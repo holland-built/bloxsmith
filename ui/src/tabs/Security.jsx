@@ -496,6 +496,13 @@ function LookalikeTable({ panelId, lookalikes }) {
 // beyond demo placeholders. A panel that can only say zero is worse than no
 // panel: zero reads as "all clear" rather than as "nothing is being watched".
 //
+// ORDERING, and why it is not a risk ranking. Axur's indicators are different
+// units — leaked credentials, dark-web mentions, expired certificates — so the
+// largest number is not the worst problem, and the count of non-zero types
+// measures breadth rather than severity. The rows are ordered by the one
+// dimension that IS comparable, exposed credentials, and the heading says so.
+// Anything stronger would be a risk score this panel has no basis to compute.
+//
 // It carries the same discipline as its neighbours — a failed feed never
 // renders as a clean zero — plus two states they do not have. Axur is optional,
 // so "no credential configured" exists and is NOT a fault; and its supplier
@@ -517,19 +524,21 @@ function AxurPanel({ panelId, axur }) {
   const columns = [
     { key: 'name', label: 'Supplier', grow: true, sortable: true },
     {
-      key: 'top_type',
-      label: 'Worst indicator',
-      sortable: true,
-      // A supplier with nothing found has no worst anything. An em dash says
-      // that; an empty cell would read as missing data.
-      render: (v, r) => (r.findings > 0 ? <span className="font-mono text-[11px]">{v}</span> : <span className="text-dim">—</span>),
-    },
-    {
-      key: 'findings',
-      label: 'Findings',
+      key: 'credentials',
+      label: 'Credentials exposed',
       keep: true,
       sortable: true,
-      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{v}</span>,
+      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{v.toLocaleString()}</span>,
+    },
+    {
+      key: 'types_affected',
+      // Breadth, not severity, and labelled as what it is. It was called
+      // "Findings", which read as a count of incidents rather than of affected
+      // categories — four types looked worse than three types holding 414,927
+      // exposed credentials.
+      label: 'Types affected',
+      sortable: true,
+      render: (v) => <span className="text-dim">{v}</span>,
     },
   ]
 
@@ -544,7 +553,7 @@ function AxurPanel({ panelId, axur }) {
       title="Axur Supplier Risk"
       right={
         <span className="text-[11px] text-muted">
-          {counted ? `${d.total_findings ?? 0} across ${rows.length}` : '—'}
+          {counted ? `${(d.total_credentials ?? 0).toLocaleString()} credentials · ${rows.length} suppliers` : '—'}
         </span>
       }
     >

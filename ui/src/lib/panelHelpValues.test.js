@@ -910,7 +910,7 @@ const CLAIMS = [
         re: /const counted = !axur\.error && !d\.unavailable && d\.configured !== false/,
         expect: 'a total is only claimed when the fetch worked, upstream did not declare itself unavailable, and a key is configured',
       },
-      { re: /\{counted \? `\$\{d\.total_findings \?\? 0\} across \$\{rows\.length\}` : '—'\}/, expect: 'otherwise the header prints an em dash rather than 0' },
+      { re: /\{counted \? `\$\{\(d\.total_credentials \?\? 0\)\.toLocaleString\(\)\} credentials · \$\{rows\.length\} suppliers` : '—'\}/, expect: 'otherwise the header prints an em dash rather than 0' },
     ],
   },
   {
@@ -1113,8 +1113,8 @@ const CLAIMS = [
 const EXCLUDED = [
   {
     panel: 'security-axur-incidents',
-    phrase: 'Worst supplier first',
-    why: 'The ordering is computed on the SERVER, in normAxurVendors (go/internal/dashboard/axur.go), and this file only greps UI sources — there is no sort in Security.jsx to bind a regex to. It is not unverified: TestAxurVendorsShapeAndOrder and TestAxurTieBreak assert the exact order, including the tie-break, against a fake Axur.',
+    phrase: 'Ordered by exposed credentials',
+    why: 'The ordering is computed on the SERVER, in normAxurVendors (go/internal/dashboard/axur.go), and this file only greps UI sources — there is no sort in Security.jsx to bind a regex to. It is not unverified: TestAxurVendorsShapeAndOrder and TestAxurTieBreak assert the exact order, including both tie-breaks, against a fake Axur.',
   },
   {
     panel: 'subnet-heatmap',
