@@ -178,7 +178,7 @@ class TabErrorBoundary extends Component {
     if (!this.state.failed) return this.props.children
     return (
       <div className="p-5">
-        <div role="alert" className="border border-border bg-card p-4 text-body text-txt">
+        <div role="alert" className="border border-border bg-card p-4 text-copy text-txt">
           This tab could not load. Reload the page.
         </div>
       </div>
@@ -227,10 +227,10 @@ const GroupSection = ({ group, tab, onPick }) => {
         aria-hidden="true"
         className="flex items-center justify-between h-[22px] px-[9px] bg-field border-y border-card-border"
       >
-        <span className="text-[10px] uppercase tracking-[0.12em] text-dim">
+        <span className="text-note uppercase tracking-[0.12em] text-dim">
           {group.question || group.label}
         </span>
-        <span className="font-mono text-[10px] text-dim">
+        <span className="font-mono text-note text-dim">
           {tabs.length} tab{tabs.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -243,14 +243,14 @@ const GroupSection = ({ group, tab, onPick }) => {
           onClick={onPick}
           style={t.id === tab ? { boxShadow: 'inset 2px 0 0 var(--color-accent)' } : undefined}
           className={
-            'grid grid-cols-[1fr_auto] items-center gap-2 h-[27px] px-[9px] text-[13px] no-underline ' +
+            'grid grid-cols-[1fr_auto] items-center gap-2 h-[27px] px-[9px] text-copy no-underline ' +
             (j < tabs.length - 1 ? 'border-b border-line ' : '') +
             (t.id === tab ? 'bg-line text-txt' : 'text-field-txt hover:bg-line-2 hover:text-txt')
           }
         >
           <span>{t.label}</span>
           {t.id === tab && (
-            <span className="text-[10px] uppercase tracking-[0.08em] px-1.5 py-[1px] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]">
+            <span className="text-note uppercase tracking-[0.08em] px-1.5 py-[1px] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]">
               Here
             </span>
           )}
@@ -562,7 +562,7 @@ export default function App() {
                         onClick={() => setOpenGroup(open ? null : g.id)}
                         onKeyDown={onTriggerKey(g.id)}
                         className={
-                          'flex items-center gap-2 px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
+                          'flex items-center gap-2 px-3 font-mono text-note font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
                           (i < GROUPS.length - 1 ? 'border-r border-card-border ' : '') +
                           (open
                             ? 'bg-field text-txt'
@@ -575,7 +575,7 @@ export default function App() {
                         <span
                           aria-hidden="true"
                           className={
-                            'inline-block text-caption leading-none font-bold text-center min-w-[15px] px-1 pt-[2px] pb-[3px] border bg-field ' +
+                            'inline-block text-note leading-none font-bold text-center min-w-[15px] px-1 pt-[2px] pb-[3px] border bg-field ' +
                             (open ? 'border-accent text-txt' : 'border-border text-field-txt')
                           }
                         >
@@ -609,7 +609,7 @@ export default function App() {
                   onClick={() => setOpenGroup(openGroup === 'menu' ? null : 'menu')}
                   onKeyDown={onTriggerKey('menu')}
                   className={
-                    'flex items-center gap-2 px-3 font-mono text-[12px] font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
+                    'flex items-center gap-2 px-3 font-mono text-note font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
                     (openGroup === 'menu' ? 'bg-field text-txt' : 'bg-line text-txt')
                   }
                 >
@@ -627,8 +627,8 @@ export default function App() {
               {/* Which tab you are on, spelled out — the group label alone names
                   a neighbourhood, not an address. */}
               <div className="hidden 2xl:flex items-center gap-2 min-w-0">
-                <span className="text-[10px] uppercase tracking-[0.12em] text-dim shrink-0">Tab</span>
-                <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-field-txt truncate">
+                <span className="text-note uppercase tracking-[0.12em] text-dim shrink-0">Tab</span>
+                <span className="font-mono text-note font-semibold uppercase tracking-[0.1em] text-field-txt truncate">
                   {activeLabel}
                 </span>
               </div>
@@ -695,7 +695,7 @@ export default function App() {
               </button>
               <a
                 href="#provision"
-                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body font-medium no-underline"
+                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy font-medium no-underline"
               >
                 + Provision
               </a>

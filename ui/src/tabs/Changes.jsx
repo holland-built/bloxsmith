@@ -88,8 +88,8 @@ export default function Changes() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
-      <p className="text-dense text-muted mb-3 max-w-[80ch]">
+      <h1 className="text-copy font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
+      <p className="text-note text-muted mb-3 max-w-[80ch]">
         Infoblox portal activity, {FEED_PROMISE}. This is a window on the audit route, not a change log: it
         cannot show more than {ROW_CAP} events, and it holds no history from before the window.
       </p>
@@ -119,7 +119,7 @@ export default function Changes() {
           span={6}
           title="Changed objects"
           note="grouped by what was touched, newest group first"
-          right={state === 'ok' ? <span className="text-caption text-muted">{summary.listed} rows · {summary.groups} groups</span> : null}
+          right={state === 'ok' ? <span className="text-note text-muted">{summary.listed} rows · {summary.groups} groups</span> : null}
         >
           {state === 'loading' ? (
             <Skeleton h={250} />
@@ -175,7 +175,7 @@ function BandCell({ cell }) {
           eye only — read aloud it is nothing at all, indistinguishable from an
           empty lane — so the word it stands for goes beside it, hidden from
           view and not from the accessibility tree. */}
-      <div className="flex items-start justify-center pt-2.5 text-[26px] leading-none font-semibold tabular-nums" style={{ color: unknown ? COLORS.other : tone }}>
+      <div className="flex items-start justify-center pt-2.5 text-figure leading-none font-semibold tabular-nums" style={{ color: unknown ? COLORS.other : tone }}>
         {unknown ? (
           <>
             <span aria-hidden="true">—</span>
@@ -187,12 +187,12 @@ function BandCell({ cell }) {
       </div>
       <div className="px-3 py-2.5 min-w-0">
         <div className="flex items-center justify-between gap-2.5">
-          <span className="text-[12px] font-semibold">{cell.label}</span>
+          <span className="text-note font-semibold">{cell.label}</span>
           <Chip tone={populated ? (cell.key === 'outOfHours' ? 'warn' : 'crit') : 'quiet'}>
             {populated ? POPULATED_CHIP[cell.key] : cell.chip}
           </Chip>
         </div>
-        <p className="mt-1.5 text-[12px] text-muted leading-[1.45]">
+        <p className="mt-1.5 text-note text-muted leading-[1.45]">
           {unknown && (
             <span className="text-field-txt font-semibold">
               {NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)} — {cell.reason}.{' '}
@@ -201,7 +201,7 @@ function BandCell({ cell }) {
           {cell.caption}
         </p>
         {cell.state === 'populated' && cell.key === 'newActors' && (
-          <p className="mt-1 text-caption text-dim truncate" title={cell.actors.join(', ')}>
+          <p className="mt-1 text-note text-dim truncate" title={cell.actors.join(', ')}>
             {cell.actors.join(', ')}
           </p>
         )}
@@ -219,7 +219,7 @@ function CapBanner({ text }) {
       style={{ borderColor: COLORS.warn }}
     >
       <Chip tone="warn">Capped</Chip>
-      <span className="text-[12px] text-muted leading-[1.45]">{text}</span>
+      <span className="text-note text-muted leading-[1.45]">{text}</span>
     </div>
   )
 }
@@ -230,7 +230,7 @@ function CapBanner({ text }) {
 // checked by hand against the two clocks either side of it.
 function SpanBar({ summary }) {
   return (
-    <div data-changes-span="" className="flex flex-wrap gap-x-5 gap-y-1 px-1 pb-2 text-[10.5px] uppercase tracking-wide text-dim">
+    <div data-changes-span="" className="flex flex-wrap gap-x-5 gap-y-1 px-1 pb-2 text-note uppercase tracking-wide text-dim">
       <span>rows listed here <b className="text-field-txt">{summary.listed}</b></span>
       <span>groups <b className="text-field-txt">{summary.groups}</b></span>
       <span>earliest <b className="text-field-txt">{summary.earliestClock}</b></span>
@@ -265,7 +265,7 @@ function Feed({ groups }) {
     >
       <div
         role="row"
-        className={`grid ${FEED_COLS} gap-x-3 sticky top-0 z-10 bg-card border-b border-border px-1 py-1.5 text-[10.5px] uppercase tracking-wide text-dim`}
+        className={`grid ${FEED_COLS} gap-x-3 sticky top-0 z-10 bg-card border-b border-border px-1 py-1.5 text-note uppercase tracking-wide text-dim`}
       >
         {FEED_COLUMNS.map((col, i) => (
           <span key={col.key} role="columnheader" aria-colindex={i + 1}>
@@ -312,12 +312,12 @@ function GroupHeader({ group }) {
         role="rowheader"
         aria-colindex={COL.ts}
         aria-colspan={2}
-        className="col-span-2 text-[12px] font-semibold truncate"
+        className="col-span-2 text-note font-semibold truncate"
         title={group.resource}
       >
         <span role="heading" aria-level={3}>{group.resource}</span>
       </span>
-      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-caption text-dim truncate">
+      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-note text-dim truncate">
         {groupCounts(group)}
       </span>
     </div>
@@ -340,7 +340,7 @@ function FeedRow({ row }) {
   const date = formatDate(row.ts)
 
   return (
-    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-1 h-[28px] text-[11.5px]`}>
+    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-1 h-[28px] text-note`}>
       <span
         role="cell"
         aria-colindex={COL.severity}
@@ -349,7 +349,7 @@ function FeedRow({ row }) {
       >
         <span className="sr-only">{railWord}</span>
       </span>
-      <span role="cell" aria-colindex={COL.ts} className="font-mono text-caption whitespace-nowrap">
+      <span role="cell" aria-colindex={COL.ts} className="font-mono text-note whitespace-nowrap">
         <span className="text-dim mr-1.5">{date}</span>
         {formatClock(row.ts)}
       </span>
@@ -372,7 +372,7 @@ function FeedRow({ row }) {
 
 function Legend() {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-[10.5px] text-dim">
+    <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-note text-dim">
       <span><b className="text-muted">DEL</b> deletion</span>
       <span><b className="text-muted">FAIL</b> result was not "success"</span>
       <span><b className="text-muted">OOH</b> outside 20:00–08:00 on your local clock</span>
@@ -387,7 +387,7 @@ function Chip({ tone = 'quiet', children }) {
   const color = tone === 'crit' ? COLORS.crit : tone === 'warn' ? COLORS.warn : COLORS.other
   return (
     <span
-      className="shrink-0 rounded-control border px-1.5 py-[1px] text-[10px] leading-[14px] whitespace-nowrap"
+      className="shrink-0 rounded-control border px-1.5 py-[1px] text-note leading-[14px] whitespace-nowrap"
       style={{ color, borderColor: color }}
     >
       {children}

@@ -89,10 +89,10 @@ export default function Palette({ tabs, onPick }) {
           }}
           placeholder="Search… (tabs, IP, hostname)"
           aria-activedescendant={hits[idx] ? `palette-opt-${hits[idx].id}` : undefined}
-          className="w-full px-4 py-3 bg-transparent text-txt text-body outline-none border-b border-line-2"
+          className="w-full px-4 py-3 bg-transparent text-txt text-copy outline-none border-b border-line-2"
         />
         <div role="listbox" className="max-h-[300px] overflow-auto py-1">
-          {hits.length === 0 && <div className="px-4 py-3 text-muted text-body">no match</div>}
+          {hits.length === 0 && <div className="px-4 py-3 text-muted text-copy">no match</div>}
           {hits.map((t, i) => (
             <button
               key={t.id}
@@ -101,11 +101,11 @@ export default function Palette({ tabs, onPick }) {
               aria-selected={i === idx}
               onClick={() => pick(t)}
               onMouseEnter={() => setIdx(i)}
-              className={`w-full flex items-center justify-between gap-3 text-left px-4 py-2 text-body ${i === idx ? 'bg-line text-txt' : 'text-muted'}`}
+              className={`w-full flex items-center justify-between gap-3 text-left px-4 py-2 text-copy ${i === idx ? 'bg-line text-txt' : 'text-muted'}`}
             >
               <span className="truncate">{t.label}</span>
               {t.note && (
-                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.09em] text-dim">{t.note}</span>
+                <span className="shrink-0 font-mono text-note uppercase tracking-[0.09em] text-dim">{t.note}</span>
               )}
             </button>
           ))}

@@ -24,7 +24,7 @@ function fmtTs(ts) {
 function monoTs(v) {
   const s = fmtTs(v)
   return (
-    <span className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono text-[12px]" style={{ maxWidth: 180 }} title={s}>
+    <span className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono text-note" style={{ maxWidth: 180 }} title={s}>
       {s}
     </span>
   )
@@ -61,7 +61,7 @@ export default function Audit() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-3">Audit</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-3">Audit</h1>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -94,7 +94,7 @@ function ShortRead({ chain }) {
   const note = readShortfall(chain.data)
   if (!note) return null
   return (
-    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+    <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
       this list is incomplete — {note}
     </div>
   )
@@ -129,7 +129,7 @@ function TruncationNote({ chain }) {
   const note = truncationNote(chain.data)
   if (!note) return null
   return (
-    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+    <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
       {note}
     </div>
   )
@@ -192,7 +192,7 @@ function ActivitySummary({ entries, chain, panelId }) {
       // in words. The cap is `auditLogReturnCap`, go/internal/server/state.go:86
       // (2000); measured live 2026-08-21 the log holds 838 entries, so today
       // this chip and the log are the same number and no note renders.
-      right={<span className="text-caption text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
+      right={<span className="text-note text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
     >
       <ShortRead chain={chain} />
       <TruncationNote chain={chain} />
@@ -207,8 +207,8 @@ function ActivitySummary({ entries, chain, panelId }) {
           {rows.map((r) => (
             <div key={r.event}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[12px] truncate" title={r.event}>{r.event}</span>
-                <span className="text-[13px] font-semibold tabular-nums" style={{ color: r.color }}>
+                <span className="text-note truncate" title={r.event}>{r.event}</span>
+                <span className="text-copy font-semibold tabular-nums" style={{ color: r.color }}>
                   {r.count.toLocaleString()}
                 </span>
               </div>
@@ -236,7 +236,7 @@ function EventPill({ event }) {
   const { COLORS } = useChartTheme()
   const color = eventColor(event || '', COLORS)
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: `${color}22`, color }}>
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `${color}22`, color }}>
       {event || '—'}
     </span>
   )
@@ -265,7 +265,7 @@ function OfflineCheckHint() {
   return (
     <span className="text-dim">
       {' · check it yourself with '}
-      <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">bloxsmith audit verify</code>
+      <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">bloxsmith audit verify</code>
     </span>
   )
 }
@@ -276,7 +276,7 @@ function ChainVerdict({ result, error, loading }) {
   if (error || result == null || result.chain_verify_error) {
     const why = error ? 'the check could not be loaded' : result?.chain_verify_error
     return (
-      <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+      <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
         chain integrity could not be verified
         {why ? <span className="font-normal text-dim"> — {why}</span> : null}
         <span className="font-normal"><OfflineCheckHint /></span>
@@ -285,16 +285,16 @@ function ChainVerdict({ result, error, loading }) {
   }
   if (result.chain_valid === false) {
     return (
-      <div className="text-body font-semibold mb-2" style={{ color: COLORS.crit }}>
+      <div className="text-copy font-semibold mb-2" style={{ color: COLORS.crit }}>
         chain tampered — broken at entry #{result.broken_index}
-        {result.broken_reason ? <span className="font-normal text-[12px]"> — {result.broken_reason}</span> : null}
-        <span className="font-normal text-[12px]"><OfflineCheckHint /></span>
+        {result.broken_reason ? <span className="font-normal text-note"> — {result.broken_reason}</span> : null}
+        <span className="font-normal text-note"><OfflineCheckHint /></span>
       </div>
     )
   }
   if (result.chain_valid === true) {
     return (
-      <div className="text-caption text-dim mb-2">
+      <div className="text-note text-dim mb-2">
         chain intact — signature and entry count verified
         <OfflineCheckHint />
       </div>
@@ -302,7 +302,7 @@ function ChainVerdict({ result, error, loading }) {
   }
   // Unrecognized shape: same rule as a fetch failure — don't imply "fine".
   return (
-    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+    <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
       chain integrity could not be verified
     </div>
   )
@@ -328,16 +328,16 @@ function AppendFailures({ result }) {
   if (typeof n !== 'number' || n <= 0) return null
   const last = result.last_append_failure
   return (
-    <div className="text-body font-semibold mb-2" style={{ color: COLORS.crit }}>
+    <div className="text-copy font-semibold mb-2" style={{ color: COLORS.crit }}>
       {n} audit record{n === 1 ? '' : 's'} failed to write since the server started
       {last?.event ? (
-        <span className="font-normal text-[12px]">
+        <span className="font-normal text-note">
           {' — last: '}
-          <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">{last.event}</code>
+          <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">{last.event}</code>
           {last.error ? <span className="text-dim"> ({last.error})</span> : null}
         </span>
       ) : null}
-      <span className="font-normal text-[12px] text-dim">
+      <span className="font-normal text-note text-dim">
         {' · the chain on disk is unaffected; the missing record cannot be recovered'}
       </span>
     </div>
@@ -421,7 +421,7 @@ function AuditTable({ entries, chain, panelId }) {
       label: 'Detail',
       sortable: true,
       render: (v) => (
-        <span className="block truncate font-mono text-caption" title={v}>{v || '—'}</span>
+        <span className="block truncate font-mono text-note" title={v}>{v || '—'}</span>
       ),
     },
   ]
@@ -466,7 +466,7 @@ function AuditTable({ entries, chain, panelId }) {
               show. Measured live 2026-08-21: 838 entries, under the cap, so
               `truncated` is false and the two are currently the same set. */}
           {sorted.length > 0 && (
-            <span className="text-caption text-muted">
+            <span className="text-note text-muted">
               {sorted.length.toLocaleString()}
               {sorted.length !== entries.length ? ` of ${entries.length.toLocaleString()}` : ''}
             </span>
@@ -554,7 +554,7 @@ function CspAuditTable({ panelId }) {
       keep: true,
       render: (v, r) => (
         <span className="block truncate max-w-[160px]" title={r.user}>
-          {r.user || '—'} {r.who_kind && <span className="text-dim text-[10.5px]">({r.who_kind})</span>}
+          {r.user || '—'} {r.who_kind && <span className="text-dim text-note">({r.who_kind})</span>}
         </span>
       ),
     },
@@ -584,7 +584,7 @@ function CspAuditTable({ panelId }) {
             onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
             className={`${FIELD_CLS} w-[220px]`}
           />
-          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
+          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
             {loading ? 'Searching…' : 'Search'}
           </button>
           {/* `500` here is the `_limit` CSPAudit sends upstream, not a fact
@@ -599,7 +599,7 @@ function CspAuditTable({ panelId }) {
               screen, so it is the one passed. There is no `total` to pass: the
               upstream tells us there are more and not how many. */}
           {rows.length > 0 && (
-            <span className="text-caption text-muted">
+            <span className="text-note text-muted">
               {sampleCountLabel({ returned: rows.length, truncated: result?.truncated }, 'entries')}
             </span>
           )}

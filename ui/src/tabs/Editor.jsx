@@ -228,7 +228,7 @@ export default function Editor() {
 
   return (
     <div className="max-w-[720px] mx-auto p-5">
-      <h1 className="text-title font-semibold tracking-tight mb-1">Editor</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
       <TabIntro anchor="editor">
         Direct create, update, and delete on individual DNS/DHCP objects. Blank Object ID creates; pasting an ID
         switches the form to update and reveals Delete. Preview first, then Apply. Editor-created subnets and
@@ -240,7 +240,7 @@ export default function Editor() {
           <button
             key={t.key}
             onClick={() => { setType(t.key); setEditId('') }}
-            className="px-2.5 py-1.5 rounded-control border text-body"
+            className="px-2.5 py-1.5 rounded-control border text-copy"
             style={type === t.key
               ? { borderColor: COLORS.accent, background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
               : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
@@ -253,13 +253,13 @@ export default function Editor() {
       <CardGrid layoutKey="editor">
         <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
         <div className="flex flex-col gap-3">
-          <label className="text-dense text-muted flex flex-col gap-1">
+          <label className="text-note text-muted flex flex-col gap-1">
             Object ID (leave blank to create new)
             <input className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
           </label>
 
           {spec.fields.map((f) => (
-            <label key={f.key} className="text-dense text-muted flex flex-col gap-1">
+            <label key={f.key} className="text-note text-muted flex flex-col gap-1">
               {f.label}{f.required ? ' *' : ''}
               <input
                 className={inputCls}
@@ -288,7 +288,7 @@ export default function Editor() {
               <button
                 onClick={del}
                 disabled={status === 'busy'}
-                className="mt-3 px-3 py-1.5 rounded-control text-body border ml-auto disabled:opacity-50"
+                className="mt-3 px-3 py-1.5 rounded-control text-copy border ml-auto disabled:opacity-50"
                 style={delArmed
                   ? { borderColor: COLORS.crit, color: COLORS.onCrit, background: COLORS.crit }
                   : { borderColor: COLORS.crit, color: COLORS.crit, background: 'transparent' }}

@@ -33,7 +33,7 @@ function Inline({ text }) {
       {parseInline(text).map((tok, i) => {
         if (tok.type === 'strong') return <strong key={i} className="font-semibold text-field-txt">{tok.text}</strong>
         if (tok.type === 'em') return <em key={i}>{tok.text}</em>
-        if (tok.type === 'code') return <code key={i} className="font-mono text-caption px-1 py-0.5 rounded-mark bg-field text-field-txt">{tok.text}</code>
+        if (tok.type === 'code') return <code key={i} className="font-mono text-note px-1 py-0.5 rounded-mark bg-field text-field-txt">{tok.text}</code>
         if (tok.type === 'link') {
           // Links inside the doc point at GitHub, other docs, or Infoblox. They
           // leave the app, so they say so and open in their own tab.
@@ -58,29 +58,29 @@ function Blocks({ blocks }) {
         // the panel to a single h2 and stops the document outline growing a
         // second top-level heading beside the page's own.
         const cls = b.level <= 2
-          ? 'text-[13px] font-semibold text-field-txt mt-4 mb-1.5 first:mt-0'
-          : 'text-[12px] font-semibold text-field-txt mt-3 mb-1'
+          ? 'text-copy font-semibold text-field-txt mt-4 mb-1.5 first:mt-0'
+          : 'text-note font-semibold text-field-txt mt-3 mb-1'
         const Tag = b.level <= 2 ? 'h3' : 'h4'
         return <Tag key={i} className={cls}>{b.text}</Tag>
       }
       case 'para':
-        return <p key={i} className="text-caption leading-relaxed text-muted mb-2"><Inline text={b.text} /></p>
+        return <p key={i} className="text-note leading-relaxed text-muted mb-2"><Inline text={b.text} /></p>
       case 'ul':
         return (
           <ul key={i} className="list-disc pl-4 mb-2">
-            {b.items.map((it, n) => <li key={n} className="text-caption leading-relaxed text-muted mb-0.5"><Inline text={it} /></li>)}
+            {b.items.map((it, n) => <li key={n} className="text-note leading-relaxed text-muted mb-0.5"><Inline text={it} /></li>)}
           </ul>
         )
       case 'ol':
         return (
           <ol key={i} className="list-decimal pl-4 mb-2">
-            {b.items.map((it, n) => <li key={n} className="text-caption leading-relaxed text-muted mb-0.5"><Inline text={it} /></li>)}
+            {b.items.map((it, n) => <li key={n} className="text-note leading-relaxed text-muted mb-0.5"><Inline text={it} /></li>)}
           </ol>
         )
       case 'table':
         return (
           <div key={i} className="overflow-x-auto mb-2">
-            <table className="w-full border-collapse text-caption">
+            <table className="w-full border-collapse text-note">
               <thead>
                 <tr>
                   {b.head.map((h, n) => (
@@ -102,7 +102,7 @@ function Blocks({ blocks }) {
         )
       case 'quote':
         return (
-          <blockquote key={i} className="border-l-2 border-card-border pl-2.5 my-2 text-caption leading-relaxed text-dim">
+          <blockquote key={i} className="border-l-2 border-card-border pl-2.5 my-2 text-note leading-relaxed text-dim">
             <Inline text={b.text} />
           </blockquote>
         )
@@ -178,14 +178,14 @@ export default function DocsPanel({ anchor, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-3">
-          <h2 id="docs-title" className="text-body font-semibold">{title ? `Docs — ${title}` : 'Docs'}</h2>
+          <h2 id="docs-title" className="text-copy font-semibold">{title ? `Docs — ${title}` : 'Docs'}</h2>
           <span className="flex-1" />
-          <button className="text-muted text-body" onClick={onClose} aria-label="Close">✕</button>
+          <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         {failed ? (
           // Says what is still available rather than only what broke.
-          <p className="text-caption leading-relaxed text-muted">
+          <p className="text-note leading-relaxed text-muted">
             The documentation could not be loaded.{' '}
             <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
               Read it on GitHub
@@ -193,18 +193,18 @@ export default function DocsPanel({ anchor, onClose }) {
             .
           </p>
         ) : !doc ? (
-          <p className="text-caption text-dim">Loading…</p>
+          <p className="text-note text-dim">Loading…</p>
         ) : (
           <>
             {showingWholeDoc && (
-              <p className="text-caption leading-relaxed text-dim mb-3">
+              <p className="text-note leading-relaxed text-dim mb-3">
                 This tab has no section of its own yet, so the whole document is below.
               </p>
             )}
             {/* The section heading is the panel's title above, so it is not
                 repeated in the body. */}
             <Blocks blocks={section ? blocks.slice(1) : blocks} />
-            <p className="mt-4 pt-3 border-t border-card-border text-caption">
+            <p className="mt-4 pt-3 border-t border-card-border text-note">
               <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
                 All tabs, on GitHub →
               </a>
