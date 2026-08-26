@@ -197,6 +197,9 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		}
 		m.auth.SetOverride("")
 	} else {
+		// Read BEFORE the round trip, so a tenant transition that lands while it
+		// is in flight is detectable when the JWT comes back.
+		epoch := m.auth.OverrideEpoch()
 		resp, _, err := m.cspJSON("/v2/session/account_switch", map[string]any{"id": accountID})
 		if err != nil {
 			return nil, err
@@ -210,7 +213,19 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		}
 		// Override wins over the vault active key, so the proxy uses THIS tenant's
 		// JWT immediately (no cross-tenant leak).
-		m.auth.SetOverride("Bearer " + jwt)
+		//
+		// Refused outright if the vault changed tenant while the switch was in
+		// flight. This JWT was minted for an account reached through the PREVIOUS
+		// tenant's key, so publishing it now would point every proxy call at the
+		// tenant the operator just left — and clearing it afterwards is too late,
+		// because a request can pin it in between. Not retried with a fresh
+		// epoch either: the credential is wrong, not merely late.
+		if !m.auth.SetOverrideAt("Bearer "+jwt, epoch) {
+			return map[string]any{
+				"ok":    false,
+				"error": "the active tenant changed during the account switch; nothing was applied — switch again",
+			}, nil
+		}
 		m.jwtIssue = time.Now()
 	}
 	m.active = accountID
@@ -218,11 +233,34 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 	return map[string]any{"ok": true, "active": accountID, "name": known[accountID]}, nil
 }
 
-// ResetActive clears the portal account-switch state (home, active and the JWT
-// timestamp) on a vault-tenant mutation, so the account context can't outlive
-// the tenant it belonged to. It does NOT touch the auth override or the cache —
-// the coordinated caller (main's authReset) clears the override and rotates the
-// cache.
+// ResetActive clears the portal account-switch state on a vault-tenant mutation,
+// so the account context cannot outlive the tenant it belonged to. That includes
+// THE AUTH OVERRIDE, and clearing it here rather than only in the caller is the
+// whole point of this function taking m.mu.
+//
+// It used to say "It does NOT touch the auth override or the cache — the
+// coordinated caller (main's authReset) clears the override and rotates the
+// cache", and that split had a race in it. SwitchAccount holds m.mu across its
+// entire body, including the m.auth.SetOverride("Bearer "+jwt) at the end. A
+// caller clearing the override OUTSIDE m.mu can therefore land in the middle of
+// an in-flight switch: clear, then the switch sets its JWT, and that JWT — minted
+// for an account belonging to the tenant being switched AWAY from — stays live
+// against the new tenant's dashboard with nothing left to clear it.
+//
+// Clearing under m.mu makes the two mutually exclusive, so a reset either
+// happens entirely before a switch (and the switch that follows is a deliberate
+// one against the new tenant) or entirely after it (and the JWT is cleared).
+// There is no third interleaving.
+//
+// The lock order is m.mu then a.mu, which is the order SwitchAccount already
+// takes them in. Nothing takes them the other way round: rest.Auth releases its
+// own lock before calling the resolver, so no path holds a.mu and then wants
+// m.mu. See vault.rotateAuth for what happens when that stops being true.
+//
+// main's authReset still clears the override before calling this, and that is
+// not redundant: this function can wait a long time for m.mu, because
+// account.Manager holds it across an outbound CSP request. The early clear
+// shortens the window; this one closes the race.
 //
 // home and homeVerified MUST be cleared with active. They identify the CSP
 // account belonging to the OLD tenant's key; the new tenant is a different
@@ -243,6 +281,9 @@ func (m *Manager) ResetActive() {
 	m.homeVerified = false
 	m.active = ""
 	m.jwtIssue = time.Time{}
+	// Authoritative clear: mutually exclusive with SwitchAccount's own
+	// SetOverride, which is what the caller's early clear cannot be.
+	m.auth.SetOverride("")
 }
 
 // Active returns the currently active account id (lock-guarded).
