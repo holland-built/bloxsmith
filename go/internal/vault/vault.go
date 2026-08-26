@@ -99,9 +99,18 @@ type fileEnvelope struct {
 
 // Vault mirrors the server.py _vault dict (2750) plus its file location.
 type Vault struct {
-	mu      sync.Mutex
-	path    string
-	BaseURL string // Infoblox base URL for portal name/key lookups (INFOBLOX_URL)
+	// switchMu serializes a mutation with the rotateAuth that COMPLETES it, so
+	// the two halves of one tenant transition cannot interleave with another
+	// transition's. It is taken before mu and released after rotateAuth has run,
+	// and it is the only lock in this package held across the callback.
+	//
+	// Nothing outside this file takes it, and the callback cannot reach it, so it
+	// adds no edge to the lock graph — which is the whole point of it being a
+	// second lock rather than a wider scope for mu.
+	switchMu sync.Mutex
+	mu       sync.Mutex
+	path     string
+	BaseURL  string // Infoblox base URL for portal name/key lookups (INFOBLOX_URL)
 	// Mutable secret state — private and only touched while mu is held. External
 	// consumers must read it through the lock-guarded accessors (LLMCreds,
 	// ActiveKey, ActiveLabel, IsUnlocked, Snapshot) so a lock/unlock/set mutation
@@ -138,9 +147,32 @@ type Vault struct {
 // once at wiring time in main; never during request handling.
 func (v *Vault) SetAuthReset(fn func()) { v.onAuthReset = fn }
 
-// rotateAuth runs the coordinated auth reset if one is registered. The callback
-// touches the auth slot, account.Manager, and cache — never the vault — so it is
-// safe to call whether or not v.mu is held (no re-entry, no lock inversion).
+// rotateAuth runs the coordinated auth reset if one is registered.
+//
+// THE CALLER MUST NOT HOLD v.mu. This comment used to say the opposite — that
+// the callback "touches the auth slot, account.Manager, and cache — never the
+// vault — so it is safe to call whether or not v.mu is held (no re-entry, no
+// lock inversion)". Every clause of that is true except the conclusion, and the
+// conclusion took the server down for four hours on 2026-08-26.
+//
+// The callback does not touch the vault. It touches two subsystems that DO,
+// which is not the same thing:
+//
+//	rest.Auth   resolves its active key through v.ActiveKey, so a goroutine
+//	            inside Auth.Value holds a.mu and wants v.mu.
+//	account.Mgr holds m.mu across an outbound HTTP call (cspJSON) that reads
+//	            auth.IdentityValue, so it wants a.mu and then v.mu too.
+//
+// So calling this under v.mu completes a cycle: the switch held v.mu and waited
+// on a.mu, while inbound requests held a.mu and waited on v.mu. Go's RWMutex
+// then blocks every new reader behind the stalled writer, and withPinnedTenant
+// is global middleware, so the whole server stops answering — static files
+// included — while still accepting TCP. The goroutine dump that proved it is
+// quoted in TestTenantSwitchDoesNotDeadlockAgainstAuthResolver.
+//
+// The rule this leaves is one line: no lock in this package is held across a
+// call out of it. v.switchMu is the exception that proves it, and it is safe
+// only because nothing the callback reaches can take it.
 func (v *Vault) rotateAuth() {
 	if v.onAuthReset != nil {
 		v.onAuthReset()
