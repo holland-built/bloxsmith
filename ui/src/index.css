@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/* Tailwind v4 auto-detects its sources and scans COMMENTS as readily as code,
+   so a file that merely DOCUMENTS a class name keeps that class's rule alive in
+   the built CSS. radiusRoles.test.js documents the radius migration — it lists
+   every old name it replaced, and names rounded-[7px] and rounded-(--foo) as
+   spellings its first denylist draft let through — and that alone was enough to
+   ship 7 rules nothing references.
+
+   The choice was framed as "delete the bytes or delete the documentation". It
+   is neither. That file is a Node test with no markup in it, so nothing in it
+   can ever be a real class, and excluding it costs no documentation at all.
+   Verified by diffing the emitted selector list rather than assumed: 478 rules
+   before, 471 after, and the 7 that went are rounded-lg, -md, -sm, -xl,
+   -t-control, -[7px] and -(--foo), none of which appears anywhere in ui/src.
+   tests/radius-dead-rules.spec.ts is the gate that keeps them gone.
+
+   Scoped to this ONE file deliberately. Excluding tests/ wholesale was the
+   first plan and Codex was right to refuse it: a class whose only static
+   spelling lives in a fixture, with production building it dynamically, would
+   silently vanish from the CSS and be found in a browser instead of here. */
+@source not "./lib/radiusRoles.test.js";
+
 /* v6 mockup tokens — north star: .mockups/quick/...-6.html */
 @theme {
   --color-bg: #050505;
@@ -61,14 +82,13 @@
      accepts and the gate refuses, which is exactly how a migrated name creeps
      back in. The old name is gone from both.
 
-     FOUR DEAD RULES REMAIN IN THE BUILT CSS, said plainly rather than left to
-     be discovered: .rounded-lg, .rounded-md, .rounded-sm and .rounded-xl are
-     still emitted, because Tailwind scans comments and test files and those
-     names appear in this comment and in radiusRoles.test.js. They are about
-     100 bytes of CSS nothing references. Removing them would mean deleting the
-     documentation of what was migrated and why, which is a worse trade than
-     the bytes. Nothing can USE them: the guard reads ui/src source, which is
-     the only place a class name would go.
+     THE FOUR DEAD RULES ARE GONE. They used to ship — .rounded-lg, -md, -sm
+     and -xl, emitted because Tailwind scans comments and those names appear in
+     radiusRoles.test.js — and this comment used to say removing them would mean
+     deleting the documentation. It did not: the `@source not` line at the top
+     of this file excludes that one test, which has no markup in it and so can
+     never contribute a real class. Three more went with them (-t-control,
+     -[7px], -(--foo), the denylist examples). The reasoning is at that line.
 
      What moved, measured rather than eyeballed: rounded-md 6px -> 8px on 12
      elements, rounded-sm 2px -> 4px on 9 legend swatches (all 8x8px), and
