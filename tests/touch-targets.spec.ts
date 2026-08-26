@@ -38,9 +38,12 @@ test.beforeEach(async ({ page }) => {
 
 const TABS = ['overview', 'network', 'infra', 'security', 'audit', 'assets', 'provision', 'selfservice'];
 
-// 1280 is the ordinary tablet-landscape case; 390 is a phone, where a 44px
-// floor on 310 controls is likeliest to push something sideways.
-const WIDTHS = [1280, 390];
+// The four widths the sizing model is measured against elsewhere
+// (tests/table-sizing.spec.ts uses the same set), plus a phone. 1024 is the md
+// breakpoint and 1280 the xl one, so both sides of each control-cluster
+// breakpoint are covered — a 44px floor is likeliest to push something sideways
+// exactly where the layout changes shape.
+const WIDTHS = [1280, 1024, 768, 390];
 
 const MIN = 44;
 // getBoundingClientRect returns fractional px and a transform or a border can

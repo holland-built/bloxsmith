@@ -441,15 +441,19 @@ test("a tag's props are its own, not those of the JSX nested inside them", () =>
 })
 
 test('the delegating shell is the one it is documented to be, and no more', () => {
-  const delegating = SITES.filter((s) => s.delegated).map((s) => `${s.rel}:${s.line} <${s.name}`)
+  // WITHOUT THE LINE NUMBER, deliberately. The claim is about WHICH call site
+  // forwards `title={title}`, and pinning `DataTable.jsx:696` made this fail
+  // twice in one afternoon for edits that only added comments ABOVE it — a red
+  // test that says nothing except that a file got longer. The line is still
+  // printed in the failure message, where it helps and cannot break anything.
+  const delegating = SITES.filter((s) => s.delegated)
+  const identity = delegating.map((s) => `${s.rel} <${s.name}`)
   assert.deepEqual(
-    delegating,
-    // The LINE moves whenever anything above it in DataTable.jsx grows; the
-    // claim is about WHICH call site delegates, not where it sits.
-    ['ui/src/components/DataTable.jsx:806 <Card'],
+    identity,
+    ['ui/src/components/DataTable.jsx <Card'],
     'the set of call sites that forward `title={title}` has changed. Exempting one is only safe ' +
       'because its own wrapper is scanned too (see TAGS); a new one means the rule below is now ' +
-      `blind to whoever calls it. Found: ${delegating.join(', ')}`,
+      `blind to whoever calls it. Found: ${delegating.map((s) => `${s.rel}:${s.line} <${s.name}`).join(', ')}`,
   )
   assert.equal(DELEGATES.size, 1, 'DELEGATES documents one exemption; keep it that way or rewrite the rule')
 })

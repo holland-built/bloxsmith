@@ -27,12 +27,13 @@
 // into style objects or passed to recharts. Those are JS numbers rather than
 // utilities, so no scan of the source can see them.
 //
-// THAT GAP IS NO LONGER UNGUARDED, it just needs a different kind of gate. The
-// sizes this note used to list — ChartTip's fontSize: 12 and the axis ticks' 10
-// and 11 — are `var(--text-note)` now, and tests/chart-tokens.spec.ts asserts
-// the RESOLVED px in a real browser, which is the only place a var() can be
-// proved to have resolved at all. The drag ghost's 13px is what remains, and it
-// is a style object this file cannot reach either.
+// THAT GAP IS NO LONGER UNGUARDED, and half of it came back into range. The
+// axis ticks that used to be 10 and 11 carry `className: 'text-note'` now, so
+// they ARE string literals and this file sees them like any other call site.
+// ChartTip's fontSize: 12 became `var(--text-note)` in a style object, which
+// this file still cannot see; tests/chart-tokens.spec.ts asserts the RESOLVED
+// px for both in a real browser, which is the only place a var() can be proved
+// to have resolved at all. The drag ghost's 13px is what remains uncovered.
 // ---------------------------------------------------------------------------
 
 import { test } from 'node:test'

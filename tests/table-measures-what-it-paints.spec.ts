@@ -78,12 +78,19 @@ test('every table header shows its own label without clipping', async ({ page })
 
 test('a pill column is no wider than the pill it paints', async ({ page }) => {
   const fat: Finding[] = [];
+  // How many badge columns were actually examined. Without this the spec passes
+  // on an empty inventory: rename data-col-kind, or let colKind() classify a
+  // badge column as something else, and every assertion below becomes vacuous.
+  // That is the same shape as the earlier test that passed against the defect
+  // it was written for, so it is counted rather than assumed.
+  let examined = 0;
   for (const tab of TABS) {
     await page.goto(`/#${tab}`);
     await page.waitForTimeout(1000);
     const res = await page.evaluate(
       ({ tabName, CELL_PAD, BADGE_PAD, MEASURE_BUFFER, SORT_AFFORDANCE_PAD, DEAD_SPACE_TOLERANCE }) => {
         const out: any[] = [];
+        let seen = 0;
         const ctx = document.createElement('canvas').getContext('2d')!;
         const measure = (text: string, font: string, spacing: number) => {
           ctx.font = font;
@@ -140,17 +147,30 @@ test('a pill column is no wider than the pill it paints', async ({ page }) => {
             // natural width (DataTable shrinks toward a floor when the card is
             // too small and marks the clip); it may never be wider, because a
             // badge column is never in the grow set.
+            seen++;
             if (width > need + DEAD_SPACE_TOLERANCE) {
               out.push({ tab: tabName, panel, col: ci, label: raw, width: Math.round(width), need });
             }
           });
         });
-        return out;
+        return { out, seen };
       },
       { tabName: tab, CELL_PAD, BADGE_PAD, MEASURE_BUFFER, SORT_AFFORDANCE_PAD, DEAD_SPACE_TOLERANCE },
     );
-    fat.push(...res);
+    fat.push(...res.out);
+    examined += res.seen;
   }
+
+  // COUNTED, not guessed: across the tabs above there are exactly three
+  // `badge: true` columns, all on Infra — Host Health, DFP Services and Jobs.
+  // Infra's host-inventory status column declares badge AND render and is
+  // correctly reported as `render`, which is why it is not a fourth. Three is
+  // the floor rather than a target, so removing one panel does not fail this,
+  // but the classification silently breaking does.
+  expect(
+    examined,
+    'no badge columns were found to measure — data-col-kind is missing, or colKind() no longer reports "badge"',
+  ).toBeGreaterThanOrEqual(3);
 
   expect(
     fat,

@@ -125,10 +125,16 @@ function widthsEqual(a, b) {
 // leftover width. tests/table-measures-what-it-paints.spec.ts is the consumer.
 // One attribute per COLUMN, on the header — not per cell, which would repeat it
 // up to rowCap times.
+//
+// THE ORDER IS THE RENDER PATH'S ORDER and has to stay that way. Infra's
+// host-inventory status column declares `badge: true` AND `render`
+// (tabs/Infra.jsx), and both the tbody and measure() test `render` first, so a
+// column like that is painted and measured as a render column. Calling it a
+// badge would hand it to the opposite invariant.
 function colKind(c) {
   if (c.width) return 'fixed'
-  if (c.badge) return 'badge'
   if (c.render) return 'render'
+  if (c.badge) return 'badge'
   if (c.mono) return 'mono'
   return 'text'
 }
@@ -174,7 +180,6 @@ export function DataTable({
   const monoProbeRef = useRef(null)
   const headProbeRef = useRef(null)
   const noteProbeRef = useRef(null)
-  const renderProbeRef = useRef(null)
   const widthProbeRef = useRef(null)
   const canvasCtxRef = useRef(null)
   const prevWidthsRef = useRef(null)
@@ -297,37 +302,88 @@ export function DataTable({
     // is read, so this costs one layout flush per render column, not one per
     // row.
     //
+    // THE STAGE IS A REAL <table>, and that is not decoration. A clone measured
+    // in a plain <div> has left its table ancestry behind, so every rule written
+    // as `table <x>` stops matching it. The live example: the coarse-pointer
+    // touch rule gives controls a 44px floor and exempts `table input` from it,
+    // so Security's and Incidents' Ack checkbox — a `render` column — measured
+    // 13px in the table and 44px in a div, and the column would have been
+    // inflated by 31px on every touch device. Codex found this on the diff.
+    // Cloning into table > tbody > tr > td keeps those selectors matching.
+    //
     // The td's own font is read once: it comes from `tdBase`, identical for
     // every row of a column. What varies row to row lives INSIDE the cell and
     // travels with the clone, carrying its own classes.
     const renderedNaturalWidth = (idx) => {
-      const probe = renderProbeRef.current
-      if (!probe || idx < 0 || bodyRows.length === 0) return 0
+      if (idx < 0 || bodyRows.length === 0) return 0
       const firstTd = bodyRows[0].children[idx]
       if (!firstTd) return 0
+      // The stage is BUILT AND TORN DOWN INSIDE THIS FUNCTION, never left in
+      // the tree. A persistent hidden <table> was the first version and it was
+      // wrong for a reason worth recording: every spec that scans the page with
+      // querySelectorAll('table') suddenly found an extra one. It broke three
+      // density assertions and the pill-width assertion in this repo alone.
+      // Built here, it exists only within this synchronous block — measure()
+      // never yields — so nothing outside can observe it, while the element is
+      // attached and a real <table> for as long as the layout is read, which is
+      // what keeps `table <x>` selectors matching the clones.
+      const probe = document.createElement('table')
+      probe.setAttribute('aria-hidden', 'true')
+      Object.assign(probe.style, {
+        position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
+        left: '0', top: '0', width: 'max-content', tableLayout: 'auto',
+        borderCollapse: 'collapse',
+      })
       const tdStyle = getComputedStyle(firstTd)
-      const holders = []
+      const rows = []
+      const cells = []
+      // Identical markup in identical context has identical intrinsic width, so
+      // a column of 150 status pills drawn from four distinct values costs four
+      // clones rather than 150. This is what keeps the worst case (rowCap rows
+      // x several render columns) off the layout path; Codex raised the cost as
+      // finding 2 on the diff and the fixtures are too small to have shown it.
+      const seenMarkup = new Set()
       for (const tr of bodyRows) {
         const td = tr.children[idx]
         if (!td) continue
-        const holder = document.createElement('div')
-        holder.style.display = 'inline-block'
-        holder.style.whiteSpace = 'nowrap'
+        const markup = td.innerHTML
+        if (seenMarkup.has(markup)) continue
+        seenMarkup.add(markup)
+        const probeRow = document.createElement('tr')
+        const probeCell = document.createElement('td')
+        // Zero padding: CELL_PAD is added to the result by the caller, so the
+        // stage must not contribute any of its own.
+        probeCell.style.padding = '0'
+        probeCell.style.border = '0'
+        probeCell.style.whiteSpace = 'nowrap'
         // Text nodes sitting directly in the td inherit the td's font, which
         // the clone does not carry (those classes are on the td itself).
-        holder.style.font = tdStyle.font
-        holder.style.letterSpacing = tdStyle.letterSpacing
-        for (const node of td.childNodes) holder.appendChild(node.cloneNode(true))
-        holders.push(holder)
+        probeCell.style.font = tdStyle.font
+        probeCell.style.letterSpacing = tdStyle.letterSpacing
+        for (const node of td.childNodes) probeCell.appendChild(node.cloneNode(true))
+        probeRow.appendChild(probeCell)
+        rows.push(probeRow)
+        cells.push(probeCell)
       }
-      if (holders.length === 0) return 0
-      probe.replaceChildren(...holders)
+      if (cells.length === 0) return 0
+      // An explicit tbody: appending <tr> straight to a <table> through the DOM
+      // does not create one the way the HTML parser would, and leaves the rows
+      // relying on CSS anonymous-box fixup.
+      const tbody = document.createElement('tbody')
+      tbody.append(...rows)
+      probe.appendChild(tbody)
+      // Attached inside the real table's own wrapper, so it inherits the same
+      // cascade the live cells sit in.
+      wrapper.appendChild(probe)
       let max = 0
-      for (const h of holders) {
-        const w = h.getBoundingClientRect().width
-        if (w > max) max = w
+      try {
+        for (const c of cells) {
+          const w = c.getBoundingClientRect().width
+          if (w > max) max = w
+        }
+      } finally {
+        probe.remove()
       }
-      probe.replaceChildren()
       return max
     }
 
@@ -767,19 +823,6 @@ export function DataTable({
           text-copy cell, so measuring them needs the note font, not the body
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
-      {/* The render-column stage. Clones of a column's rendered cells are laid
-          out in here to get their intrinsic width, pills, padding, icons and
-          all. width:max-content is what makes the result independent of the
-          width the real column already has, so this cannot feed back into
-          itself. It is `visibility: hidden`, NOT `display: none`, because a
-          display:none subtree has no layout to measure. */}
-      <div
-        ref={renderProbeRef}
-        style={{
-          position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
-          left: 0, top: 0, width: 'max-content', whiteSpace: 'nowrap',
-        }}
-      />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
       <div ref={wrapperRef} className="overflow-x-hidden overflow-y-auto" style={{ maxHeight }}>
         {table}

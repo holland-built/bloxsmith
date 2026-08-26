@@ -18,7 +18,7 @@ export default function StackedDayBars({ data, blockedColor, allowedColor, tickF
         <XAxis
           dataKey="day"
           tickFormatter={tickFormat}
-          tick={{ fill: 'var(--color-tick)', fontSize: 'var(--text-note)' }}
+          tick={{ fill: 'var(--color-tick)', className: 'text-note' }}
           axisLine={{ stroke: 'var(--color-grid)' }}
           tickLine={false}
           minTickGap={30}

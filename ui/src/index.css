@@ -416,10 +416,15 @@ html[data-theme="light"] { color-scheme: light; }
     min-width: 44px;
   }
 
-  /* An inline box ignores both, so the role has to carry a box first. */
+  /* An inline box ignores both, so the role has to carry a box first.
+     max-width keeps that box from becoming an unbreakable atom: an inline-block
+     sizes to max-content by default, so a long panel title would stop wrapping
+     in a narrow card header and push its own row sideways. Bounded at 100%, the
+     text inside wraps exactly as it did. */
   span[role="button"],
   span[role="link"] {
     display: inline-block;
+    max-width: 100%;
   }
 
   table button,
