@@ -83,23 +83,39 @@ func NewAuth(fallback string, active func() string) *Auth {
 
 // Value resolves the current Authorization header: active tenant key, else the
 // env fallback. Matches `MCP_HEADERS.get("Authorization") or API_KEY`.
+// THE LOCK IS RELEASED BEFORE active() IS CALLED, and that is not a
+// micro-optimisation. active is a resolver owned by another package — in the
+// server it is vault.ActiveKey, which takes the vault's own mutex. Holding
+// a.mu across it means this goroutine holds a.mu and wants v.mu, while a tenant
+// switch holds v.mu and wants a.mu. That cycle hung the server for four hours
+// on 2026-08-26; vault.rotateAuth's comment has the full account.
+//
+// Cutting THIS edge is not by itself what fixed the outage (vault no longer
+// calls out under its own lock either, which is the change that breaks every
+// cycle through it). It is here because the alternative is relying on a
+// promise about what a foreign function does under a lock it cannot see, and
+// that promise is the one that was already broken once.
+//
+// The three fields are copied, not read live, so the resolved answer is built
+// from one coherent observation rather than three reads racing a writer.
 func (a *Auth) Value() string {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
+	override, active, fallback := a.override, a.active, a.fallback
+	a.mu.RUnlock()
 	// A portal account switch takes precedence over everything: in vault mode
 	// active() is non-empty, so without this the switched-in JWT would be
 	// shadowed and REST calls would keep hitting the PRIOR tenant (cross-tenant
 	// leak). The override is set by account.SwitchAccount and cleared when
 	// switching back to the home account.
-	if a.override != "" {
-		return a.override
+	if override != "" {
+		return override
 	}
-	if a.active != nil {
-		if k := a.active(); k != "" {
+	if active != nil {
+		if k := active(); k != "" {
 			return k
 		}
 	}
-	return a.fallback
+	return fallback
 }
 
 // IdentityValue resolves the credential that identifies the PERSON, not the
@@ -118,14 +134,19 @@ func (a *Auth) Value() string {
 // Fallback is consulted before active() so env-key mode behaves byte-identically
 // to reading the env API_KEY directly, which is what account.Manager did before
 // it used this method.
+// Releases a.mu before calling active(), for the reason spelled out on Value.
+// This one matters more, not less: account.Manager calls it from cspJSON while
+// holding its OWN mutex across an outbound HTTP request, so under the old code a
+// single /api/accounts call held m.mu, took a.mu, and then wanted v.mu.
 func (a *Auth) IdentityValue() string {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.fallback != "" {
-		return a.fallback
+	active, fallback := a.active, a.fallback
+	a.mu.RUnlock()
+	if fallback != "" {
+		return fallback
 	}
-	if a.active != nil {
-		return a.active()
+	if active != nil {
+		return active()
 	}
 	return ""
 }
