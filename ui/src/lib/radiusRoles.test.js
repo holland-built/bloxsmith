@@ -42,9 +42,13 @@
 //   Not covered: ui/src/index.css, which DECLARES the scale; go/web, generated
 //                from ui/dist; tests/, whose locators name rendered classes on
 //                purpose (tests/selfservice-manage.spec.ts says so at the line).
-//   NOT covered: a radius written straight into a style object, e.g. ChartTip's
-//                `borderRadius: 8`. Those are JS numbers, not utilities, and
-//                are left for a later pass rather than pretended about here.
+//   NOT covered: a radius written straight into a style object. Those are JS
+//                numbers rather than utilities, so no scan of the source can
+//                see them. The later pass this used to defer happened:
+//                ChartTip's `borderRadius: 8` and its 2px legend swatch are
+//                `var(--radius-control)` and `var(--radius-mark)` now, and
+//                tests/chart-tokens.spec.ts asserts the resolved px in a
+//                browser, which is where a var() can be proved to resolve.
 // ---------------------------------------------------------------------------
 
 import { test } from 'node:test'

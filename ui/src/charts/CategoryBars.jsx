@@ -21,12 +21,18 @@ import { ChartTip } from '../components/ui.jsx'
 // a substitution — `useThemeColors()` resolves `grid` and `tick` by reading
 // exactly these two variables (lib/theme.jsx:77-78), so this is the same value
 // by a shorter route, and it follows a theme switch without a re-render.
-// `tickSize` and `minTickGap` are stated by the caller rather than inferred
-// from whether a `tickFormat` was passed. The inference was written first and
-// was wrong the moment a fourth caller appeared: Security's hourly chart wants
-// the smaller tick AND a 30px gap while formatting nothing, which the rule
-// "formatted axes are the dense ones" cannot express. A guess that holds for
-// three call sites and silently misrenders the fourth is worse than a prop.
+// `minTickGap` is stated by the caller rather than inferred from whether a
+// `tickFormat` was passed. The inference was written first and was wrong the
+// moment a fourth caller appeared: Security's hourly chart wants a 30px gap
+// while formatting nothing, which the rule "formatted axes are the dense ones"
+// cannot express. A guess that holds for three call sites and silently
+// misrenders the fourth is worse than a prop.
+//
+// `tickSize` USED to sit beside it, defaulting to 11 with two callers passing
+// 10. Under a three-size scale 10px is not a size, and an axis tick is a label,
+// so every tick in the app is --text-note and there is nothing left for a
+// caller to choose. Density is what those two callers actually wanted, and
+// minTickGap already says that without also making the text smaller.
 export default function CategoryBars({
   data,
   unit,
@@ -36,7 +42,6 @@ export default function CategoryBars({
   showY = false,
   tickFormat,
   fill,
-  tickSize = 11,
   minTickGap,
 }) {
   return (
@@ -46,13 +51,13 @@ export default function CategoryBars({
         <XAxis
           dataKey={xKey}
           tickFormatter={tickFormat}
-          tick={{ fill: 'var(--color-tick)', fontSize: tickSize }}
+          tick={{ fill: 'var(--color-tick)', fontSize: 'var(--text-note)' }}
           axisLine={{ stroke: 'var(--color-grid)' }}
           tickLine={false}
           minTickGap={minTickGap}
         />
         {showY ? (
-          <YAxis tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} allowDecimals={false} />
+          <YAxis tick={{ fill: 'var(--color-tick)', fontSize: 'var(--text-note)' }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} allowDecimals={false} />
         ) : (
           <YAxis hide />
         )}

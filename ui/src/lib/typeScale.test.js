@@ -24,9 +24,15 @@
 // exception nobody uses is reported as dead so the list cannot rot.
 //
 // SCOPE: string literals in ui/src/**/*.jsx. Not covered: font sizes written
-// into style objects or passed to recharts (ChartTip's fontSize: 12, the axis
-// ticks' 10 and 11, the drag ghost's 13px). Those are JS numbers, not
-// utilities, and index.css names them as still outstanding.
+// into style objects or passed to recharts. Those are JS numbers rather than
+// utilities, so no scan of the source can see them.
+//
+// THAT GAP IS NO LONGER UNGUARDED, it just needs a different kind of gate. The
+// sizes this note used to list — ChartTip's fontSize: 12 and the axis ticks' 10
+// and 11 — are `var(--text-note)` now, and tests/chart-tokens.spec.ts asserts
+// the RESOLVED px in a real browser, which is the only place a var() can be
+// proved to have resolved at all. The drag ghost's 13px is what remains, and it
+// is a style object this file cannot reach either.
 // ---------------------------------------------------------------------------
 
 import { test } from 'node:test'
