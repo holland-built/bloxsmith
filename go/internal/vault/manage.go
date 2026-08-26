@@ -167,6 +167,8 @@ func (v *Vault) InitR(passphrase string) map[string]any {
 
 // UnlockR wraps Unlock (server.py:2810), then best-effort refreshes names.
 func (v *Vault) UnlockR(passphrase string) map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
 	if err := v.Unlock(passphrase); err != nil {
 		return fail(err.Error())
 	}
@@ -179,14 +181,24 @@ func (v *Vault) UnlockR(passphrase string) map[string]any {
 
 // AddTenant is vault_add_tenant (server.py:2878).
 func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
+	res, rotate := v.addTenantLocked(label, key, groq)
+	if rotate {
+		v.rotateAuth()
+	}
+	return res
+}
+
+func (v *Vault) addTenantLocked(label, key string, groq *string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
-		return fail("locked")
+		return fail("locked"), false
 	}
 	nk := NormKey(key)
 	if nk == "" {
-		return fail("API key required")
+		return fail("API key required"), false
 	}
 	label = strings.TrimSpace(label)
 	if label == "" {
@@ -215,22 +227,30 @@ func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 	}
 	if err := v.save(); err != nil {
 		v.restore(snap)
-		return fail(err.Error())
+		return fail(err.Error()), false
 	}
 	// The first tenant added to an empty vault becomes active — the active key
-	// just changed from nothing to this tenant, so rotate the auth+cache.
-	if becameActive {
-		v.rotateAuth()
-	}
-	return map[string]any{"ok": true, "id": tid, "label": label}
+	// just changed from nothing to this tenant, so the caller rotates the
+	// auth+cache once mu is released.
+	return map[string]any{"ok": true, "id": tid, "label": label}, becameActive
 }
 
 // RemoveTenant is vault_remove_tenant (server.py:2899).
 func (v *Vault) RemoveTenant(tid string) map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
+	res, rotate := v.removeTenantLocked(tid)
+	if rotate {
+		v.rotateAuth()
+	}
+	return res
+}
+
+func (v *Vault) removeTenantLocked(tid string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
-		return fail("locked")
+		return fail("locked"), false
 	}
 	snap := v.snapshot()
 	removedActive := v.active != nil && *v.active == tid
@@ -253,23 +273,30 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 	}
 	if err := v.save(); err != nil {
 		v.restore(snap)
-		return fail(err.Error())
+		return fail(err.Error()), false
 	}
 	// Removing the active tenant re-points active (or clears it) — the active key
-	// changed, so rotate the auth+cache.
-	if removedActive {
-		v.rotateAuth()
-	}
-	return ok()
+	// changed, so the caller rotates the auth+cache once mu is released.
+	return ok(), removedActive
 }
 
 // UpdateTenant is vault_update_tenant (server.py:2909): replace key, rename, or
 // both; a blank key keeps the existing key (rename-only).
 func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
+	res, rotate := v.updateTenantLocked(tid, key, label)
+	if rotate {
+		v.rotateAuth()
+	}
+	return res
+}
+
+func (v *Vault) updateTenantLocked(tid, key string, label *string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
-		return fail("locked")
+		return fail("locked"), false
 	}
 	nk := NormKey(key)
 	lbl := ""
@@ -277,7 +304,7 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		lbl = strings.TrimSpace(*label)
 	}
 	if nk == "" && lbl == "" {
-		return fail("nothing to update")
+		return fail("nothing to update"), false
 	}
 	idx := -1
 	for i := range v.tenants {
@@ -287,7 +314,7 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		}
 	}
 	if idx < 0 {
-		return fail("unknown connection")
+		return fail("unknown connection"), false
 	}
 	snap := v.snapshot()
 	// The active tenant's key changes only when this tenant is active AND a new
@@ -322,20 +349,34 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 	}
 	if err := v.save(); err != nil {
 		v.restore(snap)
-		return fail(err.Error())
+		return fail(err.Error()), false
 	}
-	if activeKeyChanged {
-		v.rotateAuth()
-	}
-	return map[string]any{"ok": true, "id": tid, "label": v.tenants[idx].Label}
+	return map[string]any{"ok": true, "id": tid, "label": v.tenants[idx].Label}, activeKeyChanged
 }
 
 // SetActive is vault_set_active (server.py:2933).
+// SetActive takes switchMu for the whole transition, then does the mutation
+// under mu and runs rotateAuth with mu RELEASED. rotateAuth's comment carries
+// the reason; the short version is that the callback reaches subsystems that
+// resolve their key back through this vault, so holding mu across it deadlocks.
 func (v *Vault) SetActive(tid string) map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
+	res, rotate := v.setActiveLocked(tid)
+	if rotate {
+		v.rotateAuth()
+	}
+	return res
+}
+
+// setActiveLocked does the vault half. The bool is "the active key changed, so
+// the caller owes a rotateAuth" — returned rather than acted on, because acting
+// on it here would mean acting on it under mu.
+func (v *Vault) setActiveLocked(tid string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
-		return fail("locked")
+		return fail("locked"), false
 	}
 	found := false
 	for _, t := range v.tenants {
@@ -345,24 +386,26 @@ func (v *Vault) SetActive(tid string) map[string]any {
 		}
 	}
 	if !found {
-		return fail("unknown tenant")
+		return fail("unknown tenant"), false
 	}
 	snap := v.snapshot()
 	id := tid
 	v.active = &id
 	if err := v.save(); err != nil {
 		v.restore(snap)
-		return fail(err.Error())
+		return fail(err.Error()), false
 	}
 	// SetActive is the canonical vault-tenant switch: coordinated reset of the
 	// portal override + account.Manager active + JWT ts, plus a cache Rotate.
-	v.rotateAuth()
-	return map[string]any{"ok": true, "active": tid}
+	// The caller runs it once mu is released.
+	return map[string]any{"ok": true, "active": tid}, true
 }
 
 // LockR wraps Lock (server.py:2943) in the {ok} shape. Locking drops the active
 // key, so coordinate the auth reset + cache rotate.
 func (v *Vault) LockR() map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
 	v.Lock()
 	v.rotateAuth()
 	return ok()
@@ -371,6 +414,8 @@ func (v *Vault) LockR() map[string]any {
 // ResetR wraps Reset (server.py:2951). Reset clears all tenants (no active key),
 // so coordinate the auth reset + cache rotate.
 func (v *Vault) ResetR() map[string]any {
+	v.switchMu.Lock()
+	defer v.switchMu.Unlock()
 	if err := v.Reset(); err != nil {
 		return fail(err.Error())
 	}

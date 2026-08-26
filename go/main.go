@@ -468,8 +468,29 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// drop prior-tenant rows). Portal /api/switch-account keeps its own override
 	// and only Rotates — it is intentionally NOT cleared here.
 	acct := account.New(cfg.BaseURL, auth, sharedCache)
+	// THE ORDER IS DELIBERATE, and it is ordered by how long each step can BLOCK
+	// rather than by how the sentence above reads.
+	//
+	// This callback runs after the vault has committed the new tenant and
+	// released its mutex (vault.rotateAuth explains why it cannot run inside it).
+	// So there is a window in which the new tenant is live while these three
+	// have not yet caught up, and the job here is to make that window short for
+	// the things that leak across tenants.
+	//
+	// SetOverride and the first Rotate are in-memory and effectively instant.
+	// ResetActive is NOT: it takes account.Manager's mutex, which that package
+	// holds across an outbound CSP request in cspJSON. A tenant switch landing
+	// while an account list is in flight therefore waits on the network, and
+	// putting the cache Rotate behind that wait would keep serving PRIOR-TENANT
+	// rows for the whole of it. Rotating first drops them immediately.
+	//
+	// The second Rotate fences anything that started during that wait: a fetch
+	// admitted between the first Rotate and ResetActive belongs to the old
+	// generation and must not be allowed to populate the new one. Rotate only
+	// bumps a generation, so doing it twice costs nothing worth measuring.
 	v.SetAuthReset(func() {
 		auth.SetOverride("")
+		sharedCache.Rotate()
 		acct.ResetActive()
 		sharedCache.Rotate()
 	})
