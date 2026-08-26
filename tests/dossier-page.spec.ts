@@ -743,3 +743,107 @@ test.describe('live tenant', () => {
     expect(ipamStatuses, `IPAM was asked and answered ${ipamStatuses.join(', ')}`).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The ledger's four cell kinds share ONE horizontal inset, and it is a token.
+//
+// The head cells, the field cells and the threat-intel panel embedded below the
+// last row all have to keep one left edge — a single vertical scan of five
+// sources is what the ledger is for. That inset was written out four times as
+// px-[11px], which is the shape that drifts: fix a misalignment at one and the
+// other three stay where they were.
+//
+// It is --sp-ledger-inset now, and this asserts the RESOLVED px in a browser
+// rather than the class name in the source, for the reason tests/chart-tokens.
+// spec.ts gives. Three things can go wrong that a source scan cannot see, and
+// none of them throws:
+//
+//   1. the token is not declared, so every var() is invalid at computed-value
+//      time and padding falls to its initial 0px;
+//   2. Tailwind does not emit a utility for px-[var(--x)] at all, so the class
+//      is inert and the cell keeps whatever it inherited;
+//   3. one of the four drifts off the token again.
+//
+// ui/src/lib/spacingRoles.test.js covers (1) and (3) from the source side and
+// cannot cover (2) at all, because whether the CSS was generated is a fact
+// about the build.
+//
+// THE TWO FILES CATCH DIFFERENT THINGS, and neither is redundant. Measured, each
+// defect injected alone with the tree restored after:
+//
+//   --sp-ledger-inset undeclared    THIS test fails: "is not declared on :root".
+//   the field cells' responsive     THIS test fails, listing 96 cells painting
+//   spelling drifts to 14px         14px/14px against the 11px token.
+//   `ledger-cell` off the CELL      THIS test fails on the COUNT: "only 5 ledger
+//   constant                        cells were found". Without that floor the
+//                                   remaining five would all have passed and
+//                                   the ninety-six would simply have stopped
+//                                   being looked at.
+//   one cell back to px-[11px]      THIS TEST PASSES. 11px equals 11px, so
+//                                   nothing it can measure has changed. The
+//                                   unit test is what fails: "expected 4 uses
+//                                   of --sp-ledger-inset, found 3".
+//
+// The last row is the point. A browser can prove the token RESOLVES; only the
+// source can prove all four spellings still ask for it. Delete either file and
+// one of those defects ships green.
+test('every ledger cell paints the same inset, and it is the token', async ({ page }) => {
+  await page.goto('/#dossier?q=172.16.128.1');
+  await expect(page.locator('[data-dossier-panel]')).toBeVisible({ timeout: 10_000 });
+  // min-[561px] is where the ledger becomes a grid and the field cells pick up
+  // this inset. Below that breakpoint they stack and use a narrower padding,
+  // which is a different value and deliberately not part of this role — so the
+  // viewport is set wide on purpose, and the responsive variant is the half of
+  // the role that only gets measured here.
+  await page.setViewportSize({ width: 1280, height: 1400 });
+  await page.waitForTimeout(300);
+
+  const seen = await page.evaluate(() => {
+    const token = getComputedStyle(document.documentElement)
+      .getPropertyValue('--sp-ledger-inset')
+      .trim();
+    // Reached through `ledger-cell`, a marker class that styles nothing and
+    // exists for exactly this. Selecting by a styling class (div.h-6) couples
+    // the guard to how the ledger looks this week; selecting by the words
+    // couples it to the copy. Neither reaches the eleven FIELD cells that get
+    // their inset through the CELL constant, and those carry the responsive
+    // min-[561px]: variant, which is the most fragile of the four spellings.
+    const cells = Array.from(document.querySelectorAll('.ledger-cell'));
+    const wrong: string[] = [];
+    for (const el of cells) {
+      const cs = getComputedStyle(el);
+      const got = `${cs.paddingLeft}/${cs.paddingRight}`;
+      if (got !== `${token}/${token}`) {
+        wrong.push(`${(el.className || '').split(' ').slice(0, 3).join(' ')}… paints ${got}`);
+      }
+    }
+    return {
+      token,
+      wrong,
+      count: cells.length,
+      // Counted per category, so one cannot vanish behind another's total. The
+      // panel is the cell that sits OUTSIDE the grid and still has to line up
+      // with it, which is the alignment most easily broken by accident.
+      panels: document.querySelectorAll('[data-dossier-panel].ledger-cell').length,
+      heads: document.querySelectorAll('.ledger-cell.h-6').length,
+    };
+  });
+
+  expect(seen.token, '--sp-ledger-inset is not declared on :root').toMatch(/^[\d.]+px$/);
+  expect(seen.heads, 'no ledger head cells were found to measure').toBe(4);
+  expect(seen.panels, 'the embedded threat-intel panel is not marked as a ledger cell').toBe(1);
+  // A floor rather than an exact count: adding or removing a source changes how
+  // many field cells the ledger builds, and that must not fail this. What it
+  // catches is the field cells not being measured AT ALL, which is what happens
+  // if the marker comes off the CELL constant — and they are the only ones
+  // carrying the responsive spelling.
+  expect(
+    seen.count,
+    `only ${seen.count} ledger cells were found — the field cells reach their inset through the CELL constant, so a count this low means they are not being measured`,
+  ).toBeGreaterThan(10);
+
+  expect(
+    seen.wrong,
+    `Ledger cells not painting --sp-ledger-inset (${seen.token}):\n  ${seen.wrong.join('\n  ')}`,
+  ).toEqual([]);
+});
