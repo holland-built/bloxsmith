@@ -570,7 +570,6 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
               yKey="count"
               tickFormat={fmtShortDay}
               fill={COLORS.accent}
-              tickSize={10}
               minTickGap={20}
             />
           </Suspense>

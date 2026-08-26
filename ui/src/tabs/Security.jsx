@@ -164,7 +164,6 @@ function SeverityHero({ panelId, hub, events }) {
                 height={180}
                 xKey="hour"
                 fill={COLORS.accent}
-                tickSize={10}
                 minTickGap={30}
               />
             </Suspense>

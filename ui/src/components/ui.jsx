@@ -117,8 +117,12 @@ export function ChartTip({
       style={{
         background: colors.field,
         border: `1px solid ${colors.border}`,
-        borderRadius: 8,
-        fontSize: 12,
+        // var() strings, not values read out through getComputedStyle: these
+        // are CSS declarations on a real element, so the browser resolves them
+        // at paint. Reading the tokens in JS would mean reading them before the
+        // stylesheet has applied on a cold load and baking in an empty string.
+        borderRadius: 'var(--radius-control)',
+        fontSize: 'var(--text-note)',
         padding: '6px 9px',
         lineHeight: 1.45,
         // The tooltip follows the cursor across the plot area; letting it take
@@ -138,7 +142,7 @@ export function ChartTip({
                 <i
                   aria-hidden="true"
                   style={{
-                    width: 8, height: 8, borderRadius: 2, display: 'inline-block', flex: 'none',
+                    width: 8, height: 8, borderRadius: 'var(--radius-mark)', display: 'inline-block', flex: 'none',
                     background: p.color || p.fill || p.stroke || colors.muted,
                   }}
                 />
