@@ -38,7 +38,7 @@ export default function GradientArea({
         <XAxis
           dataKey="label"
           tickFormatter={tickFormat}
-          tick={{ fill: 'var(--color-tick)', fontSize: 11 }}
+          tick={{ fill: 'var(--color-tick)', className: 'text-note' }}
           axisLine={{ stroke: 'var(--color-grid)' }}
           tickLine={false}
           minTickGap={40}
