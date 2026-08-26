@@ -116,6 +116,23 @@ function widthsEqual(a, b) {
   )
 }
 
+// How a column was SIZED, published on its <th> so a test can tell the cases
+// apart from the outside. Without it the DOM cannot distinguish DataTable's own
+// badge pill from a `render` column whose caller hand-rolls the identical pill
+// markup (Overview's subnet table does exactly that), and the two have opposite
+// width invariants: a badge column is never in the grow set, so it may never be
+// wider than its content needs, while a render column legitimately absorbs
+// leftover width. tests/table-measures-what-it-paints.spec.ts is the consumer.
+// One attribute per COLUMN, on the header — not per cell, which would repeat it
+// up to rowCap times.
+function colKind(c) {
+  if (c.width) return 'fixed'
+  if (c.badge) return 'badge'
+  if (c.render) return 'render'
+  if (c.mono) return 'mono'
+  return 'text'
+}
+
 // Pick the grow column set: explicit `grow: true` columns, or (when none
 // declare it) one implicit column so an all-hug table doesn't hug left and
 // leave a dead gap on the right.
@@ -156,6 +173,8 @@ export function DataTable({
   const sansProbeRef = useRef(null)
   const monoProbeRef = useRef(null)
   const headProbeRef = useRef(null)
+  const noteProbeRef = useRef(null)
+  const renderProbeRef = useRef(null)
   const widthProbeRef = useRef(null)
   const canvasCtxRef = useRef(null)
   const prevWidthsRef = useRef(null)
@@ -194,16 +213,36 @@ export function DataTable({
     else setInternalSort(next)
   }
 
-  // ---- measurement (canvas measureText, no offscreen DOM row rendering) ----
+  // ---- measurement ----
+  // Canvas measureText for anything whose painted shape is known here (headers,
+  // plain cells, pills). Offscreen layout for `render` columns ONLY, where the
+  // caller's markup is arbitrary and reconstructing a width from text cannot
+  // see its padding, borders, gaps or icons.
 
   function getCtx() {
     if (!canvasCtxRef.current) canvasCtxRef.current = document.createElement('canvas').getContext('2d')
     return canvasCtxRef.current
   }
-  function textWidth(text, font) {
+  // `spacing` is CSS letter-spacing in px, and it has to be passed rather than
+  // baked into `font`: the getComputedStyle().font SHORTHAND carries family,
+  // size, weight, style and line-height and NOT letter-spacing or
+  // text-transform. Both are on the header probe (tracking-wide, uppercase),
+  // so measuring with the shorthand alone under-counts every header — measured
+  // at 10.4px on "Status", which is what clipped it to "STAT…".
+  //
+  // ctx.letterSpacing is the exact thing (it is the same engine that paints),
+  // so it is preferred and only falls back to arithmetic. The fallback adds one
+  // gap per character INCLUDING the last, matching CSS, which puts a trailing
+  // gap on the total exactly as the browser does.
+  function textWidth(text, font, spacing = 0) {
     const ctx = getCtx()
     if (ctx.font !== font) ctx.font = font
-    return ctx.measureText(text).width
+    if ('letterSpacing' in ctx) {
+      const want = `${spacing || 0}px`
+      if (ctx.letterSpacing !== want) ctx.letterSpacing = want
+      return ctx.measureText(text).width
+    }
+    return ctx.measureText(text).width + (spacing || 0) * text.length
   }
   function toPx(value) {
     if (typeof value === 'number') return value
@@ -218,10 +257,16 @@ export function DataTable({
 
   function measure() {
     const wrapper = wrapperRef.current
-    if (!wrapper || !sansProbeRef.current || !monoProbeRef.current || !headProbeRef.current) return null
+    if (!wrapper || !sansProbeRef.current || !monoProbeRef.current || !headProbeRef.current || !noteProbeRef.current) return null
     const sansFont = getComputedStyle(sansProbeRef.current).font
     const monoFont = getComputedStyle(monoProbeRef.current).font
-    const headFont = getComputedStyle(headProbeRef.current).font
+    const noteFont = getComputedStyle(noteProbeRef.current).font
+    // The header's transform and spacing are READ off the probe rather than
+    // assumed, so restyling the probe restyles the measurement with it.
+    const headStyle = getComputedStyle(headProbeRef.current)
+    const headFont = headStyle.font
+    const headSpacing = parseFloat(headStyle.letterSpacing) || 0
+    const headUpper = headStyle.textTransform === 'uppercase'
     const zeroWidth = textWidth('0', sansFont) || 7
 
     const chCap = (maxCh) => Math.ceil(maxCh * zeroWidth + CELL_PAD + MEASURE_BUFFER)
@@ -231,14 +276,59 @@ export function DataTable({
     // fine: the row set that triggers this effect paints on the next commit and
     // re-measures then.
     const bodyRows = wrapper.querySelectorAll('tbody tr')
-    const renderedCells = (idx) => {
-      const out = []
-      if (idx < 0) return out
+
+    // The intrinsic width of a `render` column, taken by LAYING THE CELLS OUT
+    // rather than by reconstructing a number from their text.
+    //
+    // Canvas measureText on td.textContent was the previous method and it is
+    // wrong whenever the renderer emits anything but bare text. Measured on the
+    // real app: 16 cells across 8 tabs paint an 11px pill inside a 14px cell,
+    // and measuring their text at 14px over-stated those columns by 1–26px
+    // each. Text width is also only part of a cell — a pill's own padding, a
+    // border, a flex gap, an icon and multi-node content are all invisible to
+    // measureText, and a renderer is free to vary all of them PER ROW, so
+    // sampling one row cannot stand in for the column.
+    //
+    // Laying out sidesteps every one of those. The clones go in an absolutely
+    // positioned max-content container, so the width that comes back is the
+    // content's OWN width and not a function of the width the column already
+    // has — which is the property that keeps this out of the measure-grow-
+    // measure loop that ruled out scrollWidth. All rows are appended before any
+    // is read, so this costs one layout flush per render column, not one per
+    // row.
+    //
+    // The td's own font is read once: it comes from `tdBase`, identical for
+    // every row of a column. What varies row to row lives INSIDE the cell and
+    // travels with the clone, carrying its own classes.
+    const renderedNaturalWidth = (idx) => {
+      const probe = renderProbeRef.current
+      if (!probe || idx < 0 || bodyRows.length === 0) return 0
+      const firstTd = bodyRows[0].children[idx]
+      if (!firstTd) return 0
+      const tdStyle = getComputedStyle(firstTd)
+      const holders = []
       for (const tr of bodyRows) {
         const td = tr.children[idx]
-        if (td) out.push((td.textContent || '').trim())
+        if (!td) continue
+        const holder = document.createElement('div')
+        holder.style.display = 'inline-block'
+        holder.style.whiteSpace = 'nowrap'
+        // Text nodes sitting directly in the td inherit the td's font, which
+        // the clone does not carry (those classes are on the td itself).
+        holder.style.font = tdStyle.font
+        holder.style.letterSpacing = tdStyle.letterSpacing
+        for (const node of td.childNodes) holder.appendChild(node.cloneNode(true))
+        holders.push(holder)
       }
-      return out
+      if (holders.length === 0) return 0
+      probe.replaceChildren(...holders)
+      let max = 0
+      for (const h of holders) {
+        const w = h.getBoundingClientRect().width
+        if (w > max) max = w
+      }
+      probe.replaceChildren()
+      return max
     }
 
     const fixed = {}
@@ -249,7 +339,9 @@ export function DataTable({
         continue
       }
       const font = c.mono ? monoFont : sansFont
-      let w = textWidth(String(c.label ?? ''), headFont) + (c.sortable ? SORT_AFFORDANCE_PAD : 0)
+      const rawLabel = String(c.label ?? '')
+      const paintedLabel = headUpper ? rawLabel.toUpperCase() : rawLabel
+      let w = textWidth(paintedLabel, headFont, headSpacing) + (c.sortable ? SORT_AFFORDANCE_PAD : 0)
       // A `render` column is measured from the text on screen, read out of the
       // DOM; every other column from its raw value. The raw value is the WRONG
       // input for a render column and it was wrong in both directions:
@@ -265,22 +357,23 @@ export function DataTable({
       //   PM" is 173px. The column was 78px wider than anything ever shown in
       //   it, which is dead space by construction.
       //
-      // textContent, not scrollWidth: a rendered cell's scrollWidth is a
-      // function of the width it was already given (its contents wrap), so
-      // feeding that back in would be a measure-grow-measure loop. The text is
-      // the same however narrow the column gets. Before the first paint there
-      // is no DOM to read and the raw value stands in for one pass.
-      const rendered = c.render ? renderedCells(cols.indexOf(c)) : null
-      if (rendered && rendered.length) {
-        for (const text of rendered) {
-          const tw = textWidth(text, font)
-          if (tw > w) w = tw
-        }
+      // NOT scrollWidth: a rendered cell's scrollWidth is a function of the
+      // width it was already given (its contents wrap), so feeding that back in
+      // would be a measure-grow-measure loop. renderedNaturalWidth() above
+      // reads the same cells laid out at max-content instead, which is the same
+      // number however narrow the real column gets. Before the first paint
+      // there is no DOM to read and the raw value stands in for one pass.
+      const laidOut = c.render ? renderedNaturalWidth(cols.indexOf(c)) : 0
+      if (laidOut > 0) {
+        if (laidOut > w) w = laidOut
       } else {
         for (const r of visible) {
           const v = r[c.key]
+          // A badge PAINTS its text at text-note inside a text-copy cell, so it
+          // is measured with the note probe. Measuring it at 14px is what made
+          // every pill column 1–26px wider than anything ever shown in it.
           const text = c.badge ? String(v || '—') : v != null ? String(v) : '—'
-          const tw = textWidth(text, font) + (c.badge ? BADGE_PAD : 0)
+          const tw = textWidth(text, c.badge ? noteFont : font) + (c.badge ? BADGE_PAD : 0)
           if (tw > w) w = tw
         }
       }
@@ -527,7 +620,7 @@ export function DataTable({
               const isActive = activeSort && activeSort.key === c.key
               const ariaSort = isActive ? (activeSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
               return (
-                <th key={c.key} aria-sort={ariaSort} className={base} style={cellStyle(c)}>
+                <th key={c.key} aria-sort={ariaSort} data-col-kind={colKind(c)} className={base} style={cellStyle(c)}>
                   <button
                     type="button"
                     onClick={() => handleSort(c.key)}
@@ -540,7 +633,7 @@ export function DataTable({
               )
             }
             return (
-              <th key={c.key} className={base} style={cellStyle(c)}>
+              <th key={c.key} data-col-kind={colKind(c)} className={base} style={cellStyle(c)}>
                 {c.label}
               </th>
             )
@@ -669,6 +762,23 @@ export function DataTable({
         ref={headProbeRef}
         className="text-note font-medium uppercase tracking-wide"
         style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }}
+      />
+      {/* The pill probe. Badge cells paint their text at text-note inside a
+          text-copy cell, so measuring them needs the note font, not the body
+          font. font-medium matches the pill span's own weight. */}
+      <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
+      {/* The render-column stage. Clones of a column's rendered cells are laid
+          out in here to get their intrinsic width, pills, padding, icons and
+          all. width:max-content is what makes the result independent of the
+          width the real column already has, so this cannot feed back into
+          itself. It is `visibility: hidden`, NOT `display: none`, because a
+          display:none subtree has no layout to measure. */}
+      <div
+        ref={renderProbeRef}
+        style={{
+          position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
+          left: 0, top: 0, width: 'max-content', whiteSpace: 'nowrap',
+        }}
       />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
       <div ref={wrapperRef} className="overflow-x-hidden overflow-y-auto" style={{ maxHeight }}>
