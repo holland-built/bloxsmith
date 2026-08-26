@@ -1865,9 +1865,46 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
         const rect = item.getBoundingClientRect()
         ghost = overlayEl(
           'data-layout-ghost',
+          // A cssText string, because the element is built by hand and appended
+          // to document.body — and that is precisely why this line had drifted
+          // off two design systems at once. The scans in ui/src/lib/ read class
+          // literals out of .jsx and cannot see inside a string, so nothing
+          // failed while `12px`, `12px` and `system-ui,sans-serif` sat here.
+          //
+          // TWO of the three were the token's own value already, so they move no
+          // pixel: 12px is --radius-surface exactly, and 12px is the padding
+          // this painted before it had a name. What changes for those two is
+          // that moving the token now moves the ghost.
+          //
+          // The font stack is the one that is not a strict equality, and saying
+          // so is the honest version. `system-ui,sans-serif` becomes
+          // `system-ui,-apple-system,sans-serif`, which inserts a fallback
+          // BEHIND the first choice. system-ui resolves on every platform this
+          // is built for, so the face painted is the same one; what the token
+          // adds is a second answer for a browser that does not know system-ui,
+          // where this used to fall straight through to a generic.
+          //
+          // var() forms rather than values read through getComputedStyle in JS,
+          // for the reason ChartTip states: these are declarations on a real
+          // element and the browser resolves them at paint, whereas reading the
+          // tokens in JS on a cold load runs before the stylesheet applies and
+          // bakes in an empty string. tests/drag-ghost-tokens.spec.ts asserts
+          // the RESOLVED value, because a var() naming a token that does not
+          // exist is invalid at computed-value time — which for padding and
+          // border-radius means the INITIAL value (0px), and for the inherited
+          // font properties means whatever body is using. Neither throws, and
+          // the second in particular looks close enough to right to pass a
+          // glance, which is why it is asserted rather than eyeballed.
+          //
+          // 13px IS STILL A HAND-WRITTEN SIZE, left alone deliberately. The
+          // scale is 24/14/11, so this is a fourth, and --text-copy would move
+          // it to 14 — a change to how the ghost LOOKS, which docs/SCREENS.md
+          // puts behind a variant set and the owner naming one. It does not
+          // belong folded into a change that otherwise moves nothing. It is
+          // recorded as open rather than forgotten: typeScale.test.js names it.
           `width:${Math.round(rect.width)}px;height:${Math.round(Math.min(rect.height, 120))}px;` +
-            'border-radius:12px;border:2px solid var(--color-accent);background:var(--color-card);' +
-            'opacity:.9;padding:12px;font:600 13px system-ui,sans-serif;color:var(--color-txt);overflow:hidden;',
+            'border-radius:var(--radius-surface);border:2px solid var(--color-accent);background:var(--color-card);' +
+            'opacity:.9;padding:var(--sp-ghost-pad);font:600 13px var(--font-sans);color:var(--color-txt);overflow:hidden;',
         )
         ghost.textContent = labelText()
         line = overlayEl('data-layout-insert-line', 'width:3px;border-radius:2px;background:var(--color-accent);')
