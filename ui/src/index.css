@@ -382,14 +382,23 @@ html[data-theme="light"] { color-scheme: light; }
    it measures — Codex finding 6. Table rows already stand at 38px, and the
    header sort buttons are excluded with them.
 
-   WIDTH IS INCLUDED, having been assumed too dangerous and then measured.
+   HEIGHT ONLY, and the reason is worth the paragraph because it was measured
+   three times and the first two readings disagreed.
+
    min-width: 44px on the 24px `w-6` icon buttons was expected to push the
-   topbar and the panel action rows into horizontal overflow, which is the one
-   thing the sizing model exists to prevent. It does not, at any width the app
-   is built for: 1280, 1024, 768 and 390 all report scrollWidth == clientWidth
-   on all eight tabs. So the targets are a true 44x44 and the app keeps WCAG
-   2.5.5's enhanced size on touch, rather than the 24x44 a height-only rule
-   would have left.
+   header into horizontal overflow, which is the one thing the sizing model
+   exists to prevent. Measured on macOS at 1280, 1024, 768 and 390 it did not:
+   scrollWidth == clientWidth on all eight tabs, so width went in. CI then
+   failed on all eight, by 9px, at 1280 only — Linux renders the header text
+   wider, and the slack macOS had was already spent. Measured against a
+   fine-pointer baseline in the same browser: 9px on touch against 0px with a
+   mouse, so it was this rule and not the platform.
+
+   Width is therefore out. A row of chrome that must fit one line has a margin
+   of safety that depends on the font the OS happens to have, and a rule whose
+   correctness rests on that will break again on the next machine. An icon
+   button's hit area is 24x44: WCAG 2.5.8's 24x24 minimum with room to spare,
+   short of 2.5.5's enhanced 44x44. Stated rather than implied.
 
    min-height DOES NOT APPLY TO AN INLINE BOX, which is not a detail that can be
    reasoned past — the CSS is simply ignored there. Overview's chart-title
@@ -413,7 +422,6 @@ html[data-theme="light"] { color-scheme: light; }
   a[href],
   [role="button"] {
     min-height: 44px;
-    min-width: 44px;
   }
 
   /* An inline box ignores both, so the role has to carry a box first.
@@ -437,7 +445,6 @@ html[data-theme="light"] { color-scheme: light; }
   svg a[href],
   svg [role="button"] {
     min-height: 0;
-    min-width: 0;
   }
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
