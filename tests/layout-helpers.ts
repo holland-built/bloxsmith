@@ -209,6 +209,29 @@ export async function grabRightEdge(page: Page, id: string) {
   return { box, y };
 }
 
+// Presses a panel's move handle and travels far enough for the drag to BEGIN,
+// leaving the button down. The caller owns everything after that, including the
+// pointerup.
+//
+// The 40px step matters and is not a round number chosen for looks: onHandleDown
+// creates nothing until the pointer has moved more than 4px on an axis, because
+// below that the gesture is a click on a button that must stay clickable and
+// focusable. A caller that moves less than that gets no ghost and no insertion
+// line, and would read the absence as a defect in whatever it came to measure.
+//
+// Extracted rather than copied. This file's own header gives the reason: a spec
+// that re-implements "grab a card and drag it" with its own pointer arithmetic
+// can go on passing against a gesture the app no longer performs.
+export async function beginPanelDrag(page: Page, id: string) {
+  const handle = page.locator(`[data-panel-id="${id}"] [data-layout-handle]`);
+  await expect(handle).toHaveCount(1);
+  const hb = (await handle.boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + 40, hb.y + 40, { steps: 5 });
+  return hb;
+}
+
 // Drops the card `id` onto the right half of whatever card is currently at DOM
 // position `slot`. That aim gives the same insertion index whichever row the
 // two cards happen to be on: the dragged card is counted either because the
@@ -218,14 +241,9 @@ export async function grabRightEdge(page: Page, id: string) {
 export async function dragOntoRightHalfOf(page: Page, id: string, slot: number) {
   const ids = await domOrder(page);
   const targetBox = await cardBox(page, ids[slot]!);
-  const handle = page.locator(`[data-panel-id="${id}"] [data-layout-handle]`);
-  await expect(handle).toHaveCount(1);
-  const hb = (await handle.boundingBox())!;
   const before = await cardBox(page, id);
 
-  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(hb.x + 40, hb.y + 40, { steps: 5 });
+  await beginPanelDrag(page, id);
   await page.mouse.move(
     (targetBox.left + targetBox.right) / 2 + 20,
     clampY(page, targetBox.top + 20),

@@ -34,6 +34,21 @@
 // this file still cannot see; tests/chart-tokens.spec.ts asserts the RESOLVED
 // px for both in a real browser, which is the only place a var() can be proved
 // to have resolved at all. The drag ghost's 13px is what remains uncovered.
+//
+// IT IS STILL UNCOVERED BY THIS FILE AND NO LONGER UNWATCHED. The ghost's
+// cssText string now writes var(--sp-ghost-pad), var(--radius-surface) and
+// var(--font-sans), and tests/drag-ghost-tokens.spec.ts asserts all three
+// resolved in a browser mid-drag — including a test that MOVES each token and
+// requires the ghost to follow, because the values it replaced were equal to
+// the tokens and an equality check cannot tell those two apart.
+//
+// The 13px was deliberately left alone in that change. The scale is 24/14/11,
+// so --text-copy moves it to 14, and a change to how the ghost LOOKS is what
+// docs/SCREENS.md puts behind a variant set and the owner naming one. Folding
+// it into a change that otherwise moved no pixel would have been smuggling it.
+//
+// So this is the last site of the three-size migration, it is one line, and
+// what it needs is a yes rather than a test.
 // ---------------------------------------------------------------------------
 
 import { test } from 'node:test'

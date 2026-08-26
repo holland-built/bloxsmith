@@ -261,6 +261,29 @@ html[data-density="compact"] {
   --sp-cell-y: 0.25rem;
 }
 
+/* ---------- the drag ghost's own padding ----------
+
+   Deliberately OUTSIDE both blocks above, so it does not move with density.
+
+   The ghost is the card-shaped preview that follows the cursor while a panel is
+   being dragged (ui.jsx's onHandleDown). It is built by writing a cssText string
+   onto a div appended to document.body, and that is why it sat outside every
+   design system the app has: the scans in ui/src/lib/ read class LITERALS out of
+   .jsx, and no scan of a string's contents is among them. typeScale.test.js
+   names the ghost's 13px explicitly as the one site it cannot reach; the padding
+   and the corner were not named anywhere, which is worse — nothing knew to look.
+
+   Not density-driven, and the reason is the same one that keeps DataTable's
+   horizontal cell padding off the list above — a token whose value moves must
+   have a reader that moves with it. The ghost takes its WIDTH and HEIGHT from
+   the real card's measured rect at the moment the drag begins, and nothing
+   re-reads this padding afterwards. Density-driving it would have the inner
+   padding change size on a preview whose outer box was measured under the other
+   density. It is 12px in both, which is what it painted before it had a name. */
+:root {
+  --sp-ghost-pad: 12px;
+}
+
 /* ---------- the card grid's track count, declared where the browser decides it ----------
 
    `--grid-tracks` is the number of columns [data-card-grid] ACTUALLY declares at
