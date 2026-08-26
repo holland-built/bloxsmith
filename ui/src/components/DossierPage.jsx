@@ -449,9 +449,15 @@ const LANE_COLS =
 
 const LANES = 'grid ' + LANE_COLS
 
+// `ledger-cell` is a MARKER, not a style. Tailwind emits nothing for it and it
+// changes no pixel; it exists so tests/dossier-page.spec.ts can select every
+// cell that is supposed to sit on the shared inset, including the eleven that
+// reach it through this constant. Selecting them by a styling class instead
+// (`div.h-6`, say) couples the guard to how the ledger happens to look this
+// week, and selecting them by their words couples it to the copy.
 const CELL =
-  'col-start-2 min-[561px]:col-start-auto px-[10px] py-[7px] border-b border-line min-w-0 ' +
-  'min-[561px]:py-0 min-[561px]:px-[11px] min-[561px]:min-h-[34px] min-[561px]:border-b-0 min-[561px]:border-r min-[561px]:border-line ' +
+  'ledger-cell col-start-2 min-[561px]:col-start-auto px-[10px] py-[7px] border-b border-line min-w-0 ' +
+  'min-[561px]:py-0 min-[561px]:px-[var(--sp-ledger-inset)] min-[561px]:min-h-[34px] min-[561px]:border-b-0 min-[561px]:border-r min-[561px]:border-line ' +
   'flex items-center'
 
 function FieldCell({ k, v, title }) {
@@ -829,11 +835,11 @@ export default function DossierPage() {
       <div className={'hidden min-[561px]:grid ' + LANE_COLS + ' bg-field border-b border-border'}>
         <div />
         {['Source', 'State', 'Identity'].map((h) => (
-          <div key={h} className="h-6 flex items-center px-[11px] border-r border-line text-note uppercase tracking-[0.1em] text-dim font-semibold">
+          <div key={h} className="ledger-cell h-6 flex items-center px-[var(--sp-ledger-inset)] border-r border-line text-note uppercase tracking-[0.1em] text-dim font-semibold">
             {h}
           </div>
         ))}
-        <div className="col-span-3 h-6 flex items-center px-[11px] text-note uppercase tracking-[0.1em] text-dim font-semibold">
+        <div className="ledger-cell col-span-3 h-6 flex items-center px-[var(--sp-ledger-inset)] text-note uppercase tracking-[0.1em] text-dim font-semibold">
           Fields returned by this source
         </div>
       </div>
@@ -849,7 +855,7 @@ export default function DossierPage() {
           rows 4 and 5 breaks the single vertical scan of five jacks that is the
           point of the ledger. */}
       {q && (
-        <div data-dossier-panel className="px-[11px] py-3 border-b border-line bg-card">
+        <div data-dossier-panel className="ledger-cell px-[var(--sp-ledger-inset)] py-3 border-b border-line bg-card">
           <h2 className="text-note uppercase tracking-[0.1em] text-dim font-semibold mb-2">
             Threat intel — full detail
           </h2>
