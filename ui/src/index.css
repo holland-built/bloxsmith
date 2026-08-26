@@ -284,6 +284,33 @@ html[data-density="compact"] {
   --sp-ghost-pad: 12px;
 }
 
+/* ---------- the dossier ledger's horizontal cell inset ----------
+
+   DossierPage's ledger is a grid whose columns must line up down the page: the
+   three head cells, every field cell, and the threat-intel panel embedded below
+   the last row all share one left edge. That alignment is what the ledger IS —
+   a single vertical scan of five sources — so the inset the four of them share
+   is a role, not a coincidence of four numbers that happen to match.
+
+   It was written out four times as px-[11px], which is exactly the shape that
+   drifts: fix a misalignment at one of the four and the other three stay put.
+
+   EXTRACTED AT ITS RENDERING VALUE. 11px is what all four painted before this
+   token existed and 11px is what they paint after it, so nothing moves. 11px is
+   also not a step on any scale — Tailwind's own would put it at 10 or 12 — and
+   that is left exactly as it is on purpose: moving it is a change to how the
+   page LOOKS, which docs/SCREENS.md puts behind a variant set and the owner
+   naming one. Naming a value and changing it are two different jobs and this is
+   only the first.
+
+   NOT density-driven, for the same reason as --sp-ghost-pad above: the ledger's
+   column widths are declared in px in LANE_COLS (DossierPage.jsx), and an inset
+   that moved under a width that did not would push the cell contents out of the
+   column that was sized for them. */
+:root {
+  --sp-ledger-inset: 11px;
+}
+
 /* ---------- the card grid's track count, declared where the browser decides it ----------
 
    `--grid-tracks` is the number of columns [data-card-grid] ACTUALLY declares at
