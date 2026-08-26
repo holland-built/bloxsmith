@@ -86,12 +86,38 @@ test('every control off the tables is a 44px touch target, and nothing overflows
               return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} ${Math.round(b.width)}x${Math.round(b.height)}`;
             });
           const de = document.documentElement;
+          // NAME THE CULPRIT. "a tab overflows by 9px" is not actionable, and
+          // this failure first appeared only on CI's Linux font metrics, where
+          // it cannot be reproduced by reading the CSS. Every element whose
+          // right edge passes the viewport is reported with the ancestor chain
+          // needed to find it.
+          const offenders: string[] = [];
+          if (de.scrollWidth > de.clientWidth + 1) {
+            const limit = de.clientWidth;
+            document.querySelectorAll('*').forEach((el) => {
+              const b = el.getBoundingClientRect();
+              if (b.width === 0 || b.right <= limit + 1) return;
+              // Only the innermost offenders: an ancestor is wide because its
+              // child is, and listing both buries the answer.
+              if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > limit + 1)) return;
+              const path: string[] = [];
+              let p: Element | null = el;
+              for (let i = 0; i < 4 && p; i++, p = p.parentElement) {
+                const cls = (p.getAttribute('class') || '').split(/\s+/).slice(0, 3).join('.');
+                path.push(`${p.tagName.toLowerCase()}${cls ? '.' + cls : ''}`);
+              }
+              offenders.push(
+                `right=${Math.round(b.right)} w=${Math.round(b.width)} ${path.join(' < ')}`,
+              );
+            });
+          }
           return {
             coarse,
             n: subject.length,
             under,
             scrollW: de.scrollWidth,
             clientW: de.clientWidth,
+            offenders: offenders.slice(0, 6),
           };
         },
         { sel: INTERACTIVE, MIN, SLACK },
@@ -104,7 +130,10 @@ test('every control off the tables is a 44px touch target, and nothing overflows
 
       for (const u of r.under) small.push(`${width}px ${tab}: ${u}`);
       if (r.scrollW > r.clientW + 1) {
-        overflow.push(`${width}px ${tab}: scrollWidth ${r.scrollW} > clientWidth ${r.clientW}`);
+        overflow.push(
+          `${width}px ${tab}: scrollWidth ${r.scrollW} > clientWidth ${r.clientW}` +
+            (r.offenders.length ? `\n      ${r.offenders.join('\n      ')}` : ' (no single element passes the edge)'),
+        );
       }
     }
   }
