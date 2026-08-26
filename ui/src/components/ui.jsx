@@ -2054,7 +2054,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       onPointerDown={onHandleDown}
       onKeyDown={onHandleKey}
       onBlur={onHandleBlur}
-      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-note leading-none ${
+      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 ${
         moveActive ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
       }`}
     >
@@ -2093,7 +2093,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelName || panelId}` })}
       title="Hide this panel"
       onClick={onHide}
-      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-note leading-none text-dim hover:text-field-txt hover:border-border-hover"
+      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 text-dim hover:text-field-txt hover:border-border-hover"
     >
       {title && <span id={hideWordId} className="sr-only">Hide</span>}
       ✕
@@ -2240,7 +2240,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // back after a close — blur clears it, the next focus sets it again.
       onFocus={() => setHelpFocus(true)}
       onBlur={() => setHelpFocus(false)}
-      className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-note leading-none ${
+      className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 ${
         // Hover does not fight the pinned state: pinned always wins the accent,
         // a preview gets the plain hover treatment, and the closed state keeps
         // the CSS :hover fallback for anything the JS previews miss.
