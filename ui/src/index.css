@@ -357,4 +357,82 @@ html[data-theme="light"] { color-scheme: light; }
 
 /* hide scrollbar on internally-scrolling strips (e.g. topbar nav on narrow widths) */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ---------- touch hit areas, and only on a touch pointer ----------
+   The audit's item 5, and the narrow half of a finding that was rejected in its
+   wide form. A blanket 44px floor on an 11px-dense desktop operator console
+   remakes every control in the app; behind `pointer: coarse` it costs a mouse
+   user NOTHING, because the query never matches for them. Measured on the
+   running app at 1280px with a touch pointer: 310 non-table controls sat under
+   44px tall, the smallest at 13px.
+
+   WHY min-height AND NOT AN ::after OVERLAY. An overlay is the technique that
+   grows a hit area without moving any pixels, and it was measured before it was
+   rejected: centring a 44x44 box on each of those 310 controls puts 135 of them
+   — 44% — over a NEIGHBOURING control's real box. An overlapping hit area does
+   not add a target, it steals one, and whichever control paints later wins the
+   tap. Codex raised this as finding 7 on the plan and the number settles it.
+   The DataTable wrapper is `overflow-x-hidden` as well, which would clip such
+   an overlay inside a table regardless.
+
+   WHY NOTHING INSIDE A TABLE. DataTable measures its own column widths with a
+   canvas against hard-coded CELL_PAD and SORT_AFFORDANCE_PAD constants, and
+   Card publishes a width from getComputedStyle. Growing a sort button or a row
+   would move the geometry those two agree on and desync the measurer from what
+   it measures — Codex finding 6. Table rows already stand at 38px, and the
+   header sort buttons are excluded with them.
+
+   WIDTH IS INCLUDED, having been assumed too dangerous and then measured.
+   min-width: 44px on the 24px `w-6` icon buttons was expected to push the
+   topbar and the panel action rows into horizontal overflow, which is the one
+   thing the sizing model exists to prevent. It does not, at any width the app
+   is built for: 1280, 1024, 768 and 390 all report scrollWidth == clientWidth
+   on all eight tabs. So the targets are a true 44x44 and the app keeps WCAG
+   2.5.5's enhanced size on touch, rather than the 24x44 a height-only rule
+   would have left.
+
+   min-height DOES NOT APPLY TO AN INLINE BOX, which is not a detail that can be
+   reasoned past — the CSS is simply ignored there. Overview's chart-title
+   drill-down is a bare <span role="button">, so it stayed 17px through the
+   first build of this rule while every other control moved. Spans carrying the
+   role are made inline-block below; a `span[role]` selector is used rather than
+   a blanket one because most role="button" elements here are already flex, and
+   forcing display on those would break the layouts they carry.
+
+   svg is excluded because a `pointer: coarse` rule has no business resizing
+   chart geometry; the heatmap cells are sized by the chart, not by CSS.
+
+   THE COST, stated: page height on touch grows where the controls stack — the
+   Overview grid goes 1376 -> 1484px and Security 2066 -> 2344px at 1280 wide.
+   No horizontal overflow at any width, and a mouse user sees none of it. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input,
+  textarea,
+  a[href],
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* An inline box ignores both, so the role has to carry a box first. */
+  span[role="button"],
+  span[role="link"] {
+    display: inline-block;
+  }
+
+  table button,
+  table select,
+  table input,
+  table textarea,
+  table a[href],
+  table [role="button"],
+  svg button,
+  svg a[href],
+  svg [role="button"] {
+    min-height: 0;
+    min-width: 0;
+  }
+}
 .no-scrollbar::-webkit-scrollbar { display: none; }
