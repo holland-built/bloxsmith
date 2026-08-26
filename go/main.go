@@ -484,12 +484,29 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// putting the cache Rotate behind that wait would keep serving PRIOR-TENANT
 	// rows for the whole of it. Rotating first drops them immediately.
 	//
+	// InvalidateOverride rather than SetOverride(""), and the difference is the
+	// whole of the stale-JWT fix. A bare clear can be UNDONE by an account switch
+	// already in flight: it is inside its POST to /v2/session/account_switch, and
+	// it publishes a JWT minted for an account belonging to the tenant being left
+	// as soon as that returns. Clearing first does not stop a write that lands
+	// after.
+	//
+	// Bumping the epoch does. The switch reads the epoch before its round trip
+	// and can only publish while it is unchanged, so a switch spanning a tenant
+	// transition is refused outright — and there is no instant at which the old
+	// tenant's credential is visible to withPinnedTenant.
+	//
+	// ResetActive clears the override again under account.Manager's own mutex.
+	// That is belt to this braces now rather than the load-bearing part: it
+	// keeps the slot empty even for a future caller that reaches SetOverride
+	// without an epoch.
+	//
 	// The second Rotate fences anything that started during that wait: a fetch
 	// admitted between the first Rotate and ResetActive belongs to the old
 	// generation and must not be allowed to populate the new one. Rotate only
 	// bumps a generation, so doing it twice costs nothing worth measuring.
 	v.SetAuthReset(func() {
-		auth.SetOverride("")
+		auth.InvalidateOverride()
 		sharedCache.Rotate()
 		acct.ResetActive()
 		sharedCache.Rotate()

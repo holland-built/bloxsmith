@@ -74,6 +74,10 @@ type Auth struct {
 	override string        // portal account-switch key; consulted FIRST when set
 	fallback string        // API_KEY from the environment (server.py:41)
 	active   func() string // active tenant key, e.g. vault.ActiveKey
+	// overrideEpoch fences a stale account-switch JWT against a tenant
+	// transition that happened while the switch was in flight. See
+	// OverrideEpoch / InvalidateOverride / SetOverrideAt below.
+	overrideEpoch uint64
 }
 
 // NewAuth builds the slot from the env API_KEY and an active-key resolver.
@@ -178,6 +182,57 @@ func (a *Auth) SetOverride(k string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.override = k
+}
+
+// THE OVERRIDE EPOCH, and why clearing the override is not enough on its own.
+//
+// A vault tenant switch clears the override, but an account switch that started
+// BEFORE that clear is still in flight: it is inside its POST to
+// /v2/session/account_switch, and when that returns it publishes a JWT minted
+// for an account belonging to the tenant being switched away from. Clearing
+// first does not stop it, because the write happens after.
+//
+// account.Manager holding its own mutex across the whole switch makes the reset
+// and the switch mutually exclusive, which guarantees the stale JWT is CLEARED
+// eventually. It does not stop it being OBSERVED: between the switch publishing
+// and the reset winning the mutex, withPinnedTenant can pin that credential to
+// an inbound request, which then runs to completion against the old tenant.
+// That is Codex's blocking finding on the first version of this fix.
+//
+// So the override carries an epoch. A caller reads it before it starts, and can
+// only publish while it is unchanged; a tenant transition bumps it. An
+// account switch that spans a transition therefore cannot publish at all, and
+// there is no window in which a stale JWT is visible to anything.
+
+// OverrideEpoch is the value a caller must present to SetOverrideAt to publish.
+func (a *Auth) OverrideEpoch() uint64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.overrideEpoch
+}
+
+// InvalidateOverride clears the override AND bumps the epoch, so any account
+// switch already in flight is refused when it tries to publish. This is what a
+// vault tenant transition calls.
+func (a *Auth) InvalidateOverride() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.override = ""
+	a.overrideEpoch++
+}
+
+// SetOverrideAt publishes k only if no tenant transition has happened since the
+// caller read epoch. It reports whether the value was published; false means the
+// credential is stale by construction and must be discarded, not retried with a
+// fresh epoch — the account it was minted for belongs to the previous tenant.
+func (a *Auth) SetOverrideAt(k string, epoch uint64) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.overrideEpoch != epoch {
+		return false
+	}
+	a.override = k
+	return true
 }
 
 // Client is the Infoblox REST proxy. One process-wide Client resolves auth
