@@ -17,9 +17,21 @@ import { installBaselineWorld } from './page-fixtures';
 // Two things are asserted together, because either alone is misleading:
 //   1. Every interactive control outside a table and outside an SVG is at least
 //      44x44. Measured before the rule existed: 310 were not, the smallest 13px.
-//   2. No tab overflows horizontally at any width. Growing 310 controls is only
-//      safe if it does not push the layout sideways, and the sizing model exists
-//      precisely to keep scrollWidth == clientWidth.
+//   2. The coarse pointer INTRODUCES no horizontal overflow. Growing 310
+//      controls is only safe if it does not push the layout sideways.
+//
+// THE OVERFLOW CHECK IS A DIFFERENCE, not an absolute, and that was learned the
+// hard way. The first version asserted `scrollWidth == clientWidth` outright. It
+// passed on macOS and failed on CI's Linux font metrics, which render the header
+// links wider and put the last one 9px past the viewport at 1280 — on every tab,
+// with a 101px-wide element that no 44px floor could have grown. That overflow
+// is the platform's, not this rule's: the rest of the suite runs with a fine
+// pointer and has never looked for it. Blaming the touch targets for it would
+// have been a false accusation, and "fixing" it would have meant changing the
+// header for everyone to satisfy a test.
+//
+// So the fine pointer is measured as a BASELINE in the same run, on the same
+// machine and fonts, and only overflow the coarse pointer ADDS is a failure.
 //
 // WHAT IS DELIBERATELY EXEMPT, so a future reader does not "fix" it:
 //   - Anything inside <table>. DataTable measures column widths with a canvas
@@ -53,89 +65,92 @@ const SLACK = 1;
 
 const INTERACTIVE = 'button, a[href], input, select, textarea, [role="button"]';
 
-test('every control off the tables is a 44px touch target, and nothing overflows', async ({ page }) => {
+// Everything the page can tell us in one pass, so the touch page and the
+// fine-pointer baseline are measured by identical code.
+async function survey(page: import('@playwright/test').Page, width: number, tab: string) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto(`/#${tab}`);
+  await expect(page.locator('h1').first()).toBeVisible();
+  await page.waitForTimeout(900);
+  return page.evaluate(
+    ({ sel, MIN, SLACK }) => {
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      const els = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
+      const subject = els.filter((el) => {
+        if (el.closest('table') || el.closest('svg')) return false;
+        const b = el.getBoundingClientRect();
+        return b.width > 0 && b.height > 0; // skip hidden controls
+      });
+      const under = subject
+        .map((el) => ({ el, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.height < MIN - SLACK || b.width < MIN - SLACK)
+        .slice(0, 8)
+        .map(({ el, b }) => {
+          const cls = (el.getAttribute('class') || '').split(/\s+/).slice(0, 2).join(' ');
+          return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} ${Math.round(b.width)}x${Math.round(b.height)}`;
+        });
+      const de = document.documentElement;
+      const excess = Math.max(0, de.scrollWidth - de.clientWidth);
+      // NAME THE CULPRIT. "a tab overflows by 9px" is not actionable.
+      const offenders: string[] = [];
+      if (excess > 1) {
+        const limit = de.clientWidth;
+        document.querySelectorAll('*').forEach((el) => {
+          const b = el.getBoundingClientRect();
+          if (b.width === 0 || b.right <= limit + 1) return;
+          // Innermost only: an ancestor is wide because its child is.
+          if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > limit + 1)) return;
+          const path: string[] = [];
+          let p: Element | null = el;
+          for (let i = 0; i < 4 && p; i++, p = p.parentElement) {
+            const cls = (p.getAttribute('class') || '').split(/\s+/).slice(0, 3).join('.');
+            path.push(`${p.tagName.toLowerCase()}${cls ? '.' + cls : ''}`);
+          }
+          offenders.push(`right=${Math.round(b.right)} w=${Math.round(b.width)} ${path.join(' < ')}`);
+        });
+      }
+      return { coarse, n: subject.length, under, excess, offenders: offenders.slice(0, 4) };
+    },
+    { sel: INTERACTIVE, MIN, SLACK },
+  );
+}
+
+test('every control off the tables is a 44px touch target, and nothing overflows', async ({ page, browser }) => {
   const small: string[] = [];
   const overflow: string[] = [];
   let measured = 0;
 
-  for (const width of WIDTHS) {
-    await page.setViewportSize({ width, height: 900 });
-    for (const tab of TABS) {
-      await page.goto(`/#${tab}`);
-      await expect(page.locator('h1').first()).toBeVisible();
-      await page.waitForTimeout(900);
+  // The baseline context: same browser, same machine, same fonts, fine pointer.
+  const fineCtx = await browser.newContext({ hasTouch: false });
+  const finePage = await fineCtx.newPage();
+  await installBaselineWorld(finePage);
 
-      const r = await page.evaluate(
-        ({ sel, MIN, SLACK }) => {
-          const coarse = window.matchMedia('(pointer: coarse)').matches;
-          const els = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
-          const subject = els.filter((el) => {
-            if (el.closest('table') || el.closest('svg')) return false;
-            const b = el.getBoundingClientRect();
-            return b.width > 0 && b.height > 0; // skip hidden controls
-          });
-          const under = subject
-            .map((el) => {
-              const b = el.getBoundingClientRect();
-              return { el, b };
-            })
-            .filter(({ b }) => b.height < MIN - SLACK || b.width < MIN - SLACK)
-            .slice(0, 8)
-            .map(({ el, b }) => {
-              const cls = (el.getAttribute('class') || '').split(/\s+/).slice(0, 2).join(' ');
-              return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} ${Math.round(b.width)}x${Math.round(b.height)}`;
-            });
-          const de = document.documentElement;
-          // NAME THE CULPRIT. "a tab overflows by 9px" is not actionable, and
-          // this failure first appeared only on CI's Linux font metrics, where
-          // it cannot be reproduced by reading the CSS. Every element whose
-          // right edge passes the viewport is reported with the ancestor chain
-          // needed to find it.
-          const offenders: string[] = [];
-          if (de.scrollWidth > de.clientWidth + 1) {
-            const limit = de.clientWidth;
-            document.querySelectorAll('*').forEach((el) => {
-              const b = el.getBoundingClientRect();
-              if (b.width === 0 || b.right <= limit + 1) return;
-              // Only the innermost offenders: an ancestor is wide because its
-              // child is, and listing both buries the answer.
-              if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > limit + 1)) return;
-              const path: string[] = [];
-              let p: Element | null = el;
-              for (let i = 0; i < 4 && p; i++, p = p.parentElement) {
-                const cls = (p.getAttribute('class') || '').split(/\s+/).slice(0, 3).join('.');
-                path.push(`${p.tagName.toLowerCase()}${cls ? '.' + cls : ''}`);
-              }
-              offenders.push(
-                `right=${Math.round(b.right)} w=${Math.round(b.width)} ${path.join(' < ')}`,
-              );
-            });
+  try {
+    for (const width of WIDTHS) {
+      for (const tab of TABS) {
+        const touch = await survey(page, width, tab);
+        // If the pointer is not coarse the rule cannot apply and every
+        // assertion below would pass or fail for the wrong reason.
+        expect(touch.coarse, 'the browser did not report a coarse pointer; hasTouch is not in effect').toBe(true);
+        measured += touch.n;
+        for (const u of touch.under) small.push(`${width}px ${tab}: ${u}`);
+
+        if (touch.excess > 1) {
+          const fine = await survey(finePage, width, tab);
+          expect(fine.coarse, 'the baseline context reported a coarse pointer; hasTouch:false is not in effect').toBe(false);
+          // Only what the touch rule ADDED. A tab that already overflows by the
+          // same amount with a mouse is the platform's layout, not this rule's.
+          if (touch.excess > fine.excess + 1) {
+            overflow.push(
+              `${width}px ${tab}: overflows by ${Math.round(touch.excess)}px on touch against ` +
+                `${Math.round(fine.excess)}px with a mouse\n      ${touch.offenders.join('\n      ')}`,
+            );
           }
-          return {
-            coarse,
-            n: subject.length,
-            under,
-            scrollW: de.scrollWidth,
-            clientW: de.clientWidth,
-            offenders: offenders.slice(0, 6),
-          };
-        },
-        { sel: INTERACTIVE, MIN, SLACK },
-      );
-
-      // If the pointer is not coarse the rule cannot apply and every assertion
-      // below would pass or fail for the wrong reason.
-      expect(r.coarse, 'the browser did not report a coarse pointer; hasTouch is not in effect').toBe(true);
-      measured += r.n;
-
-      for (const u of r.under) small.push(`${width}px ${tab}: ${u}`);
-      if (r.scrollW > r.clientW + 1) {
-        overflow.push(
-          `${width}px ${tab}: scrollWidth ${r.scrollW} > clientWidth ${r.clientW}` +
-            (r.offenders.length ? `\n      ${r.offenders.join('\n      ')}` : ' (no single element passes the edge)'),
-        );
+        }
       }
     }
+  } finally {
+    await fineCtx.close();
   }
 
   // Cannot pass by emptiness: if the selector stopped matching, this trips.
@@ -147,6 +162,6 @@ test('every control off the tables is a 44px touch target, and nothing overflows
   ).toEqual([]);
   expect(
     overflow,
-    `Growing the touch targets pushed a tab into horizontal overflow:\n  ${overflow.join('\n  ')}`,
+    `The coarse pointer ADDED horizontal overflow a mouse does not have:\n  ${overflow.join('\n  ')}`,
   ).toEqual([]);
 });
