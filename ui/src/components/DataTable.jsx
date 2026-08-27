@@ -211,6 +211,17 @@ export function DataTable({
   limit,
   viewAllHref,
   maxHeight = 320,
+  // Floor for the scroll box, for a panel that reserves its space before the
+  // rows exist. Opt-in and undefined by default, so every existing caller keeps
+  // a box that is exactly as tall as its content.
+  //
+  // A cap alone cannot hold a layout still. maxHeight pins the height only for
+  // an estate with enough rows to overflow it; a shorter one renders shorter,
+  // so a skeleton sized to the cap is then TALLER than the table that replaces
+  // it and the panel collapses instead of growing. Same shift, other direction.
+  // Passing both makes the box one height in every state that has a table in
+  // it, which is the property a reserved space actually needs.
+  minHeight,
   rowCap = 150,
   sort,
   onSort,
@@ -875,7 +886,7 @@ export function DataTable({
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
-      <div ref={wrapperRef} className="overflow-x-hidden overflow-y-auto" style={{ maxHeight }}>
+      <div ref={wrapperRef} className="overflow-x-hidden overflow-y-auto" style={{ maxHeight, minHeight }}>
         {table}
       </div>
       {footer}
