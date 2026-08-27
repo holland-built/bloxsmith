@@ -617,6 +617,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                     never showed which account you were actually on — the one
                     thing a picker has to say. */}
                 <select
+                  aria-label="Active CSP account"
                   className={inCls}
                   value={activeAccount}
                   onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
@@ -696,7 +697,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               type="button"
               onClick={onOpenHelp}
               aria-haspopup="dialog"
-              className="block lg:hidden mb-3 text-left text-note font-medium text-accent hover:underline underline-offset-2"
+              className="block lg:hidden mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"
             >
               What these controls do →
             </button>

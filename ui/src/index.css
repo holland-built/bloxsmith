@@ -55,6 +55,25 @@
   --color-grid: #222222;
   --color-tick: #858585;
   --color-accent: #0070f3;
+  /* --color-link is the accent AS TEXT, and it exists because the accent fails
+     AA as text while passing everywhere else it is used.
+
+     Measured 2026-08-27 on the running app. #0070f3 as 11px text scores 4.47:1
+     on --color-bg, 4.38 on --color-card and 3.97 on --color-field. AA needs 4.5
+     for text this size. Lighthouse caught only the first of those, because the
+     page it audited happened to put one link on the page background; the card
+     and field cases are worse and it never saw them.
+
+     Deliberately NOT a change to --color-accent. That token is also the fill
+     behind white button text, the chart series colour and the focus ring, and
+     each of those is measured and passing at its own job: a filled accent button
+     scores 4.55 with white on it, and moving the fill to fix the text would
+     break the button to fix the link. One meaning, one token.
+
+     #1a80ff scores 4.80 on the worst dark surface. The light block below carries
+     its own value, because the same colour cannot clear 4.5 against both a near
+     black and a near white. */
+  --color-link: #1a80ff;
   --color-purple: #8b5cf6;
   --color-ok: #4ade80;
   --color-warn: #f5a623;
@@ -207,6 +226,10 @@
   --color-grid: #e5e5e5;
   --color-tick: #656565;
   --color-accent: #0070f3;
+  /* The light theme's accent-as-text is DARKER, not lighter: 4.79 on the worst
+     light surface (--color-line at #eeeeee). The dark theme's #1a80ff would
+     score 2.7 here. See the note in the dark block. */
+  --color-link: #0063d8;
   --color-purple: #7c3aed;
   --color-ok: #16a34a;
   --color-warn: #b45309;

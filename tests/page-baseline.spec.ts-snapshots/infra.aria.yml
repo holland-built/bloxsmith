@@ -54,8 +54,9 @@
   - text: 7assets with discovery status tracked
   - heading "Host Inventory" [level=2]
   - text: 3 hosts
-  - textbox "Search name, IP…"
-  - combobox:
+  - textbox "Search name or IP":
+    - /placeholder: Search name, IP…
+  - combobox "Filter by type":
     - option "All types" [selected]
     - option "onprem"
   - 'button "About: Host Inventory"': "About: ⓘ"

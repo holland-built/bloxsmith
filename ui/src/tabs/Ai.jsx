@@ -180,6 +180,7 @@ function ChatCard({ panelId }) {
         <input
           ref={inRef}
           className={`${inputCls} flex-1 text-copy`}
+          aria-label="Ask about your network"
           placeholder="Ask about your network…"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -339,6 +340,7 @@ function LookupCard({ panelId }) {
       <div className="flex gap-2 mb-3">
         <input
           className={`${inputCls} flex-1 text-copy`}
+          aria-label="Look up a domain, IP, or host"
           placeholder="domain, IP, or host…"
           value={q}
           onChange={(e) => setQ(e.target.value)}

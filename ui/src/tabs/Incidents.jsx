@@ -347,6 +347,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       right={
         <div className="flex items-center gap-2">
           <input
+            aria-label="Filter incidents"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -423,7 +424,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
       render: (_v, r) => (
         <button
           type="button"
-          className="line-clamp-2 text-left underline decoration-dotted underline-offset-2 hover:text-accent"
+          className="line-clamp-2 text-left underline decoration-dotted underline-offset-2 hover:text-link"
           onClick={() => onOpenAction(r.id)}
         >
           {r.title || r.name || r.message || r.display_id || r.id || '—'}

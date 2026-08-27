@@ -15,8 +15,9 @@
   - text: /Baseline Space \d+ Other Space \d+/
   - heading "DHCP Leases" [level=2]
   - text: 2 of 2
-  - textbox "Search address, hostname, MAC…"
-  - combobox:
+  - textbox "Search address, hostname, MAC":
+    - /placeholder: Search address, hostname, MAC…
+  - combobox "Filter by state":
     - option "All states" [selected]
     - option "active"
     - option "expired"
@@ -51,8 +52,9 @@
         - cell "expired"
   - heading "Which Subnets Run Out First?" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links/
-  - textbox "Filter…"
-  - combobox:
+  - textbox "Filter networks":
+    - /placeholder: Filter…
+  - combobox "Filter by site":
     - option "All sites" [selected]
     - option "baseline-site"
     - option "other-site"

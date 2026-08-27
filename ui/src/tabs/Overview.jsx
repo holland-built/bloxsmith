@@ -906,7 +906,14 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
             onChange={(e) => setFilter(e.target.value)}
             className={`${FIELD_CLS} w-[170px]`}
           />
+          {/* "Site", not "Filter subnets by site". The input above is already
+              labelled "Filter subnets", and a label that CONTAINS another's
+              makes every substring locator ambiguous: layout-drag.spec.ts:453
+              asks for getByLabel('Filter subnets') and got two elements. The
+              select filters by site and sits beside a control that says it
+              filters subnets, so the shorter name is the clearer one too. */}
           <select
+            aria-label="Site"
             value={site}
             onChange={(e) => setSite(e.target.value)}
             className={FIELD_CLS}
