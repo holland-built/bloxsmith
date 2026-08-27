@@ -27,17 +27,17 @@
         - columnheader "Util"
         - columnheader "Free"
     - rowgroup:
-      - button "View details for baseline-net-c":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "other-site"
         - cell /\d+%/
         - cell "5"
-      - button "View details for baseline-net-b":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
         - cell /\d+/
-      - button "View details for baseline-net-a":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
@@ -74,7 +74,7 @@
         - columnheader "Zone"
         - columnheader "Issues"
     - rowgroup:
-      - button "View details for dns/auth_zone/baseline-2":
+      - button "View details for 1":
         - cell "1"
         - cell "other.example."
         - cell "low ttl"

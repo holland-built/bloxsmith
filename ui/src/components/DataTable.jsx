@@ -131,6 +131,57 @@ function widthsEqual(a, b) {
 // (tabs/Infra.jsx), and both the tbody and measure() test `render` first, so a
 // column like that is painted and measured as a render column. Calling it a
 // badge would hand it to the opposite invariant.
+// rowName is what a screen reader hears instead of the row's own text, because
+// aria-label REPLACES the content rather than adding to it.
+//
+// This used to be `r.name ?? r.id ?? 'row'`, which is correct for the tables
+// whose rows carry one of those keys and silently useless for the ones that do
+// not. Measured on 2026-08-27: Overview's subnet table rendered 150 rows with
+// ONE distinct label between them, "View details for row", while Daily's table
+// produced 30 distinct labels from the same code. The difference is that a
+// subnet row keys its identity as `network`, so both branches missed and every
+// row fell to the literal.
+//
+// So the fallback is the FIRST COLUMN'S OWN VALUE, which is the column a reader
+// identifies the row by: it is why that column is first. Falling back to a
+// hard-coded word is what produced 150 identical announcements, and no fixed
+// list of key names would have caught `network` either.
+function rowName(r, cols) {
+  if (typeof r.rowLabel === 'string' && r.rowLabel !== '') return r.rowLabel
+  // THE VISIBLE COLUMNS COME BEFORE r.name AND r.id, and that order is the
+  // whole point rather than a detail.
+  //
+  // aria-label replaces what a row says with what we say about it, so the two
+  // have to agree: a reader who hears a name and then looks for it must find
+  // it on screen. r.name is often an INTERNAL identifier that the table never
+  // paints. Measured while building this: the fixture's subnet rows carry
+  // name="baseline-net-c" while the row displays "10.30.0.0", so preferring
+  // r.name announced a string found nowhere in the row. The test caught it.
+  //
+  // So: the first scalar value across the visible columns, then the internal
+  // keys as a last resort. Two shapes make "first column" alone wrong, and both
+  // exist here: a leading action or checkbox column holds nothing for its own
+  // key, and a `render` column can hold an object, which String() turns into
+  // "[object Object]" — worse than the generic label it replaced, because it
+  // looks deliberate. Scanning for the first usable value skips both.
+  if (cols) {
+    for (const c of cols) {
+      if (c.hidden) continue
+      const v = r[c.key]
+      const t = typeof v
+      if (v == null || v === '') continue
+      if (t !== 'string' && t !== 'number' && t !== 'bigint') continue
+      const str = String(v).trim()
+      // An em dash is this app's "no value", so it identifies nothing.
+      if (str === '' || str === '—' || str === '–') continue
+      return str
+    }
+  }
+  if (r.name != null && r.name !== '') return String(r.name)
+  if (r.id != null && r.id !== '') return String(r.id)
+  return 'row'
+}
+
 function colKind(c) {
   if (c.width) return 'fixed'
   if (c.render) return 'render'
@@ -713,7 +764,7 @@ export function DataTable({
             }
             tabIndex={onRowClick ? 0 : undefined}
             role={onRowClick ? 'button' : undefined}
-            aria-label={onRowClick ? `View details for ${r.name ?? r.id ?? 'row'}` : undefined}
+            aria-label={onRowClick ? `View details for ${rowName(r, cols)}` : undefined}
             style={rowStyle ? rowStyle(r) : undefined}
             className={
               onRowClick
@@ -788,7 +839,7 @@ export function DataTable({
     footer = (
       <a
         href={viewAllHref}
-        className="block text-center text-accent text-note font-medium py-2 px-2.5 hover:bg-line/50 rounded-control transition-colors"
+        className="block text-center text-link text-note font-medium py-2 px-2.5 hover:bg-line/50 rounded-control transition-colors"
       >
         View all {rows.length} →
       </a>

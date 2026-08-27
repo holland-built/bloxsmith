@@ -9,8 +9,9 @@
   - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
-  - textbox "Filter…"
-  - combobox:
+  - textbox "Filter audit entries":
+    - /placeholder: Filter…
+  - combobox "Filter by event":
     - option "All events" [selected]
     - option "dns-record-delete-error"
     - option "provision-subnet"
@@ -62,7 +63,8 @@
         - cell "from=v0.0.0-baseline"
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
-  - textbox "Search user or resource…"
+  - textbox "Search user or resource":
+    - /placeholder: Search user or resource…
   - button "Search"
   - text: 5 entries shown, total unknown
   - 'button "About: CSP Portal Audit"': "About: ⓘ"

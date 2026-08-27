@@ -2092,7 +2092,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       onKeyDown={onHandleKey}
       onBlur={onHandleBlur}
       className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 ${
-        moveActive ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+        moveActive ? 'border-accent text-link' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
       }`}
     >
       {title && <span id={moveWordId} className="sr-only">Move</span>}
@@ -2282,7 +2282,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
         // a preview gets the plain hover treatment, and the closed state keeps
         // the CSS :hover fallback for anything the JS previews miss.
         helpPinned
-          ? 'border-accent text-accent'
+          ? 'border-accent text-link'
           : helpOpen
             ? 'border-border-hover text-field-txt'
             : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
@@ -2588,7 +2588,7 @@ export function TabIntro({ anchor, children }) {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="text-accent underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-note"
+        className="text-link underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-note"
       >
         Docs →
       </button>

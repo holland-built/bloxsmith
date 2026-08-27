@@ -409,12 +409,14 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
         <div className="flex items-center gap-2">
           <span className="text-note text-muted">{countLabel}</span>
           <input
+            aria-label="Search name or IP"
             placeholder="Search name, IP…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className={`${FIELD_CLS} w-[170px]`}
           />
           <select
+            aria-label="Filter by type"
             value={type}
             onChange={(e) => setType(e.target.value)}
             className={FIELD_CLS}

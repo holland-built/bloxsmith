@@ -38,7 +38,7 @@ function Inline({ text }) {
           // Links inside the doc point at GitHub, other docs, or Infoblox. They
           // leave the app, so they say so and open in their own tab.
           return (
-            <a key={i} href={tok.href} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+            <a key={i} href={tok.href} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
               {tok.text}
             </a>
           )
@@ -187,7 +187,7 @@ export default function DocsPanel({ anchor, onClose }) {
           // Says what is still available rather than only what broke.
           <p className="text-note leading-relaxed text-muted">
             The documentation could not be loaded.{' '}
-            <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+            <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
               Read it on GitHub
             </a>
             .
@@ -205,7 +205,7 @@ export default function DocsPanel({ anchor, onClose }) {
                 repeated in the body. */}
             <Blocks blocks={section ? blocks.slice(1) : blocks} />
             <p className="mt-4 pt-3 border-t border-card-border text-note">
-              <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+              <a href={DOCS_REPO_URL} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
                 All tabs, on GitHub →
               </a>
             </p>

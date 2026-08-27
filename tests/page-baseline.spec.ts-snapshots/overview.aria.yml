@@ -39,9 +39,9 @@
   - button "Hide Subnet Heatmap": Hide ✕
   - button "Move Subnet Heatmap": Move ⠿
   - group "Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one.":
-    - button /[\d.]+ — \d+% used/
-    - button /[\d.]+ — \d+% used/
-    - button /[\d.]+ — \d+% used/
+    - button /\d+\.\d+\.0\.0 — \d+% used/
+    - button /\d+\.\d+\.0\.0 — \d+% used/
+    - button /\d+\.\d+\.0\.0 — \d+% used/
   - text: /ok >\d+% >\d+%/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
@@ -56,7 +56,7 @@
   - text: /excl\. \/\d+–\/\d+ infra links showing 3 of 3/
   - textbox "Filter subnets":
     - /placeholder: Filter…
-  - combobox:
+  - combobox "Site":
     - option "All sites" [selected]
     - option "baseline-site"
     - option "other-site"
@@ -77,19 +77,19 @@
         - columnheader "Free":
           - button "Free"
     - rowgroup:
-      - button "View details for row":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "other-site"
         - cell /\d+%/
         - cell "Critical"
         - cell "5 free"
-      - button "View details for row":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
         - cell "Warning"
         - cell /\d+ free/
-      - button "View details for row":
+      - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/

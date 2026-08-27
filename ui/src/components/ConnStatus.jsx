@@ -158,7 +158,7 @@ export default function ConnStatus() {
                   disabled={switching}
                   className={
                     'w-full text-left px-2.5 py-1.5 flex items-center gap-2 disabled:opacity-60 ' +
-                    (isActive ? 'text-accent font-medium bg-line/50' : 'text-field-txt hover:bg-line/40')
+                    (isActive ? 'text-link font-medium bg-line/50' : 'text-field-txt hover:bg-line/40')
                   }
                   onClick={() => switchTenant(t.id)}
                 >
