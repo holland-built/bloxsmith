@@ -269,12 +269,14 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
         <div className="flex items-center gap-2">
           <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
           <input
+            aria-label="Search address, hostname, MAC"
             placeholder="Search address, hostname, MAC…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className={`${FIELD_CLS} w-[220px]`}
           />
           <select
+            aria-label="Filter by state"
             value={state}
             onChange={(e) => setState(e.target.value)}
             className={FIELD_CLS}
@@ -475,12 +477,14 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
       right={
         <div className="flex items-center gap-2">
           <input
+            aria-label="Filter networks"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className={`${FIELD_CLS} w-[170px]`}
           />
           <select
+            aria-label="Filter by site"
             value={site}
             onChange={(e) => setSite(e.target.value)}
             className={FIELD_CLS}

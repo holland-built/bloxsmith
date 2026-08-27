@@ -16,12 +16,14 @@
   - button "Are any of my DNS zones misconfigured?"
   - button "Which hosts are offline?"
   - button /What changed in the last \d+ hours\?/
-  - textbox "Ask about your network…"
+  - textbox "Ask about your network":
+    - /placeholder: Ask about your network…
   - button "Ask" [disabled]
   - heading "Threat lookup" [level=2]
   - 'button "About: Threat lookup"': "About: ⓘ"
   - button "Hide Threat lookup": Hide ✕
   - button "Move Threat lookup": Move ⠿
-  - textbox "domain, IP, or host…"
+  - textbox "Look up a domain, IP, or host":
+    - /placeholder: domain, IP, or host…
   - button "Lookup" [disabled]
   - text: Look up a domain, IP, or host

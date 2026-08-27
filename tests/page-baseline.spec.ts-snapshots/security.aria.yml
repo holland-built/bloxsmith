@@ -37,18 +37,18 @@
         - columnheader "Time":
           - button "Time"
     - rowgroup:
-      - row /Block HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM/:
-        - cell:
-          - checkbox
+      - row /Acknowledge bad\.baseline\.example Block HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM/:
+        - cell "Acknowledge bad.baseline.example":
+          - checkbox "Acknowledge bad.baseline.example"
         - cell "Block":
           - button "Block"
         - cell "HIGH"
         - cell "bad.baseline.example"
         - cell "BLOCK"
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
-      - row /Block MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM/:
-        - cell:
-          - checkbox
+      - row /Acknowledge watch\.baseline\.example Block MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM/:
+        - cell "Acknowledge watch.baseline.example":
+          - checkbox "Acknowledge watch.baseline.example"
         - cell "Block":
           - button "Block"
         - cell "MEDIUM"

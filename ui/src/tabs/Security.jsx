@@ -351,7 +351,23 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       label: 'Ack',
       keep: true,
       render: (_v, r) => (
-        <input type="checkbox" checked={!!acks[ackKey(r)]} onChange={() => toggleAck(r)} />
+        // A placeholder-free control in a 50-row list: without a label a screen
+        // reader announces "checkbox" fifty times and names none of the threats
+        // it is acknowledging.
+        //
+        // ackKey(r) rather than the qname alone. The first version of this fell
+        // back to `r.qname || r.severity`, and severity is not an identity: the
+        // server normalises a missing qname to an empty string, so every such
+        // row would have announced "Acknowledge HIGH" and the fifty identical
+        // labels would have come back wearing a different word. ackKey is what
+        // this component ALREADY uses to tell one row from another, which makes
+        // it the honest answer and keeps the two in step.
+        <input
+          type="checkbox"
+          aria-label={`Acknowledge ${r.qname || ackKey(r)}`}
+          checked={!!acks[ackKey(r)]}
+          onChange={() => toggleAck(r)}
+        />
       ),
     },
     {

@@ -435,12 +435,14 @@ function AuditTable({ entries, chain, panelId }) {
       right={
         <div className="flex items-center gap-2">
           <input
+            aria-label="Filter audit entries"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className={`${FIELD_CLS} w-[150px]`}
           />
           <select
+            aria-label="Filter by event"
             value={event}
             onChange={(e) => setEvent(e.target.value)}
             className={FIELD_CLS}
@@ -578,6 +580,7 @@ function CspAuditTable({ panelId }) {
       right={
         <div className="flex items-center gap-2">
           <input
+            aria-label="Search user or resource"
             placeholder="Search user or resource…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
