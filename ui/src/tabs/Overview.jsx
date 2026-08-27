@@ -131,7 +131,7 @@ export default function Overview() {
         <TopUtilization panelId="top-consumers" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
         <SubnetHeatmap panelId="subnet-heatmap" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
         <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} />
-        <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
       </CardGrid>
     </div>
@@ -759,7 +759,13 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
 
 // ---------- table ----------
 
-function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
+// The subnet table's scroll box, reserved before the rows exist and held after
+// they arrive. One constant rather than a literal in three places: the skeleton
+// only reserves the right space while it equals what the table occupies, and
+// two of these drifting apart reintroduces the shift silently.
+const TABLE_H = 420
+
+function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId, loading = false }) {
   const [filter, setFilter] = useState('')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -929,7 +935,33 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
         </div>
       }
     >
-      {subnets.length === 0 ? (
+      {/* The in-flight branch is a Skeleton at TABLE_H, not <Empty/>.
+          It used to be <Empty/>, which stands about 72px tall, and the table
+          that replaces it stands TABLE_H: measured on 2026-08-27, that one swap
+          was 0.1988 of the page's 0.1994 desktop CLS, against a 0.1 threshold.
+          The mobile Lighthouse profile scored 0.004 and hid it entirely,
+          because at 390px the panel is below the fold when it grows.
+
+          THE SKELETON ALONE IS ONLY HALF OF IT, and the missing half is the
+          minHeight below. maxHeight pins the table's height only for an estate
+          with enough subnets to overflow it — the live tenant reports 72,299,
+          so that is the ordinary case — but a small estate renders a short
+          table, and a skeleton sized to the cap would then be taller than what
+          replaces it. The panel would collapse rather than grow: the same
+          shift, pointing the other way, and for a 3-subnet estate a worse one
+          than the bug being fixed. min and max together make the box TABLE_H in
+          every state that has a table in it.
+
+          Loading is its OWN branch rather than a case of "no rows yet", and
+          what is left unreserved is deliberate: a tenant with genuinely zero
+          subnets, or a dead feed, still steps down from TABLE_H to a short box
+          once. That is chosen over standing a screen-tall empty rectangle in
+          front of someone whose estate has nothing in it — the reserved space
+          exists to stop the common case moving, not to make every case
+          equally tall. */}
+      {loading && subnets.length === 0 ? (
+        <Skeleton h={TABLE_H} />
+      ) : subnets.length === 0 ? (
         subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <DataTable
@@ -947,7 +979,8 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
             if (r._addr) location.hash = 'network?subnet=' + encodeURIComponent(r._addr)
           }}
           rowKey={(r, i) => r.network + i}
-          maxHeight={420}
+          maxHeight={TABLE_H}
+          minHeight={TABLE_H}
           rowCap={150}
           emptyText="no subnets match"
         />
