@@ -48,6 +48,29 @@ function useTapThenDrill() {
 
 // ---------- main ----------
 
+// WHAT THE THREE-ACROSS CHART ROW RESERVES WHILE /api/data IS IN FLIGHT.
+//
+// Measured 2026-08-27 on the live tenant: the row was 198px tall while loading
+// and 278px once data landed, and everything below it dropped. All three panels
+// share one CardGrid row, so the row's height is the max of the three and no
+// one of them could be held still on its own — which is why there are three
+// constants here rather than a fix in one panel.
+//
+// The cause was not a lazily-imported chart chunk. Each panel renders <Empty/>
+// (`min-h-[100px]`) whenever its slice is still an empty array, and an in-flight
+// request looks exactly like an empty estate to that test. So the row reserved
+// 100px for content that settles at 180.
+//
+// Each number below is the panel's OWN existing literal, not a new measurement:
+// the height prop recharts is given, the svg's own height attribute, the donut
+// box's Tailwind size. Every one is width-independent — verified at 1920, 1440,
+// 1280, 1024 and 900, where the grid drops from six columns to four and the row
+// membership changes but none of these three heights moves — so re-spanning or
+// reordering a panel through the saved layout cannot invalidate them.
+const BARS_H = 180 // SubnetUsageBars, and its Suspense fallback, already agreed on this
+const HEATMAP_H = 110 // the heatmap svg's height attribute
+const DONUT_H = 130 // the donut box, w-[130px] h-[130px]
+
 // Three chart shapes on this tab; only the panels drawing them wait for recharts.
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
 const SubnetUsageBars = lazy(() => import('../charts/SubnetUsageBars.jsx'))
@@ -128,9 +151,12 @@ export default function Overview() {
       <CardGrid layoutKey="overview">
         <DnsHero panelId="dns-hero" dns={dns} />
         <KpiStack panelId="kpi-stack" subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
-        <TopUtilization panelId="top-consumers" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
-        <SubnetHeatmap panelId="subnet-heatmap" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
-        <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} />
+        {/* These three share one grid row, so all three take `loading` — the
+            row's height is the max of them and reserving in only one or two
+            would leave the third to resize it. */}
+        <TopUtilization panelId="top-consumers" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
+        <SubnetHeatmap panelId="subnet-heatmap" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
+        <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} loading={data.loading} />
         <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
       </CardGrid>
@@ -387,7 +413,35 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
                 <div className="text-note text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
               </>
             ) : (
-              <div className="h-[30px]" />
+              // THE +54px THAT MOVED EVERY ROW BELOW THIS PANEL.
+              //
+              // The placeholder used to be the 30px spacer alone. It stood in
+              // for the Sparkline and reserved nothing for the caption under
+              // it, so each of the three cells grew 18px the moment /api/data
+              // landed — 54px in total, and this panel is the taller half of
+              // the top row, so the whole page dropped by it.
+              //
+              // The caption is rendered rather than measured: same element,
+              // same text, same classes, in the same child order, hidden. Its
+              // height is then the settled height by construction and cannot
+              // drift if the font, the line-height or the wording changes — a
+              // constant here would have to be re-measured every time one did.
+              //
+              // `visibility: hidden` and not `display: none`, which reserves
+              // nothing, and not `opacity: 0`, which would leave the text
+              // selectable and readable by a screen reader.
+              //
+              // This branch also covers a genuinely small estate and a failed
+              // feed, and it reserves there too. Deliberate: reserving only
+              // while loading would trade this shift for a 54px SHRINK on any
+              // tenant with one or no measured subnet. The cost is 18px of
+              // blank per cell in those two states.
+              <>
+                <div className="h-[30px]" />
+                <div className="text-note text-dim mt-0.5" style={{ visibility: 'hidden' }} aria-hidden="true">
+                  util of loaded rows (sorted), not history or estate
+                </div>
+              </>
             )}
           </div>
         )
@@ -398,7 +452,7 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
 
 // ---------- top utilization ----------
 
-function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
+function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId, loading = false }) {
   const { COLORS } = useChartTheme()
   const tap = useTapThenDrill()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
@@ -419,7 +473,12 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
   return (
     <Card panelId={panelId} span={2} title="Top Consumers" right={<span className="text-note text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
       {top.length === 0 ? (
-        subnetsStatus === 'error' ? (
+        // Loading is tested BEFORE the empty states, because an in-flight
+        // request and an empty estate are indistinguishable from `top` alone
+        // and only the first of the two should reserve height.
+        loading ? (
+          <Skeleton h={BARS_H} />
+        ) : subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
         ) : named.length > 0 ? (
           <Empty>no loaded subnet reports addresses used</Empty>
@@ -428,11 +487,11 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
         )
       ) : (
         <div onPointerDownCapture={tap.onPointerDownCapture}>
-        <Suspense fallback={<Skeleton h={180} />}>
+        <Suspense fallback={<Skeleton h={BARS_H} />}>
           <SubnetUsageBars
             data={top}
             color={COLORS.purple}
-            height={180}
+            height={BARS_H}
             onBarClick={(payload) => {
               const addr = payload?.addr
               if (!addr || !tap.drills(addr)) return
@@ -448,7 +507,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
 
 // ---------- subnet heatmap ----------
 
-function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
+function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading = false }) {
   const { COLORS } = useChartTheme()
   // The readout that replaced the native <title>: which square, and where the
   // pointer is inside the grid so the chip can follow it.
@@ -536,7 +595,12 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   return (
     <Card panelId={panelId} span={2} title="Subnet Heatmap" right={<span className="text-note text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
       {cells.length === 0 ? (
-        subnetsStatus === 'error' ? (
+        // This panel has no Suspense boundary of its own — it draws inline SVG
+        // — so its height follows /api/data directly, and loading is the only
+        // signal that separates "still asking" from "nothing to draw".
+        loading ? (
+          <Skeleton h={HEATMAP_H} />
+        ) : subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
         ) : all.length > 0 ? (
           <Empty>no loaded subnet reports utilisation</Empty>
@@ -562,7 +626,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
                 over as a page scroll — the same reason the layout drag handle
                 carries `touch-none`. A tap is unaffected and still navigates. */}
             <svg
-              width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none"
+              width="100%" height={HEATMAP_H} viewBox="0 0 100 100" preserveAspectRatio="none"
               style={{ touchAction: 'none' }}
               role="group"
               aria-label="Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one."
@@ -691,7 +755,7 @@ function statusBucket(s) {
 
 const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
 
-function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
+function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false }) {
   const { COLORS } = useChartTheme()
   const tap = useTapThenDrill()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
@@ -713,9 +777,20 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
   return (
     <Card panelId={panelId} span={2} title="Host Status">
       {total === 0 ? (
-        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
+        // The donut's own Suspense fallback already fills its 130px box, so the
+        // lazy chunk was never this panel's problem — the <Empty/> below it was.
+        loading ? (
+          <Skeleton h={DONUT_H} />
+        ) : hostsStatus === 'error' ? (
+          <FeedUnavailable label="Hosts feed unavailable" />
+        ) : (
+          <Empty />
+        )
       ) : (
         <div className="flex items-center gap-4">
+          {/* w-[130px] h-[130px] is DONUT_H. The two are kept in step by
+              tests/overview-cls.spec.ts, which fails if the box and the
+              reservation ever disagree. */}
           <div className="relative w-[130px] h-[130px] shrink-0" onPointerDownCapture={tap.onPointerDownCapture}>
             <Suspense fallback={<div className="w-full h-full" />}>
               <StatusDonut
