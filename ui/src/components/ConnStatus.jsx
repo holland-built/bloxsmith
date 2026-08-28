@@ -10,7 +10,18 @@ export default function ConnStatus() {
   const [, forceTick] = useState(0)
 
   const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000 })
-  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000 })
+  // ADOPTS, because this dot and the Overview tab want the same 294KB and used
+  // to fetch it separately — this one at t=39ms and Overview at t=331ms on every
+  // load, measured 2026-08-27. Whichever of the two asks second now takes the
+  // other's answer. The window is 2000ms: an order of magnitude above the
+  // measured 261ms gap between the two mounts, and far below both poll intervals
+  // (60s here, 30s there), so it collapses the duplicate without ever merging
+  // two intended poll cycles into one.
+  //
+  // Nothing about this dot's own freshness claim changes: it reports when data
+  // was last SEEN, and an adopted result was seen just as recently as a fetched
+  // one — more recently, in fact, than the request this call site no longer makes.
+  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 2000 })
 
   useEffect(() => {
     const onLocked = () => setLocked(true)
