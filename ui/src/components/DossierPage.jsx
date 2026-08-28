@@ -414,7 +414,7 @@ function Jack({ state }) {
     >
       <span
         aria-hidden="true"
-        className={'absolute ' + (barred ? 'inset-y-[4px] inset-x-[1px]' : 'inset-[2px] rounded-full')}
+        className={'absolute ' + (barred ? 'inset-y-1 inset-x-0' : 'inset-0 rounded-full')}
         style={{ background: j.fill }}
       />
     </span>
@@ -456,13 +456,13 @@ const LANES = 'grid ' + LANE_COLS
 // (`div.h-6`, say) couples the guard to how the ledger happens to look this
 // week, and selecting them by their words couples it to the copy.
 const CELL =
-  'ledger-cell col-start-2 min-[561px]:col-start-auto px-[10px] py-[7px] border-b border-line min-w-0 ' +
+  'ledger-cell col-start-2 min-[561px]:col-start-auto px-2 py-2 border-b border-line min-w-0 ' +
   'min-[561px]:py-0 min-[561px]:px-[var(--sp-ledger-inset)] min-[561px]:min-h-[34px] min-[561px]:border-b-0 min-[561px]:border-r min-[561px]:border-line ' +
   'flex items-center'
 
 function FieldCell({ k, v, title }) {
   return (
-    <div className={CELL + ' gap-[9px] overflow-hidden'}>
+    <div className={CELL + ' gap-2 overflow-hidden'}>
       <span className="text-note uppercase tracking-[0.1em] text-dim font-medium whitespace-nowrap">{k}</span>
       <span className="font-mono text-copy text-field-txt truncate" title={title || undefined}>
         {v ?? <span className="text-dim">{DASH}</span>}
@@ -484,7 +484,7 @@ function SkeletonCell({ w }) {
 function LeftLanes({ state, label }) {
   return (
     <>
-      <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] flex justify-center items-start min-[561px]:items-center pt-[11px] min-[561px]:pt-0 border-r border-line">
+      <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] flex justify-center items-start min-[561px]:items-center pt-2 min-[561px]:pt-0 border-r border-line">
         <Jack state={state} />
       </div>
       <div className={CELL + ' text-note font-semibold tracking-[0.05em] text-txt whitespace-nowrap overflow-hidden text-ellipsis'}>
@@ -521,14 +521,14 @@ function Why({ src, q, state, reason }) {
   return (
     <div className={'grid grid-cols-[30px_1fr] border-b border-line bg-card'} data-dossier-why={src.key}>
       <div className="border-r border-line" />
-      <div className="px-3 pt-[10px] pb-3 border-l-2" style={{ borderLeftColor: 'var(--color-warn)' }}>
-        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-note leading-[1.5] mb-1 text-dim">
+      <div className="px-3 pt-2 pb-3 border-l-2" style={{ borderLeftColor: 'var(--color-warn)' }}>
+        <div className="flex flex-col min-[561px]:flex-row gap-2 items-baseline text-note leading-[1.5] mb-1 text-dim">
           <span className="text-note uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
           <span>
             Nothing found — we asked a source and it told us {subject} has none.
           </span>
         </div>
-        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-note leading-[1.5] text-field-txt">
+        <div className="flex flex-col min-[561px]:flex-row gap-2 items-baseline text-note leading-[1.5] text-field-txt">
           <span className="text-note uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0 text-[var(--pill-warn-fg)]">This</span>
           <span>
             {state === 'unsupported'
@@ -538,10 +538,10 @@ function Why({ src, q, state, reason }) {
             {reason ? <> Reported reason: <span className="font-mono text-note">{reason}</span></> : null}
           </span>
         </div>
-        <div className="mt-[9px] flex gap-[7px]">
+        <div className="mt-2 flex gap-2">
           <a
             href={`#${src.tab}`}
-            className="inline-flex items-center h-[23px] px-[10px] text-note no-underline border border-border bg-field text-field-txt hover:border-border-hover"
+            className="inline-flex items-center h-[23px] px-2 text-note no-underline border border-border bg-field text-field-txt hover:border-border-hover"
           >
             Open {src.tabLabel} tab
           </a>
@@ -671,7 +671,7 @@ function Ribbon({ results }) {
           </span>
         </div>
       ))}
-      <div className="flex-1 flex items-center px-3 py-[6px] min-[561px]:py-0 text-note text-dim leading-[1.45]">
+      <div className="flex-1 flex items-center px-3 py-2 min-[561px]:py-0 text-note text-dim leading-[1.45]">
         Each source is asked on its own — a slow one holds nothing else up.
       </div>
     </div>
@@ -821,7 +821,7 @@ export default function DossierPage() {
             className="bg-transparent outline-none border-0 font-mono text-copy font-semibold text-txt tracking-[0.04em] w-full min-w-0"
           />
         </label>
-        <div className="flex items-center gap-[9px] px-[13px] h-[34px] min-[561px]:h-auto">
+        <div className="flex items-center gap-2 px-4 h-[34px] min-[561px]:h-auto">
           <span className="text-note uppercase tracking-[0.09em] text-dim">Recognised as</span>
           <span className="font-mono text-note text-field-txt tracking-[0.06em] uppercase font-semibold">
             {kind ? kind.label : q ? 'Free text' : DASH}

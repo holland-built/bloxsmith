@@ -202,7 +202,7 @@ const MenuPanel = ({ ref, label, onKeyDown, children }) => (
     aria-label={label}
     onKeyDown={onKeyDown}
     style={{ borderTopColor: 'var(--color-accent)' }}
-    className="absolute left-[-1px] top-full mt-[7px] min-w-[214px] z-20 bg-card border border-border shadow-lg"
+    className="absolute left-[-1px] top-full mt-2 min-w-[214px] z-20 bg-card border border-border shadow-lg"
   >
     {children}
   </div>
@@ -225,7 +225,7 @@ const GroupSection = ({ group, tab, onPick }) => {
     <div role="group" aria-label={group.label}>
       <div
         aria-hidden="true"
-        className="flex items-center justify-between h-[22px] px-[9px] bg-field border-y border-card-border"
+        className="flex items-center justify-between h-[22px] px-2 bg-field border-y border-card-border"
       >
         <span className="text-note uppercase tracking-[0.12em] text-dim">
           {group.question || group.label}
@@ -243,14 +243,14 @@ const GroupSection = ({ group, tab, onPick }) => {
           onClick={onPick}
           style={t.id === tab ? { boxShadow: 'inset 2px 0 0 var(--color-accent)' } : undefined}
           className={
-            'grid grid-cols-[1fr_auto] items-center gap-2 h-[27px] px-[9px] text-copy no-underline ' +
+            'grid grid-cols-[1fr_auto] items-center gap-2 h-[27px] px-2 text-copy no-underline ' +
             (j < tabs.length - 1 ? 'border-b border-line ' : '') +
             (t.id === tab ? 'bg-line text-txt' : 'text-field-txt hover:bg-line-2 hover:text-txt')
           }
         >
           <span>{t.label}</span>
           {t.id === tab && (
-            <span className="text-note uppercase tracking-[0.08em] px-1.5 py-[1px] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]">
+            <span className="text-note uppercase tracking-[0.08em] px-1.5 py-0 bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]">
               Here
             </span>
           )}
@@ -575,7 +575,7 @@ export default function App() {
                         <span
                           aria-hidden="true"
                           className={
-                            'inline-block text-note leading-none font-bold text-center min-w-[15px] px-1 pt-[2px] pb-[3px] border bg-field ' +
+                            'inline-block text-note leading-none font-bold text-center min-w-[15px] px-1 pt-0 pb-0 border bg-field ' +
                             (open ? 'border-accent text-txt' : 'border-border text-field-txt')
                           }
                         >

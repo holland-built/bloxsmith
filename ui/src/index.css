@@ -318,20 +318,38 @@ html[data-density="compact"] {
    It was written out four times as px-[11px], which is exactly the shape that
    drifts: fix a misalignment at one of the four and the other three stay put.
 
-   EXTRACTED AT ITS RENDERING VALUE. 11px is what all four painted before this
-   token existed and 11px is what they paint after it, so nothing moves. 11px is
-   also not a step on any scale — Tailwind's own would put it at 10 or 12 — and
-   that is left exactly as it is on purpose: moving it is a change to how the
-   page LOOKS, which docs/SCREENS.md puts behind a variant set and the owner
-   naming one. Naming a value and changing it are two different jobs and this is
-   only the first.
+   EXTRACTED AT ITS RENDERING VALUE, THEN MOVED ONCE THE OWNER PICKED. It was
+   named at 11px — what all four painted before the token existed — because
+   naming a value and changing it are two different jobs and docs/SCREENS.md
+   puts the second behind a variant set and the owner naming one. That happened:
+   .mockups/spacing-scale/all.html offered four directions and v2 was chosen, so
+   the inset is now 8px.
+
+   8px, not 12px, because v2's ladder is 0/4/8/16 and 12 does not exist on it.
+   Under v2 every value from 6 to 11 lands on 8, which is what carried this one
+   down rather than up.
 
    NOT density-driven, for the same reason as --sp-ghost-pad above: the ledger's
    column widths are declared in px in LANE_COLS (DossierPage.jsx), and an inset
    that moved under a width that did not would push the cell contents out of the
-   column that was sized for them. */
+   column that was sized for them.
+
+   WHICH DIRECTION MATTERS, AND THIS ONE WENT THE SAFE WAY. Shrinking the inset
+   gives each cell 6px MORE room inside a track whose width did not change, so it
+   cannot overflow anything; it is growing it that would squeeze the contents
+   out. A future move upward has to bring LANE_COLS with it. Either way,
+   tests/dossier-page.spec.ts reads this token at runtime and asserts every
+   `.ledger-cell` paints exactly it, so the alignment is guarded at whatever
+   value this holds rather than at the one it happened to hold when it was
+   written.
+
+   AND THE VALUE NOW COLLIDES WITH A SCALE STEP, which cost an assertion. px-2 is
+   also 8px, so a ledger cell that stops using this token renders identically and
+   no ratchet would flag it. ui/src/lib/spacingRoles.test.js grew a check that
+   every `ledger-cell` class string also carries px-[var(--sp-ledger-inset)],
+   because at 11px the drift was self-announcing and at 8px it is silent. */
 :root {
-  --sp-ledger-inset: 11px;
+  --sp-ledger-inset: 8px;
 }
 
 /* ---------- the card grid's track count, declared where the browser decides it ----------
