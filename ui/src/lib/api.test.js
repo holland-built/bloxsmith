@@ -9,6 +9,7 @@ import {
   budgetMs,
   isTransientError,
   retryDelayMs,
+  __resetAdoptionForTests,
   retryFailedFeeds,
   useApi,
 } from './api.js'
@@ -499,4 +500,292 @@ test('changing the url cancels the retry queued for the old one', async (t) => {
     'a retry for the url this hook already left',
   )
   hook.unmount()
+})
+
+// ---------------------------------------------------------------------------
+// adoptIfFresherThan — taking a result somebody else just fetched
+//
+// THE DEFECT. /api/data was fetched twice on every Overview load, ~294KB each:
+// the header's ConnStatus at t=39ms and the Overview tab at t=331ms, measured on
+// the live tenant 2026-08-27. Two components, same url, 261ms apart.
+//
+// These drive the real hook through the same dispatcher the retry tests above
+// use, because what is under test is again effect lifetime: which requests go
+// out, what is retained between them, and what is dropped on unmount.
+// ---------------------------------------------------------------------------
+
+// Small enough that a test can step past it with the mocked clock rather than
+// sleeping, and the ratio to the request timings below is the same one the real
+// 2000ms window has to the real 261ms gap.
+const WINDOW = 200
+
+test.beforeEach(() => __resetAdoptionForTests())
+
+test('the second caller of a url adopts the first result instead of fetching it again', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 7 })])
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'the first caller fetches normally')
+
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'the second caller made no request of its own')
+  assert.deepEqual(second.current.data, { rows: 7 }, 'and it still got the data')
+  assert.equal(second.current.loading, false)
+  assert.equal(second.current.error, null)
+
+  first.unmount()
+  second.unmount()
+})
+
+test('an adopted payload is a copy, so two panels cannot mutate each other', async (t) => {
+  harness(t, [jsonOk({ rows: [1, 2, 3] })])
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  assert.notEqual(second.current.data, first.current.data, 'not the same object')
+  assert.deepEqual(second.current.data, first.current.data, 'but the same value')
+  second.current.data.rows.push(4)
+  assert.deepEqual(first.current.data.rows, [1, 2, 3], 'the first caller is untouched')
+
+  first.unmount()
+  second.unmount()
+})
+
+test('past the window, the second caller fetches for itself', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 7 }), jsonOk({ rows: 8 })])
+  // performance.now is stubbed rather than mocked through t.mock.timers, because
+  // harness() has already enabled those and enabling twice throws. Only the
+  // clock the window is measured against needs to move — and that clock is the
+  // monotonic one, not Date; see the note beside freshOk() for why.
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  now += WINDOW + 1
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'the stale result was not adopted')
+  assert.deepEqual(second.current.data, { rows: 8 })
+
+  first.unmount()
+  second.unmount()
+})
+
+// The ordering guard. Responses do not settle in the order they were sent, and
+// without a sequence number an older payload landing late would overwrite a
+// newer one — after which the next caller adopts stale data believing it fresh.
+test('a slow first response that lands after a fast second one is not adopted', async (t) => {
+  let releaseSlow
+  const slow = new Promise((r) => (releaseSlow = r))
+  const { calls } = harness(t, [
+    () => slow.then(() => new Response(JSON.stringify({ rows: 'stale' }), { status: 200 })),
+    jsonOk({ rows: 'fresh' }),
+  ])
+
+  const a = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const b = mountHook(() => useApi('/api/data', { adoptIfFresherThan: 0 })) // never adopts; always fetches
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'])
+  assert.deepEqual(b.current.data, { rows: 'fresh' })
+
+  releaseSlow()
+  await settle()
+
+  const c = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(
+    c.current.data,
+    { rows: 'fresh' },
+    'the late-landing older request did not overwrite the newer result',
+  )
+
+  a.unmount()
+  b.unmount()
+  c.unmount()
+})
+
+// Failures are never published, so every caller fetches one for itself and the
+// retry, failuresRef and feeds-registry paths stay exactly as they were.
+test('a failure is never adopted — the next caller asks for itself', async (t) => {
+  const { calls } = harness(t, [jsonStatus(500), jsonOk({ rows: 7 })])
+  const first = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(first.current.error?.status, 500)
+
+  const second = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'the error was not shared')
+  assert.deepEqual(second.current.data, { rows: 7 })
+
+  first.unmount()
+  second.unmount()
+})
+
+// A locked vault raises `bx:vault-locked` once per 503 received. Adopting a
+// locked outcome would have suppressed the second caller's request AND its
+// event, quietly halving the count. Locked results are not published, so the
+// count is whatever it was before this option existed.
+test('a locked vault still raises one event per caller, exactly as before', async (t) => {
+  const { calls, vaultEvents } = harness(t, [jsonStatus(503, { locked: true })])
+  const first = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'the locked response was not shared')
+  assert.deepEqual(vaultEvents, ['bx:vault-locked', 'bx:vault-locked'])
+
+  first.unmount()
+  second.unmount()
+})
+
+// The retention bound. Nothing is kept for a url no adopter is watching, which
+// is what keeps the ~60 call sites that never opt in — several of which build
+// their url out of user input, a filter box or a selected id — from seeding an
+// unbounded map with one parsed payload per distinct string.
+test('nothing is retained for a url that no adopter is watching', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 7 }), jsonOk({ rows: 8 })])
+  const plain = mountHook(() => useApi('/api/data'))
+  await settle()
+
+  const adopter = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'nothing was there to adopt')
+  assert.deepEqual(adopter.current.data, { rows: 8 })
+
+  plain.unmount()
+  adopter.unmount()
+})
+
+// ...but sharing is by URL, not by caller, and that IS the intent: once some
+// component has opted this url in, a plain caller's response is the same bytes
+// and is worth adopting. Pinned explicitly, because the test above reads at a
+// glance as though plain callers were excluded, and they are not.
+test('once a url is watched, even a plain caller\'s result can be adopted', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 'from-adopter' }), jsonOk({ rows: 'from-plain' })])
+  const adopter = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  // A second, non-opting caller of the same url fetches for itself and its
+  // result becomes the current one.
+  const plain = mountHook(() => useApi('/api/data'))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'])
+
+  const later = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'the plain caller\'s result was adoptable')
+  assert.deepEqual(later.current.data, { rows: 'from-plain' })
+
+  adopter.unmount()
+  plain.unmount()
+  later.unmount()
+})
+
+// F1's guard, stated as behaviour: a cached success is not adopted once a NEWER
+// request has been started for the same url, even while it is inside the window.
+// Recent is not the same as current.
+test('a cached success is not adopted once a newer request has started', async (t) => {
+  let releasePending
+  const pending = new Promise((r) => (releasePending = r))
+  const { calls } = harness(t, [
+    jsonOk({ rows: 'first' }),
+    () => pending.then(() => new Response(JSON.stringify({ rows: 'second' }), { status: 200 })),
+    jsonOk({ rows: 'third' }),
+  ])
+
+  const a = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(a.current.data, { rows: 'first' })
+
+  // Starts request #2 and leaves it in flight. adoptIfFresherThan 0 never adopts.
+  const b = mountHook(() => useApi('/api/data', { adoptIfFresherThan: 0 }))
+  await settle()
+  assert.deepEqual(calls.length, 2)
+
+  // The 'first' entry is still well inside the window, but it is no longer the
+  // newest request started, so it must not be handed out.
+  const c = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(calls.length, 3, 'the superseded entry was not adopted')
+
+  releasePending()
+  await settle()
+  a.unmount()
+  b.unmount()
+  c.unmount()
+})
+
+// F2's guard: the hook that DID the fetching must not be able to edit what the
+// next adopter receives. The clone-on-adopt test covers the other direction.
+test('the fetching hook cannot mutate what a later adopter receives', async (t) => {
+  harness(t, [jsonOk({ rows: [1, 2, 3] })])
+  const fetcher = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  fetcher.current.data.rows.push('scribbled')
+
+  const adopter = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(adopter.current.data.rows, [1, 2, 3], 'the adopter got the response, not the edit')
+
+  fetcher.unmount()
+  adopter.unmount()
+})
+
+// The accepted cost, pinned so it is a decision rather than a surprise: a vault
+// that locks inside the window is not noticed by the caller that adopts. See the
+// block above adoptIfFresherThan in api.js for why that is survivable —
+// /api/vault/status polls separately and is never adopted.
+test('a vault that locks inside the window is missed by the adopting caller', async (t) => {
+  const { calls, vaultEvents } = harness(t, [jsonOk({ rows: 7 }), jsonStatus(503, { locked: true })])
+  const first = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(vaultEvents, [], 'nothing locked yet')
+
+  const second = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'it adopted rather than discovering the lock')
+  assert.deepEqual(vaultEvents, [], 'and so raised no event — this is the accepted cost')
+  assert.deepEqual(second.current.data, { rows: 7 })
+
+  first.unmount()
+  second.unmount()
+})
+
+// A tenant's data must not outlive the components that asked for it.
+test('the stored result is dropped when the last watcher unmounts', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 7 }), jsonOk({ rows: 8 })])
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  first.unmount()
+
+  const later = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data', '/api/data'], 'the payload did not survive the unmount')
+  assert.deepEqual(later.current.data, { rows: 8 })
+  later.unmount()
+})
+
+// ...but it DOES survive while a second watcher is still mounted, or every
+// tab switch away from Overview would throw away the header's copy.
+test('the stored result survives one watcher leaving while another stays', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 7 })])
+  const a = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const b = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  a.unmount()
+
+  const c = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'still exactly one request in total')
+  assert.deepEqual(c.current.data, { rows: 7 })
+  b.unmount()
+  c.unmount()
 })

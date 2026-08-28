@@ -79,7 +79,10 @@ const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 export default function Overview() {
   const arrangedOnce = useHasArranged()
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
-  const data = useApi('/api/data', { poll: 30000 })
+  // The other half of the pair described in ConnStatus.jsx: the header's status
+  // dot polls this same url, and on a warm load whichever of the two asks second
+  // adopts the first's result instead of fetching 294KB again.
+  const data = useApi('/api/data', { poll: 30000, adoptIfFresherThan: 2000 })
   const licenses = useApi('/api/csp/license-alerts', { poll: 30000 })
 
   const subnets = data.data?.subnets ?? []
