@@ -176,11 +176,155 @@ export function retryFailedFeeds() {
   }
 }
 
+// ---------- adopting a result somebody else just fetched ----------
+//
+// THE DEFECT. GET /api/data was fetched TWICE on every Overview load, ~294KB
+// each. Measured on the live tenant 2026-08-27 from a Playwright request trace:
+//
+//   t=39ms   ConnStatus, in the header, poll 60000   ends t=70ms
+//   t=331ms  the Overview tab itself, poll 30000     ends t=388ms
+//
+// Two mounted components asking the same url, 261ms apart. They are NOT
+// concurrent, so de-duplicating in-flight requests would not have caught it —
+// the first was long finished before the second began. What catches it is a
+// freshness window: a caller that is about to ask for something another caller
+// finished moments ago takes that answer instead.
+//
+// WHY THERE IS NO SHARED REQUEST HERE. The obvious design — one shared promise
+// per url that late callers join — was written out and reviewed, and it needed a
+// shared AbortController with a waiter count, a hard request deadline, a
+// generation fence against forced refetches racing older responses, and
+// coordinated retry state so two callers of one url could not disagree about
+// whether it had failed. Every one of those exists only because a request is
+// shared WHILE IN FLIGHT. Nothing here is: each caller still owns its own fetch,
+// its own timeout, its own abort and its own retry exactly as before. The only
+// new thing a caller can do is decline to start one.
+//
+// ONLY SUCCESSES ARE PUBLISHED, and that is what keeps this small. An adopted
+// error would have to reproduce failuresRef, the retry timer and the feeds
+// registry's failed/retrying pair; an adopted vault-locked would swallow one of
+// the two `bx:vault-locked` events a 503 raises today. Neither is worth the
+// risk for a saving that only matters on the happy path, so a failure and a
+// locked vault are never written here and every caller fetches them itself. The
+// error and locked paths are therefore byte-identical to what they were.
+//
+// WHAT THIS DOES NOT FIX. Adoption needs a SETTLED result, so it collapses the
+// duplicate only when the first request has already finished — a warm read, 8ms
+// to 36ms per the measurements at the top of this file. On a COLD load
+// /api/data takes 3.5-7.5s, ConnStatus is still in flight when Overview mounts,
+// nothing has settled, and both fetch exactly as before. That is the honest
+// bound: this halves the steady-state polling load, which is where the server
+// cost actually lives, and does nothing for the first cold load of a session.
+//
+// AND ONE ACCEPTED COST, WRITTEN DOWN RATHER THAN DISCOVERED LATER. If the vault
+// locks inside the window, a caller that adopts the success from just before it
+// does not make the request that would have returned 503, and so does not raise
+// the `bx:vault-locked` that request would have raised. It finds out on its next
+// poll instead — up to 30s later.
+//
+// That is survivable ONLY because the lock has its own signal that this does not
+// touch: ConnStatus polls /api/vault/status every 30s WITHOUT adopting, and
+// `status.ready === false` drives the same locked state that the event does. A
+// 503 on /api/data is the secondary detector, not the primary one. If that ever
+// stops being true — if /api/data's 503 becomes the only way the app learns the
+// vault is shut — this option has to come off that call site.
+const adopting = new Set() // urls some mounted hook has opted in to
+const adoptCounts = new Map() // url -> how many mounted hooks opted in, so the last one out clears it
+const lastOk = new Map() // url -> { json, at, seq }
+const seqByUrl = new Map() // url -> the sequence number of the newest request STARTED
+
+// Exported for ui/src/lib/api.test.js only. Module state outlives a test, so a
+// test that seeds a fresh result would otherwise leak it into the next one and
+// turn an assertion about fetching into an assertion about ordering.
+export function __resetAdoptionForTests() {
+  adopting.clear()
+  adoptCounts.clear()
+  lastOk.clear()
+  seqByUrl.clear()
+}
+
+/** The next sequence number for this url, claimed when a request starts. */
+function claimSeq(url) {
+  const next = (seqByUrl.get(url) ?? 0) + 1
+  seqByUrl.set(url, next)
+  return next
+}
+
+/**
+ * Record a successful body, if this request is still the newest one started for
+ * its url.
+ *
+ * The sequence check is the whole point. Responses do not necessarily settle in
+ * the order they were sent: a slow request started first can land after a fast
+ * one started second, and without this an older payload would overwrite a newer
+ * one and the next caller would adopt stale data believing it fresh.
+ */
+function publishOk(url, seq, json) {
+  if (!adopting.has(url)) return // nothing reads it, so nothing is kept
+  if (seq !== seqByUrl.get(url)) return // superseded while in flight
+  // Cloned on the way IN as well as on the way out. The fetching hook has
+  // already been handed `json`, and a panel that sorts or splices its slice in
+  // place would otherwise be editing what the next adopter is about to receive.
+  // Two clones is the price of two callers never sharing one mutable payload.
+  lastOk.set(url, { json: structuredClone(json), at: performance.now(), seq })
+}
+
+/**
+ * The body another caller finished within `withinMs`, or null.
+ *
+ * TWO conditions, and the second is the one that is easy to leave out. Recent is
+ * not sufficient: a newer request may already have been STARTED for this url —
+ * and may already have failed — while this entry is still inside the window.
+ * Adopting it then would hand out a result that has been superseded. So the
+ * entry must also be the one belonging to the newest request started, which is
+ * what makes `lastOk` mean "the current answer" rather than "the last answer".
+ *
+ * Nothing is deleted here. A miss is specific to the caller that asked, because
+ * the window is the CALLER's, and another watcher with a longer window could
+ * still be entitled to the same entry. Expiry belongs to the watcher cleanup,
+ * which drops the whole url when the last one leaves.
+ */
+function freshOk(url, withinMs) {
+  const hit = lastOk.get(url)
+  if (!hit) return null
+  if (hit.seq !== seqByUrl.get(url)) return null
+  return performance.now() - hit.at <= withinMs ? hit : null
+}
+
+// performance.now(), NOT Date.now(), and this is not a style preference.
+//
+// Date.now() is the WALL clock. It jumps: an NTP correction, a laptop waking
+// from sleep, an operator fixing their timezone. An elapsed interval measured
+// across a backwards jump goes negative and every stale entry reads as fresh;
+// across a forwards jump a fresh one reads as expired. performance.now() is
+// monotonic and immune to both.
+//
+// It was also wrong under test, which is how this was caught rather than
+// reasoned about. tests/page-fixtures.ts calls page.clock.setFixedTime() so
+// that rendered "3 hours ago" strings cannot drift between runs — which FREEZES
+// Date.now(). With a frozen wall clock every entry was 0ms old forever, so
+// adoption never expired, Overview's 30s poll took the mount result again
+// instead of fetching, and the two specs that drive a real re-poll
+// (keyboard-reach.spec.ts:157 and layout-drag.spec.ts:443) both failed. A
+// timer that never expires is a cache that never refreshes.
+
 /**
  * Fetch a URL, optionally polling on an interval.
  * Returns { data, error, loading, retrying, refetch }.
+ *
+ * `adoptIfFresherThan` (ms) lets this call site skip its own request when
+ * another caller of the same url finished one that recently, and take that
+ * result instead. Opt-in per call site, and deliberately not a default: it is a
+ * change to what "poll every N seconds" means, and it is only ever right where
+ * two components genuinely want the same bytes at the same moment. See the
+ * block above for why only successes are shared and what this does not fix.
+ *
+ * FOR POLLING CALL SITES. An adopted result does not schedule a retry, because
+ * there is nothing to retry — no request was made. A polling call site already
+ * never schedules its own retry (the poll IS the retry), so this matches how
+ * such a call site behaves today rather than inventing an exception for it.
  */
-export function useApi(url, { poll, coldMs } = {}) {
+export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -196,6 +340,40 @@ export function useApi(url, { poll, coldMs } = {}) {
   // Named so the retry timer can call it without a ref hop.
   const load = useCallback(function run() {
     if (!url) return
+
+    // Somebody else asked for this a moment ago. Take their answer and make no
+    // request at all. Everything set here is what this hook's own success path
+    // would have set, and nothing else: no `bx:vault-locked` (only a 503 raises
+    // that, and a 503 is never published), no retry timer, no feeds-registry
+    // change beyond clearing an error the way a success does.
+    if (adoptIfFresherThan) {
+      const hit = freshOk(url, adoptIfFresherThan)
+      if (hit) {
+        // The url has answered — for somebody — so this hook's next real request
+        // gets the warm budget, exactly as if it had answered here.
+        warmRef.current = true
+        if (!aliveRef.current) return
+        failuresRef.current = 0
+        // Cloned, so two hooks never hold one mutable payload. Two fetches would
+        // have produced two independent objects, and a panel that sorts or
+        // splices its slice in place must not reach into another panel's copy.
+        setData(structuredClone(hit.json))
+        setError(null)
+        setLoading(false)
+        setRetrying(false)
+        return
+      }
+    }
+
+    // Claimed before the request goes out, so the ordering this establishes is
+    // the order requests STARTED in, not the order they happened to finish.
+    //
+    // Only for a url somebody is watching. Sequencing every url the app ever
+    // fetches would grow a map with one entry per distinct string for the life
+    // of the page, and several call sites build their url out of user input —
+    // a filter box, a search term, a selected id. Nothing is published for an
+    // unwatched url anyway, so there is no order there to protect.
+    const seq = adopting.has(url) ? claimSeq(url) : 0
     // Cold budget until this url has answered once, then the original hang guard.
     const { signal, cancel } = abortAfter(budgetMs(warmRef.current, coldMs))
     fetch(url, { cache: 'no-store', signal })
@@ -226,6 +404,13 @@ export function useApi(url, { poll, coldMs } = {}) {
         // The url has now answered once, so later requests get the warm budget
         // even if this component unmounted mid-flight.
         warmRef.current = true
+        // Published before the aliveRef gate, deliberately: this is a real, fresh
+        // answer for this url whatever became of the component that asked for it,
+        // and the `seq` check inside is what decides whether it is still the
+        // newest. Nothing is published unless some MOUNTED hook has opted in to
+        // this url, so an unmounted caller cannot leave a payload behind for a
+        // url nobody is watching.
+        publishOk(url, seq, json)
         if (!aliveRef.current) return
         failuresRef.current = 0
         setData(json)
@@ -261,7 +446,7 @@ export function useApi(url, { poll, coldMs } = {}) {
     // Safe to add: every caller passes a module constant
     // (tabs/Assets.jsx: SLOW_COLD_TIMEOUT_MS), so `load` does not churn identity
     // and the effect at the bottom of this hook does not refire.
-  }, [url, poll, coldMs])
+  }, [url, poll, coldMs, adoptIfFresherThan])
 
   /** Start over: full attempt budget, optionally after a spreading delay. */
   const retry = useCallback(
@@ -285,6 +470,30 @@ export function useApi(url, { poll, coldMs } = {}) {
       publishFeeds()
     }
   }, [])
+
+  // Registration is what bounds what gets kept. `publishOk` writes nothing for a
+  // url that is not in here, so the 60-odd call sites that never opt in — some of
+  // which build their url from user input, and would otherwise seed an unbounded
+  // map with one parsed payload per distinct string — cost nothing and retain
+  // nothing. The last entry for a url is dropped when its last watcher unmounts,
+  // so a tenant's data does not outlive the component that asked for it.
+  useEffect(() => {
+    if (!url || !adoptIfFresherThan) return undefined
+    const n = (adoptCounts.get(url) ?? 0) + 1
+    adoptCounts.set(url, n)
+    adopting.add(url)
+    return () => {
+      const left = (adoptCounts.get(url) ?? 1) - 1
+      if (left > 0) {
+        adoptCounts.set(url, left)
+        return
+      }
+      adoptCounts.delete(url)
+      adopting.delete(url)
+      lastOk.delete(url)
+      seqByUrl.delete(url)
+    }
+  }, [url, adoptIfFresherThan])
 
   // No dep array: this mirrors state into the registry entry, and publishes
   // only when one of the two booleans actually moved.
