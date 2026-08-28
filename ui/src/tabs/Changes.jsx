@@ -387,7 +387,7 @@ function Chip({ tone = 'quiet', children }) {
   const color = tone === 'crit' ? COLORS.crit : tone === 'warn' ? COLORS.warn : COLORS.other
   return (
     <span
-      className="shrink-0 rounded-control border px-1.5 py-[1px] text-note leading-[14px] whitespace-nowrap"
+      className="shrink-0 rounded-control border px-1.5 py-0 text-note leading-[14px] whitespace-nowrap"
       style={{ color, borderColor: color }}
     >
       {children}

@@ -32,24 +32,49 @@
 //
 // Every one of those figures is PRINTED by the failure message below rather than
 // only written here, so the next person reads the current number instead of
-// trusting a comment's. After the extraction below the in-scope figure is 23.
+// trusting a comment's. After the extraction below the in-scope figure was 23.
 //
-// EXTRACTION, NOT NORMALISATION. #189/#190 set the precedent both ways: naming a
-// value that already renders is authorised, and MOVING it is a look change that
-// docs/SCREENS.md puts behind a variant set and the owner naming one. Of the 27
-// in scope, exactly four shared a role — DossierPage's ledger inset, written out
-// four times as px-[11px], where the head cells, the field cells and the
-// embedded panel all have to keep one left edge. Those four are now
-// --sp-ledger-inset at 11px, which is what they already painted.
+// IT IS NOW 0. The 23 were the open look change this header used to describe as
+// "landing them on 8 and 12 is the real answer ... it needs a mockup set and a
+// pick". Both happened: .mockups/spacing-scale/all.html rendered four
+// directions and the owner picked v2 — ladder 0/4/8/16, the sub-4 nudges
+// deleted rather than rounded, and no 12. So the sentence below about it being
+// "recorded as open rather than done quietly" describes how it got done, not
+// something still outstanding.
 //
-// The remaining 23 are one-off optical nudges at values that repeat nowhere,
-// spread across fourteen distinct numbers: gap-[7/9/10px], px-[9/10/13px],
-// py-[1/6/7px], pt-[2/10/11px], pb-[3px], mt-[7/9px], inset-[2px],
-// inset-x-[1px], inset-y-[4px]. A token per value would be renaming rather than
-// systematising — fourteen names for fourteen numbers, most used once, is a
-// worse file than the one it replaced. Landing them on 8 and 12 is the real
-// answer, and that is a look change: it needs a mockup set and a pick, so it is
-// recorded as open rather than done quietly.
+// The 79 SIZES ARE STILL NOT FORGIVEN and are still a different job. A green run
+// here still does not mean w-[420px] found a home.
+//
+// EXTRACTION FIRST, THEN NORMALISATION — BOTH NOW DONE, IN THAT ORDER.
+// #189/#190 set the precedent both ways: naming a value that already renders is
+// authorised, and MOVING it is a look change that docs/SCREENS.md puts behind a
+// variant set and the owner naming one.
+//
+// Step one, extraction. Of the 27 in scope, exactly four shared a role —
+// DossierPage's ledger inset, written out four times as px-[11px], where the
+// head cells, the field cells and the embedded panel all have to keep one left
+// edge. Those four became --sp-ledger-inset, declared at 11px, which is what
+// they already painted. Nothing moved.
+//
+// Step two, normalisation. The remaining 23 were one-off optical nudges at
+// values that repeat nowhere, spread across fourteen distinct numbers:
+// gap-[7/9/10px], px-[9/10/13px], py-[1/6/7px], pt-[2/10/11px], pb-[3px],
+// mt-[7/9px], inset-[2px], inset-x-[1px], inset-y-[4px]. A token per value would
+// have been renaming rather than systematising — fourteen names for fourteen
+// numbers, most used once, is a worse file than the one it replaced. Landing
+// them on a ladder was the real answer, and that needed a mockup set and a pick.
+// Both happened: .mockups/spacing-scale/all.html rendered four directions and
+// the owner chose v2 — ladder 0/4/8/16, sub-4 nudges deleted rather than
+// rounded, no 12. All 23 are gone, and --sp-ledger-inset went 11px -> 8px with
+// them, because under that ladder everything from 6 to 11 lands on 8.
+//
+// ONE THING GOT HARDER TO GUARD BECAUSE OF IT, and it is why the ledger test
+// below grew a third assertion. At 11px the token's value was distinctive: a
+// ledger cell that drifted off it had to write px-[11px], which the ratchet
+// above catches. At 8px the value collides with px-2, so a drifting cell can now
+// render pixel-identically through a perfectly ordinary utility that no ratchet
+// would ever flag. Landing on a scale makes the code tidier and the drift
+// quieter, and only an explicit check on the ledger cells covers the difference.
 // ---------------------------------------------------------------------------
 
 import { test } from 'node:test'
@@ -125,25 +150,23 @@ const ARBITRARY_SIZE = new RegExp(
 // inset-y-. The test failed on its first run and printed the real inventory,
 // which is what is transcribed below.
 const CENSUS = {
-  'gap-[10px]': 2,
-  'gap-[9px]': 2,
-  'px-[10px]': 2,
-  'px-[9px]': 2,
-  'py-[1px]': 2,
-  'gap-[7px]': 1,
-  'inset-[2px]': 1,
-  'inset-x-[1px]': 1,
-  'inset-y-[4px]': 1,
-  'mt-[7px]': 1,
-  'mt-[9px]': 1,
-  'pb-[3px]': 1,
-  'pt-[10px]': 1,
-  'pt-[11px]': 1,
-  'pt-[2px]': 1,
-  'px-[13px]': 1,
-  'py-[6px]': 1,
-  'py-[7px]': 1,
+  // EMPTY, AND THAT IS THE POINT RATHER THAN AN OVERSIGHT.
+  //
+  // All 18 classes that used to be listed here are gone. The 23 one-off nudges
+  // they counted were the "landing them on 8 and 12 is the real answer" note in
+  // this file's header — the look change that needed a mockup set and a pick.
+  // .mockups/spacing-scale/all.html offered four directions and v2 was chosen:
+  // ladder 0/4/8/16, sub-4 nudges deleted rather than rounded, 12 absent.
+  //
+  // An empty census makes ARBITRARY_BUDGET 0, so the ratchet below now fails on
+  // the FIRST new arbitrary spacing value rather than the twenty-fourth. That is
+  // a real tightening and it is meant: there is no longer a backlog for a new
+  // one to hide in.
+  //
+  // A genuine one-off still has a way in — add its line here with its reason,
+  // exactly as before. What it cannot do any more is arrive silently.
 }
+
 const ARBITRARY_BUDGET = Object.values(CENSUS).reduce((a, b) => a + b, 0)
 
 function walk(rel, out) {
@@ -315,13 +338,21 @@ test('--sp-ledger-inset is declared, and every ledger cell uses it', () => {
   const stripJs = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 
   const css = stripCss(fs.readFileSync(path.join(REPO, 'ui/src/index.css'), 'utf8'))
-  // The semicolon is required: `--sp-ledger-inset: 11px-ish` would satisfy a
+  // The semicolon is required: `--sp-ledger-inset: 8px-ish` would satisfy a
   // pattern that stopped at the unit, and an invalid value makes the var()
   // invalid at computed-value time, which paints no padding at all.
+  //
+  // 8px, not the 11px this token was extracted at. Extraction named the value
+  // without moving it, because moving it is a look change docs/SCREENS.md puts
+  // behind a variant set and the owner naming one. That happened:
+  // .mockups/spacing-scale/all.html offered four directions and v2 was chosen,
+  // whose ladder is 0/4/8/16 — every value from 6 to 11 lands on 8, and 12 does
+  // not exist on it. The number is pinned here rather than left loose so that
+  // the next move is also a decision rather than a drift.
   assert.match(
     css,
-    /--sp-ledger-inset:\s*11px\s*;/,
-    '--sp-ledger-inset is not declared as a complete `11px;` in ui/src/index.css, so every px-[var(--sp-ledger-inset)] renders no padding at all'
+    /--sp-ledger-inset:\s*8px\s*;/,
+    '--sp-ledger-inset is not declared as a complete `8px;` in ui/src/index.css, so every px-[var(--sp-ledger-inset)] renders no padding at all'
   )
 
   const dossier = stripJs(fs.readFileSync(path.join(REPO, 'ui/src/components/DossierPage.jsx'), 'utf8'))
@@ -336,5 +367,38 @@ test('--sp-ledger-inset is declared, and every ledger cell uses it', () => {
   assert.equal(
     (dossier.match(/px-\[11px\]/g) || []).length, 0,
     'a hand-written px-[11px] came back to DossierPage.jsx alongside the token'
+  )
+
+  // THE ASSERTION THE MOVE TO 8px MADE NECESSARY.
+  //
+  // While the inset was 11px, a ledger cell that stopped using the token had to
+  // say px-[11px], and the ratchet above caught it. Now that it is 8px, px-2
+  // renders exactly the same thing — so a drifted cell is invisible to the
+  // ratchet, invisible to the eye, and invisible to any test that only compares
+  // rendered pixels. The four-use count above does not cover it either: a FIFTH
+  // ledger cell written with px-2 leaves that count at four and still passes.
+  //
+  // So every element carrying `ledger-cell` is checked to also carry the token,
+  // which is the only form of the check that survives the value coinciding with
+  // a scale step.
+  const ledgerCells = dossier.match(/className=(?:"|`|')[^"`']*\bledger-cell\b[^"`']*(?:"|`|')/g) || []
+  assert.ok(
+    ledgerCells.length >= 3,
+    `expected to find ledger-cell class strings in DossierPage.jsx, found ${ledgerCells.length} — this check has stopped looking at anything`
+  )
+  const drifted = ledgerCells.filter((c) => !c.includes('px-[var(--sp-ledger-inset)]'))
+  assert.deepEqual(
+    drifted, [],
+    `a ledger cell carries its own horizontal padding instead of --sp-ledger-inset:\n  ${drifted.join('\n  ')}\n` +
+      `Since the token is 8px, px-2 renders identically and nothing else in this suite would notice the drift.`
+  )
+
+  // And the fixture that proves the check can fail, because a filter over a
+  // regex match is exactly the shape that silently matches nothing.
+  const FIXTURE = 'className="ledger-cell px-2 border-r"'
+  const fixtureCells = [FIXTURE].filter((c) => !c.includes('px-[var(--sp-ledger-inset)]'))
+  assert.equal(
+    fixtureCells.length, 1,
+    'the ledger-cell drift check does not flag a cell written with px-2, so it would not have caught the thing it exists for'
   )
 })
