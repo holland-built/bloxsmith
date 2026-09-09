@@ -63,3 +63,17 @@ E2E_SKIP_LIVE=1 npx playwright test
 
 `tests/layout-persist.spec.ts` finds a server by `pgrep` across the whole machine and SIGTERMs
 it. A worktree does not protect the owner's `:8090` from that; only the flag does.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in this repo, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels, each named after its role. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
