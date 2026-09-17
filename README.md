@@ -217,10 +217,25 @@ works: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
 BIND=0.0.0.0 docker compose up -d
 ```
 
+The safer choice is the secure proxy: HTTPS with a username and password on port 8443, while
+Bloxsmith itself only listens on the machine. It needs the whole repo, because the proxy reads
+`deploy/Caddyfile`. The quick-start folder does not have it.
+
 ```bash
-# add a reverse proxy with HTTPS and a username and password (served on port 8443)
+# get the repo, which includes the proxy settings
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+# make your own copy of the settings file
+cp .env.example .env
+# turn a password into the hash the proxy stores (use your own password)
+docker run --rm caddy caddy hash-password -p 'your-password'
+# open the settings: set BIND=127.0.0.1 and paste the hash into BASIC_AUTH_HASH
+nano .env
+# start Bloxsmith and the proxy; open https://<server>:8443
 docker compose --profile secure up -d
 ```
+
+Leave `BASIC_AUTH_HASH` empty and the proxy has no working password. Leave `BIND` at `0.0.0.0`
+and anyone can still skip the proxy by using port 8080.
 
 Your keys are encrypted in the `noc-vault` volume. If you turn on auto-unlock, the passphrase is
 stored on the same machine, so the encryption protects a stolen disk or backup, not a machine
@@ -247,10 +262,12 @@ checks](docs/DEPLOYMENT.md#backup--restore).
 With Docker:
 
 ```bash
-# write a backup inside the container (add --force to replace an older one)
+# write a backup inside the container
 docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz
 # copy it out to the current folder
 docker cp bloxsmith:/vault/backup.tar.gz .
+# delete the copy left inside the container, so the next backup does not refuse to overwrite it
+docker compose exec bloxsmith rm /vault/backup.tar.gz
 ```
 
 With Homebrew or an installer script:
@@ -261,10 +278,24 @@ bloxsmith vault-backup ./backup.tar.gz
 ```
 
 To restore, stop Bloxsmith first. A running copy keeps the old vault in memory and can write it
-back over the restore.
+back over the restore. `--force` replaces the files the backup holds and leaves other files alone.
+
+With Docker, from the folder that holds `docker-compose.yml` and `backup.tar.gz`:
 
 ```bash
-# put a backup back; --force replaces the files the backup holds
+# stop Bloxsmith, keeping its volumes
+docker compose down
+# restore the backup into the noc-vault volume with a one-off container
+docker run --rm -v noc-vault:/vault -v "$PWD":/backup:ro ghcr.io/holland-built/bloxsmith:latest vault-restore /backup/backup.tar.gz --confirm restore --force
+# start Bloxsmith again and unlock it with the passphrase the backup was made with
+docker compose up -d
+```
+
+With Homebrew or an installer script, stop Bloxsmith (Ctrl+C, or `bloxsmith service stop` if it
+runs at login), then:
+
+```bash
+# put the backup back
 bloxsmith vault-restore ./backup.tar.gz --confirm restore --force
 ```
 
