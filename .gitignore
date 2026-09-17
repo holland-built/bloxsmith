@@ -132,3 +132,9 @@ go/web/app.bundle.js
 
 # root-level templates/ is a fetched third-party copy — never commit (our own set lives in go/templates/)
 /templates/
+
+# Local screenshots and agent-tool config
+audit-*.png
+orca.yaml
+.orca/
+.fallow/
