@@ -259,15 +259,11 @@ The backup file holds your vault already encrypted, so it is as secret as your p
 audit signing key and `.env` are not in it on purpose: [why, and the restore
 checks](docs/DEPLOYMENT.md#backup--restore).
 
-With Docker:
+With Docker, from your Bloxsmith folder:
 
 ```bash
-# write a backup inside the container
-docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz
-# copy it out to the current folder
-docker cp bloxsmith:/vault/backup.tar.gz .
-# delete the copy left inside the container, so the next backup does not refuse to overwrite it
-docker compose exec bloxsmith rm /vault/backup.tar.gz
+# write a backup of the noc-vault volume straight into the current folder with a one-off container
+docker run --rm -v noc-vault:/vault -v "$PWD":/out ghcr.io/holland-built/bloxsmith:latest vault-backup /out/backup.tar.gz
 ```
 
 With Homebrew or an installer script:
