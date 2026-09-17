@@ -259,17 +259,17 @@ The backup file holds your vault already encrypted, so it is as secret as your p
 audit signing key and `.env` are not in it on purpose: [why, and the restore
 checks](docs/DEPLOYMENT.md#backup--restore).
 
-With Docker, from your Bloxsmith folder:
+With Docker, with or without Compose:
 
 ```bash
-# write a backup inside the container; --force replaces the one from last time
-docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz --force
+# write a backup to the container's temporary folder, outside the vault volume
+docker exec bloxsmith /app/bloxsmith vault-backup /tmp/backup.tar.gz --force
 # copy it out to the current folder, owned by you
-docker cp bloxsmith:/vault/backup.tar.gz .
+docker cp bloxsmith:/tmp/backup.tar.gz .
 ```
 
-The last backup stays in the `noc-vault` volume. It is encrypted the same way as the vault beside
-it, and the next backup replaces it.
+The copy in the container's temporary folder is gone when the container is replaced, and the next
+backup overwrites it.
 
 With Homebrew or an installer script:
 
@@ -281,15 +281,16 @@ bloxsmith vault-backup ./backup.tar.gz
 To restore, stop Bloxsmith first. A running copy keeps the old vault in memory and can write it
 back over the restore. `--force` replaces the files the backup holds and leaves other files alone.
 
-With Docker, from the folder that holds `docker-compose.yml` and `backup.tar.gz`:
+With Docker, with or without Compose, from the folder that holds `backup.tar.gz`. In Command
+Prompt, write `%cd%` where it says `$PWD`:
 
 ```bash
-# stop Bloxsmith, keeping its volumes
-docker compose down
+# stop Bloxsmith; its volumes are kept
+docker stop bloxsmith
 # restore the backup into the noc-vault volume with a one-off container
 docker run --rm -v noc-vault:/vault -v "$PWD":/backup:ro ghcr.io/holland-built/bloxsmith:latest vault-restore /backup/backup.tar.gz --confirm restore --force
 # start Bloxsmith again and unlock it with the passphrase the backup was made with
-docker compose up -d
+docker start bloxsmith
 ```
 
 With Homebrew or an installer script, stop Bloxsmith (Ctrl+C, or `bloxsmith service stop` if it
