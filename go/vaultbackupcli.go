@@ -296,9 +296,9 @@ func writeStateArchive(stateDir, dest string) (files int, total int64, notes []s
 	tw := tar.NewWriter(gz)
 
 	// The destination may legitimately sit INSIDE the directory being archived —
-	// the documented Docker form writes to /vault/backup.tar.gz, and /vault is
-	// the state dir. Without this, the archive would be walked into itself and
-	// grow until the disk filled.
+	// for example `vault-backup /vault/backup.tar.gz` in Docker, where /vault is
+	// the state dir (the documented form now writes to /tmp instead). Without this,
+	// the archive would be walked into itself and grow until the disk filled.
 	absDest, err := filepath.Abs(dest)
 	if err != nil {
 		return 0, 0, nil, err
