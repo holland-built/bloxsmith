@@ -801,17 +801,29 @@ Both are printed on every run, so nobody discovers the gap at restore time.
 
 ### From Docker
 
-The container has no shell (`gcr.io/distroless/static`), so run the binary
-directly and then copy the file off the volume:
+The container has no shell and no `rm` (`gcr.io/distroless/static`), so run the
+binary directly, write the archive outside the vault volume, and copy it out.
+This works for Compose and plain `docker run`, which both name the container
+`bloxsmith`:
 
 ```bash
-docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz
-docker cp bloxsmith:/vault/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
-docker compose exec bloxsmith rm /vault/backup.tar.gz   # don't leave it in the volume
+docker exec bloxsmith /app/bloxsmith vault-backup /tmp/backup.tar.gz --force
+docker cp bloxsmith:/tmp/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
 ```
 
-Writing into `/vault` is safe: the destination is skipped while the directory is
-being walked, so the archive is never packed into itself.
+`/tmp` is the container's own filesystem, so the archive never lands in the
+`noc-vault` volume and is gone when the container is replaced. `--force` lets the
+next backup overwrite it. `docker cp` writes the host copy as your user, where a
+one-off `docker run -v "$PWD":/out` would leave it owned by root on Linux.
+
+To restore into Docker, stop the container and run the restore in a one-off
+container against the same volume:
+
+```bash
+docker stop bloxsmith
+docker run --rm -v noc-vault:/vault -v "$PWD":/backup:ro ghcr.io/holland-built/bloxsmith:latest vault-restore /backup/backup.tar.gz --confirm restore --force
+docker start bloxsmith
+```
 
 ### Restoring
 
