@@ -262,9 +262,14 @@ checks](docs/DEPLOYMENT.md#backup--restore).
 With Docker, from your Bloxsmith folder:
 
 ```bash
-# write a backup of the noc-vault volume straight into the current folder with a one-off container
-docker run --rm -v noc-vault:/vault -v "$PWD":/out ghcr.io/holland-built/bloxsmith:latest vault-backup /out/backup.tar.gz
+# write a backup inside the container; --force replaces the one from last time
+docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz --force
+# copy it out to the current folder, owned by you
+docker cp bloxsmith:/vault/backup.tar.gz .
 ```
+
+The last backup stays in the `noc-vault` volume. It is encrypted the same way as the vault beside
+it, and the next backup replaces it.
 
 With Homebrew or an installer script:
 
