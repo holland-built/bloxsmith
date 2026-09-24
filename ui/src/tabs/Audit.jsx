@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { chainRows, eventTally, readShortfall, truncationNote } from '../lib/auditChain.js'
+import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -55,9 +55,61 @@ function chainTs(_v, row) {
 // The slice itself is left alone: it is still served, still declared in
 // lib/data.js, and no tab consumes it now. Wiring it up somewhere useful, or
 // retiring it, is its own decision and not this fix's to take.
+//
+// LOAD OLDER (issue #172). The server sends the newest page; Load older asks for
+// the page before whatever is on screen and joins it on. lib/auditChain.js
+// olderPages owns the joining, so a gap or a changed log drops the older pages
+// instead of showing a list with a hole in it. `raw` is the one entry list every
+// panel below reads, so the summary, the event menu and the table always agree.
 export default function Audit() {
   const chain = useApi('/api/audit/log', { poll: 30000 })
-  const entries = useMemo(() => chainRows(chain.data?.entries), [chain.data])
+  const [older, dispatch] = useReducer(olderPages, { gen: 0, view: null })
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [olderError, setOlderError] = useState(null)
+  const inFlight = useRef(null)
+  const latest = useRef(null)
+  latest.current = chain.data
+
+  useEffect(() => { dispatch({ type: 'poll', data: chain.data }) }, [chain.data])
+  useEffect(() => () => inFlight.current?.abort(), [])
+
+  // The view can lag the newest poll by one render, until the effect above runs;
+  // joining here too means the newest entries never disappear in that render.
+  const raw = useMemo(() => {
+    const page = pageOf(chain.data)
+    if (!older.view || !page) return chain.data?.entries
+    return (joinPages(older.view, page) ?? page).entries
+  }, [older.view, chain.data])
+  const entries = useMemo(() => chainRows(raw), [raw])
+
+  // Where the next Load older starts: before the oldest entry on screen. Null
+  // when there is nothing older, or when the server cannot page.
+  const cursor = older.view ? older.view.first : chain.data?.next_before
+  const canLoadOlder = chain.data?.truncated === true && Number.isFinite(cursor) && cursor > 0
+
+  async function loadOlder() {
+    if (!canLoadOlder || loadingOlder) return
+    const gen = older.gen
+    const data = chain.data
+    const ctrl = new AbortController()
+    inFlight.current = ctrl
+    setLoadingOlder(true)
+    setOlderError(null)
+    try {
+      const res = await fetch(`/api/audit/log?before=${cursor}`, { cache: 'no-store', signal: ctrl.signal })
+      const page = await res.json()
+      if (!res.ok) throw new Error(page?.error || `HTTP ${res.status}`)
+      dispatch({ type: 'older', gen, data, page, latest: latest.current })
+    } catch (err) {
+      if (err.name !== 'AbortError') setOlderError(err.message)
+    } finally {
+      if (inFlight.current === ctrl) {
+        inFlight.current = null
+        setLoadingOlder(false)
+      }
+    }
+  }
+  const more = { canLoadOlder, loadOlder, loadingOlder, olderError }
 
   return (
     <div className="w-full px-6 py-5">
@@ -67,8 +119,8 @@ export default function Audit() {
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="audit">
-        <ActivitySummary panelId="audit-activity-summary" entries={entries} chain={chain} />
-        <AuditTable panelId="audit-log" entries={entries} chain={chain} />
+        <ActivitySummary panelId="audit-activity-summary" raw={raw} entries={entries} chain={chain} />
+        <AuditTable panelId="audit-log" raw={raw} entries={entries} chain={chain} more={more} />
         <CspAuditTable panelId="audit-csp-portal" />
       </CardGrid>
     </div>
@@ -124,9 +176,9 @@ function ShortRead({ chain }) {
 // The gate is `truncated === true`, checked inside truncationNote. A payload
 // cached before those fields existed (a tab held open across a deploy) has no
 // `truncated` key, takes the null branch, and renders byte-identically to today.
-function TruncationNote({ chain }) {
+function TruncationNote({ chain, loaded }) {
   const { COLORS } = useChartTheme()
-  const note = truncationNote(chain.data)
+  const note = truncationNote(chain.data, loaded)
   if (!note) return null
   return (
     <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
@@ -151,9 +203,9 @@ function TruncationNote({ chain }) {
 // this tab's critical path entirely.
 const KINDS_SHOWN = 5
 
-function ActivitySummary({ entries, chain, panelId }) {
+function ActivitySummary({ raw, entries, chain, panelId }) {
   const { COLORS } = useChartTheme()
-  const tally = useMemo(() => eventTally(chain.data?.entries), [chain.data])
+  const tally = useMemo(() => eventTally(raw), [raw])
 
   // The kinds past the cut are summed into one row rather than dropped, so the
   // rows still add up to the count in the header. A list that silently stops at
@@ -195,7 +247,7 @@ function ActivitySummary({ entries, chain, panelId }) {
       right={<span className="text-note text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
     >
       <ShortRead chain={chain} />
-      <TruncationNote chain={chain} />
+      <TruncationNote chain={chain} loaded={entries.length} />
       {chain.loading ? (
         <Skeleton h={200} />
       ) : chain.error ? (
@@ -356,21 +408,48 @@ function AppendFailures({ result }) {
 // regenerated, and a payload cached from before these fields existed has no
 // `truncated` key at all and must render exactly as it does today.
 //
-// N comes from the server's own `returned` when it is there, falling back to
-// the rows actually held. `total` is deliberately NOT used: the claim being
-// made is about the reach of the filter, and the filter reached `returned`
-// rows, not `total` of them. The log-level figure is the TruncationNote's job.
+// N is the rows actually held: the newest page plus any Load older has added
+// (issue #172). `total` is deliberately NOT used: the claim being made is about
+// the reach of the filter, and the filter reached the held rows, not `total` of
+// them. Once every entry is held the filter reached the whole log, and the
+// plain sentence is true again. The log-level figure is the TruncationNote's job.
 //
 // Cap: `auditLogReturnCap`, go/internal/server/state.go:86, 2000 today.
 // Measured live 2026-08-21: 838 entries, so `truncated` is false and the second
 // branch renders nowhere until the log grows past the cap.
 function noMatchText(data, held) {
   if (data?.truncated !== true) return 'no entries match'
-  const n = Number.isFinite(data?.returned) ? data.returned : held
+  if (Number.isFinite(data?.total) && held >= data.total) return 'no entries match'
+  const n = held
   return `no entries match. The filter searched only the newest ${n.toLocaleString()} entries shown here, and older entries were not searched.`
 }
 
-function AuditTable({ entries, chain, panelId }) {
+// The button Load older lives in, with its own in-flight and error states. It
+// renders only when there is something older to fetch, which is never true on a
+// log under the cap, so the committed aria snapshot is unaffected.
+function LoadOlder({ more }) {
+  const { COLORS } = useChartTheme()
+  if (!more.canLoadOlder) return null
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <button
+        type="button"
+        onClick={more.loadOlder}
+        disabled={more.loadingOlder}
+        className={`${FIELD_CLS} disabled:opacity-60`}
+      >
+        {more.loadingOlder ? 'Loading older…' : 'Load older'}
+      </button>
+      {more.olderError ? (
+        <span className="text-note" style={{ color: COLORS.warn }}>
+          could not load older entries — {more.olderError}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function AuditTable({ raw, entries, chain, panelId, more }) {
   const [filter, setFilter] = useState('')
   const [event, setEvent] = useState('')
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' })
@@ -378,7 +457,7 @@ function AuditTable({ entries, chain, panelId }) {
   // The kinds actually present, so the selector cannot offer a filter that
   // matches nothing. The old one listed CREATE/UPDATE/DELETE, which are portal
   // vocabulary and appear in no entry this log has ever written.
-  const kinds = useMemo(() => eventTally(chain.data?.entries).map((t) => t.event), [chain.data])
+  const kinds = useMemo(() => eventTally(raw).map((t) => t.event), [raw])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -479,7 +558,8 @@ function AuditTable({ entries, chain, panelId }) {
       <ChainVerdict result={chain.data} error={chain.error} loading={chain.loading} />
       <AppendFailures result={chain.data} />
       <ShortRead chain={chain} />
-      <TruncationNote chain={chain} />
+      <TruncationNote chain={chain} loaded={entries.length} />
+      <LoadOlder more={more} />
       {chain.loading ? (
         <Skeleton h={250} />
       ) : chain.error ? (
