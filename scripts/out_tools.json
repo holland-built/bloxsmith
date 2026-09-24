@@ -140,7 +140,7 @@
   },
   {
     "name": "infoblox-portal_list_all_cubes",
-    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics, overlapping blocks), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, only summaries are\nreturned.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
+    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics), DHCP (activity logs, metrics, overlapping blocks), IPAM (address blocks, subnets, IP address utilization), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, only summaries are\nreturned.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
     "params": [],
     "required": []
   },
@@ -160,18 +160,18 @@
     "params": [
       "task_description*:string",
       "cube_name*:string",
-      "measures*:array",
+      "measures:[{'items': {'type': 'string'}, 'type': 'array'}, {'type': 'null'}]",
       "dimensions:[{'items': {'type': 'string'}, 'type': 'array'}, {'type': 'null'}]",
       "time_dimensions:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
       "filters:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
       "order:[{'additionalProperties': {'enum': ['asc', 'desc'], 'type': 'string'}, 'type': 'object'}, {'type': 'null'}]",
       "limit:[{'type': 'integer'}, {'type': 'null'}]",
       "offset:[{'type': 'integer'}, {'type': 'null'}]",
-      "table_name:[{'type': 'string'}, {'type': 'null'}]"
+      "table_name:[{'type': 'string'}, {'type': 'null'}]",
+      "query_plan_ref:[{'type': 'string'}, {'type': 'null'}]"
     ],
     "required": [
       "cube_name",
-      "measures",
       "task_description"
     ]
   },

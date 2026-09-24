@@ -6,9 +6,17 @@ from mcp_session import _mcp_session, _tool_text
 
 def txt(r):
     try:
-        return json.loads(_tool_text(r))
+        data = json.loads(_tool_text(r))
     except Exception:
         return _tool_text(r)
+    # Since 2026-09 get_cube_info and get_service_info wrap their whole answer as a
+    # JSON string under a lone "info" key. Unwrap it, or every field list reads empty.
+    if isinstance(data, dict) and list(data) == ["info"] and isinstance(data["info"], str):
+        try:
+            return json.loads(data["info"])
+        except ValueError:
+            pass
+    return data
 
 
 async def main():
