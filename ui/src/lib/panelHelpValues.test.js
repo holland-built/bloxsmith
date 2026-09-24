@@ -977,7 +977,7 @@ const CLAIMS = [
     says: /largest kind first\./,
     file: AUDIT,
     proofs: [
-      { re: /eventTally\(chain\.data\?\.entries\)/, expect: 'the rows come from eventTally, which sorts largest-first' },
+      { re: /eventTally\(raw\)/, expect: 'the rows come from eventTally, which sorts largest-first' },
     ],
   },
   {

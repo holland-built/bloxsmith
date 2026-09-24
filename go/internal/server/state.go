@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -144,17 +145,43 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 	// tail slice preserves the contract while reversing here would break it.
 	// (The line was cited as :88 until 2026-08-21, which is DETAIL_NOISE's
 	// comment — a different rule about which detail keys are dropped from a cell.)
+	//
+	// ?before=N (issue #172) moves the window's END back to position N, so the
+	// Audit tab can reach entries older than the cap. N is a position in the
+	// decoded log, and the log is append-only, so a position never moves under
+	// later appends; an offset from the newest end would. On a partial read it is
+	// ignored, for the same reason nothing is capped there: positions past the
+	// failure were never seen. Each page is still a full Read() and Verify().
 	total := len(entries)
-	truncated := readErr == nil && total > auditLogReturnCap
-	if truncated {
-		entries = entries[total-auditLogReturnCap:]
+	start, end := 0, total
+	if readErr == nil {
+		if raw := r.URL.Query().Get("before"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			// Not clamped: total only grows, so a cursor this server issued is
+			// always in range. Anything else is a typo or a log that shrank.
+			if err != nil || n < 1 || n > total {
+				d.json(w, r, 400, map[string]any{"error": fmt.Sprintf("before must be a whole number from 1 to %d", total)})
+				return
+			}
+			end = n
+		}
+		if end > auditLogReturnCap {
+			start = end - auditLogReturnCap
+		}
+	}
+	entries = entries[start:end]
+	var nextBefore any // null: nothing older to load
+	if start > 0 {
+		nextBefore = start
 	}
 
 	out := map[string]any{
 		"entries":            entries,
 		"returned":           len(entries),
 		"total":              total,
-		"truncated":          truncated,
+		"truncated":          len(entries) < total,
+		"first_index":        start,
+		"next_before":        nextBefore,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
 		"broken_reason":      chain["broken_reason"],
@@ -218,9 +245,10 @@ func mergeAppendHealth(out, health map[string]any) {
 // alert category). Those refuse a caller something they genuinely cannot
 // otherwise have. This one did not.
 //
-// AND THE PART A LATER READER NEEDS MOST: /api/audit/log now caps its response
-// at auditLogReturnCap newest entries, which makes THIS route the only one that
-// returns older entries in full. That cap is a PAYLOAD-SIZE measure and
+// AND THE PART A LATER READER NEEDS MOST: /api/audit/log caps each response at
+// auditLogReturnCap entries, and reaches older ones a page at a time through
+// ?before= (issue #172). THIS route is still the only one that returns the whole
+// log in one response. That cap is a PAYLOAD-SIZE measure and
 // explicitly NOT an access-control boundary — it must never become the thing
 // standing between a viewer and half the audit log. The user was asked about
 // exactly this on 2026-08-20 and ruled that a performance constant must not be

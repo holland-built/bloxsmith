@@ -217,17 +217,26 @@ export function readShortfall(data) {
  * log's path. And it does not name /api/audit/export, because an API route is
  * not an instruction a reader can follow.
  */
-export function truncationNote(data) {
+//
+// `loaded` (issue #172) is how many entries the tab holds once Load older has
+// added pages to the newest one. It defaults to `returned`, which is what the
+// tab holds before any click. Once everything is loaded the filter reaches the
+// whole log, so there is nothing left to warn about.
+export function truncationNote(data, loaded = data?.returned) {
   if (data?.truncated !== true) return null
 
-  const returned = data?.returned
+  const returned = loaded
   const total = data?.total
+  if (Number.isFinite(returned) && Number.isFinite(total) && returned >= total) return null
   const scope =
     'the filter and search below cover only what is shown here, not the rest of the log, ' +
     'which stays on the server in audit_log.jsonl (bloxsmith audit verify prints its path)'
 
   if (Number.isFinite(returned) && Number.isFinite(total)) {
-    return `Showing the newest ${returned.toLocaleString()} of ${total.toLocaleString()} entries; ${scope}.`
+    // Only a server that sends first_index can page, so only then is there a
+    // Load older button for the sentence to name.
+    const more = Number.isFinite(data?.first_index) ? ' Load older fetches the entries before these.' : ''
+    return `Showing the newest ${returned.toLocaleString()} of ${total.toLocaleString()} entries; ${scope}.${more}`
   }
 
   // Malformed payload: the server always sends `total` alongside `truncated`,
@@ -237,4 +246,77 @@ export function truncationNote(data) {
   // drops the figure it does not have.
   const newest = Number.isFinite(returned) ? `the newest ${returned.toLocaleString()} entries` : 'only the newest entries'
   return `Showing ${newest} of a longer log; the full count is not known from this response, and ${scope}.`
+}
+
+// ---------- paging back past the cap (issue #172) ----------
+//
+// A page is {first, entries}: entries[i] sits at position first + i in the log.
+// /api/audit/log sends `first_index` for the page it returned, and `?before=N`
+// returns the page ending just before position N. The log is append-only, so a
+// position never moves and two pages can be joined on it.
+//
+// What this must never do is show a list with a hole in it, or rows from two
+// different logs, while it looks like one continuous log. So a join that would
+// leave a gap, or that finds the two pages disagreeing about an entry's hash,
+// or that finds the log got shorter, returns null and the caller drops what it
+// had loaded.
+
+/** The page a /api/audit/log response describes, or null if it cannot page. */
+export function pageOf(data) {
+  if (!Number.isFinite(data?.first_index) || !Array.isArray(data?.entries)) return null
+  return { first: data.first_index, entries: data.entries }
+}
+
+/**
+ * `older` followed by `newer`, as one page, or null when they do not join.
+ * `newer` must start inside `older` or right after it, and must not end before
+ * it. Where they overlap, the entries must carry the same hash; the newer copy
+ * is kept. Where they only touch, the first newer entry's prev_hash must name
+ * the last older entry, or a log rewritten between the two reads would join.
+ */
+export function joinPages(older, newer) {
+  const olderEnd = older.first + older.entries.length
+  const newerEnd = newer.first + newer.entries.length
+  if (newer.first < older.first || newer.first > olderEnd || newerEnd < olderEnd) return null
+  for (let p = newer.first; p < olderEnd; p++) {
+    if (older.entries[p - older.first]?.hash !== newer.entries[p - newer.first]?.hash) return null
+  }
+  if (newer.first === olderEnd && older.entries.length && newer.entries.length &&
+      newer.entries[0]?.prev_hash !== older.entries[older.entries.length - 1]?.hash) return null
+  return { first: older.first, entries: older.entries.slice(0, newer.first - older.first).concat(newer.entries) }
+}
+
+/**
+ * State for the Audit tab's Load older, as a reducer so the poll and a Load
+ * older reply cannot overwrite each other's work. State is {gen, view}: `view`
+ * is null until the first Load older, then the joined page on screen.
+ *
+ * `poll` joins each newest page onto the view, so the view keeps up as the
+ * newest window slides forward. A gap (more than a page of appends between two
+ * polls) or a disagreement drops the view and bumps `gen`.
+ *
+ * `older` carries the gen it was requested under. A reply from before a reset
+ * is ignored, and so is one that does not join (a duplicate click's reply).
+ * `data` is the newest page when the request was sent and `latest` the newest
+ * page now: a poll that landed while the request was out found no view to join,
+ * so the reply joins it here or is dropped.
+ */
+export function olderPages(state, action) {
+  if (action.type === 'poll') {
+    const page = pageOf(action.data)
+    if (!state.view || !page) return state
+    const view = joinPages(state.view, page)
+    return view ? { ...state, view } : { gen: state.gen + 1, view: null }
+  }
+  if (action.type === 'older') {
+    if (action.gen !== state.gen) return state
+    const base = state.view ?? pageOf(action.data)
+    const page = pageOf(action.page)
+    if (!base || !page || page.first + page.entries.length !== base.first) return state
+    let view = joinPages(page, base)
+    const latest = pageOf(action.latest)
+    if (view && latest) view = joinPages(view, latest)
+    return view ? { ...state, view } : state
+  }
+  return state
 }

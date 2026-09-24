@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chainRows, detailText, entryTimeMs, eventTally, readShortfall, truncationNote } from './auditChain.js'
+import { chainRows, detailText, entryTimeMs, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from './auditChain.js'
 
 const REAL_ENTRY = {
   actor: 'loopback',
@@ -240,4 +240,113 @@ test('a truncated payload with neither figure still refuses to invent one', () =
   assert.match(s, /only the newest entries/)
   // The filename carries no digit, so naming it cannot smuggle a figure in.
   assert.match(s, /audit_log\.jsonl/)
+})
+
+// --- paging back past the cap (issue #172) ----------------------------------
+//
+// A page is {first, entries}: entries[i] sits at position first + i in the log.
+// The log is append-only, so a position never moves, and pages join on position.
+
+const at = (first, n, tag = 'h') =>
+  Array.from({ length: n }, (_, i) => ({ event: `event-${first + i}`, hash: `${tag}${first + i}`, prev_hash: `${tag}${first + i - 1}` }))
+const events = (page) => page.entries.map((e) => e.event)
+
+test('pageOf reads first_index, and refuses a payload without it', () => {
+  assert.deepEqual(pageOf({ first_index: 6, entries: at(6, 2) }), { first: 6, entries: at(6, 2) })
+  assert.equal(pageOf({ entries: at(0, 2) }), null) // a server from before #172
+  assert.equal(pageOf({ first_index: 3 }), null)
+  assert.equal(pageOf(undefined), null)
+})
+
+test('joinPages puts an older page directly before a newer one', () => {
+  const j = joinPages({ first: 2, entries: at(2, 4) }, { first: 6, entries: at(6, 4) })
+  assert.equal(j.first, 2)
+  assert.deepEqual(events(j), ['event-2', 'event-3', 'event-4', 'event-5', 'event-6', 'event-7', 'event-8', 'event-9'])
+})
+
+test('joinPages takes the overlap once, from the newer page', () => {
+  // The newest window slid forward by two between polls: 6..9 then 8..11.
+  const j = joinPages({ first: 2, entries: at(2, 8) }, { first: 8, entries: at(8, 4) })
+  assert.equal(j.first, 2)
+  assert.equal(j.entries.length, 10)
+  assert.deepEqual(events(j).slice(-4), ['event-8', 'event-9', 'event-10', 'event-11'])
+})
+
+test('joinPages refuses a gap rather than hiding it', () => {
+  // More than one page of appends between polls: positions 6 and 7 were never seen.
+  assert.equal(joinPages({ first: 2, entries: at(2, 4) }, { first: 8, entries: at(8, 4) }), null)
+})
+
+test('joinPages refuses pages that disagree about the same position', () => {
+  // Same positions, different hashes: the log on disk is not the one the older
+  // page was read from. Mixing the two would show rows from two different logs.
+  const older = { first: 2, entries: at(2, 8) }
+  assert.equal(joinPages(older, { first: 8, entries: at(8, 4, 'x') }), null)
+})
+
+test('joinPages refuses a log that got shorter', () => {
+  assert.equal(joinPages({ first: 2, entries: at(2, 8) }, { first: 6, entries: at(6, 2) }), null)
+})
+
+test('olderPages: a poll with nothing loaded changes nothing', () => {
+  const s = { gen: 0, view: null }
+  assert.equal(olderPages(s, { type: 'poll', data: { first_index: 6, entries: at(6, 4) } }), s)
+})
+
+test('olderPages: a loaded page joins the polled one, and later polls extend it', () => {
+  let s = { gen: 0, view: null }
+  const polled = { first_index: 6, entries: at(6, 4) }
+  s = olderPages(s, { type: 'older', gen: 0, data: polled, page: { first_index: 2, entries: at(2, 4) } })
+  assert.equal(s.view.first, 2)
+  assert.equal(s.view.entries.length, 8)
+  s = olderPages(s, { type: 'poll', data: { first_index: 8, entries: at(8, 4) } })
+  assert.equal(s.view.first, 2)
+  assert.deepEqual(events(s.view).slice(-2), ['event-10', 'event-11'])
+})
+
+test('olderPages: a gap drops what was loaded and starts a new generation', () => {
+  let s = { gen: 0, view: { first: 2, entries: at(2, 8) } }
+  s = olderPages(s, { type: 'poll', data: { first_index: 20, entries: at(20, 4) } })
+  assert.deepEqual(s, { gen: 1, view: null })
+})
+
+test('olderPages: a reply from before a reset is ignored', () => {
+  const s = { gen: 1, view: null }
+  const late = { type: 'older', gen: 0, data: { first_index: 6, entries: at(6, 4) }, page: { first_index: 2, entries: at(2, 4) } }
+  assert.equal(olderPages(s, late), s)
+})
+
+test('olderPages: a page that does not end where the view starts is ignored', () => {
+  const s = { gen: 0, view: { first: 2, entries: at(2, 8) } }
+  // A duplicate reply for a cursor already loaded.
+  const dup = { type: 'older', gen: 0, data: { first_index: 6, entries: at(6, 4) }, page: { first_index: 2, entries: at(2, 4) } }
+  assert.equal(olderPages(s, dup).view.first, 2)
+  assert.equal(olderPages(s, dup).view.entries.length, 8)
+})
+
+test('truncationNote counts what is loaded, and goes quiet once all of it is', () => {
+  const data = { returned: 200, total: 837, truncated: true, first_index: 637 }
+  assert.doesNotMatch(truncationNote({ returned: 200, total: 837, truncated: true }), /Load older/) // cannot page
+  assert.match(truncationNote(data, 400), /Showing the newest 400 of 837 entries/)
+  assert.match(truncationNote(data, 400), /Load older/)
+  assert.doesNotMatch(truncationNote(data, 400), /download/i)
+  assert.equal(truncationNote(data, 837), null)
+})
+
+test('joinPages refuses touching pages whose link does not match', () => {
+  // No overlap to compare, so the chain link is the only check: a log rewritten
+  // to the same length between two reads must not join.
+  assert.equal(joinPages({ first: 2, entries: at(2, 4, 'x') }, { first: 6, entries: at(6, 4) }), null)
+})
+
+test('olderPages: a reply joins the poll that landed while it was out', () => {
+  const s = { gen: 0, view: null }
+  const next = olderPages(s, {
+    type: 'older', gen: 0,
+    data: { first_index: 6, entries: at(6, 4) },
+    latest: { first_index: 8, entries: at(8, 4) },
+    page: { first_index: 2, entries: at(2, 4) },
+  })
+  assert.equal(next.view.first, 2)
+  assert.deepEqual(events(next.view).slice(-1), ['event-11'])
 })

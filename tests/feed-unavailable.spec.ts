@@ -303,4 +303,44 @@ test.describe('Audit → Activity Summary panel (audit chain)', () => {
     await expect(card.getByText('no entries match', { exact: true })).toBeVisible();
     await expect(card.getByText(/older entries were not searched/)).toHaveCount(0);
   });
+
+  // Issue #172: Load older fetches the page before the newest one and joins it
+  // on, so the filter and the summary reach entries past the server's cap.
+  test('Load older joins the earlier page on, and the warning goes once all of it is loaded', async ({ page }) => {
+    const OLDER = [
+      { actor: 'carol', event: 'retag-block', ts: 1785196680, detail: { status: 'x' }, hash: 'h-1', prev_hash: '', seq: 0 },
+      { actor: 'dave', event: 'snooze', ts: 1785196740, detail: { category: 'dns' }, hash: 'h0', prev_hash: 'h-1', seq: 1 },
+    ];
+    // The newest page's first entry links back to the older page's last one,
+    // as a real chain does; Load older refuses to join pages that do not link.
+    const NEWEST = [{ ...CHAIN_ENTRIES[0], prev_hash: 'h0' }, ...CHAIN_ENTRIES.slice(1)];
+    const total = OLDER.length + NEWEST.length;
+    const befores: string[] = [];
+    await page.route(
+      (url) => url.pathname === '/api/audit/log',
+      (route) => {
+        const before = new URL(route.request().url()).searchParams.get('before');
+        if (before) befores.push(before);
+        return fulfillJson(route, before === String(OLDER.length)
+          ? { ...auditLogPayload(OLDER), returned: 2, total, truncated: true, first_index: 0, next_before: null }
+          : { ...auditLogPayload(NEWEST), returned: 2, total, truncated: true, first_index: 2, next_before: 2 });
+      },
+    );
+    await page.goto('/#audit');
+
+    const card = page.locator(AUDIT_LOG_CARD);
+    await expect(card.getByText(new RegExp(`Showing the newest 2 of ${total} entries`))).toBeVisible();
+    await card.getByPlaceholder('Filter').fill('carol');
+    await expect(card.getByText(/older entries were not searched/)).toBeVisible();
+
+    await card.getByRole('button', { name: 'Load older' }).click();
+
+    await expect(card.getByText('carol')).toBeVisible();
+    expect(befores).toEqual([String(OLDER.length)]);
+    // Everything is loaded now, so the filter reached the whole log and neither
+    // the warning nor the button has anything left to say.
+    await expect(card.getByText(/Showing the newest/)).toHaveCount(0);
+    await expect(card.getByRole('button', { name: 'Load older' })).toHaveCount(0);
+    await expect(page.locator(SUMMARY_CARD).getByText(new RegExp(`${total} recorded events`, 'i'))).toBeVisible();
+  });
 });
