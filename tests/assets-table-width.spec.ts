@@ -38,7 +38,7 @@ import { test, expect } from './fixtures';
 
 const NAMES = [
   'debug-vpcflow', 'ip-10-0-14-221.ec2.internal', 'DESKTOP-4F9K2LQ',
-  'sholland-macbook-pro-16-inch-2023', 'prod-db-replica-eu-west-1c',
+  'kjohnson-macbook-pro-16-inch-2023', 'prod-db-replica-eu-west-1c',
   'wireless-ap-floor3-northwing-0042', 'svc-backup-agent', 'iphone-15-pro-max',
 ];
 const TYPES = ['Storage Bucket', 'Workstation', 'Virtual Machine', 'Laptop', 'Smartphone'];

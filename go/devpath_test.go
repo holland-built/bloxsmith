@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// The regression this file covers (#95): `/Users/sholland/AI/Infoblox MCP/.env`
+// The regression this file covers (#95): `/Users/<you>/<repo>/.env`
 // was compiled into every release for four weeks. The repo already pays for
 // `-trimpath` to keep build-machine paths out of the artifact, and measured on
 // that commit it worked perfectly — 896 toolchain paths went to 0 — while the
