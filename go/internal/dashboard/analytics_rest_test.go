@@ -46,7 +46,7 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 		seen = append(seen, q)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"result":{"data":[
-			{"NstarDnsActivity.total_query_count":"270196"}
+			{"NetworkNstarDnsActivity.total_query_count":"270196"}
 		]}}`))
 	})
 
@@ -58,18 +58,18 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 
 	// 1. volume: measures + daily-granularity 7-day timeDimension.
 	vol := seen[0]
-	if ms, _ := vol["measures"].([]any); len(ms) != 1 || ms[0] != "NstarDnsActivity.total_query_count" {
+	if ms, _ := vol["measures"].([]any); len(ms) != 1 || ms[0] != "NetworkNstarDnsActivity.total_query_count" {
 		t.Errorf("volume measures = %v", vol["measures"])
 	}
 	td := asMap(asSlice(vol["timeDimensions"])[0])
-	if td["dimension"] != "NstarDnsActivity.timestamp" || td["dateRange"] != "last 7 days" || td["granularity"] != "day" {
+	if td["dimension"] != "NetworkNstarDnsActivity.timestamp" || td["dateRange"] != "last 7 days" || td["granularity"] != "day" {
 		t.Errorf("volume timeDimensions = %+v", td)
 	}
 
 	// 2. top_clients: device dimensions, no granularity, ordered, limit 50.
 	clients := seen[1]
 	dims, _ := clients["dimensions"].([]any)
-	if len(dims) != 2 || dims[0] != "NstarDnsActivity.device_name" || dims[1] != "NstarDnsActivity.device_ip" {
+	if len(dims) != 2 || dims[0] != "NetworkNstarDnsActivity.device_name" || dims[1] != "NetworkNstarDnsActivity.device_ip" {
 		t.Errorf("top_clients dimensions = %v", clients["dimensions"])
 	}
 	td2 := asMap(asSlice(clients["timeDimensions"])[0])
@@ -83,7 +83,7 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 	// 3. query_types: query_type dimension, limit 10.
 	types := seen[2]
 	dims3, _ := types["dimensions"].([]any)
-	if len(dims3) != 1 || dims3[0] != "NstarDnsActivity.query_type" {
+	if len(dims3) != 1 || dims3[0] != "NetworkNstarDnsActivity.query_type" {
 		t.Errorf("query_types dimensions = %v", types["dimensions"])
 	}
 	if types["limit"] != float64(10) {

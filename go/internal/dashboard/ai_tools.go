@@ -211,13 +211,13 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		days := aiClampInt(args["days"], ai.AnalyticsDaysDefault, ai.AnalyticsDaysMin, ai.AnalyticsDaysMax)
 		limit := aiClampInt(args["limit"], ai.AnalyticsLimitDefault, ai.AnalyticsLimitMin, ai.AnalyticsLimitMax)
 		q, _ := json.Marshal(map[string]any{
-			"measures":   []string{"NstarDnsActivity.total_query_count"},
-			"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
+			"measures":   []string{"NetworkNstarDnsActivity.total_query_count"},
+			"dimensions": []string{"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
 			"timeDimensions": []map[string]any{{
-				"dimension": "NstarDnsActivity.timestamp",
+				"dimension": "NetworkNstarDnsActivity.timestamp",
 				"dateRange": "last " + strconv.Itoa(days) + " days",
 			}},
-			"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"},
+			"order": map[string]any{"NetworkNstarDnsActivity.total_query_count": "desc"},
 			"limit": limit,
 		})
 		body, status, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
