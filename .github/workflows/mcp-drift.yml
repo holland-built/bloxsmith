@@ -448,6 +448,15 @@ jobs:
                                if isinstance(v, dict) and "error" in v)
               return len(entries), len(details), errored
 
+          def hollow(path):
+              """True when detail blocks exist but not one of them carries a field or endpoint."""
+              with open(path) as fh:
+                  data = json.load(fh)
+              det = next((k for k in DETAIL if isinstance(data, dict) and k in data), None)
+              blocks = [v for v in (data[det].values() if det else []) if isinstance(v, dict)]
+              keys = ("measures", "dimensions", "all_endpoints", "get_endpoints")
+              return bool(blocks) and not any(v.get(k) for v in blocks for k in keys)
+
           rows, fatal = [], []
           for live, snap in PAIRS:
               name = os.path.basename(snap)
@@ -464,6 +473,14 @@ jobs:
               if errored:
                   fatal.append(f"{name}: {len(errored)} detail block(s) came back as an error "
                                f"instead of data ({', '.join(errored)}). That is a partial catalog.")
+                  continue
+              # 2026-09: get_cube_info started wrapping its answer under a lone "info"
+              # key, the parser read every field list as empty, and all 64 cubes came
+              # through as present but hollow. Neither check above catches that shape.
+              if hollow(live):
+                  fatal.append(f"{name}: every detail block is empty (no fields or endpoints). "
+                               f"The response shape probably changed; fix the catalog script "
+                               f"before refreshing.")
                   continue
               n_snap, d_snap, _ = read(snap)
               rows.append((name, n_snap, n_live, d_snap, d_live))

@@ -74,7 +74,7 @@ Fetch one and read it:
 
 ```bash
 # the release version to check, without the leading v
-V=3.53.0
+V=3.70.6
 # the download folder for that release
 BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
 # download the Linux amd64 dependency list (SBOM)
@@ -153,7 +153,7 @@ SBOM claiming to describe both. Nothing is attached to the index for that reason
 
 ```bash
 # the release version to check, without the leading v
-V=3.53.0
+V=3.70.6
 # the image to check
 IMAGE=ghcr.io/holland-built/bloxsmith
 # your computer type: amd64, or arm64 for Apple silicon and ARM servers
