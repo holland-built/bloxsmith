@@ -1,10 +1,12 @@
 [
   {
     "name": "infoblox-hosts_get_host_config",
-    "description": "Fetch the effective DNS or DHCP configuration files for a specific on-prem host. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
+    "description": "Fetch the requested variant of the DNS or DHCP configuration files for a specific on-prem host. Returns the base configuration by default; pass `variant=dfp` to get the DNS Firewall Proxy configuration a NIOS-X host running DFP actually loads. The response names the effective file and why it was chosen. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
     "params": [
       "config_type*:string",
-      "ophid*:string"
+      "ophid*:string",
+      "variant:string",
+      "version:string"
     ],
     "required": [
       "config_type",
@@ -138,13 +140,13 @@
   },
   {
     "name": "infoblox-portal_list_all_cubes",
-    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics, overlapping blocks), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, use `get_cube_info` to\nget detailed information about a specific cube before querying.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
+    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics, overlapping blocks), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, only summaries are\nreturned.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
     "params": [],
     "required": []
   },
   {
     "name": "infoblox-portal_get_cube_info",
-    "description": "Get detailed metadata for a specific CubeJS cube.\n\nReturns comprehensive information about the cube including:\n- Dimensions: Fields you can group by or filter on (e.g., device_ip, timestamp)\n- Measures: Aggregatable values (e.g., count, sum, average)\n- Segments: Pre-defined filters that can be applied\n\nUse this information to construct queries with the `query_cube` tool.\n\nExample dimension types:\n- string: Text values for filtering/grouping\n- number: Numeric values\n- time: Timestamps that support time-based analysis\n- boolean: True/false values\n\nExample measure types:\n- count: Number of records\n- sum: Total of numeric values\n- avg: Average value\n- min/max: Extreme values",
+    "description": "Get detailed metadata for a specific CubeJS cube.\n\nReturns comprehensive information about the cube including:\n- Dimensions: Fields you can group by or filter on (e.g., device_ip, timestamp)\n- Measures: Aggregatable values (e.g., count, sum, average)\n- Segments: Pre-defined filters that can be applied\n\nExample dimension types:\n- string: Text values for filtering/grouping\n- number: Numeric values\n- time: Timestamps that support time-based analysis\n- boolean: True/false values\n\nExample measure types:\n- count: Number of records\n- sum: Total of numeric values\n- avg: Average value\n- min/max: Extreme values",
     "params": [
       "cube_name*:string"
     ],
@@ -154,7 +156,7 @@
   },
   {
     "name": "infoblox-portal_query_cube",
-    "description": "Execute a CubeJS query and store results for SQL analysis.\n\nThis tool queries the specified cube with the given parameters and stores\nthe results in a Parquet file that can be queried with `query_stored_data`.\n\nQuery Building Tips:\n1. Always use fully qualified names (CubeName.field) for measures and dimensions\n2. Use get_cube_info first to see available fields\n3. Time dimensions support relative ranges like '24 hours', '7 days' (auto-converted to date tuples)\n4. Filters use operators like: equals, notEquals, contains, gt, gte, lt, lte\n\nCommon Patterns:\n- Time series: Add time_dimensions with granularity for trends over time\n- Top N: Use order with limit to get highest/lowest values\n- Filtering: Use filters to narrow down to specific criteria\n- Grouping: Add dimensions to segment data by categories\n\nReturns:\n    Table name and metadata for use with query_stored_data tool.",
+    "description": "Execute a CubeJS query and store results for SQL analysis.\n\nQuery Building Tips:\n1. Always use fully qualified names (CubeName.field) for measures and dimensions\n2. Time dimensions support relative ranges like '24 hours', '7 days' (auto-converted to date tuples)\n3. Filters use operators like: equals, notEquals, contains, gt, gte, lt, lte\n\nCommon Patterns:\n- Time series: Add time_dimensions with granularity for trends over time\n- Top N: Use order with limit to get highest/lowest values\n- Filtering: Use filters to narrow down to specific criteria\n- Grouping: Add dimensions to segment data by categories",
     "params": [
       "task_description*:string",
       "cube_name*:string",
