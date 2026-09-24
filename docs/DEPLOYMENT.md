@@ -633,6 +633,15 @@ the sealed count are what catch a person — without the key you cannot edit an
 entry, and you cannot cut entries off the end, without `/api/audit/log`
 reporting it.
 
+**The log records caller IP addresses, and keeps them.** Each entry's actor is
+the caller's IP address, or `loopback` for a request from the same machine. A
+refused request records the caller's role instead. This is on purpose: an audit
+trail has to say who acted, and the IP is the only identity the app has. Because
+the chain cannot be edited, those addresses can't be removed later without
+breaking it. Under GDPR an IP address can be personal data, so mention the log in
+whatever privacy or retention notice covers your deployment. Every role can
+export the log (`/api/audit/export`).
+
 **What the default protects, and what it does not.** With nothing configured the
 key is generated once at `<AUDIT_TRUST_DIR>/audit.key`, mode `0600`, on the same
 machine. That defeats an attacker who can write the log file but is not the
