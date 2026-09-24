@@ -2,6 +2,8 @@ package server
 
 import (
 	"fmt"
+	"log"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -864,11 +866,25 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 		// refused, nothing went"), and `result["incomplete"]` is absent — not
 		// empty — on the failure paths above the delete loop, where nothing was
 		// deleted at all.
+		//
+		// One exception to "as-is" (#173): the audited copy drops export_path.
+		// It is a server-local filesystem path, and the chain is append-only and
+		// readable by every role, so it could never be taken back out. The caller
+		// still gets it in the body; the server log gets it for whoever runs the
+		// box — the same split recoverStream uses for panic text.
 		detail := map[string]any{"template": name, "error": err.Error()}
 		body := map[string]any{"error": err.Error()}
 		if inc, ok := result["incomplete"]; ok {
-			detail["incomplete"] = inc
 			body["incomplete"] = inc
+			if m, isMap := inc.(map[string]any); isMap {
+				if p, has := m["export_path"]; has {
+					log.Printf("[teardown] /api/teardown/block %s incomplete; export written to %v", name, p)
+				}
+				m = maps.Clone(m)
+				delete(m, "export_path")
+				inc = m
+			}
+			detail["incomplete"] = inc
 		}
 		if !dry {
 			d.auditAppend("teardown-block-error", httpx.Actor(r), detail)

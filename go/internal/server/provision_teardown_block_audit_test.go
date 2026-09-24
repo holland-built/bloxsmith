@@ -158,6 +158,17 @@ func TestTeardownBlock_PartialDeleteNamesTheBlocksAlreadyGone(t *testing.T) {
 	if len(auditGone) != 1 {
 		t.Fatalf("audit blocks_deleted = %v, want the one deleted block", auditInc["blocks_deleted"])
 	}
+
+	// export_path is a server-local filesystem path (#173). The caller needs it
+	// to find the record; the chain is append-only and readable by every role,
+	// so it must not be written there, where it could never be removed.
+	if p, _ := inc["export_path"].(string); p == "" {
+		t.Fatalf("400 body lost export_path: %v — the operator is no longer told where the record went", inc)
+	}
+	if _, present := auditInc["export_path"]; present {
+		t.Fatalf("audit row carries export_path %v — a server filesystem path in a log that cannot be redacted",
+			auditInc["export_path"])
+	}
 }
 
 // A failure BEFORE the first delete destroys nothing, so there is no inventory
