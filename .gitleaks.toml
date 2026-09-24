@@ -5,11 +5,11 @@ useDefault = true
 
 [[allowlists]]
 description = "The release signing key is an Ed25519 PUBLIC key. Publishing it is the point: a shipped binary checks a release against it offline. Matched by value, so a real secret added to the same file is still caught."
-regexes = ['''2f43b683c88932f930ed9c48c35346b03f026fa5f61fe2db16cddefc66111b89''']
+regexes = ['''^2f43b683c88932f930ed9c48c35346b03f026fa5f61fe2db16cddefc66111b89$''']
 
 [[allowlists]]
 description = "Test fixtures. Every string in these files is invented so a test can assert on it."
 paths = [
-  '''go/internal/dashboard/axur_test\.go''',
-  '''tests/page-fixtures\.ts''',
+  '''^go/internal/dashboard/axur_test\.go$''',
+  '''^tests/page-fixtures\.ts$''',
 ]
