@@ -83,7 +83,7 @@ export default defineConfig({
     ? [...LIVE_TENANT_SPECS, ...LINUX_CI_UNPROVEN_SPECS]
     : [],
   // Explicit, because the default did NOT land in this repo. Playwright's
-  // computed default here resolved to /Users/sholland/test-results — outside
+  // computed default here resolved to /Users/<you>/test-results — outside
   // the project, outside .gitignore, and nowhere anyone would look — so every
   // trace, video and screenshot this config now captures would have been
   // written somewhere invisible. Measured with

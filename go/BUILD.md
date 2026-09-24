@@ -17,7 +17,9 @@ because the module and the embedded `web/` assets both live here).
 ## Local test build (NO publish)
 
 ```bash
+# go into the Go folder
 cd go
+# build every platform locally without publishing anything
 goreleaser build --snapshot --clean
 ```
 
@@ -31,10 +33,14 @@ mode it reads `<X.Y.Z+1>-snapshot-<commit>` (incpatch of the last semver tag).
 Verify a produced binary:
 
 ```bash
-./dist/bloxsmith_darwin_all/bloxsmith --version         # prints the stamped version
-PORT=8099 ./dist/bloxsmith_darwin_all/bloxsmith &        # boot it
-curl -s localhost:8099/api/update/check                  # "current" == stamped version
-curl -s localhost:8099/ | head                           # embedded UI (index.html) loads
+# print the version built into the program
+./dist/bloxsmith_darwin_all/bloxsmith --version
+# start it on port 8099 in the background
+PORT=8099 ./dist/bloxsmith_darwin_all/bloxsmith &
+# the "current" field should match that version
+curl -s localhost:8099/api/update/check
+# the built-in web page should load
+curl -s localhost:8099/ | head
 ```
 
 ## Real release (publishes)
@@ -43,7 +49,9 @@ Canonical path is the **tag-triggered CI workflow** (`.github/workflows/release.
 cut a **semver** tag on `master` and push it — CI runs goreleaser (see `docs/SHIP.md`).
 
 ```bash
-git tag vX.Y.Z          # semver, e.g. v2.2.0
+# tag the release with its version number, for example v2.2.0
+git tag vX.Y.Z
+# push the tag; CI builds and publishes the release
 git push origin vX.Y.Z
 ```
 
@@ -52,7 +60,9 @@ Local fallback: stage the installers into `go/` first (goreleaser's
 at publish time — the copies are gitignored):
 
 ```bash
+# copy the installers next to the Go code, where goreleaser looks for them
 cd go && cp ../scripts/install.sh ../scripts/install.ps1 .
+# build and publish the release using your GitHub login
 GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
 ```
 

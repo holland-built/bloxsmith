@@ -20,6 +20,7 @@ The Go binary serves the frontend from `go/web` (`go:embed all:web` in
 the repo-root `SHIP.md`:
 
 ```bash
+# build the UI, clear out the old copy, and copy the new one into the Go program's folder
 cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/
 ```
 

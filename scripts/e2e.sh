@@ -57,7 +57,7 @@
 # which is why playwright.config.ts excludes it under E2E_SKIP_LIVE.
 #
 # ENV LEAKAGE, which is the non-obvious hazard here. go/main.go:387 loads
-# /Users/sholland/AI/Infoblox MCP/.env by ABSOLUTE PATH, and LoadServiceEnv()
+# /Users/<you>/<repo>/.env by ABSOLUTE PATH, and LoadServiceEnv()
 # reads the per-user config .env as well -- so on a developer machine the binary
 # picks up real Infoblox credentials no matter what directory it runs from.
 # config.LoadDotEnv is setdefault (a variable already in the environment wins),

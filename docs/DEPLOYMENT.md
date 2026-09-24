@@ -25,7 +25,12 @@ A single self-contained binary, published on GitHub Releases. Nothing else is
 required — no Docker, no Python, no checkout. macOS and Linux:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh && less install.sh && sh install.sh
+# download the installer
+curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
+# read it before running it; press q to quit
+less install.sh
+# run it
+sh install.sh
 ```
 
 The two-step form is deliberate: you read the script before it runs. The
@@ -68,8 +73,11 @@ the Go toolchain the release was built with.
 Fetch one and read it:
 
 ```bash
-V=3.53.0   # the release version, no v prefix
+# the release version to check, without the leading v
+V=3.53.0
+# the download folder for that release
 BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
+# download the Linux amd64 dependency list (SBOM)
 curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
 
 # every dependency and its version
@@ -81,9 +89,12 @@ keyless, with the release workflow's GitHub OIDC identity, no key stored
 anywhere. Verify it before trusting it:
 
 ```bash
+# download the SBOM's signature
 curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig"
+# download the certificate that goes with the signature
 curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem"
 
+# check the SBOM was signed by this repo's release workflow
 cosign verify-blob \
   --certificate "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem" \
   --signature   "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig" \
@@ -107,7 +118,9 @@ Nothing in a Go module list can see React, recharts or tailwind, so a fifth
 document is published alongside them:
 
 ```bash
+# download the web UI's dependency list
 curl -fsSLO "$BASE/bloxsmith_${V}_ui_npm.sbom.json"
+# list every UI package and its version, sorted
 jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_ui_npm.sbom.json" | sort
 ```
 
@@ -139,13 +152,18 @@ SBOM claiming to describe both. Nothing is attached to the index for that reason
 **Resolve the architecture digest first:**
 
 ```bash
-V=3.53.0                                # release version, no v prefix
+# the release version to check, without the leading v
+V=3.53.0
+# the image to check
 IMAGE=ghcr.io/holland-built/bloxsmith
-ARCH=amd64                              # or arm64
+# your computer type: amd64, or arm64 for Apple silicon and ARM servers
+ARCH=amd64
 
+# find the image ID for your computer type
 DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE:$V" \
   | jq -r --arg a "$ARCH" '.manifests[] | select(.platform.architecture == $a) | .digest')
 
+# check the attached dependency lists were signed by the release workflow, then print them
 cosign verify-attestation --type spdxjson \
   --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
@@ -186,8 +204,11 @@ No winget. The primary path is **download-inspect-run** `install.ps1` — no adm
 no Docker:
 
 ```powershell
+# download the installer
 iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
-# review install.ps1, then run it (for this process only):
+# read it before running it
+notepad install.ps1
+# run it; the Bypass setting applies to this one run only
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
@@ -218,13 +239,13 @@ You're an Infoblox SE showing this on a laptop or a customer LAN with Docker.
 Pull and run the prebuilt Go image directly:
 
 ```bash
-# localhost → http://localhost:8080
+# start it at http://localhost:8080, reachable only from this computer
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
 
-# LAN → bind all interfaces, reachable at http://<host-ip>:8080
-#   swap 127.0.0.1: for 0.0.0.0: in the -p flag above
+# to reach it from your network at http://<host-ip>:8080,
+# change 127.0.0.1: to 0.0.0.0: in the -p flag above
 ```
 
 Mounting `/var/run/docker.sock` lets the in-app self-update work; drop that `-v` to
@@ -247,11 +268,16 @@ survive Docker restarts automatically, and the compose file mounts the Docker
 socket so the in-app self-update works.
 
 ```bash
+# get the code and go into its folder
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-cp .env.example .env        # fill in INFOBLOX_API_KEY
-docker compose up -d                       # dashboard (loopback)
-BIND=0.0.0.0 docker compose up -d          # expose on the LAN
-docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
+# make your own copy of the settings file, then fill in INFOBLOX_API_KEY
+cp .env.example .env
+# start the dashboard, reachable only from this computer
+docker compose up -d
+# start it reachable from your whole network, with no login in front
+BIND=0.0.0.0 docker compose up -d
+# start it behind the secure proxy: HTTPS plus a username and password
+docker compose --profile secure up -d
 ```
 
 > **Updating `.env`:** after `git pull`, compare `.env` with `.env.example` — add any
@@ -261,7 +287,8 @@ For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all acc
 goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
 
 ```bash
-docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC_AUTH_HASH
+# turn a password into the hash to paste into BASIC_AUTH_HASH (use your own password)
+docker run --rm caddy caddy hash-password -p 'yourpassword'
 ```
 
 | Scenario | Command | URL |
@@ -367,11 +394,11 @@ To see what is inside the image you are about to run, read its SBOM attestation:
 [the container image's SBOM](#the-container-images-sbom-attestation).
 
 ```bash
+# start it at http://localhost:8080, reachable only from this computer
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   --restart unless-stopped \
   ghcr.io/holland-built/bloxsmith:latest
-# → http://localhost:8080   (loopback only; use BIND=0.0.0.0 / the script to expose on the LAN)
 ```
 
 No keys on the command line. On first open the dashboard walks you through a
@@ -414,11 +441,16 @@ the image. Requires **Go 1.26+** and **Node 24** (the version CI builds the UI w
 `.github/workflows/ci.yml`).
 
 ```bash
+# get the code and go into its folder
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-cd ui && npm ci && npm run build && cd ..   # vite → ui/dist
-rm -rf go/web/* && cp -R ui/dist/* go/web/  # go/embed.go embeds this tree
-cd go && go build -o bloxsmith .            # single self-contained binary with the UI baked in
-./bloxsmith                                 # → http://localhost:8080
+# build the web UI into ui/dist
+cd ui && npm ci && npm run build && cd ..
+# replace the UI copy that gets built into the program
+rm -rf go/web/* && cp -R ui/dist/* go/web/
+# build one program file with the UI inside it
+cd go && go build -o bloxsmith .
+# start it at http://localhost:8080
+./bloxsmith
 ```
 
 The copy step is not optional and its absence is silent. `go/web` is committed, so
@@ -434,17 +466,23 @@ See [go/BUILD.md](../go/BUILD.md) for cross-compilation and the goreleaser build
 ### Build the container image locally
 
 ```bash
+# build the program first; the image wraps it
 cd go && go build -o bloxsmith .
-docker build -f Dockerfile.goreleaser -t bloxsmith .   # distroless image around the binary
+# build a minimal Docker image around the program
+docker build -f Dockerfile.goreleaser -t bloxsmith .
 ```
 
 ### Manage
 
 ```bash
-docker logs -f bloxsmith     # watch logs
-docker rm -f bloxsmith       # stop + remove
-docker start bloxsmith       # restart existing
-PORT=8090 ./bloxsmith        # standalone binary on a different port
+# follow the log output; press Ctrl+C to stop watching
+docker logs -f bloxsmith
+# stop and remove the container; your volumes are kept
+docker rm -f bloxsmith
+# start the existing container again
+docker start bloxsmith
+# run the program on port 8090 instead of 8080
+PORT=8090 ./bloxsmith
 ```
 
 ### Health
@@ -457,9 +495,12 @@ and failing it would restart-loop a container before anyone could type the
 passphrase. For vault state, read `GET /api/vault/status` instead.
 
 ```bash
-curl -s localhost:8080/healthz     # {"status":"ok","version":"…"}
-bloxsmith healthcheck              # same probe, as an exit code: 0 healthy, 1 not
-docker compose ps                  # STATUS column shows healthy / unhealthy
+# ask the server whether it is healthy; a healthy one answers {"status":"ok",...}
+curl -s localhost:8080/healthz
+# the same check as an exit code: 0 means healthy, 1 means not
+bloxsmith healthcheck
+# the STATUS column shows healthy or unhealthy
+docker compose ps
 ```
 
 The compose file runs `bloxsmith healthcheck` inside the container as its
@@ -657,8 +698,9 @@ you'd otherwise re-type after each upgrade is the **passphrase** to decrypt it.
 Supply it at boot and the dashboard comes up live with no browser step:
 
 ```bash
-# Preferred: a mounted secret file (kept out of `docker inspect` / process env)
+# preferred: save the passphrase to a file only you can read, which keeps it out of `docker inspect`
 printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
+# start it with the passphrase file mounted, so the vault unlocks on its own
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
@@ -699,10 +741,14 @@ removes it while keeping unattended restarts. What genuinely narrows it:
 #### `bloxsmith vault-passphrase` (macOS only)
 
 ```
-bloxsmith vault-passphrase set       # prompts twice, no echo, stores it
-bloxsmith vault-passphrase status    # says where the next start would get it from
-bloxsmith vault-passphrase check     # proves the stored copy really opens the vault
-bloxsmith vault-passphrase remove    # deletes the entry
+# store the passphrase; it asks twice and does not show what you type
+bloxsmith vault-passphrase set
+# show where the next start will get the passphrase from
+bloxsmith vault-passphrase status
+# check that the stored passphrase really opens the vault
+bloxsmith vault-passphrase check
+# delete the stored passphrase
+bloxsmith vault-passphrase remove
 ```
 
 **Run `check` before you delete anything.** `status` tells you which source would
@@ -772,6 +818,7 @@ they are not recoverable from the Infoblox side: they are re-issued, one portal
 visit per tenant.
 
 ```bash
+# save the vault, audit log and settings into one file only you can read
 bloxsmith vault-backup /path/to/bloxsmith-2026-08-06.tar.gz
 ```
 
@@ -807,7 +854,9 @@ This works for Compose and plain `docker run`, which both name the container
 `bloxsmith`:
 
 ```bash
+# write a backup to the container's temporary folder, outside the vault volume
 docker exec bloxsmith /app/bloxsmith vault-backup /tmp/backup.tar.gz --force
+# copy it out to the current folder with today's date, owned by you
 docker cp bloxsmith:/tmp/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
 ```
 
@@ -820,14 +869,18 @@ To restore into Docker, stop the container and run the restore in a one-off
 container against the same volume:
 
 ```bash
+# stop Bloxsmith; its volumes are kept
 docker stop bloxsmith
+# restore the backup into the noc-vault volume with a one-off container
 docker run --rm -v noc-vault:/vault -v "$PWD":/backup:ro ghcr.io/holland-built/bloxsmith:latest vault-restore /backup/backup.tar.gz --confirm restore --force
+# start Bloxsmith again and unlock it with the passphrase the backup was made with
 docker start bloxsmith
 ```
 
 ### Restoring
 
 ```bash
+# put the backup back; stop the server first
 bloxsmith vault-restore ./bloxsmith-backup-2026-08-06.tar.gz --confirm restore
 ```
 
@@ -893,7 +946,8 @@ is written because nothing is being deleted.
 
 #### Reading an export back — `bloxsmith restore-plan`
 
-```
+```bash
+# print what to re-create to undo that teardown
 bloxsmith restore-plan <state dir>/teardown-exports/20260730T091522Z-teardown-site-ams.json
 ```
 
@@ -1013,9 +1067,12 @@ If anything sits in front of the app — the `secure` Caddy profile, nginx, a cl
 load balancer — **set `TRUSTED_PROXIES`**:
 
 ```bash
-TRUSTED_PROXIES=127.0.0.1,::1        # Caddy on the same host (the secure profile)
-TRUSTED_PROXIES=172.18.0.0/16        # a proxy elsewhere on the docker network
-TRUSTED_PROXIES=10.0.0.7             # a single load balancer
+# the secure proxy runs on the same machine
+TRUSTED_PROXIES=127.0.0.1,::1
+# a proxy somewhere else on the Docker network
+TRUSTED_PROXIES=172.18.0.0/16
+# a single load balancer at this address
+TRUSTED_PROXIES=10.0.0.7
 ```
 
 **Why it matters.** `POST /api/vault/unlock` is rate limited per client: wrong
