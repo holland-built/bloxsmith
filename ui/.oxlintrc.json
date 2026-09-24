@@ -6,6 +6,15 @@
   ],
   "rules": {
     "react/rules-of-hooks": "error",
+    // oxlint 1.79+ turns on React Compiler checks. This app does not use the
+    // React Compiler, and these flagged 27 working sites, so they stay off
+    // until the compiler is adopted.
+    "react/immutability": "off",
+    "react/preserve-manual-memoization": "off",
+    "react/purity": "off",
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/use-memo": "off",
     "react/only-export-components": [
       "warn",
       {
