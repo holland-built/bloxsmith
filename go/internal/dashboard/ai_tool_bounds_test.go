@@ -158,7 +158,7 @@ func TestAIToolBounds_AnalyticsLimit(t *testing.T) {
 func TestAIToolBounds_ClampedWindowIsStatedInTheResult(t *testing.T) {
 	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"result":{"data":[{"NstarDnsActivity.device_name":"h1","NstarDnsActivity.total_query_count":5}]}}`))
+		_, _ = w.Write([]byte(`{"result":{"data":[{"NetworkNstarDnsActivity.device_name":"h1","NetworkNstarDnsActivity.total_query_count":5}]}}`))
 	})
 	out := s.RunAITool(context.Background(), "get_dns_analytics", map[string]any{"days": 99999})
 
