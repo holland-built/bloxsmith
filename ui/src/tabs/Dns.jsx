@@ -7,6 +7,7 @@ import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
+import { HeadlineStrip } from '../components/kit.jsx'
 
 // ---------- main ----------
 
@@ -19,6 +20,29 @@ const SLICES = ['zones']
 
 // Both charts on this tab share one shape; only they wait for recharts.
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
+
+// The counts across the top, each a jump to its panel. A feed that is down or
+// still loading is a dash, never zero; a failed poll's kept rows do not count
+// (useData keeps its last payload on error, so its slice status stays 'ok').
+// Zones that publish no TTL were never checked, so the issue count names the
+// population it covers, exactly as the Zone Counts panel it jumps to does.
+function headlines(qps, services, zones, zonesStatus, zonesFailed) {
+  const qpsOk = !qps.loading && !qps.error && qps.data?.status !== 'error'
+  const rows = qpsOk ? qps.data?.rows ?? [] : []
+  const last = rows.length ? rows[rows.length - 1].avg_value : null
+  const zonesOk = !zonesFailed && (zonesStatus === 'ok' || zonesStatus === 'empty')
+  const checked = zonesOk ? zones.filter(ttlChecked).length : 0
+  const coverage = zonesOk && checked < zones.length ? ` (of ${checked.toLocaleString()} checked)` : ''
+  const svc = services.data?.rows
+  const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
+  const fmt = (v) => (v == null ? null : v.toLocaleString())
+  return [
+    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-accent)' },
+    { panelId: 'dns-zone-kpis', label: 'Zones', value: fmt(zonesOk ? zones.length : null), color: 'var(--color-other)' },
+    { panelId: 'dns-zone-kpis', label: `Zones with issues${coverage}`, value: fmt(zonesOk ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length : null), color: 'var(--color-crit)' },
+    { panelId: 'dns-services', label: 'DNS services', value: fmt(svcOk ? svc.length : null), color: 'var(--color-other)' },
+  ]
+}
 
 export default function Dns() {
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
@@ -43,6 +67,7 @@ export default function Dns() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">DNS</h1>
+      <HeadlineStrip label="Headline numbers" items={headlines(qps, services, zones, zonesStatus, !!data.error)} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A

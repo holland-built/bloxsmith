@@ -1,19 +1,64 @@
 - main "Infra tab":
   - heading "Infrastructure" [level=1]
   - text: Operational
+  - list "Headline numbers":
+    - listitem:
+      - button "Hosts 3"
+    - listitem:
+      - button "Offline 1"
+    - listitem:
+      - button "Degraded 1"
+    - listitem:
+      - button "Unknown 0"
   - button "Arrange panels"
-  - heading "Service Health" [level=2]
-  - text: deployed services
-  - 'button "About: Service Health"': "About: ⓘ"
-  - button "Hide Service Health": Hide ✕
-  - button "Move Service Health": Move ⠿
-  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security beyond the row cap not listed
+  - heading "Host Inventory" [level=2]
+  - text: 3 hosts
+  - textbox "Search name or IP":
+    - /placeholder: Search name, IP…
+  - combobox "Filter by type":
+    - option "All types" [selected]
+    - option "onprem"
+  - 'button "About: Host Inventory"': "About: ⓘ"
+  - button "Hide Host Inventory": Hide ✕
+  - button "Move Host Inventory": Move ⠿
+  - table:
+    - rowgroup:
+      - row "Name IP Status Type":
+        - columnheader "Name":
+          - button "Name"
+        - columnheader "IP":
+          - button "IP"
+        - columnheader "Status":
+          - button "Status"
+        - columnheader "Type"
+    - rowgroup:
+      - row /baseline-host-a \d+\.\d+\.0\.2 ok onprem/:
+        - cell "baseline-host-a"
+        - cell /\d+\.\d+\.0\.2/
+        - cell "ok"
+        - cell "onprem"
+      - row /baseline-host-b \d+\.\d+\.0\.2 degraded onprem/:
+        - cell "baseline-host-b"
+        - cell /\d+\.\d+\.0\.2/
+        - cell "degraded"
+        - cell "onprem"
+      - row /baseline-host-c \d+\.\d+\.0\.2 offline onprem/:
+        - cell "baseline-host-c"
+        - cell /\d+\.\d+\.0\.2/
+        - cell "offline"
+        - cell "onprem"
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - button "Hide Host Status": Hide ✕
   - button "Move Host Status": Move ⠿
   - application
   - text: /3 hosts Degraded \d+% Offline \d+% Other \d+%/
+  - heading "Service Health" [level=2]
+  - text: deployed services
+  - 'button "About: Service Health"': "About: ⓘ"
+  - button "Hide Service Health": Hide ✕
+  - button "Move Service Health": Move ⠿
+  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security beyond the row cap not listed
   - heading "Host Health" [level=2]
   - text: CSP 1
   - 'button "About: Host Health"': "About: ⓘ"
@@ -52,42 +97,6 @@
   - button "Hide Asset Discovery": Hide ✕
   - button "Move Asset Discovery": Move ⠿
   - text: 7assets with discovery status tracked
-  - heading "Host Inventory" [level=2]
-  - text: 3 hosts
-  - textbox "Search name or IP":
-    - /placeholder: Search name, IP…
-  - combobox "Filter by type":
-    - option "All types" [selected]
-    - option "onprem"
-  - 'button "About: Host Inventory"': "About: ⓘ"
-  - button "Hide Host Inventory": Hide ✕
-  - button "Move Host Inventory": Move ⠿
-  - table:
-    - rowgroup:
-      - row "Name IP Status Type":
-        - columnheader "Name":
-          - button "Name"
-        - columnheader "IP":
-          - button "IP"
-        - columnheader "Status":
-          - button "Status"
-        - columnheader "Type"
-    - rowgroup:
-      - row /baseline-host-a \d+\.\d+\.0\.2 ok onprem/:
-        - cell "baseline-host-a"
-        - cell /\d+\.\d+\.0\.2/
-        - cell "ok"
-        - cell "onprem"
-      - row /baseline-host-b \d+\.\d+\.0\.2 degraded onprem/:
-        - cell "baseline-host-b"
-        - cell /\d+\.\d+\.0\.2/
-        - cell "degraded"
-        - cell "onprem"
-      - row /baseline-host-c \d+\.\d+\.0\.2 offline onprem/:
-        - cell "baseline-host-c"
-        - cell /\d+\.\d+\.0\.2/
-        - cell "offline"
-        - cell "onprem"
   - heading "Jobs" [level=2]
   - text: recent 1
   - 'button "About: Jobs"': "About: ⓘ"

@@ -5,6 +5,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
+import { HeadlineStrip } from '../components/kit.jsx'
 
 // ---------- helpers ----------
 
@@ -77,13 +78,15 @@ export default function Infra() {
           </span>
         )}
       </div>
+      <HeadlineStrip label="Headline numbers" items={headlines(hosts, totalHosts, hostsStatus)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="infra">
-        <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
+        <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+        <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
         <FeedCard
           span={2}
           panelId="infra-host-health"
@@ -115,7 +118,6 @@ export default function Infra() {
           ]}
         />
         <DiscoveryStatus panelId="infra-asset-discovery" feed={discovery} />
-        <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={3}
           panelId="infra-jobs"
@@ -146,6 +148,26 @@ export default function Infra() {
       </CardGrid>
     </div>
   )
+}
+
+// ---------- headline numbers ----------
+
+// The counts across the top, each a jump to its panel, bucketed the same way
+// as the table and the donut (statusBucket). Counted over the hosts loaded;
+// when that is not all of them the label says so. A dead or loading feed is a
+// dash, never zero.
+function headlines(hosts, totalHosts, hostsStatus) {
+  const ok = hostsStatus === 'ok' || hostsStatus === 'empty'
+  const b = { active: 0, degraded: 0, offline: 0, unknown: 0, other: 0 }
+  if (ok) for (const h of hosts) b[statusBucket(h.status)]++
+  const loaded = ok && (typeof totalHosts !== 'number' || hosts.length < totalHosts) ? ` (of ${hosts.length.toLocaleString()} loaded)` : ''
+  const v = (k) => (ok ? b[k].toLocaleString() : null)
+  return [
+    { panelId: 'infra-host-inventory', label: 'Hosts', value: ok && typeof totalHosts === 'number' ? totalHosts.toLocaleString() : null, color: 'var(--color-other)' },
+    { panelId: 'infra-host-status', label: `Offline${loaded}`, value: v('offline'), color: 'var(--color-crit)' },
+    { panelId: 'infra-host-status', label: `Degraded${loaded}`, value: v('degraded'), color: 'var(--color-warn)' },
+    { panelId: 'infra-host-status', label: `Unknown${loaded}`, value: v('unknown'), color: 'var(--color-other)' },
+  ]
 }
 
 // ---------- host status ----------
@@ -376,7 +398,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
 
   return (
     <Card
-      span={6}
+      span={4}
       panelId={panelId}
       // Same shape as Dns.jsx's zone table: the heading turns into a React node
       // while a status filter is on, so the popup's row for this panel flipped

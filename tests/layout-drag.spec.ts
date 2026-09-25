@@ -778,8 +778,8 @@ const TAB_CASES: TabCase[] = [
     declared: [
       'network-utilization-distribution',
       'network-ipam-spaces',
-      'network-dhcp-leases', // inside hiddenPanelGroup({...SERVICE_GROUPS.dhcp})
       'network-exhaustion',
+      'network-dhcp-leases', // inside hiddenPanelGroup({...SERVICE_GROUPS.dhcp})
     ],
     resizeSubject: 'network-ipam-spaces',
     firstDeclaredSpan: 3,

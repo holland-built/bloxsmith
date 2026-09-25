@@ -1,5 +1,14 @@
 - main "Network tab":
   - heading "Network" [level=1]
+  - list "Headline numbers":
+    - listitem:
+      - button "Subnets 3"
+    - listitem:
+      - button /Over \d+% 1/
+    - listitem:
+      - button /\d+–\d+% 1/
+    - listitem:
+      - button "Leases 2"
   - button "Arrange panels"
   - heading "Utilization Distribution" [level=2]
   - text: 3 loaded of 3 total
@@ -13,43 +22,6 @@
   - button "Hide IPAM Spaces — Top Used": Hide ✕
   - button "Move IPAM Spaces — Top Used": Move ⠿
   - text: /Baseline Space \d+ Other Space \d+/
-  - heading "DHCP Leases" [level=2]
-  - text: 2 of 2
-  - textbox "Search address, hostname, MAC":
-    - /placeholder: Search address, hostname, MAC…
-  - combobox "Filter by state":
-    - option "All states" [selected]
-    - option "active"
-    - option "expired"
-  - 'button "About: DHCP Leases"': "About: ⓘ"
-  - button "Hide DHCP Leases": Hide ✕
-  - button "Move DHCP Leases": Move ⠿
-  - table:
-    - rowgroup:
-      - row "Address Hostname Ends Hardware State":
-        - columnheader "Address":
-          - button "Address"
-        - columnheader "Hostname":
-          - button "Hostname"
-        - columnheader "Ends":
-          - button "Ends"
-        - columnheader "Hardware":
-          - button "Hardware"
-        - columnheader "State":
-          - button "State"
-    - rowgroup:
-      - row /\d+\.\d+\.0\.5 baseline-host-a 1\/1\/\d+, 6:\d+:\d+ PM \d+:\d+:5e:\d+:\d+:\d+ active/:
-        - cell /\d+\.\d+\.0\.5/
-        - cell "baseline-host-a"
-        - cell /1\/1\/\d+, 6:\d+:\d+ PM/
-        - cell /\d+:\d+:5e:\d+:\d+:\d+/
-        - cell "active"
-      - row /\d+\.\d+\.0\.9 baseline-host-b 1\/1\/\d+, \d+:\d+:\d+ AM \d+:\d+:5e:\d+:\d+:\d+ expired/:
-        - cell /\d+\.\d+\.0\.9/
-        - cell "baseline-host-b"
-        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
-        - cell /\d+:\d+:5e:\d+:\d+:\d+/
-        - cell "expired"
   - heading "Which Subnets Run Out First?" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links/
   - textbox "Filter networks":
@@ -97,3 +69,40 @@
         - cell "Healthy"
         - cell /\d+/
         - cell /\d+ free/
+  - heading "DHCP Leases" [level=2]
+  - text: 2 of 2
+  - textbox "Search address, hostname, MAC":
+    - /placeholder: Search address, hostname, MAC…
+  - combobox "Filter by state":
+    - option "All states" [selected]
+    - option "active"
+    - option "expired"
+  - 'button "About: DHCP Leases"': "About: ⓘ"
+  - button "Hide DHCP Leases": Hide ✕
+  - button "Move DHCP Leases": Move ⠿
+  - table:
+    - rowgroup:
+      - row "Address Hostname Ends Hardware State":
+        - columnheader "Address":
+          - button "Address"
+        - columnheader "Hostname":
+          - button "Hostname"
+        - columnheader "Ends":
+          - button "Ends"
+        - columnheader "Hardware":
+          - button "Hardware"
+        - columnheader "State":
+          - button "State"
+    - rowgroup:
+      - row /\d+\.\d+\.0\.5 baseline-host-a 1\/1\/\d+, 6:\d+:\d+ PM \d+:\d+:5e:\d+:\d+:\d+ active/:
+        - cell /\d+\.\d+\.0\.5/
+        - cell "baseline-host-a"
+        - cell /1\/1\/\d+, 6:\d+:\d+ PM/
+        - cell /\d+:\d+:5e:\d+:\d+:\d+/
+        - cell "active"
+      - row /\d+\.\d+\.0\.9 baseline-host-b 1\/1\/\d+, \d+:\d+:\d+ AM \d+:\d+:5e:\d+:\d+:\d+ expired/:
+        - cell /\d+\.\d+\.0\.9/
+        - cell "baseline-host-b"
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell /\d+:\d+:5e:\d+:\d+:\d+/
+        - cell "expired"
