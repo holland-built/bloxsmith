@@ -100,9 +100,14 @@ test.describe('per-tenant write lock', () => {
     // it. A refusal here must be a JSON 403, never a 200 event-stream that then
     // reports what it deleted.
     //
-    // dry=1 AND no confirm=DELETE, deliberately. The write lock refuses a dry run
-    // exactly as it refuses a real one, so this proves the same thing — and the
-    // first version of this test did NOT do that. It sent confirm=DELETE&dry=0,
+    // dry=0 AND no confirm=DELETE, deliberately. A dry run (dry=1, or no flag)
+    // is now a Preview, which changes nothing and which the lock lets through on
+    // a read-only tenant (writelock.go isDryPreview), so the refusal is proved on
+    // a live run instead. Without confirm=DELETE that live run is still harmless
+    // if the lock ever fails: the handler answers "confirmation required" before
+    // it deletes anything (provision.go, the seed-demo teardown's confirm check).
+    // Never add confirm=DELETE here. The first version of this test sent
+    // confirm=DELETE&dry=0,
     // and when the lock was temporarily removed to prove these assertions were
     // load-bearing, a real teardown fired at the live dev tenant. It deleted
     // nothing (checked three ways: zero of 1,936 objects in first_seen.json ever
@@ -112,7 +117,7 @@ test.describe('per-tenant write lock', () => {
     // is "destroys a live tenant" must not be written when a harmless request
     // proves the identical property.
     const res = await page.evaluate(async () => {
-      const r = await fetch('/api/teardown/seed-demo/stream?dry=1');
+      const r = await fetch('/api/teardown/seed-demo/stream?dry=0');
       return { status: r.status, type: r.headers.get('content-type') || '', body: await r.text() };
     });
 
