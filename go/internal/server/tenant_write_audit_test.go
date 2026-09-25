@@ -695,7 +695,7 @@ func TestTenantWriteRoutesAreRecordedOnDisk(t *testing.T) {
 
 		before := *hits
 		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, lockReq(method, path))
+		h.ServeHTTP(rr, lockReq(method, liveRun(method, path)))
 
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("%s answered %d instead of refusing — this test cannot say anything about the audit "+

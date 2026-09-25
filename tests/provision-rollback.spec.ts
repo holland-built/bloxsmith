@@ -50,6 +50,10 @@ const NO_ROLLBACK_KEY = failureBody(); // older server: key absent entirely
 // Preview must succeed (to reveal Apply) and Apply must fail — same endpoint,
 // told apart by the dry flag the UI already sends.
 async function stubSeedStream(page: import('@playwright/test').Page, applyBody: string) {
+  // Provision checks the tenant is writable before opening any stream (a
+  // read-only one refuses them all), so the stubbed world says it is.
+  await page.route('**/api/vault/write-target*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ known: true, tenant: 't/-', label: 'Test Tenant', writable: true }) }));
   await page.route('**/api/provision/seed-demo/stream*', (route) =>
     route.fulfill({
       status: 200,

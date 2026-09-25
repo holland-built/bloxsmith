@@ -45,6 +45,10 @@ const ALL_SUCCEEDED = sseBody(['succeeded', 'succeeded', 'succeeded']);
 const PARTIAL = sseBody(['succeeded', 'failed', 'succeeded']);
 
 async function stubSeedStream(page: import('@playwright/test').Page, body: string) {
+  // Provision checks the tenant is writable before opening any stream (a
+  // read-only one refuses them all), so the stubbed world says it is.
+  await page.route('**/api/vault/write-target*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ known: true, tenant: 't/-', label: 'Test Tenant', writable: true }) }));
   await page.route('**/api/provision/seed-demo/stream*', (route) =>
     route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
 }

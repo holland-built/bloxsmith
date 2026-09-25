@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/httpx"
+	"bloxsmith/internal/provision"
 	"bloxsmith/internal/vault"
 )
 
@@ -170,6 +171,35 @@ func tenantWriteOnGet(path string) bool {
 	return strings.Contains(path, "/provision/") || strings.Contains(path, "/teardown/")
 }
 
+// dryPreviewStreams are the streams whose dry run is known to change nothing:
+// each one returns, or skips every POST/PATCH/DELETE, export write and
+// rollback, when provision.TruthyDry says dry (traced handler by handler on
+// 2026-09-25). A stream is listed here by name, never by the /provision/ or
+// /teardown/ shape tenantWriteOnGet uses, so a sixth stream stays fully locked
+// until someone has checked its dry path and added it.
+var dryPreviewStreams = map[string]bool{
+	"/api/provision/stream":           true,
+	"/api/provision/site/stream":      true,
+	"/api/provision/seed-demo/stream": true,
+	"/api/teardown/site/stream":       true,
+	"/api/teardown/seed-demo/stream":  true,
+}
+
+// isDryPreview reports whether this request is a Preview: a GET or HEAD to one
+// of dryPreviewStreams whose dry flag is on. The lock lets these through on a
+// read-only tenant, because a preview only reads the tenant to show the plan.
+//
+// The flag is parsed EXACTLY as the handlers parse it, queryM (first value
+// wins) then provision.TruthyDry (missing or anything but 0/false/no is dry).
+// Any other parse would open a gap: a request this function called dry that
+// the handler then ran live.
+func isDryPreview(r *http.Request, path string) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	return dryPreviewStreams[path] && provision.TruthyDry(queryM(r)["dry"])
+}
+
 // requestChangesTenant reports whether THIS request — verb and path together —
 // would change data in the customer's tenant. This is what the lock gates on.
 //
@@ -281,7 +311,7 @@ func (d *Deps) writeLockRefusal(id, unknown, path string) map[string]any {
 func (d *Deps) withWriteLock(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.SplitN(r.URL.Path, "?", 2)[0]
-		if !requestChangesTenant(r.Method, path) {
+		if !requestChangesTenant(r.Method, path) || isDryPreview(r, path) {
 			next.ServeHTTP(w, r)
 			return
 		}

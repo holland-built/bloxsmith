@@ -127,7 +127,9 @@ func TestWriteRefusedByDefault(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/api/teardown/seed-demo/stream?confirm=DELETE&dry=0"},
 		{"GET", "/api/teardown/site/stream?confirm=DELETE&dry=0"},
-		{"GET", "/api/provision/seed-demo/stream"},
+		// dry=0: a live run. (A stream with no dry flag, or a truthy one, is a
+		// Preview and is let through; see TestDryPreviewPassesReadOnlyLock.)
+		{"GET", "/api/provision/seed-demo/stream?dry=0"},
 		{"POST", "/api/teardown/block"},
 		{"POST", "/api/provision/block"},
 		{"POST", "/api/dns/records"},
@@ -158,6 +160,56 @@ func TestWriteRefusedByDefault(t *testing.T) {
 			// be worse than no control at all.
 			if *hits != before {
 				t.Errorf("refused request still reached the upstream (%d -> %d calls) — it refused AFTER acting", before, *hits)
+			}
+		})
+	}
+}
+
+// TestDryPreviewPassesReadOnlyLock: a Preview (the dry run of a provision or
+// teardown stream) only reads the tenant, so a read-only tenant allows it. Every
+// live run is still refused, including the parses a gate could get wrong.
+func TestDryPreviewPassesReadOnlyLock(t *testing.T) {
+	h, _, _ := lockedTestServer(t)
+	refusedByLock := func(method, path string) bool {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, lockReq(method, path))
+		if rr.Code != http.StatusForbidden {
+			return false
+		}
+		reason, _ := bodyOf(t, rr)["reason"].(string)
+		return reason == "tenant-read-only"
+	}
+
+	for _, p := range []string{
+		"/api/provision/stream?dry=1",
+		"/api/provision/site/stream?dry=1",
+		"/api/provision/seed-demo/stream?dry=true",
+		"/api/teardown/site/stream?dry=1",
+		"/api/teardown/seed-demo/stream?dry=yes",
+		"/api/provision/seed-demo/stream",             // no flag: the handlers run dry
+		"/api/provision/seed-demo/stream?dry=1&dry=0", // first value wins, as in queryM
+	} {
+		t.Run("allowed "+p, func(t *testing.T) {
+			if refusedByLock("GET", p) {
+				t.Fatalf("a dry Preview was refused by the write lock: GET %s", p)
+			}
+		})
+	}
+
+	for _, tc := range []struct{ method, path string }{
+		{"GET", "/api/provision/stream?dry=0"},
+		{"GET", "/api/provision/site/stream?dry=false"},
+		{"GET", "/api/teardown/site/stream?dry=no&confirm=DELETE"},
+		{"GET", "/api/teardown/seed-demo/stream?dry=0&dry=1&confirm=DELETE"}, // first value wins: live
+		{"GET", "/api/provision/seed-demo/stream?dry=%20FALSE%20"},           // trimmed and lowercased: live
+		// Only the five named streams, and only as GET: a dry flag on any other
+		// write route changes nothing about the lock.
+		{"POST", "/api/provision/block?dry=1"},
+		{"POST", "/api/teardown/block?dry=1"},
+	} {
+		t.Run("refused "+tc.method+" "+tc.path, func(t *testing.T) {
+			if !refusedByLock(tc.method, tc.path) {
+				t.Fatalf("a live run got past the write lock on a read-only tenant: %s %s", tc.method, tc.path)
 			}
 		})
 	}
