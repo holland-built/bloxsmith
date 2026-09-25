@@ -21,19 +21,41 @@
    silently vanish from the CSS and be found in a browser instead of here. */
 @source not "./lib/radiusRoles.test.js";
 
-/* v6 mockup tokens — north star: .mockups/quick/...-6.html */
+/* v6 mockup tokens — north star: .mockups/quick/...-6.html
+
+   INFOBLOX BRAND PALETTE (2026-09-25). The owner picked option 4 of four
+   compared side by side: navy surfaces in dark theme, cool blue-grey surfaces
+   in light, and the brand blue #3a8fd6 as the accent. Brand orange #f37021 was
+   tried as the accent and rejected: --color-accent is also the chart colour for
+   HEALTHY series (active hosts, ok subnets, the DNS line), and orange beside the
+   amber --color-warn made healthy read as a warning.
+
+   The older notes below explain why each token exists and were measured on the
+   previous grey palette; their reasoning still holds, their numbers are history.
+   The values now in force, measured for this change (WCAG, 4.5:1 for text):
+
+     dark   dim #93a8bc      5.52 on line-2 #12304c (worst surface)
+            link #5aa5e6     5.13 on line-2
+            crit #f25a5a     4.81 on field    (#ee4444 fell to 4.41 on navy)
+            purple #a07cf9   5.08 on field    (#8b5cf6 fell to 3.95 on navy)
+            #050505 on accent #3a8fd6  5.90
+     light  dim #52667a      4.83 on line-2 #e1e9f0 (worst surface)
+            link #0063b0     5.02 on line-2
+            white on accent #1f6fb5    5.25
+
+   tests/contrast.spec.ts measures these live in both themes. */
 @theme {
-  --color-bg: #050505;
-  --color-card: #0e0e0e;
-  --color-card-border: #1e1e1e;
-  --color-line: #161616;
-  --color-line-2: #1c1c1c;
-  --color-field: #141414;
-  --color-border: #2a2a2a;
-  --color-border-hover: #3a3a3a;
+  --color-bg: #04111d;
+  --color-card: #0a1f33;
+  --color-card-border: #16344f;
+  --color-line: #0f263c;
+  --color-line-2: #12304c;
+  --color-field: #0d2439;
+  --color-border: #1f4263;
+  --color-border-hover: #2d5a82;
   --color-txt: #ededed;
   --color-field-txt: #dddddd;
-  --color-muted: #8a8a8a;
+  --color-muted: #9fb3c6;
   /* --color-dim and --color-tick were both #777777. Measured from live computed
      styles against the surfaces they actually sit on, that was below WCAG AA's
      4.5:1 for normal text everywhere except the page background: 4.31:1 on a
@@ -51,10 +73,10 @@
      is untouched: 5.23:1 versus 16.49:1 on a card. Restoring a visible dim/muted
      step would mean moving --color-muted to about #9a9a9a, which is a second
      app-wide colour change that nothing here has failed a check on. */
-  --color-dim: #858585;
-  --color-grid: #222222;
-  --color-tick: #858585;
-  --color-accent: #0070f3;
+  --color-dim: #93a8bc;
+  --color-grid: #16344f;
+  --color-tick: #93a8bc;
+  --color-accent: #3a8fd6;
   /* --color-link is the accent AS TEXT, and it exists because the accent fails
      AA as text while passing everywhere else it is used.
 
@@ -73,11 +95,11 @@
      #1a80ff scores 4.80 on the worst dark surface. The light block below carries
      its own value, because the same colour cannot clear 4.5 against both a near
      black and a near white. */
-  --color-link: #1a80ff;
-  --color-purple: #8b5cf6;
+  --color-link: #5aa5e6;
+  --color-purple: #a07cf9;
   --color-ok: #4ade80;
   --color-warn: #f5a623;
-  --color-crit: #ee4444;
+  --color-crit: #f25a5a;
   --color-other: #8a8a8a;
   --color-sev-high: #ff7b7b;
   /* ---------- radius: three roles, and the pill ----------
@@ -134,7 +156,7 @@
      So this is three contrast failures, not four missing tokens. #050505 is the
      dark theme's own page background, reused rather than a fourth near-black
      invented for the job. Locked down by tests/contrast.spec.ts. */
-  --color-on-accent: #ffffff;
+  --color-on-accent: #050505;
   --color-on-crit: #050505;
   --color-on-ok: #050505;
   --font-sans: system-ui, -apple-system, sans-serif;
@@ -190,24 +212,24 @@
   --pill-crit-fg: #ff7b7b;
   --pill-warn-bg: #2a2210;
   --pill-warn-fg: #f5c76b;
-  --pill-ok-bg: #0d2136;
-  --pill-ok-fg: #6bb2ff;
-  --pill-neutral-bg: #1a1a1a;
-  --pill-neutral-fg: #8a8a8a;
+  --pill-ok-bg: #0f2c49;
+  --pill-ok-fg: #6bb0ea;
+  --pill-neutral-bg: #12304c;
+  --pill-neutral-fg: #9fb3c6;
 }
 
 :root[data-theme="light"] {
-  --color-bg: #f7f7f8;
+  --color-bg: #f3f6f9;
   --color-card: #ffffff;
-  --color-card-border: #e5e5e5;
-  --color-line: #eeeeee;
-  --color-line-2: #e5e5e5;
+  --color-card-border: #dbe3ea;
+  --color-line: #eaf0f5;
+  --color-line-2: #e1e9f0;
   --color-field: #ffffff;
-  --color-border: #e5e5e5;
-  --color-border-hover: #d4d4d4;
+  --color-border: #dbe3ea;
+  --color-border-hover: #c3d0dc;
   --color-txt: #111111;
   --color-field-txt: #111111;
-  --color-muted: #666666;
+  --color-muted: #52667a;
   /* #6b6b6b measured 4.23:1 against --color-line-2 (#e5e5e5), the band-caption
      background on #changes — the one light surface it failed on. #656565 is the
      smallest step that clears 4.5:1 there (4.63:1) with margin, and it stays
@@ -222,14 +244,17 @@
      whole palette and worse than the finding this change came from. Chart axis
      labels are ordinary 11px text, not decoration, so they get the same value as
      dim — which is what the dark block has always done. */
-  --color-dim: #656565;
-  --color-grid: #e5e5e5;
-  --color-tick: #656565;
-  --color-accent: #0070f3;
+  --color-dim: #52667a;
+  --color-grid: #e1e9f0;
+  --color-tick: #52667a;
+  --color-accent: #1f6fb5;
+  /* Dark theme's accent takes near-black text (5.90); this darker blue takes
+     white (5.25). */
+  --color-on-accent: #ffffff;
   /* The light theme's accent-as-text is DARKER, not lighter: 4.79 on the worst
      light surface (--color-line at #eeeeee). The dark theme's #1a80ff would
      score 2.7 here. See the note in the dark block. */
-  --color-link: #0063d8;
+  --color-link: #0063b0;
   --color-purple: #7c3aed;
   --color-ok: #16a34a;
   --color-warn: #b45309;
@@ -246,9 +271,9 @@
   --pill-warn-bg: #fef3d6;
   --pill-warn-fg: #92600a;
   --pill-ok-bg: #e6f0fd;
-  --pill-ok-fg: #0757c9;
-  --pill-neutral-bg: #f0f0f0;
-  --pill-neutral-fg: #555555;
+  --pill-ok-fg: #0f5a9c;
+  --pill-neutral-bg: #eaf0f5;
+  --pill-neutral-fg: #3f5366;
 }
 
 /* ---------- density tokens ----------
