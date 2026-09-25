@@ -99,7 +99,7 @@ function visibleColumns(columns, sorted) {
 // any cost.
 
 const CELL_PAD = 20 // px-2.5 on both sides of a th/td
-const SORT_AFFORDANCE_PAD = 14 // room for the ▲/▼ indicator on a sortable header
+const SORT_AFFORDANCE_PAD = 17 // room for the ▲/▼ indicator on a sortable header; Inter's triangle paints 15.53px (tests/table-measures-what-it-paints.spec.ts), was 14 under system-ui
 const MEASURE_BUFFER = 3 // absorbs measureText() sub-pixel rounding
 const BADGE_PAD = 20 // the pill span's own px-2.5
 const SHRINK_FLOOR_CH = 6

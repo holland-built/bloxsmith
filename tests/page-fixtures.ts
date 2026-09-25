@@ -557,6 +557,10 @@ const PER_PAGE: Record<string, Handler[]> = {
   overview: [
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
     { method: 'GET', path: '/api/csp/license-alerts', body: LICENSE_ALERTS, required: true },
+    // The summary column beside the panels (Overview.jsx EstateRail).
+    { method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true },
+    { method: 'GET', path: '/api/hub/health', body: HUB_HEALTH, required: true },
+    { method: 'GET', path: '/api/incidents', body: INCIDENTS, required: true },
   ],
   daily: [{ method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true }],
   network: [

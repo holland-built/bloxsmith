@@ -27,7 +27,8 @@ const Drift = lazy(() => import('./tabs/Drift.jsx'))
 const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
 const Ai = lazy(() => import('./tabs/Ai.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
-import { Skeleton } from './components/ui.jsx'
+import { FOCUS_RING, Skeleton } from './components/ui.jsx'
+import { PageBar } from './components/kit.jsx'
 import Palette from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
 import ConnStatus from './components/ConnStatus.jsx'
@@ -624,14 +625,6 @@ export default function App() {
                   </MenuPanel>
                 )}
               </div>
-              {/* Which tab you are on, spelled out — the group label alone names
-                  a neighbourhood, not an address. */}
-              <div className="hidden 2xl:flex items-center gap-2 min-w-0">
-                <span className="text-note uppercase tracking-[0.12em] text-dim shrink-0">Tab</span>
-                <span className="font-mono text-note font-semibold uppercase tracking-[0.1em] text-field-txt truncate">
-                  {activeLabel}
-                </span>
-              </div>
             </nav>
             {/* The A3 fold, per .mockups/build-bloxsmith-ux/bloxsmith-ux-v11.html
                 (surface A3 and its caption). Unfolded, this cluster measures 410px
@@ -701,6 +694,17 @@ export default function App() {
               </a>
             </div>
           </header>
+          {/* Where you are, Kentik-style: the group and the tab. Pages outside
+              the groups (a dossier) have no group and so no bar. */}
+          {groupOf(tab) && (
+            <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
+              {tab !== 'ai' && (
+                <a href="#ai" className={`px-2.5 py-1 rounded-control border border-border text-copy text-txt no-underline hover:border-border-hover ${FOCUS_RING}`}>
+                  Ask
+                </a>
+              )}
+            </PageBar>
+          )}
           {/* The landing place for focus after a tab change, and the only named
               region on the page — its name is the tab, so a screen reader that
               lands here is told which tab it landed on. tabIndex -1 makes it a
