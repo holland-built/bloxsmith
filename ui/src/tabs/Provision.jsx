@@ -107,8 +107,13 @@ function WriteAccessBanner({ isAdmin }) {
 
 export default function Provision() {
   const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
-  const whoami = useApi('/api/whoami')
-  const role = whoami.data?.role || 'viewer'
+  // Read through authFetch, not useApi: the server answers "admin" only when
+  // X-Auth-Token matches DASHBOARD_TOKEN, and useApi sends no token, so on a
+  // token deployment an admin read as "viewer" and lost the admin controls.
+  const [role, setRole] = useState('viewer')
+  useEffect(() => {
+    authFetch('/api/whoami', { cache: 'no-store' }).then((r) => { if (r.ok && r.data?.role) setRole(r.data.role) })
+  }, [])
   const isAdmin = role === 'admin'
   const writeTarget = useWriteTarget()
 
