@@ -6,7 +6,7 @@ the distribution layer (Phase 2 of `plans/030-go-single-binary-migration.md`).
 
 ## Prerequisites
 
-- Go toolchain (see `go/go.mod` — currently `go 1.26.3`).
+- Go toolchain (see `go/go.mod` — currently `go 1.26.6`).
 - goreleaser v2: `brew install goreleaser` **or**
   `go install github.com/goreleaser/goreleaser/v2@latest`.
 - For the container image only: Docker with buildx (release step, not build step).

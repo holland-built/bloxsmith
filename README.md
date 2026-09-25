@@ -16,6 +16,13 @@ security data.
 
 ![Bloxsmith dashboard](docs/dashboard.png)
 
+<details>
+<summary><b>Light theme</b></summary>
+
+![Bloxsmith dashboard in the light theme](docs/dashboard-light.png)
+
+</details>
+
 | Area | What you see |
 |---|---|
 | Subnets and DHCP | Leases, how full each subnet is, which ones are running out |
@@ -75,7 +82,8 @@ security data.
 
 You only add the key once. It is kept encrypted and survives restarts and updates.
 
-## What you need
+<details>
+<summary><b>What you need</b></summary>
 
 | Where | Needs |
 |---|---|
@@ -84,7 +92,10 @@ You only add the key once. It is kept encrypted and survives restarts and update
 | Network | Outbound HTTPS to csp.infoblox.com |
 | Port | 8080 free on your computer, or change `PORT` (see Troubleshooting) |
 
-## Updating
+</details>
+
+<details>
+<summary><b>Updating</b></summary>
 
 Nothing updates on its own. Bloxsmith shows a small banner when a newer version is out, and you
 decide when to take it. Open the Bloxsmith folder from step 2:
@@ -96,6 +107,8 @@ decide when to take it. Open the Bloxsmith folder from step 2:
 | Linux | Run `./update.sh` |
 
 Your passphrase, keys and saved views are kept. The dashboard is unavailable for about a minute.
+
+</details>
 
 <details>
 <summary><b>Update by typing it yourself, or for the other install methods</b></summary>
@@ -120,7 +133,7 @@ All update modes, including pinning a version: [docs/DEPLOYMENT.md](docs/DEPLOYM
 </details>
 
 <details>
-<summary><b>Other ways to install</b> (Homebrew, installer script, Docker without Compose)</summary>
+<summary><b>Other ways to install (Homebrew, installer script, Docker without Compose)</b></summary>
 
 These skip Docker Compose, so the update files above do not apply to them.
 
@@ -464,8 +477,11 @@ Full reference, including every setting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md
 
 </details>
 
-## Credits and license
+<details>
+<summary><b>Credits and license</b></summary>
 
 - [Security policy](.github/SECURITY.md) and [how to contribute](.github/CONTRIBUTING.md).
 - The provisioning engine and self-service tab are based on [Chris Marrison](https://github.com/ccmarris)'s BSD-2-Clause projects [uddi_automation_toolkit](https://github.com/ccmarris/uddi_automation_toolkit) and [uddi_self_service_example](https://github.com/ccmarris/uddi_self_service_example). Details in [NOTICE.md](NOTICE.md).
 - Released under the [MIT License](LICENSE).
+
+</details>
