@@ -218,7 +218,10 @@ function EntitiesTable({ entities, availability, reason }) {
     if (typeof entities[0] === 'object' && entities[0]) {
       const cols = Object.keys(entities[0])
       return (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
+        // Scrolls sideways rather than clipping: beside the chat the panel is
+        // narrow, and a column cut off at the edge could not be reached at all.
+        // Focusable so the keyboard can scroll it too.
+        <div tabIndex={0} aria-label="Lookup matches" className="overflow-x-auto overflow-y-auto max-h-[280px]">
           <table className="w-full text-note font-mono">
             <thead>
               <tr className="text-muted text-left">

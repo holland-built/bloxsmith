@@ -61,3 +61,28 @@ test('on a phone the two panels stack, lookup under the chat', async ({ page }) 
   const lb = await page.locator('[data-panel-id="ai-threat-lookup"]').boundingBox();
   expect(lb!.y).toBeGreaterThan(ask!.y + ask!.height - 1);
 });
+
+test('a wide lookup result can be scrolled to its last column, not clipped', async ({ page }) => {
+  // Long values, as real feeds return: each cell caps at 180px, so eight of
+  // them are far wider than the lookup panel beside the chat.
+  const long = 'Infoblox_High_Risk,Infoblox_Base,Suspicious_Lookalike';
+  const row = { name: 'tbcloud-alibaba.com.example-lookalike.net', type: long, threat_level: long, class: long, property: long, feed: long, first_seen: long, last_seen: long, last_column: 'reach me' };
+  await page.route('**/api/threat-lookup*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entities: [row], availability: 'ok' }) }),
+  );
+  await page.goto('/#ai');
+  await page.getByPlaceholder('domain, IP, or host…').fill('tbcloud-alibaba.com');
+  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
+  // The table's own wrapper, found without relying on anything this change added.
+  const region = page.locator('[data-panel-id="ai-threat-lookup"] table').first().locator('..');
+  await expect(region).toBeVisible();
+  expect(await region.evaluate((el) => el.scrollWidth > el.clientWidth), 'the table was not wider than the panel, so this proves nothing').toBe(true);
+  // What a user does: a sideways wheel over the table. A clipped box ignores
+  // it (a script could still scroll it, which is why this is not scrollIntoView).
+  const r = await region.boundingBox();
+  await page.mouse.move(r!.x + r!.width / 2, r!.y + 20);
+  await page.mouse.wheel(2000, 0);
+  await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const c = await region.getByRole('columnheader', { name: 'last_column' }).boundingBox();
+  expect(c!.x + c!.width).toBeLessThanOrEqual(r!.x + r!.width + 1);
+});
