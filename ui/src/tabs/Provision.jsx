@@ -379,16 +379,23 @@ function SubnetMode() {
       <Card key="provision-subnet-request" title="Request" panelId="provision-subnet-request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="Space">
-            <select className={inputCls} value={space} onChange={(e) => { setSpace(e.target.value); setBlock(''); flow.markStale() }}>
-              <option value="">{spacesApi.loading ? 'Loading spaces…' : 'Select a space'}</option>
-              {spaces.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
-            </select>
+            <FilterSelect
+              label="Space"
+              value={space}
+              onChange={(v) => { setSpace(v); setBlock(''); flow.markStale() }}
+              placeholder={spacesApi.loading ? 'Loading spaces…' : 'Select a space'}
+              options={spaces.map((sp) => ({ value: sp.id, label: sp.name }))}
+            />
           </Field>
           <Field label="Block">
-            <select className={inputCls} value={block} onChange={(e) => { setBlock(e.target.value); flow.markStale() }} disabled={!space}>
-              <option value="">{blocksApi.loading ? 'Loading blocks…' : 'Select a block'}</option>
-              {blocks.map((b) => <option key={b.id} value={b.id}>{b.name || b.cidr || b.address}</option>)}
-            </select>
+            <FilterSelect
+              label="Block"
+              value={block}
+              onChange={(v) => { setBlock(v); flow.markStale() }}
+              disabled={!space}
+              placeholder={blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
+              options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
+            />
           </Field>
           <Field label="CIDR prefix">
             <input type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
@@ -481,10 +488,13 @@ function SiteMode({ isAdmin }) {
       <Card key="provision-site-request" title="Request" panelId="provision-site-request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="IP space (override)">
-            <select className={inputCls} value={siteSpace} onChange={(e) => onInput(setSiteSpace)(e.target.value)}>
-              <option value="">— template default —</option>
-              {spaces.map((sp) => <option key={sp.id} value={sp.name}>{sp.name}</option>)}
-            </select>
+            <FilterSelect
+              label="IP space"
+              value={siteSpace}
+              onChange={(v) => onInput(setSiteSpace)(v)}
+              placeholder="— template default —"
+              options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
+            />
           </Field>
           <Field label="Template">
             <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
@@ -681,10 +691,13 @@ function SeedMode({ isAdmin }) {
             />
           ))}
           <Field label="IP space (override)">
-            <select className={inputCls} value={seedSpace} onChange={(e) => { setSeedSpace(e.target.value); touch() }}>
-              <option value="">— template default —</option>
-              {spaces.map((sp) => <option key={sp.id} value={sp.name}>{sp.name}</option>)}
-            </select>
+            <FilterSelect
+              label="IP space"
+              value={seedSpace}
+              onChange={(v) => { setSeedSpace(v); touch() }}
+              placeholder="— template default —"
+              options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
+            />
           </Field>
 
           <div>
@@ -795,6 +808,41 @@ function SeedMode({ isAdmin }) {
 }
 
 // ---------- shared form bits ----------
+
+// A dropdown with a search box above it. A tenant can have hundreds of IP
+// spaces (801 on the live one, 2026-09-25), which made the plain list a long
+// scroll. Typing narrows the options; the list itself stays a native <select>,
+// so keyboard use and screen readers work as they did.
+//
+// The chosen option always stays in the list, even when the search no longer
+// matches it, so narrowing the search never silently changes the selection.
+function FilterSelect({ label, value, onChange, options, placeholder, disabled }) {
+  const [q, setQ] = useState('')
+  const needle = q.trim().toLowerCase()
+  const shown = needle ? options.filter((o) => o.label.toLowerCase().includes(needle)) : options
+  const chosen = value && !shown.some((o) => o.value === value) ? options.find((o) => o.value === value) : null
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        type="search"
+        aria-label={`Search ${label}`}
+        placeholder={`Type to search ${options.length.toLocaleString()} ${options.length === 1 ? 'option' : 'options'}`}
+        className={inputCls}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        disabled={disabled || options.length === 0}
+      />
+      <select aria-label={label} className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+        <option value="">{needle ? `${placeholder} (${shown.length.toLocaleString()} of ${options.length.toLocaleString()} match)` : placeholder}</option>
+        {chosen && <option value={chosen.value}>{chosen.label}</option>}
+        {/* Index in the key: two spaces can share a name, and the site and seed
+            pickers use the name as the value. */}
+        {shown.map((o, i) => <option key={`${i}:${o.value}`} value={o.value}>{o.label}</option>)}
+      </select>
+      {needle && shown.length === 0 && <span className="text-note text-dim">No {label.toLowerCase()} matches “{q.trim()}”.</span>}
+    </div>
+  )
+}
 
 function Field({ label, children }) {
   return (

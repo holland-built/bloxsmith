@@ -1024,7 +1024,7 @@ const CLAIMS = [
     file: PROVISION,
     proofs: [
       { re: /applyLabel="Provision"/, expect: 'the button on this panel is the one labelled Provision' },
-      { re: /setSpace\(e\.target\.value\); setBlock\(''\); flow\.markStale\(\)/, expect: 'editing the Space field marks the preview stale, which is what withdraws the button' },
+      { re: /setSpace\(v\); setBlock\(''\); flow\.markStale\(\)/, expect: 'editing the Space field marks the preview stale, which is what withdraws the button' },
     ],
   },
   {
