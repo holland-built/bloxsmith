@@ -215,6 +215,72 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
   });
 });
 
+test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-down', () => {
+  test('a first read still in flight shows "—", never "0 shown" / "0 zones" / "0 events"', async ({ page }) => {
+    // Never answered: both feeds stay on their first read for the whole test.
+    await page.route('**/api/data*', () => {});
+    await page.route('**/api/hub/security*', () => {});
+    await page.goto('/#daily');
+
+    await expect(card(page, 'Hosts Needing Attention').getByText('— shown', { exact: true })).toBeVisible();
+    await expect(card(page, 'DNS Zone Issues').getByText('— zones', { exact: true })).toBeVisible();
+    await expect(card(page, 'Security Today').getByText('— events', { exact: true })).toBeVisible();
+    for (const zero of ['0 shown', '0 zones', '0 events']) {
+      await expect(page.getByText(zero, { exact: true })).toHaveCount(0);
+    }
+  });
+
+  test('a refresh that fails after a good read marks the kept rows as old', async ({ page }) => {
+    await page.clock.install();
+    let fail = false;
+    await page.route('**/api/data*', (route) => (fail ? dead(route) : fulfillJson(route, dataPayload({
+      hosts: [{ id: 'h1', name: 'host-down', ip: '10.0.0.1', status: 'offline', type: 'Host' }],
+      zones: [{ id: 'z1', fqdn: 'bad.example.', issues: ['High Neg-TTL'] }],
+      subnets: [{ id: 's1', addr: '10.1.0.0', cidr: 24, total: 256, used: 250, util: 98, site: 'x' }],
+    }))));
+    await page.goto('/#daily');
+    await expect(page.getByText('host-down')).toBeVisible();
+    await expect(page.getByText('The last refresh failed.', { exact: false })).toHaveCount(0);
+
+    fail = true;
+    await page.clock.runFor(31_000); // past the 30s poll
+    for (const title of ['Top Capacity Risks', 'Hosts Needing Attention', 'DNS Zone Issues']) {
+      await expect(card(page, title).getByText(/The last refresh failed\. These rows are from the previous read\./)).toBeVisible();
+    }
+    await expect(page.getByText('host-down')).toBeVisible();
+  });
+
+  test('current rows from a slice read only in part are not called old', async ({ page }) => {
+    await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
+      subnets: [{ id: 's1', addr: '10.1.0.0', cidr: 24, total: 256, used: 250, util: 98, site: 'x' }],
+      meta: { subnets: 'error' },
+    })));
+    await page.goto('/#daily');
+    await expect(card(page, 'Top Capacity Risks').getByText('10.1.0.0')).toBeVisible();
+    await expect(page.getByText('The last refresh failed.', { exact: false })).toHaveCount(0);
+  });
+
+  test('"Hosts Not Online" opens Infra filtered to the same hosts it counted', async ({ page }) => {
+    await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
+      hosts: [
+        { id: 'a', name: 'up-1', status: 'online', type: 'Host' },
+        { id: 'b', name: 'off-1', status: 'offline', type: 'Host' },
+        { id: 'c', name: 'deg-1', status: 'degraded', type: 'Host' },
+        { id: 'd', name: 'pend-1', status: 'pending', type: 'Host' },
+      ],
+    })));
+    await page.goto('/#daily');
+    await expect(kpi(page, 'Hosts Not Online').getByText('3', { exact: true })).toBeVisible();
+
+    await page.getByText('Hosts Not Online', { exact: true }).click();
+    await expect(page).toHaveURL(/#infra\?status=not-online/);
+    const inventory = card(page, /Host Inventory/);
+    await expect(inventory.getByText('status: not online')).toBeVisible();
+    await expect(inventory.locator('tbody tr')).toHaveCount(3);
+    await expect(inventory.getByText('up-1')).toHaveCount(0);
+  });
+});
+
 // ---------- 5. Incidents ← /api/incidents ----------
 
 test.describe('Incidents → severity tiles + categories (/api/incidents down)', () => {
