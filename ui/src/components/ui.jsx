@@ -1555,6 +1555,11 @@ function reportMissingHelp(panelId, title) {
 // carry a heading that is a node, a heading that changes with a filter, or no
 // heading at all, and all three still need one stable line of text. Setting it
 // changes no element, no layout and no pixel on the card itself.
+// The --radius-surface in force where a panel sits, which a tab may scope.
+function surfaceRadius(el) {
+  return getComputedStyle(el).getPropertyValue('--radius-surface').trim()
+}
+
 export function Card({ title, panelName, note, right, span = 2, panelId, fit: fitEnabled = true, className = '', innerRef, children }) {
   const spanClass = SPAN_CLASS[span] || SPAN_CLASS[6]
   const ref = useRef(null)
@@ -1906,7 +1911,13 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
           // puts behind a variant set and the owner naming one. It does not
           // belong folded into a change that otherwise moves nothing. It is
           // recorded as open rather than forgotten: typeScale.test.js names it.
+          //
+          // The ghost lives on body, outside any tab that scopes the token (the
+          // Risk tabs set --radius-surface: 0 on [data-layout="record"]), so the
+          // panel's own value is carried over. Read at drag time, long after the
+          // stylesheet applied; left out when empty so the root token applies.
           `width:${Math.round(rect.width)}px;height:${Math.round(Math.min(rect.height, 120))}px;` +
+            (surfaceRadius(item) ? `--radius-surface:${surfaceRadius(item)};` : '') +
             'border-radius:var(--radius-surface);border:2px solid var(--color-accent);background:var(--color-card);' +
             'opacity:.9;padding:var(--sp-ghost-pad);font:600 13px var(--font-sans);color:var(--color-txt);overflow:hidden;',
         )

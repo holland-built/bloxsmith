@@ -245,3 +245,22 @@ test('moving the tokens moves the ghost with them', async ({ page }) => {
     `--font-sans was moved to ${MOVED_SANS} and the ghost still paints ${got!.fontFamily} — the stack is hard-coded, or the font shorthand dropped the var()`,
   ).toBe(normaliseStack(MOVED_SANS));
 });
+
+test('on a tab that scopes the corner token, the ghost takes the panel\'s corner', async ({ page }) => {
+  // The Risk tabs set --radius-surface: 0 on [data-layout="record"]. The ghost
+  // is appended to body, outside that scope, so reading the token there would
+  // give a rounded ghost for a square panel.
+  await gotoTab(page, 'audit', 3);
+  const id = 'audit-log';
+  const panelCorner = await page.locator(`[data-panel-id="${id}"]`).evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
+  expect(panelCorner, 'the record layout did not square the panel').toBe('0px');
+  let got: Awaited<ReturnType<typeof ghostStyle>> = null;
+  try {
+    await beginPanelDrag(page, id);
+    await expect(page.locator('[data-layout-ghost]')).toHaveCount(1);
+    got = await ghostStyle(page);
+  } finally {
+    await page.mouse.up();
+  }
+  expect(got!.borderTopLeftRadius).toBe(panelCorner);
+});
