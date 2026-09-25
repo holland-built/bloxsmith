@@ -84,8 +84,9 @@ type TableReport = {
 function measureTables(tolerance: number): TableReport[] {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
-  function measureText(text: string, font: string): number {
+  function measureText(text: string, font: string, spacing = 0): number {
     ctx.font = font;
+    ctx.letterSpacing = `${spacing}px`;
     return ctx.measureText(text || '').width;
   }
 
@@ -183,7 +184,17 @@ function measureTables(tolerance: number): TableReport[] {
       const hasMaxWidth = !!(th as HTMLElement).style.maxWidth;
       const allotted = (th as HTMLElement).getBoundingClientRect().width;
 
-      let neededWidth = measureText(label, getComputedStyle(th).font);
+      // Measure the header the way DataTable paints it: uppercase and with its
+      // letter-spacing, and without the aria-hidden sort glyph (the 17px
+      // allowance below covers that). Measuring the bare label under-counted,
+      // which the system font's wider glyphs used to hide inside the tolerance.
+      const header = (th.querySelector('button') as HTMLElement) || (th as HTMLElement);
+      const hs = getComputedStyle(header);
+      const clone = header.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
+      const raw = (clone.textContent || '').trim();
+      const painted = hs.textTransform === 'uppercase' ? raw.toUpperCase() : raw;
+      let neededWidth = measureText(painted, hs.font, parseFloat(hs.letterSpacing) || 0);
 
       // The cell font is a property of the column, not the row — read it once.
       // Reading it per cell forces a style recalc per cell and made this sweep
@@ -215,10 +226,11 @@ function measureTables(tolerance: number): TableReport[] {
       // same quantity it sizes the panel from, not a near-miss:
       //   CELL_PAD 20            px-2.5 on both sides of every th/td
       //   MEASURE_BUFFER 3       its sub-pixel rounding allowance
-      //   SORT_AFFORDANCE_PAD 14 the ▲/▼ room on a sortable header (a <button>)
+      //   SORT_AFFORDANCE_PAD 17 the ▲/▼ room on a sortable header (a <button>)
       //   BADGE_PAD 20           a status pill's own px-2.5
       neededWidth += 20 + 3;
-      if (th.querySelector('button')) neededWidth += 14;
+      if (th.querySelector('button')) neededWidth += 17;
+      neededWidth = Math.ceil(neededWidth);
       if (rows.some((tr) => (tr.children[colIndex]?.firstElementChild as HTMLElement)?.className?.includes?.('rounded-full'))) {
         neededWidth += 20;
       }
