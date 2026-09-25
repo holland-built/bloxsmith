@@ -30,8 +30,8 @@ function feedStatus(api, name) {
 // The briefing look: panels sit on the page itself, divided by a hairline rule
 // above each one, with no card box around them. Security Today is the one
 // filled panel, so the only box on the page is the one sample-based panel.
-const OPEN = 'bg-transparent! border-0! border-t! border-line! rounded-none! px-0! pt-4! [&_h2]:text-[15px]'
-const FILLED = 'bg-line/40! border-0! [&_h2]:text-[15px]'
+const OPEN = 'bg-transparent! border-0! border-t! border-line! px-0! pt-4!'
+const FILLED = 'bg-line/40! border-0!'
 
 export default function Daily() {
   const data = useApi('/api/data', { poll: 30000 })

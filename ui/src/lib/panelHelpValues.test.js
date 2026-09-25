@@ -520,7 +520,7 @@ const CLAIMS = [
     says: /subnets 85% full or more \(tiny networks under 16 addresses left out\)/,
     file: DAILY,
     proofs: [
-      { re: /\(Number\(s\.util\) \|\| 0\) >= 85\)\.length/, expect: 'the count is util >= 85, inclusive like the drill-down' },
+      { re: /\(Number\(s\.util\) \|\| 0\) >= 85\)$/m, expect: 'the count is util >= 85, inclusive like the drill-down' },
       {
         re: /\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28 &&/,
         expect: 'prefixes longer than /28 (fewer than 16 addresses) are filtered out before the util test',
