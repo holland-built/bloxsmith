@@ -21,7 +21,7 @@ const REAL_ENTRY = {
     method: 'GET',
     path: '/api/teardown/seed-demo/stream',
     reason: 'tenant-read-only',
-    tenant: 'b84022133fb7/-',
+    tenant: 'a1b2c3d4e5f6/-',
   },
   hash: '123ba6f',
   prev_hash: '0000000',
@@ -59,7 +59,7 @@ test('an unusable timestamp is null, never a guess', () => {
 test('detail drops the two keys every entry carries and sorts the rest', () => {
   assert.equal(
     detailText(REAL_ENTRY.detail),
-    'method=GET · path=/api/teardown/seed-demo/stream · reason=tenant-read-only · tenant=b84022133fb7/-',
+    'method=GET · path=/api/teardown/seed-demo/stream · reason=tenant-read-only · tenant=a1b2c3d4e5f6/-',
   )
 })
 
