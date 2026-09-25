@@ -221,10 +221,16 @@ function EstateRail({ data, sliceStatus }) {
 
   const totals = data.data?._totals ?? {}
   const hosts = data.data?.hosts ?? []
+  // _totals.subnetsWarn is every subnet at 70% or more, INCLUDING the ≥90%
+  // ones (go/internal/dashboard/dashboard.go: the at-risk pager's
+  // utilization>=70 total), so the three bands are ≥90, 70–89 = warn − crit,
+  // and the rest = total − warn. The two counts come from separate queries;
+  // if they disagree (warn < crit, or warn > total) no band is shown.
   const subOk = !data.loading && sliceStatus('subnets') !== 'error' &&
-    [totals.subnets, totals.subnetsCrit, totals.subnetsWarn].every((v) => typeof v === 'number')
+    [totals.subnets, totals.subnetsCrit, totals.subnetsWarn].every((v) => typeof v === 'number') &&
+    totals.subnetsCrit <= totals.subnetsWarn && totals.subnetsWarn <= totals.subnets
   const sub = subOk
-    ? { crit: totals.subnetsCrit, warn: totals.subnetsWarn, rest: totals.subnets - totals.subnetsCrit - totals.subnetsWarn }
+    ? { crit: totals.subnetsCrit, warn: totals.subnetsWarn - totals.subnetsCrit, rest: totals.subnets - totals.subnetsWarn }
     : { crit: null, warn: null, rest: null }
 
   const hostOk = !data.loading && sliceStatus('hosts') !== 'error'
@@ -250,9 +256,9 @@ function EstateRail({ data, sliceStatus }) {
     <aside aria-label="Other areas" className="flex flex-col gap-3">
       <ModuleCard title="Subnet fullness" href="#network" linkLabel="Network"
         unavailable={!subOk && !data.loading ? 'Subnet counts unavailable' : null}
-        counts={[{ label: '≥90%', value: sub.crit, tone: 'crit' }, { label: '75–89%', value: sub.warn, tone: 'warn' }, { label: 'The rest', value: sub.rest, tone: 'neutral' }]}>
+        counts={[{ label: '≥90%', value: sub.crit, tone: 'crit' }, { label: '70–89%', value: sub.warn, tone: 'warn' }, { label: 'The rest', value: sub.rest, tone: 'neutral' }]}>
         <SegmentedBar label="Subnets by fullness" crit={sub.crit} warn={sub.warn} ok={0} other={sub.rest} />
-        <p className="text-note text-dim mt-1">“The rest” is under 75% full or not measured</p>
+        <p className="text-note text-dim mt-1">“The rest” is under 70% full or not measured</p>
       </ModuleCard>
       <ModuleCard title={`Hosts${hostScope}`} href="#infra" linkLabel="Infra"
         unavailable={!hostOk && !data.loading ? 'Hosts feed unavailable' : null}
