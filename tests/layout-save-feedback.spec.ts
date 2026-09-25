@@ -28,12 +28,13 @@ import { domOrder, dragOntoRightHalfOf, gotoTab, liveText, tabToHandle } from '.
 const VIEW = '__layout_security';
 
 // Read off Security.jsx's <CardGrid layoutKey="security">, by hand. The first
-// three are one hiddenPanelGroup run.
+// three are one hiddenPanelGroup run, led by Triage Inbox.
 const DECLARED = [
-  'security-threat-events',
-  'security-response-summary',
   'security-triage-inbox',
+  'security-response-summary',
+  'security-threat-events',
   'security-inventory',
+  'security-soc-insights',
   'security-lookalike-domains',
   'security-axur-incidents',
   'security-ctem-exposure',
@@ -43,7 +44,6 @@ const DECLARED = [
   'security-exposed-surface',
   'security-ctem-assets',
   'security-threat-feed-activity',
-  'security-soc-insights',
 ];
 
 test.describe.configure({ mode: 'serial' });

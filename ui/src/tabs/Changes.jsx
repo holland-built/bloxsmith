@@ -87,7 +87,7 @@ export default function Changes() {
   const state = feedState({ payload: data, error, loading, rowsInWindow: rows })
 
   return (
-    <div className="w-full px-6 py-5">
+    <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
       <p className="text-note text-muted mb-3 max-w-[80ch]">
         Infoblox portal activity, {FEED_PROMISE}. This is a window on the audit route, not a change log: it

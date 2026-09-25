@@ -112,15 +112,15 @@ export default function Audit() {
   const more = { canLoadOlder, loadOlder, loadingOlder, olderError }
 
   return (
-    <div className="w-full px-6 py-5">
+    <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Audit</h1>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="audit">
-        <ActivitySummary panelId="audit-activity-summary" raw={raw} entries={entries} chain={chain} />
         <AuditTable panelId="audit-log" raw={raw} entries={entries} chain={chain} more={more} />
+        <ActivitySummary panelId="audit-activity-summary" raw={raw} entries={entries} chain={chain} />
         <CspAuditTable panelId="audit-csp-portal" />
       </CardGrid>
     </div>

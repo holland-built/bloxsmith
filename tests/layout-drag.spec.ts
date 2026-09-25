@@ -804,10 +804,11 @@ const TAB_CASES: TabCase[] = [
     declared: [
       // The first three are one hiddenPanelGroup run of three Cards — the
       // exact shape that used to collapse into a single unnamed grid child.
-      'security-threat-events',
-      'security-response-summary',
       'security-triage-inbox',
+      'security-response-summary',
+      'security-threat-events',
       'security-inventory',
+      'security-soc-insights',
       'security-lookalike-domains',
       'security-axur-incidents',
       'security-ctem-exposure',
@@ -817,10 +818,11 @@ const TAB_CASES: TabCase[] = [
       'security-exposed-surface',
       'security-ctem-assets',
       'security-threat-feed-activity',
-      'security-soc-insights',
     ],
     resizeSubject: 'security-response-summary',
-    firstDeclaredSpan: 4,
+    // Triage Inbox leads (the Risk tabs lead with their working table) and is
+    // already full width, so the keyboard step narrows it instead.
+    firstDeclaredSpan: 6,
   },
 ];
 
@@ -1015,8 +1017,9 @@ for (const tab of TAB_CASES) {
       // Focus survived a re-sort of the real DOM children.
       expect(await activeHandlePanel(page)).toBe(tab.declared[0]);
 
-      await page.keyboard.press('ArrowUp');
-      const widened = tab.firstDeclaredSpan + 1;
+      const full = tab.firstDeclaredSpan === 6;
+      await page.keyboard.press(full ? 'ArrowDown' : 'ArrowUp');
+      const widened = tab.firstDeclaredSpan + (full ? -1 : 1);
       expect(await liveText(page)).toBe(`Width ${widened} of 6 columns`);
       expect((await inlineSpans(page))[tab.declared[0]]).toBe(`span ${widened} / span ${widened}`);
 

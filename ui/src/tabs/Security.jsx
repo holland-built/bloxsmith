@@ -69,7 +69,7 @@ export default function Security() {
   const events = hub.data?.events ?? []
 
   return (
-    <div className="w-full px-6 py-5">
+    <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Security</h1>
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
@@ -86,12 +86,13 @@ export default function Security() {
           ...SERVICE_GROUPS.threatDefense,
           state: owned,
           children: [
-            <SeverityHero key="security-threat-events" panelId="security-threat-events" hub={hub} events={events} />,
-            <KpiStack key="security-response-summary" panelId="security-response-summary" hub={hub} events={events} acks={acks} />,
             <TriageInbox key="security-triage-inbox" panelId="security-triage-inbox" hub={hub} events={events} acks={acks} setAcks={setAcks} />,
+            <KpiStack key="security-response-summary" panelId="security-response-summary" hub={hub} events={events} acks={acks} />,
+            <SeverityHero key="security-threat-events" panelId="security-threat-events" hub={hub} events={events} />,
           ],
         })}
         <SecurityInventory panelId="security-inventory" hub={hubDomains} />
+        <InsightsPanel panelId="security-soc-insights" insights={insights} />
         <LookalikeTable panelId="security-lookalike-domains" lookalikes={lookalikes} />
         <AxurPanel panelId="security-axur-incidents" axur={axur} />
         <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
@@ -101,7 +102,6 @@ export default function Security() {
         <ExposedSurfacePanel panelId="security-exposed-surface" hostnames={exposedHostnames} ips={exposedIps} />
         <CtemAssetsPanel panelId="security-ctem-assets" ctemAssets={ctemAssets} />
         <ThreatFeed panelId="security-threat-feed-activity" threats={threats} />
-        <InsightsPanel panelId="security-soc-insights" insights={insights} />
       </CardGrid>
     </div>
   )
