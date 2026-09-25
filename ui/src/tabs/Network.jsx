@@ -5,6 +5,7 @@ import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { DASH, freeOf, num } from '../lib/measured.js'
+import { HeadlineStrip } from '../components/kit.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -66,6 +67,7 @@ export default function Network() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Network</h1>
+      <HeadlineStrip label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId,
           because CardGrid reads the saved order off `props.panelId` of its own
           children while it reads the live order off the DOM. A wrapper whose id
@@ -86,6 +88,7 @@ export default function Network() {
             layout. The id lives here rather than on the <Card> inside
             DhcpLeases for the same reason it does on Overview: the grid reads
             it off this element. */}
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dhcp,
           state: owned,
@@ -93,10 +96,40 @@ export default function Network() {
             <DhcpLeases key="network-dhcp-leases" panelId="network-dhcp-leases" dhcp={dhcp} innerRef={leasesRef} />,
           ],
         })}
-        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
       </CardGrid>
     </div>
   )
+}
+
+// ---------- headline numbers ----------
+
+// The counts across the top, each a jump to its panel. The two band counts are
+// Utilization Distribution's own bars (70-85 inclusive, over 85), counted from
+// the same rows, so the number and the bar it jumps to always agree.
+//
+// Those rows are meant to hold every subnet at 70% or more, but the server's
+// at-risk pager is capped (dashboard.go atRiskPageCap/RowCap/TimeCap) and sets
+// _totals.degraded when a cap trips. The bands are only called estate-wide
+// when the loaded >= 70 rows reach _totals.subnetsWarn and nothing was capped;
+// otherwise the labels say they count the loaded rows. A feed that is down or
+// loading is a dash, never zero.
+function headlines(subnets, totals, subnetsStatus, dhcp) {
+  const t = totals ?? {}
+  const subOk = subnetsStatus === 'ok' || subnetsStatus === 'empty'
+  const util = subOk ? subnets.map((s) => num(s.util)).filter((u) => u !== null) : []
+  const band = (test) => (subOk ? util.filter(test).length : null)
+  const complete = subOk && t.degraded !== true && Number.isFinite(t.subnetsWarn) &&
+    util.filter((u) => u >= 70).length >= t.subnetsWarn
+  const scope = subOk && !complete ? ' (of loaded)' : ''
+  const leases = dhcp.data?.count
+  const leasesOk = !dhcp.loading && !dhcp.error && dhcp.data?.status !== 'error' && Number.isFinite(leases)
+  const fmt = (v) => (v == null ? null : v.toLocaleString())
+  return [
+    { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null), color: 'var(--color-other)' },
+    { panelId: 'network-utilization-distribution', label: `Over 85%${scope}`, value: fmt(band((u) => u > 85)), color: 'var(--color-crit)' },
+    { panelId: 'network-utilization-distribution', label: `70–85%${scope}`, value: fmt(band((u) => u >= 70 && u <= 85)), color: 'var(--color-warn)' },
+    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), color: 'var(--color-accent)' },
+  ]
 }
 
 // ---------- utilization distribution ----------
@@ -130,7 +163,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
       : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
 
   return (
-    <Card panelId={panelId} span={3} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>
+    <Card panelId={panelId} span={4} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -174,7 +207,7 @@ function IpamSpaces({ panelId, ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
+    <Card panelId={panelId} span={2} title="IPAM Spaces — Top Used" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (

@@ -3,6 +3,7 @@ import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { HeadlineStrip } from '../components/kit.jsx'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
 // discovery found. Until this existed, asset data appeared only as scalar
@@ -115,6 +116,7 @@ export default function Assets() {
         Every asset discovery found, searchable by name and filterable by type. Click a row for the
         fields too sparse to keep in the table.
       </TabIntro>
+      <HeadlineStrip label="Headline numbers" items={headlines(filters)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -169,6 +171,18 @@ export default function Assets() {
 // It is the real total and the type chips, so the first thing on screen tells
 // you the size and shape of the estate — and every chip is a one-click way to
 // ask a question, which a search box the operator has to guess at is not.
+// The counts across the top, from the filter feed: the whole inventory, not
+// the searched or filtered list, so both jump to the filter panel that prints
+// the same total. A feed that is down or loading is a dash, never zero.
+function headlines(filters) {
+  const d = filters.data
+  const ok = !filters.loading && !filters.error && d?.availability !== 'error'
+  return [
+    { panelId: 'assets-filter-bar', label: 'Assets', value: ok && typeof d?.total === 'number' ? d.total.toLocaleString() : null, color: 'var(--color-other)' },
+    { panelId: 'assets-filter-bar', label: 'Asset types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null, color: 'var(--color-other)' },
+  ]
+}
+
 function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, searched, onRefresh, busy, panelId }) {
   const { COLORS } = useChartTheme()
   const d = filters.data
@@ -182,7 +196,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 
   return (
     <Card
-      span={6}
+      span={2}
       panelId={panelId}
       title="Asset Inventory"
       note="CSP discovery"
@@ -350,10 +364,11 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
 
   return (
     <Card
-      span={6}
+      span={4}
       // The one card in the app that opts out of content-driven width: this is
-      // the page's primary table, not a dashboard panel, so it takes the full
-      // six tracks it declares rather than shrinking to its columns.
+      // the page's primary table, not a dashboard panel, so it takes the four
+      // tracks it declares (the filter panel has the other two beside it)
+      // rather than shrinking to its columns.
       fit={false}
       panelId={panelId}
       title="Assets"
