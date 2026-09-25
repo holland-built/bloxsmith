@@ -128,13 +128,15 @@ func TestWritesOnTheRecordPathAreStillRefused(t *testing.T) {
 // TestSSEStreamsStillRefusedAsGET is the case that must never regress. All five
 // provision/teardown streams arrive as GETs because EventSource cannot issue
 // anything else, and they are the routes that destroy live sites and demo data.
-// A verb rule that let GETs through would unlock exactly these.
+// A verb rule that let GETs through would unlock exactly these. Each is sent as
+// a live run (dry=0): the dry Preview of the same stream changes nothing and is
+// let through, see TestDryPreviewPassesReadOnlyLock.
 func TestSSEStreamsStillRefusedAsGET(t *testing.T) {
 	h, d, hits := lockedTestServer(t)
 	for _, path := range []string{
-		"/api/provision/stream",
-		"/api/provision/site/stream",
-		"/api/provision/seed-demo/stream",
+		"/api/provision/stream?dry=0",
+		"/api/provision/site/stream?dry=0",
+		"/api/provision/seed-demo/stream?dry=0",
 		"/api/teardown/site/stream?confirm=DELETE&dry=0",
 		"/api/teardown/seed-demo/stream?confirm=DELETE&dry=0",
 	} {

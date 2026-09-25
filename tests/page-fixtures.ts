@@ -552,6 +552,10 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/ipam/blocks', body: { blocks: [{ id: 'ipam/address_block/baseline-1', address: '10.10.0.0', cidr: 16, name: 'baseline-block' }] } },
     { method: 'GET', path: '/api/whoami', body: WHOAMI, required: true },
     { method: 'GET', path: '/api/templates', body: TEMPLATES },
+    // Which tenant a write lands in and whether it may be changed. Writable in
+    // the baseline world, so the stream specs run as before;
+    // provision-write-access.spec.ts overrides it to read-only.
+    { method: 'GET', path: '/api/vault/write-target', body: { known: true, tenant: 'baseline-tenant/-', label: 'Baseline Tenant', writable: true }, required: true },
   ],
   editor: [],
   overview: [

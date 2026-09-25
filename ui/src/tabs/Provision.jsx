@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses. /api/ipam/spaces
 // and /api/ipam/blocks answer 502 on an upstream failure and /api/templates
 // answers 500 — and `data?.spaces ?? []` collapses every one of those into the
@@ -7,18 +7,110 @@ import { useEffect, useRef, useState } from 'react'
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
-import { withToken } from '../lib/authFetch.js'
+import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
 
 const inputCls = `${FIELD_CLS} w-full`
+
+// ---------- write permission ----------
+//
+// Apply changes the customer's tenant, and the server refuses it unless that
+// tenant has been marked writable (go/internal/server/writelock.go). Preview is
+// a dry run that changes nothing, so the lock lets it through on a read-only
+// tenant. EventSource cannot read a refusal's body, so without this an Apply on
+// a read-only tenant only ever said "Stream connection error". The page now
+// reads the same /api/vault/write-target the Settings panel reads, says up
+// front when the tenant is read-only, and offers the same switch.
+//
+// Three outcomes stay distinct, as in Settings: writable, read-only, and "could
+// not tell where a write would land". The last is not read-only; it is unknown.
+const WriteTarget = createContext(null)
+
+function useWriteTarget() {
+  const [state, setState] = useState({ loading: true, data: null, error: null })
+  const load = useCallback(async () => {
+    const r = await authFetch('/api/vault/write-target', { cache: 'no-store' })
+    if (r.ok && r.data) setState({ loading: false, data: r.data, error: null })
+    else setState((prev) => ({ loading: false, data: prev.data, error: 'Could not read whether this tenant allows changes.' }))
+  }, [])
+  useEffect(() => { load() }, [load])
+  const d = state.data
+  const readOnly = !!(d && d.known && d.writable === false)
+  const name = d?.label || d?.tenant || 'This tenant'
+  return { ...state, readOnly, name, reload: load }
+}
+
+function WriteAccessBanner({ isAdmin }) {
+  const wt = useContext(WriteTarget)
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!wt || wt.loading) return null
+  if (wt.error && !wt.data) return <div className="mb-4 text-note" style={{ color: COLORS.warn }}>{wt.error}</div>
+  if (wt.data && !wt.data.known) {
+    return (
+      <div className="mb-4 text-note" style={{ color: COLORS.warn }}>
+        Could not tell which tenant a change would land in, so Apply will be refused: {wt.data.reason}
+      </div>
+    )
+  }
+  if (!wt.readOnly) return null
+
+  // No id is sent: the server resolves the same identity it enforces against,
+  // so this cannot grant a different tenant than the one named here.
+  const allow = async () => {
+    setBusy(true); setErr('')
+    const r = await authFetch('/api/vault/tenant-writable', { method: 'POST', body: JSON.stringify({ writable: true }) })
+    setBusy(false)
+    if (r.ok && r.data?.ok) { setConfirming(false); wt.reload() }
+    else setErr(r.data?.error || 'Could not change the write permission.')
+  }
+
+  return (
+    <div role="status" className="mb-4 rounded-control border px-3 py-2.5 text-copy" style={{ borderColor: 'var(--color-warn)' }}>
+      <p>
+        <strong>{wt.name} is read-only.</strong> Preview works, because it changes nothing. Apply is off until the tenant is switched to read-write.
+      </p>
+      {!isAdmin ? (
+        <p className="text-note text-muted mt-1">An admin can switch it to read-write in Settings.</p>
+      ) : !confirming ? (
+        <button type="button" onClick={() => setConfirming(true)}
+          className="mt-2 px-2.5 py-1.5 rounded-control border border-border text-copy hover:border-border-hover">
+          Switch to read-write
+        </button>
+      ) : (
+        <div className="mt-2">
+          <p className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
+            This lets Apply and teardown create and delete real DNS zones, subnets and address blocks in {wt.name}.
+            Only do this on a tenant you own. You can switch it back in Settings.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={allow}
+              className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
+              style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}>
+              {busy ? 'Saving…' : 'Yes, allow changes'}
+            </button>
+            <button type="button" disabled={busy} onClick={() => { setConfirming(false); setErr('') }}
+              className="px-2.5 py-1.5 rounded-control border border-border text-copy">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {err && <p className="text-note mt-2" style={{ color: 'var(--color-crit)' }}>{err}</p>}
+    </div>
+  )
+}
 
 export default function Provision() {
   const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
   const whoami = useApi('/api/whoami')
   const role = whoami.data?.role || 'viewer'
   const isAdmin = role === 'admin'
+  const writeTarget = useWriteTarget()
 
   return (
+    <WriteTarget.Provider value={writeTarget}>
     <div className="max-w-[720px] mx-auto p-5">
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-copy font-semibold tracking-tight">Provision</h1>
@@ -38,6 +130,8 @@ export default function Provision() {
         estate. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent
         and needs admin.
       </TabIntro>
+
+      <WriteAccessBanner isAdmin={isAdmin} />
 
       <div className="flex gap-1 mb-4 p-1 rounded-control bg-field border border-border w-fit">
         {[
@@ -59,6 +153,7 @@ export default function Provision() {
 
       {mode === 'subnet' ? <SubnetMode /> : mode === 'site' ? <SiteMode isAdmin={isAdmin} /> : <SeedMode isAdmin={isAdmin} />}
     </div>
+    </WriteTarget.Provider>
   )
 }
 
@@ -89,6 +184,7 @@ function useStreamFlow(path) {
   const [rollback, setRollback] = useState(null)
   const esRef = useRef(null)
   const dryRef = useRef(true)
+  const writeTarget = useContext(WriteTarget)
 
   useEffect(() => () => esRef.current?.close(), [])
 
@@ -98,6 +194,13 @@ function useStreamFlow(path) {
 
   function run(qs, dry) {
     if (status === 'busy' || esRef.current) return
+    // A read-only tenant refuses an Apply before it starts, and the browser
+    // hides the reason. Say it instead of opening a stream. A Preview (dry run)
+    // is let through by the server, so it is not stopped here.
+    if (!dry && writeTarget?.readOnly) {
+      setError(`${writeTarget.name} is read-only, so nothing was sent. Switch it to read-write at the top of this page.`)
+      return
+    }
     setLog([]); setRows({}); setResult(null); setError(null); setRollback(null); setStatus('busy')
     dryRef.current = dry
     // withToken: EventSource can't send X-Auth-Token, so a token deployment
@@ -120,7 +223,14 @@ function useStreamFlow(path) {
         stop(dryRef.current ? 'previewed' : 'applied')
       }
     }
-    es.onerror = () => { if (!esRef.current) return; setError((p) => p || 'Stream connection error'); stop('idle') }
+    es.onerror = () => {
+      if (!esRef.current) return
+      setError((p) => p || 'The server closed the connection before sending anything. If this tenant was just made read-only, the notice at the top of this page says so.')
+      stop('idle')
+      // The permission may have changed since the page loaded; re-read it so
+      // the notice at the top reflects what the server just enforced.
+      writeTarget?.reload()
+    }
   }
 
   return { status, stale, log, rows, result, error, rollback, markStale, run }

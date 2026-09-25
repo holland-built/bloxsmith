@@ -187,6 +187,17 @@ var knownDestructiveRoutes = []struct{ method, path string }{
 	{"POST", "/api/actions/some-action-id/status"},
 }
 
+// liveRun makes a stream request a live run. A GET to one of the five streams
+// with no dry flag is a Preview (the handlers run dry when the flag is missing)
+// and the lock lets it through on a read-only tenant; see
+// TestDryPreviewPassesReadOnlyLock. These tests are about the live run.
+func liveRun(method, path string) string {
+	if method == http.MethodGet && dryPreviewStreams[path] {
+		return path + "?dry=0"
+	}
+	return path
+}
+
 // TestKnownDestructiveRoutesClassifiedAsTenantWrites is the belt to the braces
 // above, and it is a PURE CLASSIFIER test — the name says so on purpose. The
 // list test proves nothing was FORGOTTEN; this proves isTenantWrite() actually
@@ -289,7 +300,7 @@ func TestKnownDestructiveRoutesAreGated(t *testing.T) {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			before := *hits
 			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, lockReq(tc.method, tc.path))
+			h.ServeHTTP(rr, lockReq(tc.method, liveRun(tc.method, tc.path)))
 
 			if rr.Code != http.StatusForbidden {
 				t.Fatalf("%s %s changes data in the customer's tenant, but the server answered %d instead of refusing it — "+
