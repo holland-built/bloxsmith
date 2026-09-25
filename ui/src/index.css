@@ -321,6 +321,12 @@
   --sp-cell-y: 0.5rem;
 }
 
+/* A jump to a panel (the headline strips, the Change tabs' rail) scrolls it to
+   the top of the viewport, where the sticky header would cover its title. */
+[data-panel-id] {
+  scroll-margin-top: 72px;
+}
+
 html[data-density="compact"] {
   --sp-card-pad: 12px;
   --sp-grid-gap: 0.5rem;

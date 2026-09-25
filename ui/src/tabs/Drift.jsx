@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses — /api/templates
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
 // collapse into the same empty list a tenant that owns nothing produces.
+import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
@@ -75,6 +76,7 @@ export default function Drift() {
   }
 
   return (
+    <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Drift</h1>
       <TabIntro anchor="drift">
@@ -91,7 +93,7 @@ export default function Drift() {
         <Card
           panelId="drift-check"
           span={6}
-          className="max-w-[720px] mx-auto"
+          className="max-w-[720px]"
           title="Check drift"
           note="compare a site template against live Infoblox state"
         >
@@ -138,7 +140,7 @@ export default function Drift() {
         </Card>
 
         {err && (
-          <Card key="drift-error" panelId="drift-error" span={6} className="max-w-[720px] mx-auto" title="Error">
+          <Card key="drift-error" panelId="drift-error" span={6} className="max-w-[720px]" title="Error">
             <div className="text-copy" style={{ color: COLORS.crit }}>{err}</div>
           </Card>
         )}
@@ -217,5 +219,6 @@ export default function Drift() {
         )}
       </CardGrid>
     </div>
+    </PageRail>
   )
 }

@@ -5,6 +5,7 @@
 // Colours come only from tokens in index.css, so both themes and the contrast
 // tests cover them. Red means critical, amber means warning, and the accent
 // blue means healthy, the same meaning the charts already use.
+import { useEffect, useRef, useState } from 'react'
 import { FOCUS_RING } from './ui.jsx'
 
 const TONE = {
@@ -27,26 +28,27 @@ export function StatusPill({ tone = 'neutral', children }) {
 // jumps to the panel about it (scrolls it into view and moves focus there), so
 // the numbers lead and the detail stays one click away. A value that is null
 // was not measured and shows a dash, never a zero.
-export function HeadlineStrip({ items, label }) {
-  const jump = (panelId) => {
-    const el = document.querySelector(`[data-panel-id="${panelId}"]`)
-    // A panel taken off the page has no element. Send focus to Arrange panels,
-    // where it can be put back, rather than doing nothing.
-    if (!el) {
-      const arrange = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Arrange panels')
-      arrange?.focus()
-      return
-    }
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-    el.focus({ preventScroll: true })
+// Scroll to a panel and move focus to it. A panel taken off the page has no
+// element, so focus goes to Arrange panels, where it can be put back.
+function jumpToPanel(panelId) {
+  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
+  if (!el) {
+    const arrange = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Arrange panels')
+    arrange?.focus()
+    return
   }
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+  el.focus({ preventScroll: true })
+}
+
+export function HeadlineStrip({ items, label }) {
   return (
     <ul aria-label={label} className="flex flex-wrap rounded-surface bg-card border border-card-border mb-3">
       {items.map((it) => (
         <li key={it.label} className="border-r border-line last:border-r-0">
-          <button type="button" onClick={() => jump(it.panelId)} className={`text-left px-4 py-2.5 hover:bg-line ${FOCUS_RING}`}>
+          <button type="button" onClick={() => jumpToPanel(it.panelId)} className={`text-left px-4 py-2.5 hover:bg-line ${FOCUS_RING}`}>
             <span className="flex items-center gap-1.5 text-note text-muted">
               <span aria-hidden="true" className="inline-block w-2 h-2 rounded-full" style={{ background: it.color }} />
               {it.label}
@@ -124,6 +126,77 @@ export function PageBar({ group, page, children }) {
         </ol>
       </nav>
       <div className="flex items-center gap-2">{children}</div>
+    </div>
+  )
+}
+
+// The Change tabs' task rail: a list of the panels on the page, beside them,
+// each jumping to its panel. It reads the panels off the page itself, so it
+// follows Provision's mode switch, a Drift result appearing, and a panel taken
+// off with Arrange panels, with nothing to keep in step by hand. The panel in
+// view is marked. Below lg there is no room beside the forms, so it is not
+// shown and the page is exactly what it was.
+export function PageRail({ children }) {
+  const ref = useRef(null)
+  const [items, setItems] = useState([])
+  const [active, setActive] = useState(null)
+
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
+    const read = () => {
+      const next = [...root.querySelectorAll('[data-card-grid] [data-panel-id]')].map((el) => ({
+        id: el.getAttribute('data-panel-id'),
+        title: el.querySelector('h2')?.textContent.trim() || el.getAttribute('data-panel-id'),
+      }))
+      setItems((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+    }
+    // Only a panel arriving or leaving, or a panel title changing, can change
+    // the list. Provision streams every log line into the page, so re-reading
+    // on each one would rescan an ever-longer log once per line.
+    const isPanel = (n) => n.nodeType === 1 && (n.matches('[data-panel-id], [data-card-grid]') || n.querySelector('[data-panel-id]'))
+    const inTitle = (n) => !!(n.nodeType === 1 ? n : n.parentElement)?.closest('[data-panel-id] h2')
+    const relevant = (r) => inTitle(r.target) || [...r.addedNodes, ...r.removedNodes].some(isPanel)
+    read()
+    const mo = new MutationObserver((records) => { if (records.some(relevant)) read() })
+    mo.observe(root, { childList: true, subtree: true, characterData: true })
+    return () => mo.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!items.length || typeof IntersectionObserver === 'undefined') return
+    const seen = new Map()
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) seen.set(e.target.getAttribute('data-panel-id'), e.isIntersecting)
+      setActive(items.find((it) => seen.get(it.id))?.id ?? null)
+    })
+    for (const it of items) {
+      const el = document.querySelector(`[data-panel-id="${it.id}"]`)
+      if (el) io.observe(el)
+    }
+    return () => io.disconnect()
+  }, [items])
+
+  return (
+    <div ref={ref} className="lg:flex lg:items-start lg:gap-6">
+      <nav aria-label="On this page" className="hidden lg:block sticky top-16 w-[200px] flex-none pt-5 pl-6">
+        <p className="text-copy font-semibold text-txt mb-2">On this page</p>
+        <ul>
+          {items.map((it) => (
+            <li key={it.id}>
+              <button
+                type="button"
+                onClick={() => jumpToPanel(it.id)}
+                aria-current={active === it.id ? 'location' : undefined}
+                className={`block w-full text-left text-copy py-1 pl-3 border-l ${active === it.id ? 'border-txt text-txt' : 'border-border text-muted hover:text-txt'} ${FOCUS_RING}`}
+              >
+                {it.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
 }
