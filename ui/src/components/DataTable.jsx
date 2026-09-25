@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
@@ -655,6 +656,8 @@ export function DataTable({
   }
 
   measureRef.current = measure
+  // Measure again when a web font finishes loading (see lib/fonts.js).
+  const fontsLoaded = useFontsLoaded()
 
   // Recompute whenever the rendered rows or the visible column set change
   // (both are fresh arrays each such render, so this also naturally re-fires
@@ -670,7 +673,7 @@ export function DataTable({
       prevWidthsRef.current = w
       setColWidths(w)
     }
-  }, [cols, visible])
+  }, [cols, visible, fontsLoaded])
 
   // Recompute on wrapper resize (sidebar toggle, viewport change, etc.) — this
   // is layout the render pass above can't see. rAF-debounced so a resize storm
