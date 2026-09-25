@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 
 const inputCls = `${FIELD_CLS} w-full`
@@ -227,7 +228,8 @@ export default function Editor() {
   const previewBody = preview ? (preview.would_create || preview.would_update || preview) : null
 
   return (
-    <div className="max-w-[720px] mx-auto p-5">
+    <PageRail>
+    <div className="max-w-[820px] p-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
       <TabIntro anchor="editor">
         Direct create, update, and delete on individual DNS/DHCP objects. Blank Object ID creates; pasting an ID
@@ -303,5 +305,6 @@ export default function Editor() {
 
       {!spec && <Empty>unknown type</Empty>}
     </div>
+    </PageRail>
   )
 }

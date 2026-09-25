@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 // falls back to its placeholder and Apply sits disabled with no reason given.
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+import { PageRail } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
@@ -144,7 +145,8 @@ export default function Provision() {
 
   return (
     <WriteTarget.Provider value={writeTarget}>
-    <div className="max-w-[720px] mx-auto p-5">
+    <PageRail>
+    <div className="max-w-[820px] p-5">
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-copy font-semibold tracking-tight">Provision</h1>
         <span
@@ -186,6 +188,7 @@ export default function Provision() {
 
       {mode === 'subnet' ? <SubnetMode /> : mode === 'site' ? <SiteMode isAdmin={isAdmin} /> : <SeedMode isAdmin={isAdmin} />}
     </div>
+    </PageRail>
     </WriteTarget.Provider>
   )
 }

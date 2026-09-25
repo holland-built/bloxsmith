@@ -10,6 +10,7 @@
 // that is what carries the notice.
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 
 const inputCls = FIELD_CLS
@@ -661,6 +662,7 @@ const SHOW_MANAGE_ADDRESSES = true
 
 export default function SelfService() {
   return (
+    <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Self-Service</h1>
       <TabIntro anchor="self-service">
@@ -689,5 +691,6 @@ export default function SelfService() {
         {SHOW_MANAGE_ADDRESSES && <ManageAddressesPanel key="selfservice-manage-addresses" panelId="selfservice-manage-addresses" />}
       </CardGrid>
     </div>
+    </PageRail>
   )
 }
