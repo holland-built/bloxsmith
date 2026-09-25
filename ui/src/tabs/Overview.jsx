@@ -5,6 +5,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, Sparkline,
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
+import { HeadlineStrip, ModuleCard, SegmentedBar, StatusPill } from '../components/kit.jsx'
 
 
 // Tap once to read it, tap again to follow it.
@@ -151,6 +152,12 @@ export default function Overview() {
           what registers the saved span. Nothing here changes what renders
           until a layout has actually been saved for this tab: with no saved
           view the GET 404s, no order is applied and no span is overridden. */}
+      <HeadlineStrip label="Headline numbers" items={headlines(dns, data, licenses, sliceStatus)} />
+      {/* The panels keep their own grid, so drag, resize, hide and saved
+          layouts work exactly as before. The summary column sits beside it,
+          outside the grid, so it is never a draggable panel. */}
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0">
       <CardGrid layoutKey="overview">
         <DnsHero panelId="dns-hero" dns={dns} />
         <KpiStack panelId="kpi-stack" subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
@@ -163,7 +170,124 @@ export default function Overview() {
         <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
       </CardGrid>
+      </div>
+      <EstateRail data={data} sliceStatus={sliceStatus} />
+      </div>
     </div>
+  )
+}
+
+// ---------- headline strip and summary column ----------
+
+// The numbers across the top. Each jumps to the panel that explains it, and
+// none repeats a number a panel already shows in large type (the subnet counts
+// live in the Leases & Subnets panel). A figure that is loading or failed is
+// null, which the strip shows as a dash.
+function headlines(dns, data, licenses, sliceStatus) {
+  const totals = data.data?._totals ?? {}
+  const hosts = data.data?.hosts ?? []
+  // A failed poll keeps the last rows in memory; the headline must not show
+  // them as current while the DNS panel says the feed is unavailable.
+  const dnsOk = !dns.loading && !dns.error && dns.data?.status !== 'error'
+  const rows = dnsOk ? dns.data?.rows ?? [] : []
+  const qps = rows.length ? rows[rows.length - 1].avg_value : null
+  const hostOk = !data.loading && sliceStatus('hosts') !== 'error'
+  const offline = hostOk ? hosts.filter((h) => statusBucket(h.status) === 'offline').length : null
+  // Offline is counted over the rows loaded; say so when that is not all of
+  // them, or when the estate total is unknown and so cannot vouch for them.
+  const loadedNote = hostOk && (typeof totals.hosts !== 'number' || hosts.length < totals.hosts) ? ` (of ${hosts.length.toLocaleString()} loaded)` : ''
+  const lic = licenses.data?.licenses
+  const licOk = !licenses.loading && !licenses.error && licenses.data?.status !== 'error' && Array.isArray(lic)
+  return [
+    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-accent)' },
+    { panelId: 'host-status', label: 'Hosts', value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null, color: 'var(--color-ok)' },
+    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: offline == null ? null : offline.toLocaleString(), color: 'var(--color-crit)' },
+    { panelId: 'license-inventory', label: 'Licences', value: licOk ? lic.length.toLocaleString() : null, color: 'var(--color-other)' },
+  ]
+}
+
+const TONE_WORD = { crit: 'Critical', warn: 'Warning', ok: 'Healthy', neutral: 'Unknown' }
+// Only crit and warn are operational states. A service whose state could not
+// be read is Unknown, not a warning about it.
+const svcTone = (s) => (s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'ok' ? 'ok' : 'neutral')
+
+// Summaries of other tabs, each with a link there. The rules the rest of the
+// app follows hold here too: a feed that is down or loading is "unavailable"
+// or a dash, never zero; a sample says it is a sample; partial data says so.
+function EstateRail({ data, sliceStatus }) {
+  const sec = useApi('/api/hub/security', { poll: 30000 })
+  const health = useApi('/api/hub/health', { poll: 30000 })
+  const inc = useApi('/api/incidents', { poll: 30000 })
+
+  const totals = data.data?._totals ?? {}
+  const hosts = data.data?.hosts ?? []
+  // _totals.subnetsWarn is every subnet at 70% or more, INCLUDING the ≥90%
+  // ones (go/internal/dashboard/dashboard.go: the at-risk pager's
+  // utilization>=70 total), so the three bands are ≥90, 70–89 = warn − crit,
+  // and the rest = total − warn. The two counts come from separate queries;
+  // if they disagree (warn < crit, or warn > total) no band is shown.
+  const subOk = !data.loading && sliceStatus('subnets') !== 'error' &&
+    [totals.subnets, totals.subnetsCrit, totals.subnetsWarn].every((v) => typeof v === 'number') &&
+    totals.subnetsCrit <= totals.subnetsWarn && totals.subnetsWarn <= totals.subnets
+  const sub = subOk
+    ? { crit: totals.subnetsCrit, warn: totals.subnetsWarn - totals.subnetsCrit, rest: totals.subnets - totals.subnetsWarn }
+    : { crit: null, warn: null, rest: null }
+
+  const hostOk = !data.loading && sliceStatus('hosts') !== 'error'
+  const hb = { active: 0, degraded: 0, offline: 0, unknown: 0, other: 0 }
+  if (hostOk) for (const h of hosts) hb[statusBucket(h.status)]++
+  const hostScope = hostOk && (typeof totals.hosts !== 'number' || hosts.length < totals.hosts) ? ` (${hosts.length.toLocaleString()} loaded)` : ''
+
+  const secOk = !sec.loading && !sec.error && sec.data?.availability === 'ok'
+  const secScope = secOk && sec.data.truncated ? `counted in the latest ${sec.data.returned} events, not all time` : ''
+
+  const svcRows = Array.isArray(health.data) ? health.data : []
+  const svcDown = !health.loading && (!!health.error || (svcRows.length > 0 && svcRows.every((b) => b.availability === 'error')))
+  // Rows only from a response that answered; never stale rows under "unavailable".
+  const svc = health.loading || svcDown ? [] : svcRows
+  const svcPartial = [...new Set(svc.filter((b) => b.availability === 'partial' && b.reason).map((b) => b.reason))]
+
+  const incs = inc.data?.incidents
+  const incOk = !inc.loading && !inc.error && Array.isArray(incs)
+  const incPartial = incOk && (inc.data.signals_degraded || inc.data.signals_truncated ||
+    Object.values(inc.data._meta ?? {}).some((v) => v !== 'ok' && v !== 'empty'))
+
+  return (
+    <aside aria-label="Other areas" className="flex flex-col gap-3">
+      <ModuleCard title="Subnet fullness" href="#network" linkLabel="Network"
+        unavailable={!subOk && !data.loading ? 'Subnet counts unavailable' : null}
+        counts={[{ label: '≥90%', value: sub.crit, tone: 'crit' }, { label: '70–89%', value: sub.warn, tone: 'warn' }, { label: 'The rest', value: sub.rest, tone: 'neutral' }]}>
+        <SegmentedBar label="Subnets by fullness" crit={sub.crit} warn={sub.warn} ok={0} other={sub.rest} />
+        <p className="text-note text-dim mt-1">“The rest” is under 70% full or not measured</p>
+      </ModuleCard>
+      <ModuleCard title={`Hosts${hostScope}`} href="#infra" linkLabel="Infra"
+        unavailable={!hostOk && !data.loading ? 'Hosts feed unavailable' : null}
+        counts={[{ label: 'Offline', value: hostOk ? hb.offline : null, tone: 'crit' }, { label: 'Degraded', value: hostOk ? hb.degraded : null, tone: 'warn' }, { label: 'Active', value: hostOk ? hb.active : null, tone: 'ok' }]}>
+        {hostOk && <p className="text-note text-dim">{(hb.unknown + hb.other).toLocaleString()} unknown or other</p>}
+      </ModuleCard>
+      <ModuleCard title="Security" href="#security" linkLabel="Security"
+        unavailable={!sec.loading && !secOk ? 'Security feed unavailable' : null}
+        counts={[{ label: 'Critical', value: secOk ? sec.data.counts?.critical ?? null : null, tone: 'crit' }, { label: 'High', value: secOk ? sec.data.counts?.high ?? null : null, tone: 'warn' }, { label: 'Blocked', value: secOk ? sec.data.blocked ?? null : null, tone: 'neutral' }]}>
+        {secScope && <p className="text-note text-dim">{secScope}</p>}
+      </ModuleCard>
+      <ModuleCard title="Services" href="#infra" linkLabel="Service health" unavailable={svcDown ? 'Service health unavailable' : null}>
+        <ul className="flex flex-col gap-1.5 mb-1">
+          {svc.map((s) => (
+            <li key={s.name} className="flex items-center justify-between gap-2 text-copy">
+              <span>{s.name}</span>
+              <span className="flex items-center gap-2"><span className="text-note text-muted">{s.meta}</span><StatusPill tone={svcTone(s.status)}>{s.statusLabel || TONE_WORD[svcTone(s.status)]}</StatusPill></span>
+            </li>
+          ))}
+        </ul>
+        {health.loading && <p className="text-note text-dim">loading…</p>}
+        {!svcDown && svcPartial.map((r) => <p key={r} className="text-note text-dim">partial: {r}</p>)}
+      </ModuleCard>
+      <ModuleCard title="Incidents" href="#incidents" linkLabel="Incidents"
+        unavailable={!inc.loading && !incOk ? 'Incidents feed unavailable' : null}
+        counts={[{ label: 'Critical', value: incOk ? incs.filter((i) => i.severity === 'crit').length : null, tone: 'crit' }, { label: 'Warning', value: incOk ? incs.filter((i) => i.severity === 'warn').length : null, tone: 'warn' }]}>
+        <p className="text-note text-dim">incident categories{incPartial ? ' · some checks incomplete' : ''}</p>
+      </ModuleCard>
+    </aside>
   )
 }
 

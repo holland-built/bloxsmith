@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
@@ -99,7 +100,7 @@ function visibleColumns(columns, sorted) {
 // any cost.
 
 const CELL_PAD = 20 // px-2.5 on both sides of a th/td
-const SORT_AFFORDANCE_PAD = 14 // room for the ▲/▼ indicator on a sortable header
+const SORT_AFFORDANCE_PAD = 17 // room for the ▲/▼ indicator on a sortable header; Inter's triangle paints 15.53px (tests/table-measures-what-it-paints.spec.ts), was 14 under system-ui
 const MEASURE_BUFFER = 3 // absorbs measureText() sub-pixel rounding
 const BADGE_PAD = 20 // the pill span's own px-2.5
 const SHRINK_FLOOR_CH = 6
@@ -655,6 +656,8 @@ export function DataTable({
   }
 
   measureRef.current = measure
+  // Measure again when a web font finishes loading (see lib/fonts.js).
+  const fontsLoaded = useFontsLoaded()
 
   // Recompute whenever the rendered rows or the visible column set change
   // (both are fresh arrays each such render, so this also naturally re-fires
@@ -670,7 +673,7 @@ export function DataTable({
       prevWidthsRef.current = w
       setColWidths(w)
     }
-  }, [cols, visible])
+  }, [cols, visible, fontsLoaded])
 
   // Recompute on wrapper resize (sidebar toggle, viewport change, etc.) — this
   // is layout the render pass above can't see. rAF-debounced so a resize storm

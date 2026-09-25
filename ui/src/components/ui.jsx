@@ -1,4 +1,5 @@
 import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
+import { useFontsLoaded } from '../lib/fonts.js'
 import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { markArranged } from '../lib/arrangedOnce.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -1564,6 +1565,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   const headCanvasRef = useRef(null)
   const bodyNeedRef = useRef(null)
   const grid = useContext(GridFitContext)
+  // Re-render when a web font finishes loading, so the header measurement in
+  // publish() (run by the layout effect on every render) uses the real font.
+  useFontsLoaded()
 
   // A panel is rearrangeable only inside a grid that persists layouts AND only
   // if it has the stable identity a saved layout refers to. Both, or neither:

@@ -1,4 +1,4 @@
-# Dashboard tabs
+var e=`# Dashboard tabs
 
 What each tab in Bloxsmith does, what it reads, and what it can change.
 
@@ -97,7 +97,7 @@ IPAM and DHCP in detail.
 - **DHCP Leases** — filterable lease table.
 - **Subnet table** — the full list, /29–/32 excluded.
 
-Deep-linkable: `#network?subnet=10.0.0.0`, `#network?minUtil=90`, `#network?focus=leases`.
+Deep-linkable: \`#network?subnet=10.0.0.0\`, \`#network?minUtil=90\`, \`#network?focus=leases\`.
 
 ## DNS
 
@@ -127,7 +127,7 @@ A panel that shows nothing is telling you the feed returned nothing, not that yo
 
 Axur is a separate company from Infoblox, with its own subscription and its own key.
 
-- **Where the key goes.** Paste it under ⋯ Settings, encrypted alongside your Infoblox keys. `AXUR_API_KEY` also works, for deployments that never open a vault; the saved one wins when both are set. The key belongs to the installation, so switching Infoblox accounts does not change it.
+- **Where the key goes.** Paste it under ⋯ Settings, encrypted alongside your Infoblox keys. \`AXUR_API_KEY\` also works, for deployments that never open a vault; the saved one wins when both are set. The key belongs to the installation, so switching Infoblox accounts does not change it.
 - **What the order means.** Sorted by credentials exposed, the only figure that compares fairly between suppliers. Axur's other measures count different things, so the biggest number is not the worst problem.
 - **What "Types affected" means.** How many categories of problem, not how many problems. It sits beside the ranking rather than driving it.
 - **When there is no number.** A dash means nothing was counted, and the panel says why: no key, a locked vault, an account code it could not work out, or a failed read. An empty list says "no suppliers monitored in Axur", which is not the same as "no problems found".
@@ -141,7 +141,7 @@ Host and service health. Host health polls every 15 seconds; the rest every 30�
 - **DFP Services** — DNS forwarding proxy state.
 - **Asset Discovery** — discovery run status.
 
-Deep-linkable: `#infra?status=offline`.
+Deep-linkable: \`#infra?status=offline\`.
 
 ## Assets
 
@@ -195,14 +195,14 @@ It shows at most the 500 most recent events in the last 24 hours. The portal ret
 
 **Writes to Infoblox.** Builds real objects. Follows the [Preview → Apply flow](#the-write-flow); progress streams line by line as the plan runs.
 
-Your role is shown as a pill at the top right (`VIEWER` / `OPERATOR` / `ADMIN`). Live teardown requires admin.
+Your role is shown as a pill at the top right (\`VIEWER\` / \`OPERATOR\` / \`ADMIN\`). Live teardown requires admin.
 
 ### Subnet
 
 Carve one subnet out of an existing block.
 
 1. Pick an **IP space**, then a **block** inside it.
-2. Set the **CIDR prefix** (e.g. `24`), a **name**, and an optional comment.
+2. Set the **CIDR prefix** (e.g. \`24\`), a **name**, and an optional comment.
 3. Optionally tick **Create matching DNS zone**.
 4. **Preview** — the log streams the plan without writing. Then **Provision**.
 
@@ -218,15 +218,15 @@ Build an entire site from a template in your template library — address block,
 
 **Tear down this site** deletes what that template provisioned. It is permanent. Preview it like anything else; the live run needs admin plus typing the site name to confirm.
 
-If the template dropdown is empty, no templates are installed — run `scripts/fetch_templates.py`, or use the release archive / container image, which bundle them.
+If the template dropdown is empty, no templates are installed — run \`scripts/fetch_templates.py\`, or use the release archive / container image, which bundle them.
 
 ### Seed demo
 
 Bulk-provisions a full demo estate across the regions you tick (AMER, EMEA, APAC) from the template library. Built for demos and lab tenants.
 
-Per-template progress rolls up as `done/total`, with failures listed individually. The finishing message says what actually happened rather than just that the run ended: a clean run says "Seed complete," a mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed," and a run where nothing succeeded says "Seed failed — 0 of *N* template(s) succeeded" instead of the misleadingly cheerful default.
+Per-template progress rolls up as \`done/total\`, with failures listed individually. The finishing message says what actually happened rather than just that the run ended: a clean run says "Seed complete," a mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed," and a run where nothing succeeded says "Seed failed — 0 of *N* template(s) succeeded" instead of the misleadingly cheerful default.
 
-**Tear down demo** deletes every object the seed created in the selected space. The live run needs admin plus typing `DELETE`.
+**Tear down demo** deletes every object the seed created in the selected space. The live run needs admin plus typing \`DELETE\`.
 
 > Do not point Seed demo at a production tenant. It writes many objects fast and the teardown is the only way back.
 
@@ -247,10 +247,10 @@ Take the next free address(es) out of a subnet.
 Add a record to an existing zone.
 
 1. Pick the **zone** and record **type** (A, AAAA, CNAME, MX, TXT, SRV, PTR, NS, CAA).
-2. Fill in **name** (`@` for the zone apex), **value**, and an optional TTL.
+2. Fill in **name** (\`@\` for the zone apex), **value**, and an optional TTL.
 3. **Preview** sends it to the server for validation and shows the record it would write. **Create** writes it.
 
-The preview shows the record as the *server* parsed it, which is often not what you typed — an SRV value of `10 5 5060 sip.example.com` comes back as separate priority, weight, port, and target fields. Worth a glance.
+The preview shows the record as the *server* parsed it, which is often not what you typed — an SRV value of \`10 5 5060 sip.example.com\` comes back as separate priority, weight, port, and target fields. Worth a glance.
 
 ### Manage Records
 
@@ -258,13 +258,13 @@ Edit or delete a record that already exists in a zone.
 
 Pick a **zone**, then **Edit** any editable row (read-only record types are marked as such and skip straight past Edit/Delete). Change value, TTL, or comment and hit **Preview** — same server-validated preview as the create form. **Update** re-reads the record right before writing and compares it against the copy the preview was built from; if the two don't match, Apply is refused with "record changed since you previewed — preview again" rather than overwriting whatever is there now.
 
-**Delete** is a two-click arm: the first click turns the button into "Click again to delete `<type> <name> -> <value>`" naming the exact record, and it disarms itself after four seconds if you don't confirm.
+**Delete** is a two-click arm: the first click turns the button into "Click again to delete \`<type> <name> -> <value>\`" naming the exact record, and it disarms itself after four seconds if you don't confirm.
 
 ### Manage Addresses
 
 Release an allocated address back to the pool.
 
-Pick an **IP space**, then a **subnet**, to list its addresses. **Release** is armed the same way as Manage Records' delete — one click shows "Click again to release `<address>`", the second click sends it, and the arm expires after four seconds either way.
+Pick an **IP space**, then a **subnet**, to list its addresses. **Release** is armed the same way as Manage Records' delete — one click shows "Click again to release \`<address>\`", the second click sends it, and the arm expires after four seconds either way.
 
 ## Editor
 
@@ -281,7 +281,7 @@ Six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, and Tags (b
 
 **Delete** is separate and does not go through preview. It is armed by two clicks — the first changes the button to "Click again to permanently delete" and disarms itself after four seconds. There is no undo.
 
-Deep-linkable and prefillable from other tabs: `#editor?type=subnet&id=abc123`.
+Deep-linkable and prefillable from other tabs: \`#editor?type=subnet&id=abc123\`.
 
 > Subnets and address blocks created here are ad-hoc. No site template knows about them, so Drift will report them as extra.
 
@@ -292,7 +292,7 @@ Deep-linkable and prefillable from other tabs: `#editor?type=subnet&id=abc123`.
 1. Pick a **template**, optionally override the **IP space**.
 2. **Check drift.**
 
-The result is either `✓ in-sync` or a count of drift items, grouped by category and sorted worst-first. Each item is tagged:
+The result is either \`✓ in-sync\` or a count of drift items, grouped by category and sorted worst-first. Each item is tagged:
 
 - **missing** — the template defines it, Infoblox doesn't have it.
 - **changed** — it exists, but a value differs from the template.
@@ -322,6 +322,7 @@ Enter a domain, IP, or host. Returns matching threat-intel entities plus a dossi
 
 ## Security posture
 
-The five Provision/teardown streams (`#provision`'s subnet/site/seed runs and their teardowns) are `EventSource` GET requests, because a browser's `EventSource` can't send a mutating verb or custom headers — but a GET is also what a hostile page could fire blind. Those five routes carry a stricter gate than the rest of the write surface: a request must carry `Sec-Fetch-Site: same-origin` (or `none`) or a matching Origin/Referer. A bare loopback request with no fetch-metadata at all is refused, where the ordinary write endpoints still trust it. Setting `DASHBOARD_TOKEN` sidesteps this check entirely — since `EventSource` can't set the `X-Auth-Token` header, the dashboard instead passes the token on the stream URL as `?token=`.
+The five Provision/teardown streams (\`#provision\`'s subnet/site/seed runs and their teardowns) are \`EventSource\` GET requests, because a browser's \`EventSource\` can't send a mutating verb or custom headers — but a GET is also what a hostile page could fire blind. Those five routes carry a stricter gate than the rest of the write surface: a request must carry \`Sec-Fetch-Site: same-origin\` (or \`none\`) or a matching Origin/Referer. A bare loopback request with no fetch-metadata at all is refused, where the ordinary write endpoints still trust it. Setting \`DASHBOARD_TOKEN\` sidesteps this check entirely — since \`EventSource\` can't set the \`X-Auth-Token\` header, the dashboard instead passes the token on the stream URL as \`?token=\`.
 
-Separately, the server checks the `Host` header on every request against an allowlist (`localhost`, `127.0.0.1`, `[::1]`, and whatever it's bound to); an unrecognized `Host` gets `421 Misdirected Request`, which stops DNS-rebinding attacks. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own hostname, so that check stands down until you set `ALLOWED_HOSTS`. Full variable reference and the rest of the deployment security notes are in [docs/DEPLOYMENT.md](DEPLOYMENT.md#security-notes) — this section only points at what exists, not how to configure it.
+Separately, the server checks the \`Host\` header on every request against an allowlist (\`localhost\`, \`127.0.0.1\`, \`[::1]\`, and whatever it's bound to); an unrecognized \`Host\` gets \`421 Misdirected Request\`, which stops DNS-rebinding attacks. A wildcard bind (\`HOST=0.0.0.0\`, the Docker default) can't know its own hostname, so that check stands down until you set \`ALLOWED_HOSTS\`. Full variable reference and the rest of the deployment security notes are in [docs/DEPLOYMENT.md](DEPLOYMENT.md#security-notes) — this section only points at what exists, not how to configure it.
+`;export{e as default};

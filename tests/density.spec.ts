@@ -105,7 +105,9 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
 
   const before = await page.evaluate(probe);
   expect(before.density).toBe('comfortable');
-  expect(before.rowH).toBe(38);
+  // 39 and 31, not 38 and 30: Inter (index.css) has a line box 1px taller
+  // than the system font these were first measured with. Padding is unchanged.
+  expect(before.rowH).toBe(39);
   expect(before.cardPadTop).toBe('18px');
   expect(before.cellPadY).toBe('8px/8px');
 
@@ -114,7 +116,7 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
   await page.waitForTimeout(500);
 
   const compact = await page.evaluate(probe);
-  expect(compact.rowH).toBe(30);
+  expect(compact.rowH).toBe(31);
   expect(compact.cardPadTop).toBe('12px');
   expect(compact.cellPadY).toBe('4px/4px');
   // The predicate's own two clauses, stated as the comparisons they are rather
@@ -152,7 +154,7 @@ test('the density choice survives a page reload', async ({ page }) => {
   );
   await page.waitForTimeout(800);
   const after = await page.evaluate(probe);
-  expect(after.rowH).toBe(30);
+  expect(after.rowH).toBe(31);
   expect(after.cardPadTop).toBe('12px');
 });
 
