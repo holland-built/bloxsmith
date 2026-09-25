@@ -1,4 +1,5 @@
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useMemo } from 'react'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
@@ -26,6 +27,12 @@ function feedStatus(api, name) {
 
 // ---------- main ----------
 
+// The briefing look: panels sit on the page itself, divided by a hairline rule
+// above each one, with no card box around them. Security Today is the one
+// filled panel, so the only box on the page is the one sample-based panel.
+const OPEN = 'bg-transparent! border-0! border-t! border-line! px-0! pt-4!'
+const FILLED = 'bg-line/40! border-0!'
+
 export default function Daily() {
   const data = useApi('/api/data', { poll: 30000 })
   const sec = useApi('/api/hub/security', { poll: 30000 })
@@ -41,15 +48,23 @@ export default function Daily() {
     hosts: feedStatus(data, 'hosts'),
     zones: feedStatus(data, 'zones'),
   }
+  // When this page last received /api/data, not the time on the clock: a
+  // stalled poll must not keep claiming the figures are fresh.
+  const asOf = useMemo(() => (data.data ? new Date() : null), [data.data])
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-3">Daily Briefing</h1>
+      <h1 className="text-figure font-semibold tracking-tight mb-1">Daily Briefing</h1>
+      <p className="text-muted mb-4">
+        {asOf
+          ? `Open items as of ${asOf.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, refreshed every 30 seconds.`
+          : 'Loading open items.'}
+      </p>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
-      <CardGrid layoutKey="daily">
+      <CardGrid layoutKey="daily" className="gap-x-8! gap-y-6!">
         <IssueKpis panelId="daily-open-issues" subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
         <SecurityToday panelId="daily-security-today" sec={sec} />
         <TopCapacityRisks panelId="daily-top-capacity-risks" subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
@@ -76,25 +91,49 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   // show a subnet at exactly 85.0% in the list but not in the count. The
   // `<= 28` rule mirrors that same drill-down (Network.jsx `base`), which drops
   // /29-/32 infra links; it is disclosed in the help copy for this panel.
-  const atLeast85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) >= 85).length
-  const notOnline = hosts.filter((h) => !/online|active/i.test(h.status || '')).length
-  const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
+  const atLeast85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) >= 85)
+  const badHosts = hosts.filter((h) => !/online|active/i.test(h.status || ''))
+  const zonesWithIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
+
+  // The line under each number says what is behind it, from the same rows the
+  // number counts. >= 90 is complete for the same reason >= 85 is (see above).
+  const byStatus = {}
+  for (const h of badHosts) {
+    const k = (h.status || 'unknown').toLowerCase()
+    byStatus[k] = (byStatus[k] || 0) + 1
+  }
+  const issueTypes = {}
+  for (const z of zonesWithIssues) for (const t of z.issues) issueTypes[t] = (issueTypes[t] || 0) + 1
+  const commonTypes = Object.entries(issueTypes).sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const at90 = atLeast85.filter((s) => (Number(s.util) || 0) >= 90).length
 
   // Each KPI reads a DIFFERENT feed (subnets/hosts/zones) — one can be dead
   // while the other two are fine, so the gate is per-row, not per-card.
   const cells = [
-    { label: 'Subnets ≥85% Util', value: atLeast85, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets },
-    { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn, hash: 'infra?status=error', status: meta.hosts },
-    { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other, hash: 'dns?issues=1', status: meta.zones },
+    {
+      label: 'Subnets ≥85% Util', value: atLeast85.length, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets,
+      detail: `${at90.toLocaleString()} of them are at 90% or more. /29–/32 links are left out.`,
+    },
+    {
+      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=error', status: meta.hosts,
+      detail: `${hosts.length.toLocaleString()} hosts loaded.` +
+        (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
+    },
+    {
+      label: 'DNS Zones w/ Issues', value: zonesWithIssues.length, color: COLORS.warn, hash: 'dns?issues=1', status: meta.zones,
+      detail: commonTypes.length ? `Most common: ${commonTypes.map(([t, n]) => `${t} (${n.toLocaleString()})`).join(', ')}.` : '',
+    },
   ]
 
   return (
-    <Card span={2} panelId={panelId} title="Open Issues" className="flex flex-col justify-between">
+    <Card span={4} panelId={panelId} title="Open Issues" note="what needs you this morning" className={OPEN}>
       {loading ? (
         <Skeleton h={160} />
       ) : (
-        cells.map((c, i) => {
+        cells.map((c) => {
           const unavailable = c.status === 'error'
+          // The label's parent is the row, and it holds the number too: the
+          // failure tests find a row by its label and look for the value beside it.
           return (
             <div
               key={c.label}
@@ -102,16 +141,17 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
               tabIndex={0}
               onClick={() => { location.hash = c.hash }}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-              className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+              className={`grid grid-cols-[6rem_1fr] items-baseline gap-x-4 py-3 border-b border-line last:border-b-0 cursor-pointer hover:bg-line/50 ${FOCUS_RING}`}
             >
-              <div className="text-muted text-note">{c.label}</div>
               {unavailable ? (
-                <div className="text-note font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
+                <div className="row-span-2 text-note font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
               ) : (
-                <div className="text-figure font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+                <div className="row-span-2 text-figure font-semibold tracking-tight tabular-nums text-right" style={{ color: c.value > 0 ? c.color : undefined }}>
                   {c.value.toLocaleString()}
                 </div>
               )}
+              <div className="text-copy font-semibold">{c.label}</div>
+              <div className="col-start-2 text-note text-muted mt-0.5">{unavailable ? 'This feed did not answer.' : c.detail}</div>
             </div>
           )
         })
@@ -134,7 +174,9 @@ function SecurityToday({ sec, panelId }) {
     { label: 'critical', value: Number(counts.critical) || 0, color: COLORS.crit },
     { label: 'high', value: Number(counts.high) || 0, color: COLORS.warn },
     { label: 'medium', value: Number(counts.medium) || 0, color: COLORS.other },
+    { label: 'low', value: Number(counts.low) || 0 },
     { label: 'blocked', value: Number(sec.data?.blocked) || 0, color: COLORS.ok },
+    { label: 'logged', value: Number(sec.data?.logged) || 0 },
   ]
 
   // A dead threat feed is not a quiet day. The fetch failing, or finishing with
@@ -151,9 +193,10 @@ function SecurityToday({ sec, panelId }) {
 
   return (
     <Card
-      span={4}
+      span={2}
       panelId={panelId}
       title="Security Today"
+      className={FILLED}
       right={<span className="text-note text-muted">{secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
     >
       {sec.loading ? (
@@ -162,16 +205,16 @@ function SecurityToday({ sec, panelId }) {
         <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-3 mt-1">
+          <dl className="divide-y divide-line">
             {chips.map((c) => (
-              <div key={c.label} className="text-center py-4 rounded-control bg-line/40">
-                <div className="text-figure font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+              <div key={c.label} className="flex justify-between py-1.5">
+                <dt className="text-muted capitalize">{c.label}</dt>
+                <dd className="font-semibold tabular-nums" style={{ color: c.value > 0 ? c.color : undefined }}>
                   {c.value.toLocaleString()}
-                </div>
-                <div className="text-note text-muted mt-1 capitalize">{c.label}</div>
+                </dd>
               </div>
             ))}
-          </div>
+          </dl>
           {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}
@@ -209,11 +252,12 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
         )
       },
     },
-    { key: 'free', label: 'Free', align: 'right', render: (v) => <span className="text-muted">{(v || 0).toLocaleString()}</span> },
+    { key: 'used', label: 'Used', align: 'right', render: (v, s) => <span className="text-muted tabular-nums">{(Number(v) || 0).toLocaleString()} / {(Number(s.total) || 0).toLocaleString()}</span> },
+    { key: 'free', label: 'Free', align: 'right', render: (v) => <span className="tabular-nums">{(v || 0).toLocaleString()}</span> },
   ]
 
   return (
-    <Card span={3} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-note text-muted">top 10</span>}>
+    <Card span={2} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-note text-muted">top 10</span>} className={OPEN}>
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -258,9 +302,10 @@ function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
 
   return (
     <Card
-      span={3}
+      span={2}
       panelId={panelId}
       title="Hosts Needing Attention"
+      className={OPEN}
       // "0 shown" off a dead feed reads as "nothing needs attention".
       right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} shown</span>}
     >
@@ -309,9 +354,10 @@ function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
 
   return (
     <Card
-      span={6}
+      span={2}
       panelId={panelId}
       title="DNS Zone Issues"
+      className={OPEN}
       // "0 zones" off a dead feed reads as a clean estate.
       right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} zones</span>}
     >

@@ -1,19 +1,32 @@
 - main "Daily tab":
   - heading "Daily Briefing" [level=1]
+  - paragraph: /Open items as of .+, refreshed every \d+ seconds\./
   - button "Arrange panels"
   - heading "Open Issues" [level=2]
+  - text: what needs you this morning
   - 'button "About: Open Issues"': "About: ⓘ"
   - button "Hide Open Issues": Hide ✕
   - button "Move Open Issues": Move ⠿
-  - button /Subnets ≥\d+% Util 2/
-  - button "Hosts Not Online 3"
-  - button "DNS Zones w/ Issues 1"
+  - button /2 Subnets ≥\d+% Util 1 of them are at \d+% or more\. \/\d+–\/\d+ links are left out\./
+  - button "3 Hosts Not Online 3 hosts loaded. 1 ok, 1 degraded, 1 offline."
+  - 'button "1 DNS Zones w/ Issues Most common: low ttl (1)."'
   - heading "Security Today" [level=2]
   - text: 2 events
   - 'button "About: Security Today"': "About: ⓘ"
   - button "Hide Security Today": Hide ✕
   - button "Move Security Today": Move ⠿
-  - text: /1 critical 2 high 3 medium \d+ blocked/
+  - term: critical
+  - definition: "1"
+  - term: high
+  - definition: "2"
+  - term: medium
+  - definition: "3"
+  - term: low
+  - definition: "4"
+  - term: blocked
+  - definition: /\d+/
+  - term: logged
+  - definition: "8"
   - heading "Top Capacity Risks" [level=2]
   - text: /least free space, excl\. infra links top \d+/
   - 'button "About: Top Capacity Risks"': "About: ⓘ"
@@ -21,26 +34,30 @@
   - button "Move Top Capacity Risks": Move ⠿
   - table:
     - rowgroup:
-      - row "Network Site Util Free":
+      - row "Network Site Util Used Free":
         - columnheader "Network"
         - columnheader "Site"
         - columnheader "Util"
+        - columnheader "Used"
         - columnheader "Free"
     - rowgroup:
       - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "other-site"
         - cell /\d+%/
+        - cell /\d+ \/ \d+/
         - cell "5"
       - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
+        - cell /\d+ \/ \d+/
         - cell /\d+/
       - button /View details for \d+\.\d+\.0\.0/:
         - cell /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
+        - cell /\d+ \/ \d+/
         - cell /\d+/
   - heading "Hosts Needing Attention" [level=2]
   - text: 3 shown
