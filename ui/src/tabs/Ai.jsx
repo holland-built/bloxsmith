@@ -39,11 +39,14 @@ function Message({ item }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-copy whitespace-pre-wrap">
+        {/* Said on every answer, so model prose is never read as a measured
+            figure. The facts under it are the server's, and say so. */}
+        <p className="text-note text-muted mb-1">AI-generated</p>
         {item.text}
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {item.suggestions.map((sg, i) => (
-              <span key={i} className="text-note px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
+              <span key={i} className="text-note px-2 py-0.5 rounded-control border border-border text-muted">{sg}</span>
             ))}
           </div>
         )}
@@ -157,7 +160,7 @@ function ChatCard({ panelId }) {
   const ask = (sg) => submit(sg)
 
   return (
-    <Card panelId={panelId} title="Ask AI" span={6}>
+    <Card panelId={panelId} title="Ask AI" span={4}>
       <div role="log" aria-live="polite" className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
         {items.length === 0 ? (
           <Empty>Ask a question or pick a suggestion below</Empty>
@@ -169,7 +172,7 @@ function ChatCard({ panelId }) {
         {SUGGESTIONS.map((sg, i) => (
           <button
             key={i}
-            className="text-note px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
+            className="text-note px-2 py-1 rounded-control border border-border text-muted hover:text-field-txt hover:border-border-hover"
             onClick={() => ask(sg)}
           >
             {sg}
@@ -336,7 +339,7 @@ function LookupCard({ panelId }) {
   }
 
   return (
-    <Card panelId={panelId} title="Threat lookup" span={6}>
+    <Card panelId={panelId} title="Threat lookup" span={2}>
       <div className="flex gap-2 mb-3">
         <input
           className={`${inputCls} flex-1 text-copy`}
@@ -422,9 +425,12 @@ function EgressNotice() {
 
 // ---------- main ----------
 
+// Layout "B · Desk": asking leads, wide and filled; Threat lookup sits beside
+// it, narrower and open (index.css, [data-panel-id="ai-threat-lookup"]), so
+// both are usable at once and the lookup never reads as the model's evidence.
 export default function Ai() {
   return (
-    <div className="max-w-[860px] mx-auto p-5">
+    <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">AI Assistant</h1>
       <TabIntro anchor="ai">
         Ask questions about your own network in plain language — answers show the tools used, so you can check
