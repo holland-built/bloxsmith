@@ -4,7 +4,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 
 Tabs fall into two groups:
 
-- **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit. They poll and display; they never write to Infoblox. Assets is the one exception to the polling half: it re-reads only when you ask it to, for the reason given in its own section.
+- **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They poll and display; they never write to Infoblox. Assets is the one exception to the polling half: it re-reads only when you ask it to, for the reason given in its own section.
 - **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
 
 One property holds across almost every panel on every tab: a feed that failed to load is never rendered the same way as a feed that loaded and came back empty. Where a call errors, times out, or the upstream returns a payload the panel can't trust, the panel says so — "feed unavailable," a chain-verify warning, a fetch-error line — instead of falling back to the same blank state a healthy, empty tenant would produce. If a panel shows no rows, that now means there genuinely are none, not that something failed silently on the way to the screen.
@@ -39,6 +39,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [Assets](#assets) | no | Every discovered asset, searchable and paged |
 | [Incidents](#incidents) | no | SOC triage queue |
 | [Audit](#audit) | no | Who changed what |
+| [Changes](#changes) | no | What changed in the last 24 hours |
 | [Provision](#provision) | **yes** | Build subnets, sites, demo estates |
 | [Self-Service](#self-service) | **yes** | Grab an address, add a DNS record, edit or remove either |
 | [Editor](#editor) | **yes** | Direct create/update/delete on objects |
@@ -174,6 +175,17 @@ Who changed what.
 - **CSP Portal Audit** — activity in the Infoblox portal itself, from the CSP audit API. External changes show up here, not in the Bloxsmith log. It loads the most recent activity as soon as you open the tab; the search box filters that same feed rather than gating it behind a search.
 
 Two separate logs on purpose: one is what this tool did, the other is what everything else did.
+
+---
+
+## Changes
+
+What changed in the portal in the last 24 hours. It reads the same CSP audit feed as the Audit tab's portal panel, limited to one day and grouped by what was touched.
+
+- **Notability**: four questions about the day: deletions, failed changes, changes made out of hours, and new actors. Each one is answered, marked None, or marked Unknown when the data cannot answer it. An actor counts as new if it made changes in the recent half of the window and none in the earlier half; there is no history before the window to check.
+- **Changed objects**: the changes grouped by the object they touched, newest group first. Deletions and failures are shown in red.
+
+It shows at most the 500 most recent events in the last 24 hours. The portal returns no more than that in one request, so on a busy day the oldest changes in the window are not shown, and the page says so when that happens.
 
 ---
 
