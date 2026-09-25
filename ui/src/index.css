@@ -616,3 +616,14 @@ html[data-theme="light"] { color-scheme: light; }
    underline to stay distinguishable without relying on colour (WCAG 1.4.1). */
 :root:not([data-theme="light"]) a.text-link,
 :root:not([data-theme="light"]) .text-link a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Ask: the lookup beside the chat ----------
+   Threat lookup is an independent search, not the model's evidence, so it sits
+   open beside the filled Ask AI panel: no fill, one rule on its left edge.
+   Border widths are unchanged, so its measured width does not move. */
+[data-panel-id="ai-threat-lookup"] {
+  background: transparent;
+  border-color: transparent;
+  border-left-color: var(--color-border);
+  border-radius: 0;
+}
