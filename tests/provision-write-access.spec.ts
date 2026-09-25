@@ -54,11 +54,12 @@ test('an admin switches the tenant to read-write after a confirm step, and the n
   await page.getByRole('button', { name: 'Switch to read-write' }).click();
   // Nothing is sent until the operator confirms.
   expect(posted).toEqual([]);
-  await expect(page.getByText(/create and delete real DNS zones, subnets and address blocks in Baseline Tenant/)).toBeVisible();
+  await expect(page.getByText(/create and delete real DNS zones, subnets, address blocks, DHCP ranges and\s+host records in Baseline Tenant/)).toBeVisible();
   await page.getByRole('button', { name: 'Yes, allow changes' }).click();
 
-  // No tenant id is sent: the server resolves the tenant it enforces against.
-  expect(posted).toEqual([{ writable: true }]);
+  // The tenant named on screen is the one sent, so a tenant switch in another
+  // tab cannot turn this into a grant for a different tenant.
+  expect(posted).toEqual([{ writable: true, id: 'baseline-tenant/-' }]);
   await expect(page.getByText('Baseline Tenant is read-only.')).toHaveCount(0);
 });
 

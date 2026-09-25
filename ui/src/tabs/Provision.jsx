@@ -56,11 +56,13 @@ function WriteAccessBanner({ isAdmin }) {
   }
   if (!wt.readOnly) return null
 
-  // No id is sent: the server resolves the same identity it enforces against,
-  // so this cannot grant a different tenant than the one named here.
+  // The id of the tenant NAMED on screen is sent, not left for the server to
+  // resolve: the active tenant is process-wide, and another tab could switch it
+  // while this confirm is open. Without the id the server would mark whichever
+  // tenant is active by then, not the one the operator just agreed to.
   const allow = async () => {
     setBusy(true); setErr('')
-    const r = await authFetch('/api/vault/tenant-writable', { method: 'POST', body: JSON.stringify({ writable: true }) })
+    const r = await authFetch('/api/vault/tenant-writable', { method: 'POST', body: JSON.stringify({ writable: true, id: wt.data.tenant }) })
     setBusy(false)
     if (r.ok && r.data?.ok) { setConfirming(false); wt.reload() }
     else setErr(r.data?.error || 'Could not change the write permission.')
@@ -81,7 +83,8 @@ function WriteAccessBanner({ isAdmin }) {
       ) : (
         <div className="mt-2">
           <p className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
-            This lets Apply and teardown create and delete real DNS zones, subnets and address blocks in {wt.name}.
+            This lets Apply and teardown create and delete real DNS zones, subnets, address blocks, DHCP ranges and
+            host records in {wt.name}.
             Only do this on a tenant you own. You can switch it back in Settings.
           </p>
           <div className="flex gap-2">
