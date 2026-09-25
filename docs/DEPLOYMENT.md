@@ -966,7 +966,7 @@ has to be created in**:
 ```
 export:  site teardown of "ams"
 written: 2026-07-30T09:15:22Z by bloxsmith 3.31.0
-tenant:  Infoblox Sales (b84022133fb7/-)
+tenant:  Example Corp (a1b2c3d4e5f6/-)
 
 Re-create in this order (each needs the ones above it):
    1. ip_space      default   (prerequisite — teardown did not delete this)
