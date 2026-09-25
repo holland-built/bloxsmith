@@ -1,18 +1,6 @@
 - main "Security tab":
   - heading "Security" [level=1]
   - button "Arrange panels"
-  - heading "Threat Events — by Severity" [level=2]
-  - text: 2 events
-  - 'button "About: Threat Events — by Severity"': "About: ⓘ"
-  - button "Hide Threat Events — by Severity": Hide ✕
-  - button "Move Threat Events — by Severity": Move ⠿
-  - text: critical 1 high 2 medium 3 low 4
-  - application: /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
-  - heading "Response Summary" [level=2]
-  - 'button "About: Response Summary"': "About: ⓘ"
-  - button "Hide Response Summary": Hide ✕
-  - button "Move Response Summary": Move ⠿
-  - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
   - heading "Triage Inbox" [level=2]
   - button "all"
   - button "critical"
@@ -55,12 +43,49 @@
         - cell "watch.baseline.example"
         - cell "LOG"
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+  - heading "Response Summary" [level=2]
+  - 'button "About: Response Summary"': "About: ⓘ"
+  - button "Hide Response Summary": Hide ✕
+  - button "Move Response Summary": Move ⠿
+  - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
+  - heading "Threat Events — by Severity" [level=2]
+  - text: 2 events
+  - 'button "About: Threat Events — by Severity"': "About: ⓘ"
+  - button "Hide Threat Events — by Severity": Hide ✕
+  - button "Move Threat Events — by Severity": Move ⠿
+  - text: critical 1 high 2 medium 3 low 4
+  - application: /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
   - heading "Security Inventory" [level=2]
   - text: what is configured
   - 'button "About: Security Inventory"': "About: ⓘ"
   - button "Hide Security Inventory": Hide ✕
   - button "Move Security Inventory": Move ⠿
   - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
+  - heading "SOC Insights" [level=2]
+  - text: "1"
+  - 'button "About: SOC Insights"': "About: ⓘ"
+  - button "Hide SOC Insights": Hide ✕
+  - button "Move SOC Insights": Move ⠿
+  - table:
+    - rowgroup:
+      - row "Threat Severity Status Events Last Seen":
+        - columnheader "Threat":
+          - button "Threat"
+        - columnheader "Severity":
+          - button "Severity"
+        - columnheader "Status":
+          - button "Status"
+        - columnheader "Events":
+          - button "Events"
+        - columnheader "Last Seen":
+          - button "Last Seen"
+    - rowgroup:
+      - row /Baseline Insight HIGH Active 9 1\/1\/\d+/:
+        - cell "Baseline Insight"
+        - cell "HIGH"
+        - cell "Active"
+        - cell "9"
+        - cell /1\/1\/\d+/
   - heading "Lookalike Domains" [level=2]
   - text: 1 detected
   - 'button "About: Lookalike Domains"': "About: ⓘ"
@@ -80,6 +105,29 @@
         - cell "baselíne.example"
         - cell "baseline.example"
         - cell "yes"
+  - heading "Axur Supplier Risk" [level=2]
+  - text: 9 credentials · 2 suppliers
+  - 'button "About: Axur Supplier Risk"': "About: ⓘ"
+  - button "Hide Axur Supplier Risk": Hide ✕
+  - button "Move Axur Supplier Risk": Move ⠿
+  - table:
+    - rowgroup:
+      - row "Supplier Credentials exposed Types affected":
+        - columnheader "Supplier":
+          - button "Supplier"
+        - columnheader "Credentials exposed":
+          - button "Credentials exposed"
+        - columnheader "Types affected":
+          - button "Types affected"
+    - rowgroup:
+      - row "baseline-supplier-a 7 3":
+        - cell "baseline-supplier-a"
+        - cell "7"
+        - cell "3"
+      - row "baseline-supplier-b 2 1":
+        - cell "baseline-supplier-b"
+        - cell "2"
+        - cell "1"
   - heading "CTEM Exposure" [level=2]
   - 'button "About: CTEM Exposure"': "About: ⓘ"
   - button "Hide CTEM Exposure": Hide ✕
@@ -117,28 +165,3 @@
   - button "Move Threat Feed Activity": Move ⠿
   - text: /\d+ Blocked 0 Allowed/
   - application: /Dec \d+ Dec \d+/
-  - heading "SOC Insights" [level=2]
-  - text: "1"
-  - 'button "About: SOC Insights"': "About: ⓘ"
-  - button "Hide SOC Insights": Hide ✕
-  - button "Move SOC Insights": Move ⠿
-  - table:
-    - rowgroup:
-      - row "Threat Severity Status Events Last Seen":
-        - columnheader "Threat":
-          - button "Threat"
-        - columnheader "Severity":
-          - button "Severity"
-        - columnheader "Status":
-          - button "Status"
-        - columnheader "Events":
-          - button "Events"
-        - columnheader "Last Seen":
-          - button "Last Seen"
-    - rowgroup:
-      - row /Baseline Insight HIGH Active 9 1\/1\/\d+/:
-        - cell "Baseline Insight"
-        - cell "HIGH"
-        - cell "Active"
-        - cell "9"
-        - cell /1\/1\/\d+/

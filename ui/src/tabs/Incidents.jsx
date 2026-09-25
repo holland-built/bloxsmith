@@ -126,14 +126,10 @@ export default function Incidents() {
   }
 
   return (
-    <div className="w-full px-6 py-5">
+    <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid layoutKey="incidents">
         <CategoryChips panelId="incidents-categories" categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
-        {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
-            different Card on its error branch, and both are the same panel — one
-            literal here keeps the id unique and both branches attributed. */}
-        <SeverityKpis panelId="incidents-severity" signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
         <IncidentsTable
           panelId="incidents-triage"
           signals={signals}
@@ -149,6 +145,10 @@ export default function Incidents() {
           onToggleAck={toggleAck}
           onClearAcks={() => setAcks({})}
         />
+        {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
+            different Card on its error branch, and both are the same panel — one
+            literal here keeps the id unique and both branches attributed. */}
+        <SeverityKpis panelId="incidents-severity" signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
         <SocQueue
           panelId="incidents-soc-queue"
           rows={actionsRows}

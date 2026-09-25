@@ -1,12 +1,6 @@
 - main "Audit tab":
   - heading "Audit" [level=1]
   - button "Arrange panels"
-  - heading "Activity Summary" [level=2]
-  - text: 5 recorded events
-  - 'button "About: Activity Summary"': "About: ⓘ"
-  - button "Hide Activity Summary": Hide ✕
-  - button "Move Activity Summary": Move ⠿
-  - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
   - textbox "Filter audit entries":
@@ -61,6 +55,12 @@
         - cell "baseline-operator"
         - cell "update-apply"
         - cell "from=v0.0.0-baseline"
+  - heading "Activity Summary" [level=2]
+  - text: 5 recorded events
+  - 'button "About: Activity Summary"': "About: ⓘ"
+  - button "Hide Activity Summary": Hide ✕
+  - button "Move Activity Summary": Move ⠿
+  - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
   - textbox "Search user or resource":

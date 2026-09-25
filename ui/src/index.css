@@ -327,6 +327,29 @@ html[data-density="compact"] {
   --sp-cell-y: 0.25rem;
 }
 
+/* ---------- record layout: the Risk tabs ----------
+   Security, Incidents, Audit and Changes are where the operator acts (ack,
+   block, load older), so each leads with its working table and runs dense and
+   square: the compact spacing above, no corner radius. The lead table sits on
+   the page under one rule instead of in a filled box. Border WIDTHS are left
+   alone so no panel's measured width moves; only colours change. */
+[data-layout="record"] {
+  --sp-card-pad: 12px;
+  --sp-grid-gap: 0.5rem;
+  --sp-cell-y: 0.25rem;
+  --radius-surface: 0px;
+}
+[data-layout="record"] :is(
+  [data-panel-id="security-triage-inbox"],
+  [data-panel-id="incidents-triage"],
+  [data-panel-id="audit-log"],
+  [data-panel-id="changes-changed-objects"]
+) {
+  background: transparent;
+  border-color: transparent;
+  border-top-color: var(--color-border-hover);
+}
+
 /* ---------- the drag ghost's own padding ----------
 
    Deliberately OUTSIDE both blocks above, so it does not move with density.
