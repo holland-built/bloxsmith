@@ -105,15 +105,40 @@ function WriteAccessBanner({ isAdmin }) {
   )
 }
 
-export default function Provision() {
-  const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
-  // Read through authFetch, not useApi: the server answers "admin" only when
-  // X-Auth-Token matches DASHBOARD_TOKEN, and useApi sends no token, so on a
-  // token deployment an admin read as "viewer" and lost the admin controls.
+// useRole reads /api/whoami through authFetch, not useApi. The server answers
+// "admin" only when X-Auth-Token matches DASHBOARD_TOKEN, and useApi sends no
+// token, so on a token deployment an admin read as "viewer" and lost the admin
+// controls. It reads again when the token changes in Settings (the sheet opens
+// over this tab), and retries a failed read instead of staying "viewer".
+function useRole() {
   const [role, setRole] = useState('viewer')
   useEffect(() => {
-    authFetch('/api/whoami', { cache: 'no-store' }).then((r) => { if (r.ok && r.data?.role) setRole(r.data.role) })
+    let alive = true
+    let seq = 0
+    let timer
+    const load = async () => {
+      clearTimeout(timer)
+      const mine = ++seq
+      const r = await authFetch('/api/whoami', { cache: 'no-store' })
+      // A token typed one key at a time fires one read per key; keep the newest.
+      if (!alive || mine !== seq) return
+      if (r.ok && r.data?.role) setRole(r.data.role)
+      else timer = setTimeout(load, 5000)
+    }
+    load()
+    window.addEventListener('bx:token-changed', load)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+      window.removeEventListener('bx:token-changed', load)
+    }
   }, [])
+  return role
+}
+
+export default function Provision() {
+  const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
+  const role = useRole()
   const isAdmin = role === 'admin'
   const writeTarget = useWriteTarget()
 

@@ -149,6 +149,8 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     setDashToken(v)
     if (v) localStorage.setItem('dashToken', v)
     else localStorage.removeItem('dashToken')
+    // Provision reads the caller's role with this token; tell it to read again.
+    window.dispatchEvent(new Event('bx:token-changed'))
   }
 
   const setActive = async (id) => {
