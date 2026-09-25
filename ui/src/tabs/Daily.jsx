@@ -50,6 +50,10 @@ export default function Daily() {
   }
   // When this page last received /api/data, not the time on the clock: a
   // stalled poll must not keep claiming the figures are fresh.
+  // The whole refresh failed and useApi is still holding the previous read.
+  // Not the same as a slice reporting 'error': the backend can send current
+  // rows for a slice it only read in part, and those are not old.
+  const stale = !!data.error && !!data.data
   const asOf = useMemo(() => (data.data ? new Date() : null), [data.data])
 
   return (
@@ -67,9 +71,9 @@ export default function Daily() {
       <CardGrid layoutKey="daily" className="gap-x-8! gap-y-6!">
         <IssueKpis panelId="daily-open-issues" subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
         <SecurityToday panelId="daily-security-today" sec={sec} />
-        <TopCapacityRisks panelId="daily-top-capacity-risks" subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
-        <HostsAttention panelId="daily-hosts-attention" hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} />
-        <DnsZoneIssues panelId="daily-dns-zone-issues" zones={zones} loading={data.loading} zonesStatus={meta.zones} />
+        <TopCapacityRisks panelId="daily-top-capacity-risks" subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} stale={stale} />
+        <HostsAttention panelId="daily-hosts-attention" hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} stale={stale} />
+        <DnsZoneIssues panelId="daily-dns-zone-issues" zones={zones} loading={data.loading} zonesStatus={meta.zones} stale={stale} />
       </CardGrid>
     </div>
   )
@@ -115,7 +119,7 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
       detail: `${at90.toLocaleString()} of them are at 90% or more. /29–/32 links are left out.`,
     },
     {
-      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=error', status: meta.hosts,
+      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=not-online', status: meta.hosts,
       detail: `${hosts.length.toLocaleString()} hosts loaded.` +
         (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
     },
@@ -197,7 +201,7 @@ function SecurityToday({ sec, panelId }) {
       panelId={panelId}
       title="Security Today"
       className={FILLED}
-      right={<span className="text-note text-muted">{secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
+      right={<span className="text-note text-muted">{sec.loading || secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
     >
       {sec.loading ? (
         <Skeleton h={160} />
@@ -224,7 +228,14 @@ function SecurityToday({ sec, panelId }) {
 
 // ---------- top capacity risks ----------
 
-function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
+// A refresh that fails after a good one leaves the last rows in place (useApi
+// keeps its data on error). Those rows are still worth seeing, but not as if
+// they were current: Open Issues already says "unavailable" for the same feed.
+function StaleNote() {
+  return <p className="text-note text-warn mb-2">The last refresh failed. These rows are from the previous read.</p>
+}
+
+function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
   const feedDead = subnetsStatus === 'error' && subnets.length === 0
   const rows = [...subnets]
     .filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
@@ -258,6 +269,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
 
   return (
     <Card span={2} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-note text-muted">top 10</span>} className={OPEN}>
+      {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -278,7 +290,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
 
 // ---------- hosts needing attention ----------
 
-function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
+function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
   const { COLORS } = useChartTheme()
   const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
   const feedDead = hostsStatus === 'error' && hosts.length === 0
@@ -307,8 +319,9 @@ function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
       title="Hosts Needing Attention"
       className={OPEN}
       // "0 shown" off a dead feed reads as "nothing needs attention".
-      right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} shown</span>}
+      right={<span className="text-note text-muted">{loading || feedDead ? '—' : rows.length} shown</span>}
     >
+      {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -320,8 +333,8 @@ function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
           rows={rows}
           columns={columns}
           limit={10}
-          viewAllHref="#infra?status=error"
-          onRowClick={() => { location.hash = 'infra?status=error' }}
+          viewAllHref="#infra?status=not-online"
+          onRowClick={() => { location.hash = 'infra?status=not-online' }}
         />
       )}
     </Card>
@@ -330,7 +343,7 @@ function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
 
 // ---------- DNS zone issues ----------
 
-function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
+function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
   const rows = zones
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
     .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
@@ -359,8 +372,9 @@ function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
       title="DNS Zone Issues"
       className={OPEN}
       // "0 zones" off a dead feed reads as a clean estate.
-      right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} zones</span>}
+      right={<span className="text-note text-muted">{loading || feedDead ? '—' : rows.length} zones</span>}
     >
+      {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
         <Skeleton h={160} />
       ) : feedDead ? (

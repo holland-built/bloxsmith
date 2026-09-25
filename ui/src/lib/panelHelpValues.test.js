@@ -547,7 +547,7 @@ const CLAIMS = [
     file: DAILY,
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(sec\.data, 'events'\)/, expect: 'the panel computes a scope note from the payload' },
-      { re: /\{secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
+      { re: /\{sec\.loading \|\| secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
       // THE CLAIM IS THAT THE NOTE IS RENDERED. Not what size it is, not what
       // colour. This proof was re-pointed three times in one week — at
       // text-[11px], then text-caption, then text-note — every time the type
@@ -561,7 +561,7 @@ const CLAIMS = [
     panel: 'daily-security-today',
     says: /A dash means the feed could not be read/,
     file: DAILY,
-    proofs: [{ re: /\{secDead \? '— events'/, expect: 'a dead feed renders a dash rather than a count' }],
+    proofs: [{ re: /\{sec\.loading \|\| secDead \? '— events'/, expect: 'a dead feed renders a dash rather than a count' }],
   },
   {
     panel: 'daily-security-today',
@@ -887,7 +887,7 @@ const CLAIMS = [
     file: DAILY,
     proofs: [
       { re: /const feedDead = hostsStatus === 'error' && hosts\.length === 0/, expect: 'a dead hosts feed with nothing loaded is what "could not be read" means here' },
-      { re: /\{feedDead \? '—' : rows\.length\} shown/, expect: 'the header count is an em dash, not 0, when the feed is dead' },
+      { re: /\{loading \|\| feedDead \? '—' : rows\.length\} shown/, expect: 'the header count is an em dash, not 0, when the feed is dead' },
     ],
   },
   {

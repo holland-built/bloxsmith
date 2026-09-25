@@ -351,7 +351,11 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
     return hosts.filter((h) => {
-      if (statusFilter && statusBucket(h.status) !== statusFilter) return false
+      // 'not-online' is Daily's "Hosts Not Online": every host that is not
+      // online or active, the same rule as the count that links here.
+      if (statusFilter === 'not-online') {
+        if (/online|active/i.test(h.status || '')) return false
+      } else if (statusFilter && statusBucket(h.status) !== statusFilter) return false
       if (type && h.type !== type) return false
       if (!q) return true
       return [h.name, h.ip, h.status, h.type].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
@@ -400,7 +404,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
               className={`text-note font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
-              status: {statusFilter} <span aria-hidden="true">✕</span>
+              status: {statusFilter.replace('-', ' ')} <span aria-hidden="true">✕</span>
             </button>
           </span>
         ) : 'Host Inventory'
