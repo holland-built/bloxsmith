@@ -100,3 +100,50 @@ test('a writable tenant shows no notice', async ({ page }) => {
   await page.goto('/#provision');
   await expect(page.getByText(/is read-only/)).toHaveCount(0);
 });
+
+test('on a DASHBOARD_TOKEN deployment the admin is read as admin, because whoami carries the token', async ({ page }) => {
+  // The server answers "admin" only when X-Auth-Token matches DASHBOARD_TOKEN
+  // (httpx.ResolveRole). Provision used to read whoami without the token, so an
+  // admin on a token deployment showed as VIEWER and lost the switch.
+  await page.addInitScript(() => localStorage.setItem('dashToken', 's3cret'));
+  await page.route('**/api/vault/write-target*', (route) => json(route, READ_ONLY));
+  await page.route('**/api/whoami*', (route) => {
+    const admin = route.request().headers()['x-auth-token'] === 's3cret';
+    return json(route, { actor: 'baseline', role: admin ? 'admin' : 'viewer', tenant: 'baseline-tenant', token_auth: admin });
+  });
+  await page.goto('/#provision');
+
+  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Switch to read-write' })).toBeVisible();
+});
+
+test('typing the token in Settings turns the viewer badge into admin without a reload', async ({ page }) => {
+  await page.route('**/api/vault/write-target*', (route) => json(route, READ_ONLY));
+  await page.route('**/api/whoami*', (route) => {
+    const admin = route.request().headers()['x-auth-token'] === 's3cret';
+    return json(route, { actor: 'baseline', role: admin ? 'admin' : 'viewer', tenant: 'baseline-tenant', token_auth: admin });
+  });
+  await page.goto('/#provision');
+  await expect(page.getByText('VIEWER', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Dashboard token').fill('s3cret');
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Switch to read-write' })).toBeVisible();
+});
+
+test('a failed whoami read is retried instead of leaving an admin as viewer', async ({ page }) => {
+  let calls = 0;
+  await page.route('**/api/vault/write-target*', (route) => json(route, READ_ONLY));
+  await page.route('**/api/whoami*', (route) => {
+    calls += 1;
+    if (calls === 1) return json(route, { error: 'upstream' }, 502);
+    return json(route, { actor: 'baseline', role: 'admin', tenant: 'baseline-tenant', token_auth: false });
+  });
+  await page.goto('/#provision');
+
+  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible({ timeout: 10_000 });
+  expect(calls).toBeGreaterThanOrEqual(2);
+});
