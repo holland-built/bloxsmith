@@ -58,6 +58,8 @@ Every tab rearranges, and each one remembers its own arrangement — moving a pa
 
 Two tabs are quieter than the rest, and deliberately so. **Editor** draws a single panel and always will. **Drift** draws one until you run a check, and a second one appears with the result. A lone panel has nowhere to move to, so on those tabs there is no ⠿ handle and no **Arrange panels** button until a second panel is actually there — an affordance for a gesture that cannot do anything is a lie. Resize and ✕ still work on a single panel, and if you do take that one panel off the page, the **Arrange panels** button appears so you can bring it straight back.
 
+Provision, Self-Service, Editor and Drift also have an **On this page** list on the left, on wide screens. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked in the list. The list follows the page as it changes, for example when you switch Provision between Subnet, Full site and Seed demo.
+
 Panels cannot be created or deleted: the set on each tab is fixed and ships with the app, and ✕ only takes one off the page. A panel that is missing without you having hidden it is missing because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
 
 ---
@@ -111,10 +113,10 @@ Everything DNS-side, polled every 30 seconds.
 
 ## Security
 
-Threat and exposure posture. Pulls from several CSP feeds, so panels can load at different speeds.
+Threat and exposure posture. Pulls from several CSP feeds, so panels can load at different speeds. The Triage Inbox comes first, because that is where you act.
 
-- **Threat Events — by Severity** and **Threat Feed Activity**.
 - **Triage Inbox** — events waiting on you.
+- **Threat Events — by Severity** and **Threat Feed Activity**.
 - **Lookalike Domains** — domains impersonating your brand. Set your brand domain from the header.
 - **Axur Supplier Risk**: problems Axur found in your suppliers, worst first. One row per supplier.
 - **CTEM Exposure**, **Exposures**, **Exposed Surface**, **CTEM Assets** — external attack surface.
@@ -165,15 +167,16 @@ The SOC queue, polled every 20 seconds.
 
 - **Categories** — click a category to filter the triage list.
 - **Triage** — the incident list itself; click a row for detail.
+- **Severity Counts**: how many of the loaded incidents are critical, high, medium and low.
 - **SOC Queue** — Infoblox IQ Actions, with per-action detail.
 - **Action Volume** — actions per day.
 
 ## Audit
 
-Who changed what.
+Who changed what. The Audit Log comes first, with the Activity Summary beside it on wide screens.
 
-- **Activity Summary** — recent event counts.
 - **Audit Log** — actions taken *through Bloxsmith*, from the local audit trail. Each entry is hashed to the one before it, signed with an HMAC under a key kept outside the log's directory, and covered by a separately sealed count of how many entries the chain should hold. The panel shows the verdict of that check: chain intact, chain tampered (with the entry where it broke **and why** — a forged entry, a truncated tail, an altered seal), or could not be verified (**with the reason** — an unreadable file, or a key this process does not hold). A verification that fails to run reads as "could not be verified," never as "intact" — a broken check must not look like a clean bill of health. A lost or rotated key is could-not-verify, never tampered: the chain may be perfectly intact, we just cannot check it, and saying otherwise would be an invented accusation. What the key does and does not protect against is documented in [DEPLOYMENT.md](DEPLOYMENT.md#the-audit-chains-key). The panel loads the newest 2,000 entries. When the log is longer, a line says how many are shown, and **Load older** fetches the page before them. The filter box searches only what has been loaded.
+- **Activity Summary** — recent event counts.
 - **CSP Portal Audit** — activity in the Infoblox portal itself, from the CSP audit API. External changes show up here, not in the Bloxsmith log. It loads the most recent activity as soon as you open the tab; the search box filters that same feed rather than gating it behind a search.
 
 Two separate logs on purpose: one is what this tool did, the other is what everything else did.
@@ -302,13 +305,13 @@ Drift never fixes anything. To close a gap, re-provision the site (missing) or e
 
 ## AI
 
-**Reads, plus one write action.** Two independent panels.
+**Reads, plus one write action.** Two independent panels, side by side on wide screens: Ask AI on the left and Threat lookup beside it. On a phone they stack.
 
 ### Ask AI
 
 Natural-language questions about your own data — "which subnets are nearly full?", "what changed in the last 24 hours?". Suggested questions are one click.
 
-Answers show the tools the model called underneath, so you can check where a number came from. Requires an LLM key with tool-calling; see the AI query box section in the [README](../README.md). Without one, this panel returns an error and everything else in the dashboard still works.
+Each answer is labelled **AI-generated**, and shows the tools the model called underneath, so you can check where a number came from. Requires an LLM key with tool-calling; see the AI query box section in the [README](../README.md). Without one, this panel returns an error and everything else in the dashboard still works.
 
 If the vault is locked, queries return "Vault locked — unlock to query."
 
