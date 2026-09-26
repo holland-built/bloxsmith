@@ -53,6 +53,14 @@ Files under `go/` that are not `*.go`, for example `go/templates/**/*.yaml`, are
 watch lists and are safe to edit in the main checkout. So are config files like
 `.github/dependabot.yml`.
 
+`docs/TABS.md` is outside both watch lists too, but not outside the build.
+`ui/src/components/DocsPanel.jsx` imports it into the in-app help, so editing it changes the UI
+bundle. `:8090` keeps showing the old help text until something else triggers a rebuild, and a
+docs-only PR fails CI's `build` check until `go/web` is rebuilt from `ui/dist`, as #243 did.
+Run `scripts/needs-tag.sh` after that rebuild is committed, not before: it skips `docs/*` and
+`*.md`, so on the doc edit alone it says `skip`, and only the rebuilt `go/web` makes it say
+`tag`. Customers see the new help text only once it is released.
+
 ## E2E_SKIP_LIVE=1 is mandatory
 
 Worktree or not:
