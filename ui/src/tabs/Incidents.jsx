@@ -183,7 +183,9 @@ function categorySplit(category, count, signals, truncated, COLORS) {
     n[sevMeta(s.severity, COLORS).key]++
     total++
   }
-  if (total !== count) return null
+  // Severity Counts has no cell for an unknown severity, so a split naming
+  // one would count rows the panel beside it does not.
+  if (total !== count || n.unknown) return null
   return Object.keys(n)
     .filter((k) => n[k])
     .map((k) => `${n[k].toLocaleString()} ${k}`)
@@ -225,7 +227,9 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-note border-border bg-field"
                 style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
-                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
+                {/* Hidden from screen readers: the dot is the worst severity, and
+                    read first it would say "Critical" ahead of the split. */}
+                <i aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
                 <span className="font-mono text-field-txt">{count.toLocaleString()}</span>
                 <span className="text-muted">{c.category}</span>
                 <span className="text-muted">· {split ?? `worst: ${m.label.toLowerCase()}`}</span>

@@ -50,3 +50,18 @@ test('when the list is capped, the chip names the worst severity instead of a sp
   await expect(chip(page)).toContainText('worst: critical');
   await expect(chip(page)).not.toContainText('1 critical');
 });
+
+test('a row the Severity panel does not count (unknown severity) makes the chip name the worst instead', async ({ page }) => {
+  const rows = [sig('subnet-utilization', 'crit', 1), sig('subnet-utilization', 'mystery', 2)];
+  await page.route('**/api/incidents', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(incidents({ count: 2, signals: rows, truncated: false })) }));
+  await page.goto('/#incidents');
+  await expect(chip(page)).toContainText('worst: critical');
+  await expect(chip(page)).not.toContainText('unknown');
+});
+
+test('a screen reader hears the split, not the old worst-severity word first', async ({ page }) => {
+  const rows = [sig('subnet-utilization', 'crit', 1), sig('subnet-utilization', 'crit', 2), sig('subnet-utilization', 'warn', 3)];
+  await page.route('**/api/incidents', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(incidents({ count: 3, signals: rows, truncated: false })) }));
+  await page.goto('/#incidents');
+  await expect(chip(page)).toHaveAccessibleName('3 subnet-utilization · 2 critical, 1 medium');
+});
