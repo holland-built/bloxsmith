@@ -6,7 +6,7 @@
   - 'button "About: Categories"': "About: ⓘ"
   - button "Hide Categories": Hide ✕
   - button "Move Categories": Move ⠿
-  - button "High High severity 2 capacity"
+  - 'button "2 capacity · worst: high"'
   - heading "Triage" [level=2]
   - textbox "Filter incidents":
     - /placeholder: Filter…

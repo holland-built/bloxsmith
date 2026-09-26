@@ -129,7 +129,7 @@ export default function Incidents() {
     <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid layoutKey="incidents">
-        <CategoryChips panelId="incidents-categories" categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
+        <CategoryChips panelId="incidents-categories" categories={categories} signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         <IncidentsTable
           panelId="incidents-triage"
           signals={signals}
@@ -168,7 +168,31 @@ export default function Incidents() {
 
 // ---------- category chips ----------
 
-function CategoryChips({ categories, loading, error, category, onCategory, degraded, meta = {}, panelId }) {
+// How a category's total splits by severity, counted from the same rows the
+// Severity panel counts. The chip used to show only its worst severity beside
+// the total, so "C 1,745" read as 1,745 critical when the Severity panel said
+// 953. Null when the loaded rows cannot account for the whole total (the
+// server capped the list, or the two disagree): a split that does not add up
+// to the number beside it would be a second disagreement.
+function categorySplit(category, count, signals, truncated, COLORS) {
+  if (truncated) return null
+  const n = { critical: 0, high: 0, medium: 0, low: 0, unknown: 0 }
+  let total = 0
+  for (const s of signals) {
+    if (s.category !== category) continue
+    n[sevMeta(s.severity, COLORS).key]++
+    total++
+  }
+  // Severity Counts has no cell for an unknown severity, so a split naming
+  // one would count rows the panel beside it does not.
+  if (total !== count || n.unknown) return null
+  return Object.keys(n)
+    .filter((k) => n[k])
+    .map((k) => `${n[k].toLocaleString()} ${k}`)
+    .join(', ')
+}
+
+function CategoryChips({ categories, signals = [], truncated = false, loading, error, category, onCategory, degraded, meta = {}, panelId }) {
   const { COLORS } = useChartTheme()
   const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
@@ -194,6 +218,8 @@ function CategoryChips({ categories, loading, error, category, onCategory, degra
           {categories.map((c) => {
             const on = category === c.category
             const m = sevMeta(c.severity, COLORS)
+            const count = Number(c.count) || 0
+            const split = categorySplit(c.category, count, signals, truncated, COLORS)
             return (
               <button
                 key={c.category}
@@ -201,11 +227,12 @@ function CategoryChips({ categories, loading, error, category, onCategory, degra
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-note border-border bg-field"
                 style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
-                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
-                <span className="font-semibold" style={{ color: m.color }} aria-hidden="true">{m.label[0]}</span>
-                <span className="sr-only">{m.label} severity</span>
-                <span className="font-mono text-field-txt">{(Number(c.count) || 0).toLocaleString()}</span>
+                {/* Hidden from screen readers: the dot is the worst severity, and
+                    read first it would say "Critical" ahead of the split. */}
+                <i aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
+                <span className="font-mono text-field-txt">{count.toLocaleString()}</span>
                 <span className="text-muted">{c.category}</span>
+                <span className="text-muted">· {split ?? `worst: ${m.label.toLowerCase()}`}</span>
               </button>
             )
           })}
