@@ -254,15 +254,15 @@ export default function Editor() {
 
       <CardGrid layoutKey="editor">
         <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
-        <div className="flex flex-col gap-3">
-          <label className="text-note text-muted flex flex-col gap-1">
-            Object ID (leave blank to create new)
+        <div data-form-cols="" className="flex flex-col gap-3">
+          <label data-field="" className="text-note text-muted flex flex-col gap-1">
+            <span>Object ID (leave blank to create new)</span>
             <input className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
           </label>
 
           {spec.fields.map((f) => (
-            <label key={f.key} className="text-note text-muted flex flex-col gap-1">
-              {f.label}{f.required ? ' *' : ''}
+            <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">
+              <span>{f.label}{f.required ? ' *' : ''}</span>
               <input
                 className={inputCls}
                 type={f.kind === 'number' ? 'number' : 'text'}

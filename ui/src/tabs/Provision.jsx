@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses. /api/ipam/spaces
 // and /api/ipam/blocks answer 502 on an upstream failure and /api/templates
 // answers 500 — and `data?.spaces ?? []` collapses every one of those into the
@@ -410,8 +410,8 @@ function SubnetMode() {
     // a list naming only its own panels.
     <CardGrid layoutKey="provision-subnet">
       <Card key="provision-subnet-request" title="Request" panelId="provision-subnet-request" span={6}>
-        <div className="flex flex-col gap-3">
-          <Field label="Space">
+        <div data-form-cols="" className="flex flex-col gap-3">
+          <Field group label="Space">
             <FilterSelect
               label="Space"
               value={space}
@@ -420,12 +420,19 @@ function SubnetMode() {
               options={spaces.map((sp) => ({ value: sp.id, label: sp.name }))}
             />
           </Field>
-          <Field label="Block">
+          <Field group label="Block">
+            {/* Keyed on the space, so a search typed for one space's blocks is
+                cleared when the space changes. Disabled while the new space's
+                blocks load, and after that load fails: useApi keeps the last
+                list it had, which can be the previous space's, so it stays on
+                screen under the "may be out of date" warning but cannot be
+                picked from. */}
             <FilterSelect
+              key={space}
               label="Block"
               value={block}
               onChange={(v) => { setBlock(v); flow.markStale() }}
-              disabled={!space}
+              disabled={!space || blocksApi.loading || !!blocksApi.error}
               placeholder={blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
             />
@@ -519,8 +526,8 @@ function SiteMode({ isAdmin }) {
     // Its own key, for the reason spelled out on the subnet grid above.
     <CardGrid layoutKey="provision-site">
       <Card key="provision-site-request" title="Request" panelId="provision-site-request" span={6}>
-        <div className="flex flex-col gap-3">
-          <Field label="IP space (override)">
+        <div data-form-cols="" className="flex flex-col gap-3">
+          <Field group label="IP space (override)">
             <FilterSelect
               label="IP space"
               value={siteSpace}
@@ -620,7 +627,7 @@ function SiteMode({ isAdmin }) {
       )}
 
       <Card key="provision-site-teardown" title="Tear down this site" note="permanently deletes its provisioned objects" panelId="provision-site-teardown" span={6}>
-        <div className="flex flex-col gap-3">
+        <div data-form-cols="" className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type the site name to confirm">
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
@@ -714,7 +721,7 @@ function SeedMode({ isAdmin }) {
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
           library. Preview the plan before writing real objects — this creates a lot of them.
         </div>
-        <div className="flex flex-col gap-3">
+        <div data-form-cols="" className="flex flex-col gap-3">
           {['amer', 'emea', 'apac'].map((r) => (
             <CheckRow
               key={r}
@@ -723,7 +730,7 @@ function SeedMode({ isAdmin }) {
               label={r.toUpperCase()}
             />
           ))}
-          <Field label="IP space (override)">
+          <Field group label="IP space (override)">
             <FilterSelect
               label="IP space"
               value={seedSpace}
@@ -782,7 +789,7 @@ function SeedMode({ isAdmin }) {
       )}
 
       <Card key="provision-seed-teardown" title="Tear down demo" note={`permanently deletes every seed-created object in ${seedSpace || 'the default space'}`} panelId="provision-seed-teardown" span={6}>
-        <div className="flex flex-col gap-3">
+        <div data-form-cols="" className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type DELETE to confirm">
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
@@ -842,6 +849,8 @@ function SeedMode({ isAdmin }) {
 
 // ---------- shared form bits ----------
 
+const RESULTS_CAP = 50
+
 // A dropdown with a search box above it. A tenant can have hundreds of IP
 // spaces (801 on the live one, 2026-09-25), which made the plain list a long
 // scroll. Typing narrows the options; the list itself stays a native <select>,
@@ -851,20 +860,77 @@ function SeedMode({ isAdmin }) {
 // matches it, so narrowing the search never silently changes the selection.
 function FilterSelect({ label, value, onChange, options, placeholder, disabled }) {
   const [q, setQ] = useState('')
+  const inputRef = useRef(null)
+  const listRef = useRef(null)
   const needle = q.trim().toLowerCase()
   const shown = needle ? options.filter((o) => o.label.toLowerCase().includes(needle)) : options
   const chosen = value && !shown.some((o) => o.value === value) ? options.find((o) => o.value === value) : null
+  // The matches, shown as you type so nobody has to open the dropdown to see
+  // them. Capped for the page's sake; the dropdown below still holds every match.
+  const results = needle && !disabled ? shown.slice(0, RESULTS_CAP) : []
+  const pick = (v) => {
+    onChange(v)
+    setQ('')
+    // The list goes away with the search, so focus goes back to the box rather
+    // than falling to the page.
+    inputRef.current?.focus()
+  }
+  const buttons = () => [...(listRef.current?.querySelectorAll('button') ?? [])]
+  const clear = () => { setQ(''); inputRef.current?.focus() }
+  const onListKey = (e) => {
+    const all = buttons()
+    const i = all.indexOf(document.activeElement)
+    if (e.key === 'ArrowDown') { e.preventDefault(); all[Math.min(i + 1, all.length - 1)]?.focus() }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (i <= 0) inputRef.current?.focus()
+      else all[i - 1].focus()
+    }
+    else if (e.key === 'Escape') { e.preventDefault(); clear() }
+  }
   return (
     <div className="flex flex-col gap-1.5">
       <input
+        ref={inputRef}
         type="search"
         aria-label={`Search ${label}`}
         placeholder={`Type to search ${options.length.toLocaleString()} ${options.length === 1 ? 'option' : 'options'}`}
         className={inputCls}
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && results.length) { e.preventDefault(); buttons()[0]?.focus() }
+          else if (e.key === 'Enter') { e.preventDefault(); if (results.length) pick(results[0].value) }
+          else if (e.key === 'Escape' && q) { e.preventDefault(); clear() }
+        }}
         disabled={disabled || options.length === 0}
       />
+      {results.length > 0 && (
+        <ul ref={listRef} aria-label={`Matching ${label.toLowerCase()}`} onKeyDown={onListKey} className="flex flex-col max-h-[240px] overflow-y-auto rounded-control border border-border bg-field">
+          {results.map((o, i) => (
+            <li key={`${i}:${o.value}`}>
+              <button
+                type="button"
+                onClick={() => pick(o.value)}
+                aria-current={o.value === value ? 'true' : undefined}
+                className={`w-full text-left text-copy px-3 py-1.5 hover:bg-line focus-visible:bg-line focus-visible:outline-none ${o.value === value ? 'font-semibold text-txt' : 'text-field-txt'}`}
+              >
+                {o.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* Said out loud as the matches change, since a list appearing is silent.
+          Kept in the page with no search, only hidden, because a live region
+          that appears already holding its text is announced unreliably. */}
+      <span role="status" className={needle ? 'text-note text-dim' : 'sr-only'}>
+        {!needle ? '' : shown.length === 0
+          ? `No ${label.toLowerCase()} matches “${q.trim()}”.`
+          : shown.length > RESULTS_CAP
+            ? `Showing ${RESULTS_CAP} of ${shown.length.toLocaleString()} matches. Keep typing to narrow it, or use the list below.`
+            : `${shown.length.toLocaleString()} ${shown.length === 1 ? 'match' : 'matches'}.`}
+      </span>
       <select aria-label={label} className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
         <option value="">{needle ? `${placeholder} (${shown.length.toLocaleString()} of ${options.length.toLocaleString()} match)` : placeholder}</option>
         {chosen && <option value={chosen.value}>{chosen.label}</option>}
@@ -872,15 +938,25 @@ function FilterSelect({ label, value, onChange, options, placeholder, disabled }
             pickers use the name as the value. */}
         {shown.map((o, i) => <option key={`${i}:${o.value}`} value={o.value}>{o.label}</option>)}
       </select>
-      {needle && shown.length === 0 && <span className="text-note text-dim">No {label.toLowerCase()} matches “{q.trim()}”.</span>}
     </div>
   )
 }
 
-function Field({ label, children }) {
-  return (
-    <label className="flex flex-col gap-1 text-note text-muted">
-      {label}
+// A form row. On a screen md and wider, [data-form-cols] in index.css puts the
+// caption in a left column and the control beside it. A search box plus its
+// dropdown is two controls, so that row is a named group rather than one
+// <label> wrapped around both.
+function Field({ label, group = false, children }) {
+  const id = useId()
+  const cls = 'flex flex-col gap-1 text-note text-muted'
+  return group ? (
+    <div role="group" aria-labelledby={id} data-field="" className={cls}>
+      <span id={id}>{label}</span>
+      {children}
+    </div>
+  ) : (
+    <label data-field="" className={cls}>
+      <span>{label}</span>
       {children}
     </label>
   )
