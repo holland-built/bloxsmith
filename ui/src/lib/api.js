@@ -330,6 +330,15 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
   const aliveRef = useRef(true)
+  // The url this hook wants NOW. aliveRef alone cannot tell an answer for the
+  // previous url from one for this url: it goes false when the url changes and
+  // true again when the new url's effect runs, so an answer for the old url
+  // that landed after that was applied as the new url's data. Provision's Block
+  // picker showed one space's blocks under another that way (pick space A, then
+  // B before A's blocks arrive). Set during render, so it is already current
+  // when any late answer lands.
+  const urlRef = useRef(url)
+  urlRef.current = url
   const warmRef = useRef(false) // flips once a load has succeeded for this url
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
@@ -340,6 +349,8 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // Named so the retry timer can call it without a ref hop.
   const load = useCallback(function run() {
     if (!url) return
+    // Mounted, AND still wanting the url this request was made for.
+    const live = () => aliveRef.current && urlRef.current === url
 
     // Somebody else asked for this a moment ago. Take their answer and make no
     // request at all. Everything set here is what this hook's own success path
@@ -352,7 +363,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // The url has answered — for somebody — so this hook's next real request
         // gets the warm budget, exactly as if it had answered here.
         warmRef.current = true
-        if (!aliveRef.current) return
+        if (!live()) return
         failuresRef.current = 0
         // Cloned, so two hooks never hold one mutable payload. Two fetches would
         // have produced two independent objects, and a panel that sorts or
@@ -382,7 +393,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
           const body = await res.json().catch(() => ({}))
           if (body && (body.locked === true || body.error === 'vault locked')) {
             cancel()
-            if (aliveRef.current) {
+            if (live()) {
               setData(null)
               setLoading(false)
             }
@@ -411,7 +422,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // this url, so an unmounted caller cannot leave a payload behind for a
         // url nobody is watching.
         publishOk(url, seq, json)
-        if (!aliveRef.current) return
+        if (!live()) return
         failuresRef.current = 0
         setData(json)
         setError(null)
@@ -419,7 +430,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         setRetrying(false)
       })
       .catch((err) => {
-        if (!aliveRef.current) return
+        if (!live()) return
         // error stays set and loading stays false for the whole retry wait, so
         // no existing branch at any call site sees a state it did not see
         // before; `retrying` is the only new signal.
@@ -437,7 +448,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         setRetrying(true)
         retryTimerRef.current = setTimeout(() => {
           retryTimerRef.current = null
-          if (aliveRef.current) run()
+          if (live()) run()
         }, delay)
       })
       .finally(cancel)

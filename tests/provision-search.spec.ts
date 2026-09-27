@@ -197,3 +197,29 @@ test('when the new space\'s blocks fail to load, the old space\'s blocks cannot 
   await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeDisabled();
   await expect(page.getByRole('searchbox', { name: 'Search Block' })).toBeDisabled();
 });
+
+test('a late answer for the previous space never fills the new space\'s block picker', async ({ page }) => {
+  // Space A's blocks answer after the switch to B, and before B's own answer.
+  // useApi used to apply that late answer as B's data, with loading false, so
+  // the picker was enabled and offered A's blocks under space B.
+  await page.route('**/api/ipam/blocks*', async (route) => {
+    const space = new URL(route.request().url()).searchParams.get('space');
+    const isA = space === 'ipam/ip_space/a';
+    await new Promise((r) => setTimeout(r, isA ? 1200 : 3500));
+    return json(route, { blocks: [{ id: isA ? 'ipam/address_block/a1' : 'ipam/address_block/b1', name: isA ? 'Amsterdam Block' : 'Berlin Block' }] });
+  });
+  await page.goto('/#provision');
+  const space = page.getByRole('combobox', { name: 'Space', exact: true });
+  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  await space.selectOption({ label: 'Amsterdam Lab' });
+  await space.selectOption({ label: 'Berlin Office' });
+
+  // Past A's answer, before B's.
+  await page.waitForTimeout(2200);
+  await expect(block).toBeDisabled();
+  await expect(block.locator('option', { hasText: 'Amsterdam Block' })).toHaveCount(0);
+
+  await expect(block).toBeEnabled({ timeout: 5000 });
+  await expect(block.locator('option', { hasText: 'Berlin Block' })).toHaveCount(1);
+  await expect(block.locator('option', { hasText: 'Amsterdam Block' })).toHaveCount(0);
+});
