@@ -553,5 +553,17 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     }
   }, [load, poll])
 
-  return { data, error, loading: loading || (!!url && answeredUrl !== url), retrying, refetch: load }
+  // Data and error belong to the url they were answered for. While a new url
+  // loads, the old url's data is not handed out: a picker drawing it offered
+  // one space's blocks, or one zone's records to edit and delete, under
+  // another (Provision, Self-Service). A failed poll of the SAME url still
+  // keeps its last payload, as before.
+  const current = !!url && answeredUrl === url
+  return {
+    data: current ? data : null,
+    error: current ? error : null,
+    loading: loading || (!!url && !current),
+    retrying,
+    refetch: load,
+  }
 }

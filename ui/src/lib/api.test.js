@@ -809,14 +809,14 @@ function deferredFetch(t) {
   return (url, body) => pending.get(url)(new Response(JSON.stringify(body), { status: 200 }))
 }
 
-test('the first render after a url change already reports loading, while the old data is still held', async (t) => {
+test('the first render after a url change already reports loading, and hands out none of the old url\'s data', async (t) => {
   __resetAdoptionForTests()
   const answer = deferredFetch(t)
   let url = '/api/ipam/blocks?space=a'
   const seen = []
   const hook = mountHook(() => {
     const r = useApi(url)
-    seen.push({ url, loading: r.loading })
+    seen.push({ url, loading: r.loading, data: r.data })
     return r
   })
   answer('/api/ipam/blocks?space=a', { blocks: ['a1'] })
@@ -828,7 +828,8 @@ test('the first render after a url change already reports loading, while the old
   hook.rerender()
   // The first entry for b was recorded before any effect ran.
   const firstForB = seen.slice(from).find((s) => s.url.endsWith('space=b'))
-  assert.equal(firstForB.loading, true, 'b rendered as not loading while holding a\'s data')
+  assert.equal(firstForB.loading, true, 'b rendered as not loading')
+  assert.equal(firstForB.data, null, 'b rendered holding a\'s data')
   hook.unmount()
 })
 
