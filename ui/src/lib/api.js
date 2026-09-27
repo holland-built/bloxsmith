@@ -339,10 +339,13 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // url itself, because A -> B -> A would make the first A request look current
   // again, and so would StrictMode running the effect twice.
   const genRef = useRef(0)
-  // The url the last applied answer (data, error or locked) belongs to. Until
-  // the new url has answered, the hook reports loading, from the very render
-  // the url changes in, rather than one render later when the effect runs.
-  const [answeredUrl, setAnsweredUrl] = useState(null)
+  // The url the held state (data, error, retrying) belongs to. When the url
+  // changes, the url effect clears that state and sets this; until it has, the
+  // hook hands out nothing from the old url and reports loading. State is
+  // cleared on EVERY change, so A -> B -> A cannot bring A's old data, error or
+  // retry back before the new A request answers.
+  const [forUrl, setForUrl] = useState(url)
+  const heldUrlRef = useRef(url)
   // The url this hook wants now, set during render. A caller can keep an old
   // refetch (an async click handler, say) and call it after the url changed;
   // that load would fetch the old url under the new run and could land last.
@@ -354,6 +357,13 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // One stable object for the whole life of the hook; only its fields change,
   // so the registry never has to re-register to stay current.
   const entryRef = useRef({ failed: false, retrying: false, retry: null })
+
+  // What belongs to the url asked for now. Data and error are handed out, and
+  // mirrored into the feeds registry, only for the url they came from, so a
+  // url change never shows the previous url's rows, failure or retry.
+  const fresh = forUrl === url
+  const shownError = fresh ? error : null
+  const shownRetrying = fresh ? retrying : false
 
   // Named so the retry timer can call it without a ref hop.
   const load = useCallback(function run() {
@@ -381,7 +391,6 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // have produced two independent objects, and a panel that sorts or
         // splices its slice in place must not reach into another panel's copy.
         setData(structuredClone(hit.json))
-        setAnsweredUrl(url)
         setError(null)
         setLoading(false)
         setRetrying(false)
@@ -408,7 +417,8 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
             cancel()
             if (live()) {
               setData(null)
-              setAnsweredUrl(url)
+              setError(null)
+              setRetrying(false)
               setLoading(false)
             }
             window.dispatchEvent(new Event('bx:vault-locked'))
@@ -439,7 +449,6 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         if (!live()) return
         failuresRef.current = 0
         setData(json)
-        setAnsweredUrl(url)
         setError(null)
         setLoading(false)
         setRetrying(false)
@@ -450,7 +459,6 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // no existing branch at any call site sees a state it did not see
         // before; `retrying` is the only new signal.
         setError(err)
-        setAnsweredUrl(url)
         setLoading(false)
         const attempt = (failuresRef.current += 1)
         // A poll IS the retry — it re-fires on its own interval regardless of
@@ -527,16 +535,24 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   useEffect(() => {
     const entry = entryRef.current
     entry.retry = retry
-    const failed = error !== null
-    if (entry.failed === failed && entry.retrying === retrying) return
+    const failed = shownError !== null
+    if (entry.failed === failed && entry.retrying === shownRetrying) return
     entry.failed = failed
-    entry.retrying = retrying
+    entry.retrying = shownRetrying
     publishFeeds()
   })
 
   useEffect(() => {
     aliveRef.current = true
     genRef.current += 1 // answers to any earlier run are ignored from here
+    if (heldUrlRef.current !== url) {
+      // A new url: nothing held belongs to it.
+      heldUrlRef.current = url
+      setData(null)
+      setError(null)
+      setRetrying(false)
+      setForUrl(url)
+    }
     warmRef.current = false // a new url is cold again
     failuresRef.current = 0 // and gets a full retry budget
     setLoading(true)
@@ -551,19 +567,20 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
       clearTimeout(retryTimerRef.current)
       retryTimerRef.current = null
     }
-  }, [load, poll])
+    // url is already in load's deps, so listing it changes no run; it is here
+    // because the body reads it to tell a new url from a re-run for the same one.
+  }, [load, poll, url])
 
   // Data and error belong to the url they were answered for. While a new url
   // loads, the old url's data is not handed out: a picker drawing it offered
   // one space's blocks, or one zone's records to edit and delete, under
   // another (Provision, Self-Service). A failed poll of the SAME url still
   // keeps its last payload, as before.
-  const current = !!url && answeredUrl === url
   return {
-    data: current ? data : null,
-    error: current ? error : null,
-    loading: loading || (!!url && !current),
-    retrying,
+    data: fresh ? data : null,
+    error: shownError,
+    loading: fresh ? loading : true,
+    retrying: shownRetrying,
     refetch: load,
   }
 }
