@@ -789,3 +789,65 @@ test('the stored result survives one watcher leaving while another stays', async
   b.unmount()
   c.unmount()
 })
+
+// ---------------------------------------------------------------------------
+// A url change. An answer belongs to the url effect run it was requested in,
+// and the hook says "loading" from the very render the url changes in.
+// Provision's Block picker showed one space's blocks under another before this.
+// ---------------------------------------------------------------------------
+
+function deferredFetch(t) {
+  const pending = new Map()
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (url) => new Promise((resolve) => pending.set(url, resolve))
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => {
+    globalThis.fetch = realFetch
+    globalThis.window = realWindow
+  })
+  return (url, body) => pending.get(url)(new Response(JSON.stringify(body), { status: 200 }))
+}
+
+test('the first render after a url change already reports loading, while the old data is still held', async (t) => {
+  __resetAdoptionForTests()
+  const answer = deferredFetch(t)
+  let url = '/api/ipam/blocks?space=a'
+  const seen = []
+  const hook = mountHook(() => {
+    const r = useApi(url)
+    seen.push({ url, loading: r.loading })
+    return r
+  })
+  answer('/api/ipam/blocks?space=a', { blocks: ['a1'] })
+  await settle()
+  assert.equal(hook.current.loading, false)
+
+  url = '/api/ipam/blocks?space=b'
+  const from = seen.length
+  hook.rerender()
+  // The first entry for b was recorded before any effect ran.
+  const firstForB = seen.slice(from).find((s) => s.url.endsWith('space=b'))
+  assert.equal(firstForB.loading, true, 'b rendered as not loading while holding a\'s data')
+  hook.unmount()
+})
+
+test('a late answer for the previous url is dropped, and the new url\'s answer is kept', async (t) => {
+  __resetAdoptionForTests()
+  const answer = deferredFetch(t)
+  let url = '/api/ipam/blocks?space=a'
+  const hook = mountHook(() => useApi(url))
+  url = '/api/ipam/blocks?space=b'
+  hook.rerender()
+
+  answer('/api/ipam/blocks?space=a', { blocks: ['a1'] }) // lands after the switch
+  await settle()
+  assert.equal(hook.current.data, null, 'space a\'s answer was applied to space b')
+  assert.equal(hook.current.loading, true)
+
+  answer('/api/ipam/blocks?space=b', { blocks: ['b1'] })
+  await settle()
+  assert.deepEqual(hook.current.data, { blocks: ['b1'] })
+  assert.equal(hook.current.loading, false)
+  hook.unmount()
+})

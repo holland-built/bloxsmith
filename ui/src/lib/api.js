@@ -330,15 +330,19 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
   const aliveRef = useRef(true)
-  // The url this hook wants NOW. aliveRef alone cannot tell an answer for the
-  // previous url from one for this url: it goes false when the url changes and
-  // true again when the new url's effect runs, so an answer for the old url
-  // that landed after that was applied as the new url's data. Provision's Block
-  // picker showed one space's blocks under another that way (pick space A, then
-  // B before A's blocks arrive). Set during render, so it is already current
-  // when any late answer lands.
-  const urlRef = useRef(url)
-  urlRef.current = url
+  // Which run of the url effect this is. aliveRef alone cannot tell an answer
+  // to an earlier request from one to the current request: it goes false when
+  // the url changes and true again when the next effect runs, so an answer for
+  // the old url that landed after that was applied as the new url's data.
+  // Provision's Block picker showed one space's blocks under another that way
+  // (pick space A, then B before A's blocks arrive). A counter rather than the
+  // url itself, because A -> B -> A would make the first A request look current
+  // again, and so would StrictMode running the effect twice.
+  const genRef = useRef(0)
+  // The url the last applied answer (data, error or locked) belongs to. Until
+  // the new url has answered, the hook reports loading, from the very render
+  // the url changes in, rather than one render later when the effect runs.
+  const [answeredUrl, setAnsweredUrl] = useState(null)
   const warmRef = useRef(false) // flips once a load has succeeded for this url
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
@@ -349,8 +353,9 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // Named so the retry timer can call it without a ref hop.
   const load = useCallback(function run() {
     if (!url) return
-    // Mounted, AND still wanting the url this request was made for.
-    const live = () => aliveRef.current && urlRef.current === url
+    // Mounted, AND still the url effect run this request was made in.
+    const gen = genRef.current
+    const live = () => aliveRef.current && genRef.current === gen
 
     // Somebody else asked for this a moment ago. Take their answer and make no
     // request at all. Everything set here is what this hook's own success path
@@ -362,13 +367,14 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
       if (hit) {
         // The url has answered — for somebody — so this hook's next real request
         // gets the warm budget, exactly as if it had answered here.
-        warmRef.current = true
+        if (genRef.current === gen) warmRef.current = true
         if (!live()) return
         failuresRef.current = 0
         // Cloned, so two hooks never hold one mutable payload. Two fetches would
         // have produced two independent objects, and a panel that sorts or
         // splices its slice in place must not reach into another panel's copy.
         setData(structuredClone(hit.json))
+        setAnsweredUrl(url)
         setError(null)
         setLoading(false)
         setRetrying(false)
@@ -395,6 +401,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
             cancel()
             if (live()) {
               setData(null)
+              setAnsweredUrl(url)
               setLoading(false)
             }
             window.dispatchEvent(new Event('bx:vault-locked'))
@@ -414,7 +421,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         if (json === null) return
         // The url has now answered once, so later requests get the warm budget
         // even if this component unmounted mid-flight.
-        warmRef.current = true
+        if (genRef.current === gen) warmRef.current = true
         // Published before the aliveRef gate, deliberately: this is a real, fresh
         // answer for this url whatever became of the component that asked for it,
         // and the `seq` check inside is what decides whether it is still the
@@ -425,6 +432,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         if (!live()) return
         failuresRef.current = 0
         setData(json)
+        setAnsweredUrl(url)
         setError(null)
         setLoading(false)
         setRetrying(false)
@@ -435,6 +443,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // no existing branch at any call site sees a state it did not see
         // before; `retrying` is the only new signal.
         setError(err)
+        setAnsweredUrl(url)
         setLoading(false)
         const attempt = (failuresRef.current += 1)
         // A poll IS the retry — it re-fires on its own interval regardless of
@@ -520,6 +529,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
 
   useEffect(() => {
     aliveRef.current = true
+    genRef.current += 1 // answers to any earlier run are ignored from here
     warmRef.current = false // a new url is cold again
     failuresRef.current = 0 // and gets a full retry budget
     setLoading(true)
@@ -536,5 +546,5 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     }
   }, [load, poll])
 
-  return { data, error, loading, retrying, refetch: load }
+  return { data, error, loading: loading || (!!url && answeredUrl !== url), retrying, refetch: load }
 }

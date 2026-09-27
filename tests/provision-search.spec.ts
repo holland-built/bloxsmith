@@ -223,3 +223,32 @@ test('a late answer for the previous space never fills the new space\'s block pi
   await expect(block.locator('option', { hasText: 'Berlin Block' })).toHaveCount(1);
   await expect(block.locator('option', { hasText: 'Amsterdam Block' })).toHaveCount(0);
 });
+
+test('switching A, B, then back to A: the first A request answering late does not replace the newer A answer', async ({ page }) => {
+  // Comparing urls alone would let the first A request count as current again
+  // once A is chosen a second time; each url change starts a new run instead.
+  let aCalls = 0;
+  await page.route('**/api/ipam/blocks*', async (route) => {
+    const space = new URL(route.request().url()).searchParams.get('space');
+    if (space !== 'ipam/ip_space/a') {
+      await new Promise((r) => setTimeout(r, 5000));
+      return json(route, { blocks: [{ id: 'ipam/address_block/b1', name: 'Berlin Block' }] });
+    }
+    aCalls += 1;
+    const first = aCalls === 1;
+    await new Promise((r) => setTimeout(r, first ? 2500 : 300));
+    return json(route, { blocks: [{ id: first ? 'ipam/address_block/old' : 'ipam/address_block/a1', name: first ? 'Old Amsterdam Block' : 'Amsterdam Block' }] });
+  });
+  await page.goto('/#provision');
+  const space = page.getByRole('combobox', { name: 'Space', exact: true });
+  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  await space.selectOption({ label: 'Amsterdam Lab' });
+  await space.selectOption({ label: 'Berlin Office' });
+  await space.selectOption({ label: 'Amsterdam Lab' });
+
+  await expect(block.locator('option', { hasText: /^Amsterdam Block$/ })).toHaveCount(1, { timeout: 2000 });
+  // Past the first A request's late answer.
+  await page.waitForTimeout(2600);
+  await expect(block.locator('option', { hasText: /^Amsterdam Block$/ })).toHaveCount(1);
+  await expect(block.locator('option', { hasText: 'Old Amsterdam Block' })).toHaveCount(0);
+});
