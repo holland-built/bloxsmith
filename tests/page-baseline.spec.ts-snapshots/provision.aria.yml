@@ -1,4 +1,11 @@
 - main "Provision tab":
+  - navigation "On this page":
+    - paragraph: On this page
+    - list:
+      - listitem:
+        - button "Request"
+      - listitem:
+        - button "Live log"
   - heading "Provision" [level=1]
   - text: ADMIN
   - paragraph:
@@ -12,13 +19,19 @@
   - 'button "About: Request"': "About: ⓘ"
   - button "Hide Request": Hide ✕
   - button "Move Request": Move ⠿
-  - text: Space
-  - combobox "Space":
-    - option "Select a space" [selected]
-    - option "Baseline Space"
-  - text: Block
-  - combobox "Block" [disabled]:
-    - option "Loading blocks…" [selected]
+  - group "Space":
+    - text: ""
+    - searchbox "Search Space"
+    - status
+    - combobox "Space":
+      - option "Select a space" [selected]
+      - option "Baseline Space"
+  - group "Block":
+    - text: ""
+    - searchbox "Search Block" [disabled]
+    - status
+    - combobox "Block" [disabled]:
+      - option "Loading blocks…" [selected]
   - text: CIDR prefix
   - spinbutton "CIDR prefix": /\d+/
   - text: Name

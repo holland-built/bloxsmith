@@ -63,3 +63,83 @@ test('the Full site and Seed demo space lists search the same way', async ({ pag
     ]);
   }
 });
+
+// Typing shows the matches straight away, as buttons under the search box, so
+// nobody has to open the dropdown to see them. The dropdown stays, holding
+// every match, for anyone who prefers it.
+
+const results = (page: import('@playwright/test').Page, label = 'space') =>
+  page.getByRole('list', { name: `Matching ${label}` }).getByRole('button');
+
+test('typing shows the matches as buttons, and a click picks one without opening the dropdown', async ({ page }) => {
+  await page.goto('/#provision');
+  const box = page.getByRole('searchbox', { name: 'Search Space' });
+  await box.fill('office');
+  await expect(results(page)).toHaveText(['Berlin Office', 'Brussels Office']);
+  await expect(page.getByRole('status').filter({ hasText: '2 matches.' })).toBeVisible();
+
+  await results(page).filter({ hasText: 'Brussels Office' }).click();
+  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/d');
+  // The search clears, the list goes, and focus returns to the box.
+  await expect(box).toHaveValue('');
+  await expect(results(page)).toHaveCount(0);
+  await expect(box).toBeFocused();
+});
+
+test('the keyboard reaches the matches: Down into them, Up back out, Enter picks, Escape clears', async ({ page }) => {
+  await page.goto('/#provision');
+  const box = page.getByRole('searchbox', { name: 'Search Space' });
+  await box.fill('b');
+  await box.press('ArrowDown');
+  await expect(results(page).first()).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(box).toBeFocused();
+
+  await box.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(results(page).nth(1)).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(box).toHaveValue('');
+  await expect(box).toBeFocused();
+
+  // Enter in the box picks the first match.
+  await box.fill('amster');
+  await box.press('Enter');
+  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/a');
+});
+
+test('more than 50 matches: 50 buttons, a line saying how many more, and the dropdown still holds all of them', async ({ page }) => {
+  const many = { spaces: Array.from({ length: 120 }, (_, i) => ({ id: `ipam/ip_space/s${i}`, name: `Site ${i}` })) };
+  await page.route('**/api/ipam/spaces*', (route) => json(route, many));
+  await page.goto('/#provision');
+  await page.getByRole('searchbox', { name: 'Search Space' }).fill('site');
+  await expect(results(page)).toHaveCount(50);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing 50 of 120 matches.' })).toBeVisible();
+  await expect(options(page, 'Space')).toHaveCount(121); // placeholder + all 120
+});
+
+test('on a wide screen the caption sits beside its field; on a phone it sits above', async ({ page }) => {
+  const geometry = async () => {
+    const cap = await page.locator('[data-panel-id="provision-subnet-request"] [data-field]').first().locator(':scope > span').first().boundingBox();
+    const ctl = await page.getByRole('searchbox', { name: 'Search Space' }).boundingBox();
+    return { cap: cap!, ctl: ctl! };
+  };
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#provision');
+  let g = await geometry();
+  expect(g.ctl.x).toBeGreaterThan(g.cap.x + g.cap.width);
+  expect(Math.abs(g.ctl.y - g.cap.y)).toBeLessThan(12);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  g = await geometry();
+  expect(g.ctl.y).toBeGreaterThan(g.cap.y + g.cap.height - 1);
+});
+
+test('Editor fields sit beside their captions on a wide screen too', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#editor');
+  const row = page.locator('[data-panel-id="editor-object-form"] [data-field]').first();
+  const cap = await row.locator(':scope > span').boundingBox();
+  const ctl = await row.locator('input').boundingBox();
+  expect(ctl!.x).toBeGreaterThan(cap!.x + cap!.width);
+});

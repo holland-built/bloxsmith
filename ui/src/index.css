@@ -627,3 +627,28 @@ html[data-theme="light"] { color-scheme: light; }
   border-left-color: var(--color-border);
   border-radius: 0;
 }
+
+/* ---------- Change-tab forms: caption beside the control ----------
+   Provision and Editor forms, md and wider: each caption sits in a left
+   column and its control beside it, capped at a readable width, so a field is
+   no longer a 740px bar. Everything that is not a field (checkboxes, the
+   Preview/Apply row and its output, notes) lines up with the controls. On a
+   phone the rows stay stacked as they were. */
+@media (min-width: 48rem) {
+  [data-form-cols] > [data-field] {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 48ch);
+    column-gap: 1rem;
+    align-items: start;
+  }
+  [data-form-cols] > [data-field] > :first-child {
+    padding-top: 0.5rem;
+  }
+  [data-form-cols] > [data-field] > :not(:first-child) {
+    grid-column: 2;
+    min-width: 0;
+  }
+  [data-form-cols] > :not([data-field]) {
+    margin-left: 12rem;
+  }
+}
