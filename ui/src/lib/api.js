@@ -343,6 +343,11 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // the new url has answered, the hook reports loading, from the very render
   // the url changes in, rather than one render later when the effect runs.
   const [answeredUrl, setAnsweredUrl] = useState(null)
+  // The url this hook wants now, set during render. A caller can keep an old
+  // refetch (an async click handler, say) and call it after the url changed;
+  // that load would fetch the old url under the new run and could land last.
+  const urlRef = useRef(url)
+  urlRef.current = url
   const warmRef = useRef(false) // flips once a load has succeeded for this url
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
@@ -352,7 +357,9 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
 
   // Named so the retry timer can call it without a ref hop.
   const load = useCallback(function run() {
-    if (!url) return
+    // A load kept from an earlier render, for a url this hook no longer wants,
+    // sends nothing.
+    if (!url || urlRef.current !== url) return
     // Mounted, AND still the url effect run this request was made in.
     const gen = genRef.current
     const live = () => aliveRef.current && genRef.current === gen

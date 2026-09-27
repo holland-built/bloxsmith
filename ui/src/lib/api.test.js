@@ -851,3 +851,23 @@ test('a late answer for the previous url is dropped, and the new url\'s answer i
   assert.equal(hook.current.loading, false)
   hook.unmount()
 })
+
+test('an old refetch called after the url changed sends nothing for the old url', async (t) => {
+  __resetAdoptionForTests()
+  const requested = []
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (u) => { requested.push(u); return new Promise(() => {}) }
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => { globalThis.fetch = realFetch; globalThis.window = realWindow })
+
+  let url = '/api/ipam/records?zone=a'
+  const hook = mountHook(() => useApi(url))
+  const oldRefetch = hook.current.refetch // kept by, say, an async click handler
+  url = '/api/ipam/records?zone=b'
+  hook.rerender()
+  const before = requested.length
+  oldRefetch()
+  assert.equal(requested.length, before, `the old refetch fetched ${requested.at(-1)} after the url changed`)
+  hook.unmount()
+})
