@@ -789,3 +789,189 @@ test('the stored result survives one watcher leaving while another stays', async
   b.unmount()
   c.unmount()
 })
+
+// ---------------------------------------------------------------------------
+// A url change. An answer belongs to the url effect run it was requested in,
+// and the hook says "loading" from the very render the url changes in.
+// Provision's Block picker showed one space's blocks under another before this.
+// ---------------------------------------------------------------------------
+
+function deferredFetch(t) {
+  const pending = new Map()
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (url) => new Promise((resolve) => pending.set(url, resolve))
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => {
+    globalThis.fetch = realFetch
+    globalThis.window = realWindow
+  })
+  return (url, body) => pending.get(url)(new Response(JSON.stringify(body), { status: 200 }))
+}
+
+test('the first render after a url change already reports loading, and hands out none of the old url\'s data', async (t) => {
+  __resetAdoptionForTests()
+  const answer = deferredFetch(t)
+  let url = '/api/ipam/blocks?space=a'
+  const seen = []
+  const hook = mountHook(() => {
+    const r = useApi(url)
+    seen.push({ url, loading: r.loading, data: r.data })
+    return r
+  })
+  answer('/api/ipam/blocks?space=a', { blocks: ['a1'] })
+  await settle()
+  assert.equal(hook.current.loading, false)
+
+  url = '/api/ipam/blocks?space=b'
+  const from = seen.length
+  hook.rerender()
+  // The first entry for b was recorded before any effect ran.
+  const firstForB = seen.slice(from).find((s) => s.url.endsWith('space=b'))
+  assert.equal(firstForB.loading, true, 'b rendered as not loading')
+  assert.equal(firstForB.data, null, 'b rendered holding a\'s data')
+  hook.unmount()
+})
+
+test('a late answer for the previous url is dropped, and the new url\'s answer is kept', async (t) => {
+  __resetAdoptionForTests()
+  const answer = deferredFetch(t)
+  let url = '/api/ipam/blocks?space=a'
+  const hook = mountHook(() => useApi(url))
+  url = '/api/ipam/blocks?space=b'
+  hook.rerender()
+
+  answer('/api/ipam/blocks?space=a', { blocks: ['a1'] }) // lands after the switch
+  await settle()
+  assert.equal(hook.current.data, null, 'space a\'s answer was applied to space b')
+  assert.equal(hook.current.loading, true)
+
+  answer('/api/ipam/blocks?space=b', { blocks: ['b1'] })
+  await settle()
+  assert.deepEqual(hook.current.data, { blocks: ['b1'] })
+  assert.equal(hook.current.loading, false)
+  hook.unmount()
+})
+
+test('an old refetch called after the url changed sends nothing for the old url', async (t) => {
+  __resetAdoptionForTests()
+  const requested = []
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (u) => { requested.push(u); return new Promise(() => {}) }
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => { globalThis.fetch = realFetch; globalThis.window = realWindow })
+
+  let url = '/api/ipam/records?zone=a'
+  const hook = mountHook(() => useApi(url))
+  const oldRefetch = hook.current.refetch // kept by, say, an async click handler
+  url = '/api/ipam/records?zone=b'
+  hook.rerender()
+  const before = requested.length
+  oldRefetch()
+  assert.equal(requested.length, before, `the old refetch fetched ${requested.at(-1)} after the url changed`)
+  hook.unmount()
+})
+
+test('when the new url fails, the old url\'s data does not come back under it', async (t) => {
+  __resetAdoptionForTests()
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (u) => Promise.resolve(u.endsWith('space=a')
+    ? new Response(JSON.stringify({ blocks: ['a1'] }), { status: 200 })
+    : new Response(JSON.stringify({ error: 'no' }), { status: 404 }))
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => { globalThis.fetch = realFetch; globalThis.window = realWindow })
+
+  let url = '/api/ipam/blocks?space=a'
+  const hook = mountHook(() => useApi(url))
+  await settle()
+  assert.deepEqual(hook.current.data, { blocks: ['a1'] })
+
+  url = '/api/ipam/blocks?space=b'
+  hook.rerender()
+  await settle()
+  assert.ok(hook.current.error, 'b\'s failure must show')
+  assert.equal(hook.current.loading, false)
+  assert.equal(hook.current.data, null, 'a\'s blocks came back under b after b failed')
+  hook.unmount()
+})
+
+test('a failed poll of the same url still keeps its last data', async (t) => {
+  __resetAdoptionForTests()
+  const { calls } = harness(t, [jsonOk({ rows: 3 }), jsonStatus(500)])
+  const hook = mountHook(() => useApi('/api/data', { poll: 30000 }))
+  await settle()
+  t.mock.timers.tick(30000)
+  await settle()
+  assert.equal(calls.length, 2)
+  assert.ok(hook.current.error)
+  assert.deepEqual(hook.current.data, { rows: 3 })
+  hook.unmount()
+})
+
+test('after a url change, the previous url\'s failure and retry are not shown under the new url', async (t) => {
+  __resetAdoptionForTests()
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+  t.mock.method(Math, 'random', () => 0)
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  globalThis.fetch = (u) => u.endsWith('space=a')
+    ? Promise.resolve(new Response(JSON.stringify({ error: 'no' }), { status: 500 }))
+    : new Promise(() => {}) // b never answers during the test
+  globalThis.window = { dispatchEvent: () => {} }
+  t.after(() => { globalThis.fetch = realFetch; globalThis.window = realWindow })
+
+  let url = '/api/ipam/blocks?space=a'
+  const hook = mountHook(() => useApi(url))
+  await settle()
+  assert.ok(hook.current.error)
+  assert.equal(hook.current.retrying, true)
+
+  url = '/api/ipam/blocks?space=b'
+  hook.rerender()
+  await settle()
+  assert.equal(hook.current.error, null, 'a\'s failure shown under b')
+  assert.equal(hook.current.retrying, false, 'a\'s retry shown under b')
+  assert.equal(hook.current.loading, true)
+  hook.unmount()
+})
+
+test('going A, B, then back to A shows none of the first A answer until the new A request answers', async (t) => {
+  __resetAdoptionForTests()
+  const answer = deferredFetch(t)
+  let url = '/api/ipam/blocks?space=a'
+  const hook = mountHook(() => useApi(url))
+  answer('/api/ipam/blocks?space=a', { blocks: ['a-first'] })
+  await settle()
+  assert.deepEqual(hook.current.data, { blocks: ['a-first'] })
+
+  url = '/api/ipam/blocks?space=b'
+  hook.rerender()
+  url = '/api/ipam/blocks?space=a'
+  hook.rerender()
+  await settle()
+  assert.equal(hook.current.data, null, 'the first A answer came back before the new A request answered')
+  assert.equal(hook.current.loading, true)
+
+  answer('/api/ipam/blocks?space=a', { blocks: ['a-second'] })
+  await settle()
+  assert.deepEqual(hook.current.data, { blocks: ['a-second'] })
+  hook.unmount()
+})
+
+test('a locked answer cancels a retry queued earlier, so retrying false is true', async (t) => {
+  __resetAdoptionForTests()
+  const locked = () => Promise.resolve(new Response(JSON.stringify({ locked: true }), { status: 503 }))
+  const { calls } = harness(t, [jsonStatus(500), locked, jsonOk({ rows: 1 })])
+  const hook = mountHook(() => useApi('/api/data'))
+  await settle()
+  assert.equal(hook.current.retrying, true) // a retry is queued for 1000ms
+  hook.current.refetch() // answered: vault locked
+  await settle()
+  assert.equal(hook.current.retrying, false)
+  t.mock.timers.tick(5000)
+  await settle()
+  assert.equal(calls.length, 2, 'the cancelled retry still sent a request')
+  hook.unmount()
+})
