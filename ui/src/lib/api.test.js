@@ -959,3 +959,19 @@ test('going A, B, then back to A shows none of the first A answer until the new 
   assert.deepEqual(hook.current.data, { blocks: ['a-second'] })
   hook.unmount()
 })
+
+test('a locked answer cancels a retry queued earlier, so retrying false is true', async (t) => {
+  __resetAdoptionForTests()
+  const locked = () => Promise.resolve(new Response(JSON.stringify({ locked: true }), { status: 503 }))
+  const { calls } = harness(t, [jsonStatus(500), locked, jsonOk({ rows: 1 })])
+  const hook = mountHook(() => useApi('/api/data'))
+  await settle()
+  assert.equal(hook.current.retrying, true) // a retry is queued for 1000ms
+  hook.current.refetch() // answered: vault locked
+  await settle()
+  assert.equal(hook.current.retrying, false)
+  t.mock.timers.tick(5000)
+  await settle()
+  assert.equal(calls.length, 2, 'the cancelled retry still sent a request')
+  hook.unmount()
+})

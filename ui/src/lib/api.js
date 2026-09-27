@@ -416,6 +416,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
           if (body && (body.locked === true || body.error === 'vault locked')) {
             cancel()
             if (live()) {
+              // A locked vault answers every retry the same way, so a retry a
+              // transient failure queued earlier is cancelled with the flag.
+              clearTimeout(retryTimerRef.current)
+              retryTimerRef.current = null
               setData(null)
               setError(null)
               setRetrying(false)
