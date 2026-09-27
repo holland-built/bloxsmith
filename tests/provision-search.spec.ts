@@ -179,3 +179,21 @@ test('a form panel resized narrower stacks its rows instead of spilling out', as
   expect(ctl!.y).toBeGreaterThan(cap!.y + cap!.height - 1);
   expect(ctl!.x + ctl!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
 });
+
+test('when the new space\'s blocks fail to load, the old space\'s blocks cannot be picked', async ({ page }) => {
+  await page.route('**/api/ipam/blocks*', (route) => {
+    const space = new URL(route.request().url()).searchParams.get('space');
+    return space === 'ipam/ip_space/a'
+      ? json(route, { blocks: [{ id: 'ipam/address_block/a1', name: 'Amsterdam Block' }] })
+      : route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"upstream"}' });
+  });
+  await page.goto('/#provision');
+  const space = page.getByRole('combobox', { name: 'Space', exact: true });
+  await space.selectOption({ label: 'Amsterdam Lab' });
+  await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeEnabled();
+
+  await space.selectOption({ label: 'Berlin Office' });
+  await expect(page.getByText(/Could not load current data/)).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeDisabled();
+  await expect(page.getByRole('searchbox', { name: 'Search Block' })).toBeDisabled();
+});

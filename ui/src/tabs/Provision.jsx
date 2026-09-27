@@ -422,14 +422,17 @@ function SubnetMode() {
           </Field>
           <Field group label="Block">
             {/* Keyed on the space, so a search typed for one space's blocks is
-                cleared when the space changes; disabled while the new space's
-                blocks load, so no result from the old list can be picked. */}
+                cleared when the space changes. Disabled while the new space's
+                blocks load, and after that load fails: useApi keeps the last
+                list it had, which can be the previous space's, so it stays on
+                screen under the "may be out of date" warning but cannot be
+                picked from. */}
             <FilterSelect
               key={space}
               label="Block"
               value={block}
               onChange={(v) => { setBlock(v); flow.markStale() }}
-              disabled={!space || blocksApi.loading}
+              disabled={!space || blocksApi.loading || !!blocksApi.error}
               placeholder={blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
             />
