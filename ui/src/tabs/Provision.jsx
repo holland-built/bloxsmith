@@ -881,7 +881,11 @@ function FilterSelect({ label, value, onChange, options, placeholder, disabled }
     const all = buttons()
     const i = all.indexOf(document.activeElement)
     if (e.key === 'ArrowDown') { e.preventDefault(); all[Math.min(i + 1, all.length - 1)]?.focus() }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); i <= 0 ? inputRef.current?.focus() : all[i - 1].focus() }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (i <= 0) inputRef.current?.focus()
+      else all[i - 1].focus()
+    }
     else if (e.key === 'Escape') { e.preventDefault(); clear() }
   }
   return (
