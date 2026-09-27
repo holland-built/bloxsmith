@@ -143,3 +143,39 @@ test('Editor fields sit beside their captions on a wide screen too', async ({ pa
   const ctl = await row.locator('input').boundingBox();
   expect(ctl!.x).toBeGreaterThan(cap!.x + cap!.width);
 });
+
+test('a block search belongs to its space: changing the space clears it, and no old block can be picked', async ({ page }) => {
+  await page.route('**/api/ipam/blocks*', (route) => {
+    const space = new URL(route.request().url()).searchParams.get('space');
+    const blocks = space === 'ipam/ip_space/a'
+      ? [{ id: 'ipam/address_block/a1', name: 'Amsterdam Block' }]
+      : [{ id: 'ipam/address_block/b1', name: 'Berlin Block' }];
+    return json(route, { blocks });
+  });
+  await page.goto('/#provision');
+  const space = page.getByRole('combobox', { name: 'Space', exact: true });
+  const blockBox = page.getByRole('searchbox', { name: 'Search Block' });
+  await space.selectOption({ label: 'Amsterdam Lab' });
+  await blockBox.fill('block');
+  await expect(results(page, 'block')).toHaveText(['Amsterdam Block']);
+
+  await space.selectOption({ label: 'Berlin Office' });
+  await expect(blockBox).toHaveValue('');
+  await expect(results(page, 'block')).toHaveCount(0);
+
+  await space.selectOption({ label: 'Select a space' });
+  await expect(blockBox).toBeDisabled();
+  await expect(results(page, 'block')).toHaveCount(0);
+});
+
+test('a form panel resized narrower stacks its rows instead of spilling out', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#provision');
+  const form = page.locator('[data-panel-id="provision-subnet-request"] [data-form-cols]');
+  await form.evaluate((el) => { (el as HTMLElement).style.width = '420px'; });
+  const cap = await page.locator('[data-panel-id="provision-subnet-request"] [data-field]').first().locator(':scope > span').first().boundingBox();
+  const ctl = await page.getByRole('searchbox', { name: 'Search Space' }).boundingBox();
+  const box = await form.boundingBox();
+  expect(ctl!.y).toBeGreaterThan(cap!.y + cap!.height - 1);
+  expect(ctl!.x + ctl!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
+});

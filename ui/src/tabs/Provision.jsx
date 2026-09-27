@@ -421,11 +421,15 @@ function SubnetMode() {
             />
           </Field>
           <Field group label="Block">
+            {/* Keyed on the space, so a search typed for one space's blocks is
+                cleared when the space changes; disabled while the new space's
+                blocks load, so no result from the old list can be picked. */}
             <FilterSelect
+              key={space}
               label="Block"
               value={block}
               onChange={(v) => { setBlock(v); flow.markStale() }}
-              disabled={!space}
+              disabled={!space || blocksApi.loading}
               placeholder={blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
             />
@@ -860,7 +864,7 @@ function FilterSelect({ label, value, onChange, options, placeholder, disabled }
   const chosen = value && !shown.some((o) => o.value === value) ? options.find((o) => o.value === value) : null
   // The matches, shown as you type so nobody has to open the dropdown to see
   // them. Capped for the page's sake; the dropdown below still holds every match.
-  const results = needle ? shown.slice(0, RESULTS_CAP) : []
+  const results = needle && !disabled ? shown.slice(0, RESULTS_CAP) : []
   const pick = (v) => {
     onChange(v)
     setQ('')
