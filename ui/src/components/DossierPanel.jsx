@@ -1,5 +1,5 @@
 import { useChartTheme, FeedUnavailable } from './ui.jsx'
-import { dossierVerdict, dossierVerdictTone } from '../lib/dossierVerdict.js'
+import { dossierHasVerdict, dossierVerdict, dossierVerdictTone } from '../lib/dossierVerdict.js'
 
 // ---------- parsing helpers ----------
 
@@ -280,11 +280,10 @@ export default function DossierPanel({ data }) {
   // server no longer emits that body (threatintel.go normDossier degrades to
   // the unavailable shape when no source survives its loop) — this half keeps
   // the panel from accepting one if anything ever produces it again.
-  const hasSummary = data.summary != null && typeof data.summary === 'object'
-  const sourcesArr = Array.isArray(data.sources) ? data.sources : null
-  const hasVerdictShape = hasSummary && sourcesArr != null && sourcesArr.length > 0
-  const errorLike = data.error != null || data.locked === true
-  if (data.unavailable || errorLike || !hasVerdictShape) {
+  if (!dossierHasVerdict(data)) {
+    const hasSummary = data.summary != null && typeof data.summary === 'object'
+    const sourcesArr = Array.isArray(data.sources) ? data.sources : null
+    const errorLike = data.error != null || data.locked === true
     const noSourcesExamined = hasSummary && sourcesArr != null && sourcesArr.length === 0
     const reason =
       data.unavailable ??
