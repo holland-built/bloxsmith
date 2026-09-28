@@ -454,9 +454,17 @@ func normLookalikes(domainsRaw, targetsRaw any) map[string]any {
 
 // --- Assets (server.py fetch_assets 4371 / _fetch_assets_async 4349) ---------
 
+// canonicalOnly keeps an account-wide SecurityActionAssets query to canonical
+// security actions. Since 2026-09 the cube spans every security action, and
+// Infoblox's own description says to ALWAYS filter isCanonical = true when
+// aggregating account-wide, or similar/non-canonical group members are mixed
+// in (#253): one device would count once per duplicate security action.
+var canonicalOnly = []map[string]any{{
+	"member": "SecurityActionAssets.isCanonical", "operator": "equals", "values": []string{"true"}}}
+
 // FetchAssets is fetch_assets: three SecurityActionAssets cube queries
-// (inventory + rollup + trend) via the MCP client. Degrades to unavailable when
-// the tenant has no security-action assets.
+// (inventory + rollup + trend) via the MCP client, each canonical-only.
+// Degrades to unavailable when the tenant has no security-action assets.
 func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	ck := cache.Key("assets", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
@@ -475,18 +483,21 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 					"SecurityActionAssets.isRisky", "SecurityActionAssets.isVerified",
 					"SecurityActionAssets.lastDetected"},
 				"order": map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 500,
+				"filters": canonicalOnly,
 			})
 		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueDevices", "SecurityActionAssets.count"},
 			map[string]any{
 				"dimensions": []string{"SecurityActionAssets.os", "SecurityActionAssets.isVerified"},
 				"order":      map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 50,
+				"filters": canonicalOnly,
 			})
 		trendD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.count"}, map[string]any{
 				"time_dimensions": []map[string]any{{
 					"dimension": "SecurityActionAssets.createdAt",
 					"dateRange": "30 days", "granularity": "day"}},
+				"filters": canonicalOnly,
 			})
 	}
 	result := assembleAssetsResult(mcpOK, invD, rollupD, trendD)
