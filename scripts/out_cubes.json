@@ -490,7 +490,7 @@
       {
         "name": "SecurityActionAssets",
         "title": "Security Action Assets",
-        "description": "Per-asset detail for security actions, one row per asset per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes a device including network identifiers (IP, MAC, hostname), threat indicators on the asset, associated users, event counts, verification status, risk flag, provider/region, ranking, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all assets involved for a particular security action, or to see all risky assets across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. For security action-level summaries use SecurityActionSummaryView; for indicator-level drill-downs use SecurityActionIndicators.",
+        "description": "Per-asset detail for security actions, one row per asset per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes a device including network identifiers (IP, MAC, hostname), threat indicators on the asset, associated users, event counts, verification status, risk flag, provider/region, ranking, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all assets involved for a particular security action, or to see all risky assets across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. ALWAYS filter isCanonical = true when aggregating account-wide (not scoped to one security action) \u2014 otherwise similar/non-canonical group members are mixed in and results can't be matched back to the canonical-only inventory table. For security action-level summaries use SecurityActionSummaryView; for indicator-level drill-downs use SecurityActionIndicators.",
         "type": "cube",
         "meta": {
           "ai_context": "IQ Threat Defense domain. Device detail inside insights/security actions: use it only when the unit of the answer is an individual asset \u2014 which devices are involved in a given insight, asset IP/MAC/hostname, per-asset risk flag, verification status, or asset ranking within an insight. Do NOT use it to count or compare insights themselves (it returns one row per asset per insight and will double-count); for questions like 'insights affecting more than N assets', 'how many insights', or breakdowns across insights use SecurityActionSummaryView. NOT a DDI/network or asset-inventory cube: distinct from AssetDetails_ch, Asset_Insight_* and all NetworkInsights* cubes, which are unrelated to Threat Defense insights.",
@@ -502,7 +502,7 @@
       {
         "name": "SecurityActionIndicators",
         "title": "Security Action Indicators",
-        "description": "Threat indicator detail for security actions, one row per indicator per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes an IOC (domain, IP, URL) including threat level, confidence rating, threat actor, event volume, affected verified/unverified assets, associated users, enforcement action status, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all threat indicators involved for a particular security action, or to see all high-severity / high-confidence indicators across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. For security action-level summaries use SecurityActionSummaryView; for asset-level drill-downs use SecurityActionAssets.",
+        "description": "Threat indicator detail for security actions, one row per indicator per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes an IOC (domain, IP, URL) including threat level, confidence rating, threat actor, event volume, affected verified/unverified assets, associated users, enforcement action status, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all threat indicators involved for a particular security action, or to see all high-severity / high-confidence indicators across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. ALWAYS filter isCanonical = true when aggregating account-wide (not scoped to one security action) \u2014 otherwise similar/non-canonical group members are mixed in and results can't be matched back to the canonical-only inventory table. For security action-level summaries use SecurityActionSummaryView; for asset-level drill-downs use SecurityActionAssets.",
         "type": "cube",
         "meta": {
           "ai_context": "IQ Threat Defense domain. Indicator-of-compromise detail inside insights/security actions: use it when the unit of the answer is the indicator (domain, IP, URL) \u2014 indicators shared across more than one insight, indicator threat level or confidence, threat actor per indicator, enforcement outcome per indicator, and blocked versus unblocked DNS event counts attributed to indicators. This is the correct cube for blocked/unblocked DNS event breakdowns within Threat Defense insights. NOT a DDI/network cube: it does not hold raw DNS query logs, DNS records, zones or views \u2014 do not confuse it with NetworkInsightsDnsRawLogs, NetworkInsightsDnsRecords or other NetworkInsights* cubes. For whole-insight counts use SecurityActionSummaryView; for device detail use SecurityActionAssets.",
@@ -514,7 +514,7 @@
       {
         "name": "SecurityActionSummaryView",
         "title": "Security Action Summary View",
-        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and evaluation_start_date is within the last 30 days \u2014 expired security actions (evaluation window older than 30 days) are excluded entirely, so expiringInDays never returns -1 in this cube. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (those stay scoped to canonical parents).",
+        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and evaluation_start_date is within the last 30 days \u2014 expired security actions (evaluation window older than 30 days) are excluded entirely, so expiringInDays never returns -1 in this cube. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (filter by securityActionDisplayId there; unlike this view, their base scope spans every security action regardless of canonical status, so filter isCanonical = true on them too when aggregating account-wide rather than drilling into one action).",
         "type": "cube",
         "meta": {
           "ai_context": "IQ Threat Defense domain. This is the insight/security-action inventory: use it whenever the question counts, lists, groups, or compares whole insights rather than their contents \u2014 how many insights, insights by severity or status, resolved vs unresolved, reopened, expiring or expiry window, threat property or threat class breakdown across insights, threat feed attribution across insights, threat actor for a named insight, insights affecting more than N assets, insights involving a named user. Prefer this cube over SecurityActionAssets and SecurityActionIndicators whenever the unit of the answer is the insight itself; those two return one row per asset or per indicator and will double-count insights. NOT a DDI/network cube: unrelated to NetworkInsights* (DNS records, zones, views, subnets, address blocks, DHCP) and to raw DNS/RPZ logs. This cube also holds IQ automation time-savings data via measures totalTimeSaved, totalManualTime, and totalAgentTime.",
@@ -2503,6 +2503,11 @@
           "title": "Asset Details Insight Indicator"
         },
         {
+          "name": "AssetDetails_ch.insight_indicators",
+          "type": "string",
+          "title": "Asset Details Indicator"
+        },
+        {
           "name": "AssetDetails_ch.insight_indicator_label",
           "type": "string",
           "title": "Asset Details Insight Indicator label"
@@ -2541,6 +2546,11 @@
           "name": "AssetDetails_ch.insight_state",
           "type": "string",
           "title": "Asset Details Insight State"
+        },
+        {
+          "name": "AssetDetails_ch.insight_states",
+          "type": "string",
+          "title": "Asset Details InsightStates"
         },
         {
           "name": "AssetDetails_ch.insight_sub_classification",
@@ -3075,7 +3085,7 @@
         {
           "name": "AssetDetails_ch.os_eos",
           "type": "time",
-          "title": "Asset Details OSEndOfSale"
+          "title": "Asset Details OSEndOfStandardSupport"
         },
         {
           "name": "AssetDetails_ch.os_eol",
@@ -3319,6 +3329,17 @@
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
           },
           {
+            "name": "AssetDetails_ch.insight_indicators",
+            "title": "Asset Details Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
+          },
+          {
             "name": "AssetDetails_ch.insight_indicator_label",
             "title": "Asset Details Insight Indicator label",
             "type": "string",
@@ -3375,6 +3396,17 @@
             "title": "Asset Details Insight State",
             "type": "string",
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
+          },
+          {
+            "name": "AssetDetails_ch.insight_states",
+            "title": "Asset Details InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "AssetDetails_ch.insight_sub_classification",
@@ -4186,9 +4218,9 @@
           },
           {
             "name": "AssetDetails_ch.os_eos",
-            "title": "Asset Details OSEndOfSale",
+            "title": "Asset Details OSEndOfStandardSupport",
             "type": "time",
-            "description": "Date when the OS version reaches End of Sale (vendor stops selling this OS version). Use when asking about end of sale dates. For when the OS is no longer maintained, see os_eol. For when security patches stop, see os_eossec."
+            "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking about end of support dates. For when the OS is no longer maintained, see os_eol. For when security patches stop, see os_eossec."
           },
           {
             "name": "AssetDetails_ch.os_eol",
@@ -4353,7 +4385,7 @@
             "description": "Only unmanaged assets. Use when asking about \"unmanaged devices\", \"shadow IT\", or assets not under management."
           }
         ],
-        "dimension_count": 148,
+        "dimension_count": 150,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -5025,7 +5057,7 @@
         {
           "name": "AssetDetails_ch_agg.os_eos",
           "type": "time",
-          "title": "Asset Details Agg OSEndOfSale"
+          "title": "Asset Details Agg OSEndOfStandardSupport"
         },
         {
           "name": "AssetDetails_ch_agg.os_eol",
@@ -6354,12 +6386,12 @@
           },
           {
             "name": "AssetDetails_ch_agg.os_eos",
-            "title": "Asset Details Agg OSEndOfSale",
+            "title": "Asset Details Agg OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -8425,7 +8457,7 @@
             "type": "string",
             "description": "Asset type classification (e.g. \"PC\", \"Server\", \"Router\") from the merged asset view. Populated only for the common row; blank for individual provider rows when the provider does not supply a mapped asset type.",
             "meta": {
-              "shown": true,
+              "shown": false,
               "table_title": "Type"
             }
           },
@@ -9723,7 +9755,7 @@
         {
           "name": "Asset_Insight_DeviceInterface_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Device Interface (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Device Interface (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_DeviceInterface_Agg_Expanded.os_eol",
@@ -11295,12 +11327,12 @@
           },
           {
             "name": "Asset_Insight_DeviceInterface_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Device Interface (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Device Interface (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -12136,6 +12168,11 @@
           "title": "Asset Insight - Device Interface (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) Classification label"
@@ -12151,6 +12188,11 @@
           "title": "Asset Insight - Device Interface (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) Insight Confidence label"
@@ -12159,6 +12201,11 @@
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_indicator_label",
@@ -12171,6 +12218,11 @@
           "title": "Asset Insight - Device Interface (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) Registration Indicator label"
@@ -12179,6 +12231,11 @@
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_status_label",
@@ -12191,9 +12248,19 @@
           "title": "Asset Insight - Device Interface (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Device Interface (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classification_label",
@@ -13155,6 +13222,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_classifications",
+            "title": "Asset Insight - Device Interface (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_classification_label",
             "title": "Asset Insight - Device Interface (Expanded) Classification label",
             "type": "string",
@@ -13173,6 +13251,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_confidences",
+            "title": "Asset Insight - Device Interface (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_confidence_label",
             "title": "Asset Insight - Device Interface (Expanded) Insight Confidence label",
             "type": "string",
@@ -13183,6 +13272,17 @@
             "title": "Asset Insight - Device Interface (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_indicators",
+            "title": "Asset Insight - Device Interface (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_indicator_label",
@@ -13197,6 +13297,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Device Interface (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Device Interface (Expanded) Registration Indicator label",
             "type": "string",
@@ -13207,6 +13318,17 @@
             "title": "Asset Insight - Device Interface (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Device Interface (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_registration_status_label",
@@ -13221,10 +13343,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_states",
+            "title": "Asset Insight - Device Interface (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classification",
             "title": "Asset Insight - Device Interface (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Device Interface (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_Expanded.insight_sub_classification_label",
@@ -14527,7 +14671,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 192,
+        "dimension_count": 199,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -15204,7 +15348,7 @@
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Device Interface + Provider Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Device Interface + Provider Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Agg_Expanded.os_eol",
@@ -16896,12 +17040,12 @@
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Device Interface + Provider Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Device Interface + Provider Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -17978,6 +18122,11 @@
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Classification label"
@@ -17993,6 +18142,11 @@
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight Confidence label"
@@ -18001,6 +18155,11 @@
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_indicator_label",
@@ -18013,6 +18172,11 @@
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Registration Indicator label"
@@ -18021,6 +18185,11 @@
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_status_label",
@@ -18033,9 +18202,19 @@
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classification_label",
@@ -19117,6 +19296,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_classifications",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_classification_label",
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) Classification label",
             "type": "string",
@@ -19135,6 +19325,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_confidences",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_confidence_label",
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -19145,6 +19346,17 @@
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_indicators",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_indicator_label",
@@ -19159,6 +19371,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -19169,6 +19392,17 @@
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_registration_status_label",
@@ -19183,10 +19417,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_states",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classification",
             "title": "Asset Insight - Device Interface + Provider Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Device Interface + Provider Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_Expanded.insight_sub_classification_label",
@@ -20655,7 +20911,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 216,
+        "dimension_count": 223,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -21378,7 +21634,7 @@
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Device Interface + Provider Data + User Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Agg_Expanded.os_eol",
@@ -23162,12 +23418,12 @@
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Device Interface + Provider Data + User Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -24245,6 +24501,11 @@
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Classification label"
@@ -24260,6 +24521,11 @@
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight Confidence label"
@@ -24268,6 +24534,11 @@
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_indicator_label",
@@ -24280,6 +24551,11 @@
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Registration Indicator label"
@@ -24288,6 +24564,11 @@
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_status_label",
@@ -24300,9 +24581,19 @@
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classification_label",
@@ -25418,6 +25709,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_classifications",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_classification_label",
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Classification label",
             "type": "string",
@@ -25436,6 +25738,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_confidences",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_confidence_label",
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -25446,6 +25759,17 @@
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_indicators",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_indicator_label",
@@ -25460,6 +25784,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -25470,6 +25805,17 @@
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_registration_status_label",
@@ -25484,10 +25830,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_states",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classification",
             "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Device Interface + Provider Data + User Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_ProviderData_UserData_Expanded.insight_sub_classification_label",
@@ -27004,7 +27372,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 223,
+        "dimension_count": 230,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -27728,7 +28096,7 @@
         {
           "name": "Asset_Insight_DeviceInterface_UserData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Device Interface + User Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Device Interface + User Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_DeviceInterface_UserData_Agg_Expanded.os_eol",
@@ -29392,12 +29760,12 @@
           },
           {
             "name": "Asset_Insight_DeviceInterface_UserData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Device Interface + User Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Device Interface + User Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -30230,6 +30598,11 @@
           "title": "Asset Insight - Device Interface + User Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) Classification label"
@@ -30245,6 +30618,11 @@
           "title": "Asset Insight - Device Interface + User Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) Insight Confidence label"
@@ -30253,6 +30631,11 @@
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_indicator_label",
@@ -30265,6 +30648,11 @@
           "title": "Asset Insight - Device Interface + User Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) Registration Indicator label"
@@ -30273,6 +30661,11 @@
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_status_label",
@@ -30285,9 +30678,19 @@
           "title": "Asset Insight - Device Interface + User Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Device Interface + User Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Device Interface + User Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classification_label",
@@ -31293,6 +31696,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_classifications",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_classification_label",
             "title": "Asset Insight - Device Interface + User Data (Expanded) Classification label",
             "type": "string",
@@ -31311,6 +31725,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_confidences",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_confidence_label",
             "title": "Asset Insight - Device Interface + User Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -31321,6 +31746,17 @@
             "title": "Asset Insight - Device Interface + User Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_indicators",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_indicator_label",
@@ -31335,6 +31771,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Device Interface + User Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -31345,6 +31792,17 @@
             "title": "Asset Insight - Device Interface + User Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_registration_status_label",
@@ -31359,10 +31817,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_states",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classification",
             "title": "Asset Insight - Device Interface + User Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Device Interface + User Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_DeviceInterface_UserData_Expanded.insight_sub_classification_label",
@@ -32733,7 +33213,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 201,
+        "dimension_count": 208,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -33406,7 +33886,7 @@
         {
           "name": "Asset_Insight_ProviderData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Provider Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Provider Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_ProviderData_Agg_Expanded.os_eol",
@@ -34849,12 +35329,12 @@
           },
           {
             "name": "Asset_Insight_ProviderData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Provider Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Provider Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -35443,6 +35923,11 @@
           "title": "Asset Insight - Provider Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_ProviderData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) Classification label"
@@ -35458,6 +35943,11 @@
           "title": "Asset Insight - Provider Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_ProviderData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) Insight Confidence label"
@@ -35466,6 +35956,11 @@
           "name": "Asset_Insight_ProviderData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_ProviderData_Expanded.insight_indicator_label",
@@ -35478,6 +35973,11 @@
           "title": "Asset Insight - Provider Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_ProviderData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) Registration Indicator label"
@@ -35486,6 +35986,11 @@
           "name": "Asset_Insight_ProviderData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_ProviderData_Expanded.insight_registration_status_label",
@@ -35498,9 +36003,19 @@
           "title": "Asset Insight - Provider Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Provider Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Provider Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classification_label",
@@ -36337,6 +36852,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_classifications",
+            "title": "Asset Insight - Provider Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_Expanded.insight_classification_label",
             "title": "Asset Insight - Provider Data (Expanded) Classification label",
             "type": "string",
@@ -36355,6 +36881,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_confidences",
+            "title": "Asset Insight - Provider Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_Expanded.insight_confidence_label",
             "title": "Asset Insight - Provider Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -36365,6 +36902,17 @@
             "title": "Asset Insight - Provider Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_indicators",
+            "title": "Asset Insight - Provider Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_Expanded.insight_indicator_label",
@@ -36379,6 +36927,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Provider Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Provider Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -36389,6 +36948,17 @@
             "title": "Asset Insight - Provider Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Provider Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_Expanded.insight_registration_status_label",
@@ -36403,10 +36973,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_states",
+            "title": "Asset Insight - Provider Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classification",
             "title": "Asset Insight - Provider Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Provider Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_Expanded.insight_sub_classification_label",
@@ -37539,7 +38131,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 167,
+        "dimension_count": 174,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -38256,7 +38848,7 @@
         {
           "name": "Asset_Insight_ProviderData_UserData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - Provider Data + User Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - Provider Data + User Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_ProviderData_UserData_Agg_Expanded.os_eol",
@@ -39781,12 +40373,12 @@
           },
           {
             "name": "Asset_Insight_ProviderData_UserData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - Provider Data + User Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - Provider Data + User Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -40352,6 +40944,11 @@
           "title": "Asset Insight - Provider Data + User Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) Classification label"
@@ -40367,6 +40964,11 @@
           "title": "Asset Insight - Provider Data + User Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) Insight Confidence label"
@@ -40375,6 +40977,11 @@
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_indicator_label",
@@ -40387,6 +40994,11 @@
           "title": "Asset Insight - Provider Data + User Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) Registration Indicator label"
@@ -40395,6 +41007,11 @@
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_status_label",
@@ -40407,9 +41024,19 @@
           "title": "Asset Insight - Provider Data + User Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - Provider Data + User Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - Provider Data + User Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classification_label",
@@ -41290,6 +41917,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_classifications",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_classification_label",
             "title": "Asset Insight - Provider Data + User Data (Expanded) Classification label",
             "type": "string",
@@ -41308,6 +41946,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_confidences",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_confidence_label",
             "title": "Asset Insight - Provider Data + User Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -41318,6 +41967,17 @@
             "title": "Asset Insight - Provider Data + User Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_indicators",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_indicator_label",
@@ -41332,6 +41992,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - Provider Data + User Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -41342,6 +42013,17 @@
             "title": "Asset Insight - Provider Data + User Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_registration_status_label",
@@ -41356,10 +42038,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_states",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classification",
             "title": "Asset Insight - Provider Data + User Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - Provider Data + User Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_ProviderData_UserData_Expanded.insight_sub_classification_label",
@@ -42560,7 +43264,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 176,
+        "dimension_count": 183,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -43273,7 +43977,7 @@
         {
           "name": "Asset_Insight_UserData_Agg_Expanded.os_eos",
           "type": "time",
-          "title": "Asset Insight - User Data (Aggregated, Expanded) OSEndOfSale"
+          "title": "Asset Insight - User Data (Aggregated, Expanded) OSEndOfStandardSupport"
         },
         {
           "name": "Asset_Insight_UserData_Agg_Expanded.os_eol",
@@ -44687,12 +45391,12 @@
           },
           {
             "name": "Asset_Insight_UserData_Agg_Expanded.os_eos",
-            "title": "Asset Insight - User Data (Aggregated, Expanded) OSEndOfSale",
+            "title": "Asset Insight - User Data (Aggregated, Expanded) OSEndOfStandardSupport",
             "type": "time",
             "description": "Date when the OS version reaches End of Support (vendor stops providing updates). Use when asking 'which assets are past end of support' or identifying unsupported OS versions. For end of life, see os_eol. For end of security patches, see os_eossec.",
             "meta": {
               "shown": true,
-              "table_title": "OS End of Sale"
+              "table_title": "OS End of Standard Support"
             }
           },
           {
@@ -45042,6 +45746,11 @@
           "title": "Asset Insight - User Data (Expanded) Classification"
         },
         {
+          "name": "Asset_Insight_UserData_Expanded.insight_classifications",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) Classifications"
+        },
+        {
           "name": "Asset_Insight_UserData_Expanded.insight_classification_label",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) Classification label"
@@ -45057,6 +45766,11 @@
           "title": "Asset Insight - User Data (Expanded) Insight Confidence"
         },
         {
+          "name": "Asset_Insight_UserData_Expanded.insight_confidences",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) Confidence"
+        },
+        {
           "name": "Asset_Insight_UserData_Expanded.insight_confidence_label",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) Insight Confidence label"
@@ -45065,6 +45779,11 @@
           "name": "Asset_Insight_UserData_Expanded.insight_indicator",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) Insight Indicator"
+        },
+        {
+          "name": "Asset_Insight_UserData_Expanded.insight_indicators",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) Indicator"
         },
         {
           "name": "Asset_Insight_UserData_Expanded.insight_indicator_label",
@@ -45077,6 +45796,11 @@
           "title": "Asset Insight - User Data (Expanded) Registration Indicator"
         },
         {
+          "name": "Asset_Insight_UserData_Expanded.insight_registration_indicators",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) MissingRecords"
+        },
+        {
           "name": "Asset_Insight_UserData_Expanded.insight_registration_indicator_label",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) Registration Indicator label"
@@ -45085,6 +45809,11 @@
           "name": "Asset_Insight_UserData_Expanded.insight_registration_status",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) Registration Status"
+        },
+        {
+          "name": "Asset_Insight_UserData_Expanded.insight_registration_statuses",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) RegistrationStatus"
         },
         {
           "name": "Asset_Insight_UserData_Expanded.insight_registration_status_label",
@@ -45097,9 +45826,19 @@
           "title": "Asset Insight - User Data (Expanded) Insight State"
         },
         {
+          "name": "Asset_Insight_UserData_Expanded.insight_states",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) InsightStates"
+        },
+        {
           "name": "Asset_Insight_UserData_Expanded.insight_sub_classification",
           "type": "string",
           "title": "Asset Insight - User Data (Expanded) SubClassification"
+        },
+        {
+          "name": "Asset_Insight_UserData_Expanded.insight_sub_classifications",
+          "type": "string",
+          "title": "Asset Insight - User Data (Expanded) SubClassifications"
         },
         {
           "name": "Asset_Insight_UserData_Expanded.insight_sub_classification_label",
@@ -45860,6 +46599,17 @@
             "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label."
           },
           {
+            "name": "Asset_Insight_UserData_Expanded.insight_classifications",
+            "title": "Asset Insight - User Data (Expanded) Classifications",
+            "type": "string",
+            "description": "Top-level classification of the security insight (e.g., \"registration\", \"security\"). Use when asking about insight type or grouping by classification. For display names, use insight_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Classifications"
+            }
+          },
+          {
             "name": "Asset_Insight_UserData_Expanded.insight_classification_label",
             "title": "Asset Insight - User Data (Expanded) Classification label",
             "type": "string",
@@ -45878,6 +46628,17 @@
             "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label."
           },
           {
+            "name": "Asset_Insight_UserData_Expanded.insight_confidences",
+            "title": "Asset Insight - User Data (Expanded) Confidence",
+            "type": "string",
+            "description": "Confidence level of the insight finding (e.g., high, medium, low). Use when asking about insight confidence, filtering by confidence, or grouping insights by confidence level. For display names, use insight_confidence_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Confidence"
+            }
+          },
+          {
             "name": "Asset_Insight_UserData_Expanded.insight_confidence_label",
             "title": "Asset Insight - User Data (Expanded) Insight Confidence label",
             "type": "string",
@@ -45888,6 +46649,17 @@
             "title": "Asset Insight - User Data (Expanded) Insight Indicator",
             "type": "string",
             "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id."
+          },
+          {
+            "name": "Asset_Insight_UserData_Expanded.insight_indicators",
+            "title": "Asset Insight - User Data (Expanded) Indicator",
+            "type": "string",
+            "description": "Specific indicator that triggered the insight, identifying a particular security check. Use when asking which indicator or check failed. For display names, use insight_indicator_label. For rule-level detail, use indicator_rule_id.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Indicator"
+            }
           },
           {
             "name": "Asset_Insight_UserData_Expanded.insight_indicator_label",
@@ -45902,6 +46674,17 @@
             "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator."
           },
           {
+            "name": "Asset_Insight_UserData_Expanded.insight_registration_indicators",
+            "title": "Asset Insight - User Data (Expanded) MissingRecords",
+            "type": "string",
+            "description": "Indicator ID only for registration-type insights. Empty for non-registration insights. Use when querying registration-related indicators. For its display name, use insight_registration_indicator_label. For all insight indicators, use insight_indicator.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Missing Records"
+            }
+          },
+          {
             "name": "Asset_Insight_UserData_Expanded.insight_registration_indicator_label",
             "title": "Asset Insight - User Data (Expanded) Registration Indicator label",
             "type": "string",
@@ -45912,6 +46695,17 @@
             "title": "Asset Insight - User Data (Expanded) Registration Status",
             "type": "string",
             "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label."
+          },
+          {
+            "name": "Asset_Insight_UserData_Expanded.insight_registration_statuses",
+            "title": "Asset Insight - User Data (Expanded) RegistrationStatus",
+            "type": "string",
+            "description": "Whether the asset is registered or unregistered based on registration-type insights. Values: \"registered\", \"unregistered\", or empty. Use when asking about registration status. For display, use insight_registration_status_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "Registration Status"
+            }
           },
           {
             "name": "Asset_Insight_UserData_Expanded.insight_registration_status_label",
@@ -45926,10 +46720,32 @@
             "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status."
           },
           {
+            "name": "Asset_Insight_UserData_Expanded.insight_states",
+            "title": "Asset Insight - User Data (Expanded) InsightStates",
+            "type": "string",
+            "description": "Current state of the insight (e.g., \"active\", \"none\"). Use when asking whether an insight is active, filtering by insight state, or checking current insight status.",
+            "meta": {
+              "data_type": "array",
+              "shown": false,
+              "table_title": "Registration Status"
+            }
+          },
+          {
             "name": "Asset_Insight_UserData_Expanded.insight_sub_classification",
             "title": "Asset Insight - User Data (Expanded) SubClassification",
             "type": "string",
             "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label."
+          },
+          {
+            "name": "Asset_Insight_UserData_Expanded.insight_sub_classifications",
+            "title": "Asset Insight - User Data (Expanded) SubClassifications",
+            "type": "string",
+            "description": "Detailed sub-classification of the insight within its parent classification. Use when drilling into specific insight types or grouping by sub-classification. For display names, use insight_sub_classification_label.",
+            "meta": {
+              "data_type": "array",
+              "shown": true,
+              "table_title": "SubClassifications"
+            }
           },
           {
             "name": "Asset_Insight_UserData_Expanded.insight_sub_classification_label",
@@ -46974,7 +47790,7 @@
             "description": ""
           }
         ],
-        "dimension_count": 152,
+        "dimension_count": 159,
         "measure_count": 7,
         "segment_count": 5,
         "meta": {
@@ -52014,6 +52830,11 @@
           "title": "Security Action Assets Security Action Display ID"
         },
         {
+          "name": "SecurityActionAssets.isCanonical",
+          "type": "boolean",
+          "title": "Security Action Assets Is Canonical"
+        },
+        {
           "name": "SecurityActionAssets.assetCqid",
           "type": "string",
           "title": "Security Action Assets Security Action Asset CQID"
@@ -52209,7 +53030,7 @@
         "name": "SecurityActionAssets",
         "title": "Security Action Assets",
         "type": "cube",
-        "description": "Per-asset detail for security actions, one row per asset per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes a device including network identifiers (IP, MAC, hostname), threat indicators on the asset, associated users, event counts, verification status, risk flag, provider/region, ranking, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all assets involved for a particular security action, or to see all risky assets across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. For security action-level summaries use SecurityActionSummaryView; for indicator-level drill-downs use SecurityActionIndicators.",
+        "description": "Per-asset detail for security actions, one row per asset per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes a device including network identifiers (IP, MAC, hostname), threat indicators on the asset, associated users, event counts, verification status, risk flag, provider/region, ranking, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all assets involved for a particular security action, or to see all risky assets across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. ALWAYS filter isCanonical = true when aggregating account-wide (not scoped to one security action) \u2014 otherwise similar/non-canonical group members are mixed in and results can't be matched back to the canonical-only inventory table. For security action-level summaries use SecurityActionSummaryView; for indicator-level drill-downs use SecurityActionIndicators.",
         "dimensions": [
           {
             "name": "SecurityActionAssets.securityActionId",
@@ -52222,6 +53043,12 @@
             "title": "Security Action Assets Security Action Display ID",
             "type": "string",
             "description": "Short human-readable identifier for the parent security action. Use when displaying security action references in reports or dashboards. For programmatic filtering or joining, use securityActionId instead."
+          },
+          {
+            "name": "SecurityActionAssets.isCanonical",
+            "title": "Security Action Assets Is Canonical",
+            "type": "boolean",
+            "description": "True when the parent security action is a canonical lead (singleton or group anchor); false when it's a similar/non-canonical group member. ALWAYS filter isCanonical = true when aggregating assets account-wide (e.g. Most Affected widgets, asset/user autocomplete) so results stay filterable against the canonical-only inventory table. Do NOT filter by this when scoping to one security action via securityActionDisplayId \u2014 a security action's own assets should be visible regardless of its canonical status."
           },
           {
             "name": "SecurityActionAssets.assetCqid",
@@ -52490,7 +53317,7 @@
           }
         ],
         "segments": [],
-        "dimension_count": 40,
+        "dimension_count": 41,
         "measure_count": 5,
         "segment_count": 0,
         "ai_context": "IQ Threat Defense domain. Device detail inside insights/security actions: use it only when the unit of the answer is an individual asset \u2014 which devices are involved in a given insight, asset IP/MAC/hostname, per-asset risk flag, verification status, or asset ranking within an insight. Do NOT use it to count or compare insights themselves (it returns one row per asset per insight and will double-count); for questions like 'insights affecting more than N assets', 'how many insights', or breakdowns across insights use SecurityActionSummaryView. NOT a DDI/network or asset-inventory cube: distinct from AssetDetails_ch, Asset_Insight_* and all NetworkInsights* cubes, which are unrelated to Threat Defense insights.",
@@ -52549,6 +53376,11 @@
           "name": "SecurityActionIndicators.securityActionDisplayId",
           "type": "string",
           "title": "Security Action Indicators Security Action Display ID"
+        },
+        {
+          "name": "SecurityActionIndicators.isCanonical",
+          "type": "boolean",
+          "title": "Security Action Indicators Is Canonical"
         },
         {
           "name": "SecurityActionIndicators.threatIndicator",
@@ -52706,7 +53538,7 @@
         "name": "SecurityActionIndicators",
         "title": "Security Action Indicators",
         "type": "cube",
-        "description": "Threat indicator detail for security actions, one row per indicator per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes an IOC (domain, IP, URL) including threat level, confidence rating, threat actor, event volume, affected verified/unverified assets, associated users, enforcement action status, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all threat indicators involved for a particular security action, or to see all high-severity / high-confidence indicators across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. For security action-level summaries use SecurityActionSummaryView; for asset-level drill-downs use SecurityActionAssets.",
+        "description": "Threat indicator detail for security actions, one row per indicator per security action. Terminology: \"insight\" is the user-facing alias for \"security action\" in the IQ Threat Defense UI \u2014 treat the two terms as synonyms. Each record describes an IOC (domain, IP, URL) including threat level, confidence rating, threat actor, event volume, affected verified/unverified assets, associated users, enforcement action status, and first/last detection timeline. Scope: rows created in the last 30 days where the parent security action has visible=true and evaluation_start_date within the last 30 days (matching SecurityActionSummaryView's scope). Use this cube to check all threat indicators involved for a particular security action, or to see all high-severity / high-confidence indicators across security actions \u2014 it's suggested to use it with securityActionDisplayId in the filter when scoping to a single security action. ALWAYS filter isCanonical = true when aggregating account-wide (not scoped to one security action) \u2014 otherwise similar/non-canonical group members are mixed in and results can't be matched back to the canonical-only inventory table. For security action-level summaries use SecurityActionSummaryView; for asset-level drill-downs use SecurityActionAssets.",
         "dimensions": [
           {
             "name": "SecurityActionIndicators.securityActionId",
@@ -52719,6 +53551,12 @@
             "title": "Security Action Indicators Security Action Display ID",
             "type": "string",
             "description": "Human-readable identifier for the parent security action. Use when displaying which security action an indicator belongs to or filtering indicators by security action. For internal joins to security action data, use securityActionId instead."
+          },
+          {
+            "name": "SecurityActionIndicators.isCanonical",
+            "title": "Security Action Indicators Is Canonical",
+            "type": "boolean",
+            "description": "True when the parent security action is a canonical lead (singleton or group anchor); false when it's a similar/non-canonical group member. ALWAYS filter isCanonical = true when aggregating indicators account-wide (e.g. Most Affected widgets, indicator autocomplete) so results stay filterable against the canonical-only inventory table. Do NOT filter by this when scoping to one security action via securityActionDisplayId \u2014 a security action's own indicators should be visible regardless of its canonical status."
           },
           {
             "name": "SecurityActionIndicators.threatIndicator",
@@ -52932,7 +53770,7 @@
           }
         ],
         "segments": [],
-        "dimension_count": 32,
+        "dimension_count": 33,
         "measure_count": 4,
         "segment_count": 0,
         "ai_context": "IQ Threat Defense domain. Indicator-of-compromise detail inside insights/security actions: use it when the unit of the answer is the indicator (domain, IP, URL) \u2014 indicators shared across more than one insight, indicator threat level or confidence, threat actor per indicator, enforcement outcome per indicator, and blocked versus unblocked DNS event counts attributed to indicators. This is the correct cube for blocked/unblocked DNS event breakdowns within Threat Defense insights. NOT a DDI/network cube: it does not hold raw DNS query logs, DNS records, zones or views \u2014 do not confuse it with NetworkInsightsDnsRawLogs, NetworkInsightsDnsRecords or other NetworkInsights* cubes. For whole-insight counts use SecurityActionSummaryView; for device detail use SecurityActionAssets.",
@@ -53236,6 +54074,11 @@
           "name": "SecurityActionSummaryView.timeSaved",
           "type": "number",
           "title": "Security Action Summary View Time Saved"
+        },
+        {
+          "name": "SecurityActionSummaryView.feedback",
+          "type": "string",
+          "title": "Security Action Summary View Feedback (JSON)"
         }
       ],
       "segments": [],
@@ -53243,7 +54086,7 @@
         "name": "SecurityActionSummaryView",
         "title": "Security Action Summary View",
         "type": "cube",
-        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and evaluation_start_date is within the last 30 days \u2014 expired security actions (evaluation window older than 30 days) are excluded entirely, so expiringInDays never returns -1 in this cube. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (those stay scoped to canonical parents).",
+        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and evaluation_start_date is within the last 30 days \u2014 expired security actions (evaluation window older than 30 days) are excluded entirely, so expiringInDays never returns -1 in this cube. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (filter by securityActionDisplayId there; unlike this view, their base scope spans every security action regardless of canonical status, so filter isCanonical = true on them too when aggregating account-wide rather than drilling into one action).",
         "dimensions": [
           {
             "name": "SecurityActionSummaryView.securityActionID",
@@ -53544,6 +54387,12 @@
             "title": "Security Action Summary View Time Saved",
             "type": "number",
             "description": "Estimated time saved for this security action, in seconds, computed as manual time minus agent time. Use when reporting automation impact per security action or ranking by saved effort. For totals across security actions, use totalTimeSaved. For the inputs, use manualTime and agentTime."
+          },
+          {
+            "name": "SecurityActionSummaryView.feedback",
+            "title": "Security Action Summary View Feedback (JSON)",
+            "type": "string",
+            "description": "Current tenant feedback on this security action as a JSON object: {\"value\":\"up|down\",\"reasons\":[...],\"note\":\"...\",\"updated_at\":\"...\"}. Null when no active feedback. Use when rendering the feedback widget state in the UI or filtering security actions by feedback value."
           }
         ],
         "measures": [
@@ -53584,7 +54433,7 @@
           }
         ],
         "segments": [],
-        "dimension_count": 50,
+        "dimension_count": 51,
         "measure_count": 5,
         "segment_count": 0,
         "ai_context": "IQ Threat Defense domain. This is the insight/security-action inventory: use it whenever the question counts, lists, groups, or compares whole insights rather than their contents \u2014 how many insights, insights by severity or status, resolved vs unresolved, reopened, expiring or expiry window, threat property or threat class breakdown across insights, threat feed attribution across insights, threat actor for a named insight, insights affecting more than N assets, insights involving a named user. Prefer this cube over SecurityActionAssets and SecurityActionIndicators whenever the unit of the answer is the insight itself; those two return one row per asset or per indicator and will double-count insights. NOT a DDI/network cube: unrelated to NetworkInsights* (DNS records, zones, views, subnets, address blocks, DHCP) and to raw DNS/RPZ logs. This cube also holds IQ automation time-savings data via measures totalTimeSaved, totalManualTime, and totalAgentTime.",
