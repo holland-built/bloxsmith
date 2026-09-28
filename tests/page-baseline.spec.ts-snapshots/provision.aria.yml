@@ -31,7 +31,7 @@
     - searchbox "Search Block" [disabled]
     - status
     - combobox "Block" [disabled]:
-      - option "Loading blocks…" [selected]
+      - option "Pick a space first" [selected]
   - text: CIDR prefix
   - spinbutton "CIDR prefix": /\d+/
   - text: Name

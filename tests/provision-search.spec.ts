@@ -252,3 +252,16 @@ test('switching A, B, then back to A: the first A request answering late does no
   await expect(block.locator('option', { hasText: /^Amsterdam Block$/ })).toHaveCount(1);
   await expect(block.locator('option', { hasText: 'Old Amsterdam Block' })).toHaveCount(0);
 });
+
+test('before a space is picked, the Block list asks for one instead of claiming it is loading', async ({ page }) => {
+  // With no space chosen nothing is being fetched, yet the list read
+  // "Loading blocks…" for as long as you looked at it.
+  await page.goto('/#provision');
+  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  await expect(block).toBeDisabled();
+  await expect(block.locator('option').first()).toHaveText('Pick a space first');
+  await expect(page.getByText('Loading blocks…')).toHaveCount(0);
+
+  await page.getByRole('combobox', { name: 'Space', exact: true }).selectOption({ label: 'Amsterdam Lab' });
+  await expect(block.locator('option').first()).not.toHaveText('Pick a space first');
+});

@@ -433,7 +433,7 @@ function SubnetMode() {
               value={block}
               onChange={(v) => { setBlock(v); flow.markStale() }}
               disabled={!space || blocksApi.loading || !!blocksApi.error}
-              placeholder={blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
+              placeholder={!space ? 'Pick a space first' : blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
             />
           </Field>
