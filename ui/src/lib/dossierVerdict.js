@@ -43,3 +43,19 @@ export function dossierVerdictTone(summary) {
       return 'neutral'
   }
 }
+
+/**
+ * True when `data` is a real verdict DossierPanel renders, false when it shows
+ * "Dossier unavailable" instead. One rule for both: the Ask tab's threat lookup
+ * uses it to decide which dossier is good enough to keep for a retry.
+ *
+ * @param {object|null|undefined} data a /api/dossier body, or `{unavailable}`
+ * @returns {boolean}
+ */
+export function dossierHasVerdict(data) {
+  if (!data) return false
+  const hasSummary = data.summary != null && typeof data.summary === 'object'
+  const hasSources = Array.isArray(data.sources) && data.sources.length > 0
+  const errorLike = data.error != null || data.locked === true
+  return !data.unavailable && !errorLike && hasSummary && hasSources
+}

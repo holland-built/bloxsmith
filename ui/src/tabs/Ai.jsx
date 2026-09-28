@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
+import { dossierHasVerdict } from '../lib/dossierVerdict.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt'
 
@@ -258,7 +259,7 @@ function EntitiesTable({ entities, availability, reason }) {
   )
 }
 
-function BlockDomainButton({ domain }) {
+function BlockDomainButton({ domain, disabled }) {
   const { COLORS } = useChartTheme()
   const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
   const [msg, setMsg] = useState('')
@@ -269,6 +270,16 @@ function BlockDomainButton({ domain }) {
 
   const looksLikeDomain = !!domain && domain.includes('.') && !domain.includes(' ')
   if (!looksLikeDomain) return null
+  // Showing a kept result from an earlier lookup: no write to the tenant, not
+  // even Unblock, on evidence this lookup did not return.
+  if (disabled) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2">
+        <button disabled className="px-2 py-1 rounded-control text-note border border-border text-muted opacity-50">Block domain</button>
+        <span className="text-note text-muted">off while an earlier result is shown</span>
+      </div>
+    )
+  }
 
   async function run(action) {
     setState('busy')
@@ -303,6 +314,19 @@ function BlockDomainButton({ domain }) {
   )
 }
 
+// "from your earlier lookup of X, at HH:MM": a result kept from the last good
+// lookup of the same search, shown under that part's failure.
+function KeptResult({ kept, children }) {
+  const t = new Date(kept.at)
+  const hhmm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`
+  return (
+    <div data-kept-result="" className="mt-2 pl-3 border-l-2 border-border">
+      <div className="text-note text-muted mb-1">from your earlier lookup of {kept.q}, at {hhmm}</div>
+      {children}
+    </div>
+  )
+}
+
 function LookupCard({ panelId }) {
   const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
@@ -311,14 +335,25 @@ function LookupCard({ panelId }) {
   const [dossier, setDossier] = useState(null)
   const [err, setErr] = useState(null)
   const [queryUsed, setQueryUsed] = useState('')
+  // The last good answer of each part, with the search that produced it. Shown
+  // only when a retry of that SAME search fails; a different search shows only
+  // its own result or error.
+  const [kept, setKept] = useState({ entities: null, dossier: null })
+  // Answers count only for the lookup they were requested in, so a late answer
+  // to an earlier search can neither show under a newer one nor replace what
+  // is kept for it.
+  const genRef = useRef(0)
 
   const lookup = async () => {
     const query = q.trim()
     if (!query) return
+    const gen = ++genRef.current
+    const current = () => gen === genRef.current
     setBusy(true); setErr(null); setRes(null); setDossier(null); setQueryUsed(query)
     fetch(`/api/dossier?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
       .then(async (r) => {
         const body = await r.json().catch(() => null)
+        if (!current()) return
         // A non-200 (vault-gate 503 {error,locked}, a recover500 panic body) must
         // never pass its error body through as if it were dossier data — that is
         // how a lookup that never ran got painted CLEAN.
@@ -327,19 +362,32 @@ function LookupCard({ panelId }) {
           setDossier({ unavailable: reason })
           return
         }
-        if (body) setDossier(body)
+        // A 200 that is not readable JSON is a failure, not an absent dossier.
+        setDossier(body || { unavailable: 'unreadable response' })
+        if (dossierHasVerdict(body)) setKept((k) => ({ ...k, dossier: { q: query, at: Date.now(), data: body } }))
       })
-      .catch(() => {})
+      // A dossier that never answered is a failure too, not silence.
+      .catch((e) => { if (current()) setDossier({ unavailable: String(e?.message || e) }) })
     try {
       const r = await fetch(`/api/threat-lookup?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
       const body = await r.json().catch(() => null)
-      if (!r.ok || (body && body.error)) setErr((body && body.error) || `HTTP ${r.status}`)
-      else setRes(body || { entities: [], query })
+      if (!current()) return
+      // A 200 that is not readable JSON is a failure too, not "No matches".
+      if (!r.ok || !body || body.error) setErr((body && body.error) || (r.ok ? 'unreadable response' : `HTTP ${r.status}`))
+      else {
+        setRes(body)
+        if (body.availability !== 'error') setKept((k) => ({ ...k, entities: { q: query, at: Date.now(), data: body } }))
+      }
     } catch (e) {
+      if (!current()) return
       setErr(String(e?.message || e))
     }
     setBusy(false)
   }
+
+  const entitiesFailed = !!err || res?.availability === 'error'
+  const keptEntities = entitiesFailed && kept.entities?.q === queryUsed ? kept.entities : null
+  const keptDossier = dossier && !dossierHasVerdict(dossier) && kept.dossier?.q === queryUsed ? kept.dossier : null
 
   return (
     <Card panelId={panelId} title="Threat lookup" span={2}>
@@ -364,7 +412,12 @@ function LookupCard({ panelId }) {
       {err && <div className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} />}
-      {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
+      {keptEntities && (
+        <KeptResult kept={keptEntities}>
+          <EntitiesTable entities={keptEntities.data.entities} availability={keptEntities.data.availability} />
+        </KeptResult>
+      )}
+      {(res || dossier || keptEntities) && <BlockDomainButton domain={queryUsed} disabled={!!(keptEntities || keptDossier)} />}
       {/* Threat intel is one of five sources the dossier page shows for the
           same indicator (assets, DNS, IPAM and recent changes are the other
           four). Nothing here is removed or moved — this is a way OUT of a
@@ -378,6 +431,11 @@ function LookupCard({ panelId }) {
         </a>
       )}
       <DossierPanel data={dossier} />
+      {keptDossier && (
+        <KeptResult kept={keptDossier}>
+          <DossierPanel data={keptDossier.data} />
+        </KeptResult>
+      )}
     </Card>
   )
 }

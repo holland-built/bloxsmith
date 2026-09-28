@@ -620,12 +620,27 @@ html[data-theme="light"] { color-scheme: light; }
 /* ---------- Ask: the lookup beside the chat ----------
    Threat lookup is an independent search, not the model's evidence, so it sits
    open beside the filled Ask AI panel: no fill, one rule on its left edge.
-   Border widths are unchanged, so its measured width does not move. */
+   Border widths are unchanged, so its measured width does not move.
+   Layout "A · Pinned panel": it is as tall as its content (align-self: start),
+   not the chat's row height, which let a failed lookup's "unavailable" block
+   stretch and push the dossier and search box off a short screen. Beside the
+   chat (xl, 1280px, where the grid goes six wide) it stays in view under the
+   sticky header while the page scrolls; top matches scroll-margin-top on
+   [data-panel-id]. Stacked, it scrolls away as before. It pins only as the
+   grid's last child, after the chat: moved first by a saved layout and widened
+   to the full row, a pinned lookup would float over the chat scrolling under it. */
 [data-panel-id="ai-threat-lookup"] {
   background: transparent;
   border-color: transparent;
   border-left-color: var(--color-border);
   border-radius: 0;
+  align-self: start;
+}
+@media (min-width: 1280px) {
+  [data-panel-id="ai-threat-lookup"]:last-child {
+    position: sticky;
+    top: 72px;
+  }
 }
 
 /* ---------- Change-tab forms: caption beside the control ----------
