@@ -116,6 +116,15 @@ jobs:
           print(f"mcp {md.version('mcp')} exports streamablehttp_client, as scripts/mcp_session.py expects")
           PY
 
+      # From 2026-09-26 csp.infoblox.com/mcp answered 429 part-way through the
+      # catalog, and the 429 killed the whole session, so this job died every
+      # night (#246). The catalog now paces its calls and resumes after a 429.
+      # This proves that against a local stand-in server that sends one 429, with
+      # no key and no network, before the live run depends on it.
+      - name: Prove the catalog survives a rate limit
+        if: steps.gate.outputs.run == 'true'
+        run: python scripts/test_mcp_rate_limit.py
+
       - name: Catalog live MCP tools, services, cubes
         if: steps.gate.outputs.run == 'true'
         env:

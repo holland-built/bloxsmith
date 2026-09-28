@@ -1,7 +1,7 @@
 """Dump all REST services + endpoint listings for NOC-relevant ones."""
 import asyncio, json, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mcp_session import _mcp_session, _tool_text
+from mcp_session import _tool_text, call_each
 
 
 def txt(r):
@@ -56,40 +56,45 @@ def extract_get_endpoints(info):
 
 
 async def main():
-    async with _mcp_session() as session:
-        result = {}
-        r = await session.call_tool("infoblox-portal_list_all_available_services", {})
-        services = txt(r)
-        result["all_services"] = services
-        svc_list = services["services"] if isinstance(services, dict) else services
-        names = [s.get("service_name") for s in svc_list if isinstance(s, dict)]
-        print(f"=== {len(names)} services ===", file=sys.stderr)
-        for s in svc_list:
-            print(f"  {s.get('service_name')}: {s.get('paths_count')} paths — {s.get('title')}", file=sys.stderr)
+    # Through call_each, like the detail calls below, so a 429 here waits and
+    # retries instead of ending the run (#246).
+    (r,) = await call_each("infoblox-portal_list_all_available_services", [{}])
+    if isinstance(r, Exception):
+        raise r
+    result = {}
+    services = txt(r)
+    result["all_services"] = services
+    svc_list = services["services"] if isinstance(services, dict) else services
+    names = [s.get("service_name") for s in svc_list if isinstance(s, dict)]
+    print(f"=== {len(names)} services ===", file=sys.stderr)
+    for s in svc_list:
+        print(f"  {s.get('service_name')}: {s.get('paths_count')} paths — {s.get('title')}", file=sys.stderr)
 
-        kws = ["ipam", "dns", "dhcp", "atc", "dfp", "fw", "lease", "host",
-               "asset", "anycast", "cdc", "threat", "network", "dossier", "infra"]
-        relevant = [n for n in names if n and any(k in str(n).lower() for k in kws)]
-        result["_relevant_names"] = relevant
-        details = {}
-        for n in relevant:
-            try:
-                ri = await session.call_tool("infoblox-portal_get_service_info", {"service_name": n})
-                info = txt(ri)
-                gets, all_eps, key = extract_get_endpoints(info)
-                details[n] = {
-                    "info_keys": list(info.keys()) if isinstance(info, dict) else str(type(info)),
-                    "container_key": key,
-                    "get_endpoints": gets,
-                    "all_endpoints": all_eps,
-                    "raw": info,
-                }
-                print(f"  [svc ok] {n}: {len(all_eps)} eps ({len(gets)} GET) via {key}", file=sys.stderr)
-            except Exception as e:
-                details[n] = {"error": str(e)}
-                print(f"  [svc ERR] {n}: {e}", file=sys.stderr)
-        result["service_details"] = details
-        print(json.dumps(result, indent=2, default=str))
+    kws = ["ipam", "dns", "dhcp", "atc", "dfp", "fw", "lease", "host",
+           "asset", "anycast", "cdc", "threat", "network", "dossier", "infra"]
+    relevant = [n for n in names if n and any(k in str(n).lower() for k in kws)]
+    result["_relevant_names"] = relevant
+    details = {}
+    answers = await call_each("infoblox-portal_get_service_info", [{"service_name": n} for n in relevant])
+    for n, ri in zip(relevant, answers):
+        try:
+            if isinstance(ri, Exception):
+                raise ri
+            info = txt(ri)
+            gets, all_eps, key = extract_get_endpoints(info)
+            details[n] = {
+                "info_keys": list(info.keys()) if isinstance(info, dict) else str(type(info)),
+                "container_key": key,
+                "get_endpoints": gets,
+                "all_endpoints": all_eps,
+                "raw": info,
+            }
+            print(f"  [svc ok] {n}: {len(all_eps)} eps ({len(gets)} GET) via {key}", file=sys.stderr)
+        except Exception as e:
+            details[n] = {"error": str(e)}
+            print(f"  [svc ERR] {n}: {e}", file=sys.stderr)
+    result["service_details"] = details
+    print(json.dumps(result, indent=2, default=str))
 
 
 asyncio.run(main())
