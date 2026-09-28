@@ -86,3 +86,14 @@ test('on a phone the lookup does not pin: it scrolls away under the chat as befo
   const scrolled = await page.evaluate(() => window.scrollY);
   expect(Math.abs(after.y - (lb.y - scrolled))).toBeLessThan(2);
 });
+
+test('moved above the chat, the lookup does not pin, so it can never float over it', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.goto('/#ai');
+  const lookup = page.locator(LOOKUP);
+  expect(await lookup.evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+  // Stands in for a saved layout that puts the lookup first: widened to the
+  // full row, the chat would scroll up underneath a pinned lookup.
+  await lookup.evaluate((el) => el.parentElement!.insertBefore(el, el.parentElement!.firstElementChild));
+  expect(await lookup.evaluate((el) => getComputedStyle(el).position)).not.toBe('sticky');
+});
