@@ -346,7 +346,9 @@ function LookupCard({ panelId }) {
 
   const lookup = async () => {
     const query = q.trim()
-    if (!query) return
+    // Enter reaches here as well as the button, and the button's disabled
+    // state does not stop Enter, so a running lookup is checked for here.
+    if (!query || busy) return
     const gen = ++genRef.current
     const current = () => gen === genRef.current
     setBusy(true); setErr(null); setRes(null); setDossier(null); setQueryUsed(query)
