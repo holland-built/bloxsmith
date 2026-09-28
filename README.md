@@ -472,6 +472,14 @@ E2E_SKIP_LIVE=1 npm run test:e2e
 | `tests/` | Playwright browser tests |
 | `scripts/` | Dev server, test runner and release helpers |
 | `docs/` | Deployment guide, tab guide, design decisions |
+| `deploy/` | Settings for the optional secure proxy |
+| `third_party/` | The Inter font, and the open-source projects the provisioning engine is based on |
+
+The files at the top level stay there because something reads them by that path. The quick
+start downloads `docker-compose.yml` and the `update` files from there. The release build
+packs `LICENSE` and `NOTICE.md`. The release tool reads its steps from `SHIP.md`, and
+`package.json` and `playwright.config.ts` set up the browser tests. `.env.example` is the
+settings template for Docker Compose. `CLAUDE.md` holds the notes Claude Code loads for this repo.
 
 Full reference, including every setting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
