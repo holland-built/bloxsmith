@@ -470,6 +470,9 @@ func canonicalOnly() []map[string]any {
 // normAssets merges rows, so a reply this long may be missing devices.
 const assetInsightLimit = 500
 
+// assetRollupLimit is the rollup's limit on OS groups.
+const assetRollupLimit = 50
+
 // assetInsightDims is the inventory's dimension set. The MCP query_cube
 // guardrail refuses a 7th dimension outright (see assets.go), so this holds at
 // most six. The cube has one row per (security action, asset) pair, and a row
@@ -509,10 +512,17 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueDevices"},
 			map[string]any{
-				"dimensions": []string{"SecurityActionAssets.os", "SecurityActionAssets.isVerified"},
-				"order":      map[string]any{"SecurityActionAssets.uniqueDevices": "desc"}, "limit": 50,
+				// os only: isVerified differs between a device's security
+				// actions, so grouping by it would count a device in two groups.
+				// os is a device property; a device whose records disagree on
+				// it would still land in two groups, so do not sum the groups.
+				"dimensions": []string{"SecurityActionAssets.os"},
+				"order":      map[string]any{"SecurityActionAssets.uniqueDevices": "desc"}, "limit": assetRollupLimit,
 				"filters": canonicalOnly(),
 			})
+		// Per day of createdAt: distinct device names on asset records stored
+		// that day. A device on several days counts on each; this is not a
+		// count of newly discovered devices.
 		trendD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueDevices"}, map[string]any{
 				"time_dimensions": []map[string]any{{
@@ -553,11 +563,20 @@ func assembleAssetsResult(mcpOK bool, invD, rollupD, trendD []map[string]any) ma
 			"unavailable": nil,
 			"note":        "No security-action assets in the last 30 days for this tenant."}
 	}
+	invFull, rollupFull := len(invD) >= assetInsightLimit, len(rollupD) >= assetRollupLimit
 	result := map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil,
-		"truncated": len(invD) >= assetInsightLimit}
-	if len(invD) >= assetInsightLimit {
-		result["note"] = fmt.Sprintf("The inventory stopped at the %d-row limit: some devices are missing, "+
-			"and the last device's security_actions total may be partial.", assetInsightLimit)
+		"truncated": invFull || rollupFull}
+	var notes []string
+	if invFull {
+		notes = append(notes, fmt.Sprintf("The inventory stopped at the %d-row limit: some devices are "+
+			"missing, and any device's security_actions total may be partial.", assetInsightLimit))
+	}
+	if rollupFull {
+		notes = append(notes, fmt.Sprintf("The OS rollup stopped at %d groups: some OS groups are missing.",
+			assetRollupLimit))
+	}
+	if len(notes) > 0 {
+		result["note"] = strings.Join(notes, " ")
 	}
 	return result
 }
