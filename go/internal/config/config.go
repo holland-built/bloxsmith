@@ -176,7 +176,7 @@ type Config struct {
 	AxurCustomerKey string // AXUR_CUSTOMER_KEY
 
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
-	LLMModel   string // LLM_MODEL or "qwen/qwen3.6-27b" (see the decommission note at the default)
+	LLMModel   string // LLM_MODEL or "qwen/qwen3.8-27b" (see the decommission note at the default)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
 
 	VaultDir            string // VAULT_DIR, default "/vault" (server.py:2405)
@@ -293,7 +293,7 @@ func Load(dir string) *Config {
 	if v := os.Getenv("LLM_API_KEY"); v != "" {
 		c.LLMAPIKey = v
 	}
-	// THE DEFAULT HAS NOW OUTLIVED TWO GROQ DECOMMISSIONS, so it is worth saying
+	// THE DEFAULT HAS NOW OUTLIVED THREE GROQ DECOMMISSIONS, so it is worth saying
 	// what keeps happening. qwen/qwen3-32b went first (404 model_not_found,
 	// 2026-07) and every /api/query returned "AI error: request failed" until
 	// the default moved. Its replacement, llama-3.3-70b-versatile, is listed on
@@ -317,7 +317,13 @@ func Load(dir string) *Config {
 	// question and returned {"answer":"4"} with three suggestions and no error,
 	// which is the contract this code already expects. It is the default for
 	// that reason and no other.
-	c.LLMModel = or("LLM_MODEL", "qwen/qwen3.6-27b")
+	//
+	// qwen/qwen3.6-27b went the same way: by 2026-10-01 GET /openai/v1/models
+	// no longer listed it and chat returned 404 "does not exist", so Ask AI
+	// showed "the AI provider does not recognise the configured model".
+	// qwen/qwen3.8-27b is the listed successor, and the same JSON-only prompt
+	// returned {"answer":"4"} from it that day.
+	c.LLMModel = or("LLM_MODEL", "qwen/qwen3.8-27b")
 	c.LLMBaseURL = os.Getenv("LLM_BASE_URL")
 
 	c.VaultDir = getDefault("VAULT_DIR", "/vault")
