@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -465,13 +466,17 @@ func canonicalOnly() []map[string]any {
 		"member": "SecurityActionAssets.isCanonical", "operator": "equals", "values": []string{"true"}}}
 }
 
+// assetInsightLimit is the inventory's row limit. The cube applies it before
+// normAssets merges rows, so a reply this long may be missing devices.
+const assetInsightLimit = 500
+
 // assetInsightDims is the inventory's dimension set. The MCP query_cube
 // guardrail refuses a 7th dimension outright (see assets.go), so this holds at
 // most six. The cube has one row per (security action, asset) pair, and a row
 // comes back per distinct dimension tuple, so assetCqid is in the set and
-// normAssets merges any rows that still share one. Fields that differ from one security action to the next
-// (lastDetected, isVerified) are left out, or they would split a device back
-// into one row per security action.
+// normAssets merges any rows that still share one. Fields that differ from one
+// security action to the next (lastDetected, isVerified) are left out, or they
+// would split a device back into one row per security action.
 var assetInsightDims = []string{
 	"SecurityActionAssets.assetCqid", "SecurityActionAssets.deviceName",
 	"SecurityActionAssets.os", "SecurityActionAssets.ipAddresses",
@@ -498,7 +503,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 		invD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueSecurityActions"}, map[string]any{
 				"dimensions": assetInsightDims,
-				"order":      map[string]any{"SecurityActionAssets.uniqueSecurityActions": "desc"}, "limit": 500,
+				"order":      map[string]any{"SecurityActionAssets.uniqueSecurityActions": "desc"}, "limit": assetInsightLimit,
 				"filters": canonicalOnly(),
 			})
 		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
@@ -548,7 +553,13 @@ func assembleAssetsResult(mcpOK bool, invD, rollupD, trendD []map[string]any) ma
 			"unavailable": nil,
 			"note":        "No security-action assets in the last 30 days for this tenant."}
 	}
-	return map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil}
+	result := map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil,
+		"truncated": len(invD) >= assetInsightLimit}
+	if len(invD) >= assetInsightLimit {
+		result["note"] = fmt.Sprintf("The inventory stopped at the %d-row limit: some devices are missing, "+
+			"and the last device's security_actions total may be partial.", assetInsightLimit)
+	}
+	return result
 }
 
 // flattenCubeRow is _flatten_cube_row (server.py:4327): strip the "Cube." prefix

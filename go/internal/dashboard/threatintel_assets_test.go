@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -177,4 +178,22 @@ func hasCanonicalFilter(v any) bool {
 		}
 	}
 	return false
+}
+
+// The cube stops at assetInsightLimit rows, before normAssets merges them, so
+// a full reply may be missing devices and the last device's total may be
+// partial. The result says so, or asset_insights would present it as complete.
+func TestAssembleAssetsResult_MarksAFullInventoryAsTruncated(t *testing.T) {
+	full := make([]map[string]any, assetInsightLimit)
+	for i := range full {
+		full[i] = map[string]any{"SecurityActionAssets.assetCqid": fmt.Sprintf("cq-%d", i)}
+	}
+	got := assembleAssetsResult(true, full, []map[string]any{}, []map[string]any{})
+	if got["truncated"] != true || got["note"] == nil {
+		t.Errorf("truncated = %v, note = %v; want true and a note for a reply at the row limit", got["truncated"], got["note"])
+	}
+	short := assembleAssetsResult(true, full[:1], []map[string]any{}, []map[string]any{})
+	if short["truncated"] != false {
+		t.Errorf("truncated = %v for a reply under the limit, want false", short["truncated"])
+	}
 }
