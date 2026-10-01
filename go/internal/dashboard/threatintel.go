@@ -458,13 +458,34 @@ func normLookalikes(domainsRaw, targetsRaw any) map[string]any {
 // security actions. Since 2026-09 the cube spans every security action, and
 // Infoblox's own description says to ALWAYS filter isCanonical = true when
 // aggregating account-wide, or similar/non-canonical group members are mixed
-// in (#253): one device would count once per duplicate security action.
-var canonicalOnly = []map[string]any{{
-	"member": "SecurityActionAssets.isCanonical", "operator": "equals", "values": []string{"true"}}}
+// in (#253): one device would count once per duplicate security action. It
+// returns a fresh slice each call, because FetchAssets runs concurrently.
+func canonicalOnly() []map[string]any {
+	return []map[string]any{{
+		"member": "SecurityActionAssets.isCanonical", "operator": "equals", "values": []string{"true"}}}
+}
+
+// assetInsightDims is the inventory's dimension set. The MCP query_cube
+// guardrail refuses a 7th dimension outright (see assets.go), so this holds at
+// most six. The cube has one row per (security action, asset) pair, and a row
+// comes back per distinct dimension tuple, so assetCqid is in the set and
+// normAssets merges any rows that still share one. Fields that differ from one security action to the next
+// (lastDetected, isVerified) are left out, or they would split a device back
+// into one row per security action.
+var assetInsightDims = []string{
+	"SecurityActionAssets.assetCqid", "SecurityActionAssets.deviceName",
+	"SecurityActionAssets.os", "SecurityActionAssets.ipAddresses",
+	"SecurityActionAssets.vendor", "SecurityActionAssets.isRisky",
+}
 
 // FetchAssets is fetch_assets: three SecurityActionAssets cube queries
-// (inventory + rollup + trend) via the MCP client, each canonical-only.
-// Degrades to unavailable when the tenant has no security-action assets.
+// (inventory + rollup + trend) via the MCP client, each canonical-only. It
+// backs /api/assets and the AI chat's asset_insights tool; the Assets tab
+// reads AssetDetails_ch_agg instead (assets.go). No count is of (security
+// action, device) pairs. Rollup and trend use uniqueDevices, which counts
+// distinct device NAMES (the cube has no distinct-assetCqid measure), so they
+// can differ slightly from the inventory, which is keyed on assetCqid. Degrades to unavailable when the
+// tenant has no security-action assets.
 func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	ck := cache.Key("assets", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
@@ -475,29 +496,24 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	mcpOK := s.Mcp != nil && s.Mcp.Initialize(ctx) == nil
 	if mcpOK {
 		invD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.count"}, map[string]any{
-				"dimensions": []string{
-					"SecurityActionAssets.deviceName", "SecurityActionAssets.os",
-					"SecurityActionAssets.ipAddresses", "SecurityActionAssets.macAddresses",
-					"SecurityActionAssets.vendor", "SecurityActionAssets.region",
-					"SecurityActionAssets.isRisky", "SecurityActionAssets.isVerified",
-					"SecurityActionAssets.lastDetected"},
-				"order": map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 500,
-				"filters": canonicalOnly,
+			[]string{"SecurityActionAssets.uniqueSecurityActions"}, map[string]any{
+				"dimensions": assetInsightDims,
+				"order":      map[string]any{"SecurityActionAssets.uniqueSecurityActions": "desc"}, "limit": 500,
+				"filters": canonicalOnly(),
 			})
 		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.uniqueDevices", "SecurityActionAssets.count"},
+			[]string{"SecurityActionAssets.uniqueDevices"},
 			map[string]any{
 				"dimensions": []string{"SecurityActionAssets.os", "SecurityActionAssets.isVerified"},
-				"order":      map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 50,
-				"filters": canonicalOnly,
+				"order":      map[string]any{"SecurityActionAssets.uniqueDevices": "desc"}, "limit": 50,
+				"filters": canonicalOnly(),
 			})
 		trendD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.count"}, map[string]any{
+			[]string{"SecurityActionAssets.uniqueDevices"}, map[string]any{
 				"time_dimensions": []map[string]any{{
 					"dimension": "SecurityActionAssets.createdAt",
 					"dateRange": "30 days", "granularity": "day"}},
-				"filters": canonicalOnly,
+				"filters": canonicalOnly(),
 			})
 	}
 	result := assembleAssetsResult(mcpOK, invD, rollupD, trendD)
@@ -557,23 +573,38 @@ func flattenCubeRows(rows []map[string]any) []any {
 	return out
 }
 
-// normAssets is norm_assets (server.py:4331).
+// normAssets is norm_assets (server.py:4331), one entry per device. The cube
+// still returns a device as several rows when one of assetInsightDims differs
+// between its security actions, so rows are merged by assetCqid: the
+// security-action counts add up (each row covers different security actions)
+// and the device is risky if any row says so. First-seen order is kept, which
+// is the cube's uniqueSecurityActions-descending order. Two limits: the cube
+// applies the 500-row limit before this merge, so a device whose rows straddle
+// it is listed with a partial total, and rows with no assetCqid are never
+// merged, because nothing says they are the same device.
 func normAssets(rows []map[string]any) []any {
 	out := []any{}
+	byCqid := map[string]map[string]any{}
 	for _, raw := range rows {
 		r := flattenCubeRow(raw)
-		out = append(out, map[string]any{
-			"device":    orStr(r["deviceName"], ""),
-			"os":        orStr(r["os"], ""),
-			"ip":        orStr(r["ipAddresses"], ""),
-			"mac":       orStr(r["macAddresses"], ""),
-			"vendor":    orStr(r["vendor"], ""),
-			"region":    orStr(r["region"], ""),
-			"risky":     r["isRisky"],
-			"verified":  r["isVerified"],
-			"last_seen": orStr(r["lastDetected"], ""),
-			"count":     r["count"],
-		})
+		cqid := orStr(r["assetCqid"], "")
+		n := int(toFloat(r["uniqueSecurityActions"]))
+		risky := r["isRisky"] == true || getStr(r["isRisky"]) == "true"
+		if a, ok := byCqid[cqid]; ok && cqid != "" {
+			a["security_actions"] = a["security_actions"].(int) + n
+			a["risky"] = a["risky"].(bool) || risky
+			continue
+		}
+		a := map[string]any{
+			"device":           orStr(r["deviceName"], ""),
+			"os":               orStr(r["os"], ""),
+			"ip":               orStr(r["ipAddresses"], ""),
+			"vendor":           orStr(r["vendor"], ""),
+			"risky":            risky,
+			"security_actions": n,
+		}
+		byCqid[cqid] = a
+		out = append(out, a)
 	}
 	return out
 }
