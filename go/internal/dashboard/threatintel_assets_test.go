@@ -197,3 +197,32 @@ func TestAssembleAssetsResult_MarksAFullInventoryAsTruncated(t *testing.T) {
 		t.Errorf("truncated = %v for a reply under the limit, want false", short["truncated"])
 	}
 }
+
+// The rollup's groups must not overlap. isVerified differs between a device's
+// security actions, so grouping by it puts one device in both the verified and
+// the unverified group and the groups add up to more devices than exist. The
+// rollup groups by os only, a property of the device.
+func TestFetchAssets_RollupGroupsDoNotOverlap(t *testing.T) {
+	s, queries := assetsCubeService(t, `[]`)
+	s.FetchAssets(context.Background())
+	if len(*queries) != 3 {
+		t.Fatalf("FetchAssets sent %d cube queries, want 3", len(*queries))
+	}
+	dims, _ := (*queries)[1]["dimensions"].([]any)
+	if len(dims) != 1 || dims[0] != "SecurityActionAssets.os" {
+		t.Errorf("rollup dimensions = %v, want [SecurityActionAssets.os]", dims)
+	}
+}
+
+// The rollup stops at assetRollupLimit OS groups. A reply that long may be
+// missing groups, and the result says so.
+func TestAssembleAssetsResult_MarksAFullRollupAsTruncated(t *testing.T) {
+	full := make([]map[string]any, assetRollupLimit)
+	for i := range full {
+		full[i] = map[string]any{"SecurityActionAssets.os": fmt.Sprintf("os-%d", i)}
+	}
+	got := assembleAssetsResult(true, []map[string]any{{"SecurityActionAssets.assetCqid": "cq-1"}}, full, []map[string]any{})
+	if got["truncated"] != true || got["note"] == nil {
+		t.Errorf("truncated = %v, note = %v; want true and a note for a rollup at its limit", got["truncated"], got["note"])
+	}
+}
