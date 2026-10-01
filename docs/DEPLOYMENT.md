@@ -558,13 +558,13 @@ Any **OpenAI-compatible** provider works via three env vars (`LLM_API_KEY` overr
 | Var            | Default            | Purpose                      |
 |----------------|--------------------|------------------------------|
 | `LLM_API_KEY`  | `GROQ_API_KEY`     | API key for the provider     |
-| `LLM_MODEL`    | `qwen/qwen3-32b`   | Model name                   |
+| `LLM_MODEL`    | `qwen/qwen3.8-27b` | Model name                   |
 | `LLM_BASE_URL` | _(blank = Groq)_   | OpenAI-compatible base URL   |
 
 ```bash
 # Groq (default) — leave LLM_BASE_URL blank
 GROQ_API_KEY=gsk_...
-LLM_MODEL=qwen/qwen3-32b
+LLM_MODEL=qwen/qwen3.8-27b
 
 # OpenAI
 LLM_API_KEY=sk-...
