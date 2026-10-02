@@ -23,6 +23,32 @@ const MonitorIcon = () => (
   </svg>
 )
 
+// One button for the header bar: shows the icon of the theme you are in and
+// flips to the other one. "System" is a third choice that needs a home of its
+// own, so it stays in Settings, Appearance, on the three-way switch below.
+// Named "Switch to … mode" on purpose: the Settings switch owns the names
+// "Light theme" and "Dark theme", and the specs find those by name.
+//
+// Hidden under 380px: with a long tenant name and an update ready the bar is
+// already 14px too wide at 360 and 320, and Settings still has the switch.
+export function ThemeToggle({ className = '' }) {
+  const { effective, setMode } = useTheme()
+  const toLight = effective === 'dark'
+  const label = toLight ? 'Switch to light mode' : 'Switch to dark mode'
+  return (
+    <button
+      type="button"
+      data-theme-toggle
+      onClick={() => setMode(toLight ? 'light' : 'dark')}
+      title={label}
+      aria-label={label}
+      className={`hidden min-[380px]:inline-grid w-8 h-8 place-items-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover ${className}`}
+    >
+      {toLight ? <SunIcon /> : <MoonIcon />}
+    </button>
+  )
+}
+
 export default function ThemeSwitch({ className = 'flex' }) {
   const { mode, setMode } = useTheme()
   const opts = [

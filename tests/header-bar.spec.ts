@@ -504,3 +504,42 @@ for (const [w, h] of [
     await expect(sheet.getByRole('button', { name: 'What these controls do →' })).toBeVisible();
   });
 }
+
+// Light and dark is the one setting people flip while looking at the page, so
+// it is on the bar, not behind Settings. One button: it shows where you are and
+// flips to the other side. "System" stays in Settings.
+for (const [w, h] of [
+  [1920, 1080],
+  [390, 844],
+] as const) {
+  test(`the header has a light/dark button that flips and remembers at ${w}px`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
+    await page.goto('/#overview');
+    const html = page.locator('html');
+    const toggle = page.locator('header [data-theme-toggle]');
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    await expect(toggle).toHaveAccessibleName('Switch to light mode');
+
+    await toggle.click();
+    await expect(html).toHaveAttribute('data-theme', 'light');
+    await expect(toggle).toHaveAccessibleName('Switch to dark mode');
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('light');
+
+    await toggle.click();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    await headerFits(page);
+  });
+}
+
+// Under 380px there is no room for it beside a long tenant name, so the bar
+// drops it and Settings, Appearance keeps the switch.
+test('under 380px the light/dark button gives way and Settings still has the switch', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/#overview');
+  await expect(page.locator('header [data-theme-toggle]')).toBeHidden();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Dark theme' })).toBeVisible();
+});
