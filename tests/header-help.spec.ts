@@ -1,23 +1,18 @@
 import { test, expect } from './fixtures';
 
-// The header's half of the help layer. Reported symptom: "I didn't know what
-// the compact was at the top" — six controls in one row, every one of them
-// explaining itself through a `title=` hover tooltip that does not exist on
-// touch and is never read on a desk either.
+// The help layer for the top bar. Reported symptom: "I didn't know what the
+// compact was at the top" — a row of small controls, each explaining itself
+// through a `title=` tooltip that does not exist on touch and is never read on a
+// desk either.
 //
-// ONE DIALOG, ONE DOOR AT ANY GIVEN WIDTH. Above `lg` the header's ⓘ opens it.
-// Below `lg` that button is display:none (App.jsx's A3 fold takes it with the
-// two switches it describes) and the settings sheet's "What these controls do →"
-// row is the door instead.
-//
-// THE SHEET LINK USED TO BE SHOWN AT EVERY WIDTH, AND IT IS NOT ANY MORE.
-// Reported as "that what do these do is redundant" — on a desktop the same ⓘ is
-// sitting in the top bar a few inches away, so Settings was a second door to a
-// dialog already on screen. The row is now `lg:hidden`, the exact inverse of the
-// header button's `hidden lg:flex`. Deleting it outright was the wrong fix and
-// the tests below say why: below `lg` it is the ONLY route, which is the gap it
-// was added to close. So the pairing is what is asserted — exactly one way in at
-// 1920 and exactly one at 390, never two and never none.
+// ONE DIALOG, ONE DOOR, AT EVERY WIDTH. The top bar used to carry an ⓘ button
+// for it, and below `lg` that button folded away and the settings sheet's link
+// took over — two doors that were each other's inverse. The bar no longer
+// carries the ⓘ at all: theme and spacing moved into Settings, which left
+// nothing in the bar that needed a manual beside it. The settings sheet's
+// "What these controls do →" row is the only way in, shown at 1920 and at 390,
+// and the tests below say so in both directions: present in the sheet, absent
+// from the bar.
 //
 // WHAT THIS FILE STOPPED ASSERTING, AND WHY. The sheet used to print the same
 // sentences as always-visible captions, once under each switch and once under
@@ -26,183 +21,89 @@ import { test, expect } from './fixtures';
 // ui/src/lib/controlHelp.js, rendered by one component. The tests below assert
 // the absence as hard as they assert the link, because a caption creeping back
 // in is exactly the regression that is easy to ship.
-//
-// Playwright's Desktop Chrome default viewport is 1280px, i.e. above `lg`, so
-// the unfolded form is what the first tests below see.
 
 const OPEN = { name: 'What these controls do', exact: true };
 const SHEET_LINK = { name: 'What these controls do →', exact: true };
 const SETTINGS = { name: 'Settings', exact: true };
 
+// The terms the dialog lists, in the order a reader meets the controls: the bar
+// left to right, then the two switches that live in Settings. Written out here
+// rather than imported so the test fails if the dictionary is edited to dodge it.
+const TERMS = [
+  'Status, Estate, Risk, Change, Ask',
+  'Update v…',
+  'The tenant name',
+  'The sliders button',
+  'Sun · Monitor · Moon',
+  'The two row icons',
+  '+ Provision',
+];
+
 // Verbatim out of CONTROL_HELP — the three paragraphs that used to sit in the
-// settings sheet. Written out here rather than imported so the test fails if
-// the dictionary is edited to dodge it.
+// settings sheet.
 const EXPLANATIONS = [
   'System follows your computer',
   'Compact fits more rows on screen',
   'Appears at the top of the screen only when a newer version exists',
 ];
 
-test('the header carries a button that opens control help', async ({ page }) => {
+const WIDTHS = [
+  [1920, 1000],
+  [390, 844],
+] as const;
+
+async function openSheet(page: import('@playwright/test').Page, width = 1280, height = 800) {
+  await page.setViewportSize({ width, height });
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
+  await page.getByRole('button', SETTINGS).click();
+  return page.getByRole('dialog', { name: 'Settings' });
+}
 
-  const btn = page.getByRole('button', OPEN);
-  await expect(btn).toBeVisible();
-  await expect(btn).toHaveAttribute('aria-haspopup', 'dialog');
-  await expect(btn).toHaveAttribute('aria-expanded', 'false');
-});
-
-test('it opens a real modal dialog naming all six header controls', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  await page.getByRole('button', OPEN).click();
-
+async function openDialog(page: import('@playwright/test').Page, width = 1280, height = 800) {
+  const sheet = await openSheet(page, width, height);
+  await sheet.getByRole('button', SHEET_LINK).click();
   const dialog = page.getByRole('dialog', { name: 'What these controls do' });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveAttribute('aria-modal', 'true');
-  await expect(page.getByRole('button', OPEN)).toHaveAttribute('aria-expanded', 'true');
+  return dialog;
+}
 
-  // One row per control in the header, in the header's own order. Asserted by
-  // the term list rather than by free text so a paragraph that happens to
-  // contain the word "theme" cannot stand in for an entry.
-  const terms = dialog.locator('dt');
-  await expect(terms).toHaveCount(6);
+for (const [w, h] of WIDTHS) {
+  test(`at ${w}px the top bar has no help button and Settings has the one link`, async ({ page }) => {
+    const sheet = await openSheet(page, w, h);
+
+    await expect(page.locator('header').getByRole('button', OPEN)).toHaveCount(0);
+    // ONE row, near the top of Appearance — not a link repeated under every
+    // switch, which is the same clutter in a new hat.
+    await expect(sheet.getByRole('button', SHEET_LINK)).toHaveCount(1);
+    await expect(sheet.getByRole('button', SHEET_LINK)).toHaveAttribute('aria-haspopup', 'dialog');
+  });
+}
+
+test('the link opens a real modal dialog naming every control, in order', async ({ page }) => {
+  const dialog = await openDialog(page);
+
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  // Asserted by the term list rather than by free text so a paragraph that
+  // happens to contain the word "theme" cannot stand in for an entry.
+  await expect(dialog.locator('dt')).toHaveText(TERMS);
 });
 
 test('the density entry answers the question that was actually asked', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await page.getByRole('button', OPEN).click();
-
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
+  const dialog = await openDialog(page);
   await expect(dialog).toContainText('Compact fits more rows on screen');
   await expect(dialog).toContainText('Comfortable gives everything more space');
 });
 
-test('Escape closes it and focus goes back to the button that opened it', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  const btn = page.getByRole('button', OPEN);
-  await btn.click();
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
-  await expect(dialog).toBeVisible();
-
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  // Focus landing on BODY is the failure this guards: a keyboard user would
-  // restart at the top of the document every time they read one line of help.
-  await expect(btn).toBeFocused();
-  await expect(btn).toHaveAttribute('aria-expanded', 'false');
-});
-
-test('the ✕ closes it and also returns focus', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  const btn = page.getByRole('button', OPEN);
-  await btn.click();
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
-  await dialog.getByRole('button', { name: 'Close' }).click();
-  await expect(dialog).toBeHidden();
-  await expect(btn).toBeFocused();
-});
-
-test('it is reachable with the keyboard alone', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  // press() sends a real key event to a focused element — no synthesised
-  // click — so this fails if the trigger is pointer-only.
-  await page.getByRole('button', OPEN).press('Enter');
-  await expect(page.getByRole('dialog', { name: 'What these controls do' })).toBeVisible();
-});
-
-test('below lg the trigger folds away with the controls it describes', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  // Same fold as the theme and density switches beside it (App.jsx's A3 fold
-  // comment). A trigger here would point at controls that are not on screen.
-  await expect(page.getByRole('button', OPEN)).toBeHidden();
-  await expect(page.getByRole('button', SETTINGS)).toBeVisible();
-});
-
-test('the settings sheet holds controls, not explanations', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await page.getByRole('button', SETTINGS).click();
-
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
-  await expect(sheet).toBeVisible();
-  // The switches and their short labels stay — those are the controls.
-  await expect(sheet).toContainText('Light · System · Dark');
-  await expect(sheet).toContainText('Comfortable · Compact');
-  // The three paragraphs do not. This is the complaint, asserted.
-  for (const sentence of EXPLANATIONS) {
-    await expect(sheet).not.toContainText(sentence);
-  }
-});
-
-test('one link, not one per setting', async ({ page }) => {
-  // Below `lg`, where the link exists at all.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await page.getByRole('button', SETTINGS).click();
-
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
-  // Three captions replaced by ONE row, near the top of Appearance — not a
-  // link repeated under every switch, which is the same clutter in a new hat.
-  await expect(sheet.getByRole('button', SHEET_LINK)).toHaveCount(1);
-  await expect(sheet.getByRole('button', SHEET_LINK)).toHaveAttribute('aria-haspopup', 'dialog');
-});
-
-test('at 1920 Settings shows no link, because the header ⓘ is right there', async ({ page }) => {
-  // THE COMPLAINT, ASSERTED. Two doors to one dialog, inches apart. The header
-  // button is checked in the same breath so this can never pass by both of them
-  // being gone — which would leave a desktop with no route at all.
-  await page.setViewportSize({ width: 1920, height: 1000 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await expect(page.getByRole('button', OPEN)).toBeVisible();
-
-  await page.getByRole('button', SETTINGS).click();
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
-  await expect(sheet).toBeVisible();
-  // The controls it names are still in the sheet — the row that was removed is
-  // the explanation link, not the switches.
-  await expect(sheet).toContainText('Light · System · Dark');
-  await expect(sheet.getByRole('button', SHEET_LINK)).toHaveCount(0);
-  // And the explanation did not get copied back in to compensate.
-  for (const sentence of EXPLANATIONS) {
-    await expect(sheet).not.toContainText(sentence);
-  }
-});
-
-test('at 390 Settings shows the link, because the header ⓘ is not there', async ({ page }) => {
-  // The inverse of the test above, and the reason the row was not simply
-  // deleted: this is the phone's only route to the dialog.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await expect(page.getByRole('button', OPEN)).toBeHidden();
-
-  await page.getByRole('button', SETTINGS).click();
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
-  await expect(sheet.getByRole('button', SHEET_LINK)).toBeVisible();
+test('the dialog says the number keys open the sections', async ({ page }) => {
+  // The bar stopped drawing a digit on each section button, so this is where a
+  // reader finds out the keys exist.
+  const dialog = await openDialog(page);
+  await expect(dialog).toContainText('Press the keys 1 to 5');
 });
 
 test('the link closes Settings and opens the dialog, rather than stacking two', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-  await page.getByRole('button', SETTINGS).click();
-
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  const sheet = await openSheet(page);
   await sheet.getByRole('button', SHEET_LINK).click();
 
   const dialog = page.getByRole('dialog', { name: 'What these controls do' });
@@ -210,88 +111,57 @@ test('the link closes Settings and opens the dialog, rather than stacking two', 
   // Two modal dialogs at once means two focus traps and two Escape handlers
   // arguing over the same keypress.
   await expect(sheet).toBeHidden();
-  await expect(dialog.locator('dt')).toHaveCount(6);
 });
 
-test('closing that dialog puts focus back on the Settings button, not the ⓘ', async ({ page }) => {
-  // Narrow, because that is where the sheet's link lives now.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
+test('Escape closes the dialog and focus goes back to the Settings button', async ({ page }) => {
+  const dialog = await openDialog(page);
   const settings = page.getByRole('button', SETTINGS);
-  await settings.click();
-  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', SHEET_LINK).click();
 
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
-  await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-
-  // "…" is where the reader's attention was — they pressed it, and the sheet
-  // it opened vanished on the way here. Landing on the header's ⓘ instead
-  // would drop them somewhere they never went. At this width that button is
-  // display:none, so "not focused" is asserted as "not on screen at all" —
-  // getByRole does not match a hidden element, and a `not.toBeFocused()` on a
-  // locator that resolves to nothing would prove nothing about where focus is.
+  // Focus landing on BODY is the failure this guards: a keyboard user would
+  // restart at the top of the document every time they read one line of help.
   await expect(settings).toBeFocused();
-  await expect(page.getByRole('button', OPEN)).toBeHidden();
 });
 
 test('the ✕ takes the same route home', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  const settings = page.getByRole('button', SETTINGS);
-  await settings.click();
-  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', SHEET_LINK).click();
-
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
+  const dialog = await openDialog(page);
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toBeHidden();
-  await expect(settings).toBeFocused();
+  await expect(page.getByRole('button', SETTINGS)).toBeFocused();
 });
 
-test('on a 390px phone the dialog is still reachable, through Settings', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
+test('it is reachable with the keyboard alone', async ({ page }) => {
+  const sheet = await openSheet(page);
 
-  // The regression this exists to stop: the header ⓘ is display:none here, so
-  // deleting the sheet's captions without adding this link would leave a phone
-  // with no route to the sentences at all.
-  await expect(page.getByRole('button', OPEN)).toBeHidden();
+  // press() sends a real key event to a focused element — no synthesised
+  // click — so this fails if the link is pointer-only.
+  await sheet.getByRole('button', SHEET_LINK).press('Enter');
+  await expect(page.getByRole('dialog', { name: 'What these controls do' })).toBeVisible();
+});
 
-  const settings = page.getByRole('button', SETTINGS);
-  await settings.click();
-  const sheet = page.getByRole('dialog', { name: 'Settings' });
-  const link = sheet.getByRole('button', SHEET_LINK);
-  await expect(link).toBeVisible();
-  await link.click();
+test('on a 390px phone the dialog is reachable, through Settings, and says the same things', async ({ page }) => {
+  const dialog = await openDialog(page, 390, 844);
 
-  const dialog = page.getByRole('dialog', { name: 'What these controls do' });
-  await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Compact fits more rows on screen');
   await expect(dialog).toContainText('System follows your computer');
   await expect(dialog).toContainText('Appears at the top of the screen only when a newer version exists');
 
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  await expect(settings).toBeFocused();
+  await expect(page.getByRole('button', SETTINGS)).toBeFocused();
 });
 
-test('the header ⓘ still returns focus to itself', async ({ page }) => {
-  // The second door must not have changed the first one. Opening from the
-  // header and closing returns to the header button, as it always did.
-  await page.goto('/#overview');
-  await expect(page.locator('h1').first()).toBeVisible();
+test('the settings sheet holds controls, not explanations', async ({ page }) => {
+  const sheet = await openSheet(page);
 
-  const btn = page.getByRole('button', OPEN);
-  await btn.click();
-  await page.keyboard.press('Escape');
-  await expect(btn).toBeFocused();
-  await expect(page.getByRole('button', SETTINGS)).not.toBeFocused();
+  // The switches and their short labels stay — those are the controls.
+  await expect(sheet).toContainText('Light · System · Dark');
+  await expect(sheet).toContainText('Comfortable · Compact');
+  // The three paragraphs do not. This is the complaint, asserted.
+  for (const sentence of EXPLANATIONS) {
+    await expect(sheet).not.toContainText(sentence);
+  }
 });
 
 test('Overview says how to rearrange it, and that nothing needs saving', async ({ page }) => {

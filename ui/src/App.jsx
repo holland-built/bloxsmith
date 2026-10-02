@@ -31,13 +31,12 @@ import { FOCUS_RING, Skeleton } from './components/ui.jsx'
 import { PageBar } from './components/kit.jsx'
 import Palette from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
+import { updateReady, useUpdate } from './lib/updateState.js'
 import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 import TenantManager from './components/TenantManager.jsx'
 import HeaderHelp from './components/HeaderHelp.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
-import ThemeSwitch from './components/ThemeSwitch.jsx'
-import DensitySwitch from './components/DensitySwitch.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -193,17 +192,16 @@ const Caret = ({ open }) => (
   </span>
 )
 
-// The dropdown shell. Square, hairline, accent-topped — same panel whether it
-// hangs off one group cell or off the collapsed Menu cell, so the two forms
-// cannot drift apart.
+// The dropdown shell. A floating surface — same panel whether it hangs off one
+// group button or off the collapsed Menu button, so the two forms cannot drift
+// apart.
 const MenuPanel = ({ ref, label, onKeyDown, children }) => (
   <div
     ref={ref}
     role="menu"
     aria-label={label}
     onKeyDown={onKeyDown}
-    style={{ borderTopColor: 'var(--color-accent)' }}
-    className="absolute left-[-1px] top-full mt-2 min-w-[214px] z-20 bg-card border border-border shadow-lg"
+    className="absolute left-0 top-full mt-2 min-w-[214px] z-20 bg-card border border-border rounded-surface shadow-lg p-1.5"
   >
     {children}
   </div>
@@ -224,37 +222,23 @@ const GroupSection = ({ group, tab, onPick }) => {
   const tabs = group.tabIds.map((id) => TABS.find((t) => t.id === id))
   return (
     <div role="group" aria-label={group.label}>
-      <div
-        aria-hidden="true"
-        className="flex items-center justify-between h-[22px] px-2 bg-field border-y border-card-border"
-      >
-        <span className="text-note uppercase tracking-[0.12em] text-dim">
-          {group.question || group.label}
-        </span>
-        <span className="font-mono text-note text-dim">
-          {tabs.length} tab{tabs.length === 1 ? '' : 's'}
-        </span>
+      <div aria-hidden="true" className="px-2.5 pt-2 pb-1 text-note text-dim">
+        {group.question || group.label}
       </div>
-      {tabs.map((t, j) => (
+      {tabs.map((t) => (
         <a
           key={t.id}
           href={`#${t.id}`}
           role="menuitem"
           aria-current={t.id === tab ? 'page' : undefined}
           onClick={onPick}
-          style={t.id === tab ? { boxShadow: 'inset 2px 0 0 var(--color-accent)' } : undefined}
           className={
-            'grid grid-cols-[1fr_auto] items-center gap-2 h-[27px] px-2 text-copy no-underline ' +
-            (j < tabs.length - 1 ? 'border-b border-line ' : '') +
-            (t.id === tab ? 'bg-line text-txt' : 'text-field-txt hover:bg-line-2 hover:text-txt')
+            'flex items-center justify-between gap-2 h-8 px-2.5 rounded-control text-copy no-underline ' +
+            (t.id === tab ? 'bg-line-2 text-txt' : 'text-field-txt hover:bg-line hover:text-txt')
           }
         >
           <span>{t.label}</span>
-          {t.id === tab && (
-            <span className="text-note uppercase tracking-[0.08em] px-1.5 py-0 bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]">
-              Here
-            </span>
-          )}
+          {t.id === tab && <span aria-hidden="true">✓</span>}
         </a>
       ))}
     </div>
@@ -268,6 +252,29 @@ export default function App() {
   const [showBrand, setShowBrand] = useState(false)
   const [brandDomain, setBrandDomain] = useState(() => localStorage.getItem('orgDomain') || '')
   const [logoBust, setLogoBust] = useState(0)
+  const { info: updateInfo, phase: updatePhase } = useUpdate()
+  const updateIsReady = updateReady(updateInfo)
+  // The bar says "update check failed" from 768px up; below it this is how a
+  // phone finds out. A dev build and a switched-off check say nothing, as in
+  // UpdateButton.
+  const updateCheckFailed =
+    !!updateInfo &&
+    !!updateInfo.error &&
+    !updateInfo.checkDisabled &&
+    !String(updateInfo.current || '').startsWith('dev-')
+  // Something to look at in Settings. The install's own state comes first: a
+  // failed or running install leaves the update still "available", and saying
+  // "ready to install" over a failure would be the wrong sentence.
+  const settingsNote =
+    updatePhase === 'error'
+      ? 'The last update failed'
+      : updatePhase === 'applying' || updatePhase === 'restarting'
+        ? 'An update is installing'
+        : updateIsReady
+          ? 'An update is ready to install'
+          : updateCheckFailed
+            ? 'The last update check failed'
+            : ''
 
   useEffect(() => {
     fetch('/api/brand', { cache: 'no-store' })
@@ -316,10 +323,6 @@ export default function App() {
   const menuRef = useRef(null)
   const mainRef = useRef(null)
   const settingsBtnRef = useRef(null)
-  const helpBtnRef = useRef(null)
-  // The element the control-help dialog hands focus back to. Not always the ⓘ:
-  // the dialog has two doors now, and focus belongs on the one that was used.
-  const helpReturnRef = useRef(null)
   const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
 
@@ -405,7 +408,7 @@ export default function App() {
     mainRef.current?.focus()
   }, [tab])
 
-  // Closing the settings sheet returns focus to the "…" that opened it. Done
+  // Closing the settings sheet returns focus to the Settings button that opened it. Done
   // here rather than inside the sheet because the sheet is unmounted by the
   // time the focus has to land, and because every route out of it (✕, Escape,
   // backdrop click, "Lock vault now") runs through this one state change.
@@ -423,17 +426,14 @@ export default function App() {
   // triggers and are unmounted at different times, and a hook parameterised
   // over "which ref, which flag" would be longer than what it replaced.
   //
-  // The one difference is WHERE focus lands: `helpReturnRef` is set by whichever
-  // door opened the dialog. Always returning to the ⓘ would be wrong twice over
-  // when the sheet's link was used — the reader's attention was on "…", and
-  // below `lg` the ⓘ is display:none, so focus() on it does nothing at all and
-  // the keyboard user is dropped on BODY.
+  // There is one door now — the settings sheet's link — so focus goes back to
+  // the Settings button the reader started from.
   const helpWasOpen = useRef(false)
   useEffect(() => {
     if (showHeaderHelp) helpWasOpen.current = true
     else if (helpWasOpen.current) {
       helpWasOpen.current = false
-      helpReturnRef.current?.focus()
+      settingsBtnRef.current?.focus()
     }
   }, [showHeaderHelp])
 
@@ -445,10 +445,9 @@ export default function App() {
   // `sheetWasOpen` is cleared by hand because both state changes land in one
   // commit: the sheet's focus-return effect would otherwise fire in the same
   // pass that mounts the dialog and yank focus straight back out of it. Focus
-  // still reaches the "…" — just later, when the dialog itself closes.
+  // still reaches the Settings button — just later, when the dialog itself closes.
   const openHelpFromSettings = () => {
     sheetWasOpen.current = false
-    helpReturnRef.current = settingsBtnRef.current
     setShowAccounts(false)
     setShowHeaderHelp(true)
   }
@@ -495,7 +494,7 @@ export default function App() {
             layout entirely — the header's sticky positioning and the flex rows
             below it see exactly the box tree they saw before. */}
         <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
-          <header className="flex items-center gap-3 px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
+          <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
             <button
               type="button"
               aria-label="Edit brand"
@@ -509,31 +508,22 @@ export default function App() {
                 className="h-5 w-5 rounded-mark"
               />
             </button>
-            {/* Wordmark folds below `lg` with the rest of the A3 fold (see the
-                controls cluster below). The logo button above does NOT fold: it
-                is 20px, and it is the only way into brand editing. */}
+            {/* The wordmark folds below `lg`. The logo button above does NOT fold:
+                it is 20px, and it is the only way into brand editing. */}
             <strong className="tracking-tight shrink-0 hidden lg:inline">Bloxsmith</strong>
-            {/* Group bar. Five cells in one hairline strip, square, flush —
-                per .mockups/build-bloxsmith-ux/bloxsmith-ux-v11.html (surface A).
-                No measurement anywhere: which form shows is a static CSS
-                breakpoint, so both forms are correct on the very first paint.
+            {/* Five group buttons, plain text. Which form shows is a static CSS
+                breakpoint, so both forms are right on the very first paint and
+                nothing is measured. Below `xl` they give way to one "Menu"
+                button, because the right-hand cluster is shrink-0 and five
+                labelled buttons would otherwise paint over it.
 
-                Below `xl` the five cells give way to one "Menu" cell. That is
-                not a taste call: the right-hand controls cluster is a measured
-                410px of shrink-0 content, so at narrow widths five labelled
-                cells have nowhere to go and paint straight over it — the exact
-                overlap the deleted measurer existed to prevent. The breakpoint is
-                xl because the five cells measure 552px and the rest of the header
-                measures 571px, so they need 1123px before they fit at all. */}
-            {/* min-w-fit, NOT min-w-0: a flex-1 item with min-width:0 collapses
+                min-w-fit, NOT min-w-0: a flex-1 item with min-width:0 collapses
                 its own box to zero when the row is over-full and lets its
-                shrink-0 contents paint straight over the neighbour — which is
-                how the old strip came to sit on top of the controls, and it also
-                makes the header under-report its own scrollWidth. fit-content
-                makes the nav own its real width, so an over-full header scrolls
-                honestly instead of overlapping silently. */}
-            <nav aria-label="Sections" className="flex-1 min-w-fit flex items-center gap-3">
-              <div className="hidden xl:flex items-stretch h-7 border border-border shrink-0">
+                shrink-0 contents paint over the neighbour. fit-content makes the
+                nav own its real width, so an over-full header scrolls honestly
+                instead of overlapping silently. */}
+            <nav aria-label="Sections" className="flex-1 min-w-fit flex items-center gap-2 sm:gap-3">
+              <div className="hidden xl:flex items-center gap-1 shrink-0">
                 {GROUPS.map((g, i) => {
                   const open = openGroup === g.id
                   const current = currentGroup === g.id
@@ -542,13 +532,12 @@ export default function App() {
                       {/* Two attributes below are the whole of what a screen
                           reader gets that a sighted user gets from paint:
                           `aria-current` says WHICH group holds the tab you are on
-                          (it was colour and an aria-hidden accent bar only, and
-                          the "Tab —" readout that spells it out renders at 2xl
-                          and no narrower); `aria-label` names the cell as a
-                          section, because the AI tab's send button is also called
-                          "Ask" and two controls answering to one name is an
-                          ambiguous answer. The visible word stays the first word
-                          of the spoken name. */}
+                          (the tint alone is colour), and `aria-label` names the
+                          button as a section, because the AI tab's send button
+                          is also called "Ask" and two controls answering to one
+                          name is an ambiguous answer. The digit keys still open
+                          these; aria-keyshortcuts and the tooltip say so, and so
+                          does the "What these controls do" dialog. */}
                       <button
                         ref={(el) => { btnRefs.current[g.id] = el }}
                         type="button"
@@ -563,33 +552,13 @@ export default function App() {
                         onClick={() => setOpenGroup(open ? null : g.id)}
                         onKeyDown={onTriggerKey(g.id)}
                         className={
-                          'flex items-center gap-2 px-3 font-mono text-note font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
-                          (i < GROUPS.length - 1 ? 'border-r border-card-border ' : '') +
-                          (open
-                            ? 'bg-field text-txt'
-                            : current
-                              ? 'bg-line text-txt'
-                              : 'text-muted hover:bg-line hover:text-field-txt')
+                          'flex items-center gap-1.5 h-8 px-3 rounded-control text-copy font-medium whitespace-nowrap cursor-pointer ' +
+                          (open || current ? 'bg-line-2 text-txt' : 'text-muted hover:bg-line hover:text-txt')
                         }
                       >
-                        {/* Keycap, not a list index: digits 1-5 are really bound. */}
-                        <span
-                          aria-hidden="true"
-                          className={
-                            'inline-block text-note leading-none font-bold text-center min-w-[15px] px-1 pt-0 pb-0 border bg-field ' +
-                            (open ? 'border-accent text-txt' : 'border-border text-field-txt')
-                          }
-                        >
-                          {i + 1}
-                        </span>
                         {g.label}
                         <Caret open={open} />
                       </button>
-                      {/* The active group is marked at the base of its own cell —
-                          without it the current tab has no on-screen home. */}
-                      {current && (
-                        <span aria-hidden="true" className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent" />
-                      )}
                       {open && (
                         <MenuPanel ref={menuRef} label={g.label} onKeyDown={onMenuKey}>
                           <GroupSection group={g} tab={tab} onPick={() => setOpenGroup(null)} />
@@ -599,8 +568,8 @@ export default function App() {
                   )
                 })}
               </div>
-              {/* Collapsed form, below lg. One cell, every group inside it. */}
-              <div className="relative flex xl:hidden items-stretch h-7 border border-border shrink-0">
+              {/* Collapsed form, below xl. One button, every group inside it. */}
+              <div className="relative flex xl:hidden shrink-0">
                 <button
                   ref={(el) => { btnRefs.current.menu = el }}
                   type="button"
@@ -610,8 +579,8 @@ export default function App() {
                   onClick={() => setOpenGroup(openGroup === 'menu' ? null : 'menu')}
                   onKeyDown={onTriggerKey('menu')}
                   className={
-                    'flex items-center gap-2 px-3 font-mono text-note font-semibold uppercase tracking-[0.13em] whitespace-nowrap cursor-pointer ' +
-                    (openGroup === 'menu' ? 'bg-field text-txt' : 'bg-line text-txt')
+                    'flex items-center gap-1.5 h-8 px-3 rounded-control text-copy font-medium whitespace-nowrap cursor-pointer ' +
+                    (openGroup === 'menu' ? 'bg-line-2 text-txt' : 'text-muted hover:bg-line hover:text-txt')
                   }
                 >
                   Menu
@@ -626,71 +595,46 @@ export default function App() {
                 )}
               </div>
             </nav>
-            {/* The A3 fold, per .mockups/build-bloxsmith-ux/bloxsmith-ux-v11.html
-                (surface A3 and its caption). Unfolded, this cluster measures 410px
-                and the whole header needs 647px of content — wider than a 390px
-                phone on its own, which is why no nav change could ever fix the
-                390px overflow. Below `lg` the wordmark, tenant name, version and
-                theme switch fold into the "…" sheet, leaving the connection dot,
-                the Menu cell, "…" and "+ Provision" — the mockup's list exactly.
+            {/* Four things on the right: an update (only when one is ready), the
+                tenant chip with its write state, Settings, and Provision. Theme
+                and spacing live in Settings now — they are set once and left,
+                and they were two of the seven controls here. The "What these
+                controls do" dialog is reached from Settings too.
 
-                `lg` and not `xl`: the fold has to lift at a width that already
-                fits 647px, and 1024 clears that by 377px, so a tenant with a
-                longer name than this one's still fits. Folding at `xl` instead
-                would take the theme switch off every 1024–1279px laptop window
-                for no measured gain. Static breakpoint, no measurement — the
-                JS width measurer this replaced is not coming back. */}
-            <div className="flex items-center gap-3 shrink-0">
-              <ConnStatus />
+                Two things give way on a small screen, because a phone cannot hold
+                a tenant chip that carries its write state beside all of this:
+                below `sm` Provision shrinks to its "+", and below `md` every
+                update message becomes a dot on Settings, where the sheet has the
+                Install button. The chip is NOT one of the things that gives way. */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <UpdateButton />
-              <ThemeSwitch className="hidden lg:flex" />
-              {/* Folds at the same `lg` as the theme switch, and into the same
-                  "…" sheet — the two are one pair of appearance controls and
-                  splitting them across the fold would leave half the pair on a
-                  1024px laptop and half of it two clicks away. */}
-              <DensitySwitch className="hidden lg:flex" />
-              {/* Folds at the same `lg` as the two switches, and that is the
-                  whole argument for the breakpoint: above it, the theme and
-                  density switches are in this row and a reader can hold the
-                  dialog's list against the row it names. Below it those two are
-                  not in the header at all, so a trigger sitting here would
-                  point at controls that are not on screen.
-                  The DIALOG does not fold — only this button does. Below `lg`
-                  it is opened from the settings sheet's "What these controls
-                  do →" row, which is where both switches have moved to, so the
-                  list is read next to the row it names at every width.
-                  THAT ROW IS `lg:hidden`, the exact inverse of this button's
-                  `hidden lg:flex` — one door at any width, never two. Reported
-                  as "that what do these do is redundant" when both showed at
-                  once. If this class is edited, edit that one too
-                  (components/TenantManager.jsx). */}
-              <button
-                ref={helpBtnRef}
-                type="button"
-                onClick={() => { helpReturnRef.current = helpBtnRef.current; setShowHeaderHelp(true) }}
-                aria-label="What these controls do"
-                aria-haspopup="dialog"
-                aria-expanded={showHeaderHelp}
-                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover cursor-pointer"
-              >
-                ⓘ
-              </button>
+              <ConnStatus />
               <button
                 ref={settingsBtnRef}
                 onClick={() => setShowAccounts(true)}
-                title="Settings"
+                title={settingsNote ? `Settings — ${settingsNote.toLowerCase()}` : 'Settings'}
                 aria-label="Settings"
+                aria-description={settingsNote || undefined}
                 aria-haspopup="dialog"
                 aria-expanded={showAccounts}
-                className="w-8 h-8 rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
+                className="relative w-8 h-8 inline-grid place-items-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
               >
-                ⋯
+                {settingsNote && (
+                  <span aria-hidden="true" className="md:hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent border-2 border-bg" />
+                )}
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                  <path d="M2 5h7M13 5h1M2 11h1M7 11h7" />
+                  <circle cx="11" cy="5" r="1.6" />
+                  <circle cx="5" cy="11" r="1.6" />
+                </svg>
               </button>
               <a
                 href="#provision"
+                aria-label="Provision"
+                title="Provision"
                 className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy font-medium no-underline"
               >
-                + Provision
+                +<span className="hidden sm:inline"> Provision</span>
               </a>
             </div>
           </header>

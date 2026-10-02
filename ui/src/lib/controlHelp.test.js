@@ -29,11 +29,12 @@ const ALLOWED_KEYS = new Set(['label', 'what'])
 // than derived, so removing a control from the header without removing it from
 // this dictionary is a red test and a decision, not a silent orphan.
 const EXPECTED = [
-  'connection-status',
+  'sections',
   'updates',
+  'connection-status',
+  'settings',
   'theme',
   'density',
-  'settings',
   'provision',
 ]
 
@@ -47,7 +48,7 @@ test('it covers exactly the header controls that exist, and no others', () => {
   assert.deepEqual(Object.keys(CONTROL_HELP).sort(), [...EXPECTED].sort())
 })
 
-test('key order is the left-to-right order of the header itself', () => {
+test('key order is the left-to-right order of the header, then the Settings switches', () => {
   // The dialog renders Object.keys in order, so the list a reader sees has to
   // match the row they are looking at. Alphabetical would put Provision second.
   assert.deepEqual(Object.keys(CONTROL_HELP), EXPECTED)

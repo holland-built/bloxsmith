@@ -1,10 +1,11 @@
 import { useRef, useEffect } from 'react'
 import { CONTROL_HELP } from '../lib/controlHelp.js'
 
-// One dialog naming every control in the app header.
+// One dialog naming every control in the app header, and the two switches
+// (theme, spacing) that now live in Settings.
 //
-// WHY A DIALOG AND NOT SIX TOOLTIPS. Six tooltips is what shipped — every
-// control in the header carries a `title=`, and the reported symptom ("I didn't
+// WHY A DIALOG AND NOT TOOLTIPS. Tooltips is what shipped — every control in
+// the header carries a `title=`, and the reported symptom ("I didn't
 // know what the compact was at the top") is what that affordance is worth. It
 // requires hover, which does not exist on touch; it requires knowing there is
 // something to hover over, which is the exact knowledge that is missing; and it
@@ -73,9 +74,10 @@ export default function HeaderHelp({ onClose }) {
         </div>
 
         {/* A description list, because that is what this is: a term and what it
-            means, six times. The dictionary's key order is the header's own
-            left-to-right order (held there by controlHelp.test.js), so the list
-            can be read against the row it describes without hunting. */}
+            means, once per control. The dictionary's key order is the header's own
+            left-to-right order, then the two Settings switches (held there by
+            controlHelp.test.js), so the list can be read against the row it
+            describes without hunting. */}
         <dl className="m-0">
           {Object.entries(CONTROL_HELP).map(([id, { label, what }]) => (
             <div key={id} className="mb-3 last:mb-0">

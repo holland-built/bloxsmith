@@ -72,6 +72,20 @@ function probe(): Probe {
   };
 }
 
+// Spacing lives in Settings now, not the top bar, so reaching it means opening
+// the sheet and closing it again: the sheet is a modal and the page behind it
+// is inert while it is open.
+async function setDensity(
+  page: import('@playwright/test').Page,
+  name: 'Compact density' | 'Comfortable density',
+) {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name }).click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+}
+
 async function gotoAssets(page: import('@playwright/test').Page) {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/#assets');
@@ -111,7 +125,7 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
   expect(before.cardPadTop).toBe('18px');
   expect(before.cellPadY).toBe('8px/8px');
 
-  await page.getByRole('button', { name: 'Compact density' }).click();
+  await setDensity(page, 'Compact density');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
   await page.waitForTimeout(500);
 
@@ -124,7 +138,7 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
   expect(compact.rowH!).toBeLessThan(before.rowH!);
   expect(parseFloat(compact.cardPadTop!)).toBeLessThan(18);
 
-  await page.getByRole('button', { name: 'Comfortable density' }).click();
+  await setDensity(page, 'Comfortable density');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'comfortable');
   await page.waitForTimeout(500);
 
@@ -139,7 +153,7 @@ test('the density choice survives a page reload', async ({ page }) => {
   test.setTimeout(90_000);
   await gotoAssets(page);
 
-  await page.getByRole('button', { name: 'Compact density' }).click();
+  await setDensity(page, 'Compact density');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
   expect(await page.evaluate(() => localStorage.getItem('density'))).toBe('compact');
 
@@ -168,7 +182,7 @@ test('no table x-overflows in either density, and cell horizontal padding never 
     expect(w.sw, `comfortable: wrapper scrollWidth ${w.sw} > clientWidth ${w.cw}`).toBeLessThanOrEqual(w.cw);
   }
 
-  await page.getByRole('button', { name: 'Compact density' }).click();
+  await setDensity(page, 'Compact density');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
   // The DataTable re-measures on its ResizeObserver after the card's padding
   // changes the wrapper's width; read after that has landed, not before.
@@ -185,16 +199,24 @@ test('no table x-overflows in either density, and cell horizontal padding never 
   expect(compact.cellPadX).toBe('10px/10px');
 });
 
-test('below lg the switch folds into the "…" sheet, exactly like the theme switch', async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 900 });
-  await page.goto('/#overview');
+test('the spacing switch is in Settings at every width, and not in the top bar', async ({ page }) => {
+  for (const width of [1920, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/#overview');
+    await expect(page.locator('header').getByRole('button', { name: 'Compact density' })).toHaveCount(0);
 
-  const inHeader = page.locator('header').getByRole('button', { name: 'Compact density' });
-  await expect(inHeader).toBeHidden();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const inSheet = page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Compact density' });
+    await expect(inSheet).toBeVisible();
+    await inSheet.click();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
 
-  await page.getByRole('button', { name: 'Settings' }).click();
-  const inSheet = page.getByRole('button', { name: 'Compact density' });
-  await expect(inSheet).toBeVisible();
-  await inSheet.click();
-  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+    // Put it back, so the second width starts from the same place.
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Comfortable density' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'comfortable');
+    // Close the sheet: a second goto to the same page only changes the hash, so
+    // an open modal would still be sitting over the Settings button.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+  }
 });
