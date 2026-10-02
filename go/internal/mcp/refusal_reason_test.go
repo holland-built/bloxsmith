@@ -115,3 +115,17 @@ func TestHTTPRefusalDoesNotWaitForASlowBody(t *testing.T) {
 	}
 	mustLog(t, logs, "http 403")
 }
+
+// An error field that is present but empty is still an error envelope: the
+// top-level message is only read when there is no "error" field at all.
+func TestHTTPRefusalWithAnEmptyErrorFieldIgnoresTheMessage(t *testing.T) {
+	logs := captureLog(t)
+	srv := replyServer(t, refuse(http.StatusForbidden, `{"error":[],"message":"HOST-77 10.1.2.3"}`))
+
+	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+
+	mustLog(t, logs, "http 403")
+	if strings.Contains(logs.String(), "HOST-77") {
+		t.Fatalf("log echoed the top-level message beside a present error field:\n%s", logs.String())
+	}
+}

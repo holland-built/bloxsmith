@@ -392,7 +392,7 @@ func refusalReason(body io.Reader) string {
 		return ""
 	}
 	msg := errorMessage(env.Error)
-	if msg == "" {
+	if noErrorField := len(env.Error) == 0 || string(env.Error) == "null"; msg == "" && noErrorField {
 		msg = env.Message
 	}
 	msg = strings.Join(strings.Fields(msg), " ")
