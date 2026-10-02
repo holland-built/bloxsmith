@@ -136,7 +136,12 @@ type Client struct {
 
 	mu        sync.Mutex
 	sessionID string // Mcp-Session-Id issued by initialize
-	nextID    int
+	// sessionAuth is the Authorization value sessionID was issued under. A
+	// session belongs to the identity that opened it: post sends the id only with
+	// that same value, so a tenant switch or a replaced key can never put one
+	// tenant's session on another tenant's key, even mid-request.
+	sessionAuth string
+	nextID      int
 
 	// uncorrelatedWarn fires at most one log line per client for a server that
 	// answers without echoing an id at all. That is a correlation blind spot
@@ -147,10 +152,6 @@ type Client struct {
 
 	initMu      sync.Mutex
 	initialized bool
-	// initAuth is the Authorization value the live session was opened with. A
-	// session belongs to the identity that opened it, so when auth() returns
-	// something else (a tenant switch, a replaced key) Initialize opens a new one.
-	initAuth string
 	// lastInitErr is the last handshake failure already written to the log,
 	// so a sustained outage does not repeat it on every call. See Initialize.
 	lastInitErr string
@@ -256,10 +257,14 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		defer cancel()
 	}
 
+	auth := c.auth()
 	c.mu.Lock()
 	c.nextID++
 	id := c.nextID
-	sid := c.sessionID
+	sid := ""
+	if c.sessionAuth == auth {
+		sid = c.sessionID
+	}
 	c.mu.Unlock()
 
 	body := rpcReq{JSONRPC: "2.0", Method: method, Params: params}
@@ -276,7 +281,7 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", c.auth())
+	req.Header.Set("Authorization", auth)
 	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	if sid != "" {
 		req.Header.Set("Mcp-Session-Id", sid)
@@ -295,6 +300,7 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	if v := resp.Header.Get("Mcp-Session-Id"); v != "" {
 		c.mu.Lock()
 		c.sessionID = v
+		c.sessionAuth = auth
 		c.mu.Unlock()
 	}
 	if resp.StatusCode >= 400 {
@@ -305,7 +311,7 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		// replaced it.
 		if resp.StatusCode == http.StatusNotFound && sid != "" && method != "initialize" {
 			c.mu.Lock()
-			if c.sessionID == sid {
+			if c.sessionID == sid && c.sessionAuth == auth {
 				c.sessionID = ""
 			}
 			c.mu.Unlock()
@@ -552,16 +558,10 @@ func (c *Client) Initialize(ctx context.Context) error {
 
 	auth := c.auth()
 	c.mu.Lock()
-	sid := c.sessionID
+	sid, sidAuth := c.sessionID, c.sessionAuth
 	c.mu.Unlock()
-	if c.initialized && sid != "" && auth == c.initAuth {
+	if c.initialized && sid != "" && auth == sidAuth {
 		return nil
-	}
-	if sid != "" {
-		// Opening a session for a different key: do not present the old one.
-		c.mu.Lock()
-		c.sessionID = ""
-		c.mu.Unlock()
 	}
 
 	_, err := c.post(ctx, "initialize", map[string]any{
@@ -604,7 +604,6 @@ func (c *Client) Initialize(ctx context.Context) error {
 		log.Printf("mcp: Initialize: notifications/initialized failed, session continues: %v", nerr)
 	}
 	c.initialized = true
-	c.initAuth = auth
 	c.lastInitErr = ""
 	return nil
 }
