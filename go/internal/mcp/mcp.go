@@ -296,8 +296,10 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	}
 	defer resp.Body.Close()
 
-	// Capture a freshly issued session id (initialize).
-	if v := resp.Header.Get("Mcp-Session-Id"); v != "" {
+	// Capture a freshly issued session id. Only the initialize reply may set it:
+	// a late reply to an older call must not replace the session a newer
+	// handshake already opened.
+	if v := resp.Header.Get("Mcp-Session-Id"); v != "" && method == "initialize" {
 		c.mu.Lock()
 		c.sessionID = v
 		c.sessionAuth = auth
