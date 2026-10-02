@@ -608,7 +608,7 @@ export default function App() {
                 below `sm` Provision shrinks to its "+", and below `md` every
                 update message becomes a dot on Settings, where the sheet has the
                 Install button. The chip is NOT one of the things that gives way. */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               <UpdateButton />
               <ConnStatus />
               <ThemeToggle />
