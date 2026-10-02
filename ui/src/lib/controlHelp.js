@@ -39,25 +39,29 @@
 // ---------------------------------------------------------------------------
 
 export const CONTROL_HELP = {
-  'connection-status': {
-    label: 'The coloured dot',
-    what: 'Green means connected with data arriving. Amber means connected but nothing came back. Red means the vault is locked or a feed failed. The words beside it name the tenant, or say what went wrong.',
+  sections: {
+    label: 'Status, Estate, Risk, Change, Ask',
+    what: 'The five groups of tabs. Press the keys 1 to 5 to open one, or click it. The group you are in is highlighted.',
   },
   updates: {
     label: 'Update v…',
     what: 'Appears at the top of the screen only when a newer version exists, and nothing is shown there when you are already up to date. Pressing it installs that version and reloads the page.',
   },
+  'connection-status': {
+    label: 'The tenant name',
+    what: "The dot: green is connected with data arriving, amber is connected but nothing came back, red is a locked vault or a failed feed. Beside the name: Read-only, Changes allowed, or Can't tell.",
+  },
+  settings: {
+    label: 'The sliders button',
+    what: 'Connections, write access, the CSP account, the Axur key, theme and spacing, updates, the dashboard token, and locking the vault.',
+  },
   theme: {
     label: 'Sun · Monitor · Moon',
-    what: 'Light, System, or Dark colours. System follows your computer and changes whenever your computer does.',
+    what: 'In Settings. Light, System, or Dark colours. System follows your computer and changes whenever your computer does.',
   },
   density: {
     label: 'The two row icons',
-    what: 'Compact fits more rows on screen. Comfortable gives everything more space. It changes spacing only — no table loses a column and no panel is hidden.',
-  },
-  settings: {
-    label: 'The ⋯ button',
-    what: 'Connections, the CSP account, the dashboard token, and locking the vault. The theme and spacing controls are in here as well, which is where a narrow screen keeps them.',
+    what: 'In Settings. Compact fits more rows on screen. Comfortable gives everything more space. It changes spacing only — no table loses a column and no panel is hidden.',
   },
   provision: {
     label: '+ Provision',

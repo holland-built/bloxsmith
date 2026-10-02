@@ -1,5 +1,46 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+
+// Which tenant a change would land in, and whether it may be changed.
+//
+// NOT useApi, deliberately. This is a permission verdict that sits beside a
+// tenant name, and useApi's guard is per url, not per request: a poll and a
+// refetch for the same url can both be in flight and the older answer can land
+// last, putting a revoked "Changes allowed" back on screen. So each read is
+// numbered here and only the newest answer is kept. Two more rules follow from
+// what the words are for:
+//
+//   - a read that FAILS discards the old verdict (the chip says "Can't tell"),
+//     rather than leaving the last good one looking current; and
+//   - when Settings or Provision has just granted or revoked, `bx:write-target`
+//     hides the verdict until the re-read lands, so the old one is not shown
+//     for even the moment the new one is in flight.
+function useWriteTarget() {
+  const [state, setState] = useState({ checking: true, data: null, error: false })
+  const asked = useRef(0)
+  const read = useCallback((hide) => {
+    const mine = ++asked.current
+    if (hide) setState({ checking: true, data: null, error: false })
+    fetch('/api/vault/write-target', { cache: 'no-store' })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((data) => { if (mine === asked.current) setState({ checking: false, data, error: false }) })
+      .catch(() => { if (mine === asked.current) setState({ checking: false, data: null, error: true }) })
+  }, [])
+  useEffect(() => {
+    read(false)
+    const id = setInterval(() => read(false), 30000)
+    const on = () => read(true)
+    window.addEventListener('bx:write-target', on)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('bx:write-target', on)
+    }
+  }, [read])
+  return state
+}
 
 export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
@@ -22,6 +63,10 @@ export default function ConnStatus() {
   // was last SEEN, and an adopted result was seen just as recently as a fetched
   // one — more recently, in fact, than the request this call site no longer makes.
   const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 2000 })
+
+  // The write state sits beside the tenant name because it is the one fact an
+  // operator needs before pressing Provision.
+  const write = useWriteTarget()
 
   useEffect(() => {
     const onLocked = () => setLocked(true)
@@ -125,32 +170,75 @@ export default function ConnStatus() {
     setSwitchErr(d.error || 'Could not switch tenant.')
   }
 
+  // What a write would do, in words. Nothing is said until there is an answer,
+  // and a failed read or `known: false` is "Can't tell" — never the last good
+  // verdict, and never read-only. A locked or offline tenant says so in `label`
+  // already and gets no permission words at all.
+  let writeWords = ''
+  let writeTone = 'text-muted'
+  if (statusOk && !isLocked) {
+    const writeTarget = write.data
+    if (write.checking) {
+      // Nothing is said until there is an answer to say.
+    } else if (write.error || !writeTarget || writeTarget.known !== true) {
+      writeWords = "Can't tell"
+      writeTone = 'text-crit'
+    } else {
+      // A CSP account switch moves where a change lands without moving the
+      // tenant named here: the write target's id is `<tenant>/<account>`, with
+      // `-` for no switch. Its label is the base tenant's, so the id is what
+      // tells them apart, and "Changes allowed" beside the wrong name would be
+      // a false statement. Settings names the account.
+      const switched = typeof writeTarget.tenant === 'string' && !writeTarget.tenant.endsWith('/-')
+      const elsewhere = switched ? ' in another account' : ''
+      writeWords = (writeTarget.writable ? 'Changes allowed' : 'Read-only') + elsewhere
+      writeTone = writeTarget.writable ? 'text-warn' : 'text-muted'
+    }
+  }
+
+  // Name over state below `lg`, on one line above it. The name truncates: a long
+  // one must never push Settings and Provision off a 390px screen. The state
+  // wraps on a phone instead of truncating, however many lines it takes,
+  // because "Changes allowed in another account" cut to "Changes…" would hide
+  // the one part that matters before Provision is pressed.
+  const body = (
+    <>
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+      <span className="flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2">
+        <span className="truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt">{label}</span>
+        {writeWords && (
+          <span data-write className={`break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
+        )}
+      </span>
+      {/* A chip that opens a tenant list says so; one tenant is not a choice. */}
+      {canSwitch && (
+        <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-dim">
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      )}
+    </>
+  )
+  const chipCls = 'flex items-center gap-2 min-w-0 min-h-9 lg:h-8 py-1 lg:py-0 px-2.5 rounded-control border border-border bg-field'
+
   if (!canSwitch) {
     return (
-      <span className="text-note text-muted flex items-center gap-1.5" title={title}>
-        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-        {/* Below `lg` only the dot survives on the bar (the v11 A3 fold). The
-            words it stands for are not lost: the same tenant is spelled out in
-            the "…" Settings sheet, which is reachable at every width. The dot
-            keeps its colour, so a locked vault or a dead feed is still visible
-            on a phone. */}
-        <span className="hidden lg:flex items-center gap-1.5">{label}</span>
+      <span className={chipCls} title={`${title}${writeWords ? ` · ${writeWords}` : ''}`}>
+        {body}
       </span>
     )
   }
 
   return (
-    <span className="relative text-note text-muted flex items-center">
+    <span className="relative flex items-center min-w-0">
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded-control px-1 py-0.5 hover:bg-line/60 cursor-pointer"
-        title={`${title} — click to switch tenant`}
+        className={chipCls + ' cursor-pointer hover:border-border-hover'}
+        title={`${title}${writeWords ? ` · ${writeWords}` : ''} — click to switch tenant`}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => { setSwitchErr(''); setOpen((o) => !o) }}
       >
-        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-        <span className="hidden lg:flex items-center gap-1.5">{label}</span>
+        {body}
       </button>
       {open && (
         <>

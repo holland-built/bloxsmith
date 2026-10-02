@@ -65,7 +65,12 @@ function WriteAccessBanner({ isAdmin }) {
     setBusy(true); setErr('')
     const r = await authFetch('/api/vault/tenant-writable', { method: 'POST', body: JSON.stringify({ writable: true, id: wt.data.tenant }) })
     setBusy(false)
-    if (r.ok && r.data?.ok) { setConfirming(false); wt.reload() }
+    if (r.ok && r.data?.ok) {
+      setConfirming(false)
+      wt.reload()
+      // The tenant chip in the top bar shows this same permission.
+      window.dispatchEvent(new Event('bx:write-target'))
+    }
     else setErr(r.data?.error || 'Could not change the write permission.')
   }
 

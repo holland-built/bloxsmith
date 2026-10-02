@@ -321,8 +321,12 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     const { ok, data } = await vpost('/api/vault/tenant-writable', { writable: on })
     setGrantBusy(false)
     setConfirmGrant(false)
-    if (ok && data.ok) load()
-    else setGrantErr(data.error || 'Could not change the write permission.')
+    if (ok && data.ok) {
+      load()
+      // The tenant chip in the top bar shows this same permission; tell it now
+      // rather than letting it wait out its poll with the old answer.
+      window.dispatchEvent(new Event('bx:write-target'))
+    } else setGrantErr(data.error || 'Could not change the write permission.')
   }
 
   const lockNow = async () => {
@@ -664,42 +668,21 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               </>
             )}
 
-            {/* The header bar folds the theme switch away below `lg` (see
-                App.jsx's A3 fold), so this is where it is reached on a narrow
-                screen. Same component, so the two cannot drift; shown at every
-                width because a settings sheet is where a reader looks for it
-                anyway. */}
-            {/* ONE link, where three explanation paragraphs used to be. Each
-                switch here carried the same sentence the header's control-help
-                dialog shows, and Updates carried a third — reported as "in a
-                setting kabob why have feature description". A settings panel
-                holds controls; the manual is a click away, not printed under
-                every row. The sentences now exist in exactly one place
-                (lib/controlHelp.js) rendered by exactly one component
-                (HeaderHelp.jsx), so there is nothing left to drift.
-                The link is not a convenience — it is the phone's only route.
-                The header's ⓘ is `hidden lg:flex` (App.jsx's A3 fold), so below
-                `lg` this row is the only way that dialog can be opened at all.
-                It closes this sheet and opens the dialog rather than stacking
-                two modals; App.jsx owns the other half and sends focus back to
-                the "…" when the dialog closes, because that is the button the
-                reader actually pressed.
-
-                AND IT IS SHOWN ONLY THERE — `lg:hidden`, the exact inverse of
-                the header button's `hidden lg:flex`. On a desktop the same ⓘ is
-                already sitting in the top bar a few inches away, and a second
-                door to it inside Settings was reported as redundant. Deleting
-                the row outright is what the inverse gate prevents: below `lg`
-                there is no other door, which is the gap this row was added to
-                close. One route at every width, never two and never none — if
-                either class is edited, edit both, and header-help.spec.ts
-                asserts the pairing at 1920 and at 390. */}
+            {/* Theme and spacing live only here: the top bar no longer carries
+                them. ONE link to the "What these controls do" dialog, where
+                explanation paragraphs under each switch used to be — a settings
+                panel holds controls, and the manual is a click away. The
+                sentences exist in exactly one place (lib/controlHelp.js),
+                rendered by exactly one component (HeaderHelp.jsx). This row is
+                that dialog's only door, at every width. It closes this sheet and
+                opens the dialog rather than stacking two modals; App.jsx owns
+                the other half and sends focus back to the Settings button. */}
             <div className="text-note uppercase tracking-wide text-dim mb-2">Appearance</div>
             <button
               type="button"
               onClick={onOpenHelp}
               aria-haspopup="dialog"
-              className="block lg:hidden mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"
+              className="block mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"
             >
               What these controls do →
             </button>

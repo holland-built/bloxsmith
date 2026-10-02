@@ -137,7 +137,7 @@ test('each group menu lists exactly its own tabs, and links to them', async ({ p
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
 
     // Prefix-matched: the item for the tab you are already on also carries a
-    // "Here" marker, which is part of its text content.
+    // check mark, which is part of its text content.
     const items = page.locator('header [role="menu"] a[role="menuitem"]');
     await expect(items).toHaveText(GROUP_TABS[label].map((t) => new RegExp(`^${esc(t)}`)));
     // Only one menu is ever open.
@@ -219,24 +219,22 @@ test('at 390px the bar collapses to one Menu button that still reaches every tab
   expect(hrefs.sort()).toEqual(TAB_HEADINGS.map(([id]) => `#${id}`).sort());
 });
 
-// P6c is satisfied at 390 by folding the tenant name, version and theme switch
-// off the bar. A fold that DELETED a control would satisfy it just as well, so
-// this is the clause that tells the two apart: the switch has to still be
-// there, and still work, from inside the "…" sheet.
-test('at 390px the theme switch folds off the bar but still works from Settings', async ({
+// The top bar no longer carries the theme switch at ANY width: it lives in
+// Settings, which is reachable everywhere. A move that DELETED the control would
+// satisfy "not on the bar" just as well, so this is the clause that tells the
+// two apart: the switch has to still be there, and still work, from inside the
+// sheet.
+test('at 390px the theme switch is not on the bar and still works from Settings', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?cb=fold-390#overview');
 
-  const lightOnBar = page.locator('header').getByRole('button', { name: 'Light theme' });
-  await expect(lightOnBar).toBeHidden();
+  await expect(page.locator('header').getByRole('button', { name: 'Light theme' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  // Two now exist in the DOM — the folded header one and the sheet's — so the
-  // ":visible" filter is what names the reachable one.
-  const lightInSheet = page.locator('button[aria-label="Light theme"]:visible');
-  await expect(lightInSheet).toHaveCount(1);
+  const lightInSheet = page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Light theme' });
+  await expect(lightInSheet).toBeVisible();
   await lightInSheet.click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });

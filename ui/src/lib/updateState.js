@@ -159,6 +159,21 @@ async function applyUpdate() {
 }
 
 /**
+ * True when a newer version is ready and this copy can install it — what the
+ * header's Update button and the dot on the Settings button both show. A dev
+ * build, a switched-off check and a failed check are all "nothing to offer".
+ */
+export function updateReady(info) {
+  return (
+    !!info &&
+    !!info.available &&
+    !info.error &&
+    !info.checkDisabled &&
+    !String(info.current || '').startsWith('dev-')
+  )
+}
+
+/**
  * What pressing an update button does: install in place when this copy can
  * update itself, otherwise open the release page.
  */
