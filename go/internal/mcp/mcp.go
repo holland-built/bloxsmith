@@ -294,6 +294,9 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		c.mu.Unlock()
 	}
 	if resp.StatusCode >= 400 {
+		if why := refusalReason(resp.Body); why != "" {
+			return nil, fmt.Errorf("mcp %s: http %d: %s", method, resp.StatusCode, why)
+		}
 		return nil, fmt.Errorf("mcp %s: http %d", method, resp.StatusCode)
 	}
 	if notify {
@@ -342,6 +345,86 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		return nil, fmt.Errorf("mcp %s: %s", method, out.Error.Message)
 	}
 	return &out, nil
+}
+
+// refusalReadWait is how long a refused call waits for the reply's message.
+const refusalReadWait = 500 * time.Millisecond
+
+// refusalReason returns the message a gateway put in the reply to a refused
+// request, or "" when the reply carries none.
+//
+// WHY IT EXISTS. A 403 on tools/call used to be reported as "http 403" and
+// nothing else, so an operator whose Assets tab said "failed upstream" could
+// not tell a key without access from a tenant without the data. The reply says
+// which. Infoblox's shape is {"error":[{"message":"..."}]}; a JSON-RPC style
+// {"error":{"message":..}}, {"error":".."} and {"message":".."} are read too.
+//
+// WHAT IT WILL NOT RETURN. Only a message field, never the body: this file's
+// standing rule (see the block above callTimeout) is that no substring of a
+// data-bearing reply reaches the log, and a refusal whose body is not an error
+// envelope stays as bare as before. The message is cut to one bounded line.
+//
+// The "error" field is read first and a top-level "message" only when there is
+// none: tool payloads use "message" for query results, so it is the less
+// trustworthy of the two.
+//
+// THE READ IS TIMED. The status is already the answer, so a refusal whose body
+// never finishes must not hold the call to its deadline: after
+// refusalReadWait the reason is given up and the status stands alone. post's
+// deferred Body.Close ends the abandoned read.
+func refusalReason(body io.Reader) string {
+	got := make(chan []byte, 1)
+	go func() {
+		raw, _ := io.ReadAll(io.LimitReader(body, 16<<10))
+		got <- raw
+	}()
+	var raw []byte
+	select {
+	case raw = <-got:
+	case <-time.After(refusalReadWait):
+		return ""
+	}
+	var env struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if json.Unmarshal(raw, &env) != nil {
+		return ""
+	}
+	msg := errorMessage(env.Error)
+	if noErrorField := len(env.Error) == 0 || string(env.Error) == "null"; msg == "" && noErrorField {
+		msg = env.Message
+	}
+	msg = strings.Join(strings.Fields(msg), " ")
+	if r := []rune(msg); len(r) > 200 {
+		msg = string(r[:200]) + "…"
+	}
+	return msg
+}
+
+// errorMessage reads the message out of the three shapes an "error" field takes.
+func errorMessage(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var one struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &one) == nil {
+		return one.Message
+	}
+	var many []struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &many) == nil {
+		for _, e := range many {
+			if e.Message != "" {
+				return e.Message
+			}
+		}
+	}
+	return ""
 }
 
 // extractSSEData pulls the JSON-RPC RESPONSE event out of an SSE reply.
