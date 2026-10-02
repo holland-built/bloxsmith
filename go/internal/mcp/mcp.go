@@ -347,6 +347,9 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	return &out, nil
 }
 
+// refusalReadWait is how long a refused call waits for the reply's message.
+const refusalReadWait = 500 * time.Millisecond
+
 // refusalReason returns the message a gateway put in the reply to a refused
 // request, or "" when the reply carries none.
 //
@@ -360,9 +363,25 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 // standing rule (see the block above callTimeout) is that no substring of a
 // data-bearing reply reaches the log, and a refusal whose body is not an error
 // envelope stays as bare as before. The message is cut to one bounded line.
+//
+// The "error" field is read first and a top-level "message" only when there is
+// none: tool payloads use "message" for query results, so it is the less
+// trustworthy of the two.
+//
+// THE READ IS TIMED. The status is already the answer, so a refusal whose body
+// never finishes must not hold the call to its deadline: after
+// refusalReadWait the reason is given up and the status stands alone. post's
+// deferred Body.Close ends the abandoned read.
 func refusalReason(body io.Reader) string {
-	raw, err := io.ReadAll(io.LimitReader(body, 16<<10))
-	if err != nil {
+	got := make(chan []byte, 1)
+	go func() {
+		raw, _ := io.ReadAll(io.LimitReader(body, 16<<10))
+		got <- raw
+	}()
+	var raw []byte
+	select {
+	case raw = <-got:
+	case <-time.After(refusalReadWait):
 		return ""
 	}
 	var env struct {
@@ -372,9 +391,9 @@ func refusalReason(body io.Reader) string {
 	if json.Unmarshal(raw, &env) != nil {
 		return ""
 	}
-	msg := env.Message
+	msg := errorMessage(env.Error)
 	if msg == "" {
-		msg = errorMessage(env.Error)
+		msg = env.Message
 	}
 	msg = strings.Join(strings.Fields(msg), " ")
 	if r := []rune(msg); len(r) > 200 {

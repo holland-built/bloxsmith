@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A gateway that refuses a tool call with an HTTP status carries the reason in
@@ -74,4 +75,43 @@ func TestHTTPRefusalReasonIsBounded(t *testing.T) {
 		t.Fatalf("a refusal's reason must be bounded, log line was %d bytes", len(got))
 	}
 	mustLog(t, logs, "http 403", "line one")
+}
+
+// Tool payloads use a top-level "message" for query results, so on a refusal the
+// error envelope is read first and the top-level field only when there is none.
+func TestHTTPRefusalPrefersTheErrorFieldOverAMessage(t *testing.T) {
+	logs := captureLog(t)
+	srv := replyServer(t, refuse(http.StatusForbidden,
+		`{"error":[{"message":"not authorized"}],"message":"HOST-77 10.1.2.3"}`))
+
+	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+
+	mustLog(t, logs, "http 403", "not authorized")
+	if strings.Contains(logs.String(), "HOST-77") {
+		t.Fatalf("log echoed the top-level message next to an error envelope:\n%s", logs.String())
+	}
+}
+
+// A refusal whose body never finishes must not hold the call: the status alone
+// is already the answer, and it used to be returned the moment it arrived.
+func TestHTTPRefusalDoesNotWaitForASlowBody(t *testing.T) {
+	logs := captureLog(t)
+	release := make(chan struct{})
+	srv := replyServer(t, func(_ string, w http.ResponseWriter) {
+		raw := w.(idEchoWriter).ResponseWriter
+		raw.Header().Set("Content-Type", "application/json")
+		raw.WriteHeader(http.StatusForbidden)
+		_, _ = raw.Write([]byte(`{"error":`))
+		raw.(http.Flusher).Flush()
+		<-release
+	})
+	t.Cleanup(func() { close(release) })
+
+	start := time.Now()
+	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+
+	if took := time.Since(start); took > 3*time.Second {
+		t.Fatalf("a refusal with an unfinished body held the call for %v", took)
+	}
+	mustLog(t, logs, "http 403")
 }
