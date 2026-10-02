@@ -56,15 +56,18 @@ let stored = 0
  */
 export async function checkForUpdate(force) {
   const mine = ++asked
+  // Pressing the button is the operator asking to look again, so an earlier
+  // failed install should not keep speaking over the new answer. Cleared as the
+  // press happens, not when the answer lands: an install that fails in between
+  // is a new failure and has to stay.
+  if (force && state.phase === 'error') set({ phase: 'idle', error: '' })
   const r = await fetchT(force ? '/api/update/check?force=1' : '/api/update/check', null, 15000)
   const info = await r.json()
   // Answers can land out of order: an ordinary check still in flight when the
   // forced one is pressed would otherwise overwrite the fresher result.
   if (mine > stored) {
     stored = mine
-    // Pressing the button is the operator asking to look again, so an earlier
-    // failed install should not keep speaking over the new answer.
-    set(force && state.phase === 'error' ? { info, phase: 'idle', error: '' } : { info })
+    set({ info })
   }
   return info
 }
