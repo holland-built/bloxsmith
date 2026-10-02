@@ -147,6 +147,10 @@ type Client struct {
 
 	initMu      sync.Mutex
 	initialized bool
+	// initAuth is the Authorization value the live session was opened with. A
+	// session belongs to the identity that opened it, so when auth() returns
+	// something else (a tenant switch, a replaced key) Initialize opens a new one.
+	initAuth string
 	// lastInitErr is the last handshake failure already written to the log,
 	// so a sustained outage does not repeat it on every call. See Initialize.
 	lastInitErr string
@@ -294,6 +298,18 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		c.mu.Unlock()
 	}
 	if resp.StatusCode >= 400 {
+		// 404 on a call that carried a session id means the server dropped that
+		// session. Forget it, so the next Initialize opens a new one instead of
+		// finding sid != "" and believing the dead one is still good. Only if it
+		// is still the one we sent: a concurrent handshake may already have
+		// replaced it.
+		if resp.StatusCode == http.StatusNotFound && sid != "" && method != "initialize" {
+			c.mu.Lock()
+			if c.sessionID == sid {
+				c.sessionID = ""
+			}
+			c.mu.Unlock()
+		}
 		if why := refusalReason(resp.Body); why != "" {
 			return nil, fmt.Errorf("mcp %s: http %d: %s", method, resp.StatusCode, why)
 		}
@@ -534,11 +550,18 @@ func (c *Client) Initialize(ctx context.Context) error {
 	c.initMu.Lock()
 	defer c.initMu.Unlock()
 
+	auth := c.auth()
 	c.mu.Lock()
 	sid := c.sessionID
 	c.mu.Unlock()
-	if c.initialized && sid != "" {
+	if c.initialized && sid != "" && auth == c.initAuth {
 		return nil
+	}
+	if sid != "" {
+		// Opening a session for a different key: do not present the old one.
+		c.mu.Lock()
+		c.sessionID = ""
+		c.mu.Unlock()
 	}
 
 	_, err := c.post(ctx, "initialize", map[string]any{
@@ -581,6 +604,7 @@ func (c *Client) Initialize(ctx context.Context) error {
 		log.Printf("mcp: Initialize: notifications/initialized failed, session continues: %v", nerr)
 	}
 	c.initialized = true
+	c.initAuth = auth
 	c.lastInitErr = ""
 	return nil
 }
