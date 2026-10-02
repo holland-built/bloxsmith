@@ -33,7 +33,14 @@ import { test, expect } from './fixtures';
 //
 // If this fails, do not raise the number until you know WHICH chunk grew: the
 // failure message lists every .js file fetched and its size.
-const BUDGET_BYTES = 380 * 1024; // 389,120 B
+//
+// RAISED 380 -> 384 KB on 2026-10-02, with the chunk that grew identified. The
+// top-bar overhaul took #provision from 387,689 B to 389,175 B: the entry chunk
+// +1,435 B (the tenant chip's write-state reads, the update dot, the help text)
+// and Provision +51 B. vendor-react (218,840) and the runtime did not move, and
+// no charts chunk is on the route, which is the regression this budget exists
+// to stop. The old ceiling had 1,431 B of headroom left before this change.
+const BUDGET_BYTES = 384 * 1024; // 393,216 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();
