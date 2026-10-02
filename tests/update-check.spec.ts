@@ -147,6 +147,57 @@ test('installing from the sheet reloads the page on its own once the new version
   await expect(page.getByRole('button', { name: 'Update v3.56.0', exact: true })).toHaveCount(0);
 });
 
+test('a slow older answer cannot overwrite a newer one', async ({ page }) => {
+  // Every unforced check is held back until the test lets it go, so it lands
+  // AFTER the forced one that the click sends — the order that used to hide
+  // the install button again.
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/update/check*', async (route) => {
+    const forced = /[?&]force=1\b/.test(route.request().url());
+    if (!forced) await gate;
+    return fulfillJson(route, forced ? newer() : upToDate());
+  });
+  const sheet = await openSettings(page);
+
+  await sheet.getByRole('button', CHECK).click();
+  const install = sheet.getByRole('button', { name: 'Install v3.56.0 and restart' });
+  await expect(install).toBeVisible();
+
+  release();
+  // One reading after the late answers have landed, not a retrying expect: a
+  // retry would pass in the instant before the late answer arrives.
+  await page.waitForTimeout(500);
+  await expect(install).toBeVisible();
+});
+
+test('a development build is not offered an install', async ({ page }) => {
+  // The header hides its button for these; the sheet has to agree.
+  await stubCheck(page, () => newer({ current: 'dev-498ca0b' }));
+  const sheet = await openSettings(page);
+
+  await sheet.getByRole('button', CHECK).click();
+  await expect(sheet.getByRole('status')).toContainText('3.56.0');
+  await expect(sheet.getByRole('button', { name: /^Install/ })).toHaveCount(0);
+});
+
+test('a failed install does not hide the result of the next check', async ({ page }) => {
+  await stubCheck(page, () => newer());
+  await page.route('**/api/update/apply', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'disk full' }) }),
+  );
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', CHECK).click();
+  await sheet.getByRole('button', { name: 'Install v3.56.0 and restart' }).click();
+  await expect(sheet.getByRole('status')).toContainText('disk full');
+
+  // The button rests for five seconds after a press (FORCED_MIN_MS).
+  await expect(sheet.getByRole('button', CHECK)).toBeEnabled({ timeout: 8000 });
+  await sheet.getByRole('button', CHECK).click();
+  await expect(sheet.getByRole('status')).toContainText('3.56.0 is ready');
+  await expect(sheet.getByRole('status')).not.toContainText('disk full');
+});
+
 test('a check that could not reach the update service says so, and claims nothing', async ({ page }) => {
   await stubCheck(page, () =>
     upToDate({ error: 'dial tcp: lookup api.github.com: no such host', checkedAt: isoAgo(0) }),

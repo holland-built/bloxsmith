@@ -168,7 +168,9 @@ export function UpdateCheck({ version }) {
   const running = String((info && info.current) || version || '').replace(/^v/, '');
   const latest = String((info && info.latest) || '').replace(/^v/, '');
   const checkedAgo = agoText(info && info.checkedAt, now);
-  const canInstall = !!info && info.available && !info.error && !disabled && !installing;
+  // The header hides its button on a development build; the sheet agrees.
+  const isDev = running.startsWith('dev-');
+  const canInstall = !!info && info.available && !info.error && !disabled && !isDev && !installing;
 
   let said = '';
   let tone = 'text-dim';

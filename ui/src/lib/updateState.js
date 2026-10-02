@@ -42,6 +42,11 @@ export function useUpdate() {
   return useSyncExternalStore(subscribe, () => state)
 }
 
+// How many checks have been sent, and the number of the newest one whose
+// answer is in `state.info`.
+let asked = 0
+let stored = 0
+
 /**
  * Asks the server whether a newer version exists and stores the answer for
  * everything that is listening. `force` skips the server's own half-hour
@@ -50,9 +55,17 @@ export function useUpdate() {
  * GitHub failed (that arrives as `info.error`).
  */
 export async function checkForUpdate(force) {
+  const mine = ++asked
   const r = await fetchT(force ? '/api/update/check?force=1' : '/api/update/check', null, 15000)
   const info = await r.json()
-  set({ info })
+  // Answers can land out of order: an ordinary check still in flight when the
+  // forced one is pressed would otherwise overwrite the fresher result.
+  if (mine > stored) {
+    stored = mine
+    // Pressing the button is the operator asking to look again, so an earlier
+    // failed install should not keep speaking over the new answer.
+    set(force && state.phase === 'error' ? { info, phase: 'idle', error: '' } : { info })
+  }
   return info
 }
 
