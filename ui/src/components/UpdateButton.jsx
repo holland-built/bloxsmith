@@ -1,122 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import { checkForUpdate, startUpdate, useUpdate } from '../lib/updateState.js';
 
 // Ported from src/96.chrome-topbar.jsx (useSelfUpdate + UpdatePill).
-// Endpoints: GET /api/update/check -> {current,latest,available,url,selfUpdate}
-//            POST /api/update/apply -> starts the swap+restart
-//            GET /api/update/status -> {phase,pct,error} poll target
-const fetchT = (url, opts, ms) => {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), ms || 8000);
-  return fetch(url, { ...(opts || {}), signal: ac.signal, cache: 'no-store' }).finally(() =>
-    clearTimeout(t)
-  );
-};
-
+// The answer and the install flow live in lib/updateState.js, shared with
+// UpdateCheck below — see the comment there for why they are not kept here.
 export default function UpdateButton() {
-  const [info, setInfo] = useState(null);
-  const [phase, setPhase] = useState('idle'); // idle | applying | restarting | error
-  const [error, setError] = useState('');
-  const applying = useRef(false);
-
-  const recheck = async () => {
-    try {
-      const r = await fetch('/api/update/check', { cache: 'no-store' });
-      setInfo(await r.json());
-    } catch {
-      // older/file-mode server — stay silent
-    }
-  };
+  const { info, phase, error } = useUpdate();
 
   useEffect(() => {
+    // older/file-mode server — stay silent
+    const recheck = () => checkForUpdate().catch(() => {});
     recheck();
     const id = setInterval(recheck, 6 * 60 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
-
-  const runApply = async () => {
-    if (applying.current) return;
-    applying.current = true;
-    setError('');
-    setPhase('applying');
-    const oldVer = (info && info.current) || '';
-    let done = false;
-    const fail = (m) => {
-      if (done) return;
-      done = true;
-      applying.current = false;
-      setPhase('error');
-      setError(m || 'update failed');
-    };
-    const confirmThenReload = () => {
-      if (done) return;
-      setPhase('restarting');
-      const deadline = Date.now() + 20000;
-      const probe = async () => {
-        if (done) return;
-        try {
-          const c = await fetchT('/api/update/check', null, 6000).then((x) => x.json());
-          if (c && c.current && c.current !== oldVer) {
-            done = true;
-            applying.current = false;
-            window.location.reload();
-            return;
-          }
-        } catch {
-          // mid-restart — keep probing
-        }
-        if (Date.now() > deadline) {
-          fail('update applied but could not confirm — refresh to verify the version');
-          return;
-        }
-        setTimeout(probe, 1500);
-      };
-      probe();
-    };
-    try {
-      const r = await fetchT('/api/update/apply', { method: 'POST' }, 12000);
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        fail(j.error || 'HTTP ' + r.status);
-        return;
-      }
-      let lastPhase = 'starting';
-      let lastChange = Date.now();
-      const tick = async () => {
-        if (done) return;
-        let s;
-        try {
-          s = await fetchT('/api/update/status', null, 8000).then((x) => x.json());
-        } catch {
-          confirmThenReload();
-          return;
-        }
-        if (done) return;
-        if (s.phase === 'error') {
-          fail(s.error);
-          return;
-        }
-        if (s.phase === 'done' || s.pct >= 100) {
-          confirmThenReload();
-          return;
-        }
-        if (s.running === false && (!s.phase || s.phase === 'idle')) {
-          confirmThenReload();
-          return;
-        }
-        if (s.phase !== lastPhase) {
-          lastPhase = s.phase;
-          lastChange = Date.now();
-        } else if (Date.now() - lastChange > 180000) {
-          fail('update stalled — refresh to check the version');
-          return;
-        }
-        setTimeout(tick, 1200);
-      };
-      setTimeout(tick, 1200);
-    } catch {
-      confirmThenReload();
-    }
-  };
 
   const current = (info && info.current) || '';
   const isDev = current.startsWith('dev-') || (info && info.checkDisabled);
@@ -158,10 +55,7 @@ export default function UpdateButton() {
     return (
       <button
         type="button"
-        onClick={() => {
-          if (info.selfUpdate) runApply();
-          else if (info.url) window.open(info.url, '_blank', 'noopener,noreferrer');
-        }}
+        onClick={startUpdate}
         className="px-2 py-1 rounded-control bg-accent text-on-accent text-note"
       >
         Update v{latest}
@@ -175,17 +69,20 @@ export default function UpdateButton() {
 // ---------------------------------------------------------------------------
 // UpdateCheck — the settings sheet's Updates section.
 //
-// WHY IT EXISTS. The pill above is the only thing in the app that ever asked
+// WHY IT EXISTS. The pill above was the only thing in the app that ever asked
 // GitHub anything, and it asks on mount and then every six hours. The server
 // remembers its answer for thirty minutes on top of that. Observed live on
 // 2026-08-07: v3.56.0 was published at 12:37, the answer had been remembered at
 // 12:21, and the app said nothing was available until the operator restarted
 // the service. There was no button anywhere that meant "look again".
 //
-// This is that button, and it is deliberately NOT a second apply flow. When
-// there is something to install, the pill in the header is what installs it,
-// and this section says so — two buttons that both claim to update the app is
-// how one of them ends up being the stale one.
+// This is that button. It also installs. It used to stop at "use the update
+// button at the top of the screen", on the reasoning that two buttons claiming
+// to update the app is how one of them ends up being the stale one — and then
+// that is exactly what happened, because the two did not share an answer: the
+// sheet found a new version and the pill, which had not heard, was not there
+// until the page was reloaded (2026-10-01). Both now read lib/updateState.js, so
+// neither can be behind the other.
 // ---------------------------------------------------------------------------
 
 // The floor the server puts under forced checks (forcedCheckMinInterval in
@@ -218,7 +115,7 @@ function agoText(iso, now) {
 }
 
 export function UpdateCheck({ version }) {
-  const [info, setInfo] = useState(null);
+  const { info, phase, error } = useUpdate();
   const [state, setState] = useState('idle'); // idle | checking | resting
   // True when the request itself never landed — a different fact from
   // info.error, which is the server telling us ITS request never landed.
@@ -232,14 +129,9 @@ export function UpdateCheck({ version }) {
   // make merely opening Settings cost a request out of the shared 60/hour.
   useEffect(() => {
     let alive = true;
-    fetch('/api/update/check', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (alive) setInfo(d);
-      })
-      .catch(() => {
-        if (alive) setUnreachable(true);
-      });
+    checkForUpdate().catch(() => {
+      if (alive) setUnreachable(true);
+    });
     return () => {
       alive = false;
     };
@@ -259,8 +151,7 @@ export function UpdateCheck({ version }) {
     setUnreachable(false);
     setFromMemory(false);
     try {
-      const d = await fetchT('/api/update/check?force=1', null, 15000).then((r) => r.json());
-      setInfo(d);
+      const d = await checkForUpdate(true);
       // The server answered from memory anyway (a second press inside its own
       // five-second floor). Say so rather than presenting it as a fresh look.
       setFromMemory(!!d.cached);
@@ -272,14 +163,23 @@ export function UpdateCheck({ version }) {
     restTimer.current = setTimeout(() => setState('idle'), FORCED_MIN_MS);
   };
 
+  const installing = phase === 'applying' || phase === 'restarting';
   const disabled = info && info.checkDisabled;
   const running = String((info && info.current) || version || '').replace(/^v/, '');
   const latest = String((info && info.latest) || '').replace(/^v/, '');
   const checkedAgo = agoText(info && info.checkedAt, now);
+  const canInstall = !!info && info.available && !info.error && !disabled && !installing;
 
   let said = '';
   let tone = 'text-dim';
-  if (state === 'checking') {
+  if (phase === 'applying') {
+    said = 'Installing the update…';
+  } else if (phase === 'restarting') {
+    said = 'Restarting. This page reloads by itself when the new version is up.';
+  } else if (phase === 'error') {
+    said = error;
+    tone = 'text-crit';
+  } else if (state === 'checking') {
     said = 'Checking…';
   } else if (unreachable) {
     said = 'Could not check just now — this app could not be reached. Try again in a moment.';
@@ -292,12 +192,12 @@ export function UpdateCheck({ version }) {
     said = 'Could not check just now — the update service could not be reached. Nothing on this machine has changed.';
     tone = 'text-crit';
   } else if (info.available) {
-    said = `Version ${latest} is ready to install. Use the update button at the top of the screen — this is only a check.`;
+    said = `Version ${latest} is ready to install.`;
     tone = 'text-txt';
   } else {
     said = "You're on the latest version.";
   }
-  if (said && fromMemory && state !== 'checking') {
+  if (said && fromMemory && state !== 'checking' && !installing && phase !== 'error') {
     said = `Just checked a moment ago, so this is the same answer. ${said}`;
   }
 
@@ -309,11 +209,20 @@ export function UpdateCheck({ version }) {
           {running ? `Bloxsmith v${running}` : 'Bloxsmith — version unknown'}
           {checkedAgo ? ` · Last checked ${checkedAgo}` : ''}
         </div>
+        {canInstall && (
+          <button
+            type="button"
+            onClick={startUpdate}
+            className="w-full mt-2 px-2.5 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium"
+          >
+            {info.selfUpdate ? `Install v${latest} and restart` : `Open the v${latest} release page`}
+          </button>
+        )}
         {!disabled && (
           <button
             type="button"
             onClick={check}
-            disabled={state !== 'idle'}
+            disabled={state !== 'idle' || installing}
             className="w-full mt-2 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-50"
           >
             Check for updates

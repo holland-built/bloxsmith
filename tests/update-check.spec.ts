@@ -95,16 +95,56 @@ test('the click asks GitHub again instead of reading the remembered answer', asy
   expect(urls.some((u) => /[?&]force=1\b/.test(u))).toBe(true);
 });
 
-test('a newer version is named, and it says where the button that installs it is', async ({ page }) => {
-  await stubCheck(page, () => upToDate({ latest: 'v3.56.0', available: true, checkedAt: isoAgo(0) }));
+const newer = (over: Record<string, unknown> = {}) =>
+  upToDate({ latest: 'v3.56.0', available: true, checkedAt: isoAgo(0), ...over });
+
+// THE BUG THIS COVERS (2026-10-01). The sheet found the new version and then
+// said "use the update button at the top of the screen" — but that button is a
+// separate component with its own copy of the answer, asked for on page load
+// and every six hours. So the sheet knew, the header did not, and the only way
+// to make the header agree was to reload the page. Both now read one answer.
+test('a newer version is named, and the sheet installs it itself', async ({ page }) => {
+  await stubCheck(page, () => newer());
   const sheet = await openSettings(page);
 
   await sheet.getByRole('button', CHECK).click();
-  const said = sheet.getByRole('status');
-  await expect(said).toContainText('3.56.0');
-  await expect(said).toContainText('top of the screen');
-  // The apply flow lives in the header pill and is not duplicated here.
-  await expect(sheet.getByRole('button', { name: /^Install|^Apply/ })).toHaveCount(0);
+  await expect(sheet.getByRole('status')).toContainText('3.56.0');
+  await expect(sheet.getByRole('button', { name: 'Install v3.56.0 and restart' })).toBeVisible();
+});
+
+test('the header button shows the new version without a page reload', async ({ page }) => {
+  // The page loads when nothing is waiting; only the click in the sheet is told otherwise.
+  await stubCheck(page, (forced) => (forced ? newer() : upToDate()));
+  const sheet = await openSettings(page);
+  const pill = { name: 'Update v3.56.0', exact: true };
+  await expect(page.getByRole('button', pill)).toHaveCount(0);
+
+  await sheet.getByRole('button', CHECK).click();
+  await expect(sheet.getByRole('status')).toContainText('3.56.0');
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await expect(page.getByRole('button', pill)).toBeVisible();
+});
+
+test('installing from the sheet reloads the page on its own once the new version answers', async ({ page }) => {
+  let installed = false;
+  await stubCheck(page, () => (installed ? upToDate({ current: 'v3.56.0', latest: 'v3.56.0' }) : newer()));
+  await page.route('**/api/update/apply', (route) => {
+    installed = true;
+    return fulfillJson(route, { ok: true });
+  });
+  await page.route('**/api/update/status', (route) =>
+    fulfillJson(route, { phase: 'done', pct: 100, running: false }),
+  );
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', CHECK).click();
+
+  const reloaded = page.waitForEvent('load');
+  await sheet.getByRole('button', { name: 'Install v3.56.0 and restart' }).click();
+  await reloaded;
+
+  // Back on the page with the new version running and nothing left to install.
+  await expect(page.getByRole('button', { name: 'Update v3.56.0', exact: true })).toHaveCount(0);
 });
 
 test('a check that could not reach the update service says so, and claims nothing', async ({ page }) => {
