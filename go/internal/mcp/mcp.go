@@ -136,7 +136,12 @@ type Client struct {
 
 	mu        sync.Mutex
 	sessionID string // Mcp-Session-Id issued by initialize
-	nextID    int
+	// sessionAuth is the Authorization value sessionID was issued under. A
+	// session belongs to the identity that opened it: post sends the id only with
+	// that same value, so a tenant switch or a replaced key can never put one
+	// tenant's session on another tenant's key, even mid-request.
+	sessionAuth string
+	nextID      int
 
 	// uncorrelatedWarn fires at most one log line per client for a server that
 	// answers without echoing an id at all. That is a correlation blind spot
@@ -252,10 +257,14 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		defer cancel()
 	}
 
+	auth := c.auth()
 	c.mu.Lock()
 	c.nextID++
 	id := c.nextID
-	sid := c.sessionID
+	sid := ""
+	if c.sessionAuth == auth {
+		sid = c.sessionID
+	}
 	c.mu.Unlock()
 
 	body := rpcReq{JSONRPC: "2.0", Method: method, Params: params}
@@ -272,7 +281,7 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", c.auth())
+	req.Header.Set("Authorization", auth)
 	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	if sid != "" {
 		req.Header.Set("Mcp-Session-Id", sid)
@@ -287,13 +296,28 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	}
 	defer resp.Body.Close()
 
-	// Capture a freshly issued session id (initialize).
-	if v := resp.Header.Get("Mcp-Session-Id"); v != "" {
+	// Capture a freshly issued session id. Only the initialize reply may set it:
+	// a late reply to an older call must not replace the session a newer
+	// handshake already opened.
+	if v := resp.Header.Get("Mcp-Session-Id"); v != "" && method == "initialize" {
 		c.mu.Lock()
 		c.sessionID = v
+		c.sessionAuth = auth
 		c.mu.Unlock()
 	}
 	if resp.StatusCode >= 400 {
+		// 404 on a call that carried a session id means the server dropped that
+		// session. Forget it, so the next Initialize opens a new one instead of
+		// finding sid != "" and believing the dead one is still good. Only if it
+		// is still the one we sent: a concurrent handshake may already have
+		// replaced it.
+		if resp.StatusCode == http.StatusNotFound && sid != "" && method != "initialize" {
+			c.mu.Lock()
+			if c.sessionID == sid && c.sessionAuth == auth {
+				c.sessionID = ""
+			}
+			c.mu.Unlock()
+		}
 		if why := refusalReason(resp.Body); why != "" {
 			return nil, fmt.Errorf("mcp %s: http %d: %s", method, resp.StatusCode, why)
 		}
@@ -534,10 +558,11 @@ func (c *Client) Initialize(ctx context.Context) error {
 	c.initMu.Lock()
 	defer c.initMu.Unlock()
 
+	auth := c.auth()
 	c.mu.Lock()
-	sid := c.sessionID
+	sid, sidAuth := c.sessionID, c.sessionAuth
 	c.mu.Unlock()
-	if c.initialized && sid != "" {
+	if c.initialized && sid != "" && auth == sidAuth {
 		return nil
 	}
 
