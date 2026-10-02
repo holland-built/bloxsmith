@@ -294,6 +294,9 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		c.mu.Unlock()
 	}
 	if resp.StatusCode >= 400 {
+		if why := refusalReason(resp.Body); why != "" {
+			return nil, fmt.Errorf("mcp %s: http %d: %s", method, resp.StatusCode, why)
+		}
 		return nil, fmt.Errorf("mcp %s: http %d", method, resp.StatusCode)
 	}
 	if notify {
@@ -342,6 +345,67 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		return nil, fmt.Errorf("mcp %s: %s", method, out.Error.Message)
 	}
 	return &out, nil
+}
+
+// refusalReason returns the message a gateway put in the reply to a refused
+// request, or "" when the reply carries none.
+//
+// WHY IT EXISTS. A 403 on tools/call used to be reported as "http 403" and
+// nothing else, so an operator whose Assets tab said "failed upstream" could
+// not tell a key without access from a tenant without the data. The reply says
+// which. Infoblox's shape is {"error":[{"message":"..."}]}; a JSON-RPC style
+// {"error":{"message":..}}, {"error":".."} and {"message":".."} are read too.
+//
+// WHAT IT WILL NOT RETURN. Only a message field, never the body: this file's
+// standing rule (see the block above callTimeout) is that no substring of a
+// data-bearing reply reaches the log, and a refusal whose body is not an error
+// envelope stays as bare as before. The message is cut to one bounded line.
+func refusalReason(body io.Reader) string {
+	raw, err := io.ReadAll(io.LimitReader(body, 16<<10))
+	if err != nil {
+		return ""
+	}
+	var env struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if json.Unmarshal(raw, &env) != nil {
+		return ""
+	}
+	msg := env.Message
+	if msg == "" {
+		msg = errorMessage(env.Error)
+	}
+	msg = strings.Join(strings.Fields(msg), " ")
+	if r := []rune(msg); len(r) > 200 {
+		msg = string(r[:200]) + "…"
+	}
+	return msg
+}
+
+// errorMessage reads the message out of the three shapes an "error" field takes.
+func errorMessage(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var one struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &one) == nil {
+		return one.Message
+	}
+	var many []struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &many) == nil {
+		for _, e := range many {
+			if e.Message != "" {
+				return e.Message
+			}
+		}
+	}
+	return ""
 }
 
 // extractSSEData pulls the JSON-RPC RESPONSE event out of an SSE reply.

@@ -1,0 +1,77 @@
+package mcp
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+// A gateway that refuses a tool call with an HTTP status carries the reason in
+// the reply — Infoblox's own shape is {"error":[{"message":"..."}]}. post used
+// to throw the reply away and report only "http 403", so the Assets tab said
+// "failed upstream" and the log said "http 403", and neither said why the key
+// was refused. The refusal's own message is the diagnosis (see the rule above callTimeout in
+// mcp.go: an upstream error message IS logged).
+
+func refuse(status int, body string) func(string, http.ResponseWriter) {
+	return func(_ string, w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}
+}
+
+func TestHTTPRefusalLogsTheUpstreamReason(t *testing.T) {
+	for name, body := range map[string]string{
+		"infoblox error list": `{"error":[{"message":"you are not authorized to use this feature"}]}`,
+		"error object":        `{"error":{"message":"you are not authorized to use this feature"}}`,
+		"error string":        `{"error":"you are not authorized to use this feature"}`,
+		"top-level message":   `{"message":"you are not authorized to use this feature"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			logs := captureLog(t)
+			srv := replyServer(t, refuse(http.StatusForbidden, body))
+
+			rows := newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+			if rows != nil {
+				t.Fatalf("expected nil rows on a refused call, got %+v", rows)
+			}
+			mustLog(t, logs, "QueryCube", "AssetDetails_ch_agg", "http 403", "you are not authorized to use this feature")
+		})
+	}
+}
+
+// The standing rule is that a data-bearing body never reaches the log. A refusal
+// whose body is not an error envelope is not echoed, in part or whole.
+func TestHTTPRefusalWithoutAnErrorMessageEchoesNothing(t *testing.T) {
+	logs := captureLog(t)
+	srv := replyServer(t, refuse(http.StatusForbidden, `{"rows":[{"name":"HOST-77","ip":"10.1.2.3"}]}`))
+
+	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+
+	mustLog(t, logs, "http 403")
+	for _, leaked := range []string{"HOST-77", "10.1.2.3"} {
+		if strings.Contains(logs.String(), leaked) {
+			t.Fatalf("log echoed %q from a body that was not an error message:\n%s", leaked, logs.String())
+		}
+	}
+}
+
+// A long or multi-line message is kept to one bounded line, so one refusal
+// cannot bury the log.
+func TestHTTPRefusalReasonIsBounded(t *testing.T) {
+	logs := captureLog(t)
+	long := strings.Repeat("x", 5000)
+	srv := replyServer(t, refuse(http.StatusForbidden, `{"error":[{"message":"line one\nline two `+long+`"}]}`))
+
+	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
+
+	got := strings.TrimSpace(logs.String())
+	if strings.Contains(got, "\n") {
+		t.Fatalf("a refusal must log as one line, got:\n%s", got)
+	}
+	if len(got) > 400 {
+		t.Fatalf("a refusal's reason must be bounded, log line was %d bytes", len(got))
+	}
+	mustLog(t, logs, "http 403", "line one")
+}
