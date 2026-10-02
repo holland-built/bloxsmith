@@ -109,23 +109,28 @@ export default function ConnStatus() {
   const statusOk = status && (status.ready || status.vaultMode === false)
   const isLocked = locked || (status && status.ready === false) || (!status && statusError)
 
+  // The tenant's NAME and its STATE are two facts and the chip says both. They
+  // used to share one slot, so a failing feed or an empty estate replaced the
+  // name with "feed error" or "no data" — and once the write words moved in
+  // beside it, "feed error · Changes allowed" named no tenant at all, which is
+  // the one thing a permission verdict must never leave out.
   let color = 'var(--color-crit)'
-  let label = 'offline'
+  let stateWord = 'offline'
+  let stateTone = 'text-crit'
   if (isLocked) {
-    color = 'var(--color-crit)'
-    label = 'locked'
+    stateWord = 'locked'
   } else if (statusOk && hasData) {
     color = 'var(--color-ok)'
-    const active = status?.active
-    const tenant = status?.tenants?.find((t) => t.id === active)
-    label = tenant?.label || 'connected'
+    stateWord = ''
   } else if (statusOk && feedsDegraded) {
-    color = 'var(--color-crit)'
-    label = 'feed error'
+    stateWord = 'feed error'
   } else if (statusOk) {
     color = 'var(--color-warn)'
-    label = 'no data'
+    stateWord = 'no data'
+    stateTone = 'text-warn'
   }
+  // The name, when the vault can say which tenant is active.
+  const knownName = status?.tenants?.find((t) => t.id === status?.active)?.label || ''
 
   const tenantName =
     status?.tenants?.find((t) => t.id === status?.active)?.label || status?.active || 'tenant'
@@ -172,8 +177,8 @@ export default function ConnStatus() {
 
   // What a write would do, in words. Nothing is said until there is an answer,
   // and a failed read or `known: false` is "Can't tell" — never the last good
-  // verdict, and never read-only. A locked or offline tenant says so in `label`
-  // already and gets no permission words at all.
+  // verdict, and never read-only. A locked or offline tenant says so in its state
+  // word already and gets no permission words at all.
   let writeWords = ''
   let writeTone = 'text-muted'
   if (statusOk && !isLocked) {
@@ -196,6 +201,17 @@ export default function ConnStatus() {
     }
   }
 
+  // The name beside a permission verdict, always. The vault names the active
+  // tenant when it has a list; a single-key server has none, and then the write
+  // target's own label stands in, and failing that the chip says "This
+  // connection" — a verdict with no subject is the one thing it must not show.
+  // With nothing to say about permission, a healthy single-key server is simply
+  // "connected" and a failing one is its state word alone.
+  const shownName =
+    knownName ||
+    (write.data && write.data.label) ||
+    (writeWords ? 'This connection' : stateWord ? '' : 'connected')
+
   // Name over state below `lg`, on one line above it. The name truncates: a long
   // one must never push Settings and Provision off a 390px screen. The state
   // wraps on a phone instead of truncating, however many lines it takes,
@@ -205,7 +221,17 @@ export default function ConnStatus() {
     <>
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
       <span className="flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2">
-        <span className="truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt">{label}</span>
+        {shownName && (
+          <span className="truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt">{shownName}</span>
+        )}
+        {stateWord && (
+          <span
+            data-state
+            className={`truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] ${shownName ? 'text-note' : 'text-copy font-medium'} ${stateTone}`}
+          >
+            {stateWord}
+          </span>
+        )}
         {writeWords && (
           <span data-write className={`break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
         )}

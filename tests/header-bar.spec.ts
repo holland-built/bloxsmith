@@ -156,6 +156,56 @@ test('granting or revoking in Settings changes the chip without waiting for a po
   await expect(chip(page)).toHaveText('Read-only');
 });
 
+// THE NAME STAYS WHEN THE ESTATE DOES NOT. The chip used to put "feed error" or
+// "no data" where the tenant's name goes, so beside "Changes allowed" it named no
+// tenant at all. Each state below is driven with a real tenant list.
+const emptyData = (degraded: boolean, meta: Record<string, string> = {}) => ({
+  subnets: [], leases: [], hosts: [], zones: [], dnsViews: [], secPolicies: [], feeds: [], auditLogs: [],
+  _totals: { degraded },
+  _meta: { subnets: 'ok', leases: 'ok', dnsViews: 'ok', zones: 'ok', hosts: 'ok', secPolicies: 'ok', feeds: 'ok', auditLogs: 'ok', ...meta },
+});
+const pill = (page: Page) => page.locator('header span[title*="last data fetch"]');
+
+test('a failing feed keeps the tenant name, and says feed error and the write state beside it', async ({ page }) => {
+  await page.route('**/api/data*', (route) => json(route, emptyData(true, { hosts: 'error', subnets: 'error', leases: 'error' })));
+  await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true })));
+  await page.goto('/#overview');
+  await expect(pill(page)).toContainText(TENANT);
+  await expect(pill(page)).toContainText('feed error');
+  await expect(pill(page)).toContainText('Changes allowed');
+  await expect(pill(page)).not.toContainText('no data');
+});
+
+test('an empty estate keeps the tenant name, and says no data beside it', async ({ page }) => {
+  await page.route('**/api/data*', (route) => json(route, emptyData(false)));
+  await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget()));
+  await page.goto('/#overview');
+  await expect(pill(page)).toContainText(TENANT);
+  await expect(pill(page)).toContainText('no data');
+  await expect(pill(page)).toContainText('Read-only');
+  await expect(pill(page)).not.toContainText('feed error');
+});
+
+test('a healthy tenant shows its name and no state word', async ({ page }) => {
+  await page.goto('/#overview');
+  await expect(pill(page)).toContainText(TENANT);
+  await expect(page.locator('header [data-state]')).toHaveCount(0);
+});
+
+test('the moment the vault locks the chip says locked, keeps the name, and drops the write words', async ({ page }) => {
+  // A vault that is really locked replaces the whole dashboard with the unlock
+  // screen, so the chip's "locked" is the moment BETWEEN the lock event and that
+  // screen arriving. The status read is left saying unlocked, which is exactly
+  // that moment held still.
+  await page.goto('/#overview');
+  await expect(chip(page)).toHaveText('Changes allowed');
+
+  await page.evaluate(() => window.dispatchEvent(new Event('bx:vault-locked')));
+  await expect(page.locator('header [data-state]')).toHaveText('locked');
+  await expect(pill(page)).toContainText(TENANT);
+  await expect(chip(page)).toHaveCount(0);
+});
+
 test('the old verdict is not shown while a grant or revoke is being re-read', async ({ page }) => {
   let writable = true;
   let hold = false;
@@ -286,6 +336,58 @@ for (const [w, h] of [
     await headerFits(page);
   });
 }
+
+// The tallest, widest chip there is: a long name, a failing feed, and a switched
+// account that can be changed. It has to fit a phone without losing any of the
+// three facts.
+for (const [w, h] of [
+  [390, 844],
+  [360, 740],
+  [320, 640],
+] as const) {
+  test(`a long name, a feed error and a switched writable account fit at ${w}px`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await widestWorld(page);
+    await page.route('**/api/data*', (route) => json(route, emptyData(true, { hosts: 'error', subnets: 'error', leases: 'error' })));
+    await page.route('**/api/vault/write-target*', (route) =>
+      json(route, writeTarget({ writable: true, tenant: 'baseline-tenant/acct-2' })),
+    );
+    await page.goto('/#overview');
+    await expect(chip(page)).toHaveText('Changes allowed in another account');
+    await expect(page.locator('header [data-state]')).toHaveText('feed error');
+    // All three facts are there AND readable: the name is in the chip, and neither
+    // the state word nor the write words are clipped by their own box.
+    await expect(pill(page)).toContainText('Infoblox Professional Services EMEA Sandbox');
+    for (const hook of ['[data-state]', '[data-write]']) {
+      const clipped = await page.locator(`header ${hook}`).evaluate((el) => ({
+        across: el.scrollWidth > el.clientWidth + 1,
+        down: el.scrollHeight > el.clientHeight + 1,
+      }));
+      expect(clipped, `${hook} is cut off at ${w}px`).toEqual({ across: false, down: false });
+    }
+    await headerFits(page);
+  });
+}
+
+test('a single-key server with no tenant list still names what a write would hit', async ({ page }) => {
+  await page.route('**/api/vault/status*', (route) => json(route, { vaultMode: false, ready: true }));
+  await page.route('**/api/data*', (route) => json(route, emptyData(true, { hosts: 'error', subnets: 'error', leases: 'error' })));
+  await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true, label: 'Lab Estate' })));
+  await page.goto('/#overview');
+  await expect(pill(page)).toContainText('Lab Estate');
+  await expect(pill(page)).toContainText('feed error');
+  await expect(pill(page)).toContainText('Changes allowed');
+});
+
+test('and with no label anywhere it says "This connection", never nothing', async ({ page }) => {
+  await page.route('**/api/vault/status*', (route) => json(route, { vaultMode: false, ready: true }));
+  await page.route('**/api/data*', (route) => json(route, emptyData(false)));
+  await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true, label: '' })));
+  await page.goto('/#overview');
+  await expect(pill(page)).toContainText('This connection');
+  await expect(pill(page)).toContainText('no data');
+  await expect(pill(page)).toContainText('Changes allowed');
+});
 
 // THE OTHER UPDATE STATES. The "ready" pill was the only one that got a phone
 // layout at first; the install error (a whole sentence), "Updating…" and "update
