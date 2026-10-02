@@ -127,6 +127,7 @@ test('typing the token in Settings turns the viewer badge into admin without a r
   await expect(page.getByText('VIEWER', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Security', exact: true }).click();
   await page.getByLabel('Dashboard token').fill('s3cret');
   await page.keyboard.press('Escape');
 

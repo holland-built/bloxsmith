@@ -211,7 +211,6 @@ export function UpdateCheck({ version }) {
 
   return (
     <>
-      <div className="text-note uppercase tracking-wide text-dim mb-2">Updates</div>
       <div className="mb-4">
         <div className="text-note text-dim">
           {running ? `Bloxsmith v${running}` : 'Bloxsmith — version unknown'}

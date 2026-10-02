@@ -57,7 +57,10 @@ async function openSheet(page: import('@playwright/test').Page, width = 1280, he
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
   await page.getByRole('button', SETTINGS).click();
-  return page.getByRole('dialog', { name: 'Settings' });
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  // The help link, theme and spacing are in the Appearance section.
+  await sheet.getByRole('button', { name: 'Appearance', exact: true }).click();
+  return sheet;
 }
 
 async function openDialog(page: import('@playwright/test').Page, width = 1280, height = 800) {

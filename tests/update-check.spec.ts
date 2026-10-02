@@ -57,6 +57,8 @@ async function openSettings(page: Page) {
   await page.getByRole('button', OPEN_SETTINGS).click();
   const sheet = page.getByRole('dialog', { name: 'Settings' });
   await expect(sheet).toBeVisible();
+  // The sheet is a drawer with a section list now; updates are one of the six.
+  await sheet.getByRole('button', { name: 'Updates', exact: true }).click();
   return sheet;
 }
 

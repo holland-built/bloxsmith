@@ -13,6 +13,7 @@ test.describe('per-tenant write lock', () => {
   test('Settings states plainly whether this tenant can be changed', async ({ page }) => {
     await page.goto('/#overview');
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Write access', exact: true }).click();
 
     const section = page.getByText('Changing this tenant');
     await expect(section).toBeVisible();
@@ -56,6 +57,7 @@ test.describe('per-tenant write lock', () => {
   test('granting is behind an explicit confirmation that names the risk', async ({ page }) => {
     await page.goto('/#overview');
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Write access', exact: true }).click();
     await page.getByRole('button', { name: /Allow changes to this tenant/ }).click();
 
     // The confirmation has to say what it actually enables, in those words.

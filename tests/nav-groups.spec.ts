@@ -233,6 +233,7 @@ test('at 390px the theme switch is not on the bar and still works from Settings'
   await expect(page.locator('header').getByRole('button', { name: 'Light theme' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Appearance', exact: true }).click();
   const lightInSheet = page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Light theme' });
   await expect(lightInSheet).toBeVisible();
   await lightInSheet.click();
