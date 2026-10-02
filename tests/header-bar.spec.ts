@@ -148,6 +148,7 @@ test('granting or revoking in Settings changes the chip without waiting for a po
   await expect(chip(page)).toHaveText('Read-only');
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Write access', exact: true }).click();
   await page.getByRole('button', { name: /Allow changes to this tenant/ }).click();
   await page.getByRole('button', { name: 'Yes, allow changes' }).click();
   await expect(chip(page)).toHaveText('Changes allowed');
@@ -398,6 +399,7 @@ const READY = { available: true, current: 'v3.80.8', latest: 'v3.81.0' };
 
 async function installFromSettings(page: Page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Updates', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Install v3.81.0 and restart' }).click();
 }
 
@@ -495,6 +497,7 @@ for (const [w, h] of [
     await page.goto('/#overview');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Settings' });
+    await sheet.getByRole('button', { name: 'Appearance', exact: true }).click();
 
     await expect(sheet.getByRole('button', { name: 'Dark theme' })).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Compact density' })).toBeVisible();

@@ -81,6 +81,7 @@ async function setDensity(
 ) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Appearance', exact: true }).click();
   await sheet.getByRole('button', { name }).click();
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
@@ -206,6 +207,7 @@ test('the spacing switch is in Settings at every width, and not in the top bar',
     await expect(page.locator('header').getByRole('button', { name: 'Compact density' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Appearance', exact: true }).click();
     const inSheet = page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Compact density' });
     await expect(inSheet).toBeVisible();
     await inSheet.click();

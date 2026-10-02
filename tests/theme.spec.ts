@@ -26,6 +26,7 @@ test('default theme is dark; Settings can switch to light and it persists', asyn
 
   // The switch lives in Settings now, not the top bar.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Light theme' }).click();
 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

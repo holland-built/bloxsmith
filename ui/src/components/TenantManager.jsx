@@ -21,7 +21,18 @@ const miniBtn = 'px-2 py-1 rounded-control border border-border text-note text-m
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// The six sections of the drawer, in the order they are listed.
+const SECTIONS = [
+  { id: 'connections', label: 'Connections' },
+  { id: 'write', label: 'Write access' },
+  { id: 'integrations', label: 'Integrations' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'security', label: 'Security' },
+]
+
 export default function TenantManager({ onClose, onOpenHelp }) {
+  const [section, setSection] = useState('connections')
   const [status, setStatus] = useState(null)
   const [statusError, setStatusError] = useState(false)
   const [accounts, setAccounts] = useState([])
@@ -338,388 +349,437 @@ export default function TenantManager({ onClose, onOpenHelp }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose} onKeyDown={onKeyDown}>
+    <div className="fixed inset-0 z-[200] flex justify-end bg-black/60" onClick={onClose} onKeyDown={onKeyDown}>
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tm-title"
         tabIndex={-1}
-        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-surface p-5 outline-none"
+        className="flex flex-col w-[760px] max-w-full h-full bg-card border-l border-card-border outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center mb-4">
+        <div className="shrink-0 flex items-center px-5 py-3 border-b border-line-2">
           <h2 id="tm-title" className="text-copy font-semibold">Settings</h2>
           <span className="flex-1" />
-          <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
+          <button className="w-8 h-8 text-muted text-copy hover:text-txt" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {!add.open && !edit && (
-          <>
-
-          </>
-        )}
-
-        {add.open ? (
-          <div>
-            <h3 className="text-note font-semibold mb-2">Add a connection</h3>
-            <label htmlFor="tm-add-key" className="block text-note text-dim mb-1">Infoblox API key</label>
-            <input
-              id="tm-add-key"
-              className={inCls}
-              type="password"
-              value={add.key}
-              onChange={(e) => setAdd((a) => ({ ...a, key: e.target.value, test: '' }))}
-              placeholder="paste token"
-              autoFocus
-            />
-            <label htmlFor="tm-add-label" className="block text-note text-dim mt-2 mb-1">Name (optional)</label>
-            <input id="tm-add-label" className={inCls} value={add.label} onChange={(e) => setAdd((a) => ({ ...a, label: e.target.value }))} />
-            <label htmlFor="tm-add-groq" className="block text-note text-dim mt-2 mb-1">Groq API key (optional)</label>
-            <input
-              id="tm-add-groq"
-              className={inCls}
-              type="password"
-              value={add.groq}
-              onChange={(e) => setAdd((a) => ({ ...a, groq: e.target.value }))}
-            />
-            {add.test && (
-              <div
+        <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
+          {/* The section list. A column at `sm` and up, a row of tabs below it that
+              scrolls sideways, so every section is reachable on a 390px phone. */}
+          <nav
+            aria-label="Settings sections"
+            className="shrink-0 flex sm:flex-col gap-1 p-3 overflow-x-auto sm:overflow-x-visible sm:overflow-y-auto sm:w-[200px] border-b sm:border-b-0 sm:border-r border-line-2"
+          >
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-current={section === s.id ? 'true' : undefined}
+                onClick={() => setSection(s.id)}
                 className={
-                  'mt-2 text-note ' +
-                  (add.test.startsWith('Key valid')
-                    ? 'text-ok'
-                    : add.test === 'Testing…' || add.test.startsWith('Unverified')
-                      ? 'text-dim'
-                      : 'text-crit')
+                  'shrink-0 h-8 px-3 rounded-control text-copy text-left whitespace-nowrap ' +
+                  (section === s.id ? 'bg-line-2 text-txt font-medium' : 'text-muted hover:bg-line hover:text-txt')
                 }
               >
-                {add.test}
-              </div>
-            )}
-            {add.err && <div className="mt-2 text-note text-crit">{add.err}</div>}
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
-                {add.busy ? 'Adding…' : 'Add'}
+                {s.label}
               </button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
-            </div>
-          </div>
-        ) : edit ? (
-          <div>
-            <h3 className="text-note font-semibold mb-2">Replace key for {edit.label || 'connection'}</h3>
-            <label htmlFor="tm-edit-key" className="block text-note text-dim mb-1">New Infoblox API key</label>
-            <input
-              id="tm-edit-key"
-              className={inCls}
-              type="password"
-              value={edit.key}
-              onChange={(e) => setEdit((s) => ({ ...s, key: e.target.value, test: '' }))}
-              autoFocus
-            />
-            {edit.test && (
-              <div
-                className={
-                  'mt-2 text-note ' +
-                  (edit.test.startsWith('Key valid')
-                    ? 'text-ok'
-                    : edit.test === 'Testing…' || edit.test.startsWith('Unverified')
-                      ? 'text-dim'
-                      : 'text-crit')
-                }
-              >
-                {edit.test}
-              </div>
-            )}
-            {edit.err && <div className="mt-2 text-note text-crit">{edit.err}</div>}
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
-                {edit.busy ? 'Replacing…' : 'Replace key'}
-              </button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="text-note uppercase tracking-wide text-dim mb-2">Vault tenants</div>
-            {statusError ? (
-              <div className="mb-3">
-                <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." onRetry={load} />
-              </div>
-            ) : (
-            <div className="space-y-1 mb-3">
-              {tenants.map((t) => (
-                <div key={t.id} className="flex items-center gap-1">
-                  {confirmRm === t.id ? (
-                    <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
-                      <span className="flex-1 text-note text-crit">Remove {t.label}?</span>
-                      <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
-                      <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button className={rowBtn} disabled={switchingAcct} onClick={() => setActive(t.id)}>
-                        <span>{t.id === activeId ? '●' : '○'}</span>
-                        <span className="truncate">{t.label}</span>
-                      </button>
-                      <button className={miniBtn} aria-label="Replace key" title="Replace key" onClick={() => openEdit(t)}>chg</button>
-                      <button className={miniBtn + ' hover:text-crit hover:border-crit'} aria-label="Remove tenant" title="Remove" onClick={() => setConfirmRm(t.id)}>✕</button>
-                    </>
-                  )}
-                </div>
-              ))}
-              {tenants.length === 0 && <div className="text-note text-dim px-1">No tenants saved.</div>}
-            </div>
-            )}
-            {activeId && (
-              <div className="mb-3">
-                <button
-                  className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-60"
-                  disabled={connTest.busy}
-                  onClick={testConnection}
-                >
-                  {connTest.busy ? 'Testing connection…' : 'Test active connection'}
-                </button>
-                {connTest.result && <div className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
-              </div>
-            )}
-            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
-              + Add connection
-            </button>
+            ))}
+          </nav>
 
-            {/* Axur, the brand-protection vendor. Its own section, deliberately
-                NOT a field on "Add connection" where the Groq key lives: this
-                credential belongs to the deployment, not to any one Infoblox
-                tenant, and it does not change when you switch tenants. */}
-            <div className="text-note uppercase tracking-wide text-dim mb-2">Axur (brand protection)</div>
-            <div className="mb-4 rounded-control border border-border bg-field p-3">
-              <label htmlFor="tm-axur-key" className="block text-note text-dim mb-1">Axur API key</label>
-              {/* NEVER prefilled from the server, and no route would return it.
-                  A password field that arrives populated invites a reader to
-                  believe they can read it back, and puts a live secret in the
-                  DOM for anything on the page to find. */}
+          {/* ALL SIX PANES STAY MOUNTED; the five that are not showing are hidden.
+              Unmounting them would throw away a half-typed connection key, an Axur
+              key, an unconfirmed grant and an update check in progress every time
+              the reader looked at another section. Hidden panes are display:none,
+              so they are out of the Tab order (the trap below skips what is not
+              displayed) and out of the accessibility tree. */}
+          <div className="flex-1 min-w-0 overflow-y-auto p-5">
+            <section className={section === 'connections' ? '' : 'hidden'} aria-label="Connections">
+            <h3 className="text-copy font-semibold mb-3">Connections</h3>
+              {add.open ? (
+            <div>
+              <h3 className="text-note font-semibold mb-2">Add a connection</h3>
+              <label htmlFor="tm-add-key" className="block text-note text-dim mb-1">Infoblox API key</label>
               <input
-                id="tm-axur-key"
+                id="tm-add-key"
                 className={inCls}
                 type="password"
-                autoComplete="off"
-                value={axur.key}
-                onChange={(e) => setAxur((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))}
-                placeholder={axur.stored ? 'a key is saved — type to replace it' : 'paste token'}
+                value={add.key}
+                onChange={(e) => setAdd((a) => ({ ...a, key: e.target.value, test: '' }))}
+                placeholder="paste token"
+                autoFocus
               />
-              <div className="text-note text-dim mt-1.5">
-                Encrypted in the vault, the way your Infoblox keys are. Paste the token on its own;
-                the &ldquo;Bearer&rdquo; word is added for you.
-              </div>
-              {axur.err && <div className="mt-2 text-note text-crit">{axur.err}</div>}
-              {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
-              <div className="flex gap-2 mt-2">
-                <button
-                  className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
-                  onClick={saveAxur}
-                  disabled={axur.busy || !axur.key}
+              <label htmlFor="tm-add-label" className="block text-note text-dim mt-2 mb-1">Name (optional)</label>
+              <input id="tm-add-label" className={inCls} value={add.label} onChange={(e) => setAdd((a) => ({ ...a, label: e.target.value }))} />
+              <label htmlFor="tm-add-groq" className="block text-note text-dim mt-2 mb-1">Groq API key (optional)</label>
+              <input
+                id="tm-add-groq"
+                className={inCls}
+                type="password"
+                value={add.groq}
+                onChange={(e) => setAdd((a) => ({ ...a, groq: e.target.value }))}
+              />
+              {add.test && (
+                <div
+                  className={
+                    'mt-2 text-note ' +
+                    (add.test.startsWith('Key valid')
+                      ? 'text-ok'
+                      : add.test === 'Testing…' || add.test.startsWith('Unverified')
+                        ? 'text-dim'
+                        : 'text-crit')
+                  }
                 >
-                  {axur.busy ? 'Saving…' : 'Save Axur key'}
+                  {add.test}
+                </div>
+              )}
+              {add.err && <div className="mt-2 text-note text-crit">{add.err}</div>}
+              <div className="flex gap-2 mt-3">
+                <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
+                  {add.busy ? 'Adding…' : 'Add'}
                 </button>
-                {axur.stored && (
-                  <button
-                    className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
-                    onClick={clearAxur}
-                    disabled={axur.busy}
-                  >
-                    Remove
-                  </button>
-                )}
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
               </div>
             </div>
-
-            {/* Per-tenant write lock. Tenants are read-only until opted in, so
-                this is the only place the dangerous routes can be turned on.
-                See go/internal/vault/writelock.go. */}
-            <div className="text-note uppercase tracking-wide text-dim mb-2">Changing this tenant</div>
-            {writeTargetError ? (
-              <div className="mb-4">
-                <FeedUnavailable label="Write permission unknown" reason={writeTargetError} />
-              </div>
-            ) : !writeTarget ? (
-              <div className="text-note text-dim px-1 mb-4">Checking…</div>
-            ) : !writeTarget.known ? (
-              <div className="mb-4">
-                <FeedUnavailable
-                  label="Cannot tell which tenant a change would hit"
-                  reason={(writeTarget.reason || '') + ' — changes are refused until this resolves.'}
-                />
-              </div>
-            ) : (
-              <div className="mb-4 rounded-control border border-border bg-field p-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-note" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
-                    {writeTarget.writable ? '● Changes allowed' : '● Read-only'}
-                  </span>
-                  <span className="flex-1" />
-                  <span className="text-note text-dim font-mono truncate" title={writeTarget.tenant}>
-                    {writeTarget.label || writeTarget.tenant}
-                  </span>
+              ) : edit ? (
+            <div>
+              <h3 className="text-note font-semibold mb-2">Replace key for {edit.label || 'connection'}</h3>
+              <label htmlFor="tm-edit-key" className="block text-note text-dim mb-1">New Infoblox API key</label>
+              <input
+                id="tm-edit-key"
+                className={inCls}
+                type="password"
+                value={edit.key}
+                onChange={(e) => setEdit((s) => ({ ...s, key: e.target.value, test: '' }))}
+                autoFocus
+              />
+              {edit.test && (
+                <div
+                  className={
+                    'mt-2 text-note ' +
+                    (edit.test.startsWith('Key valid')
+                      ? 'text-ok'
+                      : edit.test === 'Testing…' || edit.test.startsWith('Unverified')
+                        ? 'text-dim'
+                        : 'text-crit')
+                  }
+                >
+                  {edit.test}
                 </div>
-                <div className="text-note text-dim mt-1.5">
-                  {writeTarget.writable
-                    ? 'Provisioning, teardown and record edits will really change this tenant.'
-                    : 'Provisioning, teardown and record edits are refused. Nothing here can change this tenant.'}
-                </div>
-                {grantErr && <div className="mt-2 text-note text-crit">{grantErr}</div>}
-                {writeTarget.writable ? (
-                  <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-50"
-                    disabled={grantBusy}
-                    onClick={() => setWritable(false)}
-                  >
-                    {grantBusy ? 'Saving…' : 'Make read-only'}
-                  </button>
-                ) : confirmGrant ? (
-                  <div className="mt-2.5">
-                    <div className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
-                      This lets teardown delete real DNS zones, subnets and address blocks in{' '}
-                      {writeTarget.label || writeTarget.tenant}. Only do this on a tenant you own.
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="flex-1 px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
-                        style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}
-                        disabled={grantBusy}
-                        onClick={() => setWritable(true)}
-                      >
-                        {grantBusy ? 'Saving…' : 'Yes, allow changes'}
-                      </button>
-                      <button
-                        className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt"
-                        onClick={() => { setConfirmGrant(false); setGrantErr('') }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
+              )}
+              {edit.err && <div className="mt-2 text-note text-crit">{edit.err}</div>}
+              <div className="flex gap-2 mt-3">
+                <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
+                  {edit.busy ? 'Replacing…' : 'Replace key'}
+                </button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
+              </div>
+            </div>
+              ) : (
+                <>
+                <div className="text-note text-dim mb-2">Tenants in this vault. The filled dot is the one the dashboard reads.</div>
+                {statusError ? (
+                  <div className="mb-3">
+                    <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." onRetry={load} />
                   </div>
                 ) : (
-                  <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover"
-                    onClick={() => setConfirmGrant(true)}
-                  >
-                    Allow changes to this tenant…
-                  </button>
-                )}
-              </div>
-            )}
-
-            {accountsError ? (
-              <div className="mb-4">
-                <FeedUnavailable label="Account switching unavailable" reason={accountsError} />
-              </div>
-            ) : accounts.length > 0 && (
-              <>
-                <div className="text-note uppercase tracking-wide text-dim mb-2">CSP account</div>
-                {/* CONTROLLED, on the active id. It was `defaultValue=""` over a
-                    disabled "Switch active account…" placeholder, so the list
-                    never showed which account you were actually on — the one
-                    thing a picker has to say. */}
-                <select
-                  aria-label="Active CSP account"
-                  className={inCls}
-                  value={activeAccount}
-                  onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
-                >
-                  {!activeAccount && <option value="" disabled>Switch active account…</option>}
-                  {/* PLAIN NAMES. These rows are not dimmed, which was one
-                      correction, and they no longer carry " — no key saved",
-                      which is the other.
-
-                      That label was true and answered the wrong question. It
-                      said whether the vault holds a key labelled like this
-                      account; what stops a switch here is the CURRENT key
-                      lacking multi-account access, which CSP refuses with a 403
-                      regardless of what is saved — measured 2026-08-20 against
-                      both a keyed and an unkeyed account. So the picker was
-                      accurate about keys and silent about the blocker, and the
-                      one true-looking note on screen pointed away from the
-                      cause.
-
-                      It was also a guess: nothing links the two lists, so it
-                      matched CSP account names against vault labels. */}
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                <div className="space-y-1 mb-3">
+                  {tenants.map((t) => (
+                    <div key={t.id} className="flex items-center gap-1">
+                      {confirmRm === t.id ? (
+                        <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
+                          <span className="flex-1 text-note text-crit">Remove {t.label}?</span>
+                          <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label={`Confirm remove ${t.label}`} onClick={() => remove(t.id)}>Remove</button>
+                          <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label={`Keep ${t.label}`} onClick={() => setConfirmRm(null)}>Keep</button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className={rowBtn} disabled={switchingAcct} onClick={() => setActive(t.id)}>
+                            <span>{t.id === activeId ? '●' : '○'}</span>
+                            <span className="truncate">{t.label}</span>
+                          </button>
+                          <button className={miniBtn} aria-label={`Change key for ${t.label}`} onClick={() => openEdit(t)}>Change key</button>
+                          <button className={miniBtn + ' hover:text-crit hover:border-crit'} aria-label={`Remove ${t.label}`} onClick={() => setConfirmRm(t.id)}>Remove</button>
+                        </>
+                      )}
+                    </div>
                   ))}
-                </select>
-                {/* WHAT THIS SAYS AND WHAT IT REFUSES TO SAY. It states the
-                    requirement, which is always true, and it does NOT say this
-                    key fails it — that is not knowable here. /api/accounts
-                    returns `{id, name}` and no capability field, and listing
-                    accounts works on a key that cannot switch between them, so
-                    a standing "your key cannot do this" would be exactly the
-                    unmeasured claim this panel was fixed for. The measured
-                    version appears below, from CSP, once an attempt is made. */}
-                <div className="text-note text-dim mt-1.5">
-                  Switching needs a User API key with multi-account access. Without it CSP refuses
-                  the change and the list stays where it was.
+                  {tenants.length === 0 && <div className="text-note text-dim px-1">No tenants saved.</div>}
                 </div>
-                {acctSwitchErr && (
-                  <div className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
                 )}
-                {!acctSwitchErr && <div className="mb-4" />}
-              </>
-            )}
+                {activeId && (
+                  <div className="mb-3">
+                    <button
+                      className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-60"
+                      disabled={connTest.busy}
+                      onClick={testConnection}
+                    >
+                      {connTest.busy ? 'Testing connection…' : 'Test active connection'}
+                    </button>
+                    {connTest.result && <div className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
+                  </div>
+                )}
+                <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
+                  + Add connection
+                </button>
 
-            {/* Theme and spacing live only here: the top bar no longer carries
-                them. ONE link to the "What these controls do" dialog, where
-                explanation paragraphs under each switch used to be — a settings
-                panel holds controls, and the manual is a click away. The
-                sentences exist in exactly one place (lib/controlHelp.js),
-                rendered by exactly one component (HeaderHelp.jsx). This row is
-                that dialog's only door, at every width. It closes this sheet and
-                opens the dialog rather than stacking two modals; App.jsx owns
-                the other half and sends focus back to the Settings button. */}
-            <div className="text-note uppercase tracking-wide text-dim mb-2">Appearance</div>
-            <button
-              type="button"
-              onClick={onOpenHelp}
-              aria-haspopup="dialog"
-              className="block mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"
-            >
-              What these controls do →
-            </button>
-            <div className="mb-3 flex items-center gap-2">
-              <ThemeSwitch />
-              <span className="text-note text-dim">Light · System · Dark</span>
-            </div>
-            <div className="mb-4 flex items-center gap-2">
-              <DensitySwitch />
-              <span className="text-note text-dim">Comfortable · Compact</span>
-            </div>
+                {accountsError ? (
+                  <div className="mb-4">
+                    <FeedUnavailable label="Account switching unavailable" reason={accountsError} />
+                  </div>
+                ) : accounts.length > 0 && (
+                  <>
+                    <label htmlFor="tm-csp" className="block text-copy font-medium mb-2">CSP account</label>
+                    {/* CONTROLLED, on the active id. It was `defaultValue=""` over a
+                        disabled "Switch active account…" placeholder, so the list
+                        never showed which account you were actually on — the one
+                        thing a picker has to say. */}
+                    <select
+                      id="tm-csp"
+                      aria-label="Active CSP account"
+                      className={inCls}
+                      value={activeAccount}
+                      onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
+                    >
+                      {!activeAccount && <option value="" disabled>Switch active account…</option>}
+                      {/* PLAIN NAMES. These rows are not dimmed, which was one
+                          correction, and they no longer carry " — no key saved",
+                          which is the other.
 
-            {/* Same shape as Appearance above — section label, then controls.
-                The running version lives HERE and nowhere else in this sheet:
-                it used to sit alone in the footer, and printing it twice inside
-                one 420px panel would invite the reader to check whether the two
-                agreed. `version` is the /api/vault/status reading, kept as the
-                fallback for a server too old to answer the check endpoint at
-                all — otherwise a failed check would take the version off screen
-                with it. */}
-            <UpdateCheck version={(status && status.version) || ''} />
+                          That label was true and answered the wrong question. It
+                          said whether the vault holds a key labelled like this
+                          account; what stops a switch here is the CURRENT key
+                          lacking multi-account access, which CSP refuses with a 403
+                          regardless of what is saved — measured 2026-08-20 against
+                          both a keyed and an unkeyed account. So the picker was
+                          accurate about keys and silent about the blocker, and the
+                          one true-looking note on screen pointed away from the
+                          cause.
 
-            <label htmlFor="tm-dash-token" className="block text-note uppercase tracking-wide text-dim mb-2">Dashboard token</label>
-            <input
-              id="tm-dash-token"
-              className={inCls + ' mb-4'}
-              type="password"
-              value={dashToken}
-              onChange={(e) => saveToken(e.target.value)}
-              placeholder="X-Auth-Token for lock/admin actions"
-            />
+                          It was also a guess: nothing links the two lists, so it
+                          matched CSP account names against vault labels. */}
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    {/* WHAT THIS SAYS AND WHAT IT REFUSES TO SAY. It states the
+                        requirement, which is always true, and it does NOT say this
+                        key fails it — that is not knowable here. /api/accounts
+                        returns `{id, name}` and no capability field, and listing
+                        accounts works on a key that cannot switch between them, so
+                        a standing "your key cannot do this" would be exactly the
+                        unmeasured claim this panel was fixed for. The measured
+                        version appears below, from CSP, once an attempt is made. */}
+                    <div className="text-note text-dim mt-1.5">
+                      Switching needs a User API key with multi-account access. Without it CSP refuses
+                      the change and the list stays where it was.
+                    </div>
+                    {acctSwitchErr && (
+                      <div className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
+                    )}
+                    {!acctSwitchErr && <div className="mb-4" />}
+                  </>
+                )}
 
-            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
-              {locking ? 'Locking…' : 'Lock vault now'}
-            </button>
-          </>
-        )}
+                </>
+              )}
+            </section>
+
+            <section className={section === 'write' ? '' : 'hidden'} aria-label="Write access">
+            <h3 className="text-copy font-semibold mb-3">Write access</h3>
+              {/* Per-tenant write lock. Tenants are read-only until opted in, so
+                  this is the only place the dangerous routes can be turned on.
+                  See go/internal/vault/writelock.go. */}
+              <div className="text-note text-dim mb-2">Changing this tenant</div>
+              {writeTargetError ? (
+                <div className="mb-4">
+                  <FeedUnavailable label="Write permission unknown" reason={writeTargetError} />
+                </div>
+              ) : !writeTarget ? (
+                <div className="text-note text-dim px-1 mb-4">Checking…</div>
+              ) : !writeTarget.known ? (
+                <div className="mb-4">
+                  <FeedUnavailable
+                    label="Cannot tell which tenant a change would hit"
+                    reason={(writeTarget.reason || '') + ' — changes are refused until this resolves.'}
+                  />
+                </div>
+              ) : (
+                <div className="mb-4 rounded-control border border-border bg-field p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-note" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
+                      {writeTarget.writable ? '● Changes allowed' : '● Read-only'}
+                    </span>
+                    <span className="flex-1" />
+                    <span className="text-note text-dim truncate" title={writeTarget.tenant}>
+                      {writeTarget.label || writeTarget.tenant}
+                    </span>
+                  </div>
+                  <div className="text-note text-dim mt-1.5">
+                    {writeTarget.writable
+                      ? 'Provisioning, teardown and record edits will really change this tenant.'
+                      : 'Provisioning, teardown and record edits are refused. Nothing here can change this tenant.'}
+                  </div>
+                  {grantErr && <div className="mt-2 text-note text-crit">{grantErr}</div>}
+                  {writeTarget.writable ? (
+                    <button
+                      className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-50"
+                      disabled={grantBusy}
+                      onClick={() => setWritable(false)}
+                    >
+                      {grantBusy ? 'Saving…' : 'Make read-only'}
+                    </button>
+                  ) : confirmGrant ? (
+                    <div className="mt-2.5">
+                      <div className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
+                        This lets teardown delete real DNS zones, subnets and address blocks in{' '}
+                        {writeTarget.label || writeTarget.tenant}. Only do this on a tenant you own.
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="flex-1 px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
+                          style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}
+                          disabled={grantBusy}
+                          onClick={() => setWritable(true)}
+                        >
+                          {grantBusy ? 'Saving…' : 'Yes, allow changes'}
+                        </button>
+                        <button
+                          className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt"
+                          onClick={() => { setConfirmGrant(false); setGrantErr('') }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover"
+                      onClick={() => setConfirmGrant(true)}
+                    >
+                      Allow changes to this tenant…
+                    </button>
+                  )}
+                </div>
+              )}
+
+            </section>
+
+            <section className={section === 'integrations' ? '' : 'hidden'} aria-label="Integrations">
+            <h3 className="text-copy font-semibold mb-3">Integrations</h3>
+              {/* Axur, the brand-protection vendor. Its own section, deliberately
+                  NOT a field on "Add connection" where the Groq key lives: this
+                  credential belongs to the deployment, not to any one Infoblox
+                  tenant, and it does not change when you switch tenants. */}
+              <div className="text-copy font-medium mb-2">Axur (brand protection)</div>
+              <div className="mb-4 rounded-control border border-border bg-field p-3">
+                <label htmlFor="tm-axur-key" className="block text-note text-dim mb-1">Axur API key</label>
+                {/* NEVER prefilled from the server, and no route would return it.
+                    A password field that arrives populated invites a reader to
+                    believe they can read it back, and puts a live secret in the
+                    DOM for anything on the page to find. */}
+                <input
+                  id="tm-axur-key"
+                  className={inCls}
+                  type="password"
+                  autoComplete="off"
+                  value={axur.key}
+                  onChange={(e) => setAxur((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))}
+                  placeholder={axur.stored ? 'a key is saved — type to replace it' : 'paste token'}
+                />
+                <div className="text-note text-dim mt-1.5">
+                  Encrypted in the vault, the way your Infoblox keys are. Paste the token on its own;
+                  the &ldquo;Bearer&rdquo; word is added for you.
+                </div>
+                {axur.err && <div className="mt-2 text-note text-crit">{axur.err}</div>}
+                {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
+                    onClick={saveAxur}
+                    disabled={axur.busy || !axur.key}
+                  >
+                    {axur.busy ? 'Saving…' : 'Save Axur key'}
+                  </button>
+                  {axur.stored && (
+                    <button
+                      className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
+                      onClick={clearAxur}
+                      disabled={axur.busy}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </section>
+
+            <section className={section === 'appearance' ? '' : 'hidden'} aria-label="Appearance">
+            <h3 className="text-copy font-semibold mb-3">Appearance</h3>
+              {/* Theme and spacing live only here: the top bar no longer carries
+                  them. ONE link to the "What these controls do" dialog, where
+                  explanation paragraphs under each switch used to be — a settings
+                  panel holds controls, and the manual is a click away. The
+                  sentences exist in exactly one place (lib/controlHelp.js),
+                  rendered by exactly one component (HeaderHelp.jsx). This row is
+                  that dialog's only door, at every width. It closes this sheet and
+                  opens the dialog rather than stacking two modals; App.jsx owns
+                  the other half and sends focus back to the Settings button. */}
+              <button
+                type="button"
+                onClick={onOpenHelp}
+                aria-haspopup="dialog"
+                className="block mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"
+              >
+                What these controls do →
+              </button>
+              <div className="mb-3 flex items-center gap-2">
+                <ThemeSwitch />
+                <span className="text-note text-dim">Light · System · Dark</span>
+              </div>
+              <div className="mb-4 flex items-center gap-2">
+                <DensitySwitch />
+                <span className="text-note text-dim">Comfortable · Compact</span>
+              </div>
+
+            </section>
+
+            <section className={section === 'updates' ? '' : 'hidden'} aria-label="Updates">
+            <h3 className="text-copy font-semibold mb-3">Updates</h3>
+              {/* Same shape as Appearance above — section label, then controls.
+                  The running version lives HERE and nowhere else in this sheet:
+                  it used to sit alone in the footer, and printing it twice inside
+                  one 420px panel would invite the reader to check whether the two
+                  agreed. `version` is the /api/vault/status reading, kept as the
+                  fallback for a server too old to answer the check endpoint at
+                  all — otherwise a failed check would take the version off screen
+                  with it. */}
+              <UpdateCheck version={(status && status.version) || ''} />
+
+            </section>
+
+            <section className={section === 'security' ? '' : 'hidden'} aria-label="Security">
+            <h3 className="text-copy font-semibold mb-3">Security</h3>
+              <label htmlFor="tm-dash-token" className="block text-copy font-medium mb-2">Dashboard token</label>
+              <input
+                id="tm-dash-token"
+                className={inCls + ' mb-4'}
+                type="password"
+                value={dashToken}
+                onChange={(e) => saveToken(e.target.value)}
+                placeholder="X-Auth-Token for lock/admin actions"
+              />
+
+              <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
+                {locking ? 'Locking…' : 'Lock vault now'}
+              </button>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   )
