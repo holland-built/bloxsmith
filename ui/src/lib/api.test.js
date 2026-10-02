@@ -518,6 +518,8 @@ test('changing the url cancels the retry queued for the old one', async (t) => {
 // sleeping, and the ratio to the request timings below is the same one the real
 // 2000ms window has to the real 261ms gap.
 const WINDOW = 200
+// api.js's JOIN_GRACE_MS: how long a second asker waits for a first that is still answering.
+const JOIN_GRACE_MS = 150
 
 test.beforeEach(() => __resetAdoptionForTests())
 
@@ -709,8 +711,13 @@ test('a cached success is not adopted once a newer request has started', async (
   assert.deepEqual(calls.length, 2)
 
   // The 'first' entry is still well inside the window, but it is no longer the
-  // newest request started, so it must not be handed out.
+  // newest request started, so it must not be handed out. #2 is still in the
+  // air, so `c` waits its grace for it first (see the join tests below) and
+  // then, finding nothing it may adopt, asks for itself.
   const c = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(calls.length, 2, 'waiting for the request still in the air')
+  t.mock.timers.tick(JOIN_GRACE_MS)
   await settle()
   assert.equal(calls.length, 3, 'the superseded entry was not adopted')
 
@@ -719,6 +726,131 @@ test('a cached success is not adopted once a newer request has started', async (
   a.unmount()
   b.unmount()
   c.unmount()
+})
+
+// THE JOIN. Two askers mount a few milliseconds apart; the second used to find
+// the first still in the air, nothing published yet, and send its own copy of the
+// largest request in the app. It now waits a bounded moment for the first.
+test('a second asker waits for a first that is still answering, and takes its answer', async (t) => {
+  let release
+  const pending = new Promise((r) => (release = r))
+  const { calls } = harness(t, [
+    () => pending.then(() => new Response(JSON.stringify({ rows: 'shared' }), { status: 200 })),
+    jsonOk({ rows: 'second-copy' }),
+  ])
+
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'])
+
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'the second asker did not send a copy while the first was in the air')
+
+  release()
+  await settle()
+  assert.deepEqual(calls, ['/api/data'], 'and it still has not, now that the first has answered')
+  assert.deepEqual(first.current.data, { rows: 'shared' })
+  assert.deepEqual(second.current.data, { rows: 'shared' }, 'it took the first answer')
+
+  first.unmount()
+  second.unmount()
+})
+
+test('the wait is bounded: past the grace the second asker sends its own request', async (t) => {
+  const never = new Promise(() => {})
+  const { calls } = harness(t, [() => never, jsonOk({ rows: 'own' })])
+
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(calls.length, 1, 'still waiting')
+
+  t.mock.timers.tick(JOIN_GRACE_MS - 1)
+  await settle()
+  assert.equal(calls.length, 1, 'one millisecond short of the grace')
+
+  t.mock.timers.tick(1)
+  await settle()
+  assert.equal(calls.length, 2, 'the grace ran out, so it asked for itself — a cold read costs it no more than this')
+  assert.deepEqual(second.current.data, { rows: 'own' })
+
+  first.unmount()
+  second.unmount()
+})
+
+test('if the first asker fails, the second asks for itself', async (t) => {
+  let release
+  const pending = new Promise((r) => (release = r))
+  const { calls } = harness(t, [() => pending.then(() => new Response('nope', { status: 500 })), jsonOk({ rows: 'own' })])
+
+  const first = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(calls.length, 1)
+
+  release()
+  await settle()
+  assert.equal(calls.length, 2, 'a failure is never adopted, so the second sent its own')
+  assert.deepEqual(second.current.data, { rows: 'own' })
+  assert.equal(first.current.error?.status, 500)
+
+  first.unmount()
+  second.unmount()
+})
+
+test('a refetch that lands during the wait does not start a second request', async (t) => {
+  const never = new Promise(() => {})
+  const { calls } = harness(t, [() => never, jsonOk({ rows: 'own' }), jsonOk({ rows: 'extra' })])
+
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  second.current.refetch() // a poll or a retry firing mid-wait looks exactly like this
+  await settle()
+  assert.equal(calls.length, 1, 'still just the first request')
+
+  t.mock.timers.tick(JOIN_GRACE_MS)
+  await settle()
+  assert.equal(calls.length, 2, 'one request when the grace ran out, not two')
+
+  first.unmount()
+  second.unmount()
+})
+
+test('refetch handed straight to an event handler still waits', async (t) => {
+  const never = new Promise(() => {})
+  const { calls } = harness(t, [() => never, jsonOk({ rows: 'own' })])
+
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+
+  // onClick={refetch} passes the event as the first argument.
+  second.current.refetch({ type: 'click' })
+  await settle()
+  assert.equal(calls.length, 1, 'the event object did not count as "already waited"')
+
+  first.unmount()
+  second.unmount()
+})
+
+test('a url nobody opted in to is never waited for', async (t) => {
+  const never = new Promise(() => {})
+  const { calls } = harness(t, [() => never, jsonOk({ rows: 'own' })])
+
+  const plainA = mountHook(() => useApi('/api/other'))
+  await settle()
+  const plainB = mountHook(() => useApi('/api/other'))
+  await settle()
+  assert.equal(calls.length, 2, 'two plain callers each asked at once, as before')
+
+  plainA.unmount()
+  plainB.unmount()
 })
 
 // F2's guard: the hook that DID the fetching must not be able to edit what the

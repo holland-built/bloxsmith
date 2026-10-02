@@ -208,13 +208,22 @@ export function retryFailedFeeds() {
 // locked vault are never written here and every caller fetches them itself. The
 // error and locked paths are therefore byte-identical to what they were.
 //
-// WHAT THIS DOES NOT FIX. Adoption needs a SETTLED result, so it collapses the
-// duplicate only when the first request has already finished — a warm read, 8ms
-// to 36ms per the measurements at the top of this file. On a COLD load
-// /api/data takes 3.5-7.5s, ConnStatus is still in flight when Overview mounts,
-// nothing has settled, and both fetch exactly as before. That is the honest
-// bound: this halves the steady-state polling load, which is where the server
-// cost actually lives, and does nothing for the first cold load of a session.
+// WHAT THIS DOES NOT FIX. Adoption needs a SETTLED result, and a second asker
+// that arrives while the first is still answering waits only JOIN_GRACE_MS
+// (150ms) for it. That covers a warm read, 8ms to 36ms per the measurements at
+// the top of this file. On a COLD load /api/data takes 3.5-7.5s, ConnStatus is
+// still in flight when Overview mounts, the wait runs out, and both fetch
+// exactly as before. That is the honest bound: this halves the steady-state
+// polling load, which is where the server cost actually lives, and does nothing
+// for the first cold load of a session.
+//
+// THE WAIT EXISTS BECAUSE A DELAY THAT HID THE RACE WENT AWAY (2026-10-02). The
+// two askers used to mount ~280ms apart, because React holds back the reveal of
+// a lazy tab for ~300ms after it has shown the loading fallback. A lighter first
+// render stopped the fallback being committed at all, the tab mounted 14ms after
+// the header, and the second request left before the first had been published:
+// tests/duplicate-fetch.spec.ts went from 1 request to 2. The 280ms was never a
+// contract; the wait makes the property hold without it.
 //
 // AND ONE ACCEPTED COST, WRITTEN DOWN RATHER THAN DISCOVERED LATER. If the vault
 // locks inside the window, a caller that adopts the success from just before it
@@ -232,6 +241,13 @@ const adopting = new Set() // urls some mounted hook has opted in to
 const adoptCounts = new Map() // url -> how many mounted hooks opted in, so the last one out clears it
 const lastOk = new Map() // url -> { json, at, seq }
 const seqByUrl = new Map() // url -> the sequence number of the newest request STARTED
+const asking = new Map() // url -> { settled } for a request an opted-in hook sent and has not heard back from
+
+// How long a second asker waits for a first that is still answering, before
+// sending its own. Warm answers take 8-36ms (see the measurements above), so this
+// is long enough to cover them and short enough that a cold 3.5-7.5s read costs
+// the second asker at most this much extra before it does what it always did.
+const JOIN_GRACE_MS = 150
 
 // Exported for ui/src/lib/api.test.js only. Module state outlives a test, so a
 // test that seeds a fresh result would otherwise leak it into the next one and
@@ -241,6 +257,22 @@ export function __resetAdoptionForTests() {
   adoptCounts.clear()
   lastOk.clear()
   seqByUrl.clear()
+  asking.clear()
+}
+
+/**
+ * Record that a request for this url is in the air, and return the function that
+ * says it has come back (answered, failed or aborted — anything). Only for a url
+ * somebody has opted in to, for the same reason claimSeq is.
+ */
+function startAsking(url) {
+  let finish
+  const entry = { settled: new Promise((resolve) => { finish = resolve }) }
+  asking.set(url, entry)
+  return () => {
+    if (asking.get(url) === entry) asking.delete(url)
+    finish()
+  }
 }
 
 /** The next sequence number for this url, claimed when a request starts. */
@@ -351,6 +383,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   // that load would fetch the old url under the new run and could land last.
   const urlRef = useRef(url)
   urlRef.current = url
+  const joiningRef = useRef(false) // a wait for another asker's answer is pending
   const warmRef = useRef(false) // flips once a load has succeeded for this url
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
@@ -366,7 +399,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   const shownRetrying = fresh ? retrying : false
 
   // Named so the retry timer can call it without a ref hop.
-  const load = useCallback(function run() {
+  const load = useCallback(function run(waited) {
     // A load kept from an earlier render, for a url this hook no longer wants,
     // sends nothing.
     if (!url || urlRef.current !== url) return
@@ -396,6 +429,29 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         setRetrying(false)
         return
       }
+      // Nobody has an answer yet, but somebody has asked and not heard back. That
+      // is the race this whole option exists for, seen from the other side: the
+      // two askers mount a few milliseconds apart, so the second finds the first
+      // still in the air and used to send a second copy of the largest request
+      // in the app. Wait a moment for it and look again. If it fails, or is the
+      // slow cold read, the look finds nothing and this hook sends its own request
+      // exactly as it always did — the wait is the only thing added, and it is
+      // bounded. `waited` is what stops it waiting twice.
+      // `waited === true`, not truthy: `refetch` is this function, and a caller
+      // that hands it straight to an event handler passes it the event.
+      const first = waited !== true && asking.get(url)
+      if (first) {
+        // One wait at a time per hook. A poll or a retry that fires while this
+        // one is pending would otherwise start its own, and both would send a
+        // request when the grace ran out.
+        if (joiningRef.current) return
+        joiningRef.current = true
+        Promise.race([first.settled, new Promise((resolve) => setTimeout(resolve, JOIN_GRACE_MS))]).then(() => {
+          joiningRef.current = false
+          if (live()) run(true)
+        })
+        return
+      }
     }
 
     // Claimed before the request goes out, so the ordering this establishes is
@@ -407,6 +463,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     // a filter box, a search term, a selected id. Nothing is published for an
     // unwatched url anyway, so there is no order there to protect.
     const seq = adopting.has(url) ? claimSeq(url) : 0
+    const answered = adopting.has(url) ? startAsking(url) : null
     // Cold budget until this url has answered once, then the original hang guard.
     const { signal, cancel } = abortAfter(budgetMs(warmRef.current, coldMs))
     fetch(url, { cache: 'no-store', signal })
@@ -479,7 +536,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
           if (live()) run()
         }, delay)
       })
-      .finally(cancel)
+      .finally(() => {
+        cancel()
+        if (answered) answered()
+      })
     // coldMs is read inside (budgetMs above) and was missing from this list, so
     // a call site that changed it would have kept fetching on the old budget.
     // Safe to add: every caller passes a module constant
