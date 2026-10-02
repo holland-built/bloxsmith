@@ -32,7 +32,7 @@ export default function UpdateButton() {
     return (
       <span className="hidden md:flex items-center gap-2 text-note">
         <span className="text-muted">v{current.replace(/^v/, '')}</span>
-        <span className="text-crit truncate max-w-[220px]" title={error}>{error}</span>
+        <span className="text-crit truncate max-w-[180px]" title={error}>{error}</span>
       </span>
     );
   }

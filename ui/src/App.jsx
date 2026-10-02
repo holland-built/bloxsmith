@@ -36,6 +36,7 @@ import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 import TenantManager from './components/TenantManager.jsx'
 import HeaderHelp from './components/HeaderHelp.jsx'
+import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 
 const TABS = [
@@ -595,11 +596,12 @@ export default function App() {
                 )}
               </div>
             </nav>
-            {/* Four things on the right: an update (only when one is ready), the
-                tenant chip with its write state, Settings, and Provision. Theme
-                and spacing live in Settings now — they are set once and left,
-                and they were two of the seven controls here. The "What these
-                controls do" dialog is reached from Settings too.
+            {/* Five things on the right: an update (only when one is ready), the
+                tenant chip with its write state, the light/dark button, Settings,
+                and Provision. Light/dark is here because people flip it often
+                and expect to see it; the three-way switch with "System", and
+                spacing, stay in Settings. The "What these controls do" dialog
+                is reached from Settings too.
 
                 Two things give way on a small screen, because a phone cannot hold
                 a tenant chip that carries its write state beside all of this:
@@ -609,6 +611,7 @@ export default function App() {
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <UpdateButton />
               <ConnStatus />
+              <ThemeToggle />
               <button
                 ref={settingsBtnRef}
                 onClick={() => setShowAccounts(true)}
