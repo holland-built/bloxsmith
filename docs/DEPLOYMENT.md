@@ -240,7 +240,7 @@ Pull and run the prebuilt Go image directly:
 
 ```bash
 # start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
 
@@ -274,8 +274,8 @@ git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
 cp .env.example .env
 # start the dashboard, reachable only from this computer
 docker compose up -d
-# start it reachable from your whole network, with no login in front
-BIND=0.0.0.0 docker compose up -d
+# start it reachable from your whole network; the token is what allows changes
+DASHBOARD_TOKEN=pick-a-long-random-string BIND=0.0.0.0 docker compose up -d
 # start it behind the secure proxy: HTTPS plus a username and password
 docker compose --profile secure up -d
 ```
@@ -395,7 +395,7 @@ To see what is inside the image you are about to run, read its SBOM attestation:
 
 ```bash
 # start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault \
   --restart unless-stopped \
   ghcr.io/holland-built/bloxsmith:latest
@@ -614,7 +614,8 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `VAULT_DIR`        |          | `/vault`                 | Where `vault.json` is stored (mount a volume here) |
 | `VAULT_PASSPHRASE` |          | —                        | Vault-mode auto-unlock at boot (see below)   |
 | `VAULT_PASSPHRASE_FILE` |     | —                        | Path to a secret file holding the passphrase; preferred over `VAULT_PASSPHRASE` |
-| `BIND`             |          | `127.0.0.1`              | Host bind for the script/compose; `0.0.0.0` = LAN |
+| `BIND`             |          | `127.0.0.1`              | Host bind for the script/compose; `0.0.0.0` = LAN. Compose also hands it to the app as `PUBLISHED_BIND`, so a LAN bind with no `DASHBOARD_TOKEN` refuses writes |
+| `DASHBOARD_TOKEN`  |          | _(unset)_                | Lets callers write (provision, delete, tenant keys) when the dashboard is reachable from the network. Sent as `X-Auth-Token`; the UI sends it from the Settings field. Without it, a LAN-facing server refuses writes. It guards writes only: reads stay open to anyone who can reach the port |
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | App bind address                    |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
@@ -710,7 +711,7 @@ Supply it at boot and the dashboard comes up live with no browser step:
 # preferred: save the passphrase to a file only you can read, which keeps it out of `docker inspect`
 printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
 # start it with the passphrase file mounted, so the vault unlocks on its own
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault \
   -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
   -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \
@@ -1117,8 +1118,9 @@ into an admin bypass or into a forged name in a tamper-evident log.
 - The image ships no secrets — nothing secret is in the build context. The local
   build runs from `go/`; the release image is built by goreleaser from its `dist/`
   tree plus `extra_files: [templates]`. Secrets arrive at run time via the environment.
-- The app has **no client auth** on its read/query/account endpoints (only
-  `block`/`unblock` writes are gated by `DASHBOARD_TOKEN`). CORS is restricted to the
+- The app has **no client auth** on its read/query/account endpoints (writes are
+  gated by `DASHBOARD_TOKEN`; with no token they are accepted only from this machine,
+  and refused outright when the container is published beyond `127.0.0.1`). CORS is restricted to the
   loopback origin, but that only restrains browsers — anyone who can reach the port
   can use your Infoblox key indirectly. The binary/compose publish on **`127.0.0.1`
   by default**; `BIND=0.0.0.0` exposes on the LAN, and only then behind your own

@@ -3,6 +3,7 @@ package httpx
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -404,5 +405,131 @@ func TestHostAllowed_WildcardBindStandsDown(t *testing.T) {
 	}
 	if g.HostAllowed(hostReq("anything.example:8080")) {
 		t.Error("ALLOWED_HOSTS did not re-arm the gate on a wildcard bind")
+	}
+}
+
+// --- reachable beyond the host ----------------------------------------------
+//
+// Origin is a header any client can type. Before this, a tokenless server on a
+// LAN-facing bind accepted `curl -H 'Origin: http://localhost:8080'` from any
+// machine as an admin write. These cover who the caller can be, not what the
+// header says.
+
+const lanPeer = "192.168.1.50:41000"
+const dockerBridgePeer = "172.17.0.1:41000"
+const vaultWritePath = "/api/vault/tenant-writable"
+
+func reqFrom(peer, method, target string, headers map[string]string) *http.Request {
+	r := req(method, target, headers)
+	r.RemoteAddr = peer
+	return r
+}
+
+var forgedOrigin = map[string]string{"Origin": "http://localhost:8080"}
+
+func TestWriteGuard_WildcardBindLANPeerForgedOrigin_Rejected(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	if guarded(g, reqFrom(lanPeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("a LAN peer sending a localhost Origin was let write on a wildcard bind with no token")
+	}
+}
+
+func TestWriteGuard_WildcardBindLANPeerWithToken_Allowed(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.Token = "s3cret"
+	h := map[string]string{"X-Auth-Token": "s3cret"}
+	if !guarded(g, reqFrom(lanPeer, http.MethodPost, vaultWritePath, h)) {
+		t.Fatal("a valid DASHBOARD_TOKEN must still authorize a write from the LAN")
+	}
+}
+
+func TestWriteGuard_WildcardBindLoopbackPeer_Allowed(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	if !guarded(g, reqFrom("127.0.0.1:54321", http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("the operator's own browser on a wildcard bind must keep working")
+	}
+}
+
+func TestWriteGuard_LANPeerSSEStreamOnWildcardBind_Rejected(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	h := map[string]string{"Sec-Fetch-Site": "same-origin"}
+	if guarded(g, reqFrom(lanPeer, http.MethodGet, teardownStream, h)) {
+		t.Fatal("the strict SSE gate trusted a LAN peer")
+	}
+}
+
+func TestWriteGuard_PublishedBindLAN_RejectedEvenFromBridge(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.InContainer = true
+	g.PublishedBind = "0.0.0.0"
+	// Through the docker bridge the peer is the gateway for local and LAN alike.
+	if guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("a container published on 0.0.0.0 with no token trusted a forged Origin")
+	}
+}
+
+func TestWriteGuard_PublishedBindLoopback_AllowedFromBridge(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.InContainer = true
+	g.PublishedBind = "127.0.0.1"
+	if !guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("the default compose setup (published on 127.0.0.1) lost its writes")
+	}
+}
+
+// A bare `docker run -p 8080:8080` publishes on every interface and carries no
+// PUBLISHED_BIND; its peer is the bridge, so nothing can tell it from the LAN.
+func TestWriteGuard_ContainerWithoutPublishedBind_Rejected(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.InContainer = true
+	if guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("a container that does not say where it is published trusted a forged Origin")
+	}
+}
+
+func TestWriteGuard_ContainerWithoutPublishedBindButToken_Allowed(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.InContainer = true
+	g.Token = "s3cret"
+	h := map[string]string{"X-Auth-Token": "s3cret"}
+	if !guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, h)) {
+		t.Fatal("a token must authorize a write from a container with no PUBLISHED_BIND")
+	}
+}
+
+func TestResolveRole_LANPeerOnWildcardBind_Viewer(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	if got := g.ResolveRole(reqFrom(lanPeer, http.MethodPost, vaultWritePath, forgedOrigin)); got != "viewer" {
+		t.Fatalf("role = %q, want viewer", got)
+	}
+}
+
+func TestStartupNote(t *testing.T) {
+	cases := []struct {
+		name string
+		g    Guard
+		want string // substring; "" means no note
+	}{
+		{"token set", Guard{Token: "x", Host: "0.0.0.0"}, ""},
+		{"native loopback", Guard{Host: "localhost"}, ""},
+		{"native wildcard", Guard{Host: "0.0.0.0"}, "accepted only from this machine"},
+		{"compose loopback", Guard{Host: "0.0.0.0", InContainer: true, PublishedBind: "127.0.0.1"}, ""},
+		{"compose LAN", Guard{Host: "0.0.0.0", InContainer: true, PublishedBind: "0.0.0.0"}, "writes are refused"},
+		{"docker run", Guard{Host: "0.0.0.0", InContainer: true}, "writes are refused"},
+	}
+	for _, c := range cases {
+		got := c.g.StartupNote()
+		if c.want == "" && got != "" || c.want != "" && !strings.Contains(got, c.want) {
+			t.Errorf("%s: note = %q, want substring %q", c.name, got, c.want)
+		}
 	}
 }

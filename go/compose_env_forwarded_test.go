@@ -31,9 +31,9 @@ import (
 // a short list of names asserted BY NAME so the enumerator cannot be shrunk to
 // silence them.
 //
-// It also does NOT cover the eight variables config.go reads that appear in
-// neither file — ALLOWED_HOSTS, AUDIT_KEY, AUDIT_KEY_FILE, AUDIT_TRUST_DIR,
-// BLOCK_LIST_ID, DASHBOARD_TOKEN, DISABLE_UPDATE_CHECK, TEMPLATES_DIR. Those are
+// It also does NOT cover the six variables config.go reads that appear in
+// neither file — AUDIT_KEY, AUDIT_KEY_FILE, AUDIT_TRUST_DIR,
+// BLOCK_LIST_ID, DISABLE_UPDATE_CHECK, TEMPLATES_DIR. Those are
 // unsupported by the stock compose deploy (an override file or `docker compose run
 // -e` can still supply them). Which of them belong in a supported deploy is a
 // product decision, not a defect, so it is not asserted here.

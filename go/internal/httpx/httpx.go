@@ -58,6 +58,15 @@ type Guard struct {
 	// AllowedHosts is the ALLOWED_HOSTS env list — extra Host values a
 	// deployment legitimately serves (a reverse-proxy name, a LAN hostname).
 	AllowedHosts []string
+
+	// PublishedBind is the host interface the CONTAINER is published on, as the
+	// operator chose it (docker-compose forwards BIND as PUBLISHED_BIND). Inside
+	// a container the peer is the docker bridge for every caller, local or LAN,
+	// so the peer address cannot say who is calling; this is the only signal.
+	// Empty means the deployment did not say.
+	PublishedBind string
+	// InContainer reports BLOXSMITH_IN_CONTAINER (set by the image).
+	InContainer bool
 }
 
 // allowedOrigins is _allowed_origins (server.py:4892): the same-host loopback
@@ -142,12 +151,69 @@ func (g *Guard) originAllowed(ref string) bool {
 	return g.allowedOrigins()[pu.Scheme+"://"+pu.Host]
 }
 
+// loopbackHost reports a bind or publish address that only the machine itself
+// can reach.
+func loopbackHost(h string) bool {
+	switch strings.Trim(strings.ToLower(strings.TrimSpace(h)), "[]") {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
+
+// reachableBeyondHost reports that this request may come from another machine,
+// so an Origin header — which any client can type — proves nothing. Without a
+// token that header is the whole write gate, so on a LAN-facing server it let
+// `curl -H 'Origin: http://localhost:8080'` write as an admin.
+//
+//   - PublishedBind set (docker-compose): loopback is the operator's own
+//     machine; anything else is the LAN. The peer cannot help — through the
+//     docker bridge it is the gateway for every caller.
+//   - Unset, in a container (`docker run`): the peer is the bridge, so nothing
+//     here can judge it, and `-p 8080:8080` publishes on every interface. Treated
+//     as reachable: the operator adds PUBLISHED_BIND=127.0.0.1 or a token.
+//   - Native: a non-loopback bind needs a loopback peer as well.
+//
+// A same-host reverse proxy that forwards LAN traffic looks like a loopback
+// peer; such a deployment needs DASHBOARD_TOKEN.
+func (g *Guard) reachableBeyondHost(r *http.Request) bool {
+	if g.PublishedBind != "" {
+		return !loopbackHost(g.PublishedBind)
+	}
+	if g.InContainer {
+		return true
+	}
+	return !loopbackHost(g.Host) && !isLoopback(r.RemoteAddr)
+}
+
+// StartupNote is the one line main logs when there is no DASHBOARD_TOKEN and the
+// write gate is weaker than it looks, or has closed. Empty when nothing needs
+// saying.
+func (g *Guard) StartupNote() string {
+	if g.Token != "" {
+		return ""
+	}
+	switch {
+	case g.PublishedBind != "" && !loopbackHost(g.PublishedBind):
+		return "published on " + g.PublishedBind + " with no DASHBOARD_TOKEN: writes are refused. " +
+			"Set DASHBOARD_TOKEN, or publish on 127.0.0.1 (BIND=127.0.0.1)."
+	case g.PublishedBind == "" && g.InContainer:
+		return "running in a container with no DASHBOARD_TOKEN and no PUBLISHED_BIND: writes are refused, because the " +
+			"app cannot tell whether the port is open to the network. Add -e PUBLISHED_BIND=127.0.0.1 with " +
+			"-p 127.0.0.1:8080:8080, or set DASHBOARD_TOKEN."
+	case !g.InContainer && g.PublishedBind == "" && !loopbackHost(g.Host):
+		return "bound to " + g.Host + " with no DASHBOARD_TOKEN: writes are accepted only from this machine."
+	}
+	return ""
+}
+
 // SameOrigin is _same_origin (server.py:4907): an Origin/Referer must be
 // allowlisted; with neither header, a browser that vouches for itself via
 // Sec-Fetch-Site, or a loopback peer, is trusted. A browser that names another
-// site is rejected outright — the loopback fallback never gets to run.
+// site is rejected outright — the loopback fallback never gets to run. A
+// request that may come from another machine is never trusted this way.
 func (g *Guard) SameOrigin(r *http.Request) bool {
-	if foreignInitiated(r) {
+	if foreignInitiated(r) || g.reachableBeyondHost(r) {
 		return false
 	}
 	if ref := originOrReferer(r); ref != "" {
@@ -186,7 +252,7 @@ func (g *Guard) WriteOKStrict(r *http.Request) bool {
 	if g.Token != "" {
 		return g.Authed(r) || g.tokenQueryMatches(r)
 	}
-	if foreignInitiated(r) {
+	if foreignInitiated(r) || g.reachableBeyondHost(r) {
 		return false
 	}
 	if ref := originOrReferer(r); ref != "" {

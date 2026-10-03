@@ -614,6 +614,10 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		// the Host header must name something this bind actually serves.
 		Host:         cfg.Host,
 		AllowedHosts: cfg.AllowedHosts,
+		// Who can reach the port: docker-compose forwards its BIND, the image
+		// sets the container flag. See Guard.reachableBeyondHost.
+		PublishedBind: strings.TrimSpace(os.Getenv("PUBLISHED_BIND")),
+		InContainer:   os.Getenv("BLOXSMITH_IN_CONTAINER") != "",
 		// _write_guard AUDIT HOOK (server.py:4968): every authorized mutation
 		// appends a "write-authorized" entry to the hash chain. auditLog.Append
 		// itself logs on refusal (a corrupt chain), but this call site logs too
@@ -624,6 +628,10 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 				log.Printf("[audit] failed to record %q %s %s: %v", event, method, path, err)
 			}
 		},
+	}
+
+	if note := guard.StartupNote(); note != "" {
+		log.Printf("[auth] %s", note)
 	}
 
 	handler := server.New(&server.Deps{
