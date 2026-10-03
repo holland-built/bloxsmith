@@ -38,10 +38,10 @@ const VIEW = '__layout_overview';
 // The declared JSX order in Overview.jsx's <CardGrid layoutKey="overview">.
 const DECLARED_ORDER = [
   'dns-hero',
-  'kpi-stack',
+  'host-status',
   'top-consumers',
   'subnet-heatmap',
-  'host-status',
+  'services-incidents',
   'subnet-table',
   'license-inventory',
 ];
@@ -52,9 +52,9 @@ const DECLARED_ORDER = [
 const SAVED_ORDER = [
   'license-inventory',
   'subnet-table',
-  'host-status',
+  'services-incidents',
   'subnet-heatmap',
-  'kpi-stack',
+  'host-status',
   'dns-hero',
 ];
 
@@ -65,9 +65,9 @@ const SAVED_SPANS = { 'dns-hero': 6, 'host-status': 4, 'license-inventory': 2 };
 const EXPECTED_ORDER = [
   'license-inventory',
   'subnet-table',
-  'host-status',
+  'services-incidents',
   'subnet-heatmap',
-  'kpi-stack',
+  'host-status',
   'dns-hero',
   'top-consumers', // omitted from the saved order -> keeps its place, at the end
 ];

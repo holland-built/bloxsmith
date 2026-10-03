@@ -1,11 +1,11 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useHasArranged } from '../lib/arrangedOnce.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, Sparkline, TabIntro, useChartTheme, utilStatus } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, TabIntro, useChartTheme, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
-import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
-import { HeadlineStrip, ModuleCard, SegmentedBar, StatusPill } from '../components/kit.jsx'
+import { alarmTone, cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
+import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
 
 
 // Tap once to read it, tap again to follow it.
@@ -85,9 +85,9 @@ export default function Overview() {
   // adopts the first's result instead of fetching 294KB again.
   const data = useApi('/api/data', { poll: 30000, adoptIfFresherThan: 2000 })
   const licenses = useApi('/api/csp/license-alerts', { poll: 30000 })
+  const sec = useApi('/api/hub/security', { poll: 30000 })
 
   const subnets = data.data?.subnets ?? []
-  const leases = data.data?.leases ?? []
   const hosts = data.data?.hosts ?? []
   const totals = data.data?._totals ?? {}
   const meta = data.data?._meta ?? {}
@@ -152,94 +152,120 @@ export default function Overview() {
           what registers the saved span. Nothing here changes what renders
           until a layout has actually been saved for this tab: with no saved
           view the GET 404s, no order is applied and no span is overridden. */}
-      <HeadlineStrip label="Headline numbers" items={headlines(dns, data, licenses, sliceStatus)} />
-      {/* The panels keep their own grid, so drag, resize, hide and saved
-          layouts work exactly as before. The summary column sits beside it,
-          outside the grid, so it is never a draggable panel. */}
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="min-w-0">
+      <HeadlineStrip label="Headline numbers" items={headlines(dns, data, sec, sliceStatus)} />
       <CardGrid layoutKey="overview">
         <DnsHero panelId="dns-hero" dns={dns} />
-        <KpiStack panelId="kpi-stack" subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
-        {/* These three share one grid row, so all three take `loading` — the
-            row's height is the max of them and reserving in only one or two
-            would leave the third to resize it. */}
+        <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} loading={data.loading} />
+        {/* These three share one grid row, and the row's height is the tallest
+            of them. The two that read /api/data take `loading` and reserve
+            their chart's height while it is in flight; the third reads its own
+            feeds and reserves the same height itself. */}
         <TopUtilization panelId="top-consumers" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <SubnetHeatmap panelId="subnet-heatmap" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
-        <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} loading={data.loading} />
+        <ServicesIncidents panelId="services-incidents" />
         <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
       </CardGrid>
-      </div>
-      <EstateRail data={data} sliceStatus={sliceStatus} />
-      </div>
     </div>
   )
 }
 
-// ---------- headline strip and summary column ----------
+// ---------- headline tiles ----------
 
-// The numbers across the top. Each jumps to the panel that explains it, and
-// none repeats a number a panel already shows in large type (the subnet counts
-// live in the Leases & Subnets panel). A figure that is loading or failed is
-// null, which the strip shows as a dash.
-function headlines(dns, data, licenses, sliceStatus) {
+// The numbers across the top. A tile jumps to the panel that explains it, or
+// opens the tab that does when the detail is not on this page. A figure that is
+// loading or failed is null, which the strip shows as a dash, and one whose
+// feed is down also says "unavailable": a dead feed is never read as "none".
+//
+// Three of these stood in a panel of their own ("Leases & Subnets") with a
+// line under each that looked like a trend and was not one: it was every
+// loaded subnet's fullness sorted low to high. The numbers moved here and the
+// line was dropped rather than explained.
+function headlines(dns, data, sec, sliceStatus) {
   const totals = data.data?._totals ?? {}
   const hosts = data.data?.hosts ?? []
+  const subnets = data.data?.subnets ?? []
+  const leases = data.data?.leases ?? []
+  const settled = !data.loading
   // A failed poll keeps the last rows in memory; the headline must not show
   // them as current while the DNS panel says the feed is unavailable.
   const dnsOk = !dns.loading && !dns.error && dns.data?.status !== 'error'
   const rows = dnsOk ? dns.data?.rows ?? [] : []
   const qps = rows.length ? rows[rows.length - 1].avg_value : null
-  const hostOk = !data.loading && sliceStatus('hosts') !== 'error'
+
+  const hostOk = settled && sliceStatus('hosts') !== 'error'
   const offline = hostOk ? hosts.filter((h) => statusBucket(h.status) === 'offline').length : null
   // Offline is counted over the rows loaded; say so when that is not all of
   // them, or when the estate total is unknown and so cannot vouch for them.
-  const loadedNote = hostOk && (typeof totals.hosts !== 'number' || hosts.length < totals.hosts) ? ` (of ${hosts.length.toLocaleString()} loaded)` : ''
-  const lic = licenses.data?.licenses
-  const licOk = !licenses.loading && !licenses.error && licenses.data?.status !== 'error' && Array.isArray(lic)
+  const hostsPartial = hostOk && (typeof totals.hosts !== 'number' || hosts.length < totals.hosts)
+  const loadedNote = hostsPartial ? ` (of ${hosts.length.toLocaleString()} loaded)` : ''
+
+  // The estate-wide count when the server published one. Otherwise the rows
+  // loaded, and the label says so. A subnet whose utilisation was never
+  // reported is neither ≥90% nor under it, so it is counted in neither.
+  const subnetsDown = sliceStatus('subnets') === 'error'
+  const measured = subnets.filter((s) => num(s.util) !== null)
+  const hasCritTotal = typeof totals.subnetsCrit === 'number'
+  const crit = !settled || subnetsDown ? null : hasCritTotal ? totals.subnetsCrit : measured.filter((s) => num(s.util) >= 90).length
+  // The short label while loading, so the tile does not re-word itself (and
+  // re-wrap) when the payload lands with a total in it.
+  const critLabel = !settled || hasCritTotal ? 'Subnets ≥90%' : measured.length < subnets.length ? 'Subnets ≥90% (loaded rows w/ known util)' : 'Subnets ≥90% (loaded rows)'
+  // _totals.subnetsWarn is every subnet at 70% or more, INCLUDING the ≥90%
+  // ones (go/internal/dashboard/dashboard.go: the at-risk pager's
+  // utilization>=70 total), so the 70–89% band is warn − crit. The two counts
+  // come from separate queries; if they disagree no band is shown.
+  const bandOk = settled && !subnetsDown &&
+    [totals.subnets, totals.subnetsCrit, totals.subnetsWarn].every((v) => typeof v === 'number') &&
+    totals.subnetsCrit <= totals.subnetsWarn && totals.subnetsWarn <= totals.subnets
+
+  const leasesDown = sliceStatus('leases') === 'error'
+  const activeLeases = !settled || leasesDown ? null : leases.filter((l) => l.state === 'active').length
+
+  const secOk = !sec.loading && !sec.error && sec.data?.availability === 'ok'
+  const secCrit = secOk ? sec.data.counts?.critical ?? null : null
+  const secHigh = secOk ? sec.data.counts?.high ?? null : null
+  const secBad = secCrit === null || secHigh === null ? null : secCrit + secHigh
+  const secNote = !sec.loading && !secOk ? 'unavailable' : secOk && sec.data.truncated ? `in the latest ${sec.data.returned} events` : null
+
+  const fmt = (v) => (v == null ? null : v.toLocaleString())
+  const zeroIsUnknown = (tone, partial) => (partial && tone === 'ok' ? undefined : tone)
   return [
-    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-series)' },
-    { panelId: 'host-status', label: 'Hosts', value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null, color: 'var(--color-ok)' },
-    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: offline == null ? null : offline.toLocaleString(), color: 'var(--color-crit)' },
-    { panelId: 'license-inventory', label: 'Licences', value: licOk ? lic.length.toLocaleString() : null, color: 'var(--color-other)' },
+    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec' },
+    { panelId: 'host-status', label: 'Hosts', value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null },
+    // Green needs the whole estate: no offline host among the ones loaded says
+    // nothing about the ones that were not. Red does not: one is enough.
+    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
+    {
+      // The same rule: a zero counted over loaded rows is not an all-clear.
+      href: '#network?minUtil=90', label: critLabel, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
+      note: subnetsDown ? 'unavailable' : bandOk ? `${(totals.subnetsWarn - totals.subnetsCrit).toLocaleString()} at 70–89%` : null,
+    },
+    { href: '#network?focus=leases', label: 'Active Leases', value: fmt(activeLeases), note: leasesDown ? 'unavailable' : null },
+    {
+      href: '#security', label: 'Security events', value: fmt(secBad), unit: 'critical or high',
+      tone: secBad === null ? undefined : secCrit > 0 ? 'crit' : secHigh > 0 ? 'warn' : 'ok', note: secNote,
+    },
   ]
 }
+
+// ---------- services and incidents ----------
 
 const TONE_WORD = { crit: 'Critical', warn: 'Warning', ok: 'Healthy', neutral: 'Unknown' }
 // Only crit and warn are operational states. A service whose state could not
 // be read is Unknown, not a warning about it.
 const svcTone = (s) => (s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'ok' ? 'ok' : 'neutral')
 
-// Summaries of other tabs, each with a link there. The rules the rest of the
-// app follows hold here too: a feed that is down or loading is "unavailable"
-// or a dash, never zero; a sample says it is a sample; partial data says so.
-function EstateRail({ data, sliceStatus }) {
-  const sec = useApi('/api/hub/security', { poll: 30000 })
+// What a number tile cannot carry: the state of each service by name, and the
+// open incidents in words. The rules the rest of the app follows hold here
+// too: a feed that is down says so and is never an empty list, and partial
+// data is labelled partial.
+//
+// It sits in the row with Top Consumers and the heatmap and reads other feeds
+// than they do, so its body is that row's chart height (BARS_H) whatever it
+// holds: a longer list scrolls inside the panel instead of growing the row.
+function ServicesIncidents({ panelId }) {
   const health = useApi('/api/hub/health', { poll: 30000 })
   const inc = useApi('/api/incidents', { poll: 30000 })
-
-  const totals = data.data?._totals ?? {}
-  const hosts = data.data?.hosts ?? []
-  // _totals.subnetsWarn is every subnet at 70% or more, INCLUDING the ≥90%
-  // ones (go/internal/dashboard/dashboard.go: the at-risk pager's
-  // utilization>=70 total), so the three bands are ≥90, 70–89 = warn − crit,
-  // and the rest = total − warn. The two counts come from separate queries;
-  // if they disagree (warn < crit, or warn > total) no band is shown.
-  const subOk = !data.loading && sliceStatus('subnets') !== 'error' &&
-    [totals.subnets, totals.subnetsCrit, totals.subnetsWarn].every((v) => typeof v === 'number') &&
-    totals.subnetsCrit <= totals.subnetsWarn && totals.subnetsWarn <= totals.subnets
-  const sub = subOk
-    ? { crit: totals.subnetsCrit, warn: totals.subnetsWarn - totals.subnetsCrit, rest: totals.subnets - totals.subnetsWarn }
-    : { crit: null, warn: null, rest: null }
-
-  const hostOk = !data.loading && sliceStatus('hosts') !== 'error'
-  const hb = { active: 0, degraded: 0, offline: 0, unknown: 0, other: 0 }
-  if (hostOk) for (const h of hosts) hb[statusBucket(h.status)]++
-  const hostScope = hostOk && (typeof totals.hosts !== 'number' || hosts.length < totals.hosts) ? ` (${hosts.length.toLocaleString()} loaded)` : ''
-
-  const secOk = !sec.loading && !sec.error && sec.data?.availability === 'ok'
-  const secScope = secOk && sec.data.truncated ? `counted in the latest ${sec.data.returned} events, not all time` : ''
 
   const svcRows = Array.isArray(health.data) ? health.data : []
   const svcDown = !health.loading && (!!health.error || (svcRows.length > 0 && svcRows.every((b) => b.availability === 'error')))
@@ -251,43 +277,68 @@ function EstateRail({ data, sliceStatus }) {
   const incOk = !inc.loading && !inc.error && Array.isArray(incs)
   const incPartial = incOk && (inc.data.signals_degraded || inc.data.signals_truncated ||
     Object.values(inc.data._meta ?? {}).some((v) => v !== 'ok' && v !== 'empty'))
+  // An incident is a category of signals. When it counts exactly one, that
+  // signal's own sentence says more than "1 of this kind" does.
+  const signals = Array.isArray(inc.data?.signals) ? inc.data.signals : []
+  const incText = (i) => {
+    const own = signals.filter((sg) => sg.category === i.category)
+    return i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message
+  }
+  const incTone = (i) => (i.severity === 'crit' ? 'crit' : i.severity === 'warn' ? 'warn' : 'neutral')
+  const rank = { crit: 0, warn: 1, neutral: 2 }
 
   return (
-    <aside aria-label="Other areas" className="flex flex-col gap-3">
-      <ModuleCard title="Subnet fullness" href="#network" linkLabel="Network"
-        unavailable={!subOk && !data.loading ? 'Subnet counts unavailable' : null}
-        counts={[{ label: '≥90%', value: sub.crit, tone: 'crit' }, { label: '70–89%', value: sub.warn, tone: 'warn' }, { label: 'The rest', value: sub.rest, tone: 'neutral' }]}>
-        <SegmentedBar label="Subnets by fullness" crit={sub.crit} warn={sub.warn} ok={0} other={sub.rest} />
-        <p className="text-note text-dim mt-1">“The rest” is under 70% full or not measured</p>
-      </ModuleCard>
-      <ModuleCard title={`Hosts${hostScope}`} href="#infra" linkLabel="Infra"
-        unavailable={!hostOk && !data.loading ? 'Hosts feed unavailable' : null}
-        counts={[{ label: 'Offline', value: hostOk ? hb.offline : null, tone: 'crit' }, { label: 'Degraded', value: hostOk ? hb.degraded : null, tone: 'warn' }, { label: 'Active', value: hostOk ? hb.active : null, tone: 'ok' }]}>
-        {hostOk && <p className="text-note text-dim">{(hb.unknown + hb.other).toLocaleString()} unknown or other</p>}
-      </ModuleCard>
-      <ModuleCard title="Security" href="#security" linkLabel="Security"
-        unavailable={!sec.loading && !secOk ? 'Security feed unavailable' : null}
-        counts={[{ label: 'Critical', value: secOk ? sec.data.counts?.critical ?? null : null, tone: 'crit' }, { label: 'High', value: secOk ? sec.data.counts?.high ?? null : null, tone: 'warn' }, { label: 'Blocked', value: secOk ? sec.data.blocked ?? null : null, tone: 'neutral' }]}>
-        {secScope && <p className="text-note text-dim">{secScope}</p>}
-      </ModuleCard>
-      <ModuleCard title="Services" href="#infra" linkLabel="Service health" unavailable={svcDown ? 'Service health unavailable' : null}>
-        <ul className="flex flex-col gap-1.5 mb-1">
-          {svc.map((s) => (
-            <li key={s.name} className="flex items-center justify-between gap-2 text-copy">
-              <span>{s.name}</span>
-              <span className="flex items-center gap-2"><span className="text-note text-muted">{s.meta}</span><StatusPill tone={svcTone(s.status)}>{s.statusLabel || TONE_WORD[svcTone(s.status)]}</StatusPill></span>
-            </li>
-          ))}
-        </ul>
-        {health.loading && <p className="text-note text-dim">loading…</p>}
-        {!svcDown && svcPartial.map((r) => <p key={r} className="text-note text-dim">partial: {r}</p>)}
-      </ModuleCard>
-      <ModuleCard title="Incidents" href="#incidents" linkLabel="Incidents"
-        unavailable={!inc.loading && !incOk ? 'Incidents feed unavailable' : null}
-        counts={[{ label: 'Critical', value: incOk ? incs.filter((i) => i.severity === 'crit').length : null, tone: 'crit' }, { label: 'Warning', value: incOk ? incs.filter((i) => i.severity === 'warn').length : null, tone: 'warn' }]}>
-        <p className="text-note text-dim">incident categories{incPartial ? ' · some checks incomplete' : ''}</p>
-      </ModuleCard>
-    </aside>
+    <Card
+      panelId={panelId}
+      span={2}
+      title="Services and incidents"
+      right={
+        // inline-flex, not inline: index.css gives every link a 44px floor on a
+        // touch pointer, and an inline box ignores min-height.
+        <span className="flex items-center gap-2 text-note">
+          <a href="#incidents" className="text-link inline-flex items-center">Incidents</a>
+          <a href="#infra" className="text-link inline-flex items-center">Service health</a>
+        </span>
+      }
+    >
+      {health.loading && inc.loading ? (
+        <Skeleton h={BARS_H} />
+      ) : (
+        // tabIndex and the label: a box that scrolls has to be reachable and
+        // named, or a keyboard cannot scroll it.
+        <div role="region" aria-label="Services and incidents list" tabIndex={0} className={`overflow-y-auto ${FOCUS_RING}`} style={{ height: BARS_H }}>
+          {svcDown ? (
+            <p className="text-note text-dim">Service health unavailable</p>
+          ) : (
+            <ul>
+              {svc.map((s) => (
+                <li key={s.name} className="flex items-center justify-between gap-2 py-1 border-b border-line">
+                  <span className="min-w-0 truncate">{s.name}</span>
+                  <span className="flex items-center gap-2 shrink-0"><span className="text-note text-muted tabular-nums">{s.meta}</span><StatusPill tone={svcTone(s.status)}>{s.statusLabel || TONE_WORD[svcTone(s.status)]}</StatusPill></span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {health.loading && <p className="text-note text-dim">loading…</p>}
+          {!svcDown && svcPartial.map((r) => <p key={r} className="text-note text-dim mt-1">partial: {r}</p>)}
+          {!inc.loading && !incOk ? (
+            <p className="text-note text-dim mt-2">Incidents feed unavailable</p>
+          ) : incOk && incs.length === 0 ? (
+            <p className="text-note text-dim mt-2">No open incidents</p>
+          ) : incOk ? (
+            <ul>
+              {[...incs].sort((a, b) => rank[incTone(a)] - rank[incTone(b)]).map((i) => (
+                <li key={i.key ?? i.category} className="flex items-start gap-2 py-1 border-b border-line last:border-b-0">
+                  <StatusPill tone={incTone(i)}>{incTone(i) === 'neutral' ? i.severity || 'Unknown' : TONE_WORD[incTone(i)]}</StatusPill>
+                  <span className="min-w-0 break-words">{incText(i)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {incPartial && <p className="text-note text-dim mt-2">some incident checks incomplete</p>}
+        </div>
+      )}
+    </Card>
   )
 }
 
@@ -470,109 +521,6 @@ function DnsHero({ dns, panelId }) {
           </Suspense>
         </>
       )}
-    </Card>
-  )
-}
-
-// ---------- kpi stack ----------
-
-function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelId }) {
-  const { COLORS } = useChartTheme()
-  const leasesDown = leasesStatus === 'error'
-  const subnetsDown = subnetsStatus === 'error'
-  // Unmeasured utilisation is left OUT of the sparkline rather than plotted as
-  // 0 — a floor of fake zeros draws a fleet of empty subnets that don't exist.
-  const utils = subnets.map((s) => num(s.util)).filter((u) => u !== null).sort((a, b) => a - b)
-  const activeLeases = leases.filter((l) => l.state === 'active').length
-
-  const hasSubnetsTotal = typeof totals.subnets === 'number'
-  const hasCritTotal = typeof totals.subnetsCrit === 'number'
-  // A subnet whose utilisation was never reported is neither ≥90% nor under
-  // it. It is counted in neither direction, and the label says how many rows
-  // the figure actually covers.
-  const measured = subnets.filter((s) => num(s.util) !== null)
-  const rowCritSubnets = measured.filter((s) => num(s.util) >= 90).length
-  const unmeasured = subnets.length - measured.length
-
-  const cells = [
-    { label: 'Active Leases', value: leasesDown ? DASH : activeLeases.toLocaleString(), color: COLORS.series, hash: 'network?focus=leases', status: leasesStatus },
-    hasSubnetsTotal
-      ? { label: 'Subnets', value: totals.subnets.toLocaleString(), color: COLORS.purple, hash: 'network' }
-      : { label: 'Subnets (loaded rows)', value: subnetsDown ? DASH : subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network', status: subnetsStatus },
-    hasCritTotal
-      ? { label: 'Subnets ≥90%', value: totals.subnetsCrit.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' }
-      : {
-          label: unmeasured > 0 ? 'Subnets ≥90% (loaded rows w/ known util)' : 'Subnets ≥90% (loaded rows)',
-          value: subnetsDown ? DASH : rowCritSubnets.toLocaleString(),
-          color: COLORS.crit,
-          hash: 'network?minUtil=90',
-          status: subnetsStatus,
-        },
-  ]
-
-  return (
-    // No title by design — the three cells below are their own headings, and a
-    // fourth heading above them would say nothing. `panelName` is the words for
-    // the places that have to name this panel in a sentence, and it draws
-    // nothing: without it the popup called it "kpi-stack". Named for what the
-    // cells actually count (leases, subnets, and the subnets ≥90% full).
-    <Card panelId={panelId} span={2} panelName="Leases & Subnets" className="flex flex-col justify-between">
-      {cells.map((c, i) => {
-        const unavailable = c.status === 'error'
-        return (
-          <div
-            key={c.label}
-            role="button"
-            tabIndex={0}
-            onClick={() => { location.hash = c.hash }}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-            className={`py-3.5 cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
-          >
-            <div className="text-muted text-note">{c.label}</div>
-            {unavailable ? (
-              <div className="text-copy font-semibold my-1" style={{ color: COLORS.crit }}>unavailable</div>
-            ) : (
-              <div className="text-figure font-semibold tracking-tight my-1">{c.value}</div>
-            )}
-            {utils.length > 1 && !unavailable ? (
-              <>
-                <Sparkline values={utils} color={c.color} />
-                <div className="text-note text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
-              </>
-            ) : (
-              // THE +54px THAT MOVED EVERY ROW BELOW THIS PANEL.
-              //
-              // The placeholder used to be the 30px spacer alone. It stood in
-              // for the Sparkline and reserved nothing for the caption under
-              // it, so each of the three cells grew 18px the moment /api/data
-              // landed — 54px in total, and this panel is the taller half of
-              // the top row, so the whole page dropped by it.
-              //
-              // The caption is rendered rather than measured: same element,
-              // same text, same classes, in the same child order, hidden. Its
-              // height is then the settled height by construction and cannot
-              // drift if the font, the line-height or the wording changes — a
-              // constant here would have to be re-measured every time one did.
-              //
-              // `visibility: hidden` and not `display: none`, which reserves
-              // nothing, and not `opacity: 0`, which would leave the text
-              // selectable and readable by a screen reader.
-              //
-              // This branch also covers a genuinely small estate and a failed
-              // feed, and it reserves there too. Deliberate: reserving only
-              // while loading would trade this shift for a 54px SHRINK on any
-              // tenant with one or no measured subnet. The cost is 18px of
-              // blank per cell in those two states.
-              <>
-                <div className="h-[30px]" />
-                <div className="text-note text-dim mt-0.5" style={{ visibility: 'hidden' }} aria-hidden="true">
-                  util of loaded rows (sorted), not history or estate
-                </div>
-              </>
-            )}
-          </div>
-        )
-      })}
     </Card>
   )
 }
@@ -881,6 +829,19 @@ function statusBucket(s) {
 }
 
 const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
+// Worst first, for the list of hosts that are not active.
+const BUCKET_RANK = { offline: 0, degraded: 1, unknown: 2, other: 3 }
+
+// The list under the donut: up to this many lines, each a fixed height. When
+// there are more hosts than lines, the last line says how many more instead of
+// naming one, and it is a link, which on a touch pointer is 44px tall: that is
+// why it takes a line's place rather than being added under five. The box is
+// one height whether it holds five names, one, or the loading state, so the
+// panel never resizes around it.
+const HOST_ROWS = 5
+const HOST_LIST_CLS = 'mt-3 pt-2 border-t border-line h-[152px]'
+// The donut (DONUT_H, 130) plus that list and its 12px margin.
+const HOST_BOX_CLS = 'min-h-[294px] grid place-items-center'
 
 function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false }) {
   const { COLORS } = useChartTheme()
@@ -900,6 +861,11 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
   const pieData = Object.entries(buckets)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
+  // Not active is not the same as down: a host whose state nobody reported is
+  // on this list too, under its own word, Unknown.
+  const notActive = hosts
+    .filter((h) => statusBucket(h.status) !== 'active')
+    .sort((a, b) => BUCKET_RANK[statusBucket(a.status)] - BUCKET_RANK[statusBucket(b.status)])
 
   return (
     <Card panelId={panelId} span={2} title="Host Status">
@@ -907,11 +873,16 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
         // The donut's own Suspense fallback already fills its 130px box, so the
         // lazy chunk was never this panel's problem — the <Empty/> below it was.
         loading ? (
-          <Skeleton h={DONUT_H} />
-        ) : hostsStatus === 'error' ? (
-          <FeedUnavailable label="Hosts feed unavailable" />
+          <>
+            <Skeleton h={DONUT_H} />
+            <div className={HOST_LIST_CLS} />
+          </>
         ) : (
-          <Empty />
+          // The same box the donut and the list fill, so a dead feed or an
+          // empty estate does not shrink the panel that was reserved for them.
+          <div className={HOST_BOX_CLS}>
+            {hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />}
+          </div>
         )
       ) : (
         <div className="flex items-center gap-4">
@@ -950,6 +921,28 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {total > 0 && (
+        <div className={HOST_LIST_CLS}>
+          {notActive.length === 0 ? (
+            <p className="text-note text-dim">Every host loaded is active</p>
+          ) : (
+            <>
+              <ul>
+                {notActive.slice(0, notActive.length > HOST_ROWS ? HOST_ROWS - 1 : HOST_ROWS).map((h) => (
+                  <li key={h.id ?? h.name} className="flex items-center gap-2 h-6 min-w-0">
+                    <i className="w-2 h-2 rounded-mark inline-block shrink-0" style={{ background: colorMap[BUCKET_LABEL[statusBucket(h.status)]] }} />
+                    <span className="min-w-0 flex-1 truncate" title={h.name}>{h.name}</span>
+                    <span className="text-note text-muted shrink-0">{BUCKET_LABEL[statusBucket(h.status)]}</span>
+                  </li>
+                ))}
+              </ul>
+              {notActive.length > HOST_ROWS && (
+                <a href="#infra" className="text-note text-link inline-flex items-center">{(notActive.length - HOST_ROWS + 1).toLocaleString()} more on the Infra tab</a>
+              )}
+            </>
+          )}
         </div>
       )}
       {hasHostTotal && loaded !== total && (

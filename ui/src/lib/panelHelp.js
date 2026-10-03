@@ -49,10 +49,6 @@ export const PANEL_HELP = {
     what: 'The average number of DNS lookups a second your servers answered, hour by hour across the last 24 hours.',
     look: 'The big figure is the latest hour, and the note beside it compares that hour with the first one on the chart. Click the heading to open the DNS tab.',
   },
-  'kpi-stack': {
-    what: 'Three live counts: addresses currently leased out, how many subnets you have, and how many of those are at least 90% full.',
-    look: 'Click any of the three to open the matching list. The small line under each is every loaded subnet’s fullness, sorted low to high — not a history.',
-  },
   'top-consumers': {
     what: 'The twelve subnets handing out the most addresses right now.',
     look: 'Ranked by addresses in use, not by how full they are, so tiny always-full links do not crowd out real capacity problems. Click a bar to open that subnet.',
@@ -63,7 +59,11 @@ export const PANEL_HELP = {
   },
   'host-status': {
     what: 'How your Infoblox machines split by state: running, struggling, offline, anything else, or a state nothing reported back.',
-    look: 'Click a slice or a label to see just those machines on the Infra tab.',
+    look: 'Click a slice or a label to see just those machines on the Infra tab. The list under the ring names the ones that are not active, worst first.',
+  },
+  'services-incidents': {
+    what: 'Whether each Infoblox service is healthy, and the problems the app has found across your network, worst first.',
+    look: 'A service shows how many of its machines are online. A problem with a single cause is written out; several of the same kind are counted. The links in the heading open the full lists.',
   },
   'subnet-table': {
     what: 'The subnets that loaded, with how full each one is, how many addresses are still free, and which site it belongs to.',

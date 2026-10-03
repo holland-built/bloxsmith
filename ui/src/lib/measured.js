@@ -54,3 +54,13 @@ export function cmpMaybe(av, bv, dir) {
   if (bv === null) return -1
   return dir === 'asc' ? av - bv : bv - av
 }
+
+/**
+ * The tone for a count of something bad: `tone` when there is any, 'ok' when
+ * there is none, and no tone at all when the count is unknown. An unknown
+ * count must not be painted green: "we could not count the offline hosts" is
+ * not "no host is offline".
+ */
+export function alarmTone(n, tone) {
+  return n === null || n === undefined ? undefined : n > 0 ? tone : 'ok'
+}

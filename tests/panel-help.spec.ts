@@ -276,12 +276,13 @@ test('the layout sentences are said once on a page, in the Arrange window', asyn
 });
 
 test('a titleless panel still gets its ⓘ button', async ({ page }) => {
-  await page.goto('/#overview');
+  await page.goto('/#dns');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  // The KPI stack has no header row at all, so its button lives in the same
-  // absolute top-right slot the drag handle uses.
-  const btn = page.getByRole('button', { name: 'About kpi-stack', exact: true });
+  // The DNS tab's zone counts have no header row at all, so the button lives
+  // in the same absolute top-right slot the drag handle uses. (Overview's own
+  // titleless panel became the headline tiles on 2026-10-03.)
+  const btn = page.getByRole('button', { name: 'About dns-zone-kpis', exact: true });
   await expect(btn).toBeVisible();
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');

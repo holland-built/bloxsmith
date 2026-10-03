@@ -3,6 +3,22 @@
   - paragraph:
     - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right edge to resize, and your arrangement saves automatically.
     - button "Docs →"
+  - list "Headline numbers":
+    - listitem:
+      - button /DNS queries \d+ per sec/
+    - listitem:
+      - button "Hosts 3"
+    - listitem:
+      - button "Hosts offline 1"
+    - listitem:
+      - link /Subnets ≥\d+% 1 0 at \d+–\d+%/:
+        - /url: "#network?minUtil=90"
+    - listitem:
+      - link "Active Leases 1":
+        - /url: "#network?focus=leases"
+    - listitem:
+      - link "Security events 3 critical or high":
+        - /url: "#security"
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:
     - button /DNS Query Rate — \d+[hmsp]+/
@@ -12,21 +28,19 @@
   - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
   - application: /\d+:\d+ AM \d+:\d+ AM/
-  - button "About kpi-stack": ⓘ
-  - button "Hide Leases & Subnets": ✕
-  - button "Move Leases & Subnets": ⠿
-  - button "Active Leases 1 util of loaded rows (sorted), not history or estate":
-    - text: ""
-    - img
-    - text: ""
-  - button "Subnets 3 util of loaded rows (sorted), not history or estate":
-    - text: ""
-    - img
-    - text: ""
-  - button /Subnets ≥\d+% 1 util of loaded rows \(sorted\), not history or estate/:
-    - text: ""
-    - img
-    - text: ""
+  - heading "Host Status" [level=2]
+  - 'button "About: Host Status"': "About: ⓘ"
+  - button "Hide Host Status": Hide ✕
+  - button "Move Host Status": Move ⠿
+  - application
+  - text: 3 hosts
+  - button /Degraded \d+%/
+  - button /Offline \d+%/
+  - button /Other \d+%/
+  - list:
+    - listitem: baseline-host-c Offline
+    - listitem: baseline-host-b Degraded
+    - listitem: baseline-host-a Other
   - heading "Top Consumers" [level=2]
   - text: /addresses used · top \d+ of 3 subnets/
   - 'button "About: Top Consumers"': "About: ⓘ"
@@ -43,15 +57,22 @@
     - button /\d+\.\d+\.0\.0 — \d+% used/
     - button /\d+\.\d+\.0\.0 — \d+% used/
   - text: /ok >\d+% >\d+%/
-  - heading "Host Status" [level=2]
-  - 'button "About: Host Status"': "About: ⓘ"
-  - button "Hide Host Status": Hide ✕
-  - button "Move Host Status": Move ⠿
-  - application
-  - text: 3 hosts
-  - button /Degraded \d+%/
-  - button /Offline \d+%/
-  - button /Other \d+%/
+  - heading "Services and incidents" [level=2]
+  - link "Incidents":
+    - /url: "#incidents"
+  - link "Service health":
+    - /url: "#infra"
+  - 'button "About: Services and incidents"': "About: ⓘ"
+  - button "Hide Services and incidents": Hide ✕
+  - button "Move Services and incidents": Move ⠿
+  - region "Services and incidents list":
+    - list:
+      - listitem: DNS 2/2 online healthy
+      - listitem: DHCP 1 stopped · 1/2 up degraded
+      - listitem: Security beyond the row cap not listed
+    - paragraph: "/partial: service inventory truncated at the \\d+-row limit — a service type absent here may exist but not be listed/"
+    - list:
+      - listitem: high subnets close to full
   - heading "Top Subnets by Utilization" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links showing 3 of 3/
   - textbox "Filter subnets":

@@ -4,7 +4,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Sk
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
-import { DASH, freeOf, num } from '../lib/measured.js'
+import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
@@ -124,11 +124,13 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   const leases = dhcp.data?.count
   const leasesOk = !dhcp.loading && !dhcp.error && dhcp.data?.status !== 'error' && Number.isFinite(leases)
   const fmt = (v) => (v == null ? null : v.toLocaleString())
+  const over = band((u) => u > 85)
+  const mid = band((u) => u >= 70 && u <= 85)
   return [
-    { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null), color: 'var(--color-other)' },
-    { panelId: 'network-utilization-distribution', label: `Over 85%${scope}`, value: fmt(band((u) => u > 85)), color: 'var(--color-crit)' },
-    { panelId: 'network-utilization-distribution', label: `70–85%${scope}`, value: fmt(band((u) => u >= 70 && u <= 85)), color: 'var(--color-warn)' },
-    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), color: 'var(--color-series)' },
+    { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null) },
+    { panelId: 'network-utilization-distribution', label: `Over 85%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit') },
+    { panelId: 'network-utilization-distribution', label: `70–85%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn') },
+    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null) },
   ]
 }
 
