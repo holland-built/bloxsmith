@@ -2820,7 +2820,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
 }
 
 export function Skeleton({ h = 140 }) {
-  return <div className="motion-safe:animate-pulse bg-line rounded-control w-full" style={{ height: h }} />
+  return <div className="animate-pulse motion-reduce:animate-none bg-line rounded-control w-full" style={{ height: h }} />
 }
 
 export function Sparkline({ values, color, h = 30 }) {

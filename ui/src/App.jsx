@@ -34,7 +34,15 @@ import UpdateButton from './components/UpdateButton.jsx'
 import { updateReady, useUpdate } from './lib/updateState.js'
 import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
-import TenantManager from './components/TenantManager.jsx'
+// The Settings sheet is fetched when it is first opened. It is 19 KB that no
+// first paint needs, and with it in the entry file #provision went over the
+// budget tests/bundle-budget.spec.ts holds it to.
+const TenantManager = lazy(() => import('./components/TenantManager.jsx'))
+// Puts the saved spacing on <html> before the first paint. This module used to
+// arrive through the Settings sheet's own imports; now that the sheet loads
+// late, it has to be asked for here or a saved Compact would wait for Settings
+// to be opened.
+import './lib/density.js'
 import HeaderHelp from './components/HeaderHelp.jsx'
 import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
@@ -156,6 +164,26 @@ const TabLoading = () => (
 // The wording is aimed at whoever is actually looking at it, who is an operator
 // and not an engineer: it says what happened and the one thing that fixes it.
 // No error code, no stack, no "unexpected error occurred".
+// The Settings sheet loads on demand, so its file can fail to arrive (the app
+// updated under an open page and the old file is gone). The page behind is
+// inert while the sheet is open, so the message is pinned where it is seen.
+class SettingsBoundary extends Component {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div role="alert" className="fixed top-4 inset-x-4 z-[200] border border-border bg-card p-4 text-copy text-txt">
+        Settings could not load. Reload the page.
+      </div>
+    )
+  }
+}
+
 class TabErrorBoundary extends Component {
   state = { failed: false, tab: null }
 
@@ -679,7 +707,11 @@ export default function App() {
           {`${activeLabel} tab`}
         </div>
         {showAccounts && (
-          <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+          <SettingsBoundary>
+            <Suspense fallback={null}>
+              <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+            </Suspense>
+          </SettingsBoundary>
         )}
         {/* Outside the inert wrapper, like the settings sheet above it and for
             the same reason: inert content is not exposed at all, so a dialog
