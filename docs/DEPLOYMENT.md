@@ -240,7 +240,7 @@ Pull and run the prebuilt Go image directly:
 
 ```bash
 # start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
 
@@ -395,7 +395,7 @@ To see what is inside the image you are about to run, read its SBOM attestation:
 
 ```bash
 # start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault \
   --restart unless-stopped \
   ghcr.io/holland-built/bloxsmith:latest
@@ -711,7 +711,7 @@ Supply it at boot and the dashboard comes up live with no browser step:
 # preferred: save the passphrase to a file only you can read, which keeps it out of `docker inspect`
 printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
 # start it with the passphrase file mounted, so the vault unlocks on its own
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
   -v noc-vault:/vault \
   -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
   -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \

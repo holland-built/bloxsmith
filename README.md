@@ -141,7 +141,8 @@ These skip Docker Compose, so the update files above do not apply to them.
 
 ```bash
 # run Bloxsmith with two named storage volumes: one for your keys, one for the audit log's signing key
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -v noc-vault:/vault -v noc-audit-trust:/audit-trust --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
+# PUBLISHED_BIND tells it the port is only on this computer; without it (or a DASHBOARD_TOKEN) it refuses changes
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 -v noc-vault:/vault -v noc-audit-trust:/audit-trust --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
 ```
 
 The two volumes are separate on purpose, so a copy of one is not a copy of both. Leave out the

@@ -483,15 +483,25 @@ func TestWriteGuard_PublishedBindLoopback_AllowedFromBridge(t *testing.T) {
 	}
 }
 
-// The documented `docker run -p 127.0.0.1:8080:8080` carries no PUBLISHED_BIND.
-// Its peer is the bridge, so the gate cannot judge it and keeps its old rule.
-// This pins that choice so changing it is deliberate.
-func TestWriteGuard_ContainerWithoutPublishedBind_KeepsOldRule(t *testing.T) {
+// A bare `docker run -p 8080:8080` publishes on every interface and carries no
+// PUBLISHED_BIND; its peer is the bridge, so nothing can tell it from the LAN.
+func TestWriteGuard_ContainerWithoutPublishedBind_Rejected(t *testing.T) {
 	g := testGuard()
 	g.Host = "0.0.0.0"
 	g.InContainer = true
-	if !guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
-		t.Fatal("docker run on loopback lost its writes")
+	if guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, forgedOrigin)) {
+		t.Fatal("a container that does not say where it is published trusted a forged Origin")
+	}
+}
+
+func TestWriteGuard_ContainerWithoutPublishedBindButToken_Allowed(t *testing.T) {
+	g := testGuard()
+	g.Host = "0.0.0.0"
+	g.InContainer = true
+	g.Token = "s3cret"
+	h := map[string]string{"X-Auth-Token": "s3cret"}
+	if !guarded(g, reqFrom(dockerBridgePeer, http.MethodPost, vaultWritePath, h)) {
+		t.Fatal("a token must authorize a write from a container with no PUBLISHED_BIND")
 	}
 }
 
@@ -514,7 +524,7 @@ func TestStartupNote(t *testing.T) {
 		{"native wildcard", Guard{Host: "0.0.0.0"}, "accepted only from this machine"},
 		{"compose loopback", Guard{Host: "0.0.0.0", InContainer: true, PublishedBind: "127.0.0.1"}, ""},
 		{"compose LAN", Guard{Host: "0.0.0.0", InContainer: true, PublishedBind: "0.0.0.0"}, "writes are refused"},
-		{"docker run", Guard{Host: "0.0.0.0", InContainer: true}, "can forge"},
+		{"docker run", Guard{Host: "0.0.0.0", InContainer: true}, "writes are refused"},
 	}
 	for _, c := range cases {
 		got := c.g.StartupNote()

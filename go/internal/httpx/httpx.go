@@ -170,7 +170,8 @@ func loopbackHost(h string) bool {
 //     machine; anything else is the LAN. The peer cannot help — through the
 //     docker bridge it is the gateway for every caller.
 //   - Unset, in a container (`docker run`): the peer is the bridge, so nothing
-//     here can judge it. The old rule stays, and main logs a warning.
+//     here can judge it, and `-p 8080:8080` publishes on every interface. Treated
+//     as reachable: the operator adds PUBLISHED_BIND=127.0.0.1 or a token.
 //   - Native: a non-loopback bind needs a loopback peer as well.
 //
 // A same-host reverse proxy that forwards LAN traffic looks like a loopback
@@ -180,7 +181,7 @@ func (g *Guard) reachableBeyondHost(r *http.Request) bool {
 		return !loopbackHost(g.PublishedBind)
 	}
 	if g.InContainer {
-		return false
+		return true
 	}
 	return !loopbackHost(g.Host) && !isLoopback(r.RemoteAddr)
 }
@@ -197,9 +198,9 @@ func (g *Guard) StartupNote() string {
 		return "published on " + g.PublishedBind + " with no DASHBOARD_TOKEN: writes are refused. " +
 			"Set DASHBOARD_TOKEN, or publish on 127.0.0.1 (BIND=127.0.0.1)."
 	case g.PublishedBind == "" && g.InContainer:
-		return "running in a container with no DASHBOARD_TOKEN and no PUBLISHED_BIND: writes trust the Origin header, " +
-			"which any machine that can reach the port can forge. Publish on 127.0.0.1 only (-p 127.0.0.1:8080:8080), " +
-			"or set DASHBOARD_TOKEN."
+		return "running in a container with no DASHBOARD_TOKEN and no PUBLISHED_BIND: writes are refused, because the " +
+			"app cannot tell whether the port is open to the network. Add -e PUBLISHED_BIND=127.0.0.1 with " +
+			"-p 127.0.0.1:8080:8080, or set DASHBOARD_TOKEN."
 	case !g.InContainer && g.PublishedBind == "" && !loopbackHost(g.Host):
 		return "bound to " + g.Host + " with no DASHBOARD_TOKEN: writes are accepted only from this machine."
 	}
