@@ -167,6 +167,19 @@ func (v *Vault) InitR(passphrase string) map[string]any {
 
 // UnlockR wraps Unlock (server.py:2810), then best-effort refreshes names.
 func (v *Vault) UnlockR(passphrase string) map[string]any {
+	if res := v.unlockSwitching(passphrase); res != nil {
+		return res
+	}
+	// Outside switchMu: each name lookup can take 12 seconds, and a tenant
+	// switch must not wait for them. RefreshNames takes only v.mu, and only for
+	// the moments it reads or writes the vault.
+	_ = v.RefreshNames() // best-effort, mirrors the try/except at 2828
+	return ok()
+}
+
+// unlockSwitching is the part of UnlockR that must be serialised with tenant
+// switches. It returns nil on success.
+func (v *Vault) unlockSwitching(passphrase string) map[string]any {
 	v.switchMu.Lock()
 	defer v.switchMu.Unlock()
 	if err := v.Unlock(passphrase); err != nil {
@@ -175,22 +188,34 @@ func (v *Vault) UnlockR(passphrase string) map[string]any {
 	// Unlocking loads a (possibly different) active tenant into memory — coordinate
 	// the auth reset + cache rotate so nothing from a prior locked session leaks.
 	v.rotateAuth()
-	_ = v.RefreshNames() // best-effort, mirrors the try/except at 2828
-	return ok()
+	return nil
 }
 
 // AddTenant is vault_add_tenant (server.py:2878).
 func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 	v.switchMu.Lock()
 	defer v.switchMu.Unlock()
-	res, rotate := v.addTenantLocked(label, key, groq)
+	res, rotate := v.addTenantLocked(label, key, groq, v.portalLabelToAdd(label, key))
 	if rotate {
 		v.rotateAuth()
 	}
 	return res
 }
 
-func (v *Vault) addTenantLocked(label, key string, groq *string) (map[string]any, bool) {
+// portalLabelToAdd asks the portal what to call a new connection, BEFORE v.mu is
+// taken: the ask can take two 12-second calls, and every request that needs the
+// active key waits on v.mu. "" means no name was learned, whether because the
+// caller gave one, the vault is locked, or the portal did not answer.
+func (v *Vault) portalLabelToAdd(label, key string) string {
+	nk := NormKey(key)
+	if strings.TrimSpace(label) != "" || nk == "" || !v.IsUnlocked() {
+		return ""
+	}
+	l, _ := v.portalLabelForKey(nk)
+	return l
+}
+
+func (v *Vault) addTenantLocked(label, key string, groq *string, portalLabel string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
@@ -207,11 +232,10 @@ func (v *Vault) addTenantLocked(label, key string, groq *string) (map[string]any
 		// unreachable portal must not block the add, and "Tenant N" is exactly
 		// the label RefreshNames re-resolves later. The placeholder is honest —
 		// it claims no portal name — so nothing invented is presented as real.
-		l, err := v.portalLabelForKeyUnlocked(nk)
-		if err != nil || l == "" {
+		if portalLabel == "" {
 			label = "Tenant " + strconv.Itoa(len(v.tenants)+1)
 		} else {
-			label = l
+			label = portalLabel
 		}
 	}
 	tid := tokenHex(6)
@@ -285,14 +309,39 @@ func (v *Vault) removeTenantLocked(tid string) (map[string]any, bool) {
 func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 	v.switchMu.Lock()
 	defer v.switchMu.Unlock()
-	res, rotate := v.updateTenantLocked(tid, key, label)
+	res, rotate := v.updateTenantLocked(tid, key, label, v.portalLabelToRekey(tid, key, label))
 	if rotate {
 		v.rotateAuth()
 	}
 	return res
 }
 
-func (v *Vault) updateTenantLocked(tid, key string, label *string) (map[string]any, bool) {
+// portalLabelToRekey is portalLabelToAdd for a replaced key: it asks only when a
+// new key arrives with no name, and only for a connection that exists.
+func (v *Vault) portalLabelToRekey(tid, key string, label *string) string {
+	nk := NormKey(key)
+	if nk == "" || (label != nil && strings.TrimSpace(*label) != "") {
+		return ""
+	}
+	v.mu.Lock()
+	known := false
+	if v.unlocked {
+		for i := range v.tenants {
+			if v.tenants[i].ID == tid {
+				known = true
+				break
+			}
+		}
+	}
+	v.mu.Unlock()
+	if !known {
+		return ""
+	}
+	l, _ := v.portalLabelForKey(nk)
+	return l
+}
+
+func (v *Vault) updateTenantLocked(tid, key string, label *string, portalLabel string) (map[string]any, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
@@ -333,10 +382,9 @@ func (v *Vault) updateTenantLocked(tid, key string, label *string) (map[string]a
 			// both fall back rather than failing the update, because the key
 			// swap itself must still land. Keeping the existing label (or the
 			// positional placeholder) claims no portal name either way.
-			l, err := v.portalLabelForKeyUnlocked(nk)
 			switch {
-			case err == nil && l != "":
-				lbl = l
+			case portalLabel != "":
+				lbl = portalLabel
 			case v.tenants[idx].Label != "":
 				lbl = v.tenants[idx].Label
 			default:
@@ -794,13 +842,6 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 }
 
 // --- small internals kept lock-aware -----------------------------------------
-
-// portalLabelForKeyUnlocked is called while v.mu is already held. The lookup is
-// pure network I/O against a passed key, touching no vault state, so it is safe
-// to run under the lock (matches Python calling it inside _vault_lock at 2886).
-func (v *Vault) portalLabelForKeyUnlocked(key string) (string, error) {
-	return v.portalLabelForKey(key)
-}
 
 // activeKeyLocked resolves the active tenant key assuming v.mu is held.
 func (v *Vault) activeKeyLocked() string {

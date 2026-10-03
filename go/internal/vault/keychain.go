@@ -1,12 +1,14 @@
 package vault
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // THE VAULT PASSPHRASE IN THE OS KEYCHAIN
@@ -97,6 +99,11 @@ func KeychainAvailable() error {
 	return nil
 }
 
+// keychainTimeout bounds one `security` call. It runs while the server starts,
+// and a keychain waiting on a prompt nobody can see would otherwise hold the
+// whole start-up.
+var keychainTimeout = 10 * time.Second
+
 // GetKeychainPassphrase reads the stored passphrase for vaultPath.
 //
 // It shells out to `security` rather than linking the Security framework because
@@ -108,8 +115,14 @@ func GetKeychainPassphrase(vaultPath string) (string, error) {
 	if err := KeychainAvailable(); err != nil {
 		return "", err
 	}
-	out, err := exec.Command("security", "find-generic-password",
+	ctx, cancel := context.WithTimeout(context.Background(), keychainTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "security", "find-generic-password",
 		"-a", vaultPath, "-s", keychainService, "-w").Output()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("keychain lookup gave up after %s: the macOS `security` tool did not answer "+
+			"(a locked keychain waiting for a prompt can do this)", keychainTimeout)
+	}
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {

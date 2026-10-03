@@ -357,7 +357,13 @@ func (v *Vault) Init(passphrase string) error {
 	v.groq, v.axur, v.llmBase, v.llmModel = "", "", "", ""
 	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
-	return v.save()
+	if err := v.save(); err != nil {
+		// Nothing was written, so no vault exists. Do not stay unlocked
+		// holding a key for one.
+		v.lockLocked()
+		return err
+	}
+	return nil
 }
 
 // Unlock decrypts an existing vault with the passphrase (server.py:2810).
