@@ -168,6 +168,8 @@ const TabLoading = () => (
 // updated under an open page and the old file is gone). The page behind is
 // inert while the sheet is open, so the message is pinned where it is seen and
 // carries its own two ways out: reload, or close and carry on without Settings.
+const SHEET_BTN = `px-2.5 py-1 rounded-control border border-border text-copy text-txt cursor-pointer hover:border-border-hover ${FOCUS_RING}`
+
 class SettingsBoundary extends Component {
   state = { failed: false }
 
@@ -177,12 +179,11 @@ class SettingsBoundary extends Component {
 
   render() {
     if (!this.state.failed) return this.props.children
-    const btn = `px-2.5 py-1 rounded-control border border-border text-copy text-txt cursor-pointer hover:border-border-hover ${FOCUS_RING}`
     return (
       <div className="fixed top-4 inset-x-4 z-[200] flex flex-wrap items-center gap-3 border border-border bg-card p-4 text-copy text-txt">
         <span role="alert" className="flex-1">Settings could not load.</span>
-        <button type="button" ref={(el) => el?.focus()} onClick={() => location.reload()} className={btn}>Reload the page</button>
-        <button type="button" onClick={this.props.onClose} className={btn}>Close</button>
+        <button type="button" ref={(el) => el?.focus()} onClick={() => location.reload()} className={SHEET_BTN}>Reload the page</button>
+        <button type="button" onClick={this.props.onClose} className={SHEET_BTN}>Close</button>
       </div>
     )
   }
@@ -712,9 +713,19 @@ export default function App() {
         </div>
         {showAccounts && (
           <SettingsBoundary onClose={() => setShowAccounts(false)}>
-            {/* The page behind is already inert, so the wait is said out loud
-                and dimmed like the sheet it is about to become. */}
-            <Suspense fallback={<div role="status" className="fixed inset-0 z-[200] grid place-items-center bg-black/60 text-copy text-txt">Loading settings…</div>}>
+            {/* The page behind is already inert, so the wait is said out loud,
+                dimmed like the sheet it is about to become, and can be left: a
+                fetch that never answers must not hold the page. */}
+            <Suspense
+              fallback={
+                <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 text-copy text-txt">
+                  <div className="flex items-center gap-3 border border-border bg-card p-4">
+                    <span role="status">Loading settings…</span>
+                    <button type="button" onClick={() => setShowAccounts(false)} className={SHEET_BTN}>Cancel</button>
+                  </div>
+                </div>
+              }
+            >
               <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
             </Suspense>
           </SettingsBoundary>

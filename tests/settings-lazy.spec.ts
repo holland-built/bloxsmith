@@ -53,8 +53,22 @@ test('a Settings file that cannot be fetched leaves a way out', async ({ page })
   await expect(page.getByRole('button', { name: 'Reload the page' })).toBeFocused();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('Settings could not load.')).toHaveCount(0);
+  await expect(page.getByRole('button', SETTINGS)).toBeFocused();
   // The page is usable again: a header link works, which it would not inside
   // an inert tree.
+  await page.getByRole('link', { name: 'Provision', exact: true }).click();
+  await expect(page).toHaveURL(/#provision/);
+});
+
+test('a Settings file that never arrives can be cancelled', async ({ page }) => {
+  // Never answered. Playwright drops the held request when the page closes.
+  await page.route(SHEET_FILE, () => new Promise(() => {}));
+  await page.goto('/#overview');
+  await page.getByRole('button', SETTINGS).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Loading settings…' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByText('Loading settings…')).toHaveCount(0);
+  await expect(page.getByRole('button', SETTINGS)).toBeFocused();
   await page.getByRole('link', { name: 'Provision', exact: true }).click();
   await expect(page).toHaveURL(/#provision/);
 });
