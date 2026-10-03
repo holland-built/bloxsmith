@@ -94,7 +94,16 @@ export function BrandEdit({ onClose, onSaved }) {
   // rendering, because by the time any effect runs autoFocus has already moved
   // focus onto the first input.
   const openerRef = useRef(typeof document !== 'undefined' ? document.activeElement : null)
-  useEffect(() => () => { openerRef.current?.focus?.() }, [])
+  // Only on a real close: StrictMode (development) runs this cleanup once right
+  // after mount and remounts at once, and that blip must not move focus.
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      setTimeout(() => { if (!mountedRef.current) openerRef.current?.focus?.() }, 0)
+    }
+  }, [])
 
   // Tab stays inside the dialog. The list is re-read on every press, because the
   // preview image and the buttons come and go.
