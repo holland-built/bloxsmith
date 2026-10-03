@@ -81,13 +81,15 @@
 // THE COLOUR DICTIONARY, and why half of it is a human's word.
 //
 // The copy says "red", "amber", "blue", "green", "grey", "pink". The code says
-// COLORS.crit, COLORS.warn, COLORS.accent, COLORS.ok, COLORS.other,
-// COLORS.sevHigh. This file pairs them with a HAND-WRITTEN dictionary:
+// COLORS.crit, COLORS.warn, COLORS.accent, COLORS.series, COLORS.ok,
+// COLORS.other, COLORS.sevHigh. This file pairs them with a HAND-WRITTEN dictionary:
 //
 //   crit    -> red     --color-crit       ui/src/index.css:40 (dark) :91 (light)
 //   warn    -> amber   --color-warn       ui/src/index.css:39 (dark) :90 (light)
 //   accent  -> blue    --color-accent     ui/src/index.css:36 (dark) :87 (light)
 //   ok      -> green   --color-ok         ui/src/index.css:38 (dark) :89 (light)
+//   series  -> green   --color-series     a chart line or a bar under its threshold;
+//                                         the same green as ok in dark theme
 //   other   -> grey    --color-other      ui/src/index.css:41 (dark) :92 (light)
 //   sevHigh -> pink    --color-sev-high   ui/src/index.css:42 (dark) :93 (light)
 //
@@ -261,6 +263,7 @@ const COLOUR_TOKENS = {
   warn: { word: 'amber', cssVar: '--color-warn' },
   accent: { word: 'blue', cssVar: '--color-accent' },
   ok: { word: 'green', cssVar: '--color-ok' },
+  series: { word: 'green', cssVar: '--color-series' },
   other: { word: 'grey', cssVar: '--color-other' },
   sevHigh: { word: 'pink', cssVar: '--color-sev-high' },
 }
@@ -461,12 +464,12 @@ const CLAIMS = [
   // ---- thresholds ----
   {
     panel: 'subnet-heatmap',
-    says: /blue is fine, amber past 75% full, red past 92%/,
+    says: /green is fine, amber past 75% full, red past 92%/,
     file: OVERVIEW,
     proofs: [
       { re: /const color = util >= 92 \? COLORS\.crit/, expect: 'red (COLORS.crit) at util >= 92' },
       { re: /: util >= 75 \? COLORS\.warn/, expect: 'amber (COLORS.warn) at util >= 75' },
-      { re: /util >= 75 \? COLORS\.warn : COLORS\.accent/, expect: 'blue (COLORS.accent) below 75' },
+      { re: /util >= 75 \? COLORS\.warn : COLORS\.series/, expect: 'green (COLORS.series) below 75' },
     ],
   },
   {
@@ -480,10 +483,10 @@ const CLAIMS = [
   },
   {
     panel: 'network-utilization-distribution',
-    says: /Blue is under 70% full, amber 70–85%, red past 85%/,
+    says: /Green is under 70% full, amber 70–85%, red past 85%/,
     file: NETWORK,
     proofs: [
-      { re: /label: '<70%', test: \(u\) => u < 70, color: COLORS\.accent/, expect: 'blue band is u < 70' },
+      { re: /label: '<70%', test: \(u\) => u < 70, color: COLORS\.series/, expect: 'green band is u < 70' },
       { re: /label: '70–85%', test: \(u\) => u >= 70 && u <= 85, color: COLORS\.warn/, expect: 'amber band is 70 <= u <= 85' },
       { re: /label: '>85%', test: \(u\) => u > 85, color: COLORS\.crit/, expect: 'red band is u > 85' },
     ],

@@ -601,7 +601,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
               xKey="date"
               yKey="count"
               tickFormat={fmtShortDay}
-              fill={COLORS.accent}
+              fill={COLORS.series}
               minTickGap={20}
             />
           </Suspense>

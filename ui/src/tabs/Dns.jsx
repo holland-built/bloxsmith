@@ -37,7 +37,7 @@ function headlines(qps, services, zones, zonesStatus, zonesFailed) {
   const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
   const fmt = (v) => (v == null ? null : v.toLocaleString())
   return [
-    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-accent)' },
+    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-series)' },
     { panelId: 'dns-zone-kpis', label: 'Zones', value: fmt(zonesOk ? zones.length : null), color: 'var(--color-other)' },
     { panelId: 'dns-zone-kpis', label: `Zones with issues${coverage}`, value: fmt(zonesOk ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length : null), color: 'var(--color-crit)' },
     { panelId: 'dns-services', label: 'DNS services', value: fmt(svcOk ? svc.length : null), color: 'var(--color-other)' },
@@ -126,7 +126,7 @@ function QpsHero({ panelId, qps }) {
       panelId={panelId}
       span={4}
       title="DNS Query Rate — 24h"
-      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />avg qps</span>}
     >
       {qps.loading ? (
         <Skeleton h={250} />
@@ -152,7 +152,7 @@ function QpsHero({ panelId, qps }) {
           <Suspense fallback={<Skeleton h={230} />}>
             <GradientArea
               data={chartData}
-              color={COLORS.accent}
+              color={COLORS.series}
               gradientId="qpsFill"
               unit="queries per second"
               height={230}
@@ -239,13 +239,13 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
     {
       label: 'Zones w/ issues',
       value: issueCount.toLocaleString(),
-      color: issueCount > 0 ? COLORS.crit : COLORS.accent,
+      color: issueCount > 0 ? COLORS.crit : COLORS.ok,
       note: coverage,
     },
     {
       label: 'Anomalies',
       value: anomalyCount.toLocaleString(),
-      color: anomalyCount > 0 ? COLORS.warn : COLORS.accent,
+      color: anomalyCount > 0 ? COLORS.warn : COLORS.ok,
       note: coverage,
     },
   ]

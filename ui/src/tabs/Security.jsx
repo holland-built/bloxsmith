@@ -163,7 +163,7 @@ function SeverityHero({ panelId, hub, events }) {
                 unit="events"
                 height={180}
                 xKey="hour"
-                fill={COLORS.accent}
+                fill={COLORS.series}
                 minTickGap={30}
               />
             </Suspense>
@@ -200,7 +200,7 @@ function KpiStack({ panelId, hub, events, acks }) {
 
   const cells = [
     { label: 'Unacked Critical', value: unackedCrit, color: COLORS.crit },
-    { label: 'Blocked', value: d.blocked ?? 0, color: COLORS.accent },
+    { label: 'Blocked', value: d.blocked ?? 0, color: COLORS.series },
     { label: 'Logged', value: d.logged ?? 0, color: COLORS.other },
     { label: totalCell.label, value: totalCell.value, color: COLORS.purple },
   ]

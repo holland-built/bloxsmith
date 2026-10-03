@@ -187,7 +187,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
-    Active: COLORS.accent,
+    Active: COLORS.ok,
     Degraded: COLORS.warn,
     Offline: COLORS.crit,
     Unknown: COLORS.other,
@@ -258,7 +258,6 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
 // The branch ORDER is unchanged and load-bearing: an unfinished read is not a
 // dead feed, and a dead feed is not a tenant with nothing discovered.
 function DiscoveryStatus({ feed, panelId }) {
-  const { COLORS } = useChartTheme()
   const { data, error, loading } = feed
 
   const pending = loading && !data
@@ -284,7 +283,7 @@ function DiscoveryStatus({ feed, panelId }) {
         <Empty>no discovery data for this tenant</Empty>
       ) : (
         <div>
-          <span className="text-copy font-semibold" style={{ color: COLORS.accent }}>{data.total.toLocaleString()}</span>
+          <span className="text-copy font-semibold">{data.total.toLocaleString()}</span>
           <span className="text-dim text-note ml-1.5">assets with discovery status tracked</span>
         </div>
       )}

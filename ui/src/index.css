@@ -31,49 +31,53 @@
   font-display: swap;
 }
 
-/* v6 mockup tokens — north star: .mockups/quick/...-6.html
+/* PANEL-WALL THEME (2026-10-03). The owner compared three looks of the Status
+   page built on live data, asked what Grafana would do, and chose that: panels
+   edge to edge on a charcoal canvas, green chart lines, blue buttons and links.
+   The surface, text, button and chart values below are Grafana's own, read
+   from its source (packages/grafana-data/src/themes) rather than from memory.
+   It replaces the near-colourless "Obsidian" palette of 2026-09-25 and the
+   blue-grey light theme that went with it.
 
-   OBSIDIAN DARK THEME (2026-09-25). The owner compared five dark looks, each
-   modelled on a published design system (IBM Carbon, Linear/Vercel, GitHub
-   dimmed, Grafana, a trading terminal), and picked this one: near-black
-   surfaces, hairline borders, Inter, and almost no colour. The accent is a
-   near-white, so colour on screen now means a state (red critical, amber
-   warning, green ok) and nothing else. Purple is gone from dark theme; the
-   series that used it is a light grey. Links are the text colour, so they are
-   underlined in dark theme to stay distinguishable without colour.
+   THREE ROLES THAT USED TO SHARE ONE TOKEN. In Obsidian the accent was a
+   near-white that served as the button fill, the chart line and the mark for
+   "healthy" all at once. They are separate now, because they are no longer the
+   same colour:
 
-   Light theme keeps the blue-grey surfaces and brand blue from the palette
-   before this one. Inter, the radius scale and the figure weight apply to both
-   themes, because shape and type should not change when the theme does.
+     --color-accent   what you click or focus: buttons, links, the focus ring
+     --color-series   a measured series: a chart line, a bar that is not a state
+     --color-ok       a state: healthy, valid, allowed
+
+   Series and ok are the same green in dark theme, as they are in Grafana, where
+   a bar under its threshold and a plain line are both green. They stay two
+   tokens because a chart is not a claim that something is healthy.
 
    The older notes below explain why each token exists and were measured on
    earlier palettes; their reasoning still holds, their numbers are history.
    The values now in force (WCAG, 4.5:1 for text):
 
-     dark   dim #8a8f98      5.19 on line-2 #1c1d20 (worst surface)
-            muted #9ca0a8    6.43 on line-2
-            crit #eb5757     5.25 on card #0f1011
-            series #b4b8bf   (was purple) 9+ on card; a step between
-                             the near-white accent and the grey below
-            other #80858d    4.54 on line-2 (unknown / other slices)
-            #08090a on accent #e6e6e6  15.97
-     light  dim #52667a      4.83 on line-2 #e1e9f0 (worst surface)
-            link #0063b0     5.02 on line-2
-            white on accent #1f6fb5    5.25
+     dark   dim #9799a6      5.43 on line-2 #22252b (worst surface)
+            muted #a4a6b3    6.35 on line-2
+            crit #f55f6e     4.93 on line-2, 5.55 on card #181b1f
+            ok #73bf69       6.86 on line-2
+            white on accent #3d71d9   4.60
+     light  dim #5f6469      4.97 on line-2 #e9eaec (worst surface)
+            link #1b5bd1     5.04 on line-2
+            white on accent #3871dc   4.60
 
    tests/contrast.spec.ts measures these live in both themes. */
 @theme {
-  --color-bg: #08090a;
-  --color-card: #0f1011;
-  --color-card-border: #1c1d20;
-  --color-line: #141516;
-  --color-line-2: #1c1d20;
-  --color-field: #141516;
-  --color-border: #23252a;
-  --color-border-hover: #34363c;
-  --color-txt: #f7f8f8;
-  --color-field-txt: #f7f8f8;
-  --color-muted: #9ca0a8;
+  --color-bg: #111217;
+  --color-card: #181b1f;
+  --color-card-border: #2e3036;
+  --color-line: #1f2227;
+  --color-line-2: #22252b;
+  --color-field: #111217;
+  --color-border: #3c3e45;
+  --color-border-hover: #4e5058;
+  --color-txt: #ccccdc;
+  --color-field-txt: #ccccdc;
+  --color-muted: #a4a6b3;
   /* --color-dim and --color-tick were both #777777. Measured from live computed
      styles against the surfaces they actually sit on, that was below WCAG AA's
      4.5:1 for normal text everywhere except the page background: 4.31:1 on a
@@ -91,10 +95,10 @@
      is untouched: 5.23:1 versus 16.49:1 on a card. Restoring a visible dim/muted
      step would mean moving --color-muted to about #9a9a9a, which is a second
      app-wide colour change that nothing here has failed a check on. */
-  --color-dim: #8a8f98;
-  --color-grid: #1c1d20;
-  --color-tick: #8a8f98;
-  --color-accent: #e6e6e6;
+  --color-dim: #9799a6;
+  --color-grid: #2e3036;
+  --color-tick: #9799a6;
+  --color-accent: #3d71d9;
   /* --color-link is the accent AS TEXT, and it exists because the accent fails
      AA as text while passing everywhere else it is used.
 
@@ -113,13 +117,15 @@
      #1a80ff scores 4.80 on the worst dark surface. The light block below carries
      its own value, because the same colour cannot clear 4.5 against both a near
      black and a near white. */
-  --color-link: #f7f8f8;
-  --color-purple: #b4b8bf;
-  --color-ok: #4cb782;
-  --color-warn: #f2c94c;
-  --color-crit: #eb5757;
-  --color-other: #80858d;
-  --color-sev-high: #eb5757;
+  --color-link: #6e9fff;
+  /* The colour of a measured series. See the note at the top of this block. */
+  --color-series: #73bf69;
+  --color-purple: #b877d9;
+  --color-ok: #73bf69;
+  --color-warn: #f2cc0c;
+  --color-crit: #f55f6e;
+  --color-other: #9799a6;
+  --color-sev-high: #f55f6e;
   /* ---------- radius: three roles, and the pill ----------
      Seven families were in use and the one declared token was used 7 times
      against rounded-lg's 81: rounded-card 12px, rounded-xl 12px, rounded-lg
@@ -153,7 +159,7 @@
      elements, rounded-sm 2px -> 4px on 9 legend swatches (all 8x8px), and
      rounded-xl 12px -> 12px on the palette overlay, which is a no-op. Nothing
      else changes value. */
-  --radius-surface: 10px;
+  --radius-surface: 6px;
   --radius-control: 6px;
   --radius-mark: 4px;
 
@@ -174,9 +180,12 @@
      So this is three contrast failures, not four missing tokens. #050505 is the
      dark theme's own page background, reused rather than a fourth near-black
      invented for the job. Locked down by tests/contrast.spec.ts. */
-  --color-on-accent: #08090a;
-  --color-on-crit: #08090a;
-  --color-on-ok: #08090a;
+  /* 2026-10-03: the accent is a blue again, so its label is white (4.60).
+     Crit and ok keep a near-black label, now the page colour of this palette:
+     6.01 on crit and 8.36 on ok. */
+  --color-on-accent: #ffffff;
+  --color-on-crit: #111217;
+  --color-on-ok: #111217;
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 
   /* ---------- type: three sizes, and weight carries the rest ----------
@@ -226,28 +235,30 @@
 }
 
 :root {
-  --pill-crit-bg: #2a1113;
-  --pill-crit-fg: #f08a8a;
-  --pill-warn-bg: #2a2310;
-  --pill-warn-fg: #f2d27a;
-  --pill-ok-bg: #1c1d20;
-  --pill-ok-fg: #c9ccd1;
-  --pill-neutral-bg: #1c1d20;
-  --pill-neutral-fg: #9ca0a8;
+  --pill-crit-bg: #3b1a22;
+  --pill-crit-fg: #ff8fa0;
+  --pill-warn-bg: #362e10;
+  --pill-warn-fg: #f5d565;
+  /* The ok pill is green in both themes. It was grey here and blue in light,
+     so the same word changed colour with the theme. */
+  --pill-ok-bg: #1e3324;
+  --pill-ok-fg: #96d98d;
+  --pill-neutral-bg: #2c2f35;
+  --pill-neutral-fg: #b4b6c2;
 }
 
 :root[data-theme="light"] {
-  --color-bg: #f3f6f9;
+  --color-bg: #f4f5f5;
   --color-card: #ffffff;
-  --color-card-border: #dbe3ea;
-  --color-line: #eaf0f5;
-  --color-line-2: #e1e9f0;
+  --color-card-border: #dfe0e2;
+  --color-line: #f1f2f3;
+  --color-line-2: #e9eaec;
   --color-field: #ffffff;
-  --color-border: #dbe3ea;
-  --color-border-hover: #c3d0dc;
-  --color-txt: #111111;
-  --color-field-txt: #111111;
-  --color-muted: #52667a;
+  --color-border: #c9ccd0;
+  --color-border-hover: #9fa3a8;
+  --color-txt: #24292e;
+  --color-field-txt: #24292e;
+  --color-muted: #555a5f;
   /* #6b6b6b measured 4.23:1 against --color-line-2 (#e5e5e5), the band-caption
      background on #changes — the one light surface it failed on. #656565 is the
      smallest step that clears 4.5:1 there (4.63:1) with margin, and it stays
@@ -262,18 +273,21 @@
      whole palette and worse than the finding this change came from. Chart axis
      labels are ordinary 11px text, not decoration, so they get the same value as
      dim — which is what the dark block has always done. */
-  --color-dim: #52667a;
-  --color-grid: #e1e9f0;
-  --color-tick: #52667a;
-  --color-accent: #1f6fb5;
-  /* Dark theme's accent takes near-black text (5.90); this darker blue takes
-     white (5.25). */
+  --color-dim: #5f6469;
+  --color-grid: #e9eaec;
+  --color-tick: #5f6469;
+  --color-accent: #3871dc;
+  /* White on this blue is 4.60. */
   --color-on-accent: #ffffff;
-  /* The light theme's accent-as-text is DARKER, not lighter: 4.79 on the worst
-     light surface (--color-line at #eeeeee). The dark theme's #1a80ff would
-     score 2.7 here. See the note in the dark block. */
-  --color-link: #0063b0;
-  --color-purple: #7c3aed;
+  /* The light theme's accent-as-text is DARKER than the dark theme's: 5.04 on
+     the worst light surface (--color-line-2 at #e9eaec), where the dark
+     theme's #6e9fff would score 2.2. See the note in the dark block. */
+  --color-link: #1b5bd1;
+  /* Grafana's own light green, #56a64b, is 3.02 on white: enough for a line,
+     too close to the limit for the 24px figures that are drawn in this colour.
+     This is its next step down, 4.5 on white. */
+  --color-series: #37872d;
+  --color-purple: #a352cc;
   --color-ok: #166534;
   --color-warn: #b45309;
   --color-crit: #c81e1e;
@@ -281,9 +295,9 @@
   --color-sev-high: #e5484d;
 
   /* Light ok and crit are used as TEXT as well as fills, on the page background
-     (#f3f6f9) and on --color-line-2. The earlier #16a34a / #dc2626 scored 3.04
-     and 4.45 on the page background, so axe failed 200 elements. #166534 scores
-     6.57 there and #c81e1e 5.29; both clear 4.5 on every light surface, and
+     (#f4f5f5) and on --color-line-2. The earlier #16a34a / #dc2626 scored 3.04
+     and 4.45 on the page background of the time, so axe failed 200 elements.
+     #166534 scores 6.53 on today's and #c81e1e 5.25; both clear 4.5 on every light surface, and
      white clears 5.7 or better on either as a fill. */
   --color-on-ok: #ffffff;
   --color-on-crit: #ffffff;
@@ -292,10 +306,10 @@
   --pill-crit-fg: #b91c1c;
   --pill-warn-bg: #fef3d6;
   --pill-warn-fg: #92600a;
-  --pill-ok-bg: #e6f0fd;
-  --pill-ok-fg: #0f5a9c;
-  --pill-neutral-bg: #eaf0f5;
-  --pill-neutral-fg: #3f5366;
+  --pill-ok-bg: #e3f1e5;
+  --pill-ok-fg: #14602f;
+  --pill-neutral-bg: #ecedef;
+  --pill-neutral-fg: #4a4f55;
 }
 
 /* ---------- density tokens ----------

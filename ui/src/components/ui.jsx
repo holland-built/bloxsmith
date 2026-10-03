@@ -15,7 +15,7 @@ import {
 // theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
 // which resolves real hex per theme.
 export const COLORS = {
-  accent: 'var(--color-accent)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
+  accent: 'var(--color-accent)', series: 'var(--color-series)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
   crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
   // Foregrounds for the three FILLED buttons. These are not decoration: white
   // measured 3.79:1 on dark crit, 1.74:1 on dark ok and 3.30:1 on light ok, all
@@ -50,6 +50,7 @@ export function useChartTheme() {
   return {
     COLORS: {
       accent: colors.accent,
+      series: colors.series,
       purple: colors.purple,
       warn: colors.warn,
       crit: colors.crit,
@@ -2845,6 +2846,6 @@ export function Sparkline({ values, color, h = 30 }) {
 export function utilStatus(util) {
   if (util >= 92) return { label: 'Critical', color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
   if (util >= 75) return { label: 'Warning', color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
-  return { label: 'Healthy', color: 'var(--color-accent)', bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)' }
+  return { label: 'Healthy', color: 'var(--color-ok)', bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)' }
 }
 

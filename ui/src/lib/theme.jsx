@@ -68,6 +68,7 @@ export function useThemeColors() {
   const { effective } = useTheme()
   return useMemo(() => ({
     accent: cssVar('--color-accent'),
+    series: cssVar('--color-series'),
     purple: cssVar('--color-purple'),
     warn: cssVar('--color-warn'),
     crit: cssVar('--color-crit'),
