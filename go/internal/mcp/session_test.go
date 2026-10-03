@@ -119,3 +119,30 @@ func TestInitializeOpensANewSessionAfterAnExpiredOne(t *testing.T) {
 		t.Fatalf("want a second handshake after the 404, got %d sessions issued", s.issued)
 	}
 }
+
+// QueryCube's MCP fallback is the only cube route that needs a session, so it
+// opens one itself. Callers no longer do it for it: when the direct endpoint
+// answers there is no handshake at all, and when it cannot, the MCP call must
+// still travel with a session.
+func TestQueryCubeFallbackOpensItsOwnSession(t *testing.T) {
+	s := &sessionServer{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/cubejs/v1/query", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/mcp", s.handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := New(srv.URL+"/mcp", func() string { return "Bearer k" })
+	c.QueryCube(t.Context(), "Assets", []string{"Assets.n"}, map[string]any{})
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.inits) != 1 {
+		t.Fatalf("want one handshake before the fallback call, got %v", s.inits)
+	}
+	if len(s.calls) != 1 || s.calls[0] != "Bearer k session-1" {
+		t.Fatalf("the fallback call must carry the session it just opened, got %v", s.calls)
+	}
+}

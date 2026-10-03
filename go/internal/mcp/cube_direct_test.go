@@ -45,6 +45,11 @@ func (s *cubeServer) start(t *testing.T, cubeStatus int, cubeBody string) *httpt
 		}
 		_ = json.Unmarshal(body, &req)
 		switch {
+		case req.Method == "initialize":
+			// The fallback opens its own session now.
+			w.Header().Set("Mcp-Session-Id", "s1")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": requestID(body), "result": map[string]any{}})
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_cube":
 			w.Header().Set("Content-Type", "application/json")
 			text := `{"table_name":"cube_x.parquet","row_count":1,"column_count":1,"columns":["count"],"message":"Query Result: [{'Assets.count': '7'}]. If necessary, use query_stored_data tool."}`

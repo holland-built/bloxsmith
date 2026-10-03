@@ -1151,6 +1151,12 @@ func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, 
 // queryCubeMCP is the MCP route: column names use "__" which is converted back
 // to "." for caller consistency.
 func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+	// The only cube route that needs a session, so it opens its own: callers
+	// no longer gate a cube read on a handshake the direct route never uses.
+	// Initialize logs its own failure.
+	if err := c.Initialize(ctx); err != nil {
+		return nil
+	}
 	args := map[string]any{
 		"task_description": fmt.Sprintf("Query %s for NOC dashboard analytics", cube),
 		"cube_name":        cube,
