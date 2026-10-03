@@ -69,10 +69,10 @@ const VIEW = '__layout_overview';
 // The declared JSX order in Overview.jsx's <CardGrid layoutKey="overview">.
 const DECLARED_ORDER = [
   'dns-hero',
-  'kpi-stack',
+  'host-status',
   'top-consumers',
   'subnet-heatmap',
-  'host-status',
+  'services-incidents',
   'subnet-table',
   'license-inventory',
 ];
@@ -190,11 +190,11 @@ test('P9a: dragging card A past card B persists the new order and it survives a 
   await dragOntoRightHalfOf(page, 'dns-hero', 1);
 
   const AFTER_DRAG = [
-    'kpi-stack',
+    'host-status',
     'dns-hero',
     'top-consumers',
     'subnet-heatmap',
-    'host-status',
+    'services-incidents',
     'subnet-table',
     'license-inventory',
   ];
@@ -223,10 +223,10 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
   expect(await domOrder(page)).toEqual([
     'dns-hero',
     'license-inventory',
-    'kpi-stack',
+    'host-status',
     'top-consumers',
     'subnet-heatmap',
-    'host-status',
+    'services-incidents',
     'subnet-table',
   ]);
 
@@ -239,10 +239,10 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
     'dns-hero',
     'license-inventory',
     'subnet-table',
-    'kpi-stack',
+    'host-status',
     'top-consumers',
     'subnet-heatmap',
-    'host-status',
+    'services-incidents',
   ]);
 
   // Visual order is read off the rendered boxes (top, then left) and must be
@@ -322,11 +322,11 @@ test('P9c: a keyboard-only run moves a card two positions, changes its span, and
   expect(await liveText(page)).toBe('Moved to position 3 of 7');
 
   const AFTER_MOVE = [
-    'kpi-stack',
+    'host-status',
     'top-consumers',
     'dns-hero',
     'subnet-heatmap',
-    'host-status',
+    'services-incidents',
     'subnet-table',
     'license-inventory',
   ];

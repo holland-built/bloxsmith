@@ -6,6 +6,7 @@ import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.j
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { HeadlineStrip } from '../components/kit.jsx'
+import { alarmTone } from '../lib/measured.js'
 
 // ---------- helpers ----------
 
@@ -161,12 +162,13 @@ function headlines(hosts, totalHosts, hostsStatus) {
   const b = { active: 0, degraded: 0, offline: 0, unknown: 0, other: 0 }
   if (ok) for (const h of hosts) b[statusBucket(h.status)]++
   const loaded = ok && (typeof totalHosts !== 'number' || hosts.length < totalHosts) ? ` (of ${hosts.length.toLocaleString()} loaded)` : ''
+  const n = (k) => (ok ? b[k] : null)
   const v = (k) => (ok ? b[k].toLocaleString() : null)
   return [
-    { panelId: 'infra-host-inventory', label: 'Hosts', value: ok && typeof totalHosts === 'number' ? totalHosts.toLocaleString() : null, color: 'var(--color-other)' },
-    { panelId: 'infra-host-status', label: `Offline${loaded}`, value: v('offline'), color: 'var(--color-crit)' },
-    { panelId: 'infra-host-status', label: `Degraded${loaded}`, value: v('degraded'), color: 'var(--color-warn)' },
-    { panelId: 'infra-host-status', label: `Unknown${loaded}`, value: v('unknown'), color: 'var(--color-other)' },
+    { panelId: 'infra-host-inventory', label: 'Hosts', value: ok && typeof totalHosts === 'number' ? totalHosts.toLocaleString() : null },
+    { panelId: 'infra-host-status', label: `Offline${loaded}`, value: v('offline'), tone: alarmTone(n('offline'), 'crit') },
+    { panelId: 'infra-host-status', label: `Degraded${loaded}`, value: v('degraded'), tone: alarmTone(n('degraded'), 'warn') },
+    { panelId: 'infra-host-status', label: `Unknown${loaded}`, value: v('unknown') },
   ]
 }
 

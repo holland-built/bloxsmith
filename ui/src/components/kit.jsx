@@ -1,6 +1,5 @@
-// Shared pieces for the Kentik-inspired layout: status pills, a headline
-// number strip, a red/amber/ok share bar, a
-// summary card that links to another tab, and the breadcrumb bar.
+// Shared pieces of the page chrome: status pills, the row of headline number
+// tiles, and the breadcrumb bar.
 //
 // Colours come only from tokens in index.css, so both themes and the contrast
 // tests cover them. Red means critical, amber means warning and green means
@@ -24,10 +23,15 @@ export function StatusPill({ tone = 'neutral', children }) {
   )
 }
 
-// The headline numbers across the top of a page. Each one is a button that
-// jumps to the panel about it (scrolls it into view and moves focus there), so
-// the numbers lead and the detail stays one click away. A value that is null
+// The headline numbers across the top of a page, one tile each. A tile jumps
+// to the panel about it (scrolls it into view and moves focus there), or, when
+// the detail lives on another tab, is a link to that tab. A value that is null
 // was not measured and shows a dash, never a zero.
+//
+// A tile that reports a state says so twice: the figure takes the state's
+// colour and the tile is tinted with it. The label carries the meaning in
+// words ("Hosts offline"), so the colour is never the only signal, and a tile
+// whose value is unknown takes no tone at all: a dash is not good news.
 // Scroll to a panel and move focus to it. A panel taken off the page has no
 // element, so focus goes to Arrange panels, where it can be put back.
 function jumpToPanel(panelId) {
@@ -43,74 +47,54 @@ function jumpToPanel(panelId) {
   el.focus({ preventScroll: true })
 }
 
+// min-h is the height of a tile holding all three lines (label, figure, note)
+// plus its border, so a tile with a dash and no note is already that box.
+// tests/overview-cls.spec.ts measures it.
+const TILE = 'w-full h-full min-h-[88px] flex flex-col text-left px-3 pt-2.5 pb-2 rounded-surface border no-underline text-txt cursor-pointer'
+
+// Columns by how many tiles there are, so every row of tiles is a full row at
+// every width: six go 2, 3, then 6 across; four go 2 then 4. Written out in
+// full because Tailwind only emits classes it can read as whole strings.
+const TILE_COLS = {
+  3: 'grid-cols-3',
+  4: 'grid-cols-2 md:grid-cols-4',
+  6: 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
+}
+const TILE_COLS_DEFAULT = 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
+
 export function HeadlineStrip({ items, label }) {
   return (
-    <ul aria-label={label} className="flex flex-wrap rounded-surface bg-card border border-card-border mb-3">
-      {items.map((it) => (
-        <li key={it.label} className="border-r border-line last:border-r-0">
-          <button type="button" onClick={() => jumpToPanel(it.panelId)} className={`text-left px-4 py-2.5 hover:bg-line ${FOCUS_RING}`}>
-            <span className="flex items-center gap-1.5 text-note text-muted">
-              <span aria-hidden="true" className="inline-block w-2 h-2 rounded-full" style={{ background: it.color }} />
-              {it.label}
-            </span>
-            <span className="text-figure font-semibold tabular-nums text-txt">
+    <ul aria-label={label} className={`grid gap-[var(--sp-grid-gap)] mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
+      {items.map((it) => {
+        const tone = it.value != null && TONE[it.tone] && it.tone !== 'neutral' ? it.tone : null
+        const style = tone
+          ? {
+              background: `color-mix(in srgb, ${TONE[tone].dot} 14%, var(--color-card))`,
+              borderColor: `color-mix(in srgb, ${TONE[tone].dot} 40%, var(--color-card-border))`,
+            }
+          : undefined
+        const cls = `${TILE} ${tone ? 'hover:brightness-110' : 'bg-card border-card-border hover:bg-line'} ${FOCUS_RING}`
+        const body = (
+          <>
+            <span className="text-note text-muted">{it.label}</span>
+            <span className="text-figure font-semibold tabular-nums mt-1" style={tone ? { color: TONE[tone].dot } : undefined}>
               {it.value == null ? '—' : it.value}
               {it.unit ? <span className="text-note font-normal text-muted"> {it.unit}</span> : null}
             </span>
-          </button>
-        </li>
-      ))}
+            {it.note ? <span className="text-note text-muted mt-auto pt-1">{it.note}</span> : null}
+          </>
+        )
+        return (
+          <li key={it.label} className="min-w-0">
+            {it.href ? (
+              <a href={it.href} data-tone={tone || undefined} className={cls} style={style}>{body}</a>
+            ) : (
+              <button type="button" data-tone={tone || undefined} onClick={() => jumpToPanel(it.panelId)} className={cls} style={style}>{body}</button>
+            )}
+          </li>
+        )
+      })}
     </ul>
-  )
-}
-
-// Shares of one whole as a single bar: critical, warning, healthy, other.
-// The label says what is being counted so the bar is never read as address
-// use. If any share is unknown (null) the bar is not drawn at all: a bar of
-// zeros would claim "none" about a count nobody measured.
-export function SegmentedBar({ crit, warn, ok, other = 0, label }) {
-  if ([crit, warn, ok, other].some((n) => n == null)) {
-    return <p className="text-note text-dim">{label}: breakdown unavailable</p>
-  }
-  const total = crit + warn + ok + other
-  const pct = (n) => (total ? (n / total) * 100 : 0)
-  return (
-    <div role="img" aria-label={`${label}: ${crit} critical, ${warn} warning, ${ok} healthy${other ? `, ${other} other` : ''}`} className="flex h-2 rounded-full overflow-hidden bg-line">
-      <span style={{ width: `${pct(crit)}%`, background: 'var(--color-crit)' }} />
-      <span style={{ width: `${pct(warn)}%`, background: 'var(--color-warn)' }} />
-      <span style={{ width: `${pct(ok)}%`, background: 'var(--color-ok)' }} />
-      <span style={{ width: `${pct(other)}%`, background: 'var(--color-other)' }} />
-    </div>
-  )
-}
-
-// A summary of another tab: a title, up to three counts, and a link to go
-// there. `unavailable` replaces the counts rather than showing zeros.
-export function ModuleCard({ title, counts = [], href, linkLabel, unavailable, children }) {
-  return (
-    <section className="rounded-surface bg-card border border-card-border p-4" aria-label={title}>
-      <h2 className="text-copy font-semibold mb-2">{title}</h2>
-      {unavailable ? (
-        <p className="text-note text-dim mb-3">{unavailable}</p>
-      ) : (
-        <dl className="flex gap-5 mb-3">
-          {counts.map((c) => (
-            <div key={c.label}>
-              <dt className="text-note text-muted">{c.label}</dt>
-              <dd className="text-figure font-semibold tabular-nums" style={{ color: TONE[c.tone] && c.tone !== 'neutral' ? TONE[c.tone].dot : undefined }}>
-                {c.value == null ? '—' : c.value.toLocaleString()}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {children}
-      {href && (
-        <a href={href} className={`inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-control border border-border text-copy text-txt no-underline hover:border-border-hover ${FOCUS_RING}`}>
-          {linkLabel} <span aria-hidden="true">›</span>
-        </a>
-      )}
-    </section>
   )
 }
 

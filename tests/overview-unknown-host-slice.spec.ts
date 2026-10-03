@@ -40,9 +40,15 @@ const CARD = 'xpath=ancestor::div[contains(@class,"bg-card")]';
 function hostStatusCard(page: import('@playwright/test').Page) {
   return page.locator('h2', { hasText: 'Host Status' }).first().locator(CARD);
 }
-/** One legend row: swatch <i>, name <span class="flex-1">, percentage <b>. */
+/**
+ * One legend row: swatch <i>, name <span class="text-muted flex-1">, percentage <b>.
+ * Found by the legend's own name span rather than by the word alone: since
+ * 2026-10-03 the Overview panel also lists the hosts that are not active, each
+ * with its state as a word, so "Unknown" by itself names the legend entry AND
+ * those list rows. Infra's legend has the same span, so this serves both tabs.
+ */
 function legendRow(page: import('@playwright/test').Page, name: string) {
-  return hostStatusCard(page).getByText(name, { exact: true }).locator('..');
+  return hostStatusCard(page).locator('span.text-muted.flex-1').filter({ hasText: new RegExp(`^${name}$`) }).locator('..');
 }
 
 // 10 hosts, deliberately chosen so every bucket lands on a distinct, whole
@@ -78,7 +84,7 @@ test.describe('Overview → Host Status donut (hosts reported as "unknown")', ()
     await page.goto('/#overview');
 
     const card = hostStatusCard(page);
-    await expect(card.getByText('Unknown', { exact: true })).toBeVisible();
+    await expect(legendRow(page, 'Unknown')).toBeVisible();
 
     // 1. Unknown carries the two unreported hosts.
     await expect(legendRow(page, 'Unknown').locator('b')).toHaveText('20%');

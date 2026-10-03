@@ -59,14 +59,14 @@ const CARD = 'xpath=ancestor::div[contains(@class,"bg-card")]';
 function card(page: import('@playwright/test').Page, title: string | RegExp) {
   return page.locator('h2', { hasText: title }).first().locator(CARD);
 }
-/** A KPI row: the label div's parent holds the value beside it. */
+/** A headline tile: the label's parent is the tile, which holds the value and its note. */
 function kpi(page: import('@playwright/test').Page, label: string) {
   return page.getByText(label, { exact: true }).locator('..');
 }
 
 // ---------- 1. Overview ← /api/data (whole request dead) ----------
 
-test.describe('Overview → subnet/host panels + KPI stack (/api/data down)', () => {
+test.describe('Overview → subnet/host panels + headline tiles (/api/data down)', () => {
   test('a dead /api/data shows feed-unavailable panels, never a zeroed KPI', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#overview');
@@ -74,7 +74,7 @@ test.describe('Overview → subnet/host panels + KPI stack (/api/data down)', ()
     await expect(page.getByText('Subnets feed unavailable').first()).toBeVisible();
     await expect(page.getByText('Hosts feed unavailable').first()).toBeVisible();
 
-    for (const label of ['Active Leases', 'Subnets (loaded rows)', 'Subnets ≥90% (loaded rows)']) {
+    for (const label of ['Active Leases', 'Subnets ≥90% (loaded rows)']) {
       const row = kpi(page, label);
       await expect(row.getByText('unavailable', { exact: true })).toBeVisible();
       await expect(row.getByText('0', { exact: true })).toHaveCount(0);
@@ -91,7 +91,7 @@ test.describe('Overview → subnet/host panels + KPI stack (/api/data down)', ()
     );
     await page.goto('/#overview');
 
-    for (const label of ['Active Leases', 'Subnets (loaded rows)', 'Subnets ≥90% (loaded rows)']) {
+    for (const label of ['Active Leases', 'Subnets ≥90% (loaded rows)']) {
       const row = kpi(page, label);
       await expect(row.getByText('0', { exact: true })).toBeVisible();
       await expect(row.getByText('unavailable', { exact: true })).toHaveCount(0);

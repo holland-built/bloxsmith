@@ -178,8 +178,8 @@ function headlines(filters) {
   const d = filters.data
   const ok = !filters.loading && !filters.error && d?.availability !== 'error'
   return [
-    { panelId: 'assets-filter-bar', label: 'Assets', value: ok && typeof d?.total === 'number' ? d.total.toLocaleString() : null, color: 'var(--color-other)' },
-    { panelId: 'assets-filter-bar', label: 'Asset types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null, color: 'var(--color-other)' },
+    { panelId: 'assets-filter-bar', label: 'Assets', value: ok && typeof d?.total === 'number' ? d.total.toLocaleString() : null },
+    { panelId: 'assets-filter-bar', label: 'Asset types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null },
   ]
 }
 

@@ -68,13 +68,12 @@ Panels cannot be created or deleted: the set on each tab is fixed and ships with
 
 Estate at a glance. Refreshes every 30 seconds.
 
-- **Headline numbers**: a strip across the top with DNS queries per second, hosts, hosts offline and licences. Click one to jump to the panel it comes from.
-- **Summary column**: on wide screens, a column on the right summarises other tabs: subnet fullness, hosts, security events, service health and incidents, each with a link to its tab. A feed that is down says "unavailable" rather than showing zero, and security counts that come from the latest events only say so.
+- **Headline numbers**: a row of tiles across the top: DNS queries per second, hosts, hosts offline, subnets at 90% or more, active leases, and security events that are critical or high. A tile that counts something bad is red or amber when there is any and green when there is none. A count that could not be read is a dash with no colour, and says "unavailable". Click a tile to jump to its panel, or to the tab that holds the detail.
 - **DNS Query Rate — 24h** — average QPS trend, with the change since the first hour in the window.
-- **KPI stack** — active leases, total subnets, subnets at 90%+ utilization. Each tile links through to the filtered Network view.
 - **Top Consumers** — the 12 subnets with the most addresses *used*. Ranked by count, not percentage, because a wall of 100%-full /32 links tells you nothing.
 - **Subnet Heatmap** — utilization per subnet, worst first, capped at 288 cells. /29–/32 infra links are excluded.
-- **Host Status** — active / degraded / offline split.
+- **Host Status** — active / degraded / offline split, with the hosts that are not active named underneath, worst first.
+- **Services and incidents** — each Infoblox service with how many of its machines are online, then the open incidents, worst first, with links to the Incidents and Infra tabs. A feed that is down says so rather than showing an empty list.
 - **Top Subnets by Utilization** — sortable, filterable, exports to CSV.
 - **License Inventory** — SKU, state, expiry, and time remaining. Under 30 days is red, under 90 amber.
 

@@ -510,15 +510,6 @@ const CLAIMS = [
     proofs: [{ re: /\.sort\(\(a, b\) => a\.free - b\.free\)/, expect: 'rows are ordered by free addresses ascending, not by util' }],
   },
   {
-    panel: 'kpi-stack',
-    says: /how many of those are at least 90% full/,
-    file: OVERVIEW,
-    proofs: [
-      { re: /const rowCritSubnets = measured\.filter\(\(s\) => num\(s\.util\) >= 90\)/, expect: 'the row-derived count is util >= 90' },
-      { re: /hash: 'network\?minUtil=90'/, expect: 'the tile links to the same 90 threshold' },
-    ],
-  },
-  {
     panel: 'daily-open-issues',
     says: /subnets 85% full or more \(tiny networks under 16 addresses left out\)/,
     file: DAILY,
@@ -872,18 +863,6 @@ const CLAIMS = [
   // Every row below answers a sentence the FACT lexicon flagged and nothing was
   // checking. They are grouped by where they came from, not by kind, so the
   // next person can see what the detector actually bought.
-  {
-    panel: 'kpi-stack',
-    says: /Click any of the three to open the matching list\./,
-    file: OVERVIEW,
-    proofs: [
-      {
-        re: /const cells = \[\n\s*\{ label: 'Active Leases',[\s\S]{0,400}?label: 'Subnets'[\s\S]{0,400}?label: 'Subnets ≥90%'[\s\S]{0,400}?\n\s*\]\n/,
-        expect: 'the KpiStack cells array holds three entries — Active Leases, Subnets, Subnets ≥90% — and closes after the third',
-      },
-      { re: /onClick=\{\(\) => \{ location\.hash = c\.hash \}\}/, expect: 'each of those cells navigates to its own hash when clicked' },
-    ],
-  },
   {
     panel: 'daily-hosts-attention',
     says: /The count in the header shows a dash, not 0, when the machines could not be read\./,

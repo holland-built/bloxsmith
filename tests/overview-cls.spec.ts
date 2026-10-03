@@ -152,51 +152,44 @@ test('the host-status legend never grows taller than the donut it sits beside', 
   ).toBeLessThanOrEqual(1);
 });
 
-// The caption under each sparkline is reserved by rendering a hidden copy of
-// itself, so that its height is the settled height BY CONSTRUCTION and cannot
-// drift when the font, the line-height or the wording changes.
-//
-// Height equality alone would not prove that: a `h-[48px]` spacer, or the same
-// caption at `opacity: 0`, would both satisfy it. So the mechanism is asserted
-// too — the text is really there, it is really `visibility: hidden`, and it is
-// really out of the accessibility tree. `opacity: 0` would leave it selectable
-// and readable aloud; `display: none` would reserve nothing at all.
-test('the kpi sparkline caption is reserved by a hidden copy of itself', async ({ page }) => {
+// The row of number tiles has one height whatever a tile holds: a dash while
+// /api/data is in flight, a figure after, and under some figures a note. The
+// panel these numbers used to live in ("Leases & Subnets") grew 54px when the
+// payload landed and moved every row beneath it, which is what the test that
+// stood here guarded. The tiles sit above the whole grid, so a change in their
+// height would move all of it.
+test('the headline tiles are the same height before and after /api/data lands', async ({ page }) => {
   await installBaselineWorld(page);
+
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/data', async (route) => {
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(dataPayload()),
+    });
+  });
+
   await page.goto('/#overview');
 
-  const cell = '[data-panel-id="kpi-stack"] [role="button"]';
-  // The sparkline itself, not the panel: waiting for the panel would let the
-  // placeholder state satisfy the wait, and then BOTH measurements below would
-  // observe the placeholder and agree with each other against broken code.
-  await expect(page.locator(`${cell} svg`).first()).toBeVisible({ timeout: 20_000 });
-  const withSparkline = await boxH(page, cell);
+  const strip = page.getByRole('list', { name: 'Headline numbers' });
+  await expect(strip.getByRole('listitem')).toHaveCount(6);
+  // A dash, not a zero and not a skeleton: the tile is already its final box.
+  await expect(strip.getByRole('button', { name: 'Hosts —', exact: true })).toBeVisible();
+  const loading = (await strip.boundingBox())!.height;
 
-  // The same cell with its sparkline suppressed. One measured subnet is not
-  // enough to draw a line, which is the real condition the placeholder branch
-  // covers — and it is also a real tenant: a brand-new estate with one subnet.
-  const one = structuredClone(dataPayload()) as { subnets: unknown[] };
-  one.subnets = [one.subnets[0]];
-  await page.route('**/api/data', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(one) }),
-  );
-  await page.reload();
-  // Wait for the sparkline to be GONE, so the second measurement is known to be
-  // of the branch under test rather than of a page that had not updated yet.
-  await expect(page.locator(`${cell} svg`).first()).toBeHidden({ timeout: 20_000 });
-  const withoutSparkline = await boxH(page, cell);
+  release();
+  await expect(strip.getByRole('button', { name: /^Hosts \d/ })).toBeVisible({ timeout: 20_000 });
+  // The note under a figure is the third and last line a tile can hold, so the
+  // settled read is taken once one is on screen.
+  await expect(strip.getByText(/at 70–89%/)).toBeVisible();
+  const settled = (await strip.boundingBox())!.height;
 
   expect(
-    Math.abs(withSparkline - withoutSparkline),
-    `a kpi cell is ${withSparkline}px with a sparkline and ${withoutSparkline}px without one, ` +
-      `so an estate that has one shifts against an estate that does not`,
+    Math.abs(settled - loading),
+    `the tile row is ${loading}px while /api/data is in flight and ${settled}px after, ` +
+      `so every panel under it moves when the payload lands`,
   ).toBeLessThanOrEqual(1);
-
-  const hidden = page.locator(`${cell} [aria-hidden="true"]`).first();
-  await expect(hidden).toHaveText(/util of loaded rows/);
-  await expect(hidden).toHaveCSS('visibility', 'hidden');
-  // Hidden from assistive technology as well as from the eye: the caption
-  // describes a sparkline that is not being drawn, so reading it aloud would be
-  // a lie about what is on screen.
-  await expect(page.locator(cell).first()).not.toHaveAccessibleName(/util of loaded rows/);
 });

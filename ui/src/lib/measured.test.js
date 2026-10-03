@@ -11,7 +11,7 @@ import test from 'node:test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cmpMaybe, DASH, freeOf, num } from './measured.js'
+import { alarmTone, cmpMaybe, DASH, freeOf, num } from './measured.js'
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
@@ -90,4 +90,14 @@ test('no tab or component redefines what this module owns', () => {
     [],
     `import these from lib/measured.js instead of redefining them:\n${offenders.join('\n')}`,
   )
+})
+
+test('alarmTone: any is the alarm, none is ok, and unknown is no tone at all', () => {
+  assert.equal(alarmTone(3, 'crit'), 'crit')
+  assert.equal(alarmTone(1, 'warn'), 'warn')
+  assert.equal(alarmTone(0, 'crit'), 'ok')
+  // The case the helper exists for: a count that could not be read must not be
+  // painted green.
+  assert.equal(alarmTone(null, 'crit'), undefined)
+  assert.equal(alarmTone(undefined, 'crit'), undefined)
 })

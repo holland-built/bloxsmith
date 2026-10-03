@@ -873,7 +873,13 @@ export function CardGrid({ className = '', layoutKey, children }) {
   // name, and it is a poor one on purpose: it is at least true, where guessing
   // a title from an id would not be.
   const nameOf = (id) => titlesRef.current.get(id) || id
-  const hiddenTiles = (layout?.hidden ?? []).map((id) => ({ id, name: nameOf(id) }))
+  //
+  // Only tiles this page still has. A saved layout can name one that has since
+  // been removed from the page (Overview's "Leases & Subnets" became headline
+  // tiles on 2026-10-03), and listing that would offer a Put back button that
+  // puts nothing back, under the only name left for it: its raw id.
+  const presentIds = new Set(Children.toArray(ordered).map((c) => c?.props?.panelId).filter(Boolean))
+  const hiddenTiles = (layout?.hidden ?? []).filter((id) => presentIds.has(id)).map((id) => ({ id, name: nameOf(id) }))
 
   // What "On this page" lists, in the order the page is actually in.
   //
@@ -2424,7 +2430,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
           )}
         </div>
       )}
-      {/* A managed panel with no title (Overview's KPI stack) has no header to
+      {/* A managed panel with no title (the DNS tab's zone counts) has no header to
           put the handle in. Absolutely positioned rather than given a header
           of its own: adding a header row would change that card's layout, and
           "zero visual change until you actually use the feature" is the rule
@@ -2822,25 +2828,6 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
 
 export function Skeleton({ h = 140 }) {
   return <div className="animate-pulse motion-reduce:animate-none bg-line rounded-control w-full" style={{ height: h }} />
-}
-
-export function Sparkline({ values, color, h = 30 }) {
-  if (!values || values.length < 2) return null
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const pts = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * 100
-      const y = h - ((v - min) / range) * h
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 100 ${h}`} preserveAspectRatio="none">
-      <polyline fill="none" stroke={color} strokeWidth="1.8" vectorEffect="non-scaling-stroke" points={pts} />
-    </svg>
-  )
 }
 
 export function utilStatus(util) {

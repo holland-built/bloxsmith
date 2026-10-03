@@ -8,6 +8,7 @@ import { useHashParams } from '../lib/hash.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
+import { alarmTone } from '../lib/measured.js'
 
 // ---------- main ----------
 
@@ -36,11 +37,12 @@ function headlines(qps, services, zones, zonesStatus, zonesFailed) {
   const svc = services.data?.rows
   const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
   const fmt = (v) => (v == null ? null : v.toLocaleString())
+  const withIssues = zonesOk ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length : null
   return [
-    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-series)' },
-    { panelId: 'dns-zone-kpis', label: 'Zones', value: fmt(zonesOk ? zones.length : null), color: 'var(--color-other)' },
-    { panelId: 'dns-zone-kpis', label: `Zones with issues${coverage}`, value: fmt(zonesOk ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length : null), color: 'var(--color-crit)' },
-    { panelId: 'dns-services', label: 'DNS services', value: fmt(svcOk ? svc.length : null), color: 'var(--color-other)' },
+    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec' },
+    { panelId: 'dns-zone-kpis', label: 'Zones', value: fmt(zonesOk ? zones.length : null) },
+    { panelId: 'dns-zone-kpis', label: `Zones with issues${coverage}`, value: fmt(withIssues), tone: alarmTone(withIssues, 'crit') },
+    { panelId: 'dns-services', label: 'DNS services', value: fmt(svcOk ? svc.length : null) },
   ]
 }
 
