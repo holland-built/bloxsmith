@@ -128,7 +128,7 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
     { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null), color: 'var(--color-other)' },
     { panelId: 'network-utilization-distribution', label: `Over 85%${scope}`, value: fmt(band((u) => u > 85)), color: 'var(--color-crit)' },
     { panelId: 'network-utilization-distribution', label: `70–85%${scope}`, value: fmt(band((u) => u >= 70 && u <= 85)), color: 'var(--color-warn)' },
-    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), color: 'var(--color-accent)' },
+    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), color: 'var(--color-series)' },
   ]
 }
 
@@ -137,7 +137,7 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
 function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   const { COLORS } = useChartTheme()
   const BANDS = [
-    { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.accent },
+    { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.series },
     { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
     { key: '85-100', label: '>85%', test: (u) => u > 85, color: COLORS.crit },
   ]

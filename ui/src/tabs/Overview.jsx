@@ -199,7 +199,7 @@ function headlines(dns, data, licenses, sliceStatus) {
   const lic = licenses.data?.licenses
   const licOk = !licenses.loading && !licenses.error && licenses.data?.status !== 'error' && Array.isArray(lic)
   return [
-    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-accent)' },
+    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec', color: 'var(--color-series)' },
     { panelId: 'host-status', label: 'Hosts', value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null, color: 'var(--color-ok)' },
     { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: offline == null ? null : offline.toLocaleString(), color: 'var(--color-crit)' },
     { panelId: 'license-inventory', label: 'Licences', value: licOk ? lic.length.toLocaleString() : null, color: 'var(--color-other)' },
@@ -437,7 +437,7 @@ function DnsHero({ dns, panelId }) {
       // the popup and the heading on screen are the same phrase to look for.
       panelName="DNS Query Rate — 24h"
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
-      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />avg qps</span>}
     >
       {dns.loading ? (
         <Skeleton h={250} />
@@ -461,7 +461,7 @@ function DnsHero({ dns, panelId }) {
           <Suspense fallback={<Skeleton h={230} />}>
             <GradientArea
               data={chartData}
-              color={COLORS.accent}
+              color={COLORS.series}
               gradientId="dnsFill"
               unit="queries per second"
               height={230}
@@ -495,7 +495,7 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
   const unmeasured = subnets.length - measured.length
 
   const cells = [
-    { label: 'Active Leases', value: leasesDown ? DASH : activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases', status: leasesStatus },
+    { label: 'Active Leases', value: leasesDown ? DASH : activeLeases.toLocaleString(), color: COLORS.series, hash: 'network?focus=leases', status: leasesStatus },
     hasSubnetsTotal
       ? { label: 'Subnets', value: totals.subnets.toLocaleString(), color: COLORS.purple, hash: 'network' }
       : { label: 'Subnets (loaded rows)', value: subnetsDown ? DASH : subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network', status: subnetsStatus },
@@ -766,7 +766,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading =
                 const addr = s.addr || s.cidr
                 const r = Math.floor(i / cols)
                 const c = i % cols
-                const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.accent
+                const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.series
                 const opacity = Math.max(0.15, Math.min(1, util / 100))
                 return (
                   <rect
@@ -849,7 +849,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading =
             )}
           </div>
           <div className="flex gap-3.5 mt-2 text-note text-muted">
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />ok</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />ok</span>
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
           </div>
@@ -888,7 +888,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
-    Active: COLORS.accent,
+    Active: COLORS.ok,
     Degraded: COLORS.warn,
     Offline: COLORS.crit,
     Unknown: COLORS.other,

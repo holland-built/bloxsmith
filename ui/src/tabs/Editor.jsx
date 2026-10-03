@@ -244,7 +244,7 @@ export default function Editor() {
             onClick={() => { setType(t.key); setEditId('') }}
             className="px-2.5 py-1.5 rounded-control border text-copy"
             style={type === t.key
-              ? { borderColor: COLORS.accent, background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
+              ? { borderColor: COLORS.accent, background: 'var(--color-line-2)', color: 'var(--color-txt)' }
               : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
           >
             {t.label}

@@ -533,7 +533,7 @@ export default function App() {
             layout entirely — the header's sticky positioning and the flex rows
             below it see exactly the box tree they saw before. */}
         <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
-          <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
+          <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-card-border bg-card sticky top-0 z-10">
             <button
               type="button"
               aria-label="Edit brand"

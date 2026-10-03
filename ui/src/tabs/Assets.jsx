@@ -249,7 +249,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
                 0 — see assets.go's assembleAssetFilters. */}
             {typeof d?.total === 'number' ? (
               <>
-                <span className="text-copy font-semibold" style={{ color: COLORS.accent }}>
+                <span className="text-copy font-semibold">
                   {d.total.toLocaleString()}
                 </span>
                 <span className="text-dim text-note ml-1.5">assets discovered</span>

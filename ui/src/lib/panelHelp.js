@@ -58,7 +58,7 @@ export const PANEL_HELP = {
     look: 'Ranked by addresses in use, not by how full they are, so tiny always-full links do not crowd out real capacity problems. Click a bar to open that subnet.',
   },
   'subnet-heatmap': {
-    what: 'One square per subnet, coloured by how full it is: blue is fine, amber past 75% full, red past 92%.',
+    what: 'One square per subnet, coloured by how full it is: green is fine, amber past 75% full, red past 92%.',
     look: 'Only the fullest few hundred are drawn, worst first. Point at a square, or drag a finger across them, to read its name and figure. Click or tap one to open that subnet.',
   },
   'host-status': {
@@ -99,7 +99,7 @@ export const PANEL_HELP = {
   // ---- Network ----
   'network-utilization-distribution': {
     what: 'How many of your subnets are lightly used, filling up, or nearly out of addresses.',
-    look: 'Blue is under 70% full, amber 70–85%, red past 85%. A subnet that reports no figure is left out of the bars and counted in the line at the top right.',
+    look: 'Green is under 70% full, amber 70–85%, red past 85%. A subnet that reports no figure is left out of the bars and counted in the line at the top right.',
   },
   'network-ipam-spaces': {
     what: 'The twelve address spaces handing out the most addresses right now.',

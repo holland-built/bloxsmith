@@ -3,15 +3,15 @@
 // summary card that links to another tab, and the breadcrumb bar.
 //
 // Colours come only from tokens in index.css, so both themes and the contrast
-// tests cover them. Red means critical, amber means warning, and the accent
-// blue means healthy, the same meaning the charts already use.
+// tests cover them. Red means critical, amber means warning and green means
+// healthy, the same meaning the charts already use.
 import { useEffect, useRef, useState } from 'react'
 import { FOCUS_RING } from './ui.jsx'
 
 const TONE = {
   crit: { bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)', dot: 'var(--color-crit)' },
   warn: { bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)', dot: 'var(--color-warn)' },
-  ok: { bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)', dot: 'var(--color-accent)' },
+  ok: { bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)', dot: 'var(--color-ok)' },
   neutral: { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)', dot: 'var(--color-other)' },
 }
 
@@ -78,7 +78,7 @@ export function SegmentedBar({ crit, warn, ok, other = 0, label }) {
     <div role="img" aria-label={`${label}: ${crit} critical, ${warn} warning, ${ok} healthy${other ? `, ${other} other` : ''}`} className="flex h-2 rounded-full overflow-hidden bg-line">
       <span style={{ width: `${pct(crit)}%`, background: 'var(--color-crit)' }} />
       <span style={{ width: `${pct(warn)}%`, background: 'var(--color-warn)' }} />
-      <span style={{ width: `${pct(ok)}%`, background: 'var(--color-accent)' }} />
+      <span style={{ width: `${pct(ok)}%`, background: 'var(--color-ok)' }} />
       <span style={{ width: `${pct(other)}%`, background: 'var(--color-other)' }} />
     </div>
   )
