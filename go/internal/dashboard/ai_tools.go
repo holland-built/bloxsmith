@@ -50,7 +50,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		// Python opens a fresh MCP session per tool (_mcp_session); the Go client
 		// is persistent, so (re)initialize the session before each call.
 		if err := s.Mcp.Initialize(ctx); err != nil {
-			return "Tool error: " + err.Error()
+			return "Tool error: " + failReason(err, err.Error())
 		}
 		// mcp.Search returns nil on a failed search (transport error, non-2xx,
 		// or an unparseable/unexpected payload) and a non-nil (possibly empty)
@@ -59,9 +59,9 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		// from, would collapse a dead search into "No entities found.",
 		// telling the model (and the human it relays to) there are no
 		// entities when the truth is the search never ran.
-		hits := s.Mcp.Search(ctx, aiStr(args["query"]))
+		hits, err := s.Mcp.SearchErr(ctx, aiStr(args["query"]))
 		if hits == nil {
-			return aiLookupFailed("entities", "could not reach the entity search service")
+			return aiLookupFailed("entities", failReason(err, "could not reach the entity search service"))
 		}
 		if len(hits) == 0 {
 			return "No entities found."

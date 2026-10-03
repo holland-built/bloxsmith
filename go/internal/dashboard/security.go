@@ -201,6 +201,43 @@ func (s *Service) verifyOutcome(blockListID, domain string, wantPresent bool, de
 	}
 }
 
+// writeSessionFailure is the answer when the MCP session for a block or unblock
+// cannot be opened, or nil when it can. No write was sent, so it is "rejected"
+// (safe to retry), and the error says why when Infoblox said.
+func (s *Service) writeSessionFailure(ctx context.Context) map[string]any {
+	if s.Mcp == nil {
+		return map[string]any{"ok": false, "outcome": "invalid", "error": "internal error"}
+	}
+	if err := s.Mcp.Initialize(ctx); err != nil {
+		if r := mcp.Reason(err); r != "" {
+			return map[string]any{"ok": false, "outcome": "rejected", "error": r}
+		}
+		return map[string]any{"ok": false, "outcome": "invalid", "error": "internal error"}
+	}
+	return nil
+}
+
+// transportFailure answers a write whose call failed on the wire. A refusal
+// (HTTP 403) says why. A timeout is "unverified": the reply never came, so the
+// write may already have landed, and the person is told to re-check before
+// retrying. It used to be "rejected", which the Security tab words as "nothing
+// was applied, safe to retry". Every other transport failure is unchanged.
+func transportFailure(verb, domain, blockListID string, err error, detail string) map[string]any {
+	res := map[string]any{
+		"ok": false, "outcome": "rejected", "domain": domain, "list": blockListID,
+		"error": verb + " request rejected: " + err.Error(), "detail": detail,
+	}
+	switch r := mcp.Reason(err); {
+	case r == "":
+	case errors.Is(err, context.DeadlineExceeded):
+		res["outcome"] = "unverified"
+		res["error"] = r + " The change may already have applied: refresh and re-check before retrying."
+	default:
+		res["error"] = r
+	}
+	return res
+}
+
 // BlockDomain is block_domain (server.py:4574 / _block_domain_async 4556).
 func (s *Service) BlockDomain(ctx context.Context, domain, blockListID string) map[string]any {
 	if !isFQDN(domain) {
@@ -212,8 +249,8 @@ func (s *Service) BlockDomain(ctx context.Context, domain, blockListID string) m
 	if !blockListRE.MatchString(blockListID) {
 		return map[string]any{"ok": false, "outcome": "invalid", "error": "invalid block list id"}
 	}
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
-		return map[string]any{"ok": false, "outcome": "invalid", "error": "internal error"}
+	if res := s.writeSessionFailure(ctx); res != nil {
+		return res
 	}
 
 	// No success predicate: the success shape for make_patch_request is
@@ -229,10 +266,7 @@ func (s *Service) BlockDomain(ctx context.Context, domain, blockListID string) m
 			{"item": domain, "description": "Blocked via NOC dashboard"}}},
 	}, nil)
 	if isMcpTransportError(err) {
-		return map[string]any{
-			"ok": false, "outcome": "rejected", "domain": domain, "list": blockListID,
-			"error": "block request rejected: " + err.Error(), "detail": detail,
-		}
+		return transportFailure("block", domain, blockListID, err, detail)
 	}
 
 	return s.verifyOutcome(blockListID, domain, true, detail)
@@ -246,8 +280,8 @@ func (s *Service) UnblockDomain(ctx context.Context, domain, blockListID string)
 	if blockListID == "" || !blockListRE.MatchString(blockListID) {
 		return map[string]any{"ok": false, "outcome": "invalid", "error": "block list not configured (set BLOCK_LIST_ID)"}
 	}
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
-		return map[string]any{"ok": false, "outcome": "invalid", "error": "internal error"}
+	if res := s.writeSessionFailure(ctx); res != nil {
+		return res
 	}
 
 	// See BlockDomain: no success predicate, same rationale.
@@ -258,10 +292,7 @@ func (s *Service) UnblockDomain(ctx context.Context, domain, blockListID string)
 		"body":             map[string]any{"items": []any{domain}},
 	}, nil)
 	if isMcpTransportError(err) {
-		return map[string]any{
-			"ok": false, "outcome": "rejected", "domain": domain, "list": blockListID,
-			"error": "unblock request rejected: " + err.Error(), "detail": detail,
-		}
+		return transportFailure("unblock", domain, blockListID, err, detail)
 	}
 
 	return s.verifyOutcome(blockListID, domain, false, detail)

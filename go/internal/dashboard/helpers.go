@@ -17,6 +17,15 @@ import (
 // Service bundles the two dependencies every fetcher needs. Mcp is the
 // hand-rolled MCP client used only by the AI tool loop (RunAITool, Phase 1h);
 // the /api/data read path deliberately uses Rest (the parquet path is broken).
+// failReason is the sentence a panel shows for a failed Infoblox call: the one
+// mcp.Reason has for it (a refused call, a call that timed out), else fallback.
+func failReason(err error, fallback string) string {
+	if r := mcp.Reason(err); r != "" {
+		return r
+	}
+	return fallback
+}
+
 type Service struct {
 	Rest  *rest.Client
 	Cache *cache.Cache

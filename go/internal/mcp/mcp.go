@@ -111,6 +111,43 @@ var ErrTransport = errors.New("mcp: transport error")
 // reached the tool; the write may or may not have landed upstream.
 var ErrRejected = errors.New("mcp: rejected")
 
+// StatusError is a call the Infoblox gateway answered with an HTTP status >= 400.
+// Its text is what post always returned, so no log line or test that reads the
+// text changes; Reason reads the Code.
+type StatusError struct {
+	Method string
+	Code   int
+	Why    string // the gateway's own words, when it gave any
+}
+
+func (e *StatusError) Error() string {
+	if e.Why != "" {
+		return fmt.Sprintf("mcp %s: http %d: %s", e.Method, e.Code, e.Why)
+	}
+	return fmt.Sprintf("mcp %s: http %d", e.Method, e.Code)
+}
+
+// RefusedReason is what an operator is told when Infoblox answers 403. The
+// gateway's "Authorization denied" has meant one thing so far: the signed-in
+// user is not in the ib-mcp-server-user group (Jira PTCI-4674, enforced from
+// 2026-09-17). Another cause of a 403 is possible, so the sentence says
+// "probably".
+const RefusedReason = "Infoblox refused the call (HTTP 403). This key's user probably needs the ib-mcp-server-user group (Infoblox ticket PTCI-4674)."
+
+// Reason turns a failed call into a sentence an operator can act on, or "" when
+// the failure has no better wording than the caller's own. It is read from the
+// error, never from its text.
+func Reason(err error) string {
+	var se *StatusError
+	switch {
+	case errors.As(err, &se) && se.Code == http.StatusForbidden:
+		return RefusedReason
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Sprintf("Infoblox did not answer within %ds.", int(callTimeout.Round(time.Second)/time.Second))
+	}
+	return ""
+}
+
 // ErrIDMismatch is returned by post when a reply carries a JSON-RPC id that is
 // not the id we asked with — i.e. the answer belongs to a different question.
 //
@@ -318,10 +355,7 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 			}
 			c.mu.Unlock()
 		}
-		if why := refusalReason(resp.Body); why != "" {
-			return nil, fmt.Errorf("mcp %s: http %d: %s", method, resp.StatusCode, why)
-		}
-		return nil, fmt.Errorf("mcp %s: http %d", method, resp.StatusCode)
+		return nil, &StatusError{Method: method, Code: resp.StatusCode, Why: refusalReason(resp.Body)}
 	}
 	if notify {
 		return nil, nil
@@ -1134,15 +1168,23 @@ func (c *Client) queryCubeDirect(ctx context.Context, measures []string, opts ma
 // QueryCube is _mcp_query_cube (server.py:3147): a Cube.js query, asked of the
 // Portal's Cube.js endpoint first and of the MCP only when that endpoint cannot
 // answer (see queryCubeDirect). Either way a nil slice means the query failed
-// and an empty one means there are no rows.
+// and an empty one means there are no rows. Callers that can show the reason
+// use QueryCubeErr.
 func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+	rows, _ := c.QueryCubeErr(ctx, cube, measures, opts)
+	return rows
+}
+
+// QueryCubeErr is QueryCube that also says why a nil slice is nil. The error is
+// what failed; Reason turns it into a sentence for the panel.
+func (c *Client) QueryCubeErr(ctx context.Context, cube string, measures []string, opts map[string]any) ([]map[string]any, error) {
 	rows, fallback, err := c.queryCubeDirect(ctx, measures, opts)
 	if err != nil {
 		log.Printf("mcp: QueryCube %s: direct query: %v", cube, err)
-		return nil
+		return nil, err
 	}
 	if fallback == "" {
-		return rows
+		return rows, nil
 	}
 	log.Printf("mcp: QueryCube %s: direct query not used (%s), asking the MCP", cube, fallback)
 	return c.queryCubeMCP(ctx, cube, measures, opts)
@@ -1150,12 +1192,12 @@ func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, 
 
 // queryCubeMCP is the MCP route: column names use "__" which is converted back
 // to "." for caller consistency.
-func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []string, opts map[string]any) ([]map[string]any, error) {
 	// The only cube route that needs a session, so it opens its own: callers
 	// no longer gate a cube read on a handshake the direct route never uses.
 	// Initialize logs its own failure.
 	if err := c.Initialize(ctx); err != nil {
-		return nil
+		return nil, err
 	}
 	args := map[string]any{
 		"task_description": fmt.Sprintf("Query %s for NOC dashboard analytics", cube),
@@ -1168,7 +1210,7 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 	text, err := c.CallTool(ctx, "infoblox-portal_query_cube", args)
 	if err != nil {
 		log.Printf("mcp: QueryCube %s: %v", cube, err)
-		return nil
+		return nil, err
 	}
 	var rows []map[string]any
 	if inline, ok := parseInline(text); ok {
@@ -1177,13 +1219,13 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 		table, rowCount, why := storedMeta(text)
 		if why != "" {
 			log.Printf("mcp: QueryCube %s: unusable stored result: %s", cube, why)
-			return nil
+			return nil, errors.New("unusable stored result: " + why)
 		}
 		var qerr error
 		rows, qerr = c.queryAllRows(ctx, table, rowCount, cube+" cube")
 		if qerr != nil {
 			log.Printf("mcp: QueryCube %s: %v", cube, qerr)
-			return nil
+			return nil, qerr
 		}
 	}
 	for _, r := range rows {
@@ -1194,32 +1236,38 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 			}
 		}
 	}
-	return rows
+	return rows, nil
 }
 
 // Search is _mcp_search (server.py:3184): network entity search, 256-char cap
-// on the user filter.
+// on the user filter. Callers that can show the reason use SearchErr.
 func (c *Client) Search(ctx context.Context, query string) []any {
+	hits, _ := c.SearchErr(ctx, query)
+	return hits
+}
+
+// SearchErr is Search that also says why a nil result is nil.
+func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 	if len(query) > 256 {
 		query = query[:256]
 	}
 	text, err := c.CallTool(ctx, "infoblox-portal_network_entity_search", map[string]any{"query": query})
 	if err != nil {
 		log.Printf("mcp: Search: %v", err)
-		return nil
+		return nil, err
 	}
 	var data any
 	if err := json.Unmarshal([]byte(text), &data); err != nil {
 		log.Printf("mcp: Search: response is not JSON")
-		return nil
+		return nil, errors.New("response is not JSON")
 	}
 	if lst, ok := data.([]any); ok {
-		return lst
+		return lst, nil
 	}
 	if m, ok := data.(map[string]any); ok {
 		for _, key := range []string{"data", "results", "items"} {
 			if v, ok := m[key].([]any); ok {
-				return v
+				return v, nil
 			}
 		}
 	}
@@ -1229,5 +1277,5 @@ func (c *Client) Search(ctx context.Context, query string) []any {
 	// arrived and nothing in it could be read as results. It gets a line like
 	// the other two, with no part of the reply in it.
 	log.Printf("mcp: Search: response shape not recognised")
-	return nil
+	return nil, errors.New("response shape not recognised")
 }

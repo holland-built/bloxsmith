@@ -32,10 +32,10 @@ import (
 // presence of "unavailable" — which, before this field existed, was also set
 // on a genuine empty tenant and so could not tell the two apart.
 func (s *Service) FetchActions(ctx context.Context) map[string]any {
-	raw, ok := s.actionsAsync(ctx)
+	raw, ok, err := s.actionsAsync(ctx)
 	if !ok {
 		return map[string]any{"actions": []any{},
-			"unavailable":  "IQ Actions service unavailable (upstream error).",
+			"unavailable":  failReason(err, "IQ Actions service unavailable (upstream error)."),
 			"availability": "error"}
 	}
 	data, isMap := raw.(map[string]any)
@@ -70,9 +70,12 @@ const actionsPageSize = 50
 // until pagination.has_more is false or actionsMaxFetch is reached, and always
 // publishes actions_truncated saying which of those it was — see the block at
 // the end of this function for the five exits and why the flag is unconditional.
-func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
-		return nil, false
+func (s *Service) actionsAsync(ctx context.Context) (any, bool, error) {
+	if s.Mcp == nil {
+		return nil, false, nil
+	}
+	if err := s.Mcp.Initialize(ctx); err != nil {
+		return nil, false, err
 	}
 	merged := []any{}
 	var last map[string]any
@@ -90,21 +93,21 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 		})
 		if err != nil {
 			if offset == 0 {
-				return nil, false
+				return nil, false, err
 			}
 			break
 		}
 		var v any
 		if json.Unmarshal([]byte(text), &v) != nil {
 			if offset == 0 {
-				return map[string]any{"actions": []any{}, "_raw": trunc(text, 200)}, true
+				return map[string]any{"actions": []any{}, "_raw": trunc(text, 200)}, true, nil
 			}
 			break
 		}
 		page, isMap := v.(map[string]any)
 		if !isMap {
 			if offset == 0 {
-				return v, true
+				return v, true, nil
 			}
 			break
 		}
@@ -212,20 +215,24 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 	// changes nothing an operator sees; it exists for the day the tenant grows
 	// past 500 actions or a page fails, when nothing else would say so.
 	last["actions_truncated"] = truncated
-	return last, true
+	return last, true, nil
 }
 
 // GetAction is a single-action read via iq-actions_get_action. Degrades to
 // {"unavailable": ...} on any error, matching FetchActions' degrade style.
 func (s *Service) GetAction(ctx context.Context, id string) map[string]any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
-		return map[string]any{"unavailable": "IQ Actions service unavailable (upstream error)."}
+	const unavailable = "IQ Actions service unavailable (upstream error)."
+	if s.Mcp == nil {
+		return map[string]any{"unavailable": unavailable}
+	}
+	if err := s.Mcp.Initialize(ctx); err != nil {
+		return map[string]any{"unavailable": failReason(err, unavailable)}
 	}
 	text, err := s.Mcp.CallTool(ctx, "iq-actions_get_action", map[string]any{
 		"id": id, "format": "json",
 	})
 	if err != nil {
-		return map[string]any{"unavailable": "IQ Actions service unavailable (upstream error)."}
+		return map[string]any{"unavailable": failReason(err, unavailable)}
 	}
 	var v any
 	if json.Unmarshal([]byte(text), &v) != nil {
@@ -279,8 +286,11 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 	if status != "active" && status != "resolved" {
 		return nil, fmt.Errorf("invalid status %q: must be \"active\" or \"resolved\"", status)
 	}
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
+	if s.Mcp == nil {
 		return nil, fmt.Errorf("IQ Actions service unavailable (upstream error)")
+	}
+	if err := s.Mcp.Initialize(ctx); err != nil {
+		return nil, fmt.Errorf("%s", failReason(err, "IQ Actions service unavailable (upstream error)"))
 	}
 
 	oldStatus := "unknown"
@@ -308,7 +318,7 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 		return map[string]any{
 			"ok": false, "outcome": ActionOutcomeUnknown,
 			"id": id, "old_status": oldStatus, "new_status": status,
-			"error":      err.Error(),
+			"error":      failReason(err, err.Error()),
 			"result_raw": trunc(text, 200),
 		}, nil
 	}
@@ -623,15 +633,19 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 // way FetchDNSAnalytics/FetchHostMetrics/FetchHubSecurity already do; the
 // "entities" field itself is unchanged so existing callers keep working.
 func (s *Service) ThreatLookup(ctx context.Context, query string) map[string]any {
-	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		if hits := s.Mcp.Search(ctx, query); hits != nil {
-			return map[string]any{"entities": hits, "query": query, "availability": "ok"}
+	var err error
+	if s.Mcp != nil {
+		if err = s.Mcp.Initialize(ctx); err == nil {
+			var hits []any
+			if hits, err = s.Mcp.SearchErr(ctx, query); hits != nil {
+				return map[string]any{"entities": hits, "query": query, "availability": "ok"}
+			}
 		}
 	}
 	return map[string]any{
 		"entities":     []any{},
 		"query":        query,
 		"availability": "error",
-		"reason":       "Entity search (network_entity_search) unavailable (upstream error).",
+		"reason":       failReason(err, "Entity search (network_entity_search) unavailable (upstream error)."),
 	}
 }
