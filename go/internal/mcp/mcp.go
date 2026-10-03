@@ -829,6 +829,12 @@ func columnarToDicts(raw map[string]any) []map[string]any {
 //
 // The payload after "Query Result: " is Python dict-repr (single-quoted),
 // not JSON, so it needs its own defensive parse — never query_stored_data.
+// pairRE captures a key plus one of: a single-quoted string, a double-quoted
+// one (Python switches to double quotes when the text holds an apostrophe), a
+// number, or a bare token (only None/True/False are legal Python literals there
+// — anything else is an unrecognized shape).
+var pairRE = regexp.MustCompile(`'([^']*)':\s*(?:'([^']*)'|"([^"]*)"|([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)|([A-Za-z_][A-Za-z0-9_]*))`)
+
 func parseInline(text string) (rows []map[string]any, ok bool) {
 	defer func() {
 		if recover() != nil {
@@ -892,11 +898,6 @@ func parseInline(text string) (rows []map[string]any, ok bool) {
 		return nil, false
 	}
 
-	// pairRE captures a key plus one of: a quoted string, a number, or a
-	// bare token (only None/True/False are legal Python literals there —
-	// anything else is an unrecognized shape).
-	pairRE := regexp.MustCompile(`'([^']*)':\s*(?:'([^']*)'|([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)|([A-Za-z_][A-Za-z0-9_]*))`)
-
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		locs := pairRE.FindAllStringSubmatchIndex(item, -1)
@@ -907,12 +908,14 @@ func parseInline(text string) (rows []map[string]any, ok bool) {
 		for _, loc := range locs {
 			key := item[loc[2]:loc[3]]
 			switch {
-			case loc[4] != -1: // quoted string
+			case loc[4] != -1: // single-quoted string
 				row[key] = item[loc[4]:loc[5]]
-			case loc[6] != -1: // number
+			case loc[6] != -1: // double-quoted string
 				row[key] = item[loc[6]:loc[7]]
-			case loc[8] != -1: // bare token
-				switch item[loc[8]:loc[9]] {
+			case loc[8] != -1: // number
+				row[key] = item[loc[8]:loc[9]]
+			case loc[10] != -1: // bare token
+				switch item[loc[10]:loc[11]] {
 				case "None":
 					row[key] = nil
 				case "True":
@@ -1228,13 +1231,15 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 			return nil, qerr
 		}
 	}
-	for _, r := range rows {
+	// Built into a new map: inserting into the map being ranged over left it to
+	// Go's iteration order whether a renamed key was visited again and renamed a
+	// second time. Only the first "__" separates the cube from its field.
+	for i, r := range rows {
+		renamed := make(map[string]any, len(r))
 		for k, v := range r {
-			if strings.Contains(k, "__") {
-				delete(r, k)
-				r[strings.Replace(k, "__", ".", 1)] = v
-			}
+			renamed[strings.Replace(k, "__", ".", 1)] = v
 		}
+		rows[i] = renamed
 	}
 	return rows, nil
 }
@@ -1248,8 +1253,9 @@ func (c *Client) Search(ctx context.Context, query string) []any {
 
 // SearchErr is Search that also says why a nil result is nil.
 func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
-	if len(query) > 256 {
-		query = query[:256]
+	// 256 characters, as the Python was: cutting at byte 256 can split one.
+	if r := []rune(query); len(r) > 256 {
+		query = string(r[:256])
 	}
 	text, err := c.CallTool(ctx, "infoblox-portal_network_entity_search", map[string]any{"query": query})
 	if err != nil {
