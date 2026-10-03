@@ -114,6 +114,24 @@ const RETRY_BASE_MS = [2000, 8000]
  * window, not nudging them. rng is injectable so tests assert the bounds
  * instead of sampling them.
  */
+// True while the page is in a background tab. No page at all (a unit test, a
+// server render) is not hidden.
+const pageHidden = () => typeof document !== 'undefined' && document.hidden === true
+
+/**
+ * Whether two parsed API payloads say the same thing. Compared as JSON text
+ * because that is what they arrived as; anything that will not serialise (a
+ * cycle) counts as different, which only costs a re-render.
+ */
+export function sameJson(a, b) {
+  if (a === b) return true
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
 export function retryDelayMs(attempt, rng = Math.random) {
   const base = RETRY_BASE_MS[attempt - 1]
   if (base === undefined) return null
@@ -509,7 +527,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         publishOk(url, seq, json)
         if (!live()) return
         failuresRef.current = 0
-        setData(json)
+        // A poll that brings back what the screen already shows keeps the old
+        // object, so React has nothing to re-render. Most 30-second polls are
+        // identical: the server caches for five minutes.
+        setData((prev) => (poll && prev != null && sameJson(prev, json) ? prev : json))
         setError(null)
         setLoading(false)
         setRetrying(false)
@@ -622,10 +643,24 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     setLoading(true)
     load()
     let id
-    if (poll) id = setInterval(load, poll)
+    let onVisible
+    if (poll) {
+      // A tab nobody is looking at does not poll. Coming back fetches at once,
+      // so what is on screen is never older than one poll plus the return.
+      id = setInterval(() => {
+        if (!pageHidden()) load()
+      }, poll)
+      if (typeof document !== 'undefined') {
+        onVisible = () => {
+          if (!pageHidden()) load()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+      }
+    }
     return () => {
       aliveRef.current = false
       if (id) clearInterval(id)
+      if (onVisible) document.removeEventListener('visibilitychange', onVisible)
       // A retry queued for the url this hook is leaving must never land on the
       // one it is arriving at, and must never land at all after unmount.
       clearTimeout(retryTimerRef.current)
