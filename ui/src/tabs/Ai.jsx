@@ -113,7 +113,10 @@ function ChatCard({ panelId }) {
   // Put it back when the answer lands.
   const wasBusy = useRef(false)
   useEffect(() => {
-    if (wasBusy.current && !busy) inRef.current?.focus()
+    // Only when the disabled input left focus on the page. Someone who has gone
+    // on to another control while waiting keeps it.
+    const a = document.activeElement
+    if (wasBusy.current && !busy && (!a || a === document.body || a === inRef.current)) inRef.current?.focus()
     wasBusy.current = busy
   }, [busy])
 

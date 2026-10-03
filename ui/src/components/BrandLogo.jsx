@@ -90,12 +90,11 @@ export function BrandEdit({ onClose, onSaved }) {
   const [currentSrc, setCurrentSrc] = useState('')
   const panelRef = useRef(null)
 
-  // Focus goes back to whatever opened the dialog once it is gone. The dialog is
-  // unmounted by then, so this is the one place that can still say where.
-  useEffect(() => {
-    const opener = document.activeElement
-    return () => { opener?.focus?.() }
-  }, [])
+  // Focus goes back to whatever opened the dialog once it is gone. Read while
+  // rendering, because by the time any effect runs autoFocus has already moved
+  // focus onto the first input.
+  const openerRef = useRef(typeof document !== 'undefined' ? document.activeElement : null)
+  useEffect(() => () => { openerRef.current?.focus?.() }, [])
 
   // Tab stays inside the dialog. The list is re-read on every press, because the
   // preview image and the buttons come and go.
