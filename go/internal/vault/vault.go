@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -553,14 +554,18 @@ func writeFileSynced(path string, data []byte, mode os.FileMode) error {
 	return f.Close()
 }
 
-// syncDir flushes a directory entry. Best effort: Windows cannot fsync a
-// directory, and a filesystem that refuses has nothing more to offer.
+// syncDir flushes a directory entry. It does not fail the save: by now the new
+// file is already in place, and an error here would make callers roll back state
+// that is on disk. A failure is logged instead. Windows cannot fsync a directory
+// at all, so it says nothing there.
 func syncDir(dir string) {
 	d, err := os.Open(dir)
 	if err != nil {
 		return
 	}
-	_ = d.Sync()
+	if err := d.Sync(); err != nil && runtime.GOOS != "windows" {
+		log.Printf("[vault] saved, but could not flush %s to disk: %v — a power cut right now could lose this change", dir, err)
+	}
 	_ = d.Close()
 }
 
