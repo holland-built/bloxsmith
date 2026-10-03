@@ -359,7 +359,7 @@ func TestActionsAsyncPagesUntilHasMoreFalse(t *testing.T) {
 		},
 	}
 	s := newTestService(t, f)
-	raw, ok := s.actionsAsync(context.Background())
+	raw, ok, _ := s.actionsAsync(context.Background())
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -397,7 +397,7 @@ func TestActionsAsyncSinglePageDropsPageScopedKeys(t *testing.T) {
 		},
 	}
 	s := newTestService(t, f)
-	raw, ok := s.actionsAsync(context.Background())
+	raw, ok, _ := s.actionsAsync(context.Background())
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -460,7 +460,7 @@ func keysOf(m map[string]any) []string {
 // shape the three tests below are not about.
 func mergedActions(t *testing.T, f *fakeMCP) map[string]any {
 	t.Helper()
-	raw, ok := newTestService(t, f).actionsAsync(context.Background())
+	raw, ok, _ := newTestService(t, f).actionsAsync(context.Background())
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}

@@ -65,6 +65,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/cache"
+	"bloxsmith/internal/mcp"
 )
 
 const (
@@ -341,10 +342,16 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	// WaitGroup establishes happens-before, so the reads below need no locking.
 	// Each task writes only its own variable.
 	var listRows, countRows []map[string]any
+	var listErr error
 	fanOut(2,
-		func() { listRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, listOpts) },
+		func() { listRows, listErr = s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, listOpts) },
 		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, countOpts) },
 	)
+	// The assembler below is pure and cannot see the error, so a reason it can
+	// say better than its own (a refused call, a timeout) is applied here.
+	if r := mcp.Reason(listErr); listRows == nil && r != "" {
+		return assetsUnavailable(aq, r)
+	}
 
 	// WHY THE LOG LINE IS HERE AND NOT IN THE ASSEMBLER. assembleAssetInventory
 	// is pure on purpose — no network, no clock, no service state — and that is
@@ -612,9 +619,10 @@ func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
 	// and the inventory read at once, so the two together are what actually
 	// pushed first load past the browser's 12s budget.
 	var typeRows, countRows []map[string]any
+	var typeErr error
 	fanOut(2,
 		func() {
-			typeRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
+			typeRows, typeErr = s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
 				"dimensions": []string{assetsCube + ".taxonomy_type_label"},
 				"order":      map[string]any{assetsMeasure: "desc"},
 				"limit":      assetTypeLimit,
@@ -622,6 +630,9 @@ func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
 		},
 		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{}) },
 	)
+	if r := mcp.Reason(typeErr); typeRows == nil && r != "" {
+		return assetFiltersUnavailable(r)
+	}
 	return assembleAssetFilters(typeRows, countRows)
 }
 
@@ -707,13 +718,16 @@ func (s *Service) assetDetailUncached(ctx context.Context, cqid string) map[stri
 	if s.Mcp == nil {
 		return assetDetailUnavailable("the MCP session to Infoblox could not be opened")
 	}
-	rows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
+	rows, err := s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
 		"dimensions": assetDetailDims,
 		"filters": []map[string]any{{
 			"member": assetsCube + ".cqid", "operator": "equals", "values": []string{cqid},
 		}},
 		"limit": 1,
 	})
+	if r := mcp.Reason(err); rows == nil && r != "" {
+		return assetDetailUnavailable(r)
+	}
 	return assembleAssetDetail(rows)
 }
 

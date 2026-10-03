@@ -207,11 +207,11 @@ function ChatCard({ panelId }) {
 
 // ---------- threat lookup ----------
 
-function EntitiesTable({ entities, availability, reason }) {
+function EntitiesTable({ entities, availability, reason, onRetry }) {
   // ThreatLookup degrades to entities:[] on a dead upstream search — indistinguishable
   // from a genuine "no matches" unless availability is checked first.
   if (availability === 'error') {
-    return <FeedUnavailable reason={reason} label="Threat lookup unavailable" />
+    return <FeedUnavailable reason={reason} label="Threat lookup unavailable" onRetry={onRetry} />
   }
   if (entities == null) return null
   if (Array.isArray(entities)) {
@@ -263,6 +263,8 @@ function BlockDomainButton({ domain, disabled }) {
   const { COLORS } = useChartTheme()
   const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
   const [msg, setMsg] = useState('')
+  const [unconfirmed, setUnconfirmed] = useState(false)
+  const lastActionRef = useRef('block')
   const aliveRef = useRef(true)
   useEffect(() => {
     return () => { aliveRef.current = false }
@@ -282,6 +284,7 @@ function BlockDomainButton({ domain, disabled }) {
   }
 
   async function run(action) {
+    lastActionRef.current = action
     setState('busy')
     const res = await authFetch(`/api/${action}-domain`, {
       method: 'POST',
@@ -294,6 +297,7 @@ function BlockDomainButton({ domain, disabled }) {
       setState('tokenRequired')
     } else {
       setState('error')
+      setUnconfirmed(res.data?.outcome === 'unverified')
       setMsg((res.data && res.data.error) || `HTTP ${res.status}`)
     }
   }
@@ -308,7 +312,18 @@ function BlockDomainButton({ domain, disabled }) {
     )
   }
   if (state === 'tokenRequired') return <div className="mt-2 text-note" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
-  if (state === 'error') return <div className="mt-2 text-note" style={{ color: COLORS.crit }}>{msg}</div>
+  if (state === 'error') {
+    // Only a click runs it again, never a timer: an unconfirmed change may
+    // already have applied, so that one asks to be re-checked, not retried.
+    return (
+      <div className="mt-2 flex items-center gap-1.5">
+        <span className="text-note" style={{ color: COLORS.crit }}>{msg}</span>
+        <button onClick={() => run(lastActionRef.current)} className="px-2 py-1 rounded-control text-note border border-border text-muted">
+          {unconfirmed ? 'Re-check' : 'Retry'}
+        </button>
+      </div>
+    )
+  }
   return (
     <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-note border border-border text-muted hover:text-field-txt">Block domain</button>
   )
@@ -413,7 +428,7 @@ function LookupCard({ panelId }) {
       </div>
       {err && <div className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
-      {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} />}
+      {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} onRetry={lookup} />}
       {keptEntities && (
         <KeptResult kept={keptEntities}>
           <EntitiesTable entities={keptEntities.data.entities} availability={keptEntities.data.availability} />

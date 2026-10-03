@@ -240,7 +240,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       {filters.loading && !d ? (
         <Skeleton h={72} />
       ) : unavailable ? (
-        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter feed unavailable" />
+        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter feed unavailable" onRetry={() => filters.refetch()} />
       ) : (
         <>
           <div className="mb-2">
@@ -386,7 +386,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
       ) : unavailable ? (
         // The whole reason this branch is separate from the one below: a feed
         // that could not be read must never render as a tenant with no assets.
-        <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" />
+        <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
       ) : rows.length === 0 ? (
         <Empty>{searched || type ? 'no assets match' : 'no assets discovered for this tenant'}</Empty>
       ) : (
@@ -482,7 +482,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
       {detail.loading && !d ? (
         <Skeleton h={110} />
       ) : unavailable ? (
-        <FeedUnavailable reason={d?.reason || detail.error?.message} label="Asset detail unavailable" />
+        <FeedUnavailable reason={d?.reason || detail.error?.message} label="Asset detail unavailable" onRetry={() => detail.refetch()} />
       ) : d?.availability === 'empty' ? (
         // Distinct from the failure above on purpose: the lookup ran and the
         // asset was not there. An asset can be decommissioned between the page

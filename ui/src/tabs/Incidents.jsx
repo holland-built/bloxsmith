@@ -87,6 +87,8 @@ export default function Incidents() {
   // dead upstream — a genuinely empty tenant stays availability:"ok" with its
   // own "unavailable" NOTE string, so only the availability flag disambiguates.
   const actionsUnavailable = actionsApi.data?.availability === 'error'
+  const actionsReason = actionsUnavailable ? actionsApi.data?.unavailable : undefined
+  const retryActions = () => actionsApi.refetch()
 
   function toggleAck(s) {
     const k = ackKey(s)
@@ -155,12 +157,14 @@ export default function Incidents() {
           loading={actionsApi.loading}
           error={actionsApi.error}
           unavailable={actionsUnavailable}
+          reason={actionsReason}
+          onRetry={retryActions}
           statusState={actionStatusState}
           onSetStatus={setActionStatus}
           openActionId={openActionId}
           onOpenAction={setOpenActionId}
         />
-        <ActionTrendStrip panelId="incidents-action-volume" rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} />
+        <ActionTrendStrip panelId="incidents-action-volume" rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} reason={actionsReason} onRetry={retryActions} />
       </CardGrid>
     </div>
   )
@@ -433,7 +437,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 
 // ---------- SOC action queue ----------
 
-function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus, openActionId, onOpenAction, panelId }) {
+function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusState, onSetStatus, openActionId, onOpenAction, panelId }) {
   const { COLORS } = useChartTheme()
   const columns = [
     {
@@ -490,7 +494,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
       {loading ? (
         <Skeleton h={280} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" />
+        <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
         <Empty>failed to load actions</Empty>
       ) : rows.length === 0 ? (
@@ -552,7 +556,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
 
 // ---------- action volume trend strip ----------
 
-function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
+function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, panelId }) {
   const { COLORS } = useChartTheme()
 
   const { byDay, byPriority } = useMemo(() => {
@@ -582,7 +586,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" />
+        <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
         <Empty>failed to load actions</Empty>
       ) : rows.length === 0 ? (
