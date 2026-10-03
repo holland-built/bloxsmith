@@ -72,7 +72,7 @@ func (s *Service) scalarCubeTotal(ctx context.Context, cube, measure string) (to
 // dead lookup is never reported to the UI as "empty" (a fact about the
 // tenant's data) — see scalarCubeTotal.
 func (s *Service) scalarCount(ctx context.Context, cube, measure, note string) map[string]any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
+	if s.Mcp == nil {
 		return map[string]any{"total": 0, "breakdown_available": false,
 			"note": note, "status": "error"}
 	}

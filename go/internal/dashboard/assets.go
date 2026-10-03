@@ -300,7 +300,7 @@ func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir str
 // interface, so this half cannot be faked in a unit test — which is exactly
 // why every decision worth testing lives in assembleAssetInventory instead.
 func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map[string]any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
+	if s.Mcp == nil {
 		return assetsUnavailable(aq, "the MCP session to Infoblox could not be opened")
 	}
 	filters := assetFilters(aq)
@@ -604,7 +604,7 @@ func assetFiltersUnavailable(reason string) map[string]any {
 }
 
 func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
+	if s.Mcp == nil {
 		return assetFiltersUnavailable("the MCP session to Infoblox could not be opened")
 	}
 	// Same independence, same fix as assetInventoryUncached — see the note
@@ -704,7 +704,7 @@ func assetDetailUnavailable(reason string) map[string]any {
 }
 
 func (s *Service) assetDetailUncached(ctx context.Context, cqid string) map[string]any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
+	if s.Mcp == nil {
 		return assetDetailUnavailable("the MCP session to Infoblox could not be opened")
 	}
 	rows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{

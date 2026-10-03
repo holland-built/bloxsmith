@@ -501,7 +501,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	}
 	g := s.Cache.Gen()
 	var invD, rollupD, trendD []map[string]any
-	mcpOK := s.Mcp != nil && s.Mcp.Initialize(ctx) == nil
+	mcpOK := s.Mcp != nil
 	if mcpOK {
 		invD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueSecurityActions"}, map[string]any{
