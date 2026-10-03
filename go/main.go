@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -8,12 +10,15 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -63,17 +68,101 @@ func uiFS() fs.FS {
 	return sub
 }
 
-// staticHandler serves the frontend out of uiFS. index.html and assets both send
-// no-store cache headers (mirror server.py:6509-6512).
+// staticHandler serves the frontend out of uiFS.
+//
+// /assets/* is named by content hash (Vite), so a changed file is a new URL and a
+// cached copy can never be stale: those get a year and "immutable", and are sent
+// gzipped when the browser asks. Before this every reload re-fetched about 1.15 MB
+// of script, uncompressed, because everything carried no-store. Everything else —
+// index.html above all, which names the current hashes — stays no-store
+// (mirror server.py:6509-6512). The font is not hashed, so it gets a day.
 func staticHandler() http.Handler {
 	if dir := os.Getenv("WEB_DIR"); dir != "" {
 		log.Printf("dev: serving UI from disk WEB_DIR=%s (not embed)", dir)
 	}
-	fileServer := http.FileServer(http.FS(uiFS()))
+	fsys := uiFS()
+	fileServer := http.FileServer(http.FS(fsys))
+	zipped := &gzipFiles{fsys: fsys}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		switch {
+		case strings.HasPrefix(name, "assets/") && fileExists(fsys, name):
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			// The same URL is answered gzipped or plain, so a shared cache must
+			// key on it either way.
+			w.Header().Add("Vary", "Accept-Encoding")
+			if zipped.serve(w, r, name) {
+				return
+			}
+		case strings.HasPrefix(name, "fonts/") && fileExists(fsys, name):
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		default:
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// acceptsGzip reads an Accept-Encoding value: gzip must be named and not refused
+// with q=0 ("gzip;q=0" means the opposite of "gzip").
+func acceptsGzip(header string) bool {
+	for _, part := range strings.Split(strings.ToLower(header), ",") {
+		name, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if strings.TrimSpace(name) != "gzip" {
+			continue
+		}
+		q := strings.ReplaceAll(strings.TrimSpace(params), " ", "")
+		return q != "q=0" && q != "q=0.0" && q != "q=0.00" && q != "q=0.000"
+	}
+	return false
+}
+
+func fileExists(fsys fs.FS, name string) bool {
+	info, err := fs.Stat(fsys, name)
+	return err == nil && !info.IsDir()
+}
+
+// gzipFiles compresses text assets once and keeps the result: the files are
+// immutable for the life of the process, so there is nothing to invalidate.
+type gzipFiles struct {
+	fsys  fs.FS
+	cache sync.Map // name -> []byte
+}
+
+var gzippable = map[string]bool{".js": true, ".css": true, ".svg": true, ".json": true}
+
+// serve writes name gzipped and reports true, or reports false when the caller
+// should fall back to the plain file server (client did not ask, a Range request,
+// a type that is already compressed, or any read error).
+func (g *gzipFiles) serve(w http.ResponseWriter, r *http.Request, name string) bool {
+	ext := strings.ToLower(path.Ext(name))
+	if !gzippable[ext] || r.Header.Get("Range") != "" || !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		return false
+	}
+	var body []byte
+	if v, ok := g.cache.Load(name); ok {
+		body = v.([]byte)
+	} else {
+		raw, err := fs.ReadFile(g.fsys, name)
+		if err != nil {
+			return false
+		}
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		if _, err := zw.Write(raw); err != nil || zw.Close() != nil {
+			return false
+		}
+		body = buf.Bytes()
+		g.cache.Store(name, body)
+	}
+	h := w.Header()
+	h.Set("Content-Type", mime.TypeByExtension(ext))
+	h.Set("Content-Encoding", "gzip")
+	h.Set("Content-Length", strconv.Itoa(len(body)))
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(body)
+	}
+	return true
 }
 
 // securityHeaders wraps the whole mux so every response — static assets and API
