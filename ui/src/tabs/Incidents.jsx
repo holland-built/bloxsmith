@@ -399,7 +399,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       {loading ? (
         <Skeleton h={280} />
       ) : error ? (
-        <Empty>failed to load incidents</Empty>
+        <FeedUnavailable label="Incidents feed unavailable" reason={error.message || undefined} />
       ) : signals.length === 0 && degraded ? (
         <FeedUnavailable
           label="Check could not be completed"
@@ -496,7 +496,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       ) : unavailable ? (
         <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <Empty>failed to load actions</Empty>
+        <FeedUnavailable label="IQ Actions feed unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
@@ -536,7 +536,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
         {detail.loading ? (
           <Skeleton h={200} />
         ) : detail.error ? (
-          <Empty>failed to load action detail</Empty>
+          <FeedUnavailable label="Action detail unavailable" reason={detail.error.message || undefined} />
         ) : !action ? (
           <Empty>action not found</Empty>
         ) : (
@@ -588,7 +588,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
       ) : unavailable ? (
         <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <Empty>failed to load actions</Empty>
+        <FeedUnavailable label="IQ Actions feed unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>no IQ actions to trend</Empty>
       ) : (

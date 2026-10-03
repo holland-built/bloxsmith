@@ -320,11 +320,14 @@ function QueryVolume7d({ panelId, analytics }) {
   }))
 
   return (
-    <Card panelId={panelId} span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
+    <Card panelId={panelId} span={3} title="Query Volume — 7d">
       {analytics.loading ? (
         <Skeleton h={180} />
       ) : broken ? (
-        <Empty>no data</Empty>
+        // "no data" in the body with "feed unavailable" in small grey beside
+        // the title was the wrong way round: the empty-looking half was the
+        // one people read.
+        <FeedUnavailable label="DNS query volume feed unavailable" reason={analytics.error?.message || undefined} />
       ) : (
         /* The label is now the day itself, so both the axis and the hover
            have to spell it — an ISO timestamp on the axis would just be a

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
-import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
+import { Card, Empty, FeedUnavailable, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { compareCells } from '../lib/sortCompare.js'
 import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
@@ -893,7 +893,7 @@ export function FeedCard({ span, panelId, title, note, feed, columns, limit, vie
       {feed.loading && !feed.data ? (
         <Skeleton h={160} />
       ) : bad ? (
-        <Empty>feed unavailable</Empty>
+        <FeedUnavailable reason={feed.error?.message || undefined} />
       ) : rows.length === 0 ? (
         <Empty />
       ) : (

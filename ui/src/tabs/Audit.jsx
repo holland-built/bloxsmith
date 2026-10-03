@@ -694,13 +694,17 @@ function CspAuditTable({ panelId }) {
       {loading ? (
         <Skeleton h={250} />
       ) : error ? (
-        <Empty>search failed</Empty>
+        // The same words the branch below uses for a search the server could
+        // not run: a request that failed outright is that case too.
+        // onRetry because this search is its own fetch: the page-wide Try again
+        // only re-runs useApi feeds and would leave this one where it failed.
+        <FeedUnavailable label="CSP audit feed unavailable" reason={error.message || undefined} onRetry={() => runSearch(lastQuery ?? '')} />
       ) : rows.length === 0 ? (
         // csp.go:849-851 returns HTTP 200 with {rows:[],count:0,status:"error"}
         // on any upstream failure — a fetch that never actually searched must
         // not be reported with the same wording as a genuine empty result.
         result?.status === 'error' ? (
-          <FeedUnavailable label="CSP audit feed unavailable" />
+          <FeedUnavailable label="CSP audit feed unavailable" onRetry={() => runSearch(lastQuery ?? '')} />
         ) : lastQuery ? (
           <Empty>no entries match</Empty>
         ) : (
