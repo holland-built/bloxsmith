@@ -64,6 +64,16 @@ services:
       # fixed /vault, and pointing the app somewhere else would put vault.json
       # outside the persisted volume and lose it on the next container replace.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # Who can reach the port. Inside the container every caller, local or on
+      # the LAN, arrives from the docker bridge, so the app cannot see this for
+      # itself. With BIND=0.0.0.0 and no DASHBOARD_TOKEN it refuses writes
+      # instead of trusting an Origin header that any machine can forge.
+      PUBLISHED_BIND: ${BIND:-127.0.0.1}
+      # Write protection for a LAN deployment: callers send this as X-Auth-Token
+      # (the UI has a field for it in Settings). ALLOWED_HOSTS names the hostnames
+      # people use to reach it, comma-separated, so the Host check can stay on.
+      DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
     networks: [noc-net]
     # ── Health probe ───────────────────────────────────────────────────
     # Before this existed, the only thing Docker knew about this container was

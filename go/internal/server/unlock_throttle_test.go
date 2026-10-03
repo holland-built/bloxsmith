@@ -46,7 +46,7 @@ func utServer(t *testing.T) (http.Handler, *vault.Vault) {
 		Cfg:      &config.Config{Port: "8080"},
 		Vault:    v,
 		Auth:     auth,
-		Guard:    &httpx.Guard{Port: "8080", MutatingPaths: httpx.DefaultMutatingPaths()},
+		Guard:    &httpx.Guard{Port: "8080", Host: "localhost", MutatingPaths: httpx.DefaultMutatingPaths()},
 		Audit:    audit.New(filepath.Join(dir, "audit_log.jsonl"), "app-v-test", "test-instance", audit.Options{TrustDir: t.TempDir()}),
 		StateDir: dir,
 		Version:  "test",

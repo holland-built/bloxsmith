@@ -85,7 +85,7 @@ func newTenantChassis(t *testing.T, spy *tenantSpy) (http.Handler, *rest.Auth, f
 		Vault: vlt,
 		Rest:  rc,
 		Auth:  auth,
-		Guard: &httpx.Guard{Port: "8080", MutatingPaths: httpx.DefaultMutatingPaths()},
+		Guard: &httpx.Guard{Port: "8080", Host: "localhost", MutatingPaths: httpx.DefaultMutatingPaths()},
 		Audit: audit.New(t.TempDir()+"/audit_log.jsonl", "app-v-test", "test-instance",
 			audit.Options{TrustDir: t.TempDir()}),
 		Dashboard: dashboard.New(rc, nil),

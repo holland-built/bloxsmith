@@ -226,9 +226,12 @@ works: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
 <summary><b>Run it as an always-on server</b></summary>
 
 ```bash
-# expose Bloxsmith to your whole network, with no login in front of it
-BIND=0.0.0.0 docker compose up -d
+# expose Bloxsmith to your whole network; the token is what lets people make changes
+DASHBOARD_TOKEN=pick-a-long-random-string BIND=0.0.0.0 docker compose up -d
 ```
+
+Without `DASHBOARD_TOKEN`, a network-facing Bloxsmith refuses every change (provisioning, deletes,
+tenant keys) and only shows data. Paste the token into Settings so your browser sends it.
 
 The safer choice is the secure proxy: HTTPS with a username and password on port 8443, while
 Bloxsmith itself only listens on the machine. It needs the whole repo, because the proxy reads
