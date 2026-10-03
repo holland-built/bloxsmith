@@ -17,6 +17,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -557,11 +559,52 @@ func isPrivateOrLocalHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	if ip == nil {
-		return false // a public DNS name — not literally internal
+		return false // a name — refuseInternal checks what it resolves to when it is dialled
 	}
+	return isInternalIP(ip)
+}
+
+func isInternalIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsUnspecified() || ip.IsPrivate()
 }
+
+// refuseInternal is a net.Dialer Control: it runs on the address a name was
+// RESOLVED to, just before the connection is made. isPrivateOrLocalHost cannot
+// do this job from the text of a URL: the system also resolves 127.1,
+// 2130706433 (one number for 127.0.0.1; 2852039166 is the cloud metadata
+// address), foo.localhost, or a public name pointed at a private address, and
+// the connection then goes to itself. Checking here also covers a redirect and
+// a name whose answer changes between the check and the connection.
+func refuseInternal(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	if ip := net.ParseIP(host); ip == nil || isInternalIP(ip) {
+		return errors.New("base_url resolves to a local/internal address")
+	}
+	return nil
+}
+
+// guardedLLMClient is the client for a base_url THIS request supplied. A proxy
+// named by the environment is the operator's own trust boundary and does the
+// resolving itself, so requests that go through one use the ordinary transport.
+func guardedLLMClient() *http.Client {
+	direct := http.DefaultTransport.(*http.Transport).Clone()
+	direct.Proxy = nil
+	direct.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: refuseInternal}).DialContext
+	return &http.Client{Timeout: 20 * time.Second, Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if p, _ := http.ProxyFromEnvironment(r); p != nil {
+			return http.DefaultTransport.RoundTrip(r)
+		}
+		return direct.RoundTrip(r)
+	})}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 // validateLLMBase rejects non-HTTPS base URLs and obvious internal/loopback/
 // link-local targets. This runs for EVERY llm-test call, regardless of which
@@ -671,6 +714,9 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel, defaul
 	req.Header.Set("Authorization", "Bearer "+k)
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 20 * time.Second}
+	if baseSupplied {
+		client = guardedLLMClient()
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fail("LLM test failed")
