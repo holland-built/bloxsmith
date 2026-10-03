@@ -4,6 +4,7 @@ import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
 import { sampleCountLabel, sampleScopeNote } from '../lib/sampleCount.js'
+import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -242,10 +243,15 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
     .map((s) => ({
       ...s,
       network: s.addr || s.cidr,
-      util: Number(s.util) || 0,
-      free: (Number(s.total) || 0) - (Number(s.used) || 0),
+      // null when the row reported no figure. `Number(x) || 0` used to turn
+      // that into 0% used with 0 free, which is the TOP of a list ranked by
+      // least free space, under a Healthy pill: the subnet nobody measured,
+      // shown as the worst one and as fine at once.
+      util: num(s.util),
+      free: freeOf(s),
     }))
-    .sort((a, b) => a.free - b.free)
+    // Unmeasured last. A subnet with no figure is not the one with least room.
+    .sort((a, b) => cmpMaybe(a.free, b.free, 'asc'))
 
   const columns = [
     { key: 'network', label: 'Network', mono: true },
@@ -255,16 +261,17 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       label: 'Util',
       keep: true,
       render: (v) => {
-        const st = utilStatus(v)
+        // utilStatus(null) would answer Healthy. Not measured is its own word.
+        const st = v === null ? { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' } : utilStatus(v)
         return (
           <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
-            {v}%
+            {v === null ? 'Unknown' : `${v}%`}
           </span>
         )
       },
     },
-    { key: 'used', label: 'Used', align: 'right', render: (v, s) => <span className="text-muted tabular-nums">{(Number(v) || 0).toLocaleString()} / {(Number(s.total) || 0).toLocaleString()}</span> },
-    { key: 'free', label: 'Free', align: 'right', render: (v) => <span className="tabular-nums">{(v || 0).toLocaleString()}</span> },
+    { key: 'used', label: 'Used', align: 'right', render: (v, s) => <span className="text-muted tabular-nums">{num(v) === null || num(s.total) === null ? DASH : `${num(v).toLocaleString()} / ${num(s.total).toLocaleString()}`}</span> },
+    { key: 'free', label: 'Free', align: 'right', render: (v) => <span className="tabular-nums">{v === null ? DASH : v.toLocaleString()}</span> },
   ]
 
   return (

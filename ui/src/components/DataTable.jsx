@@ -2,17 +2,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
+import { compareCells } from '../lib/sortCompare.js'
+import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
 
 // ---------- extracted shared helpers ----------
 
 // Maps a status-ish string to a pill color (reuses utilStatus tokens). null => neutral.
+// Which words earn which colour is lib/statusWord.js, where it can be tested.
+const TONE_UTIL = { ok: 0, warn: 80, crit: 95 }
 export function statusBadgeColor(v) {
-  const s = String(v || '').toLowerCase()
-  if (/online|up|active|success|complete/.test(s)) return utilStatus(0)
-  if (/degraded|warn|pending|running/.test(s)) return utilStatus(80)
-  if (/off|down|error|fail/.test(s)) return utilStatus(95)
-  return null
+  const tone = statusTone(v)
+  return tone ? utilStatus(TONE_UTIL[tone]) : null
 }
 
 // Toggle a {key,dir} sort object for `key`: same key flips dir, new key => asc.
@@ -20,34 +21,11 @@ export function toggleSort(cur, key) {
   return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
 }
 
-// Sort a copy of `rows` by a controlled {key,dir} sort using a per-key accessor
-// map ({ key: (row) => value }). Does the string(localeCompare)/number branch once
-// so callers stop re-implementing it. Falls back to row[key] for unmapped keys.
-export function sortRows(rows, sort, accessors) {
-  if (!sort || !sort.key) return rows
-  const { key, dir } = sort
-  const get = accessors[key] || ((r) => r[key])
-  return [...rows].sort((a, b) => {
-    const av = get(a)
-    const bv = get(b)
-    if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-    return dir === 'asc' ? av - bv : bv - av
-  })
-}
-
 // ---------- internals ----------
 
 const EMPTY_MARKERS = new Set([null, undefined, '', '—', '-'])
 function isEmptyCell(v) {
   return EMPTY_MARKERS.has(v)
-}
-
-function defaultCompare(a, b) {
-  if (a == null && b == null) return 0
-  if (a == null) return -1
-  if (b == null) return 1
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  return String(a).localeCompare(String(b))
 }
 
 // A column is protected from auto-hide if it carries its own render/badge/action
@@ -260,7 +238,7 @@ export function DataTable({
         else {
           const av = col.sortAccessor ? col.sortAccessor(a) : a[col.key]
           const bv = col.sortAccessor ? col.sortAccessor(b) : b[col.key]
-          r = defaultCompare(av, bv)
+          r = compareCells(av, bv)
         }
         return activeSort.dir === 'asc' ? r : -r
       })

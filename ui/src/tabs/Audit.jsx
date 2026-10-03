@@ -646,7 +646,9 @@ function CspAuditTable({ panelId }) {
       key: 'result',
       label: 'Result',
       render: (v) => (
-        <span className="line-clamp-2" style={{ color: /fail/i.test(v || '') ? COLORS.crit : COLORS.ok }}>{v || '—'}</span>
+        // A row with no result gets no colour. It used to be green, which
+        // is a claim that the action succeeded when nothing said so.
+        <span className="line-clamp-2" style={{ color: !v ? COLORS.other : /fail/i.test(v) ? COLORS.crit : COLORS.ok }}>{v || '—'}</span>
       ),
     },
   ]
