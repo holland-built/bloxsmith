@@ -35,10 +35,12 @@ package dashboard
 import (
 	"errors"
 	"log"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"bloxsmith/internal/cache"
@@ -199,19 +201,56 @@ const dashboardFanOut = 12
 // to actually start were arbitrary. buildAggregate registers its measured long
 // poles first precisely so they start at t=0; that is a mechanism now, not a
 // hope. Same bound, same happens-before, strictly fewer parked goroutines.
-func fanOut(bound int, tasks ...func()) {
+//
+// A task that panics is logged and counted, not allowed to take the process down:
+// these run in their own goroutines, where the HTTP handler's recover cannot see
+// them, so one malformed upstream row would otherwise kill the whole server. The
+// count is returned so a caller can say "this feed failed" instead of showing the
+// zero value the task never filled in.
+func fanOut(bound int, tasks ...func()) (panicked int) {
 	sem := make(chan struct{}, bound)
 	var wg sync.WaitGroup
+	var count atomic.Int32
 	for _, task := range tasks {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					count.Add(1)
+					log.Printf("[dashboard] a fetch task panicked and was skipped: %v\n%s", r, debug.Stack())
+				}
+			}()
 			task()
 		}()
 	}
 	wg.Wait()
+	return int(count.Load())
+}
+
+// errTaskPanicked stands in for the error a fetch task would have returned had
+// it not panicked.
+var errTaskPanicked = errors.New("the lookup failed unexpectedly")
+
+// failUnanswered marks every status that is still empty as an error. Only a task
+// that panicked leaves its status unset, so after a recovered panic an empty
+// status means "this feed failed", never "this feed has nothing".
+func failUnanswered(statuses ...*string) {
+	for _, st := range statuses {
+		if *st == "" {
+			*st = "error"
+		}
+	}
+}
+
+func subnetPageStatusPtrs(pages []string) []*string {
+	out := make([]*string, len(pages))
+	for i := range pages {
+		out[i] = &pages[i]
+	}
+	return out
 }
 
 // fetchAtRiskSubnets pages /api/ddi/v1/ipam/subnet filtered to
@@ -656,7 +695,14 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 		)
 	}
 
-	fanOut(dashboardFanOut, tasks...)
+	if fanOut(dashboardFanOut, tasks...) > 0 {
+		// A task that panicked never filled in its status, and an empty status
+		// would read as "no data". Say it failed.
+		failUnanswered(&leasesStatus, &viewsStatus, &zonesStatus, &hostsStatus, &policiesStatus,
+			&feedsStatus, &auditStatus)
+		failUnanswered(subnetPageStatusPtrs(subnetPageStatus)...)
+		atRiskDegraded = true
+	}
 
 	// Everything below runs after every task has finished (fanOut's WaitGroup
 	// establishes happens-before), so these reads need no synchronisation.

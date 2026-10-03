@@ -315,6 +315,34 @@ func writeUnreadable(resp any, status int) bool {
 	return (status == 200 || status == 201) && asMap(resp) == nil
 }
 
+// MaxAllocateCount is the most addresses one self-service allocation may reserve.
+const MaxAllocateCount = 64
+
+// outcomeUnknown reports a write whose result the tenant never told us: no
+// response at all (a timeout, a dropped connection) or a gateway error. The
+// request may well have been applied, so nothing may be rolled back on the
+// strength of it — a rollback of the addresses would strip a live record, and a
+// plain retry would create a duplicate.
+func outcomeUnknown(status int) bool {
+	return status == 0 || status == 502 || status == 503 || status == 504
+}
+
+// createdMaybe is createdUnreadable for a write that got no answer at all.
+func createdMaybe(what string, status int, alsoUnknown string) M {
+	msg := fmt.Sprintf("the tenant did not confirm this %s (%s): the %s MAY EXIST. "+
+		"Look for it in the tenant before retrying — a retry can create a duplicate",
+		what, statusPhrase(status), what)
+	if alsoUnknown != "" {
+		msg += ". " + alsoUnknown
+	}
+	return M{
+		CreatedUnreadableKey: true,
+		"resource":           what,
+		"status":             status,
+		"error":              msg,
+	}
+}
+
 // createdUnreadable builds that result. `what` names the resource in operator
 // words ("DNS zone"); `alsoUnknown`, when non-empty, appends the one extra
 // consequence this particular call site carries (SubnetCreate cannot tag a
@@ -711,6 +739,11 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	if n, ok := intCoerce(body["count"]); ok {
 		count = n
 	}
+	// count goes straight into nextavailableip?count=N, which reserves that many
+	// addresses. Nothing bounded it, so a typo (or 0, or -1) reached the tenant.
+	if count < 1 || count > MaxAllocateCount {
+		return M{"ok": false, "error": fmt.Sprintf("count must be between 1 and %d", MaxAllocateCount)}, 400
+	}
 	name := strOr(body, "name")
 	dry := truthyDry(body["dry"])
 	dns := asMap(body["dns"])
@@ -841,9 +874,10 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				recID = rec["id"]
 			}
 			out["record"] = M{"ok": true, "id": recID, "status": rstatus}
-		} else if writeUnreadable(rresp, rstatus) {
+		} else if writeUnreadable(rresp, rstatus) || outcomeUnknown(rstatus) {
 			// Upstream ACCEPTED the record write and we cannot read back what it
-			// made. The compensating release below MUST NOT run here: releasing
+			// made — or never said (a timeout or a gateway error): the record may
+			// exist either way. The compensating release below MUST NOT run here: releasing
 			// the addresses would strip them out from under a record that exists
 			// and answers queries — the reservation is the only thing still
 			// holding those addresses for it. So the reservation stays, and the
@@ -853,9 +887,12 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			// allocation ok:true promises nor the rolled-back failure ok:false
 			// promises. The addresses stay in the result because they are known
 			// and correct; the record carries no id because there is none.
-			rec := createdUnreadable("DNS record", rstatus,
-				"The address(es) reserved for it are deliberately still reserved — releasing them "+
-					"would strip a live record of its addresses")
+			also := "The address(es) reserved for it are deliberately still reserved — releasing them " +
+				"would strip a live record of its addresses"
+			rec := createdUnreadable("DNS record", rstatus, also)
+			if outcomeUnknown(rstatus) {
+				rec = createdMaybe("DNS record", rstatus, also)
+			}
 			delete(out, "ok")
 			out[CreatedUnreadableKey] = true
 			out["record"] = rec

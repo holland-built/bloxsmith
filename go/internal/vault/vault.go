@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -521,14 +522,54 @@ func (v *Vault) save() error {
 		return err
 	}
 	tmp := v.path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o600); err != nil {
+	if err := writeFileSynced(tmp, out, 0o600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, v.path); err != nil {
 		return err
 	}
 	_ = os.Chmod(v.path, 0o600)
+	// The rename is only durable once the directory entry is. Without this a power
+	// cut right after a save can leave the old file, or none.
+	syncDir(filepath.Dir(v.path))
 	return nil
+}
+
+// writeFileSynced is os.WriteFile plus an fsync before the close: a rename of a
+// file whose bytes are still in the page cache can survive a crash as an empty
+// file, and an empty vault.json is every tenant key gone.
+func writeFileSynced(path string, data []byte, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// syncDir flushes a directory entry. It does not fail the save: by now the new
+// file is already in place, and an error here would make callers roll back state
+// that is on disk. A failure is logged instead. Windows cannot fsync a directory
+// at all, so it says nothing there.
+func syncDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		if runtime.GOOS != "windows" {
+			log.Printf("[vault] saved, but could not open %s to flush it: %v — a power cut right now could lose this change", dir, err)
+		}
+		return
+	}
+	if err := d.Sync(); err != nil && runtime.GOOS != "windows" {
+		log.Printf("[vault] saved, but could not flush %s to disk: %v — a power cut right now could lose this change", dir, err)
+	}
+	_ = d.Close()
 }
 
 // Save persists the current state (public, mutex-guarded).
