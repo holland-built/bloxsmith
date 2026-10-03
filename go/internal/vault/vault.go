@@ -561,6 +561,9 @@ func writeFileSynced(path string, data []byte, mode os.FileMode) error {
 func syncDir(dir string) {
 	d, err := os.Open(dir)
 	if err != nil {
+		if runtime.GOOS != "windows" {
+			log.Printf("[vault] saved, but could not open %s to flush it: %v — a power cut right now could lose this change", dir, err)
+		}
 		return
 	}
 	if err := d.Sync(); err != nil && runtime.GOOS != "windows" {
