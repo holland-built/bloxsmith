@@ -145,3 +145,20 @@ func TestQueryCubeAnUnknownOptionGoesToTheMCP(t *testing.T) {
 		t.Fatalf("an option the cube endpoint cannot take must not be sent to it, got %d calls", s.cubeCalls)
 	}
 }
+
+// A reply too big to hold is not a dead query: the MCP pages its rows, so it
+// gets the question instead of the panel getting nothing.
+func TestQueryCubeAReplyOverTheCapGoesToTheMCP(t *testing.T) {
+	old := maxCubeBody
+	maxCubeBody = 64
+	defer func() { maxCubeBody = old }()
+
+	s := &cubeServer{}
+	srv := s.start(t, 200, `{"result":{"data":[{"Assets.name":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
+	c := New(srv.URL+"/mcp", func() string { return "Token k" })
+
+	rows := c.QueryCube(t.Context(), "Assets", []string{"Assets.count"}, nil)
+	if len(rows) != 1 || rows[0]["Assets.count"] != "7" {
+		t.Fatalf("want the MCP's row after an oversize reply, got %v", rows)
+	}
+}

@@ -1059,8 +1059,9 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 // query took 0.1s here and either 1.7s or no answer at all through the MCP.
 const cubeQueryPath = "/api/cubejs/v1/query"
 
-// maxCubeBody bounds one direct reply. 5,000 rows is the most any caller asks for.
-const maxCubeBody = 16 << 20
+// maxCubeBody bounds one direct reply. 5,000 rows is the most any caller asks
+// for. A package var so a test can shrink it.
+var maxCubeBody int64 = 16 << 20
 
 // queryCubeDirect asks the Cube.js endpoint. A non-empty fallback means "this
 // endpoint cannot answer this question, ask the MCP": it refused the key or is
@@ -1108,12 +1109,20 @@ func (c *Client) queryCubeDirect(ctx context.Context, measures []string, opts ma
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Sprintf("http %d", resp.StatusCode), nil
 	}
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxCubeBody+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if int64(len(payload)) > maxCubeBody {
+		// Too big to hold at once. The MCP pages its rows, so it can still answer.
+		return nil, "the reply is larger than the cap", nil
+	}
 	var out struct {
 		Result struct {
 			Data []map[string]any `json:"data"`
 		} `json:"result"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxCubeBody)).Decode(&out); err != nil {
+	if err := json.Unmarshal(payload, &out); err != nil {
 		return nil, "", err
 	}
 	if out.Result.Data == nil {
