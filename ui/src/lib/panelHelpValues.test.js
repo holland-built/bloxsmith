@@ -507,7 +507,7 @@ const CLAIMS = [
     panel: 'daily-top-capacity-risks',
     says: /this ranks by addresses left, not by fullness/,
     file: DAILY,
-    proofs: [{ re: /\.sort\(\(a, b\) => a\.free - b\.free\)/, expect: 'rows are ordered by free addresses ascending, not by util' }],
+    proofs: [{ re: /\.sort\(\(a, b\) => cmpMaybe\(a\.free, b\.free, 'asc'\)\)/, expect: 'rows are ordered by free addresses ascending, not by util' }],
   },
   {
     panel: 'daily-open-issues',
@@ -758,7 +758,7 @@ const CLAIMS = [
     panel: 'audit-csp-portal',
     says: /Failed results are red, successful ones green/,
     file: AUDIT,
-    proofs: [{ re: /\/fail\/i\.test\(v \|\| ''\) \? COLORS\.crit : COLORS\.ok/, expect: 'a failing result is COLORS.crit (red), anything else COLORS.ok (green)' }],
+    proofs: [{ re: /!v \? COLORS\.other : \/fail\/i\.test\(v\) \? COLORS\.crit : COLORS\.ok/, expect: 'a failing result is COLORS.crit (red), any other result COLORS.ok (green), and a missing one neither' }],
   },
   {
     panel: 'provision-subnet-log',

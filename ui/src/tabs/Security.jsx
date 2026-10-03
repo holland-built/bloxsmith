@@ -404,7 +404,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
           style={{ maxWidth: 180 }}
           title={r.event_time || undefined}
         >
-          {r.event_time ? new Date(r.event_time).toLocaleString() : '—'}
+          {!r.event_time ? '—' : isNaN(new Date(r.event_time)) ? r.event_time : new Date(r.event_time).toLocaleString()}
         </span>
       ),
     },
@@ -543,7 +543,9 @@ function AxurPanel({ panelId, axur }) {
       label: 'Credentials exposed',
       keep: true,
       sortable: true,
-      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{v.toLocaleString()}</span>,
+      // v can be missing. `v.toLocaleString()` on undefined threw, and a throw
+      // in a cell takes the whole tab down with it.
+      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{typeof v === 'number' ? v.toLocaleString() : '—'}</span>,
     },
     {
       key: 'types_affected',
