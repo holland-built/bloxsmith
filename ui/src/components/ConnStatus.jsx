@@ -295,7 +295,7 @@ export default function ConnStatus() {
               )
             })}
             {switchErr && (
-              <div className="px-2.5 py-1.5 text-note" style={{ color: 'var(--color-crit)' }}>{switchErr}</div>
+              <div role="alert" className="px-2.5 py-1.5 text-note" style={{ color: 'var(--color-crit)' }}>{switchErr}</div>
             )}
           </div>
         </>

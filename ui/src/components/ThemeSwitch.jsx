@@ -64,6 +64,7 @@ export default function ThemeSwitch({ className = 'flex' }) {
           onClick={() => setMode(id)}
           title={label}
           aria-label={`${label} theme`}
+          aria-pressed={mode === id}
           className={`w-6 h-6 rounded-full flex items-center justify-center ${
             mode === id ? 'bg-line text-txt' : 'text-dim hover:text-muted'
           }`}

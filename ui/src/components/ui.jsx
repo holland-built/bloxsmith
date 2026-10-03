@@ -2697,6 +2697,7 @@ export function PreviewApply({
 
       {error && (
         <div
+          role="alert"
           className="text-copy rounded-control px-3 py-2"
           style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: `1px solid ${COLORS.crit}` }}
         >
@@ -2707,6 +2708,7 @@ export function PreviewApply({
           the warning above replaces it rather than sitting next to it. */}
       {!error && message && !stale && (
         <div
+          role="status"
           className="text-copy rounded-control px-3 py-2"
           style={{ background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)', border: `1px solid ${COLORS.ok}` }}
         >
@@ -2758,7 +2760,7 @@ export function deletedMsg(j, label) {
 export function FetchError({ error, stale }) {
   if (!error) return null
   return (
-    <div className="text-note mb-2" style={{ color: COLORS.crit }}>
+    <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>
       Could not load current data: {String(error?.message || error)}
       {stale && ' — the list below may be out of date.'}
     </div>
@@ -2797,6 +2799,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
   return (
     <div
       data-feed-unavailable={label}
+      role="status"
       className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
     >
       <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{label}</div>
@@ -2817,7 +2820,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
 }
 
 export function Skeleton({ h = 140 }) {
-  return <div className="animate-pulse bg-line rounded-control w-full" style={{ height: h }} />
+  return <div className="motion-safe:animate-pulse bg-line rounded-control w-full" style={{ height: h }} />
 }
 
 export function Sparkline({ values, color, h = 30 }) {

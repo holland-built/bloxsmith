@@ -79,12 +79,40 @@ function extractDomain(url) {
 const inCls =
   `${FIELD_CLS} w-full`
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function BrandEdit({ onClose, onSaved }) {
   const [domain, setDomain] = useState('')
   const [name, setName] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [currentSrc, setCurrentSrc] = useState('')
+  const panelRef = useRef(null)
+
+  // Focus goes back to whatever opened the dialog once it is gone. The dialog is
+  // unmounted by then, so this is the one place that can still say where.
+  useEffect(() => {
+    const opener = document.activeElement
+    return () => { opener?.focus?.() }
+  }, [])
+
+  // Tab stays inside the dialog. The list is re-read on every press, because the
+  // preview image and the buttons come and go.
+  const trapTab = (e) => {
+    if (e.key !== 'Tab' || !panelRef.current) return
+    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    if (!items.length) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   useEffect(() => {
     fetch('/api/brand', { cache: 'no-store' })
@@ -138,22 +166,27 @@ export function BrandEdit({ onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose} onKeyDown={trapTab}>
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="brand-edit-title"
         className="w-[380px] max-w-full bg-card border border-card-border rounded-surface p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 className="text-copy font-semibold">Logo &amp; company name</h2>
+          <h2 id="brand-edit-title" className="text-copy font-semibold">Logo &amp; company name</h2>
           <span className="flex-1" />
           <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        <label className="block text-note text-dim mb-1">Company domain</label>
-        <input className={inCls} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="infoblox.com" autoFocus />
+        <label htmlFor="brand-edit-domain" className="block text-note text-dim mb-1">Company domain</label>
+        <input id="brand-edit-domain" className={inCls} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="infoblox.com" autoFocus />
 
-        <label className="block text-note text-dim mt-3 mb-1">Display name</label>
+        <label htmlFor="brand-edit-name" className="block text-note text-dim mt-3 mb-1">Display name</label>
         <input
+          id="brand-edit-name"
           className={inCls}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -178,7 +211,7 @@ export function BrandEdit({ onClose, onSaved }) {
           </button>
         </div>
 
-        {err && <div className="mt-2 text-note text-crit">{err}</div>}
+        {err && <div role="alert" className="mt-2 text-note text-crit">{err}</div>}
 
         <div className="flex gap-2 mt-4">
           <button

@@ -326,6 +326,11 @@ export default function App() {
   const settingsBtnRef = useRef(null)
   const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
+  // WCAG 2.4.2. The tabs are a hash router, so the title is the only thing the
+  // browser history and the window list say about where you are.
+  useEffect(() => {
+    document.title = activeLabel ? `${activeLabel} — Bloxsmith` : 'Bloxsmith'
+  }, [activeLabel])
 
   // Any tab change dismisses the open menu — including a hash change that
   // came from somewhere else entirely (a card drill-down, the palette).

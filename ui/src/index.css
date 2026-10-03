@@ -274,14 +274,18 @@
      score 2.7 here. See the note in the dark block. */
   --color-link: #0063b0;
   --color-purple: #7c3aed;
-  --color-ok: #16a34a;
+  --color-ok: #166534;
   --color-warn: #b45309;
-  --color-crit: #dc2626;
+  --color-crit: #c81e1e;
   --color-other: #888888;
   --color-sev-high: #e5484d;
 
-  /* Light crit is #dc2626, dark enough for white at 4.83:1. Light ok is
-     #16a34a, which white fails at 3.30:1, so it keeps the near-black. */
+  /* Light ok and crit are used as TEXT as well as fills, on the page background
+     (#f3f6f9) and on --color-line-2. The earlier #16a34a / #dc2626 scored 3.04
+     and 4.45 on the page background, so axe failed 200 elements. #166534 scores
+     6.57 there and #c81e1e 5.29; both clear 4.5 on every light surface, and
+     white clears 5.7 or better on either as a fill. */
+  --color-on-ok: #ffffff;
   --color-on-crit: #ffffff;
 
   --pill-crit-bg: #fde8e8;
@@ -498,6 +502,10 @@ body {
 /* Theme-aware scrollbars — tell the browser the UI's color scheme so native
    scrollbars/controls stop rendering the bright-white light default in dark mode,
    plus a thin subtle themed bar. Was: unset color-scheme → glaring white bar. */
+/* Placeholder text is a hint, but it is still text a person has to read.
+   Tailwind's default is the field's text at 50%, which is 3.5:1 on white. */
+::placeholder { color: var(--color-dim); opacity: 1; }
+
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="light"] { color-scheme: light; }
 

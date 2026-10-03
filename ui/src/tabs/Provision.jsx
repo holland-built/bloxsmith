@@ -182,6 +182,7 @@ export default function Provision() {
           <button
             key={key}
             onClick={() => setMode(key)}
+            aria-pressed={mode === key}
             className={`px-3 py-1.5 rounded-control text-copy font-medium ${
               mode === key ? 'bg-accent text-on-accent' : 'text-muted'
             }`}
@@ -298,7 +299,7 @@ function RollbackReport({ report }) {
 
   if (report.outcome === 'incomplete') {
     return (
-      <div className="flex flex-col gap-0.5">
+      <div role="alert" className="flex flex-col gap-0.5">
         <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
           Cleanup could not remove {residual.length || attempted - deleted} object
           {(residual.length || attempted - deleted) === 1 ? '' : 's'} — they are still live on the customer&rsquo;s
@@ -333,7 +334,7 @@ function RollbackReport({ report }) {
 function LogView({ log, doneLabel }) {
   if (log.length === 0) return <Empty>Output appears here when you preview or apply.</Empty>
   return (
-    <div className="font-mono text-note flex flex-col gap-0.5 max-h-[280px] overflow-auto">
+    <div role="log" aria-live="polite" tabIndex={0} aria-label="Run output" className="font-mono text-note flex flex-col gap-0.5 max-h-[280px] overflow-auto">
       {log.map((l, i) => (
         <div key={i} style={{ color: l.error ? 'var(--color-crit)' : l.done ? 'var(--color-ok)' : 'var(--color-muted)' }}>
           {l.error ? `✕ ${l.error}` : l.done ? `✓ ${doneLabel || 'done'}` : l.step || JSON.stringify(l)}
@@ -918,7 +919,7 @@ function FilterSelect({ label, value, onChange, options, placeholder, disabled }
                 type="button"
                 onClick={() => pick(o.value)}
                 aria-current={o.value === value ? 'true' : undefined}
-                className={`w-full text-left text-copy px-3 py-1.5 hover:bg-line focus-visible:bg-line focus-visible:outline-none ${o.value === value ? 'font-semibold text-txt' : 'text-field-txt'}`}
+                className={`w-full text-left text-copy px-3 py-1.5 hover:bg-line focus-visible:bg-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${o.value === value ? 'font-semibold text-txt' : 'text-field-txt'}`}
               >
                 {o.label}
               </button>
