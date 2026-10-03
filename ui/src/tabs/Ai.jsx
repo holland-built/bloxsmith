@@ -109,6 +109,16 @@ function ChatCard({ panelId }) {
   const [items, setItems] = useState([])
   const [budget, setBudget] = useState(null)
   const inRef = useRef(null)
+  // The input is disabled while a question runs, which drops focus to the page.
+  // Put it back when the answer lands.
+  const wasBusy = useRef(false)
+  useEffect(() => {
+    // Only when the disabled input left focus on the page. Someone who has gone
+    // on to another control while waiting keeps it.
+    const a = document.activeElement
+    if (wasBusy.current && !busy && (!a || a === document.body || a === inRef.current)) inRef.current?.focus()
+    wasBusy.current = busy
+  }, [busy])
 
   const submit = (qArg) => {
     const q = String(qArg != null ? qArg : input).trim()

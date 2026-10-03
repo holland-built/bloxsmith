@@ -58,7 +58,7 @@ function Setup({ onDone }) {
         onChange={(e) => setP2(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}
       />
-      {err && <div className="mt-2 text-note text-crit">{err}</div>}
+      {err && <div role="alert" className="mt-2 text-note text-crit">{err}</div>}
       <button className={btnCls} onClick={go} disabled={busy || !p1 || !p2}>
         {busy ? 'Creating…' : 'Create vault'}
       </button>
@@ -97,7 +97,7 @@ function Unlock({ onDone }) {
         onKeyDown={(e) => e.key === 'Enter' && go()}
         autoFocus
       />
-      {err && <div className="mt-2 text-note text-crit">{err}</div>}
+      {err && <div role="alert" className="mt-2 text-note text-crit">{err}</div>}
       <button className={btnCls} onClick={go} disabled={busy || !p}>
         {busy ? 'Unlocking…' : 'Unlock'}
       </button>
@@ -205,6 +205,7 @@ function FirstTenant({ onDone }) {
       />
       {test && (
         <div
+          role="status"
           className={
             'mt-2 text-note ' +
             (test.startsWith('Key valid')
@@ -217,7 +218,7 @@ function FirstTenant({ onDone }) {
           {test}
         </div>
       )}
-      {err && <div className="mt-2 text-note text-crit">{err}</div>}
+      {err && <div role="alert" className="mt-2 text-note text-crit">{err}</div>}
       <button className={btnCls} onClick={go} disabled={busy || !key}>
         {busy ? 'Adding…' : 'Add connection'}
       </button>
@@ -268,7 +269,7 @@ export default function VaultGate({ children }) {
   if (!st) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-bg">
-        <div className="w-7 h-7 rounded-full border-2 border-border border-t-accent animate-spin" />
+        <div className="w-7 h-7 rounded-full border-2 border-border border-t-accent motion-safe:animate-spin" />
         <div className="text-copy font-semibold">Bloxsmith</div>
       </div>
     )

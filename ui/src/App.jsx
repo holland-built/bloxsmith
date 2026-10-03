@@ -34,7 +34,15 @@ import UpdateButton from './components/UpdateButton.jsx'
 import { updateReady, useUpdate } from './lib/updateState.js'
 import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
-import TenantManager from './components/TenantManager.jsx'
+// The Settings sheet is fetched when it is first opened. It is 19 KB that no
+// first paint needs, and with it in the entry file #provision went over the
+// budget tests/bundle-budget.spec.ts holds it to.
+const TenantManager = lazy(() => import('./components/TenantManager.jsx'))
+// Puts the saved spacing on <html> before the first paint. This module used to
+// arrive through the Settings sheet's own imports; now that the sheet loads
+// late, it has to be asked for here or a saved Compact would wait for Settings
+// to be opened.
+import './lib/density.js'
 import HeaderHelp from './components/HeaderHelp.jsx'
 import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
@@ -156,6 +164,31 @@ const TabLoading = () => (
 // The wording is aimed at whoever is actually looking at it, who is an operator
 // and not an engineer: it says what happened and the one thing that fixes it.
 // No error code, no stack, no "unexpected error occurred".
+// The Settings sheet loads on demand, so its file can fail to arrive (the app
+// updated under an open page and the old file is gone). The page behind is
+// inert while the sheet is open, so the message is pinned where it is seen and
+// carries its own two ways out: reload, or close and carry on without Settings.
+const SHEET_BTN = `px-2.5 py-1 rounded-control border border-border text-copy text-txt cursor-pointer hover:border-border-hover ${FOCUS_RING}`
+
+class SettingsBoundary extends Component {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="fixed top-4 inset-x-4 z-[200] flex flex-wrap items-center gap-3 border border-border bg-card p-4 text-copy text-txt">
+        <span role="alert" className="flex-1">Settings could not load.</span>
+        <button type="button" ref={(el) => el?.focus()} onClick={() => location.reload()} className={SHEET_BTN}>Reload the page</button>
+        <button type="button" onClick={this.props.onClose} className={SHEET_BTN}>Close</button>
+      </div>
+    )
+  }
+}
+
 class TabErrorBoundary extends Component {
   state = { failed: false, tab: null }
 
@@ -326,6 +359,11 @@ export default function App() {
   const settingsBtnRef = useRef(null)
   const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
+  // WCAG 2.4.2. The tabs are a hash router, so the title is the only thing the
+  // browser history and the window list say about where you are.
+  useEffect(() => {
+    document.title = activeLabel ? `${activeLabel} — Bloxsmith` : 'Bloxsmith'
+  }, [activeLabel])
 
   // Any tab change dismisses the open menu — including a hash change that
   // came from somewhere else entirely (a card drill-down, the palette).
@@ -674,7 +712,23 @@ export default function App() {
           {`${activeLabel} tab`}
         </div>
         {showAccounts && (
-          <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+          <SettingsBoundary onClose={() => setShowAccounts(false)}>
+            {/* The page behind is already inert, so the wait is said out loud,
+                dimmed like the sheet it is about to become, and can be left: a
+                fetch that never answers must not hold the page. */}
+            <Suspense
+              fallback={
+                <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 text-copy text-txt">
+                  <div className="flex items-center gap-3 border border-border bg-card p-4">
+                    <span role="status">Loading settings…</span>
+                    <button type="button" onClick={() => setShowAccounts(false)} className={SHEET_BTN}>Cancel</button>
+                  </div>
+                </div>
+              }
+            >
+              <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+            </Suspense>
+          </SettingsBoundary>
         )}
         {/* Outside the inert wrapper, like the settings sheet above it and for
             the same reason: inert content is not exposed at all, so a dialog

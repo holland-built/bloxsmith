@@ -9,6 +9,7 @@ import {
   budgetMs,
   isTransientError,
   retryDelayMs,
+  sameJson,
   __resetAdoptionForTests,
   retryFailedFeeds,
   useApi,
@@ -1106,4 +1107,14 @@ test('a locked answer cancels a retry queued earlier, so retrying false is true'
   await settle()
   assert.equal(calls.length, 2, 'the cancelled retry still sent a request')
   hook.unmount()
+})
+
+test('sameJson: an identical poll answer is the same, a changed one is not', () => {
+  assert.equal(sameJson({ a: [1, 2, { b: 'x' }] }, { a: [1, 2, { b: 'x' }] }), true)
+  assert.equal(sameJson({ a: [1, 2] }, { a: [1, 3] }), false)
+  assert.equal(sameJson([], []), true)
+  assert.equal(sameJson(null, {}), false)
+  const cyc = {}
+  cyc.self = cyc
+  assert.equal(sameJson(cyc, { self: 1 }), false, 'a payload that will not serialise is different, never an error')
 })

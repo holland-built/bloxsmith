@@ -422,6 +422,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               />
               {add.test && (
                 <div
+                  role="status"
                   className={
                     'mt-2 text-note ' +
                     (add.test.startsWith('Key valid')
@@ -434,7 +435,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   {add.test}
                 </div>
               )}
-              {add.err && <div className="mt-2 text-note text-crit">{add.err}</div>}
+              {add.err && <div role="alert" className="mt-2 text-note text-crit">{add.err}</div>}
               <div className="flex gap-2 mt-3">
                 <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
                   {add.busy ? 'Adding…' : 'Add'}
@@ -457,6 +458,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               />
               {edit.test && (
                 <div
+                  role="status"
                   className={
                     'mt-2 text-note ' +
                     (edit.test.startsWith('Key valid')
@@ -469,7 +471,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   {edit.test}
                 </div>
               )}
-              {edit.err && <div className="mt-2 text-note text-crit">{edit.err}</div>}
+              {edit.err && <div role="alert" className="mt-2 text-note text-crit">{edit.err}</div>}
               <div className="flex gap-2 mt-3">
                 <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
                   {edit.busy ? 'Replacing…' : 'Replace key'}
@@ -623,7 +625,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                       ? 'Provisioning, teardown and record edits will really change this tenant.'
                       : 'Provisioning, teardown and record edits are refused. Nothing here can change this tenant.'}
                   </div>
-                  {grantErr && <div className="mt-2 text-note text-crit">{grantErr}</div>}
+                  {grantErr && <div role="alert" className="mt-2 text-note text-crit">{grantErr}</div>}
                   {writeTarget.writable ? (
                     <button
                       className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-50"
@@ -694,7 +696,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   Encrypted in the vault, the way your Infoblox keys are. Paste the token on its own;
                   the &ldquo;Bearer&rdquo; word is added for you.
                 </div>
-                {axur.err && <div className="mt-2 text-note text-crit">{axur.err}</div>}
+                {axur.err && <div role="alert" className="mt-2 text-note text-crit">{axur.err}</div>}
                 {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
                 <div className="flex gap-2 mt-2">
                   <button

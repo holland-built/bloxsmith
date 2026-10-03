@@ -60,7 +60,7 @@ export default function Network() {
   const leasesRef = useRef(null)
   useEffect(() => {
     if (hp.focus === 'leases' && leasesRef.current) {
-      leasesRef.current.scrollIntoView({ behavior: 'smooth' })
+      leasesRef.current.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
     }
   }, [hp.focus])
 

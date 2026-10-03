@@ -809,7 +809,7 @@ export default function DossierPage() {
         <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-note tracking-[0.12em] text-dim">
           QUERY
         </div>
-        <label className="flex-1 flex items-center px-3 h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
+        <label className="flex-1 flex items-center px-3 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
           <span className="sr-only">Search the estate</span>
           <input
             value={draft}

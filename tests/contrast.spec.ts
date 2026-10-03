@@ -315,6 +315,16 @@ const TOKEN_PAIRS: Array<[string, string]> = [
   ['--color-on-accent', '--color-accent'],
   ['--color-on-crit', '--color-crit'],
   ['--color-on-ok', '--color-ok'],
+  // STATUS COLOUR AS TEXT. Green and red are written as 11px text on cards and
+  // on the page background (blocked, valid key, failed). Nothing here measured
+  // them, so light ok sat at 3.04:1 on the page for as long as the list ended at
+  // the fills above.
+  ['--color-ok', '--color-card'],
+  ['--color-ok', '--color-bg'],
+  ['--color-ok', '--color-line-2'],
+  ['--color-crit', '--color-card'],
+  ['--color-crit', '--color-bg'],
+  ['--color-crit', '--color-line-2'],
 ];
 
 for (const theme of ['dark', 'light'] as const) {
