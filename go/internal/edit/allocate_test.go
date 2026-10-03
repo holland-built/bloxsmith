@@ -787,3 +787,53 @@ func allocEqual(a, b []string) bool {
 	}
 	return true
 }
+
+// A DNS write that got no answer (a gateway error or timeout) may well have been
+// applied. Releasing the addresses then strips them from a live record, so the
+// reservation stays and the result says the record may exist.
+func TestAllocateDNSOutcomeUnknownDoesNotReleaseTheAddresses(t *testing.T) {
+	for _, st := range []int{502, 503, 504} {
+		f := newAllocFake(t, allocConfig{dnsStatus: st, dnsBody: `{"error":"upstream timed out"}`})
+
+		res, status := f.client().SelfserviceAllocate(M{
+			"subnet_id": "s-42", "count": float64(2), "dry": false,
+			"dns": M{"zone_id": "z-1", "name": "web"},
+		})
+
+		if dels := f.byMethod(http.MethodDelete); len(dels) != 0 {
+			t.Fatalf("status %d: DELETEs = %d, want 0 — the record may exist and the addresses are its only hold", st, len(dels))
+		}
+		if status != st {
+			t.Fatalf("status %d: returned %d", st, status)
+		}
+		if res[CreatedUnreadableKey] != true {
+			t.Fatalf("status %d: result not flagged as may-exist: %v", st, res)
+		}
+		if resultOK(res) {
+			t.Fatalf("status %d: reported ok: %v", st, res)
+		}
+		if msg, _ := res["error"].(string); !strings.Contains(msg, "MAY EXIST") {
+			t.Fatalf("status %d: error does not say the record may exist: %q", st, msg)
+		}
+	}
+}
+
+func TestAllocateCountOutsideOneToSixtyFourIsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, n := range []float64{0, -1, 65, 1e6} {
+		f := newAllocFake(t, allocConfig{})
+		res, status := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": n, "dry": false})
+		if status != 400 || resultOK(res) {
+			t.Fatalf("count %v: status %d, res %v, want a 400", n, status, res)
+		}
+		if len(f.reqs) != 0 {
+			t.Fatalf("count %v reached the tenant: %d request(s)", n, len(f.reqs))
+		}
+	}
+	// The edges are allowed.
+	for _, n := range []float64{1, 64} {
+		f := newAllocFake(t, allocConfig{})
+		if _, status := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": n, "dry": true}); status != 200 {
+			t.Fatalf("count %v dry run: status %d, want 200", n, status)
+		}
+	}
+}

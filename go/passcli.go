@@ -109,6 +109,16 @@ func runPassCLI(args []string) int {
 	case "set":
 		return passSet(vaultPath)
 	case "rotate":
+		// Same advisory as vault-restore, and for the same reason: a running
+		// server keeps the OLD key and salt in memory and re-saves the vault under
+		// them the next time a tenant changes, which quietly brings the old
+		// passphrase back. A busy port could be another program, so this warns.
+		if serverSeemsUp(cfg) {
+			fmt.Fprintf(os.Stderr, "! something is listening on %s:%s — if that is Bloxsmith, STOP IT FIRST.\n", cfg.Host, cfg.Port)
+			fmt.Fprintln(os.Stderr, "  A running server still holds the OLD passphrase's key and will write the")
+			fmt.Fprintln(os.Stderr, "  vault back under it the next time a tenant changes, undoing this rotation.")
+			fmt.Fprintln(os.Stderr)
+		}
 		return passRotate(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
 	case "check":
 		msg, code := checkKeychainOpensVault(vaultPath, vault.GetKeychainPassphrase)

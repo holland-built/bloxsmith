@@ -512,7 +512,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 		hostsTotal                                           int
 		hostsTotalOK                                         bool
 	)
-	fanOut(hubDomainsFanOut,
+	panicked := fanOut(hubDomainsFanOut,
 		func() {
 			policies, errPolicies = s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
 		},
@@ -533,6 +533,21 @@ func (s *Service) FetchHubDomains() map[string]any {
 		},
 		func() { hosts, hostsTotal, hostsTotalOK, errHosts = s.fetchHosts("") },
 	)
+	if panicked > 0 {
+		// A feed whose task panicked has neither rows nor an error, which would
+		// read as an empty feed. Give it the failure it is.
+		for _, f := range []struct {
+			rows []any
+			err  *error
+		}{
+			{policies, &errPolicies}, {feeds, &errFeeds}, {named, &errNamed}, {roaming, &errRoaming},
+			{anycast, &errAnycast}, {dfp, &errDfp}, {hosts, &errHosts},
+		} {
+			if f.rows == nil && *f.err == nil {
+				*f.err = errTaskPanicked
+			}
+		}
+	}
 
 	// availability is one section-name -> "ok"/"error" entry per
 	// independent feed this endpoint combines. Unlike the single-feed

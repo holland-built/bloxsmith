@@ -577,8 +577,26 @@ func runVaultRestoreCLI(args []string) int {
 		return 1
 	}
 	moved := 0
+	keptAside := 0
 	for _, e := range staged {
 		target := filepath.Join(stateDir, e.Name())
+		// What is being replaced is moved aside, not deleted: a restore that turns
+		// out to be the wrong archive must not also be the end of the live vault.
+		// One generation is kept; the next restore replaces it.
+		if _, statErr := os.Lstat(target); statErr == nil {
+			kept := target + ".pre-restore"
+			if err := os.RemoveAll(kept); err != nil {
+				fmt.Fprintf(os.Stderr, "vault-restore: could not clear the old %s: %v\n", kept, err)
+				fmt.Fprintf(os.Stderr, "  %d of %d entries had already been restored — the state dir is now MIXED.\n", moved, len(staged))
+				return 1
+			}
+			if err := os.Rename(target, kept); err != nil {
+				fmt.Fprintf(os.Stderr, "vault-restore: could not set %s aside: %v\n", target, err)
+				fmt.Fprintf(os.Stderr, "  %d of %d entries had already been restored — the state dir is now MIXED.\n", moved, len(staged))
+				return 1
+			}
+			keptAside++
+		}
 		if err := os.RemoveAll(target); err != nil {
 			fmt.Fprintf(os.Stderr, "vault-restore: could not replace %s: %v\n", target, err)
 			fmt.Fprintf(os.Stderr, "  %d of %d entries had already been restored — the state dir is now MIXED.\n", moved, len(staged))
@@ -623,6 +641,10 @@ func runVaultRestoreCLI(args []string) int {
 	}
 
 	fmt.Printf("restored %d %s into %s\n", len(names), plural(len(names), "file", "files"), stateDir)
+	if keptAside > 0 {
+		fmt.Printf("  the %d %s this replaced %s kept beside %s as *.pre-restore\n", keptAside,
+			plural(keptAside, "entry", "entries"), plural(keptAside, "is", "are"), plural(keptAside, "it", "them"))
+	}
 	for _, n := range names {
 		fmt.Printf("  %s\n", n)
 	}

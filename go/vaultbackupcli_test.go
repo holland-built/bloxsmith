@@ -239,6 +239,28 @@ func TestVaultRestoreRefusesNonEmptyDirWithoutForce(t *testing.T) {
 	}
 }
 
+// The vault being replaced is moved aside, not deleted: restoring the wrong
+// archive over a live vault must not also be the end of the tenant keys.
+func TestVaultRestoreForceKeepsTheReplacedVaultAsideAsPreRestore(t *testing.T) {
+	archive := goodArchive(t)
+	dst := t.TempDir()
+	live := filepath.Join(dst, "vault.json")
+	original := []byte(`{"v":2,"salt":"THE-LIVE-ONE","data":"do-not-lose-me"}`)
+	if err := os.WriteFile(live, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := runVaultRestoreCLI([]string{archive, "--confirm", "restore", "--state-dir", dst, "--force"}); code != 0 {
+		t.Fatalf("vault-restore --force exit %d, want 0", code)
+	}
+	kept, err := os.ReadFile(live + ".pre-restore")
+	if err != nil || !bytes.Equal(kept, original) {
+		t.Fatalf("the replaced vault.json was not kept as vault.json.pre-restore: %v", err)
+	}
+	if info, err := os.Stat(live + ".pre-restore"); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("the kept copy holds every tenant key and must stay 0600: %v %v", info, err)
+	}
+}
+
 // A restore is all-or-nothing. --force replaces what the archive names and
 // leaves everything else alone, which is a real limitation the help text
 // promises; if that ever silently became a wipe, an operator would lose the
