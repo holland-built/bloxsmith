@@ -67,7 +67,15 @@ func TestHTTPRefusalReasonIsBounded(t *testing.T) {
 
 	_ = newTestClient(srv.URL).QueryCube(t.Context(), "AssetDetails_ch_agg", []string{"count"}, nil)
 
-	got := strings.TrimSpace(logs.String())
+	// QueryCube asks the Cube.js endpoint first and notes when it hands over to
+	// the MCP; that notice is a separate line and not the refusal under test.
+	var kept []string
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		if !strings.Contains(line, "direct query not used") {
+			kept = append(kept, line)
+		}
+	}
+	got := strings.Join(kept, "\n")
 	if strings.Contains(got, "\n") {
 		t.Fatalf("a refusal must log as one line, got:\n%s", got)
 	}

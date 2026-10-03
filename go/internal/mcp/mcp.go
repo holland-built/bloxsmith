@@ -1051,9 +1051,97 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 	return rows, nil
 }
 
-// QueryCube is _mcp_query_cube (server.py:3147): a Cube.js query; column names
-// use "__" which is converted back to "." for caller consistency.
+// cubeQueryPath is the Cube.js endpoint the Portal's own Assets page calls. It
+// takes the same API key as every other REST call here, needs no MCP Server
+// permission, and answers with the rows in the reply, so the two MCP hops (run
+// the cube, then read its stored table) and the gateway's 60-second cut-off
+// are gone. Measured 2026-10-02 against a 1,607-asset tenant: the Assets list
+// query took 0.1s here and either 1.7s or no answer at all through the MCP.
+const cubeQueryPath = "/api/cubejs/v1/query"
+
+// maxCubeBody bounds one direct reply. 5,000 rows is the most any caller asks for.
+const maxCubeBody = 16 << 20
+
+// queryCubeDirect asks the Cube.js endpoint. A non-empty fallback means "this
+// endpoint cannot answer this question, ask the MCP": it refused the key or is
+// not there (HTTP 4xx/5xx), answered without a data list, or the query uses an
+// option Cube.js has no word for. A non-nil err is a failure the MCP would not
+// fix (no connection, an undecodable reply, a timeout), so it is not retried
+// there: a second, slower attempt would only add its own wait.
+func (c *Client) queryCubeDirect(ctx context.Context, measures []string, opts map[string]any) (rows []map[string]any, fallback string, err error) {
+	q := map[string]any{"measures": measures}
+	for k, v := range opts {
+		switch k {
+		case "dimensions", "filters", "order", "limit", "offset":
+			q[k] = v
+		case "time_dimensions":
+			q["timeDimensions"] = v
+		default:
+			return nil, "option " + k + " has no Cube.js equivalent", nil
+		}
+	}
+	text, err := json.Marshal(q)
+	if err != nil {
+		return nil, "", err
+	}
+	// The endpoint's field is a string holding the query as JSON text.
+	body, err := json.Marshal(map[string]any{"query": string(text)})
+	if err != nil {
+		return nil, "", err
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(c.url, "/mcp")+cubeQueryPath, bytes.NewReader(body))
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", c.auth())
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Sprintf("http %d", resp.StatusCode), nil
+	}
+	var out struct {
+		Result struct {
+			Data []map[string]any `json:"data"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxCubeBody)).Decode(&out); err != nil {
+		return nil, "", err
+	}
+	if out.Result.Data == nil {
+		return nil, "the reply carried no result.data", nil
+	}
+	return out.Result.Data, "", nil
+}
+
+// QueryCube is _mcp_query_cube (server.py:3147): a Cube.js query, asked of the
+// Portal's Cube.js endpoint first and of the MCP only when that endpoint cannot
+// answer (see queryCubeDirect). Either way a nil slice means the query failed
+// and an empty one means there are no rows.
 func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+	rows, fallback, err := c.queryCubeDirect(ctx, measures, opts)
+	if err != nil {
+		log.Printf("mcp: QueryCube %s: direct query: %v", cube, err)
+		return nil
+	}
+	if fallback == "" {
+		return rows
+	}
+	log.Printf("mcp: QueryCube %s: direct query not used (%s), asking the MCP", cube, fallback)
+	return c.queryCubeMCP(ctx, cube, measures, opts)
+}
+
+// queryCubeMCP is the MCP route: column names use "__" which is converted back
+// to "." for caller consistency.
+func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
 	args := map[string]any{
 		"task_description": fmt.Sprintf("Query %s for NOC dashboard analytics", cube),
 		"cube_name":        cube,
