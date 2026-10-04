@@ -6,7 +6,7 @@
   - heading "Check drift" [level=2]
   - text: compare a site template against live Infoblox state
   - 'button "About: Check drift"': "About: ⓘ"
-  - button "Hide Check drift": Hide ✕
+  - 'button "Options: Check drift"'
   - text: Template
   - combobox "Template":
     - option "Select a template" [selected]

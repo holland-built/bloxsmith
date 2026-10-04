@@ -14,8 +14,7 @@
     - option "write-refused-read-only"
   - text: "5"
   - 'button "About: Audit Log"': "About: ⓘ"
-  - button "Hide Audit Log": Hide ✕
-  - button "Move Audit Log": Move ⠿
+  - 'button "Options: Audit Log"'
   - text: chain intact — signature and entry count verified · check it yourself with
   - code: bloxsmith audit verify
   - table:
@@ -58,8 +57,7 @@
   - heading "Activity Summary" [level=2]
   - text: 5 recorded events
   - 'button "About: Activity Summary"': "About: ⓘ"
-  - button "Hide Activity Summary": Hide ✕
-  - button "Move Activity Summary": Move ⠿
+  - 'button "Options: Activity Summary"'
   - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
@@ -68,8 +66,7 @@
   - button "Search"
   - text: 5 entries shown, total unknown
   - 'button "About: CSP Portal Audit"': "About: ⓘ"
-  - button "Hide CSP Portal Audit": Hide ✕
-  - button "Move CSP Portal Audit": Move ⠿
+  - 'button "Options: CSP Portal Audit"'
   - table:
     - rowgroup:
       - row "Time Who Action Resource Result":

@@ -17,8 +17,7 @@
   - button "Arrange panels"
   - heading "Request" [level=2]
   - 'button "About: Request"': "About: ⓘ"
-  - button "Hide Request": Hide ✕
-  - button "Move Request": Move ⠿
+  - 'button "Options: Request"'
   - group "Space":
     - text: ""
     - searchbox "Search Space"
@@ -45,6 +44,5 @@
   - button "Preview" [disabled]
   - heading "Live log" [level=2]
   - 'button "About: Live log"': "About: ⓘ"
-  - button "Hide Live log": Hide ✕
-  - button "Move Live log": Move ⠿
+  - 'button "Options: Live log"'
   - text: Output appears here when you preview or apply.

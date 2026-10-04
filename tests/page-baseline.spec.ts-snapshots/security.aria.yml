@@ -9,8 +9,7 @@
   - button "low"
   - text: "2"
   - 'button "About: Triage Inbox"': "About: ⓘ"
-  - button "Hide Triage Inbox": Hide ✕
-  - button "Move Triage Inbox": Move ⠿
+  - 'button "Options: Triage Inbox"'
   - table:
     - rowgroup:
       - row "Ack Block Severity Query Action Time":
@@ -45,27 +44,23 @@
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
   - heading "Response Summary" [level=2]
   - 'button "About: Response Summary"': "About: ⓘ"
-  - button "Hide Response Summary": Hide ✕
-  - button "Move Response Summary": Move ⠿
+  - 'button "Options: Response Summary"'
   - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
   - heading "Threat Events — by Severity" [level=2]
   - text: 2 events
   - 'button "About: Threat Events — by Severity"': "About: ⓘ"
-  - button "Hide Threat Events — by Severity": Hide ✕
-  - button "Move Threat Events — by Severity": Move ⠿
+  - 'button "Options: Threat Events — by Severity"'
   - text: critical 1 high 2 medium 3 low 4
   - application: /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
   - heading "Security Inventory" [level=2]
   - text: what is configured
   - 'button "About: Security Inventory"': "About: ⓘ"
-  - button "Hide Security Inventory": Hide ✕
-  - button "Move Security Inventory": Move ⠿
+  - 'button "Options: Security Inventory"'
   - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
   - heading "SOC Insights" [level=2]
   - text: "1"
   - 'button "About: SOC Insights"': "About: ⓘ"
-  - button "Hide SOC Insights": Hide ✕
-  - button "Move SOC Insights": Move ⠿
+  - 'button "Options: SOC Insights"'
   - table:
     - rowgroup:
       - row "Threat Severity Status Events Last Seen":
@@ -89,8 +84,7 @@
   - heading "Lookalike Domains" [level=2]
   - text: 1 detected
   - 'button "About: Lookalike Domains"': "About: ⓘ"
-  - button "Hide Lookalike Domains": Hide ✕
-  - button "Move Lookalike Domains": Move ⠿
+  - 'button "Options: Lookalike Domains"'
   - table:
     - rowgroup:
       - row "Lookalike Target Suspicious":
@@ -108,8 +102,7 @@
   - heading "Axur Supplier Risk" [level=2]
   - text: 9 credentials · 2 suppliers
   - 'button "About: Axur Supplier Risk"': "About: ⓘ"
-  - button "Hide Axur Supplier Risk": Hide ✕
-  - button "Move Axur Supplier Risk": Move ⠿
+  - 'button "Options: Axur Supplier Risk"'
   - table:
     - rowgroup:
       - row "Supplier Credentials exposed Types affected":
@@ -130,38 +123,31 @@
         - cell "1"
   - heading "CTEM Exposure" [level=2]
   - 'button "About: CTEM Exposure"': "About: ⓘ"
-  - button "Hide CTEM Exposure": Hide ✕
-  - button "Move CTEM Exposure": Move ⠿
+  - 'button "Options: CTEM Exposure"'
   - text: no data
   - heading "Asset Insights" [level=2]
   - 'button "About: Asset Insights"': "About: ⓘ"
-  - button "Hide Asset Insights": Hide ✕
-  - button "Move Asset Insights": Move ⠿
+  - 'button "Options: Asset Insights"'
   - text: /Total Findings \d+ baseline/
   - heading "Exposures" [level=2]
   - 'button "About: Exposures"': "About: ⓘ"
-  - button "Hide Exposures": Hide ✕
-  - button "Move Exposures": Move ⠿
+  - 'button "Options: Exposures"'
   - text: no exposures reported
   - heading "Asset Risk" [level=2]
   - 'button "About: Asset Risk"': "About: ⓘ"
-  - button "Hide Asset Risk": Hide ✕
-  - button "Move Asset Risk": Move ⠿
+  - 'button "Options: Asset Risk"'
   - text: no asset risk data
   - heading "Exposed Surface" [level=2]
   - text: 0 hostnames · 0 IPs
   - 'button "About: Exposed Surface"': "About: ⓘ"
-  - button "Hide Exposed Surface": Hide ✕
-  - button "Move Exposed Surface": Move ⠿
+  - 'button "Options: Exposed Surface"'
   - text: Showing 0 of 0 no hostnames reported Showing 0 of 0 no IPs reported
   - heading "CTEM Assets" [level=2]
   - 'button "About: CTEM Assets"': "About: ⓘ"
-  - button "Hide CTEM Assets": Hide ✕
-  - button "Move CTEM Assets": Move ⠿
+  - 'button "Options: CTEM Assets"'
   - text: no CTEM asset data
   - heading "Threat Feed Activity" [level=2]
   - 'button "About: Threat Feed Activity"': "About: ⓘ"
-  - button "Hide Threat Feed Activity": Hide ✕
-  - button "Move Threat Feed Activity": Move ⠿
+  - 'button "Options: Threat Feed Activity"'
   - text: /\d+ Blocked 0 Allowed/
   - application: /Dec \d+ Dec \d+/

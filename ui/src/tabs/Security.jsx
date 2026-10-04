@@ -530,7 +530,7 @@ function LookalikeTable({ panelId, lookalikes }) {
 // aborting it on navigation is enough — left the panel wedged in an error state
 // the 5-minute poll would not revisit; tests/layout-drag.spec.ts caught it as a
 // Security tab with 14 panels instead of 13. Standing chrome, like every other
-// panel here: a reader who does not want it takes it off with the ✕.
+// panel here: a reader who does not want it takes it off the page from its ⋯ menu.
 function AxurPanel({ panelId, axur }) {
   const { COLORS } = useChartTheme()
   const d = axur.data ?? {}

@@ -4,19 +4,16 @@
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]
   - text: avg qps
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
-  - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
-  - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
+  - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
   - application: /\d+:\d+ AM \d+:\d+ AM/
   - button "About dns-zone-kpis": ⓘ
-  - button "Hide Zone Counts": ✕
-  - button "Move Zone Counts": ⠿
+  - button "Options for Zone Counts": ⋯
   - text: Zones 2 Zones w/ issues 1 Anomalies 1
   - heading "DNS Services" [level=2]
   - text: 1 services
   - 'button "About: DNS Services"': "About: ⓘ"
-  - button "Hide DNS Services": Hide ✕
-  - button "Move DNS Services": Move ⠿
+  - 'button "Options: DNS Services"'
   - table:
     - rowgroup:
       - row "Name Comment Pool ID":
@@ -30,16 +27,14 @@
         - cell "pool/baseline-1"
   - heading "Query Volume — 7d" [level=2]
   - 'button "About: Query Volume — 7d"': "About: ⓘ"
-  - button "Hide Query Volume — 7d": Hide ✕
-  - button "Move Query Volume — 7d": Move ⠿
+  - 'button "Options: Query Volume — 7d"'
   - application
   - heading "DNS Zones" [level=2]
   - text: 2 zones
   - textbox "Filter zones":
     - /placeholder: Filter…
   - 'button "About: DNS Zones"': "About: ⓘ"
-  - button "Hide DNS Zones": Hide ✕
-  - button "Move DNS Zones": Move ⠿
+  - 'button "Options: DNS Zones"'
   - table:
     - rowgroup:
       - row "Zone View Records TTL":
@@ -65,8 +60,7 @@
   - heading "DNSSEC Health" [level=2]
   - text: 1 unsigned
   - 'button "About: DNSSEC Health"': "About: ⓘ"
-  - button "Hide DNSSEC Health": Hide ✕
-  - button "Move DNSSEC Health": Move ⠿
+  - 'button "Options: DNSSEC Health"'
   - text: /1 signed 1 unsigned \d+\.\d+% signed share \(of 2\)/
   - table:
     - rowgroup:
@@ -80,8 +74,7 @@
   - heading "RPZ Policy Zones" [level=2]
   - text: 1 zones
   - 'button "About: RPZ Policy Zones"': "About: ⓘ"
-  - button "Hide RPZ Policy Zones": Hide ✕
-  - button "Move RPZ Policy Zones": Move ⠿
+  - 'button "Options: RPZ Policy Zones"'
   - table:
     - rowgroup:
       - row "Zone Severity Policy Override Type Status":
@@ -100,8 +93,7 @@
   - heading "DTC Load-Balanced Names" [level=2]
   - text: 1 names
   - 'button "About: DTC Load-Balanced Names"': "About: ⓘ"
-  - button "Hide DTC Load-Balanced Names": Hide ✕
-  - button "Move DTC Load-Balanced Names": Move ⠿
+  - 'button "Options: DTC Load-Balanced Names"'
   - table:
     - rowgroup:
       - row "Name Policy Precedence TTL Status":

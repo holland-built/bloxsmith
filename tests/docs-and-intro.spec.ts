@@ -24,7 +24,9 @@ import { test, expect } from './fixtures';
 // (playwright.config.ts explains why), so that is safe.
 
 const VIEW = '__layout_overview';
-const LESSON = /drag a panel/i;
+// The sentence on Overview that teaches arranging. `.` for the apostrophe, which
+// is a typographic one in the source.
+const LESSON = /open a panel.s ⋯ menu to move it/i;
 const SUMMARY = /Your estate at a glance/i;
 
 test.beforeEach(async ({ request }) => {

@@ -7,8 +7,7 @@
   - button "Arrange panels"
   - heading "Ask AI" [level=2]
   - 'button "About: Ask AI"': "About: ⓘ"
-  - button "Hide Ask AI": Hide ✕
-  - button "Move Ask AI": Move ⠿
+  - 'button "Options: Ask AI"'
   - log: Ask a question or pick a suggestion below
   - button "Which subnets are nearly full?"
   - button "Which domains are on threat feeds?"
@@ -21,8 +20,7 @@
   - button "Ask" [disabled]
   - heading "Threat lookup" [level=2]
   - 'button "About: Threat lookup"': "About: ⓘ"
-  - button "Hide Threat lookup": Hide ✕
-  - button "Move Threat lookup": Move ⠿
+  - 'button "Options: Threat lookup"'
   - textbox "Look up a domain, IP, or host":
     - /placeholder: domain, IP, or host…
   - button "Lookup" [disabled]

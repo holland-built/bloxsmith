@@ -225,6 +225,9 @@ export async function grabRightEdge(page: Page, id: string) {
 export async function beginPanelDrag(page: Page, id: string) {
   const handle = page.locator(`[data-panel-id="${id}"] [data-layout-handle]`);
   await expect(handle).toHaveCount(1);
+  // The Move button lives in the panel's "…" menu since 2026-10-04, so the
+  // gesture a person performs starts by opening it.
+  await openPanelMenu(page, id);
   const hb = (await handle.boundingBox())!;
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
   await page.mouse.down();
@@ -282,14 +285,62 @@ export const activeHandlePanel = (page: Page) =>
 
 export const liveText = (page: Page) => page.locator('[data-layout-live]').innerText();
 
-// Reaches a move handle by pressing Tab, which also proves the handle is in the
-// tab order at all rather than merely focusable by script.
-export async function tabToHandle(page: Page, id: string, max = 400) {
+// ---------------------------------------------------------------------------
+// The panel's "…" menu
+// ---------------------------------------------------------------------------
+//
+// Move and Take off the page sit behind one "…" button in each panel's header
+// since 2026-10-04. Every gesture that used to start on a bare ⠿ or ✕ starts by
+// opening that menu, so the opening lives here, once, for the same reason the
+// drag does: a spec that opened it its own way could go on passing against a
+// menu the app no longer has.
+
+export const panelMenuToggle = (page: Page, id: string) =>
+  page.locator(`[data-panel-id="${id}"] [data-panel-menu-toggle]`);
+
+export const panelMenuList = (page: Page, id: string) =>
+  page.locator(`[data-panel-id="${id}"] [data-panel-menu-list]`);
+
+// By pointer. A no-op when it is already open, so a helper can call it without
+// knowing what the spec did first.
+export async function openPanelMenu(page: Page, id: string) {
+  const toggle = panelMenuToggle(page, id);
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await expect(panelMenuList(page, id)).toBeVisible();
+}
+
+// Which panel's "…" button holds the focus, if one does.
+export const activeMenuTogglePanel = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el || !el.hasAttribute('data-panel-menu-toggle')) return null;
+    return el.closest('[data-panel-id]')?.getAttribute('data-panel-id') ?? null;
+  });
+
+// By keyboard alone: Tab to the panel's "…" button and press Enter. Returns the
+// number of Tab presses, which also proves the button is in the tab order at
+// all rather than merely focusable by script.
+export async function tabToPanelMenu(page: Page, id: string, max = 400) {
   for (let i = 0; i < max; i++) {
     await page.keyboard.press('Tab');
-    if ((await activeHandlePanel(page)) === id) return i + 1;
+    if ((await activeMenuTogglePanel(page)) === id) {
+      await page.keyboard.press('Enter');
+      await expect(panelMenuList(page, id)).toBeVisible();
+      return i + 1;
+    }
   }
-  throw new Error(`the ${id} move handle was not reachable within ${max} Tab presses`);
+  throw new Error(`the ${id} "…" button was not reachable within ${max} Tab presses`);
+}
+
+// Reaches a move handle by keyboard alone: Tab to the panel's "…" button,
+// Enter to open it, then Tab until the Move button inside has the focus.
+export async function tabToHandle(page: Page, id: string, max = 400) {
+  const presses = await tabToPanelMenu(page, id, max);
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab');
+    if ((await activeHandlePanel(page)) === id) return presses + i + 1;
+  }
+  throw new Error(`the ${id} Move button was not reachable from its open "…" menu`);
 }
 
 // ---------------------------------------------------------------------------

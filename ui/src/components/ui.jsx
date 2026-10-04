@@ -1148,18 +1148,18 @@ const ARRANGE_FOCUSABLE =
 // TWO PARTS, BECAUSE THEY ARE NOT TRUE OF THE SAME PAGES. Moving needs another
 // panel to move past; resizing, auto-save and hiding do not. #editor renders
 // one panel and always will, so on that tab the move sentence was describing a
-// gesture the operator could not perform — and the ⠿ handle it names is not
+// gesture the operator could not perform — and the Move button it names is not
 // rendered there either. The gate is `items.length > 1`, which is the same
 // count CardGrid's `reorderable` uses (arrangeItems is the order minus the
 // hidden tiles) AND the same one that decides whether the rows in this window
 // are draggable at all, so the copy and the chrome cannot disagree.
 const LAYOUT_HELP_MOVE =
   'Drag a row up or down to change the order, or use the buttons. On the page ' +
-  'itself you can drag a panel by its ⠿ grip.'
+  'itself, open a panel’s ⋯ menu and drag Move.'
 
 const LAYOUT_HELP_REST =
-  'Drag a panel’s right edge to make it wider or narrower. The ✕ on a panel ' +
-  'takes it off the page, and the list here puts it back at the end. Changes here save ' +
+  'Drag a panel’s right edge to make it wider or narrower. Take off the page, in a ' +
+  'panel’s ⋯ menu, hides it, and the list here puts it back at the end. Changes here save ' +
   'right away — there is no Save button.'
 
 // ---------- "Arrange this page" ----------
@@ -1508,6 +1508,11 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
     </div>
   )
 }
+
+// A row in a panel's "…" menu: the glyph, then the words, left-aligned and as
+// wide as the box. min-h-6 keeps the 24px target a header button has on a
+// mouse; index.css raises it to 44px on a coarse pointer like every button.
+const PANEL_MENU_ROW = 'w-full min-h-6 rounded-control px-1.5 text-note text-left inline-flex items-center gap-2 whitespace-nowrap'
 
 const SPAN_CLASS = {
   1: 'col-span-1',
@@ -1908,6 +1913,30 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // pointer comes up — the drop rewrites the saved `order`, which re-sorts the
   // real children (sortByOrder), so DOM order and visual order can never
   // disagree the way a CSS-`order` implementation would let them.
+  // ---- the "…" menu that holds Move and Take off the page ----
+  //
+  // WHY THERE IS A MENU. Every managed panel used to carry three glyph buttons
+  // in its header, ⓘ ✕ ⠿: 21 small boxes on Overview alone. The owner was shown
+  // three live variants on 2026-10-04 (leave it, fold two behind one "…", show
+  // them on hover only) and chose the second. The ⓘ stays out on its own
+  // because the owner picked that glyph earlier and its hover preview needs it
+  // on screen; hover-only was passed over because a control nobody can see is a
+  // control nobody finds, and a touch screen has no hover.
+  //
+  // A DISCLOSURE, NOT role="menu". The two things inside are ordinary buttons
+  // reached with Tab. An ARIA menu would take the arrow keys for itself, and
+  // the Move button needs all four of them once move mode starts.
+  //
+  // The state lives here rather than in a child component because two things
+  // outside the menu have to close it: taking the panel off the page (a hidden
+  // Card stays mounted, so an open menu would still be open when the panel
+  // came back) and the end of a pointer drag.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuBoxRef = useRef(null)
+  const menuBtnRef = useRef(null)
+  // Set when a pointer drag ends, read once by the layout effect below.
+  const refocusMenuRef = useRef(false)
+
   const onHandleDown = useCallback(
     (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -1987,6 +2016,12 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
         // Scoped to the gesture and reversed in finish(): without it a drag
         // across the page selects every heading it crosses.
         document.body.style.userSelect = 'none'
+        // The drag starts from a button inside the open "…" menu, and the menu
+        // would otherwise sit over the page for the whole gesture. Faded by
+        // hand and not closed: closing is a state change, which would re-render
+        // this card while the pointer is down, and the handle has to stay in
+        // the document because it holds the pointer capture.
+        if (menuBoxRef.current) menuBoxRef.current.style.opacity = '0'
       }
 
       const placeLine = (idx) => {
@@ -2003,6 +2038,14 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
         if (ghost) ghost.remove()
         if (line) line.remove()
         document.body.style.userSelect = ''
+        if (menuBoxRef.current) menuBoxRef.current.style.opacity = ''
+        // A drag that actually travelled is over, dropped or cancelled, so the
+        // menu it started from has done its job. A press that never travelled
+        // was a click on the Move button and leaves the menu as it was.
+        if (started) {
+          setMenuOpen(false)
+          refocusMenuRef.current = true
+        }
         if (!commit || !started) return
         const snap = grid.snapshot()
         const next = moveItem(snap.order, snap.order.indexOf(panelId), target)
@@ -2167,12 +2210,21 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       onPointerDown={onHandleDown}
       onKeyDown={onHandleKey}
       onBlur={onHandleBlur}
-      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 ${
-        moveActive ? 'border-accent text-link' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+      className={`${PANEL_MENU_ROW} cursor-grab touch-none select-none ${
+        moveActive ? 'bg-line text-link' : 'text-field-txt hover:bg-line'
       }`}
     >
-      {title && <span id={moveWordId} className="sr-only">Move</span>}
-      ⠿
+      <span aria-hidden="true" className="w-4 text-center text-dim">⠿</span>
+      {/* The word is the VISIBLE label now, and still the first half of the
+          accessible name ("Move <title>"), so what is read out starts with what
+          is on screen. A titleless panel is named by aria-label above and shows
+          the same word. */}
+      <span id={title ? moveWordId : undefined}>Move</span>
+      {/* What to do with it, said on screen. Until this row existed the only
+          place the keys were spelled out was the sr-only live region. */}
+      <span aria-hidden="true" className="text-dim">
+        {moveActive ? 'arrow keys, then Enter' : 'drag, or press Enter'}
+      </span>
     </button>
   ) : null
 
@@ -2190,6 +2242,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // ("puts it back at the end") rather than papered over.
   const hideWordId = panelId ? `panel-hide-${panelId}` : undefined
   const onHide = useCallback(() => {
+    // Before the panel goes: a hidden Card renders nothing but stays mounted,
+    // so a menu left open here would be open when the panel is put back.
+    setMenuOpen(false)
     const snap = grid.snapshot()
     if (snap.hidden.includes(panelId)) return
     grid.apply({ order: snap.order, spans: snap.spans, hidden: [...snap.hidden, panelId] }, true)
@@ -2203,14 +2258,121 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // By reference when there is a title, by id when there is not — the same
       // shape as the handle above, and for the same reason: a title can be a
       // React node, and interpolating one gives "Hide [object Object]".
-      {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelName || panelId}` })}
-      title="Hide this panel"
+      //
+      // THE NAME STARTS WITH THE WORDS ON THE BUTTON. It was "Hide <title>"
+      // while the button was a bare ✕. It shows "Take off the page" now, the
+      // phrase the Arrange window and the announcement already use, and a
+      // name that did not contain those words would be one a voice user could
+      // read on screen and not say.
+      {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Take off the page ${panelName || panelId}` })}
+      title="Hide this panel. The Arrange panels button puts it back."
       onClick={onHide}
-      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 text-dim hover:text-field-txt hover:border-border-hover"
+      className={`${PANEL_MENU_ROW} cursor-pointer text-field-txt hover:bg-line`}
     >
-      {title && <span id={hideWordId} className="sr-only">Hide</span>}
-      ✕
+      <span aria-hidden="true" className="w-4 text-center text-dim">✕</span>
+      <span id={title ? hideWordId : undefined}>Take off the page</span>
     </button>
+  ) : null
+
+  // ---- the "…" button and the box it opens ----
+  //
+  // The box is always in the document and `hidden` while shut, not mounted on
+  // open. The Move button inside it is the element CardGrid puts focus back on
+  // after a keyboard move re-sorts the page, and the element a pointer drag
+  // holds its capture on; neither survives being unmounted mid-gesture.
+  //
+  // Open for the whole of a keyboard move, whatever menuOpen says: every arrow
+  // press detaches and re-inserts this card, which blurs the Move button, and
+  // a box that shut on that blur would take the button away from the gesture
+  // that is using it.
+  const menuShown = menuOpen || moveActive
+  const menuId = panelId ? `panel-menu-${panelId}` : undefined
+  const menuWordId = panelId ? `panel-menu-word-${panelId}` : undefined
+
+  // After a pointer drag the menu shuts, and the Move button the press landed
+  // on is inside it, so the focus it held would be left on nothing. Put it on
+  // the "…" button instead. Done here and not in the drag's own finish():
+  // the drop re-sorts the real DOM in the render that follows, a browser drops
+  // the focus of a node that is detached and re-inserted, and a focus() call
+  // made before that render would be undone by it.
+  //
+  // ONLY FOCUS NOTHING ELSE HOLDS. The flag is set by one event and cleared on
+  // the next render, and even then focus is taken only from <body> or from
+  // inside this panel's own shut menu, so this cannot pull focus off anything
+  // the operator has since put it on. That is the fault CardGrid's own
+  // focus-restore effect once had.
+  useLayoutEffect(() => {
+    if (!refocusMenuRef.current) return
+    refocusMenuRef.current = false
+    const active = document.activeElement
+    const free = !active || active === document.body || active === document.documentElement
+    if (free || menuBoxRef.current?.contains(active)) menuBtnRef.current?.focus({ preventScroll: true })
+  })
+
+  // A press anywhere else shuts it.
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const away = (e) => {
+      if (!menuBoxRef.current?.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [menuOpen])
+
+  const onMenuKey = (e) => {
+    // In move mode Escape belongs to the Move button: it cancels the move, and
+    // the box stays so the button it is focused on does too.
+    if (e.key !== 'Escape' || moveActive || !menuOpen) return
+    // Stopped, so it does not also reach App.jsx's document-level Escape,
+    // which belongs to the nav menus.
+    e.stopPropagation()
+    setMenuOpen(false)
+    menuBtnRef.current?.focus()
+  }
+
+  // Focus going somewhere outside the box shuts it: Tab past the last button,
+  // or a click on another control. relatedTarget is where focus is going, and
+  // it is null when focus is dropped rather than moved (a press on plain page,
+  // which the pointerdown listener above already handles).
+  const onMenuBlur = (e) => {
+    if (moveActive || !menuOpen) return
+    if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setMenuOpen(false)
+  }
+
+  const menu = hideBtn || handle ? (
+    <span ref={menuBoxRef} data-panel-menu="" className="relative shrink-0 inline-flex" onKeyDown={onMenuKey} onBlur={onMenuBlur}>
+      <button
+        type="button"
+        ref={menuBtnRef}
+        data-panel-menu-toggle=""
+        // By reference when there is a title, for the reason the other header
+        // buttons give: a title can be a React node.
+        {...(title ? { 'aria-labelledby': `${menuWordId} ${titleId}` } : { 'aria-label': `Options for ${panelName || panelId}` })}
+        aria-expanded={menuShown}
+        aria-controls={menuId}
+        title="Move or hide this panel"
+        onClick={() => setMenuOpen((o) => !o)}
+        className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-note leading-none inline-flex items-center justify-center min-w-6 min-h-6 ${
+          menuShown ? 'border-border-hover text-field-txt' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+        }`}
+      >
+        {title && <span id={menuWordId} className="sr-only">Options:</span>}
+        ⋯
+      </button>
+      <span
+        id={menuId}
+        data-panel-menu-list=""
+        hidden={!menuShown}
+        // right-0: the box hangs from the button's right edge and grows to the
+        // LEFT, so it cannot widen `right` (headNeed reads rightRef.scrollWidth,
+        // and overflow to the left is not scrollable overflow) and it stays on
+        // screen for the panel in the last column.
+        className="absolute right-0 top-full mt-1 z-30 flex flex-col gap-0.5 rounded-control border border-border bg-card p-1 shadow-lg"
+      >
+        {hideBtn}
+        {handle}
+      </span>
+    </span>
   ) : null
 
   // ---- the "About" panel-help disclosure ----
@@ -2474,12 +2636,11 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
               span would be a header element the measurement could not see —
               and the header would overflow the card by exactly the handle's
               width. Sitting inside rightRef, it is counted for free. */}
-          {(right || infoBtn || handle || hideBtn) && (
+          {(right || infoBtn || menu) && (
             <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
               {infoBtn}
-              {hideBtn}
-              {handle}
+              {menu}
             </span>
           )}
         </div>
@@ -2492,11 +2653,10 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
           this file can see it either. */}
       {/* Widened from `managed && !title` to cover the help button too: a
           titleless panel with neither renders nothing, exactly as before. */}
-      {!title && (infoBtn || handle || hideBtn) && (
+      {!title && (infoBtn || menu) && (
         <span className="absolute top-2 right-3 z-10 flex items-center gap-1.5">
           {infoBtn}
-          {hideBtn}
-          {handle}
+          {menu}
         </span>
       )}
       {helpBody}

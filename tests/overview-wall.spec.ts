@@ -186,7 +186,13 @@ test('a saved layout that hid the old numbers panel does not list it as off the 
   );
   await page.goto('/#overview');
   await expect(page.locator('[data-panel-id]')).toHaveCount(7, { timeout: 20_000 });
-  await expect(page.getByText(/off the page/)).toHaveCount(0);
+  // Asked of the strip above the panels, which is where "1 tile is off the
+  // page." is said. It used to be asked of the whole page; since 2026-10-04
+  // every panel's "…" menu holds a button that reads "Take off the page", so
+  // the whole page always contains those words.
+  const strip = page.getByTestId('hidden-tiles');
+  await expect(strip).toHaveCount(1);
+  await expect(strip.getByText(/off the page/)).toHaveCount(0);
   // The panel added since that layout was saved is there, after the ones it placed.
   const ids = await page.locator('[data-panel-id]').evaluateAll((els) => els.map((el) => el.getAttribute('data-panel-id')));
   expect(ids.at(-1)).toBe('services-incidents');

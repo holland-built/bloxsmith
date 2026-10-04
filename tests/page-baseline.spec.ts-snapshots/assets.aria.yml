@@ -11,16 +11,14 @@
   - button "Search"
   - button "Refresh"
   - 'button "About: Asset Inventory"': "About: ⓘ"
-  - button "Hide Asset Inventory": Hide ✕
-  - button "Move Asset Inventory": Move ⠿
+  - 'button "Options: Asset Inventory"'
   - text: 2assets discovered
   - button "Server1"
   - button "Router1"
   - heading "Assets" [level=2]
   - text: 1–1 of 1
   - 'button "About: Assets"': "About: ⓘ"
-  - button "Hide Assets": Hide ✕
-  - button "Move Assets": Move ⠿
+  - 'button "Options: Assets"'
   - table:
     - rowgroup:
       - row "Name Type Provider Vendor Last seen":

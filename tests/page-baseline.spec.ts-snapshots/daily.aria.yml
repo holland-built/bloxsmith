@@ -5,16 +5,14 @@
   - heading "Open Issues" [level=2]
   - text: what needs you this morning
   - 'button "About: Open Issues"': "About: ⓘ"
-  - button "Hide Open Issues": Hide ✕
-  - button "Move Open Issues": Move ⠿
+  - 'button "Options: Open Issues"'
   - button /2 Subnets ≥\d+% Util 1 of them are at \d+% or more\. \/\d+–\/\d+ links are left out\./
   - button "3 Hosts Not Online 3 hosts loaded. 1 ok, 1 degraded, 1 offline."
   - 'button "1 DNS Zones w/ Issues Most common: low ttl (1)."'
   - heading "Security Today" [level=2]
   - text: 2 events
   - 'button "About: Security Today"': "About: ⓘ"
-  - button "Hide Security Today": Hide ✕
-  - button "Move Security Today": Move ⠿
+  - 'button "Options: Security Today"'
   - term: critical
   - definition: "1"
   - term: high
@@ -30,8 +28,7 @@
   - heading "Top Capacity Risks" [level=2]
   - text: /least free space, excl\. infra links top \d+/
   - 'button "About: Top Capacity Risks"': "About: ⓘ"
-  - button "Hide Top Capacity Risks": Hide ✕
-  - button "Move Top Capacity Risks": Move ⠿
+  - 'button "Options: Top Capacity Risks"'
   - table:
     - rowgroup:
       - row "Network Site Util Used Free":
@@ -62,8 +59,7 @@
   - heading "Hosts Needing Attention" [level=2]
   - text: 3 shown
   - 'button "About: Hosts Needing Attention"': "About: ⓘ"
-  - button "Hide Hosts Needing Attention": Hide ✕
-  - button "Move Hosts Needing Attention": Move ⠿
+  - 'button "Options: Hosts Needing Attention"'
   - table:
     - rowgroup:
       - row "Hostname Status":
@@ -82,8 +78,7 @@
   - heading "DNS Zone Issues" [level=2]
   - text: 1 zones
   - 'button "About: DNS Zone Issues"': "About: ⓘ"
-  - button "Hide DNS Zone Issues": Hide ✕
-  - button "Move DNS Zone Issues": Move ⠿
+  - 'button "Options: DNS Zone Issues"'
   - table:
     - rowgroup:
       - row "Zone Issues":
