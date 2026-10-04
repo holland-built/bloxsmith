@@ -7,7 +7,7 @@ import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP } from '../lib/panelHelp.js'
 import { shouldHidePanel, showAnyway } from '../lib/services.js'
 import {
-  insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
+  declaredSpan, fillRows, insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
   shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
 } from '../lib/layout.js'
 
@@ -186,10 +186,13 @@ export function ChartTip({
 // HOW IT WORKS. A panel whose body can measure itself (DataTable) reports the
 // pixel width its columns actually need. Card adds its own padding/border plus
 // what its header needs, and registers that with the enclosing CardGrid, which
-// gives it the fewest whole tracks that cover it.
+// starts it from the fewest whole tracks that cover it.
 //
-// Panels that never report (charts, KPI stacks, forms) keep their declared span
-// untouched, so this change cannot move a non-table panel.
+// Panels that never report (charts, KPI stacks, forms) start from their
+// declared span and are never made narrower than it.
+//
+// Since 2026-10-04 either kind can then be handed the tracks its row has left
+// over, so that every row ends flush. applyLayout, below, has why.
 //
 // NO FEEDBACK LOOP. The reported number is the content's NATURAL width, which
 // does not depend on how much width the panel was given — so widening a panel
@@ -309,33 +312,63 @@ function applyLayout(grid, items, overrides) {
     return s
   }
 
-  // A measuring panel gets the fewest tracks that cover its content, and never
-  // one more. Panels that do not measure are not touched at all, so their own
-  // responsive span classes keep working.
+  // A measuring panel starts from the fewest tracks that cover its content. A
+  // panel that does not measure starts from the span its own classes declare.
+  // Then every row's leftover tracks are handed out, so each row ends flush
+  // with the grid's right edge (fillRows, lib/layout.js, has the rule for who
+  // gets them).
   //
-  // SQUARING OFF THE ROWS WAS BUILT FIRST AND MEASURED WORSE. Handing each
-  // row's leftover tracks to whichever panel in it was furthest from fitting
-  // does remove the ragged right edge, but across the eight table tabs at
-  // 1024/1280/1600/1920 the totals came out:
+  // ROWS END FLUSH BECAUSE THE OWNER CHOSE IT, 2026-10-04, AGAINST A MEASUREMENT
+  // THAT SAID OTHERWISE. Squaring off the rows was built first here and taken
+  // out again: across the eight table tabs at 1024/1280/1600/1920 the totals
+  // came out
   //
   //                       dead px INSIDE panels   ragged row edges   total
   //   hand-declared spans          37,447              20,168        57,615
   //   squared-off rows             25,598              21,029        46,627
-  //   this (never stretch)         16,069              30,432        46,501
+  //   never stretch                16,069              30,432        46,501
   //
-  // Same total either way — it only decides whether the dead space sits at the
-  // edge of a row or back inside a panel, and inside a panel is the thing being
-  // complained about. Screenshots agreed: squaring off gave Host Health and
-  // On-Prem Hosts their wide empty middles straight back.
-  for (const el of Array.from(grid.children)) {
+  // The same total either way. It only decides whether the dead space sits at
+  // the edge of a row or back inside a panel, and "never stretch" was kept
+  // because inside a panel was the complaint at the time. On 2026-10-03 the
+  // owner chose a wall of bordered panels as the look, and on a wall the ragged
+  // edge is what shows: measured on the live estate at 1580px wide, 20 rows
+  // ended short across six tabs. The owner was shown three live variants (leave
+  // it, grow only the chart beside a table, stretch tables too) and picked the
+  // last. The cost is the one in the table: a table alone in its row spreads
+  // its columns across the whole row.
+  //
+  // What did not change: a table is still MEASURED, its need still decides
+  // which row it lands in, and a panel the operator sized is never grown.
+  const els = Array.from(grid.children)
+  const plan = els.map((el) => {
     const entry = items.get(el)
     const measuredSpan = entry && entry.need != null ? spanFor(entry.need) : null
     // trackCount is read live above, so a saved span 6 clamps to 2 on the base
     // grid and back to 6 at xl — the ResizeObserver below re-runs this across
     // every breakpoint change. The STORED span is never touched by the clamp.
-    const { span } = resolveSpan({ userSpan: overrides.get(el) ?? null, measuredSpan, trackCount })
+    const { span, source } = resolveSpan({ userSpan: overrides.get(el) ?? null, measuredSpan, trackCount })
+    return {
+      source,
+      span: span ?? declaredSpan(el.className, trackCount),
+      fixed: source === 'user',
+      need: source === 'measured' ? entry.need : null,
+    }
+  })
+  const filled = fillRows(plan, trackCount, widthOf)
+
+  els.forEach((el, i) => {
+    // How many tracks this item was handed beyond its own, published so a test
+    // can tell "wider than its content because its row had room" from "wider
+    // than its content because the span stopped following it"
+    // (tests/table-sizing.spec.ts, invariant 3). It has no styling role.
+    const grown = filled[i] - plan[i].span
+    if (grown > 0) el.dataset.grown = String(grown)
+    else if (el.dataset.grown) delete el.dataset.grown
+
     // null span = "leave the declared SPAN_CLASS alone", the untouched path for
-    // every panel that neither measures nor carries a saved override.
+    // a panel that neither measures, nor carries a saved override, nor was
+    // handed a track.
     //
     // CLEARED, NOT SKIPPED. `continue` alone meant an element that had ONCE
     // been given a span kept it for ever: the measurement that produced it can
@@ -345,13 +378,13 @@ function applyLayout(grid, items, overrides) {
     // element back to its responsive SPAN_CLASS, which is what "leave it alone"
     // was always supposed to mean. Guarded on the current value so an element
     // that never carried one — most grid children — is not written to at all.
-    if (span == null) {
+    if (plan[i].source === 'declared' && grown === 0) {
       if (el.style.gridColumn) el.style.gridColumn = ''
-      continue
+      return
     }
-    const next = `span ${span} / span ${span}`
+    const next = `span ${filled[i]} / span ${filled[i]}`
     if (el.style.gridColumn !== next) el.style.gridColumn = next
-  }
+  })
 }
 
 // ---- the save pill: the layout feature's only word to a SIGHTED operator ----
@@ -866,6 +899,24 @@ export function CardGrid({ className = '', layoutKey, children }) {
     ro.observe(grid)
     return () => ro.disconnect()
   }, [schedule])
+
+  // ...and which panels share a row changes whenever this grid renders: a
+  // panel dragged to another place, a tile taken off the page, a panel that
+  // only exists once its data has arrived. None of those is a measurement, so
+  // none of them reaches schedule() through a Card. Filling the rows depends on
+  // who is IN the row, so it is run again after every render.
+  //
+  // The observer above already catches the changes that alter the grid's
+  // HEIGHT, which is most of them (tests/flush-rows.spec.ts hides a tile and
+  // passes without this effect). It does so from a ResizeObserver callback,
+  // which a browser runs after that frame's animation callbacks, so the pass
+  // it schedules lands a frame later. This one is scheduled during the commit
+  // and lands in the same frame, and it does not depend on the height moving.
+  // schedule() is one pass per frame however often it is called, and
+  // applyLayout sets no state.
+  useLayoutEffect(() => {
+    schedule()
+  })
 
   // ---- the way back for a tile that has been put away ----
   //
@@ -1504,7 +1555,10 @@ export function usePanelFit() {
 // grid handed it 4 of 6 tracks (1244px) against the declared span={6} (1872px),
 // leaving 628px of the page empty beside the widest table in the app.
 // This is a per-card opt-out and not a change to applyLayout on purpose
-// — every other measuring panel must keep shrinking to its content.
+// — every other measuring panel must keep starting from what its content needs.
+// (Since 2026-10-04 applyLayout also hands a row's leftover tracks out, which
+// would give this table its full row anyway; the opt-out still keeps it out of
+// the measuring path altogether.)
 //
 // (The sentences that explain reorder, resize, hide and auto-save used to be
 // declared here and appended by Card to every managed panel's help. They now
