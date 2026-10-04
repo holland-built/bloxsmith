@@ -264,3 +264,110 @@ test('incidents: the action drawer paints a real surface, not the scrim', async 
     .evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(bg, 'the drawer background is indistinguishable from the scrim').not.toBe(scrim);
 });
+
+// ---------- a table that scrolls can be scrolled from the keyboard ----------
+//
+// Host Health has no sortable heading and no clickable row, so once its rows
+// overflow the box there was nothing in it a keyboard could land on. Chrome and
+// Firefox make such a box focusable by themselves; Safari does not, and axe
+// reported it on three panels of the live estate (`scrollable-region-focusable`:
+// dns-services, dns-dnssec-health, infra-host-health). The attribute is what is
+// asserted, because the behaviour alone already passes in this suite's Chromium.
+
+const hostHealth = (n: number) => ({
+  status: 'ok',
+  count: n,
+  rows: Array.from({ length: n }, (_, i) => ({
+    ip: `10.10.0.${i + 2}`,
+    location: 'baseline-site',
+    name: `baseline-host-${String(i).padStart(2, '0')}`,
+    nat_ip: '',
+    status: 'ok',
+    version: '0.0.0-baseline',
+  })),
+});
+
+const hostHealthBox = (page: import('@playwright/test').Page) =>
+  page.locator('[data-panel-id="infra-host-health"] div.overflow-y-auto');
+
+test('infra: a table whose rows overflow is a tab stop, shows focus, and scrolls on End', async ({ page }) => {
+  await page.route('**/api/csp/host-health', (route) => route.fulfill({ json: hostHealth(40) }));
+  await page.goto('/#infra');
+
+  const box = hostHealthBox(page);
+  await expect(box.getByText('baseline-host-00')).toBeVisible({ timeout: 20_000 });
+  // The premise: 40 rows do not fit. Without this the rest proves nothing.
+  expect(await box.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(50);
+
+  await expect(box).toHaveAttribute('tabindex', '0');
+  await expect(page.getByRole('group', { name: 'Scrollable table' })).toHaveCount(1);
+
+  // Real keys, so :focus-visible is decided the way it is for a person. A
+  // scripted .focus() on a div does not satisfy Chrome's heuristic.
+  let reached = false;
+  for (let i = 0; i < 120 && !reached; i++) {
+    await page.keyboard.press('Tab');
+    reached = await box.evaluate((el) => el === document.activeElement);
+  }
+  expect(reached, 'Tab never landed on the scrolling table').toBe(true);
+  expect(await box.evaluate((el) => getComputedStyle(el).boxShadow), 'the focused table paints no ring').not.toBe('none');
+
+  await page.keyboard.press('End');
+  await expect.poll(() => box.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});
+
+test('infra: a table that fits is not given a tab stop', async ({ page }) => {
+  // One row, from the baseline world. Guards the other direction: a stop on
+  // every table, scrolling or not, would be one more Tab press per panel.
+  await page.goto('/#infra');
+  const box = hostHealthBox(page);
+  await expect(box.getByText('baseline-host-a')).toBeVisible({ timeout: 20_000 });
+  expect(await box.evaluate((el) => el.getAttribute('tabindex'))).toBeNull();
+  await expect(page.getByRole('group', { name: 'Scrollable table' })).toHaveCount(0);
+});
+
+test('infra: the tab stop follows the rows when spacing changes without a render', async ({ page }) => {
+  // The spacing switch is a CSS variable on <html>: rows get shorter with no
+  // prop or state of the table changing. Nine rows overflow the box at
+  // comfortable spacing and fit at compact, so the stop has to come and go with
+  // the layout. This pins that behaviour; it does not tell a size observer from
+  // a check on render, because a render-only version was tried against it and
+  // also passed here.
+  await page.route('**/api/csp/host-health', (route) => route.fulfill({ json: hostHealth(9) }));
+  await page.goto('/#infra');
+
+  const box = hostHealthBox(page);
+  await expect(box.getByText('baseline-host-00')).toBeVisible({ timeout: 20_000 });
+  const overflow = () => box.evaluate((el) => el.scrollHeight - el.clientHeight);
+  const density = (d: string) => page.evaluate((v) => { document.documentElement.dataset.density = v; }, d);
+
+  // The premise, both halves. If either stops holding the row count is wrong
+  // for this test, not the product.
+  expect(await overflow(), 'nine rows should overflow at comfortable spacing').toBeGreaterThan(1);
+  await expect(box).toHaveAttribute('tabindex', '0');
+
+  await density('compact');
+  await expect.poll(overflow, { message: 'nine rows should fit at compact spacing' }).toBeLessThanOrEqual(1);
+  await expect.poll(() => box.evaluate((el) => el.getAttribute('tabindex'))).toBeNull();
+  await expect(page.getByRole('group', { name: 'Scrollable table' })).toHaveCount(0);
+
+  await density('comfortable');
+  await expect(box).toHaveAttribute('tabindex', '0');
+});
+
+test('changes: the changed-objects list is a tab stop and shows focus', async ({ page }) => {
+  // Not a DataTable: Changes draws its own grid in a box capped at 520px, and
+  // its rows hold nothing focusable. Same defect, second place.
+  await page.goto('/#changes');
+  const list = page.getByRole('table', { name: 'Changed objects, grouped by resource' });
+  await expect(list).toBeVisible({ timeout: 20_000 });
+  await expect(list).toHaveAttribute('tabindex', '0');
+
+  let reached = false;
+  for (let i = 0; i < 120 && !reached; i++) {
+    await page.keyboard.press('Tab');
+    reached = await list.evaluate((el) => el === document.activeElement);
+  }
+  expect(reached, 'Tab never landed on the changed-objects list').toBe(true);
+  expect(await list.evaluate((el) => getComputedStyle(el).boxShadow), 'the focused list paints no ring').not.toBe('none');
+});

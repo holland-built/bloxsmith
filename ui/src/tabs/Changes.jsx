@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import {
   FEED_PROMISE,
@@ -258,7 +258,10 @@ function SpanBar({ summary }) {
 function Feed({ groups }) {
   return (
     <div
-      className="max-h-[520px] overflow-auto"
+      // tabIndex: a box that scrolls has to be reachable, or a keyboard cannot
+      // scroll it. The rows hold nothing focusable of their own.
+      tabIndex={0}
+      className={`max-h-[520px] overflow-auto outline-none ${FOCUS_RING}`}
       role="table"
       aria-label="Changed objects, grouped by resource"
       aria-colcount={FEED_COLUMNS.length}

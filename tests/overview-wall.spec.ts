@@ -208,3 +208,17 @@ test('on a 390px phone the tiles are two across and nothing scrolls sideways', a
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(sideways).toBeLessThanOrEqual(0);
 });
+
+test('each host-status legend row is a 24px target, on the pitch it always had', async ({ page }) => {
+  // The rows were 16px tall with an 8px gap: two click targets whose 24px
+  // circles overlap (axe `target-size`). They are 24px with no gap now. The
+  // pitch is asserted too, because that is what says no word moved.
+  await installBaselineWorld(page);
+  await page.goto('/#overview');
+  const rows = page.locator('[data-panel-id="host-status"] [role="button"]');
+  await expect(rows).toHaveCount(3, { timeout: 20_000 });
+  const boxes = await rows.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ top: r.top, h: r.height })));
+  for (const b of boxes) expect(b.h).toBeGreaterThanOrEqual(24);
+  expect(boxes[1].top - boxes[0].top).toBeCloseTo(24, 0);
+  expect(boxes[2].top - boxes[1].top).toBeCloseTo(24, 0);
+});
