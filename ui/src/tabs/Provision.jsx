@@ -156,10 +156,10 @@ export default function Provision() {
         <h1 className="text-copy font-semibold tracking-tight">Provision</h1>
         <span
           className="text-note font-medium px-2 py-0.5 rounded-full"
-          style={{
-            background: isAdmin ? 'var(--pill-ok-bg)' : role === 'operator' ? 'var(--pill-warn-bg)' : 'var(--pill-crit-bg)',
-            color: isAdmin ? 'var(--pill-ok-fg)' : role === 'operator' ? 'var(--pill-warn-fg)' : 'var(--pill-crit-fg)',
-          }}
+          // A role is not a state. This was green for an admin, amber for an
+          // operator and RED for a viewer, so somebody with read access was
+          // shown the colour this app uses for a failure.
+          style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
         >
           {role.toUpperCase()}
         </span>

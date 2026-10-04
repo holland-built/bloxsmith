@@ -1,6 +1,5 @@
 - main "Infra tab":
   - heading "Infrastructure" [level=1]
-  - text: Operational
   - list "Headline numbers":
     - listitem:
       - button "Hosts 3"
