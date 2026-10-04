@@ -60,8 +60,8 @@ export default function Palette({ tabs, onPick }) {
     if (!kind) return tabHits
     return [
       {
-        id: 'estate-search',
-        label: `Search estate for ${raw}`,
+        id: 'search-everything',
+        label: `Search everything for ${raw}`,
         note: kind.label,
         hash: `dossier?q=${encodeURIComponent(raw)}`,
       },

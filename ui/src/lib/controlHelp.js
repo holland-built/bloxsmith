@@ -40,7 +40,7 @@
 
 export const CONTROL_HELP = {
   sections: {
-    label: 'Status, Estate, Risk, Change, Ask',
+    label: 'Status, Inventory, Risk, Change, Ask',
     what: 'The five groups of tabs. Press the keys 1 to 5 to open one, or click it. The group you are in is highlighted.',
   },
   updates: {

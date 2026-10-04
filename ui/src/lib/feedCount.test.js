@@ -45,7 +45,7 @@ test('an absent payload still counts the rows it was handed', () => {
 })
 
 test('the tooltip explains a qualified count and stays out of the way otherwise', () => {
-  const reason = 'host list truncated at the 1000-row limit — the estate is larger than the rows shown'
+  const reason = 'host list truncated at the 1000-row limit — there are more hosts than the rows shown'
   assert.equal(feedCountTitle({ truncated: true, total_available: 532, reason }, 500), reason)
   assert.equal(feedCountTitle({ truncated: true, total_available: 532 }, 500), undefined)
   assert.equal(feedCountTitle({ rows: [] }, 40), undefined)

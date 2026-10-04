@@ -30,7 +30,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 
 | Tab | Writes? | Purpose |
 |---|---|---|
-| [Overview](#overview) | no | Estate at a glance |
+| [Overview](#overview) | no | Your network at a glance |
 | [Daily](#daily) | no | What needs attention today |
 | [Network](#network) | no | IPAM and DHCP detail |
 | [DNS](#dns) | no | Query rate, services, DNSSEC, RPZ, DTC |
@@ -40,7 +40,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [Incidents](#incidents) | no | SOC triage queue |
 | [Audit](#audit) | no | Who changed what |
 | [Changes](#changes) | no | What changed in the last 24 hours |
-| [Provision](#provision) | **yes** | Build subnets, sites, demo estates |
+| [Provision](#provision) | **yes** | Build subnets, sites, demo networks |
 | [Self-Service](#self-service) | **yes** | Grab an address, add a DNS record, edit or remove either |
 | [Editor](#editor) | **yes** | Direct create/update/delete on objects |
 | [Drift](#drift) | no | Template vs. reality |
@@ -66,7 +66,7 @@ Panels cannot be created or deleted: the set on each tab is fixed and ships with
 
 ## Overview
 
-Estate at a glance. Refreshes every 30 seconds.
+Your network at a glance. Refreshes every 30 seconds.
 
 - **Headline numbers**: a row of tiles across the top: DNS queries per second, hosts, hosts offline, subnets at 90% or more, active leases, and security events that are critical or high. A tile that counts something bad is red or amber when there is any and green when there is none. A count that could not be read is a dash with no colour, and says "unavailable". Click a tile to jump to its panel, or to the tab that holds the detail.
 - **DNS Query Rate — 24h** — average QPS trend, with the change since the first hour in the window.
@@ -77,7 +77,7 @@ Estate at a glance. Refreshes every 30 seconds.
 - **Top Subnets by Utilization** — sortable, filterable, exports to CSV.
 - **License Inventory** — SKU, state, expiry, and time remaining. Under 30 days is red, under 90 amber.
 
-Where a count could not be fetched for the whole estate, the panel says "loaded rows" instead of implying it covered everything.
+Where a count could not be fetched for the whole network, the panel says "loaded rows" instead of implying it covered everything.
 
 ## Daily
 
@@ -152,7 +152,7 @@ The inventory behind the counts. Infra's **Asset Discovery** tile and Security's
 - **Assets** — the list itself: name, type, provider, vendor, last seen. Sortable on any of the five columns, 50 rows to a page.
 - **Row detail** — click any row for the fields too sparse to justify a table column: OS, IP addresses, MAC addresses, model, location. OS is recorded for roughly a quarter of assets, so as a column it would be mostly empty; on the one asset you asked about it is often the first thing you want.
 
-Search matches the asset **name** and is case-insensitive. It runs on the server against the whole estate, not against the page on screen — searching from page 4 of 48 searches all 48 pages, and puts you back on page 1 of the result.
+Search matches the asset **name** and is case-insensitive. It runs on the server against every asset, not against the page on screen — searching from page 4 of 48 searches all 48 pages, and puts you back on page 1 of the result.
 
 Everything is server-side: the search, the type filter, the sort and the paging. The browser is never sent 2,000-plus assets to show you fifty of them.
 
@@ -224,7 +224,7 @@ If the template dropdown is empty, no templates are installed — run \`scripts/
 
 ### Seed demo
 
-Bulk-provisions a full demo estate across the regions you tick (AMER, EMEA, APAC) from the template library. Built for demos and lab tenants.
+Bulk-provisions a full demo network across the regions you tick (AMER, EMEA, APAC) from the template library. Built for demos and lab tenants.
 
 Per-template progress rolls up as \`done/total\`, with failures listed individually. The finishing message says what actually happened rather than just that the run ended: a clean run says "Seed complete," a mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed," and a run where nothing succeeded says "Seed failed — 0 of *N* template(s) succeeded" instead of the misleadingly cheerful default.
 

@@ -1,8 +1,8 @@
 - main "Search result tab":
   - heading "Search result — everything about baseline.example" [level=1]
   - status: "Assets: loaded. DNS records: loaded. IP address management: not applicable. Threat intel: loaded. Recent changes: not applicable. All sources have answered."
-  - text: QUERY Search the estate
-  - textbox "Search the estate": baseline.example
+  - text: QUERY Search everything
+  - textbox "Search everything": baseline.example
   - text: Recognised as Hostname
   - img "Loaded"
   - text: Assets Loaded

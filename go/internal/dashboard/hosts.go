@@ -37,7 +37,7 @@ const hostsListLimit = 1000
 // hostsReason is the one operator-facing sentence, so four readers cannot word
 // the same fact four ways.
 var hostsReason = fmt.Sprintf(
-	"host list truncated at the %d-row limit — the estate is larger than the rows shown",
+	"host list truncated at the %d-row limit — there are more hosts than the rows shown",
 	hostsListLimit)
 
 // hostsParams is the one request shape. _is_total_size_needed is not a new

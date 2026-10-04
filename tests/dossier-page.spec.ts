@@ -155,7 +155,7 @@ test.describe('palette: indicator search', () => {
     await dialog.locator('input').fill('172.16.128.1');
 
     const options = dialog.getByRole('option');
-    await expect(options.first()).toContainText('Search estate for 172.16.128.1');
+    await expect(options.first()).toContainText('Search everything for 172.16.128.1');
     // Not a tab name: no tab is called this, and it is the ONLY hit, because
     // an IP matches no tab label.
     await expect(options).toHaveCount(1);
@@ -178,7 +178,7 @@ test.describe('palette: indicator search', () => {
     // 15 tabs, unchanged — the palette still receives TABS, never PAGES, so
     // the hidden dossier page must not be in this list.
     await expect(dialog.getByRole('option')).toHaveCount(15);
-    await expect(dialog.getByText(/Search estate for/)).toHaveCount(0);
+    await expect(dialog.getByText(/Search everything for/)).toHaveCount(0);
     await expect(dialog.getByRole('option', { name: /^Dossier$/ })).toHaveCount(0);
   });
 
@@ -186,7 +186,7 @@ test.describe('palette: indicator search', () => {
     await page.goto('/#overview');
     const dialog = await openPalette(page);
     await dialog.locator('input').fill('dns');
-    await expect(dialog.getByText(/Search estate for/)).toHaveCount(0);
+    await expect(dialog.getByText(/Search everything for/)).toHaveCount(0);
     await expect(dialog.getByRole('option').first()).toHaveText('DNS');
     // Enter still jumps to the tab, exactly as before.
     await dialog.locator('input').press('Enter');
@@ -527,7 +527,7 @@ test.describe('announcements', () => {
 
     // 1. the search itself, 2. the four that settle at once, 3. the straggler.
     expect(texts, `announcements were: ${JSON.stringify(texts)}`).toHaveLength(3);
-    expect(texts[0]).toBe('Searching the estate for 172.16.128.1.');
+    expect(texts[0]).toBe('Searching everything for 172.16.128.1.');
     expect(texts[1]).toMatch(/^Assets: loaded\./);
     expect(texts[1]).toContain('Recent changes: not applicable.');
     expect(texts[1]).toContain('1 source still loading.');
@@ -542,12 +542,12 @@ test.describe('announcements', () => {
   test('pressing Enter announces the new search', async ({ page }) => {
     await routeAll(page, { delays: { threat: 9000 } });
     await page.goto('/#dossier?q=172.16.128.1');
-    await expect(live(page)).toHaveText('Searching the estate for 172.16.128.1.');
+    await expect(live(page)).toHaveText('Searching everything for 172.16.128.1.');
 
-    const box = page.getByLabel('Search the estate');
+    const box = page.getByLabel('Search everything');
     await box.fill('app-dc1-prod.acme.corp');
     await box.press('Enter');
-    await expect(live(page)).toHaveText('Searching the estate for app-dc1-prod.acme.corp.');
+    await expect(live(page)).toHaveText('Searching everything for app-dc1-prod.acme.corp.');
   });
 });
 

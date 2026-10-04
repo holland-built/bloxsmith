@@ -164,7 +164,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
     ? `${DASH} loaded (count unavailable)`
     : estateTotal !== null
       ? `${subnets.length.toLocaleString()} loaded of ${estateTotal.toLocaleString()} total${unmeasuredLabel}`
-      : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
+      : `${subnets.length.toLocaleString()} loaded (total unavailable)${unmeasuredLabel}`
 
   return (
     <Card panelId={panelId} span={4} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>

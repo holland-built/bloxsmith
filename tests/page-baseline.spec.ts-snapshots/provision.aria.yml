@@ -9,7 +9,7 @@
   - heading "Provision" [level=1]
   - text: ADMIN
   - paragraph:
-    - text: Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo estate. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent and needs admin.
+    - text: Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo network. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent and needs admin.
     - button "Docs →"
   - button "Subnet"
   - button "Full site"

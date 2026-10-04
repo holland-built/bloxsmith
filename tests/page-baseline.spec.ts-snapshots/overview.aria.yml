@@ -1,7 +1,7 @@
 - main "Overview tab":
   - heading "Overview" [level=1]
   - paragraph:
-    - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
+    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
     - button "Docs →"
   - list "Headline numbers":
     - listitem:
