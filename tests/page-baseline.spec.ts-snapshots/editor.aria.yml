@@ -11,7 +11,7 @@
   - button "Tags"
   - heading "DNS Zone — Create" [level=2]
   - 'button "About: DNS Zone — Create"': "About: ⓘ"
-  - button "Hide DNS Zone — Create": Hide ✕
+  - 'button "Options: DNS Zone — Create"'
   - text: Object ID (leave blank to create new)
   - textbox "Object ID (leave blank to create new)":
     - /placeholder: existing object id — enables update/delete

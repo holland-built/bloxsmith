@@ -7,8 +7,7 @@
   - heading "Allocate Address" [level=2]
   - text: pick space → block → subnet
   - 'button "About: Allocate Address"': "About: ⓘ"
-  - button "Hide Allocate Address": Hide ✕
-  - button "Move Allocate Address": Move ⠿
+  - 'button "Options: Allocate Address"'
   - text: IP Space
   - combobox "IP Space":
     - option "Select space…" [selected]
@@ -28,8 +27,7 @@
   - heading "Create DNS Record" [level=2]
   - text: preview is validated by the server
   - 'button "About: Create DNS Record"': "About: ⓘ"
-  - button "Hide Create DNS Record": Hide ✕
-  - button "Move Create DNS Record": Move ⠿
+  - 'button "Options: Create DNS Record"'
   - text: Zone
   - combobox "Zone":
     - option "Select zone…" [selected]
@@ -57,8 +55,7 @@
   - heading "Manage Records" [level=2]
   - text: edit or delete existing DNS records
   - 'button "About: Manage Records"': "About: ⓘ"
-  - button "Hide Manage Records": Hide ✕
-  - button "Move Manage Records": Move ⠿
+  - 'button "Options: Manage Records"'
   - text: Zone
   - combobox "Zone":
     - option "Select zone…" [selected]
@@ -66,8 +63,7 @@
   - heading "Manage Addresses" [level=2]
   - text: release an allocated address
   - 'button "About: Manage Addresses"': "About: ⓘ"
-  - button "Hide Manage Addresses": Hide ✕
-  - button "Move Manage Addresses": Move ⠿
+  - 'button "Options: Manage Addresses"'
   - text: IP Space
   - combobox "IP Space":
     - option "Select space…" [selected]

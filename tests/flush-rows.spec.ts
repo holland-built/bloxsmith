@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { installBaselineWorld } from './page-fixtures';
+import { openPanelMenu } from './layout-helpers';
 
 // Every /api/ response is faked from tests/page-fixtures.ts.
 //
@@ -130,6 +131,7 @@ test('taking a panel off the page refills the rows it leaves behind', async ({ p
       (await page.evaluate(readRows)).flatMap((g) => g.rows.filter((r) => r.shortBy > 1 || r.spans !== g.tracks).map((r) => r.panels.join(', ')));
     expect(await shortRows(), 'the page should start with every row flush').toEqual([]);
 
+    await openPanelMenu(page, 'host-status');
     await page.locator('[data-panel-id="host-status"] [data-layout-hide]').click();
     await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(6);
     await page.waitForTimeout(600);

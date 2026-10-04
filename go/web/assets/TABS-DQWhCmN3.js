@@ -50,9 +50,9 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 
 Every tab rearranges, and each one remembers its own arrangement — moving a panel on Network changes nothing on DNS. Provision keeps three separate arrangements, one each for Subnet, Full site and Seed demo, because those are three different pages behind one tab.
 
-- **Move** — drag the ⠿ handle in a panel's header. Without a mouse: Tab to the handle, press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
+- **Move** — open the ⋯ menu in a panel's header and drag **Move**. Without a mouse: Tab to ⋯ and press Enter, Tab to **Move** and press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
 - **Resize** — drag a panel's right edge. In keyboard move mode, ↑ and ↓ do the same thing.
-- **Take a panel off the page** — the ✕ in a panel's header. Nothing is deleted and no data is lost; that tab simply stops drawing the panel until you put it back.
+- **Take a panel off the page** — **Take off the page**, in the same ⋯ menu. Nothing is deleted and no data is lost; that tab simply stops drawing the panel until you put it back.
 - **Arrange panels** — a button above the panels opens a window called "Arrange this page". It lists what is on the page, in the order the page is actually in, and separately anything that is off it. Drag a row up or down, or use its **Move up** and **Move down** buttons, to reorder. **Take off the page** and **Put back on the page** do the hiding and the undoing. A panel you put back lands at the *end* of the page rather than where it used to be, and the window says so. This window is also where the whole feature is explained in words, for anyone who has not met a ⠿ grip before.
 - **Saving** — there is no Save button, and nothing to remember to press. Every move, every resize and every hide is written as soon as you let go, the page confirms that it saved rather than leaving you to guess, and the arrangement comes back on your next visit and after a server restart.
 
@@ -60,7 +60,7 @@ Two tabs are quieter than the rest, and deliberately so. **Editor** draws a sing
 
 Provision, Self-Service, Editor and Drift also have an **On this page** list on the left, on wide screens. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked in the list. The list follows the page as it changes, for example when you switch Provision between Subnet, Full site and Seed demo.
 
-Panels cannot be created or deleted: the set on each tab is fixed and ships with the app, and ✕ only takes one off the page. A panel that is missing without you having hidden it is missing because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
+Panels cannot be created or deleted: the set on each tab is fixed and ships with the app, and **Take off the page** only hides one. A panel that is missing without you having hidden it is missing because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
 
 ---
 

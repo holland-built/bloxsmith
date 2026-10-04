@@ -136,7 +136,7 @@ export default function Overview() {
         Your estate at a glance — DNS load, address use, subnet fullness and host health.
         {!arrangedOnce && (
           <>
-            {' '}On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right
+            {' '}On this tab you can open a panel’s ⋯ menu to move it, or drag its right
             edge to resize, and your arrangement saves automatically.
           </>
         )}

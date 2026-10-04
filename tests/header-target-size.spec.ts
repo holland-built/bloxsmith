@@ -44,9 +44,12 @@ const MIN = 24;
 // under. Half a pixel of slack, far too little to hide a 17px control.
 const SLACK = 0.5;
 
+// Since 2026-10-04 the move and hide buttons are rows inside the panel's "…"
+// menu and render nothing while it is shut, so what sits in the header, and
+// what is measured on every panel, is the "…" button. The rows are measured
+// with a menu open in tests/panel-menu.spec.ts.
 const SELECTORS = [
-  { sel: '[data-layout-handle]', what: 'drag handle' },
-  { sel: '[data-layout-hide]', what: 'hide button' },
+  { sel: '[data-panel-menu-toggle]', what: '"…" button' },
 ];
 
 test('the panel header controls are 24x24 on a mouse, in both densities', async ({ page }) => {
@@ -108,11 +111,11 @@ test('the panel header controls are 24x24 on a mouse, in both densities', async 
   }
 
   // Cannot pass by emptiness: 5 tabs x 3 widths x 2 densities, every panel
-  // carrying a handle and a hide button. If the attributes are renamed this
-  // trips instead of silently measuring nothing.
+  // carrying a "…" button. If the attribute is renamed this trips instead of
+  // silently measuring nothing.
   expect(
     measured,
-    'no panel-header controls were found — data-layout-handle/data-layout-hide may have been renamed',
+    'no panel-header controls were found — data-panel-menu-toggle may have been renamed',
   ).toBeGreaterThan(100);
 
   expect(small, `Panel header controls under ${MIN}x${MIN} with a mouse:\n  ${small.join('\n  ')}`).toEqual([]);

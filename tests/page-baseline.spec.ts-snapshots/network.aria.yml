@@ -13,14 +13,12 @@
   - heading "Utilization Distribution" [level=2]
   - text: 3 loaded of 3 total
   - 'button "About: Utilization Distribution"': "About: ⓘ"
-  - button "Hide Utilization Distribution": Hide ✕
-  - button "Move Utilization Distribution": Move ⠿
+  - 'button "Options: Utilization Distribution"'
   - application: /<\d+% \d+–\d+% >\d+% 0 1 2 3 4/
   - heading "IPAM Spaces — Top Used" [level=2]
   - text: addresses used
   - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"
-  - button "Hide IPAM Spaces — Top Used": Hide ✕
-  - button "Move IPAM Spaces — Top Used": Move ⠿
+  - 'button "Options: IPAM Spaces — Top Used"'
   - text: /Baseline Space \d+ Other Space \d+/
   - heading "Which Subnets Run Out First?" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links/
@@ -31,8 +29,7 @@
     - option "baseline-site"
     - option "other-site"
   - 'button "About: Which Subnets Run Out First?"': "About: ⓘ"
-  - button "Hide Which Subnets Run Out First?": Hide ✕
-  - button "Move Which Subnets Run Out First?": Move ⠿
+  - 'button "Options: Which Subnets Run Out First?"'
   - table:
     - rowgroup:
       - row "Network Site Utilization Status Used Free":
@@ -78,8 +75,7 @@
     - option "active"
     - option "expired"
   - 'button "About: DHCP Leases"': "About: ⓘ"
-  - button "Hide DHCP Leases": Hide ✕
-  - button "Move DHCP Leases": Move ⠿
+  - 'button "Options: DHCP Leases"'
   - table:
     - rowgroup:
       - row "Address Hostname Ends Hardware State":

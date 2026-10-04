@@ -4,8 +4,7 @@
   - heading "Categories" [level=2]
   - text: click to filter Triage
   - 'button "About: Categories"': "About: ⓘ"
-  - button "Hide Categories": Hide ✕
-  - button "Move Categories": Move ⠿
+  - 'button "Options: Categories"'
   - 'button "2 capacity · worst: high"'
   - heading "Triage" [level=2]
   - textbox "Filter incidents":
@@ -13,8 +12,7 @@
   - button "Clear acks"
   - text: "2"
   - 'button "About: Triage"': "About: ⓘ"
-  - button "Hide Triage": Hide ✕
-  - button "Move Triage": Move ⠿
+  - 'button "Options: Triage"'
   - table:
     - rowgroup:
       - row "Ack Category Entity Severity Message Age":
@@ -46,14 +44,12 @@
         - cell /baseline-net-c is \d+% used/
         - cell /\d+[hmsp]+/
   - button "About incidents-severity": ⓘ
-  - button "Hide Severity Counts": ✕
-  - button "Move Severity Counts": ⠿
+  - button "Options for Severity Counts": ⋯
   - text: Critical 1 High 0 Medium 1 Low 0
   - heading "SOC Queue" [level=2]
   - text: IQ Actions 2
   - 'button "About: SOC Queue"': "About: ⓘ"
-  - button "Hide SOC Queue": Hide ✕
-  - button "Move SOC Queue": Move ⠿
+  - 'button "Options: SOC Queue"'
   - table:
     - rowgroup:
       - row "Sev Action Status":
@@ -77,7 +73,6 @@
   - heading "Action Volume" [level=2]
   - text: by day
   - 'button "About: Action Volume"': "About: ⓘ"
-  - button "Hide Action Volume": Hide ✕
-  - button "Move Action Volume": Move ⠿
+  - 'button "Options: Action Volume"'
   - application: /Dec \d+ Jan 1/
   - text: High 1 Medium 0 Low 1

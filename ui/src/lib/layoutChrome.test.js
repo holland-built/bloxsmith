@@ -153,8 +153,8 @@ test('`reorderable` is exactly "this grid is showing two or more panels right no
 })
 
 test('the generated help sentence about moving rides the same switch as the rows it names', () => {
-  // The whole point of the split: the move sentence names the ⠿ grip and the
-  // draggable rows, so it must appear exactly where those do. Read as source
+  // The whole point of the split: the move sentence names the Move button and
+  // the draggable rows, so it must appear exactly where those do. Read as source
   // rather than rendered because `npm test` cannot mount JSX (see the header).
   //
   // THE SWITCH MOVED ON 2026-08-09, THE RULE DID NOT. It used to be Card's
@@ -173,7 +173,7 @@ test('the generated help sentence about moving rides the same switch as the rows
   assert.ok(rest, 'LAYOUT_HELP_REST has been renamed or removed')
   // The half that is rendered unconditionally may not mention the grip or the
   // gesture — those belong to LAYOUT_HELP_MOVE, which is gated.
-  assert.doesNotMatch(rest[1], /⠿/, 'LAYOUT_HELP_REST names the ⠿ grip, which a one-panel page does not render')
+  assert.doesNotMatch(rest[1], /⠿|drag Move/, 'LAYOUT_HELP_REST names the Move button, which a one-panel page does not render')
   assert.doesNotMatch(rest[1], /\bmove\b/i, 'LAYOUT_HELP_REST claims a move, which a one-panel page cannot do')
 })
 

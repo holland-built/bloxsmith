@@ -18,8 +18,7 @@
     - option "All types" [selected]
     - option "onprem"
   - 'button "About: Host Inventory"': "About: ⓘ"
-  - button "Hide Host Inventory": Hide ✕
-  - button "Move Host Inventory": Move ⠿
+  - 'button "Options: Host Inventory"'
   - table:
     - rowgroup:
       - row "Name IP Status Type":
@@ -48,21 +47,18 @@
         - cell "onprem"
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
-  - button "Hide Host Status": Hide ✕
-  - button "Move Host Status": Move ⠿
+  - 'button "Options: Host Status"'
   - application
   - text: /3 hosts Degraded \d+% Offline \d+% Other \d+%/
   - heading "Service Health" [level=2]
   - text: deployed services
   - 'button "About: Service Health"': "About: ⓘ"
-  - button "Hide Service Health": Hide ✕
-  - button "Move Service Health": Move ⠿
+  - 'button "Options: Service Health"'
   - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security beyond the row cap not listed
   - heading "Host Health" [level=2]
   - text: CSP 1
   - 'button "About: Host Health"': "About: ⓘ"
-  - button "Hide Host Health": Hide ✕
-  - button "Move Host Health": Move ⠿
+  - 'button "Options: Host Health"'
   - table:
     - rowgroup:
       - row "Name Status Version":
@@ -77,8 +73,7 @@
   - heading "On-Prem Hosts" [level=2]
   - text: CSP
   - 'button "About: On-Prem Hosts"': "About: ⓘ"
-  - button "Hide On-Prem Hosts": Hide ✕
-  - button "Move On-Prem Hosts": Move ⠿
+  - 'button "Options: On-Prem Hosts"'
   - table:
     - rowgroup:
       - row "Name OPH ID Apps":
@@ -93,14 +88,12 @@
   - heading "Asset Discovery" [level=2]
   - text: CSP baseline
   - 'button "About: Asset Discovery"': "About: ⓘ"
-  - button "Hide Asset Discovery": Hide ✕
-  - button "Move Asset Discovery": Move ⠿
+  - 'button "Options: Asset Discovery"'
   - text: 7assets with discovery status tracked
   - heading "Jobs" [level=2]
   - text: recent 1
   - 'button "About: Jobs"': "About: ⓘ"
-  - button "Hide Jobs": Hide ✕
-  - button "Move Jobs": Move ⠿
+  - 'button "Options: Jobs"'
   - table:
     - rowgroup:
       - row "Created Type Status User":
@@ -117,8 +110,7 @@
   - heading "DFP Services" [level=2]
   - text: CSP 1
   - 'button "About: DFP Services"': "About: ⓘ"
-  - button "Hide DFP Services": Hide ✕
-  - button "Move DFP Services": Move ⠿
+  - 'button "Options: DFP Services"'
   - table:
     - rowgroup:
       - row "Name Status":

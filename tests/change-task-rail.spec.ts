@@ -95,7 +95,8 @@ test('a panel taken off the page leaves the rail', async ({ page, request }) => 
   await request.delete('/api/views/__layout_selfservice');
   await page.goto('/#selfservice');
   await expect(rail(page).getByRole('button', { name: 'Manage Records' })).toBeVisible();
-  await page.getByRole('button', { name: 'Hide Manage Records' }).click();
+  await page.getByRole('button', { name: 'Options: Manage Records' }).click();
+  await page.getByRole('button', { name: 'Take off the page Manage Records' }).click();
   await expect(rail(page).getByRole('button', { name: 'Manage Records' })).toHaveCount(0);
 });
 

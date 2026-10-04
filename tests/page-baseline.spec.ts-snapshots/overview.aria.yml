@@ -1,7 +1,7 @@
 - main "Overview tab":
   - heading "Overview" [level=1]
   - paragraph:
-    - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right edge to resize, and your arrangement saves automatically.
+    - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
     - button "Docs →"
   - list "Headline numbers":
     - listitem:
@@ -24,14 +24,12 @@
     - button /DNS Query Rate — \d+[hmsp]+/
   - text: avg qps
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
-  - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
-  - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
+  - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
   - application: /\d+:\d+ AM \d+:\d+ AM/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
-  - button "Hide Host Status": Hide ✕
-  - button "Move Host Status": Move ⠿
+  - 'button "Options: Host Status"'
   - application
   - text: 3 hosts
   - button /Degraded \d+%/
@@ -44,14 +42,12 @@
   - heading "Top Consumers" [level=2]
   - text: /addresses used · top \d+ of 3 subnets/
   - 'button "About: Top Consumers"': "About: ⓘ"
-  - button "Hide Top Consumers": Hide ✕
-  - button "Move Top Consumers": Move ⠿
+  - 'button "Options: Top Consumers"'
   - application
   - heading "Subnet Heatmap" [level=2]
   - text: util by subnet — 3 loaded of 3
   - 'button "About: Subnet Heatmap"': "About: ⓘ"
-  - button "Hide Subnet Heatmap": Hide ✕
-  - button "Move Subnet Heatmap": Move ⠿
+  - 'button "Options: Subnet Heatmap"'
   - group "Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one.":
     - button /\d+\.\d+\.0\.0 — \d+% used/
     - button /\d+\.\d+\.0\.0 — \d+% used/
@@ -63,8 +59,7 @@
   - link "Service health":
     - /url: "#infra"
   - 'button "About: Services and incidents"': "About: ⓘ"
-  - button "Hide Services and incidents": Hide ✕
-  - button "Move Services and incidents": Move ⠿
+  - 'button "Options: Services and incidents"'
   - region "Services and incidents list":
     - list:
       - listitem: DNS 2/2 online healthy
@@ -83,8 +78,7 @@
     - option "other-site"
   - button "Export CSV"
   - 'button "About: Top Subnets by Utilization"': "About: ⓘ"
-  - button "Hide Top Subnets by Utilization": Hide ✕
-  - button "Move Top Subnets by Utilization": Move ⠿
+  - 'button "Options: Top Subnets by Utilization"'
   - table:
     - rowgroup:
       - row "Network Site Utilization Status Free":
@@ -119,6 +113,5 @@
   - heading "License Inventory" [level=2]
   - text: 0 licenses
   - 'button "About: License Inventory"': "About: ⓘ"
-  - button "Hide License Inventory": Hide ✕
-  - button "Move License Inventory": Move ⠿
+  - 'button "Options: License Inventory"'
   - text: no license data available

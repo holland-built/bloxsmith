@@ -5,8 +5,7 @@
   - heading "Notability" [level=2]
   - text: four questions asked of this window, each answered or explicitly not answered
   - 'button "About: Notability"': "About: ⓘ"
-  - button "Hide Notability": Hide ✕
-  - button "Move Notability": Move ⠿
+  - 'button "Options: Notability"'
   - text: 1 Deletions Del
   - paragraph: Pulled out because a delete is the only operation with no later state left to inspect.
   - text: 1 Failed changes Fail
@@ -19,8 +18,7 @@
   - heading "Changed objects" [level=2]
   - text: grouped by what was touched, newest group first 5 rows · 4 groups
   - 'button "About: Changed objects"': "About: ⓘ"
-  - button "Hide Changed objects": Hide ✕
-  - button "Move Changed objects": Move ⠿
+  - 'button "Options: Changed objects"'
   - text: /rows listed here 5 groups 4 earliest \d+:\d+:\d+ latest \d+:\d+:\d+ span \d+:\d+:\d+ \( \d+:\d+:\d+ − \d+:\d+:\d+ \)/
   - table "Changed objects, grouped by resource":
     - row "Severity Local time Op Result Actor Kind Flags":

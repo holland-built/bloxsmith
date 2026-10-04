@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import {
   domOrder, dragOntoRightHalfOf, expectPersistedBlobIsValid, gotoTab, liveText,
-  savedBlob as savedBlobFor, tabToHandle,
+  openPanelMenu, savedBlob as savedBlobFor, tabToHandle, tabToPanelMenu,
 } from './layout-helpers';
 
 // "Arrange panels" — the one window that says what is on this page, what is off
@@ -172,6 +172,7 @@ test('hiding a tile takes it off the grid, and the window lists it under "Off th
   await goto(page);
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
 
+  await openPanelMenu(page, SECURITY_TODAY.id);
   await hideButton(page, SECURITY_TODAY.id).click();
   await page.waitForTimeout(600);
 
@@ -366,12 +367,14 @@ test('the window can be opened, driven and closed by keyboard alone, and hands f
   test.setTimeout(240_000);
   await goto(page);
 
-  // Hide, from the keyboard, so the window has something to put back.
-  await tabToHandle(page, HOSTS_ATTENTION.id);
+  // Hide, from the keyboard, so the window has something to put back. The
+  // button is the first thing inside the panel's "…" menu.
+  await tabToPanelMenu(page, HOSTS_ATTENTION.id);
   await tabUntil(
     page,
     (info) => info?.hide && info.panel === HOSTS_ATTENTION.id,
     `the ${HOSTS_ATTENTION.id} hide button`,
+    4,
   );
   await page.keyboard.press('Enter');
   await page.waitForTimeout(600);
@@ -459,6 +462,7 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
   }
 
   // --- direction 1: hide, and the order must still be there ---
+  await openPanelMenu(page, HOSTS_ATTENTION.id);
   await hideButton(page, HOSTS_ATTENTION.id).click();
   await page.waitForTimeout(600);
 
