@@ -40,7 +40,7 @@ test('clicking an IQ action opens the drawer and shows that action, not another'
   // different in title, priority and status, so a drawer wired to the wrong id
   // (or to the list's first row regardless of what was clicked) fails here rather
   // than passing on a coincidence.
-  const body = page.getByRole('dialog').or(page.locator('.fixed.inset-0.z-50'));
+  const body = page.getByRole('dialog', { name: 'Action detail' });
   await expect(body).toContainText(FIRST.id);
   await expect(body).toContainText(FIRST.title);
   await expect(body).toContainText('baseline.example');

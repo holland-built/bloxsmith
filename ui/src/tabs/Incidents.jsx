@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -511,24 +511,73 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
 
 // ---------- action detail drawer ----------
 
+// The same modal machinery as DocsPanel, HeaderHelp and TenantManager, copied
+// for the reason HeaderHelp.jsx gives. Until this was added the drawer covered
+// the page but took no focus: Tab kept walking the queue behind the scrim, and
+// Escape did nothing.
+const DRAWER_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 function ActionDetailDrawer({ actionId, onClose }) {
   const detail = useApi(`/api/actions/${actionId}`)
+  const panelRef = useRef(null)
 
   const action = detail.data?.action || detail.data
 
+  // Focus goes to the panel when it opens, and back to the row that opened it
+  // when it closes. The row outlives the drawer (SocQueue stays mounted), so
+  // the drawer can hand focus back itself.
+  useEffect(() => {
+    const opener = document.activeElement
+    panelRef.current?.focus()
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+    }
+  }, [])
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      onClose()
+      return
+    }
+    if (e.key !== 'Tab') return
+    const items = [...panelRef.current.querySelectorAll(DRAWER_FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    if (!items.length) {
+      e.preventDefault()
+      panelRef.current.focus()
+      return
+    }
+    const first = items[0]
+    const last = items[items.length - 1]
+    const cur = document.activeElement
+    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && cur === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose} onKeyDown={onKeyDown}>
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="action-detail-title"
+        tabIndex={-1}
         // bg-panel WAS NOT A TOKEN. `@theme` in index.css declares no
         // --color-panel, so Tailwind emitted no rule at all and this drawer
         // painted its content straight onto the bg-black/40 scrim behind it.
         // bg-card is the surface every other drawer and dialog uses
         // (DocsPanel, HeaderHelp, TenantManager).
-        className="h-full w-full max-w-[420px] bg-card border-l border-card-border p-4 overflow-y-auto"
+        className="h-full w-full max-w-[420px] bg-card border-l border-card-border p-4 overflow-y-auto outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-copy font-semibold">Action detail</h2>
+          <h2 id="action-detail-title" className="text-copy font-semibold">Action detail</h2>
           <button type="button" onClick={onClose} className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-note" aria-label="Close">
             Close
           </button>
