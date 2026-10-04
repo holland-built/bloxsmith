@@ -134,7 +134,7 @@ export default function Overview() {
           answer to "how do I save my layout" is still one click away from this
           page forever. The Docs button beside this line has it too. */}
       <TabIntro anchor="overview">
-        Your estate at a glance — DNS load, address use, subnet fullness and host health.
+        Your network at a glance — DNS load, address use, subnet fullness and host health.
         {!arrangedOnce && (
           <>
             {' '}On this tab you can open a panel’s ⋯ menu to move it, or drag its right
@@ -144,7 +144,7 @@ export default function Overview() {
       </TabIntro>
       {totals.degraded && (
         <div className="text-note text-dim mb-2">
-          some estate-wide counts could not be fetched this cycle — figures below marked as provisional
+          some whole-network counts could not be fetched this cycle — figures below marked as provisional
         </div>
       )}
       {/* panelId sits on the wrapper component, not only on the Card inside
@@ -543,7 +543,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId, loading 
   const top = [...measured].sort((a, b) => num(b.used) - num(a.used)).slice(0, 12)
   const estateLabel = typeof totals.subnets === 'number'
     ? `top 12 of ${totals.subnets.toLocaleString()} subnets`
-    : `top 12 · estate total unknown`
+    : `top 12 · total unknown`
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} unmeasured` : ''
 
   return (
@@ -664,7 +664,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading =
 
   const estateTotal = typeof totals.subnets === 'number' ? totals.subnets.toLocaleString() : null
   const heatmapLabel = cells.length < measured.length
-    ? `worst ${cells.length} of ${measured.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in estate)` : ''}`
+    ? `worst ${cells.length} of ${measured.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in total)` : ''}`
     : `util by subnet — ${cells.length.toLocaleString()} loaded${estateTotal ? ` of ${estateTotal}` : ''}`
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} util unknown` : ''
 

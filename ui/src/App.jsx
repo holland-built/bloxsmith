@@ -107,7 +107,7 @@ function hashTab() {
 // that changed.
 const GROUPS = [
   { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
-  { id: 'estate', label: 'Estate', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
+  { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
   { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift'] },
   { id: 'ask', label: 'Ask', question: '', tabIds: ['ai'] },

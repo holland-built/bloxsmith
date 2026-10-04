@@ -211,11 +211,11 @@ export const PANEL_HELP = {
   },
   'infra-host-status': {
     what: 'Your Infoblox machines grouped by state. "Unknown" is its own group: nothing reported a state for those, which is not the same as offline.',
-    look: 'The percentages are shares of the machines that loaded, not of the whole estate. When those two numbers differ, a line under the list says so.',
+    look: 'The percentages are shares of the machines that loaded, not of every machine you have. When those two numbers differ, a line under the list says so.',
   },
   'infra-host-health': {
     what: 'Each machine Infoblox reports on directly, the state it is in, and the software version it is running.',
-    look: 'The number by the title counts the machines that came back — at most 1,000, shown against the real total if your estate is bigger. "feed unavailable" means the read failed, not that you have none.',
+    look: 'The number by the title counts the machines that came back — at most 1,000, shown against the real total if you have more. "feed unavailable" means the read failed, not that you have none.',
   },
   'infra-onprem-hosts': {
     what: 'The Infoblox boxes installed on your own sites, and how many Infoblox applications each one is running.',
@@ -243,7 +243,7 @@ export const PANEL_HELP = {
     look: 'Click a chip to show only that type; click it again to clear. Nothing here refreshes on a timer — Refresh is how you ask the server again.',
   },
   'assets-list': {
-    what: 'One row per device, 50 to a page. Searching, sorting and paging all happen on the server, so a sort reorders the whole estate, not this page.',
+    what: 'One row per device, 50 to a page. Searching, sorting and paging all happen on the server, so a sort reorders every device, not this page.',
     look: 'Click a row to open its extra fields below. Provider and Vendor share one column while every row agrees on both, and split back into two when they stop.',
   },
   'assets-detail': {

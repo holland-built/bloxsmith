@@ -725,7 +725,7 @@ function useAnnouncer(q, results) {
       announced.current = new Set()
       pending.current = new Set()
       holdUntil.current = Date.now() + ANNOUNCE_HOLD_MS
-      setMessage(q ? `Searching the estate for ${q}.` : '')
+      setMessage(q ? `Searching everything for ${q}.` : '')
       return undefined
     }
 
@@ -811,7 +811,7 @@ export default function DossierPage() {
           QUERY
         </div>
         <label className="flex-1 flex items-center px-3 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
-          <span className="sr-only">Search the estate</span>
+          <span className="sr-only">Search everything</span>
           <input {...MACHINE_TEXT}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -866,7 +866,7 @@ export default function DossierPage() {
       )}
 
       {!q && (
-        <Empty>Type an IP or a hostname above and press Enter to search the estate.</Empty>
+        <Empty>Type an IP or a hostname above and press Enter to search everything.</Empty>
       )}
     </div>
   )

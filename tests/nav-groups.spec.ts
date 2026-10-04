@@ -36,13 +36,13 @@ const TAB_HEADINGS: [string, string][] = [
   ['ai', 'AI Assistant'],
 ];
 
-const GROUP_LABELS = ['Status', 'Estate', 'Risk', 'Change', 'Ask'];
+const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 
 // Which group owns which tab. Duplicated from App.jsx on purpose: a test that
 // imports the thing it checks would pass on any regrouping, including a wrong one.
 const GROUP_TABS: Record<string, string[]> = {
   Status: ['Overview', 'Daily'],
-  Estate: ['Network', 'DNS', 'Assets', 'Infra'],
+  Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Provision', 'Self-Service', 'Editor', 'Drift'],
   Ask: ['AI'],
@@ -185,7 +185,7 @@ test('a menu item navigates to its tab and the menu closes', async ({ page }) =>
 test('clicking outside closes an open group menu', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  const btn = page.locator('header button[data-group="estate"]');
+  const btn = page.locator('header button[data-group="inventory"]');
   await btn.click();
   await expect(page.locator('header [role="menu"]')).toHaveCount(1);
   await page.locator('h1').first().click();

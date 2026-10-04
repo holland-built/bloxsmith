@@ -30,7 +30,7 @@ const SETTINGS = { name: 'Settings', exact: true };
 // left to right, then the two switches that live in Settings. Written out here
 // rather than imported so the test fails if the dictionary is edited to dodge it.
 const TERMS = [
-  'Status, Estate, Risk, Change, Ask',
+  'Status, Inventory, Risk, Change, Ask',
   'Update v…',
   'The tenant name',
   'The sliders button',

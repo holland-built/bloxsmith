@@ -27,7 +27,7 @@ const VIEW = '__layout_overview';
 // The sentence on Overview that teaches arranging. `.` for the apostrophe, which
 // is a typographic one in the source.
 const LESSON = /open a panel.s ⋯ menu to move it/i;
-const SUMMARY = /Your estate at a glance/i;
+const SUMMARY = /Your network at a glance/i;
 
 test.beforeEach(async ({ request }) => {
   await request.delete(`/api/views/${VIEW}`);
@@ -57,7 +57,7 @@ test('Docs opens the tab section in the app, and never navigates to GitHub', asy
   // The panel shows THIS tab's section, titled from the document's own heading.
   await expect(page.locator('#docs-title')).toHaveText('Docs — Overview');
   // Content from the Overview section of docs/TABS.md, not from another tab.
-  await expect(dialog).toContainText('Estate at a glance');
+  await expect(dialog).toContainText('Your network at a glance');
   await expect(dialog).toContainText('Top Consumers');
   // ...and not the next tab along, which would mean the section did not end.
   await expect(dialog).not.toContainText('Provision runs the two write flows');
