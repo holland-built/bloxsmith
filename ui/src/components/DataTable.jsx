@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
-import { Card, Empty, FeedUnavailable, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
+import { Card, Empty, FeedUnavailable, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { compareCells } from '../lib/sortCompare.js'
 import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
@@ -680,6 +680,42 @@ export function DataTable({
     }
   }, [])
 
+  // A box whose rows overflow it is a tab stop, so the rows can be scrolled
+  // from the keyboard. A table with no sortable heading and no clickable row
+  // has nothing inside it to focus, and in a browser that does not make
+  // scrollers focusable by itself (Safari) its lower rows could be read with a
+  // mouse and with nothing else. A table that fits is left alone: a stop that
+  // scrolls nothing is one more Tab press on every page.
+  //
+  // Its own observer, on the box AND the table inside it, and deliberately not
+  // the one above. Whether the rows overflow changes without any render here:
+  // the spacing switch changes row height through a CSS variable, and a panel
+  // dragged narrower wraps its text. Both resize the table, so both arrive
+  // here. All it writes is three attributes with no geometry, so unlike a
+  // measurement it cannot feed back into what it observes.
+  //
+  // Keyed on whether there are rows: with none, the early return below renders
+  // no box at all, and the box that comes back later is a new element.
+  const hasRows = rows.length > 0
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper || typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(() => {
+      if (wrapper.scrollHeight > wrapper.clientHeight + 1) {
+        wrapper.tabIndex = 0
+        wrapper.setAttribute('role', 'group')
+        wrapper.setAttribute('aria-label', 'Scrollable table')
+      } else {
+        wrapper.removeAttribute('tabindex')
+        wrapper.removeAttribute('role')
+        wrapper.removeAttribute('aria-label')
+      }
+    })
+    ro.observe(wrapper)
+    if (wrapper.firstElementChild) ro.observe(wrapper.firstElementChild)
+    return () => ro.disconnect()
+  }, [hasRows])
+
   if (rows.length === 0) {
     return <div className="min-h-[100px] flex items-center justify-center text-muted text-copy">{emptyText}</div>
   }
@@ -867,7 +903,7 @@ export function DataTable({
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
-      <div ref={wrapperRef} className="overflow-x-hidden overflow-y-auto" style={{ maxHeight, minHeight }}>
+      <div ref={wrapperRef} className={`overflow-x-hidden overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
         {table}
       </div>
       {footer}

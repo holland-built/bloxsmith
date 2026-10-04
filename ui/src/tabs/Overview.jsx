@@ -905,7 +905,10 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
               <span className="text-dim text-note">{hasHostTotal ? 'hosts' : 'hosts (loaded)'}</span>
             </div>
           </div>
-          <div className="flex-1 flex flex-col gap-2">
+          {/* Rows are 24px with no gap, where they were 16px with an 8px gap.
+              Same pitch, so no word moves; the space between two rows now
+              belongs to a row, which makes each one a 24px target. */}
+          <div className="flex-1 flex flex-col">
             {pieData.map((d) => (
               <div
                 key={d.name}
@@ -913,7 +916,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
                 tabIndex={0}
                 onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.name.toLowerCase() } }}
-                className="flex items-center gap-1.5 text-note cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
+                className="flex items-center gap-1.5 min-h-6 text-note cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
               >
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
