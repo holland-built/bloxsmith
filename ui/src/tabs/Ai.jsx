@@ -4,7 +4,7 @@ import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 import { dossierHasVerdict } from '../lib/dossierVerdict.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt'
+const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
 const SUGGESTIONS = [
   'Which subnets are nearly full?',
