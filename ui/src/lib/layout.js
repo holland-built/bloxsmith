@@ -158,6 +158,89 @@ export function resolveSpan({ userSpan = null, measuredSpan = null, trackCount }
   return { source: 'declared', span: null }
 }
 
+// ---------- flush rows: who gets the tracks a row has left over ----------
+//
+// DECIDED BY THE OWNER ON 2026-10-04, after seeing three live variants on the
+// real pages: leave the rows ragged, grow only the chart beside a table, or
+// stretch tables too. They chose the third. applyLayout (ui.jsx) carries the
+// history of why the opposite was built first.
+//
+// Both functions are pure so the rule can be tested without a browser: the
+// same split, for the same reason, as the pointer maths below.
+
+// declaredSpan — the span a grid item's OWN classes give it at this track
+// count. Every item in a CardGrid carries the shape SPAN_CLASS (ui.jsx) emits,
+// `col-span-A md:col-span-B xl:col-span-C`, and the grid is 2 tracks at the
+// base, 4 from md, 6 from xl (`--grid-tracks` in index.css follows the same
+// breakpoints). Read from the class string and not from getComputedStyle,
+// because the computed value is whatever applyLayout last wrote inline: to see
+// the declared one it would have to blank its own write first.
+export function declaredSpan(className, trackCount) {
+  const found = {}
+  for (const m of String(className ?? '').matchAll(/(?:^|\s)(?:(md|xl):)?col-span-(\d+|full)(?=\s|$)/g)) {
+    found[m[1] || 'base'] = m[2] === 'full' ? trackCount : Number(m[2])
+  }
+  const span =
+    trackCount >= 6 ? (found.xl ?? found.md ?? found.base) : trackCount >= 4 ? (found.md ?? found.base) : found.base
+  // No span class at all is a plain grid item, which takes one track.
+  return clampSpan(span ?? 1, trackCount)
+}
+
+// fillRows — walk the items the way grid auto-placement does (in order, an
+// item that does not fit starts the next row), then hand each row's leftover
+// tracks out one at a time. Returns the span of every item, in order.
+//
+//   items[i].span   whole tracks the item takes before anything is handed out
+//   items[i].fixed  the operator sized it; it is never grown
+//   items[i].need   px its content needs, or null for a panel that does not
+//                   measure itself (a chart, a list)
+//   widthOf(span)   px a span covers on this grid
+//
+// WHO GETS A TRACK. A panel that does not measure, before any table: a chart
+// redraws to any width, while a table handed more than it needs spreads its
+// columns apart. Between tables it is the one whose content sits tightest, and
+// each track given loosens that one, so the next track can go elsewhere. A tie
+// goes to the narrower panel, then to the earlier one.
+//
+// Growing never changes which row an item is in: a row is closed because the
+// next item did not fit in what was left, and filling what was left cannot
+// make room for it.
+export function fillRows(items, trackCount, widthOf) {
+  const spans = items.map((it) => clampSpan(it.span, trackCount))
+  // How much an item is owed the next track. A panel that does not measure
+  // scores 2, above anything a table can score, so it is always grown first: a
+  // table whose content fills its tracks exactly scores 1, and scoring both 1
+  // let the narrower-panel tie-break hand the track to the table.
+  const fill = (i) => (items[i].need == null ? 2 : Math.min(1, items[i].need / widthOf(spans[i])))
+
+  const closeRow = (start, end, used) => {
+    const growable = []
+    for (let i = start; i < end; i++) if (!items[i].fixed) growable.push(i)
+    if (!growable.length) return
+    for (let left = trackCount - used; left > 0; left--) {
+      let best = growable[0]
+      for (const i of growable) {
+        const d = fill(i) - fill(best)
+        if (d > 0 || (d === 0 && spans[i] < spans[best])) best = i
+      }
+      spans[best]++
+    }
+  }
+
+  let start = 0
+  let used = 0
+  for (let i = 0; i < items.length; i++) {
+    if (i > start && used + spans[i] > trackCount) {
+      closeRow(start, i, used)
+      start = i
+      used = 0
+    }
+    used += spans[i]
+  }
+  closeRow(start, items.length, used)
+  return spans
+}
+
 // ---------- item 8: the maths behind the pointer, kept out of the browser ----------
 //
 // Everything a drag or a resize has to DECIDE lives here as a pure function,

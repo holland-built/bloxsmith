@@ -852,7 +852,11 @@ for (const tab of TAB_CASES) {
 
       const { track, gap, trackCount } = await geometry(page);
       expect(trackCount).toBe(6); // xl:grid-cols-6 at 1920
-      expect((await inlineSpans(page))[tab.resizeSubject]).toBe('');
+      // Not yet the width the drag is about to give it. This used to assert an
+      // EMPTY inline span, which stopped being a fact about an untouched panel
+      // when rows began to end flush: #security's Response Summary now carries
+      // `span 3` before anyone touches it, because its row had a track spare.
+      expect((await inlineSpans(page))[tab.resizeSubject]).not.toBe('span 4 / span 4');
 
       const g = await grabRightEdge(page, tab.resizeSubject);
       await page.mouse.move(g.box.left + 4 * track + 3 * gap, g.y, { steps: 12 });

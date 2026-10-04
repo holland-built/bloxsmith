@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  buildSaveBlob, clampSpan, insertionIndex, layoutViewName, loadLayout, moveItem,
+  buildSaveBlob, clampSpan, declaredSpan, fillRows, insertionIndex, layoutViewName, loadLayout, moveItem,
   parseLoad, resolveSpan, saveLayout, shiftItem, sortByOrder, spanFromWidth,
   stepSpan, unseenPanelIds, validateSave, widthAnnouncement,
 } from './layout.js'
@@ -589,3 +589,106 @@ test('a child naming a panel that is not on screen is NOT a conflict', () => {
   // does not mention it this render. Only the other direction breaks sorting.
   assert.deepEqual(unseenPanelIds(['a'], ['a', 'b']), [])
 })
+
+// ---------- flush rows ----------
+
+test('declaredSpan reads the span the item\'s own classes give it at each track count', () => {
+  const six = 'col-span-2 md:col-span-4 xl:col-span-6 bg-card'
+  assert.equal(declaredSpan(six, 2), 2)
+  assert.equal(declaredSpan(six, 4), 4)
+  assert.equal(declaredSpan(six, 6), 6)
+  // SPAN_CLASS[3]: two tracks until xl, then three.
+  const three = 'relative col-span-2 md:col-span-2 xl:col-span-3'
+  assert.equal(declaredSpan(three, 2), 2)
+  assert.equal(declaredSpan(three, 4), 2)
+  assert.equal(declaredSpan(three, 6), 3)
+  // SPAN_CLASS[1] has no prefixed class: one track everywhere.
+  assert.equal(declaredSpan('col-span-1', 6), 1)
+  assert.equal(declaredSpan('col-span-full', 4), 4)
+})
+
+test('declaredSpan: no span class is one track, and another grid\'s classes are not read as ours', () => {
+  assert.equal(declaredSpan('flex items-center', 6), 1)
+  assert.equal(declaredSpan('', 6), 1)
+  assert.equal(declaredSpan(undefined, 6), 1)
+  // A breakpoint this grid does not use, and a class that merely ends the same.
+  assert.equal(declaredSpan('lg:col-span-5 not-col-span-4', 6), 1)
+  // Never more tracks than exist, which is what made implicit columns.
+  assert.equal(declaredSpan('col-span-6', 2), 2)
+})
+
+// widthOf for a grid of 100px tracks and no gap: a span is its width / 100.
+const w100 = (s) => s * 100
+const chart = (span) => ({ span, fixed: false, need: null })
+const table = (span, need) => ({ span, fixed: false, need })
+const sized = (span) => ({ span, fixed: true, need: null })
+
+test('fillRows: a table alone in its row takes the whole row', () => {
+  // Overview's two table rows: each needs 4 of 6 and the next cannot share.
+  assert.deepEqual(fillRows([table(4, 380), table(4, 390)], 6, w100), [6, 6])
+})
+
+test('fillRows: beside a table, the chart is grown and the table is not', () => {
+  assert.deepEqual(fillRows([table(3, 290), chart(2)], 6, w100), [3, 3])
+  assert.deepEqual(fillRows([chart(2), table(3, 290)], 6, w100), [3, 3])
+  // Five spare tracks beside a one-track table all go to the chart.
+  assert.deepEqual(fillRows([chart(3), table(1, 90)], 6, w100), [5, 1])
+  // ...and still do when the table's content fills its track EXACTLY. A table
+  // that full used to tie with the chart, and the tie went to the narrower
+  // panel, which was the table: [4, 2].
+  assert.deepEqual(fillRows([chart(2), table(1, 100)], 6, w100), [5, 1])
+  assert.deepEqual(fillRows([table(1, 100), chart(2)], 6, w100), [1, 5])
+})
+
+test('fillRows: two charts share the leftover, narrower first', () => {
+  assert.deepEqual(fillRows([chart(2), chart(2)], 6, w100), [3, 3])
+  // Each track goes to whichever is narrower at that moment, so 1 and 3 with
+  // two to spare end level, and with one to spare only the narrow one grows.
+  assert.deepEqual(fillRows([chart(1), chart(3)], 6, w100), [3, 3])
+  assert.deepEqual(fillRows([chart(1), chart(4)], 6, w100), [2, 4])
+})
+
+test('fillRows: between two tables the tighter one is grown, and a track given loosens it', () => {
+  // 195/200 is tighter than 250/300, so the first track goes to the first
+  // table. Two tracks: after one, the first is 195/300 and the second is now
+  // the tighter, so they end one track each.
+  assert.deepEqual(fillRows([table(2, 195), table(3, 250)], 6, w100), [3, 3])
+  assert.deepEqual(fillRows([table(2, 195), table(2, 150)], 6, w100), [3, 3])
+  assert.deepEqual(fillRows([table(2, 100), table(3, 299)], 6, w100), [2, 4])
+})
+
+test('fillRows: a panel the operator sized is never grown', () => {
+  assert.deepEqual(fillRows([sized(2), chart(2)], 6, w100), [2, 4])
+  // Nothing in the row may grow, so the row ends short. That is their choice.
+  assert.deepEqual(fillRows([sized(3)], 6, w100), [3])
+  assert.deepEqual(fillRows([sized(2), sized(2)], 6, w100), [2, 2])
+})
+
+test('fillRows: rows break where grid auto-placement breaks them, and a full row is left alone', () => {
+  const items = [chart(4), chart(2), chart(2), chart(2), chart(2), table(4, 390), table(4, 380)]
+  assert.deepEqual(fillRows(items, 6, w100), [4, 2, 2, 2, 2, 6, 6])
+  // 4 then 4 cannot share six tracks: two rows, each filled.
+  assert.deepEqual(fillRows([chart(4), chart(4)], 6, w100), [6, 6])
+})
+
+test('fillRows: every row sums to the track count when nothing is operator-sized', () => {
+  for (const tracks of [2, 4, 6]) {
+    const items = [chart(1), table(2, 150), chart(3), table(1, 80), chart(2), chart(1), table(4, 300), chart(5), chart(1)]
+    const spans = fillRows(items, tracks, w100)
+    let used = 0
+    const rows = []
+    for (const s of spans) {
+      assert.ok(s >= 1 && s <= tracks, `span ${s} on a ${tracks}-track grid`)
+      if (used + s > tracks) { rows.push(used); used = 0 }
+      used += s
+    }
+    rows.push(used)
+    assert.deepEqual(rows, rows.map(() => tracks), `${tracks} tracks: rows were ${rows}`)
+  }
+})
+
+test('fillRows: a span wider than the grid is clamped, not passed through', () => {
+  assert.deepEqual(fillRows([chart(6), chart(6)], 2, w100), [2, 2])
+  assert.deepEqual(fillRows([], 6, w100), [])
+})
+

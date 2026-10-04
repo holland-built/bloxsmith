@@ -22,8 +22,18 @@ test.beforeEach(async ({ page }) => {
 //     via an explicit inline max-width on the <th> (the maxCh mechanism).
 //     A clipped cell in a column with NO max-width is the original bug:
 //     truncated text while other columns waste space.
-//  3. A panel is no wider than its own content needs. This one used to be
-//     computed and only console.logged. It is now asserted — see below.
+//  3. A panel is no wider than its own content needs, plus the tracks its row
+//     had left over. This one used to be computed and only console.logged. It
+//     is now asserted — see below.
+//
+//     THE SECOND HALF IS NEW (2026-10-04) AND DELIBERATE. Rows end flush now:
+//     the owner chose that after seeing it on the real pages, so a table alone
+//     in its row is handed the rest of the row and IS wider than its content.
+//     The invariant keeps its teeth because the allowance is not a number this
+//     spec picks. applyLayout publishes on each grid item how many tracks it
+//     was handed (`data-grown`), tests/flush-rows.spec.ts proves those tracks
+//     are exactly what the row had spare, and anything a panel holds beyond
+//     them is still the old defect: a span that stopped following its content.
 //
 // WHY THIS RUNS AT FOUR WIDTHS. Before the content-driven span landed, `span={4}`
 // meant 4-of-4 tracks below the xl breakpoint and 4-of-6 above it, so the Audit
@@ -148,6 +158,8 @@ function measureTables(tolerance: number): TableReport[] {
     //     track. Read from the live grid, never hardcoded — the track width is
     //     completely different at 1024 (4 tracks) and 1920 (6 tracks).
     let trackPlusGap = 0;
+    // (c) The tracks this panel was handed because its row had them spare.
+    let grownTracks = 0;
     if (card) {
       let item: HTMLElement | null = card;
       while (item && !item.parentElement?.hasAttribute('data-card-grid')) item = item.parentElement;
@@ -156,6 +168,7 @@ function measureTables(tolerance: number): TableReport[] {
         const ggs = getComputedStyle(gridEl);
         const tracks = ggs.gridTemplateColumns.split(' ').filter(Boolean);
         trackPlusGap = Math.ceil(parseFloat(tracks[0]) + (parseFloat(ggs.columnGap) || 0));
+        grownTracks = Number(item?.dataset.grown || 0);
       }
     }
     // A missing grid makes the budget below STRICTER, so it can never turn a
@@ -252,7 +265,7 @@ function measureTables(tolerance: number): TableReport[] {
     // table with one squeezed column and one roomy one reports more slack than
     // the panel actually has spare — `shortfall` is that squeeze, added back so
     // both sides of the comparison are the same quantity.
-    const budget = Math.max(0, headFloor - needTotal) + trackPlusGap + shortfall + tolerance;
+    const budget = Math.max(0, headFloor - needTotal) + trackPlusGap + grownTracks * trackPlusGap + shortfall + tolerance;
     if (wastedWidth > budget) {
       violations.push({
         kind: 'panel-too-wide',
@@ -260,7 +273,8 @@ function measureTables(tolerance: number): TableReport[] {
         detail:
           `panel holds ${Math.round(wastedWidth)}px more width than its content needs, budget ${Math.round(budget)}px ` +
           `(header floor ${Math.round(headFloor)}px, content needs ${Math.round(needTotal)}px, ` +
-          `one track+gap ${trackPlusGap}px, squeezed columns ${Math.round(shortfall)}px, tolerance ${tolerance}px). ` +
+          `one track+gap ${trackPlusGap}px, ${grownTracks} spare track(s) from its row, ` +
+          `squeezed columns ${Math.round(shortfall)}px, tolerance ${tolerance}px). ` +
           `The panel's grid span is not following its content — see the CONTENT-DRIVEN PANEL WIDTH block in ui/src/components/ui.jsx`,
       });
     }
@@ -273,7 +287,7 @@ function measureTables(tolerance: number): TableReport[] {
 
 test.describe('table column sizing', () => {
   for (const tab of TABS) {
-    test(`tab "#${tab}": tables fit their wrapper, clip only where opted in, and are no wider than their content`, async ({ page }) => {
+    test(`tab "#${tab}": tables fit their wrapper, clip only where opted in, and are no wider than their content and their row's spare tracks`, async ({ page }) => {
       test.setTimeout(150_000);
       const allViolations: Violation[] = [];
 
