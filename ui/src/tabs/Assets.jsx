@@ -4,6 +4,7 @@ import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
 // discovery found. Until this existed, asset data appeared only as scalar
@@ -202,7 +203,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       note="CSP discovery"
       right={
         <div className="flex items-center gap-2">
-          <input
+          <input {...MACHINE_TEXT}
             placeholder="Search by name…"
             aria-label="Search assets by name"
             value={input}

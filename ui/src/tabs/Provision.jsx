@@ -10,6 +10,7 @@ import { PageRail } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -444,10 +445,10 @@ function SubnetMode() {
             />
           </Field>
           <Field label="CIDR prefix">
-            <input type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
+            <input {...MACHINE_TEXT} type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
           </Field>
           <Field label="Name">
-            <input className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
+            <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
           </Field>
           <Field label="Comment">
             <input className={inputCls} value={comment} onChange={(e) => { setComment(e.target.value); flow.markStale() }} placeholder="optional" />
@@ -636,7 +637,7 @@ function SiteMode({ isAdmin }) {
         <div data-form-cols="" className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type the site name to confirm">
-              <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
+              <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
             </Field>
           ) : (
             <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
@@ -798,7 +799,7 @@ function SeedMode({ isAdmin }) {
         <div data-form-cols="" className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type DELETE to confirm">
-              <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
+              <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
             </Field>
           ) : (
             <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
@@ -896,7 +897,7 @@ function FilterSelect({ label, value, onChange, options, placeholder, disabled }
   }
   return (
     <div className="flex flex-col gap-1.5">
-      <input
+      <input {...MACHINE_TEXT}
         ref={inputRef}
         type="search"
         aria-label={`Search ${label}`}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -257,13 +258,13 @@ export default function Editor() {
         <div data-form-cols="" className="flex flex-col gap-3">
           <label data-field="" className="text-note text-muted flex flex-col gap-1">
             <span>Object ID (leave blank to create new)</span>
-            <input className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
+            <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
           </label>
 
           {spec.fields.map((f) => (
             <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">
               <span>{f.label}{f.required ? ' *' : ''}</span>
-              <input
+              <input {...(f.key === 'comment' ? null : MACHINE_TEXT)}
                 className={inputCls}
                 type={f.kind === 'number' ? 'number' : 'text'}
                 value={fields[f.key] || ''}

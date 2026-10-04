@@ -7,6 +7,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip } from '../components/kit.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -304,7 +305,7 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       right={
         <div className="flex items-center gap-2">
           <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Search address, hostname, MAC"
             placeholder="Search address, hostname, MAC…"
             value={q}
@@ -512,7 +513,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
       note="excl. /29–/32 infra links"
       right={
         <div className="flex items-center gap-2">
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Filter networks"
             placeholder="Filter…"
             value={filter}

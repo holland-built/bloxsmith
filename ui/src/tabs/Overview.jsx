@@ -6,6 +6,7 @@ import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { alarmTone, cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 
 // Tap once to read it, tap again to follow it.
@@ -1103,7 +1104,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId, loading = f
                 ? `showing ${rows.length.toLocaleString()} of ${totals.subnets.toLocaleString()}`
                 : `${rows.length.toLocaleString()} loaded`}
           </span>
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Filter subnets"
             placeholder="Filter…"
             value={filter}

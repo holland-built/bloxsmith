@@ -3,6 +3,7 @@ import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -377,7 +378,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       note={category ? `filtered · ${category}` : undefined}
       right={
         <div className="flex items-center gap-2">
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Filter incidents"
             placeholder="Filter…"
             value={filter}

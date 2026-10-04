@@ -7,6 +7,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // ---------- helpers ----------
 
@@ -436,7 +437,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
       right={
         <div className="flex items-center gap-2">
           <span className="text-note text-muted">{countLabel}</span>
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Search name or IP"
             placeholder="Search name, IP…"
             value={filter}
