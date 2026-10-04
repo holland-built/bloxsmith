@@ -95,6 +95,38 @@ const PROBE = `
     };
   };
 
+  // Every text box and dropdown on screen, with its outline measured against
+  // the fill inside it and against the surface it sits on. Composited the same
+  // way text is above: the colour a person sees, not the declared one.
+  window.__fieldBorders = () => {
+    const out = [];
+    const skip = ['checkbox', 'radio', 'hidden', 'file', 'range', 'color'];
+    for (const el of document.querySelectorAll('input, select, textarea')) {
+      if (skip.includes(el.getAttribute('type') || '')) continue;
+      if (el.offsetParent === null) continue;
+      if (el === document.activeElement) continue;
+      const cs = getComputedStyle(el);
+      // A field with no outline of its own (the palette's search row, the
+      // Dossier query bar) is bounded by its container, not by this rule.
+      if (!(parseFloat(cs.borderTopWidth) > 0) || cs.borderTopStyle === 'none') continue;
+      const raw = parseRGB(cs.borderTopColor);
+      if (!raw) continue;
+      const inside = effBg(el);
+      const outside = el.parentElement ? effBg(el.parentElement) : inside;
+      const ratio = (bg) => {
+        const flat = over({ r: raw.r, g: raw.g, b: raw.b, a: raw.a * cumOpacity(el) }, bg);
+        const L1 = lum(flat), L2 = lum(bg);
+        return { hex: hex(flat), bg: hex(bg), exact: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05) };
+      };
+      out.push({
+        what: el.tagName.toLowerCase() + ' "' + (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '').slice(0, 32) + '"',
+        inside: ratio(inside),
+        outside: ratio(outside),
+      });
+    }
+    return out;
+  };
+
   // A token measured against a token: proves the palette itself, independent of
   // whether any given screen happens to render that combination today.
   window.__tokenPair = (token, bgToken) => {
@@ -457,3 +489,69 @@ for (const theme of ['dark', 'light'] as const) {
     expect(failures, `below ${AA_NORMAL_TEXT}:1:\n  ${failures.join('\n  ')}`).toEqual([]);
   });
 }
+
+// WCAG 2.1 AA, success criterion 1.4.11 (non-text contrast): the visual
+// information needed to identify a control needs 3:1 against what is next to
+// it. For a text box or a dropdown that information is its outline. Until
+// 2026-10-04 fields were drawn with --color-border, the hairline buttons use,
+// which measured about 1.6:1 in both themes (dark 1.75 on the field fill and
+// 1.62 on a card; light 1.61 on white and 1.48 on the page). The owner was
+// shown three live variants and chose a stronger outline on fields only.
+const AA_BOUNDARY = 3;
+
+// What a field's outline can sit against: its own fill inside, and a panel or
+// the page outside.
+const FIELD_BORDER_SURFACES = ['--color-field', '--color-card', '--color-bg'];
+
+// Pages with fields of every kind: filter boxes and dropdowns in panel headers,
+// whole forms, date inputs, a textarea.
+const FIELD_ROUTES = ['#overview', '#selfservice', '#provision', '#audit', '#ai'];
+
+type Edge = { hex: string; bg: string; exact: number };
+type FieldBorder = { what: string; inside: Edge; outside: Edge };
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`${theme} theme: the field border token clears 3:1 on the fill inside it and the surfaces around it`, async ({ page }) => {
+    await open(page, theme, '#overview');
+
+    // THE TOKEN MUST EXIST BEFORE IT IS MEASURED. __tokenPair paints a probe
+    // with whatever the property resolves to, and an undeclared property
+    // resolves to an empty string: the probe then inherits the page's text
+    // colour and "passes" at 12:1 against a token that is not there.
+    const declared = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-field-border').trim(),
+    );
+    expect(declared, '--color-field-border is not declared in this theme').toMatch(/^#[0-9a-f]{6}$/i);
+
+    const failures: string[] = [];
+    for (const surface of FIELD_BORDER_SURFACES) {
+      const s = (await page.evaluate(
+        ([t, b]) => (window as any).__tokenPair(t, b),
+        ['--color-field-border', surface],
+      )) as Sample | null;
+      expect(s, `--color-field-border on ${surface} produced no measurement`).not.toBeNull();
+      if ((s as Sample).exact < AA_BOUNDARY) failures.push(`${declared} on ${surface} ${(s as Sample).bg}: ${(s as Sample).ratio}:1`);
+    }
+    expect(failures, `below ${AA_BOUNDARY}:1 in ${theme} theme:\n  ${failures.join('\n  ')}`).toEqual([]);
+  });
+
+  test(`${theme} theme: every text box and dropdown on screen has an outline at 3:1`, async ({ page }) => {
+    test.setTimeout(240_000);
+    const failures: string[] = [];
+    for (const route of FIELD_ROUTES) {
+      await open(page, theme, route);
+      const fields = (await page.evaluate(() => (window as any).__fieldBorders())) as FieldBorder[];
+      // A page whose fields never rendered would pass on emptiness.
+      expect(fields.length, `${route}: no text box or dropdown was measured`).toBeGreaterThan(0);
+      for (const f of fields) {
+        for (const [side, e] of [['its own fill', f.inside], ['the surface around it', f.outside]] as const) {
+          if (e.exact < AA_BOUNDARY) {
+            failures.push(`${route} ${f.what}: outline ${e.hex} is ${Math.round(e.exact * 100) / 100}:1 against ${side} ${e.bg}`);
+          }
+        }
+      }
+    }
+    expect(failures, `field outlines below ${AA_BOUNDARY}:1 in ${theme} theme:\n  ${failures.join('\n  ')}`).toEqual([]);
+  });
+}
+

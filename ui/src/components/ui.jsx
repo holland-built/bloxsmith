@@ -43,7 +43,7 @@ export const COLORS = {
 // FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent ${FOCUS_RING}`
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent ${FOCUS_RING}`
 
 export function useChartTheme() {
   const colors = useThemeColors()
