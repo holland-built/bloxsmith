@@ -480,8 +480,8 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
         )
       },
     },
-    { key: 'used', label: 'Used', align: 'right', sortable: true, render: (v) => <span className="text-muted">{v === null ? DASH : v.toLocaleString()}</span> },
-    { key: 'free', label: 'Free', align: 'right', sortable: true, render: (v) => <span className="text-muted">{v === null ? DASH : `${v.toLocaleString()} free`}</span> },
+    { key: 'used', label: 'Used', align: 'right', sortable: true, render: (v) => <span className="text-muted tabular-nums">{v === null ? DASH : v.toLocaleString()}</span> },
+    { key: 'free', label: 'Free', align: 'right', sortable: true, render: (v) => <span className="text-muted tabular-nums">{v === null ? DASH : `${v.toLocaleString()} free`}</span> },
   ]
 
   return (
