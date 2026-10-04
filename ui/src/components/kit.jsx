@@ -53,9 +53,15 @@ function jumpToPanel(panelId) {
 const TILE = 'w-full h-full min-h-[88px] flex flex-col text-left px-3 pt-2.5 pb-2 rounded-surface border no-underline text-txt cursor-pointer'
 
 // Columns by how many tiles there are, so every row of tiles is a full row at
-// every width: six go 2, 3, then 6 across; four go 2 then 4. Written out in
-// full because Tailwind only emits classes it can read as whole strings.
+// every width: six go 2, 3, then 6 across; four go 2 then 4; two share the row.
+// Written out in full because Tailwind only emits classes it can read as whole
+// strings.
+//
+// Two had no entry until 2026-10-04 and fell through to the default below, so
+// Assets, the one page with two tiles, drew them in a four- and then a
+// six-column row and left the rest of it empty.
 const TILE_COLS = {
+  2: 'grid-cols-2',
   3: 'grid-cols-3',
   4: 'grid-cols-2 md:grid-cols-4',
   6: 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',

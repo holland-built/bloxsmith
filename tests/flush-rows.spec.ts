@@ -140,3 +140,37 @@ test('taking a panel off the page refills the rows it leaves behind', async ({ p
     await request.delete(view);
   }
 });
+
+// The row of number tiles above the panels follows the same rule, by a
+// different mechanism: a column count chosen from how many tiles there are
+// (TILE_COLS, ui/src/components/kit.jsx). Assets has two tiles and two had no
+// entry, so they sat in a four-column row at 1024 and a six-column row at 1920
+// with the rest of the row empty. The other four pages are here so the rule is
+// asserted for every tile row, not only the one that was broken.
+for (const tab of ['overview', 'network', 'dns', 'infra', 'assets']) {
+  test(`#${tab}: every row of number tiles is a full row`, async ({ page }) => {
+    const short: string[] = [];
+    for (const width of [390, 1024, 1920]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/#${tab}`);
+      const strip = page.getByRole('list', { name: 'Headline numbers' });
+      await expect(strip).toBeVisible({ timeout: 20_000 });
+      const rows = await strip.evaluate((ul) => {
+        const edge = ul.getBoundingClientRect().right;
+        const byTop = new Map<number, number>();
+        for (const li of Array.from(ul.children)) {
+          const r = li.getBoundingClientRect();
+          const top = Math.round(r.top);
+          byTop.set(top, Math.max(byTop.get(top) ?? 0, r.right));
+        }
+        return Array.from(byTop.values()).map((right) => Math.round(edge - right));
+      });
+      expect(rows.length, `#${tab} at ${width}px: no tiles were measured`).toBeGreaterThan(0);
+      rows.forEach((shortBy, i) => {
+        if (shortBy > 1) short.push(`at ${width}px: tile row ${i + 1} ends ${shortBy}px short`);
+      });
+    }
+    expect(short, short.join('\n') || undefined).toEqual([]);
+  });
+}
+
