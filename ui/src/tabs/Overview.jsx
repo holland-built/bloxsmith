@@ -386,7 +386,7 @@ function LicenseInventory({ licenses, panelId }) {
       // as if they were the most urgent thing on the panel.
       sortAccessor: (r) => (r._days == null ? Infinity : r._days),
       render: (_v, r) => (
-        <span style={r._days != null && r._days < 30 ? { color: COLORS.crit } : r._days != null && r._days < 90 ? { color: COLORS.warn } : undefined} className={r._days == null ? 'text-muted' : ''}>
+        <span style={r._days != null && r._days < 30 ? { color: COLORS.crit } : r._days != null && r._days < 90 ? { color: COLORS.warn } : undefined} className={r._days == null ? 'tabular-nums text-muted' : 'tabular-nums'}>
           {formatRemaining(r._days)}
         </span>
       ),
@@ -400,7 +400,7 @@ function LicenseInventory({ licenses, panelId }) {
       // it does not catch clipped headers.
       label: 'Qty',
       align: 'right',
-      render: (q) => <span className="text-muted">{typeof q === 'number' ? q.toLocaleString() : '—'}</span>,
+      render: (q) => <span className="text-muted tabular-nums">{typeof q === 'number' ? q.toLocaleString() : '—'}</span>,
     },
   ]
 
@@ -1082,7 +1082,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId, loading = f
       label: 'Free',
       align: 'right',
       sortable: true,
-      render: (free) => <span className="text-muted">{free === null ? DASH : `${free.toLocaleString()} free`}</span>,
+      render: (free) => <span className="text-muted tabular-nums">{free === null ? DASH : `${free.toLocaleString()} free`}</span>,
     },
   ]
 

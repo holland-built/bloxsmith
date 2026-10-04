@@ -410,7 +410,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true },
     { key: 'view', label: 'View', sortable: true },
-    { key: 'records', label: 'Records', align: 'right', hideWhenConstant: true, sortable: true },
+    { key: 'records', label: 'Records', align: 'right', mono: true, hideWhenConstant: true, sortable: true },
     // keep: DataTable auto-hides a column whose every cell is empty, and '—' is
     // an empty cell to it. A view where no zone publishes a TTL must still show
     // the TTL column full of dashes — silently dropping it reads as "TTL isn't
@@ -631,7 +631,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   const columns = [
     { key: 'name', label: 'Name', mono: true, grow: true },
     { key: 'dtc_policy', label: 'Policy' },
-    { key: 'precedence', label: 'Precedence', align: 'right' },
+    { key: 'precedence', label: 'Precedence', align: 'right', mono: true },
     { key: 'ttl', label: 'TTL', mono: true, align: 'right' },
     { key: 'disabled', label: 'Status' },
   ]
