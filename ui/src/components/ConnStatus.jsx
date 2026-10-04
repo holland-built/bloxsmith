@@ -45,6 +45,8 @@ function useWriteTarget() {
 export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
   const [open, setOpen] = useState(false)
+  const chipRef = useRef(null)
+  const listRef = useRef(null)
   const [switching, setSwitching] = useState(false)
   const [switchErr, setSwitchErr] = useState('')
   const lastFetchRef = useRef(null)
@@ -99,6 +101,14 @@ export default function ConnStatus() {
   useEffect(() => {
     if (hasData) lastFetchRef.current = Date.now()
   }, [hasData])
+
+  // Focus goes into the list when it opens, onto the tenant in use. A listbox
+  // promises arrow keys, and they only mean something once focus is inside it.
+  useEffect(() => {
+    if (!open) return
+    const list = listRef.current
+    ;(list?.querySelector('[aria-selected="true"]') || list?.querySelector('[role="option"]'))?.focus()
+  }, [open])
 
   // Tick every 5s so the tooltip's "Xs ago" stays fresh.
   useEffect(() => {
@@ -254,9 +264,37 @@ export default function ConnStatus() {
     )
   }
 
+  // Escape closes the list and puts focus back on the chip that opened it;
+  // stopped so it does not also reach App.jsx's document-level Escape, which
+  // belongs to the nav menus. Up, Down, Home and End move between tenants.
+  //
+  // Tab closes it too, and is NOT prevented: focus is put back on the chip
+  // first, so the browser's own Tab then moves on from the chip in whichever
+  // direction was pressed. The list is one stop in the page's tab order, not
+  // one per tenant.
+  const onMenuKey = (e) => {
+    if (!open) return
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      if (e.key === 'Escape') e.stopPropagation()
+      setOpen(false)
+      chipRef.current?.focus()
+      return
+    }
+    const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
+    if (!step && e.key !== 'Home' && e.key !== 'End') return
+    const options = [...listRef.current.querySelectorAll('[role="option"]:not([disabled])')]
+    if (!options.length) return
+    e.preventDefault()
+    const at = options.indexOf(document.activeElement)
+    const next =
+      e.key === 'Home' ? 0 : e.key === 'End' ? options.length - 1 : Math.max(0, Math.min(options.length - 1, at + step))
+    options[next].focus()
+  }
+
   return (
-    <span className="relative flex items-center min-w-0">
+    <span className="relative flex items-center min-w-0" onKeyDown={onMenuKey}>
       <button
+        ref={chipRef}
         type="button"
         className={chipCls + ' cursor-pointer hover:border-border-hover'}
         title={`${title}${writeWords ? ` · ${writeWords}` : ''} — click to switch tenant`}
@@ -271,7 +309,7 @@ export default function ConnStatus() {
           {/* Click-away, behind the menu. A menu that only closes by reselecting
               is a trap on a narrow screen. */}
           <button type="button" aria-label="Close tenant menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div role="listbox" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-control border border-border bg-card shadow-lg py-1">
+          <div ref={listRef} role="listbox" aria-label="Switch tenant" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-control border border-border bg-card shadow-lg py-1">
             {tenants.map((t) => {
               const isActive = t.id === activeTenant
               return (
