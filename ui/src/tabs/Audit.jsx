@@ -4,6 +4,7 @@ import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, tr
 import { sampleCountLabel } from '../lib/sampleCount.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
 // are the two that get a colour. Everything else is one neutral tone rather than
@@ -513,7 +514,7 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
       note="Bloxsmith actions"
       right={
         <div className="flex items-center gap-2">
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Filter audit entries"
             placeholder="Filter…"
             value={filter}
@@ -661,7 +662,7 @@ function CspAuditTable({ panelId }) {
       note="external — Infoblox portal activity"
       right={
         <div className="flex items-center gap-2">
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Search user or resource"
             placeholder="Search user or resource…"
             value={q}

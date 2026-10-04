@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { classifyIndicator } from '../lib/indicator.js'
 import { FOCUS_RING } from './ui.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 /**
  * ⌘K command palette — tab jump, plus estate search. Fixed overlay, escapes all
@@ -97,7 +98,7 @@ export default function Palette({ tabs, onPick }) {
         className="w-[420px] max-w-full rounded-surface border border-border bg-card shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <input
+        <input {...MACHINE_TEXT}
           ref={inputRef}
           value={q}
           onChange={(e) => { setQ(e.target.value); setIdx(0) }}

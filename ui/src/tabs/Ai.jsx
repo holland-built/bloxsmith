@@ -3,6 +3,7 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from 
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 import { dossierHasVerdict } from '../lib/dossierVerdict.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
@@ -419,7 +420,7 @@ function LookupCard({ panelId }) {
   return (
     <Card panelId={panelId} title="Threat lookup" span={2}>
       <div className="flex gap-2 mb-3">
-        <input
+        <input {...MACHINE_TEXT}
           className={`${inputCls} flex-1 text-copy`}
           aria-label="Look up a domain, IP, or host"
           placeholder="domain, IP, or host…"

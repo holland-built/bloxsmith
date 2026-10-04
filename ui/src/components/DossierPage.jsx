@@ -7,6 +7,7 @@ import { useHashParams } from '../lib/hash.js'
 import { dossierMoreLine } from '../lib/dossierMore.js'
 import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '../lib/indicator.js'
 import { DASH } from '../lib/measured.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // Everything about one thing — the page a palette search lands on.
 //
@@ -811,9 +812,8 @@ export default function DossierPage() {
         </div>
         <label className="flex-1 flex items-center px-3 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
           <span className="sr-only">Search the estate</span>
-          <input
+          <input {...MACHINE_TEXT}
             value={draft}
-            spellCheck={false}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()

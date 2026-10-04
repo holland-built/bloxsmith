@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -149,7 +150,7 @@ function AllocatePanel({ panelId }) {
           </select>
         </Field>
         <Field label="Count">
-          <input
+          <input {...MACHINE_TEXT}
             className={inputCls}
             type="number"
             min="1"
@@ -158,7 +159,7 @@ function AllocatePanel({ panelId }) {
           />
         </Field>
         <Field label="Name (optional)">
-          <input
+          <input {...MACHINE_TEXT}
             className={inputCls}
             value={name}
             onChange={(e) => { setName(e.target.value); flow.markStale() }}
@@ -223,13 +224,13 @@ function DnsPanel({ panelId }) {
           </select>
         </Field>
         <Field label="Name">
-          <input className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="host or @" />
+          <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="host or @" />
         </Field>
         <Field label="TTL (optional)">
-          <input className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); flow.markStale() }} />
+          <input {...MACHINE_TEXT} className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); flow.markStale() }} />
         </Field>
         <Field label="Value">
-          <input className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); flow.markStale() }} placeholder="192.0.2.10" />
+          <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); flow.markStale() }} placeholder="192.0.2.10" />
         </Field>
       </div>
 
@@ -501,10 +502,10 @@ function ManageRecordsPanel({ panelId, span }) {
                       <div className="mt-2 flex flex-col gap-2">
                         <div className="grid grid-cols-3 gap-2">
                           <Field label="Value">
-                            <input className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); markStale() }} />
+                            <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); markStale() }} />
                           </Field>
                           <Field label="TTL">
-                            <input className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); markStale() }} />
+                            <input {...MACHINE_TEXT} className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); markStale() }} />
                           </Field>
                           <Field label="Comment">
                             <input className={inputCls} value={comment} onChange={(e) => { setComment(e.target.value); markStale() }} />

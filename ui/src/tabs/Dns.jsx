@@ -9,6 +9,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 
 // ---------- main ----------
 
@@ -447,7 +448,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       right={
         <div className="flex items-center gap-2.5">
           <span className="text-note text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
-          <input
+          <input {...MACHINE_TEXT}
             aria-label="Filter zones"
             placeholder="Filter…"
             value={filter}
