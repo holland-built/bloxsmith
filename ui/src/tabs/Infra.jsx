@@ -67,15 +67,16 @@ export default function Infra() {
     <div className="w-full px-6 py-5">
       <div className="flex items-center gap-2 mb-3">
         <h1 className="text-copy font-semibold tracking-tight">Infrastructure</h1>
-        {maintOk && (
+        {/* Only when maintenance is ON. With it off this used to be a green
+            "Operational" pill, and all it knew was that maintenance was off:
+            it said so beside four offline hosts out of ten. Whether the estate
+            is healthy is what the tiles below measure. */}
+        {maintOk && maintEnabled && (
           <span
             className="text-note font-medium px-2 py-0.5 rounded-full"
-            style={{
-              background: maintEnabled ? theme.pillWarnBg : theme.pillOkBg,
-              color: maintEnabled ? theme.pillWarnFg : theme.pillOkFg,
-            }}
+            style={{ background: theme.pillWarnBg, color: theme.pillWarnFg }}
           >
-            {maintEnabled ? 'Maintenance ON' : 'Operational'}
+            Maintenance ON
           </span>
         )}
       </div>

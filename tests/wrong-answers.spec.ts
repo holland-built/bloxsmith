@@ -2,7 +2,7 @@ import type { Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { dataPayload, installBaselineWorld } from './page-fixtures';
 
-// Five places where the screen said something the data did not. Each was found
+// Seven places where the screen said something the data did not. Each was found
 // by reading the code in the 2026-10-03 review, confirmed, and fixed; each test
 // here fails on the commit before the fix.
 //
@@ -13,6 +13,10 @@ import { dataPayload, installBaselineWorld } from './page-fixtures';
 //   3. The portal audit table painted a row with no result green.
 //   4. A supplier with no credential count blanked the whole Security tab.
 //   5. Addresses sorted as text: 10.1.2.10 before 10.1.2.9.
+//   6. Infra's heading carried a green "Operational" pill that only knew
+//      maintenance mode was off; it said so beside offline hosts.
+//   7. Provision painted the role badge in status colours, so a viewer was
+//      shown in the red this app uses for a failure.
 
 const fulfillJson = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
@@ -160,3 +164,48 @@ test('addresses sort by their numbers when the Network heading is clicked', asyn
   const numeric = ['10.1.2.9', '10.1.2.10', '10.1.2.20', '10.1.2.100'];
   expect([numeric, [...numeric].reverse()]).toContainEqual(order);
 });
+
+test('Infra: maintenance being off is not reported as "Operational"', async ({ page }) => {
+  // The baseline estate has one degraded and one offline host, and maintenance
+  // is off. The absence below only counts once the maintenance read has landed
+  // and been drawn: checked sooner, "not there" is also true of a pill that has
+  // not rendered yet, and the test would pass on the old code. So wait for the
+  // BODY (waitForResponse resolves on the headers), then two frames for React
+  // to draw what it was handed. Run three times against v3.87.0: failed three
+  // times.
+  const answered = page.waitForResponse('**/api/csp/maintenance');
+  await page.goto('/#infra');
+  await (await answered).finished();
+  await expect(page.getByRole('button', { name: 'Offline 1' })).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+  await expect(page.getByText('Operational', { exact: true })).toHaveCount(0);
+});
+
+test('Infra: maintenance being on is still said', async ({ page }) => {
+  await page.route('**/api/csp/maintenance', (route) => fulfillJson(route, { status: 'ok', enabled: true }));
+  await page.goto('/#infra');
+  await expect(page.getByText('Maintenance ON', { exact: true })).toBeVisible({ timeout: 20_000 });
+});
+
+for (const role of ['viewer', 'operator', 'admin']) {
+  test(`Provision: the ${role} role badge is neutral, not a status colour`, async ({ page }) => {
+    await page.route('**/api/whoami*', (route) =>
+      fulfillJson(route, { actor: 'baseline', role, tenant: 'baseline-tenant', token_auth: false }),
+    );
+    await page.goto('/#provision');
+    const badge = page.getByText(role.toUpperCase(), { exact: true });
+    await expect(badge).toBeVisible({ timeout: 20_000 });
+
+    const neutral = await tokenColour(page, '--pill-neutral-bg');
+    const statuses = await Promise.all(
+      ['--pill-ok-bg', '--pill-warn-bg', '--pill-crit-bg'].map((t) => tokenColour(page, t)),
+    );
+    // Guard the comparison: a neutral that resolved to one of the status
+    // colours would make the assertion below pass against the old badge.
+    expect(statuses).not.toContain(neutral);
+
+    await expect.poll(() => badge.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(neutral);
+    expect(await badge.evaluate((el) => getComputedStyle(el).color)).toBe(await tokenColour(page, '--pill-neutral-fg', 'color'));
+  });
+}
