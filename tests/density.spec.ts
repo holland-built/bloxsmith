@@ -19,8 +19,12 @@ test.beforeEach(async ({ page }) => {
 // from the app's own CSS variables, because a test that asks the code what it
 // does can only ever agree with it:
 //
-//   comfortable   card padding 18px   th/td padding-y 8px   row offsetHeight 38px
-//   compact       card padding 12px   th/td padding-y 4px   row offsetHeight 30px
+//   comfortable   card padding 12px   th/td padding-y 8px   row offsetHeight 38px
+//   compact       card padding  8px   th/td padding-y 4px   row offsetHeight 30px
+//
+// (The card padding was 18px and 12px until 2026-10-03, when the owner chose a
+// tighter panel wall; see the density tokens in ui/src/index.css. The row
+// figures did not move.)
 //
 // THE HORIZONTAL RULE. Density moves vertical spacing and grid gaps and nothing
 // else. DataTable computes its column widths with a canvas measurer that
@@ -123,7 +127,7 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
   // 39 and 31, not 38 and 30: Inter (index.css) has a line box 1px taller
   // than the system font these were first measured with. Padding is unchanged.
   expect(before.rowH).toBe(39);
-  expect(before.cardPadTop).toBe('18px');
+  expect(before.cardPadTop).toBe('12px');
   expect(before.cellPadY).toBe('8px/8px');
 
   await setDensity(page, 'Compact density');
@@ -132,12 +136,12 @@ test('compact shrinks rows and card padding, and comfortable restores both exact
 
   const compact = await page.evaluate(probe);
   expect(compact.rowH).toBe(31);
-  expect(compact.cardPadTop).toBe('12px');
+  expect(compact.cardPadTop).toBe('8px');
   expect(compact.cellPadY).toBe('4px/4px');
   // The predicate's own two clauses, stated as the comparisons they are rather
   // than only as the literals above.
   expect(compact.rowH!).toBeLessThan(before.rowH!);
-  expect(parseFloat(compact.cardPadTop!)).toBeLessThan(18);
+  expect(parseFloat(compact.cardPadTop!)).toBeLessThan(12);
 
   await setDensity(page, 'Comfortable density');
   await expect(page.locator('html')).toHaveAttribute('data-density', 'comfortable');
@@ -170,7 +174,7 @@ test('the density choice survives a page reload', async ({ page }) => {
   await page.waitForTimeout(800);
   const after = await page.evaluate(probe);
   expect(after.rowH).toBe(31);
-  expect(after.cardPadTop).toBe('12px');
+  expect(after.cardPadTop).toBe('8px');
 });
 
 test('no table x-overflows in either density, and cell horizontal padding never moves', async ({ page }) => {

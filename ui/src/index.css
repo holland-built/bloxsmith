@@ -317,12 +317,15 @@
    all, so spacing was hard-coded in the shared components and there was no knob
    to turn. These three are that knob.
 
-   Comfortable is today's spacing to the pixel — 18px is Card's old `p-[18px]`
-   (ui.jsx), 0.75rem is CardGrid's old `gap-3`, 0.5rem is the DataTable cell's
-   old `py-2`. Measured before the swap on #overview and #assets at 1920: card
-   padding 18px on all four sides, grid row/column gap 12px, th/td padding-y 8px,
-   table row offsetHeight 38px. With no data-density attribute set those are all
-   unchanged, because these are the same numbers under a different name.
+   Comfortable was, until 2026-10-03, the spacing these replaced, to the pixel:
+   18px card padding (Card's old `p-[18px]`), a 12px grid gap (CardGrid's old
+   `gap-3`) and 8px cell padding (the DataTable cell's old `py-2`).
+
+   2026-10-03: THE PANEL WALL IS TIGHTER. The owner chose a layout of panels
+   edge to edge, modelled on Grafana, whose grid is 8px. Comfortable is now a
+   12px card pad and an 8px gap, and compact steps the card pad down again to
+   8px. Table rows are untouched: 8px cell padding in comfortable, 4px in
+   compact, so a row is the height it was.
 
    VERTICAL AND GAPS ONLY, and horizontal CELL padding is deliberately not on
    this list. DataTable measures its column widths with a canvas and adds a
@@ -334,8 +337,8 @@
    for the opposite reason: Card reads it live from getComputedStyle when it
    reports its width (ui.jsx publish()), so nothing is hard-coded to go stale. */
 :root {
-  --sp-card-pad: 18px;
-  --sp-grid-gap: 0.75rem;
+  --sp-card-pad: 12px;
+  --sp-grid-gap: 0.5rem;
   --sp-cell-y: 0.5rem;
 }
 
@@ -346,7 +349,7 @@
 }
 
 html[data-density="compact"] {
-  --sp-card-pad: 12px;
+  --sp-card-pad: 8px;
   --sp-grid-gap: 0.5rem;
   --sp-cell-y: 0.25rem;
 }
@@ -354,7 +357,7 @@ html[data-density="compact"] {
 /* ---------- record layout: the Risk tabs ----------
    Security, Incidents, Audit and Changes are where the operator acts (ack,
    block, load older), so each leads with its working table and runs dense and
-   square: the compact spacing above, no corner radius. The lead table sits on
+   square: compact's row height on the standard card pad, no corner radius. The lead table sits on
    the page under one rule instead of in a filled box. Border WIDTHS are left
    alone so no panel's measured width moves; only colours change. */
 [data-layout="record"] {

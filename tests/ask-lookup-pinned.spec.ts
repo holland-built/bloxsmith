@@ -58,11 +58,16 @@ test('a failed lookup is only as tall as its content, not the height of the chat
 });
 
 test('the lookup stays in view beside the chat when the page scrolls', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 760 });
+  // 700 tall, not the 760 the other tests here use. The page got shorter when
+  // the panel spacing tightened on 2026-10-03, and at 760 it scrolled 196px:
+  // under the 200 this test asks for before it will believe its own result.
+  // The guard is kept as it was and the window is made shorter instead.
+  const TALL = 700;
+  await page.setViewportSize({ width: 1440, height: TALL });
   await page.goto('/#ai');
   await fillChat(page);
   const maxScroll = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-  expect(maxScroll, 'the page must scroll at 760px tall, or this proves nothing').toBeGreaterThan(200);
+  expect(maxScroll, `the page must scroll at ${TALL}px tall, or this proves nothing`).toBeGreaterThan(200);
 
   const before = (await page.locator(LOOKUP).boundingBox())!;
   await page.evaluate((y) => window.scrollTo(0, y), maxScroll);
@@ -74,7 +79,7 @@ test('the lookup stays in view beside the chat when the page scrolls', async ({ 
   expect(after.y).toBeGreaterThanOrEqual(59);
   expect(after.y).toBeLessThan(90);
   expect(search.y).toBeGreaterThan(59);
-  expect(search.y + search.height).toBeLessThan(760);
+  expect(search.y + search.height).toBeLessThan(TALL);
 });
 
 test('on a phone the lookup does not pin: it scrolls away under the chat as before', async ({ page }) => {
