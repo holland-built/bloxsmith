@@ -50,8 +50,8 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 
 Every tab rearranges, and each one remembers its own arrangement — moving a panel on Network changes nothing on DNS. Provision keeps three separate arrangements, one each for Subnet, Full site and Seed demo, because those are three different pages behind one tab.
 
-- **Move** — open the ⋯ menu in a panel's header and drag **Move**. Without a mouse: Tab to ⋯ and press Enter, Tab to **Move** and press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
-- **Resize** — drag a panel's right edge. In keyboard move mode, ↑ and ↓ do the same thing.
+- **Move** — open the ⋯ menu in a panel's header and drag **Move**. Press Escape while dragging to give the drag up. Without a mouse: Tab to ⋯ and press Enter, Tab to **Move** and press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
+- **Resize** — drag a panel's right edge. Press Escape while dragging to keep the width it had. In keyboard move mode, ↑ and ↓ do the same thing.
 - **Take a panel off the page** — **Take off the page**, in the same ⋯ menu. Nothing is deleted and no data is lost; that tab simply stops drawing the panel until you put it back.
 - **Arrange panels** — a button above the panels opens a window called "Arrange this page". It lists what is on the page, in the order the page is actually in, and separately anything that is off it. Drag a row up or down, or use its **Move up** and **Move down** buttons, to reorder. **Take off the page** and **Put back on the page** do the hiding and the undoing. A panel you put back lands at the *end* of the page rather than where it used to be, and the window says so. This window is also where the whole feature is explained in words, for anyone who has not met a ⠿ grip before.
 - **Saving** — there is no Save button, and nothing to remember to press. Every move, every resize and every hide is written as soon as you let go, the page confirms that it saved rather than leaving you to guess, and the arrangement comes back on your next visit and after a server restart.

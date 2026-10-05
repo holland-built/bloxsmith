@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
 import { installBaselineWorld } from './page-fixtures';
 import {
-  activeHandlePanel, cardBox, clampY, domOrder, dragOntoRightHalfOf, expectEverySpanWellFormed,
+  activeHandlePanel, beginPanelDrag, cardBox, clampY, domOrder, dragOntoRightHalfOf, expectEverySpanWellFormed,
   expectPersistedBlobIsValid, geometry, gotoTab, grabRightEdge, gridShape, inlineSpans, liveText,
-  narrowTo, savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
+  narrowTo, openPanelMenu, panelMenuList, savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
 } from './layout-helpers';
 
 // Every /api/ response is faked from tests/page-fixtures.ts.
@@ -259,6 +259,90 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
   expect(visual).toEqual(await domOrder(page));
   expect(await strayDragStyles(page)).toEqual([]);
   expectEverySpanWellFormed(await inlineSpans(page));
+});
+
+// ---------------------------------------------------------------------------
+// Escape gives a pointer gesture up.
+//
+// A keyboard move could always be abandoned with Escape. A mouse drag could
+// not: the only way out of a drag that had started was to let go, which drops
+// the panel wherever the pointer happened to be and saves it.
+// ---------------------------------------------------------------------------
+
+test('pressing Escape while dragging a panel gives the drag up: nothing moves, nothing is saved', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  await gotoOverview(page, 1920, 2400);
+  expect(await domOrder(page)).toEqual(DECLARED_ORDER);
+  const targetBox = await cardBox(page, DECLARED_ORDER[1]!);
+
+  // The same aim P9a uses to move dns-hero past host-status.
+  await beginPanelDrag(page, 'dns-hero');
+  await page.mouse.move(
+    (targetBox.left + targetBox.right) / 2 + 20,
+    clampY(page, targetBox.top + 20),
+    { steps: 15 },
+  );
+  await expect(page.locator('[data-layout-ghost]')).toHaveCount(1);
+  await expect(page.locator('[data-layout-insert-line]')).toHaveCount(1);
+
+  await page.keyboard.press('Escape');
+  // Gone at once, with the button still down.
+  await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
+  await expect(page.locator('[data-layout-insert-line]')).toHaveCount(0);
+
+  // Moving on and letting go must not drop the panel after all.
+  await page.mouse.move(targetBox.right - 30, clampY(page, targetBox.top + 40), { steps: 5 });
+  await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+
+  expect(await domOrder(page)).toEqual(DECLARED_ORDER);
+  expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
+  // And the page is left as a finished drag leaves it: text can be selected
+  // again, and the menu the drag started from is shut.
+  expect(await page.evaluate(() => document.body.style.userSelect)).toBe('');
+  await expect(panelMenuList(page, 'dns-hero')).toBeHidden();
+  expect(await strayDragStyles(page)).toEqual([]);
+});
+
+test('pressing Escape while dragging a panel edge keeps the width it had, and saves nothing', async ({ page, request }) => {
+  test.setTimeout(120_000);
+  await gotoOverview(page);
+  const { track, gap } = await geometry(page);
+  expect((await inlineSpans(page))['host-status']).toBe('');
+
+  // The same aim P9b uses to take host-status from 2 tracks to 4.
+  const g = await grabRightEdge(page, 'host-status');
+  await page.mouse.move(g.box.left + 4 * track + 3 * gap, g.y, { steps: 12 });
+  await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(1);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(0);
+
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  expect((await inlineSpans(page))['host-status']).toBe('');
+  expect((await cardBox(page, 'host-status')).width).toBeCloseTo(g.box.width, 0);
+  expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
+});
+
+test('Escape on a press that has not become a drag still shuts the menu', async ({ page }) => {
+  // Holding the Move button down without travelling is a press, not a drag.
+  // Escape there shuts the menu, as it does on every other row in it, and a
+  // later move of the mouse must not start a drag from a menu that is gone.
+  await gotoOverview(page);
+  await openPanelMenu(page, 'host-status');
+  const hb = (await page.locator('[data-panel-id="host-status"] [data-layout-handle]').boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await expect(panelMenuList(page, 'host-status')).toBeHidden();
+  await page.mouse.move(hb.x + 60, hb.y + 60, { steps: 5 });
+  await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await domOrder(page)).toEqual(DECLARED_ORDER);
 });
 
 // ---------------------------------------------------------------------------
