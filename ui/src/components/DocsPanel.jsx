@@ -102,7 +102,7 @@ function Blocks({ blocks }) {
         )
       case 'quote':
         return (
-          <blockquote key={i} className="border-l-2 border-card-border pl-2.5 my-2 text-note leading-relaxed text-dim">
+          <blockquote key={i} className="border-l border-card-border pl-2.5 my-2 text-note leading-relaxed text-dim">
             <Inline text={b.text} />
           </blockquote>
         )
