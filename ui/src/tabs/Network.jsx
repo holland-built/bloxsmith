@@ -6,6 +6,7 @@ import { sortRows } from '../lib/sortCompare.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
+import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 
@@ -106,8 +107,9 @@ export default function Network() {
 // ---------- headline numbers ----------
 
 // The counts across the top, each a jump to its panel. The two band counts are
-// Utilization Distribution's own bars (70-85 inclusive, over 85), counted from
-// the same rows, so the number and the bar it jumps to always agree.
+// Utilization Distribution's own bars (the amber and the red band of
+// lib/utilBands.js), counted from the same rows, so the number and the bar it
+// jumps to always agree.
 //
 // Those rows are meant to hold every subnet at 70% or more, but the server's
 // at-risk pager is capped (dashboard.go atRiskPageCap/RowCap/TimeCap) and sets
@@ -121,17 +123,17 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   const util = subOk ? subnets.map((s) => num(s.util)).filter((u) => u !== null) : []
   const band = (test) => (subOk ? util.filter(test).length : null)
   const complete = subOk && t.degraded !== true && Number.isFinite(t.subnetsWarn) &&
-    util.filter((u) => u >= 70).length >= t.subnetsWarn
+    util.filter((u) => utilBand(u) !== 'ok').length >= t.subnetsWarn
   const scope = subOk && !complete ? ' (of loaded)' : ''
   const leases = dhcp.data?.count
   const leasesOk = !dhcp.loading && !dhcp.error && dhcp.data?.status !== 'error' && Number.isFinite(leases)
   const fmt = (v) => (v == null ? null : v.toLocaleString())
-  const over = band((u) => u > 85)
-  const mid = band((u) => u >= 70 && u <= 85)
+  const over = band((u) => utilBand(u) === 'crit')
+  const mid = band((u) => utilBand(u) === 'warn')
   return [
     { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null) },
-    { panelId: 'network-utilization-distribution', label: `Over 85%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit') },
-    { panelId: 'network-utilization-distribution', label: `70–85%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn') },
+    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit') },
+    { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn') },
     { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null) },
   ]
 }
@@ -141,9 +143,9 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
 function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   const { COLORS } = useChartTheme()
   const BANDS = [
-    { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.series },
-    { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
-    { key: '85-100', label: '>85%', test: (u) => u > 85, color: COLORS.crit },
+    { key: 'ok', label: `<${UTIL_WARN}%`, test: (u) => utilBand(u) === 'ok', color: COLORS.series },
+    { key: 'warn', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%`, test: (u) => utilBand(u) === 'warn', color: COLORS.warn },
+    { key: 'crit', label: `≥${UTIL_CRIT}%`, test: (u) => utilBand(u) === 'crit', color: COLORS.crit },
   ]
   // A subnet with no reported utilisation belongs in no band — counted as 0 it
   // lands in "<70%" and inflates the healthy bar with subnets nobody measured.

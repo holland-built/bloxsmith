@@ -52,7 +52,7 @@
     - button /\d+\.\d+\.0\.0 — \d+% used/
     - button /\d+\.\d+\.0\.0 — \d+% used/
     - button /\d+\.\d+\.0\.0 — \d+% used/
-  - text: /ok >\d+% >\d+%/
+  - text: /ok ≥\d+% ≥\d+%/
   - heading "Services and incidents" [level=2]
   - link "Incidents":
     - /url: "#incidents"

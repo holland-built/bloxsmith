@@ -54,7 +54,7 @@ export const PANEL_HELP = {
     look: 'Ranked by addresses in use, not by how full they are, so tiny always-full links do not crowd out real capacity problems. Click a bar to open that subnet.',
   },
   'subnet-heatmap': {
-    what: 'One square per subnet, coloured by how full it is: green is fine, amber past 75% full, red past 92%.',
+    what: 'One square per subnet, coloured by how full it is: green is fine, amber from 70% full, red from 90%.',
     look: 'Only the fullest few hundred are drawn, worst first. Point at a square, or drag a finger across them, to read its name and figure. Click or tap one to open that subnet.',
   },
   'host-status': {
@@ -76,7 +76,7 @@ export const PANEL_HELP = {
 
   // ---- Daily ----
   'daily-open-issues': {
-    what: 'Three counts: subnets 85% full or more (tiny networks under 16 addresses left out), machines not reporting as online, and DNS zones with a problem recorded.',
+    what: 'Three counts: subnets 90% full or more (tiny networks under 16 addresses left out), machines not reporting as online, and DNS zones with a problem recorded.',
     look: 'Click any row to open the list behind it. A row reading "unavailable" in red means that one feed failed — the other two rows are still real.',
   },
   'daily-security-today': {
@@ -99,11 +99,11 @@ export const PANEL_HELP = {
   // ---- Network ----
   'network-utilization-distribution': {
     what: 'How many of your subnets are lightly used, filling up, or nearly out of addresses.',
-    look: 'Green is under 70% full, amber 70–85%, red past 85%. A subnet that reports no figure is left out of the bars and counted in the line at the top right.',
+    look: 'Green is under 70% full, amber 70–89%, red 90% or more. A subnet that reports no figure is left out of the bars and counted in the line at the top right.',
   },
   'network-ipam-spaces': {
     what: 'The twelve address spaces handing out the most addresses right now.',
-    look: 'Bar length is how full a space is, and its colour follows: amber past 75% full, red past 92%. The number on the right is addresses in use, not the percentage.',
+    look: 'Bar length is how full a space is, and its colour follows: amber from 70% full, red from 90%. The number on the right is addresses in use, not the percentage.',
   },
   'network-dhcp-leases': {
     what: 'Every address DHCP has leased out, the machine holding it, its hardware address, and when the lease runs out.',
@@ -111,7 +111,7 @@ export const PANEL_HELP = {
   },
   'network-exhaustion': {
     what: 'The subnets closest to running out of addresses, with how full each one is and how many are still free. It draws 150 at most and says how many matched.',
-    look: 'Amber past 75% full, red past 92%. A subnet nobody measured gets a grey Unknown badge, no bar and dashes, and sorts to the bottom whichever way you sort.',
+    look: 'Amber from 70% full, red from 90%. A subnet nobody measured gets a grey Unknown badge, no bar and dashes, and sorts to the bottom whichever way you sort.',
   },
 
   // ---- Dns ----

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useHasArranged } from '../lib/arrangedOnce.js'
+import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, TabIntro, useChartTheme, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
@@ -207,10 +208,10 @@ function headlines(dns, data, sec, sliceStatus) {
   const subnetsDown = sliceStatus('subnets') === 'error'
   const measured = subnets.filter((s) => num(s.util) !== null)
   const hasCritTotal = typeof totals.subnetsCrit === 'number'
-  const crit = !settled || subnetsDown ? null : hasCritTotal ? totals.subnetsCrit : measured.filter((s) => num(s.util) >= 90).length
+  const crit = !settled || subnetsDown ? null : hasCritTotal ? totals.subnetsCrit : measured.filter((s) => utilBand(num(s.util)) === 'crit').length
   // The short label while loading, so the tile does not re-word itself (and
   // re-wrap) when the payload lands with a total in it.
-  const critLabel = !settled || hasCritTotal ? 'Subnets ≥90%' : measured.length < subnets.length ? 'Subnets ≥90% (loaded rows w/ known util)' : 'Subnets ≥90% (loaded rows)'
+  const critLabel = !settled || hasCritTotal ? `Subnets ≥${UTIL_CRIT}%` : measured.length < subnets.length ? `Subnets ≥${UTIL_CRIT}% (loaded rows w/ known util)` : `Subnets ≥${UTIL_CRIT}% (loaded rows)`
   // _totals.subnetsWarn is every subnet at 70% or more, INCLUDING the ≥90%
   // ones (go/internal/dashboard/dashboard.go: the at-risk pager's
   // utilization>=70 total), so the 70–89% band is warn − crit. The two counts
@@ -238,8 +239,8 @@ function headlines(dns, data, sec, sliceStatus) {
     { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
     {
       // The same rule: a zero counted over loaded rows is not an all-clear.
-      href: '#network?minUtil=90', label: critLabel, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
-      note: subnetsDown ? 'unavailable' : bandOk ? `${(totals.subnetsWarn - totals.subnetsCrit).toLocaleString()} at 70–89%` : null,
+      href: `#network?minUtil=${UTIL_CRIT}`, label: critLabel, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
+      note: subnetsDown ? 'unavailable' : bandOk ? `${(totals.subnetsWarn - totals.subnetsCrit).toLocaleString()} at ${UTIL_WARN}–${UTIL_CRIT - 1}%` : null,
     },
     { href: '#network?focus=leases', label: 'Active Leases', value: fmt(activeLeases), note: leasesDown ? 'unavailable' : null },
     {
@@ -715,7 +716,8 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading =
                 const addr = s.addr || s.cidr
                 const r = Math.floor(i / cols)
                 const c = i % cols
-                const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.series
+                const band = utilBand(util)
+                const color = band === 'crit' ? COLORS.crit : band === 'warn' ? COLORS.warn : COLORS.series
                 const opacity = Math.max(0.15, Math.min(1, util / 100))
                 return (
                   <rect
@@ -799,8 +801,8 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId, loading =
           </div>
           <div className="flex gap-3.5 mt-2 text-note text-muted">
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />ok</span>
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.warn }} />≥{UTIL_WARN}%</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.crit }} />≥{UTIL_CRIT}%</span>
           </div>
         </>
       )}

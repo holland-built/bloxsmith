@@ -12,7 +12,7 @@
 // behavioural claim is the wrong machine for a value:
 //
 //   - A behavioural claim ("click a row") is answered by ANY onClick in the
-//     panel's file. A value claim ("red past 92%") is answered by ONE line, and
+//     panel's file. A value claim ("red from 90%") is answered by ONE line, and
 //     it usually is not in the panel's own file — `utilStatus` lives in
 //     components/ui.jsx, `ROW_CAP` in lib/changes.js, the `_limit` caps and the
 //     cube `dateRange` windows in Go. A regex that follows imports could not
@@ -24,9 +24,9 @@
 // SHAPE
 //
 //   { panel: 'subnet-heatmap',                    // a PANEL_HELP key
-//     says:  /amber past 75% full, red past 92%/, // binds the row to the SENTENCE
-//     file:  'ui/src/tabs/Overview.jsx',          // repo-root-relative
-//     proofs: [{ re: /util >= 92 \? COLORS\.crit/, expect: 'red at util >= 92' }] }
+//     says:  /amber from 70% full, red from 90%/, // binds the row to the SENTENCE
+//     file:  'ui/src/lib/utilBands.js',           // repo-root-relative
+//     proofs: [{ re: /export const UTIL_CRIT = 90/, expect: 'red starts at 90' }] }
 //
 // `says` is not decoration. If the copy is reworded or the number in it changes,
 // `says` stops matching and this file goes RED rather than quietly checking a
@@ -293,17 +293,33 @@ const GO_PROVISION = 'go/internal/server/provision.go'
 const GO_CSP = 'go/internal/dashboard/csp.go'
 const GO_ANALYTICS = 'go/internal/dashboard/analytics.go'
 const GO_HOSTS = 'go/internal/dashboard/hosts.go'
+const UTIL_BANDS = 'ui/src/lib/utilBands.js'
+
+// THE TWO NUMBERS LIVE IN ONE FILE since 2026-10-04 (lib/utilBands.js), so a
+// sentence that names them is proved in two steps, each a row of its own: the
+// numbers and the rule, here, and then that the panel's code asks that rule
+// and no other. Written once so a change to either number reds every sentence
+// that quotes it.
+const UTIL_BAND_PROOFS = [
+  { re: /export const UTIL_WARN = 70/, expect: 'amber starts at 70 (UTIL_WARN)' },
+  { re: /export const UTIL_CRIT = 90/, expect: 'red starts at 90 (UTIL_CRIT)' },
+  {
+    re: /return util >= UTIL_CRIT \? 'crit' : util >= UTIL_WARN \? 'warn' : 'ok'/,
+    expect: 'utilBand() grades from the two constants, inclusive at both edges',
+  },
+]
 
 // `utilStatus` is one function shared by three panels whose copy repeats the
 // same two thresholds. Written once so a flip there reds all three rows.
 const UTIL_STATUS_PROOFS = [
+  { re: /const band = utilBand\(util\)/, expect: 'utilStatus() takes its band from utilBand()' },
   {
-    re: /if \(util >= 92\) return \{ label: 'Critical', color: 'var\(--color-crit\)'/,
-    expect: "utilStatus() grades util >= 92 Critical / COLORS.crit (red)",
+    re: /if \(band === 'crit'\) return \{ label: 'Critical', color: 'var\(--color-crit\)'/,
+    expect: "utilStatus() draws the 'crit' band Critical / COLORS.crit (red)",
   },
   {
-    re: /if \(util >= 75\) return \{ label: 'Warning', color: 'var\(--color-warn\)'/,
-    expect: "utilStatus() grades util >= 75 Warning / COLORS.warn (amber)",
+    re: /if \(band === 'warn'\) return \{ label: 'Warning', color: 'var\(--color-warn\)'/,
+    expect: "utilStatus() draws the 'warn' band Warning / COLORS.warn (amber)",
   },
 ]
 
@@ -464,12 +480,17 @@ const CLAIMS = [
   // ---- thresholds ----
   {
     panel: 'subnet-heatmap',
-    says: /green is fine, amber past 75% full, red past 92%/,
+    says: /green is fine, amber from 70% full, red from 90%/,
+    file: UTIL_BANDS,
+    proofs: UTIL_BAND_PROOFS,
+  },
+  {
+    panel: 'subnet-heatmap',
+    says: /green is fine, amber from 70% full, red from 90%/,
     file: OVERVIEW,
     proofs: [
-      { re: /const color = util >= 92 \? COLORS\.crit/, expect: 'red (COLORS.crit) at util >= 92' },
-      { re: /: util >= 75 \? COLORS\.warn/, expect: 'amber (COLORS.warn) at util >= 75' },
-      { re: /util >= 75 \? COLORS\.warn : COLORS\.series/, expect: 'green (COLORS.series) below 75' },
+      { re: /const band = utilBand\(util\)\n\s+const color = band === 'crit' \? COLORS\.crit/, expect: "a square is red (COLORS.crit) in utilBand()'s 'crit' band" },
+      { re: /: band === 'warn' \? COLORS\.warn : COLORS\.series/, expect: "amber (COLORS.warn) in the 'warn' band, green (COLORS.series) otherwise" },
     ],
   },
   {
@@ -483,23 +504,41 @@ const CLAIMS = [
   },
   {
     panel: 'network-utilization-distribution',
-    says: /Green is under 70% full, amber 70–85%, red past 85%/,
+    says: /Green is under 70% full, amber 70–89%, red 90% or more/,
+    file: UTIL_BANDS,
+    proofs: UTIL_BAND_PROOFS,
+  },
+  {
+    panel: 'network-utilization-distribution',
+    says: /Green is under 70% full, amber 70–89%, red 90% or more/,
     file: NETWORK,
     proofs: [
-      { re: /label: '<70%', test: \(u\) => u < 70, color: COLORS\.series/, expect: 'green band is u < 70' },
-      { re: /label: '70–85%', test: \(u\) => u >= 70 && u <= 85, color: COLORS\.warn/, expect: 'amber band is 70 <= u <= 85' },
-      { re: /label: '>85%', test: \(u\) => u > 85, color: COLORS\.crit/, expect: 'red band is u > 85' },
+      { re: /label: `<\$\{UTIL_WARN\}%`, test: \(u\) => utilBand\(u\) === 'ok', color: COLORS\.series/, expect: "the green bar is utilBand()'s 'ok' band, labelled from UTIL_WARN" },
+      { re: /label: `\$\{UTIL_WARN\}–\$\{UTIL_CRIT - 1\}%`, test: \(u\) => utilBand\(u\) === 'warn', color: COLORS\.warn/, expect: "the amber bar is the 'warn' band, labelled 70–89%" },
+      { re: /label: `≥\$\{UTIL_CRIT\}%`, test: \(u\) => utilBand\(u\) === 'crit', color: COLORS\.crit/, expect: "the red bar is the 'crit' band, labelled from UTIL_CRIT" },
     ],
   },
   {
     panel: 'network-ipam-spaces',
-    says: /amber past 75% full, red past 92%/,
+    says: /amber from 70% full, red from 90%/,
+    file: UTIL_BANDS,
+    proofs: UTIL_BAND_PROOFS,
+  },
+  {
+    panel: 'network-ipam-spaces',
+    says: /amber from 70% full, red from 90%/,
     file: UI,
     proofs: UTIL_STATUS_PROOFS,
   },
   {
     panel: 'network-exhaustion',
-    says: /Amber past 75% full, red past 92%/,
+    says: /Amber from 70% full, red from 90%/,
+    file: UTIL_BANDS,
+    proofs: UTIL_BAND_PROOFS,
+  },
+  {
+    panel: 'network-exhaustion',
+    says: /Amber from 70% full, red from 90%/,
     file: UI,
     proofs: UTIL_STATUS_PROOFS,
   },
@@ -511,15 +550,21 @@ const CLAIMS = [
   },
   {
     panel: 'daily-open-issues',
-    says: /subnets 85% full or more \(tiny networks under 16 addresses left out\)/,
+    says: /subnets 90% full or more \(tiny networks under 16 addresses left out\)/,
+    file: UTIL_BANDS,
+    proofs: UTIL_BAND_PROOFS,
+  },
+  {
+    panel: 'daily-open-issues',
+    says: /subnets 90% full or more \(tiny networks under 16 addresses left out\)/,
     file: DAILY,
     proofs: [
-      { re: /\(Number\(s\.util\) \|\| 0\) >= 85\)$/m, expect: 'the count is util >= 85, inclusive like the drill-down' },
+      { re: /utilBand\(Number\(s\.util\) \|\| 0\) === 'crit'\)$/m, expect: "the count is utilBand()'s 'crit' band, inclusive like the drill-down" },
       {
         re: /\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28 &&/,
         expect: 'prefixes longer than /28 (fewer than 16 addresses) are filtered out before the util test',
       },
-      { re: /hash: 'network\?minUtil=85'/, expect: 'the row links to the same 85 threshold' },
+      { re: /hash: `network\?minUtil=\$\{UTIL_CRIT\}`/, expect: 'the row links to the same threshold, UTIL_CRIT' },
     ],
   },
   {

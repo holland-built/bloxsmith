@@ -10,6 +10,7 @@ import {
   declaredSpan, fillRows, insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
   shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
 } from '../lib/layout.js'
+import { utilBand } from '../lib/utilBands.js'
 
 // Static COLORS as CSS var() strings: fine for inline HTML styles (auto-flip with
 // theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
@@ -3044,9 +3045,12 @@ export function Skeleton({ h = 140 }) {
   return <div className="animate-pulse motion-reduce:animate-none bg-line rounded-control w-full" style={{ height: h }} />
 }
 
+// Where amber and red start is lib/utilBands.js, the one place every page
+// reads it from. This only turns the band into a word and its colours.
 export function utilStatus(util) {
-  if (util >= 92) return { label: 'Critical', color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
-  if (util >= 75) return { label: 'Warning', color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
+  const band = utilBand(util)
+  if (band === 'crit') return { label: 'Critical', color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
+  if (band === 'warn') return { label: 'Warning', color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
   return { label: 'Healthy', color: 'var(--color-ok)', bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)' }
 }
 
