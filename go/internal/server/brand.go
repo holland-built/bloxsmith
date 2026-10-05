@@ -34,17 +34,27 @@ func (d *Deps) logoFile() string  { return filepath.Join(d.StateDir, "logo.png")
 func (d *Deps) brandFile() string { return filepath.Join(d.StateDir, "brand.json") }
 
 // logo is GET /api/logo (server.py:5009): serve the vault logo if present, else
-// try the CDN sources for ?domain=, else 404.
+// try the CDN sources for ?domain= (or the saved company), else 404.
 func (d *Deps) logo(w http.ResponseWriter, r *http.Request) {
 	if data, err := os.ReadFile(d.logoFile()); err == nil {
-		w.Header().Set("Content-Type", "image/png")
-		w.Header().Set("Cache-Control", "public,max-age=3600")
-		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		w.WriteHeader(200)
-		_, _ = w.Write(data)
-		return
+		// A stored file that is not an image is skipped, never served. Installs
+		// from before cacheLogo checked its bytes hold a logo service's web page
+		// here, and it went out labelled image/png.
+		if ct, ok := logoType(data); ok {
+			w.Header().Set("Content-Type", ct)
+			w.Header().Set("Cache-Control", "public,max-age=3600")
+			w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+			w.WriteHeader(200)
+			_, _ = w.Write(data)
+			return
+		}
 	}
 	domain := brandSanitize.ReplaceAllString(r.URL.Query().Get("domain"), "")
+	if domain == "" {
+		// The page asks for /api/logo with no domain, so without this an install
+		// with nothing usable stored could only ever show the built-in mark.
+		domain = d.savedBrandDomain()
+	}
 	if domain == "" {
 		w.WriteHeader(404)
 		return
@@ -115,14 +125,37 @@ func fetchLogo(ctx context.Context, url string) ([]byte, string, bool) {
 	if err != nil || len(data) > maxLogoBytes {
 		return nil, "", false
 	}
-	if len(data) < 50 {
-		return nil, "", false
-	}
-	ct := http.DetectContentType(data)
-	if !strings.HasPrefix(ct, "image/") {
+	ct, ok := logoType(data)
+	if !ok {
 		return nil, "", false
 	}
 	return data, ct, true
+}
+
+// logoType reports the image type of data and whether data is a logo at all.
+// It is the one rule for "these bytes may be shown as the logo", applied to what
+// a CDN sent, to what is about to be stored and to what was stored earlier.
+func logoType(data []byte) (string, bool) {
+	if len(data) < 50 {
+		return "", false
+	}
+	ct := http.DetectContentType(data)
+	return ct, strings.HasPrefix(ct, "image/")
+}
+
+// savedBrandDomain is the company domain in brand.json, or "" when none is saved.
+func (d *Deps) savedBrandDomain() string {
+	b, err := os.ReadFile(d.brandFile())
+	if err != nil {
+		return ""
+	}
+	var saved struct {
+		Domain string `json:"domain"`
+	}
+	if json.Unmarshal(b, &saved) != nil {
+		return ""
+	}
+	return brandSanitize.ReplaceAllString(saved.Domain, "")
 }
 
 // brandGet is GET /api/brand (server.py:5045): the saved brand.json, else {}.
@@ -141,7 +174,7 @@ func (d *Deps) brandGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // brandPost is POST /api/brand (server.py:6018): persist {domain,name} and,
-// best-effort, cache the logo from the Brandfetch CDN (failure is non-fatal).
+// best-effort, cache the company's logo (failure is non-fatal).
 func (d *Deps) brandPost(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	// CSRF gate: this route sits ABOVE the vault gate and isn't in the central
 	// mutating-path set, so the chassis write-guard never runs for it. Without
@@ -162,29 +195,49 @@ func (d *Deps) brandPost(w http.ResponseWriter, r *http.Request, b map[string]an
 	if len(name) > 120 {
 		name = name[:120]
 	}
+	previous := d.savedBrandDomain()
 	blob, _ := json.Marshal(map[string]any{"domain": domain, "name": name})
 	if err := os.WriteFile(d.brandFile(), blob, 0o644); err != nil {
 		d.logExc("/api/brand", err)
 		d.json(w, r, 500, map[string]any{"ok": false, "error": "internal error"})
 		return
 	}
+	cached := false
 	if domain != "" {
-		url := "https://cdn.brandfetch.io/" + domain + "/w/128/h/128"
-		if err := cacheLogo(r.Context(), url, d.logoFile()); err != nil {
-			// Best-effort cache refresh: a failed CDN fetch must never cost
-			// the user their existing logo, so cacheLogo already guaranteed
+		// Brandfetch answers a server with HTTP 200 and its own web page, which
+		// cacheLogo refuses, so the second source is the one that fills the cache.
+		sources := []string{
+			"https://cdn.brandfetch.io/" + domain + "/w/128/h/128",
+			"https://icons.duckduckgo.com/ip3/" + domain + ".ico",
+		}
+		for _, url := range sources {
+			err := cacheLogo(r.Context(), url, d.logoFile())
+			if err == nil {
+				cached = true
+				break
+			}
+			// Best-effort cache refresh: a failed fetch must never cost the
+			// user their existing logo, so cacheLogo already guaranteed
 			// logo.png was left untouched. Just report the failure.
 			d.logExc("/api/brand logo fetch", err)
+		}
+	}
+	// The exception is a logo fetched for a company that is no longer the saved
+	// one, changed or cleared: beside another company's name it is a wrong
+	// answer, so it goes. Letter case does not make a different company.
+	if !cached && !strings.EqualFold(domain, previous) {
+		if err := os.Remove(d.logoFile()); err != nil && !os.IsNotExist(err) {
+			d.logExc("/api/brand stale logo", err)
 		}
 	}
 	d.json(w, r, 200, map[string]any{"ok": true})
 }
 
 // cacheLogo fetches url and, ONLY on a successful 2xx response with a
-// readable body, overwrites dest with the fetched bytes. On any failure —
-// a request-construction error, a network error, a non-2xx status, or a
-// body-read error — dest is left completely untouched and the failure is
-// returned to the caller.
+// readable body that is an image, overwrites dest with the fetched bytes. On
+// any failure — a request-construction error, a network error, a non-2xx
+// status, a body-read error, or a body that is not an image — dest is left
+// completely untouched and the failure is returned to the caller.
 //
 // Previously the write happened unconditionally whenever brandHTTP.Do
 // returned no transport error, regardless of status code, and regardless of
@@ -217,6 +270,11 @@ func cacheLogo(ctx context.Context, url, dest string) error {
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("logo fetch %s: unexpected status %d", url, resp.StatusCode)
+	}
+	// A 2xx is not a logo. Brandfetch sends a server its own web page with a
+	// 200, and that page used to be written here and served as image/png.
+	if _, ok := logoType(data); !ok {
+		return fmt.Errorf("logo fetch %s: the reply is not an image", url)
 	}
 	return os.WriteFile(dest, data, 0o644)
 }
