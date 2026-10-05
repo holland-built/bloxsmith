@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"bloxsmith/internal/config"
+	"bloxsmith/internal/httpx"
 )
 
 // This file is the regression suite for the brand-logo data-loss defect:
@@ -83,7 +84,7 @@ func TestCacheLogo_NetworkError_LeavesExistingLogoUntouched(t *testing.T) {
 // TestCacheLogo_SuccessfulFetch_StillWrites confirms the fix didn't also
 // break the happy path: a genuine 2xx response must still update dest.
 func TestCacheLogo_SuccessfulFetch_StillWrites(t *testing.T) {
-	fresh := []byte("fresh-logo-bytes")
+	fresh := pngBytes
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(fresh)
@@ -104,7 +105,7 @@ func TestCacheLogo_SuccessfulFetch_StillWrites(t *testing.T) {
 		t.Fatalf("logo.png should exist: %v", rerr)
 	}
 	if string(got) != string(fresh) {
-		t.Fatalf("expected the fresh logo to be written.\nwant: %s\ngot:  %s", fresh, got)
+		t.Fatalf("expected the fresh logo to be written.\nwant: %q\ngot:  %q", fresh, got)
 	}
 }
 
@@ -156,6 +157,7 @@ func (e *errAfterBody) Close() error { return nil }
 type cdnRouter struct {
 	replies []cdnReply
 	calls   []string
+	urls    []string
 }
 
 func (c *cdnRouter) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -167,6 +169,7 @@ func (c *cdnRouter) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	i := len(c.calls)
 	c.calls = append(c.calls, r.URL.Host)
+	c.urls = append(c.urls, r.URL.String())
 	if i >= len(c.replies) {
 		return nil, errors.New("no canned reply for call " + strconv.Itoa(i+1))
 	}
@@ -385,5 +388,232 @@ func TestCacheLogo_OversizeBody_IsRefusedAndLeavesDestUntouched(t *testing.T) {
 	got, _ := os.ReadFile(dest)
 	if string(got) != string(original) {
 		t.Fatalf("data loss: the stored logo was replaced by a truncated over-size body")
+	}
+}
+
+// --- A logo service's web page is not a logo ---------------------------------
+//
+// Found on a running install on 2026-10-04: brand.json said delta.com, logo.png
+// held 417121 bytes of HTML titled "Overview - Brandfetch", and GET /api/logo
+// sent it out as image/png. cdn.brandfetch.io answers a server with HTTP 200 and
+// its own web page, so cacheLogo's status check let it through. The picture never
+// loaded, and the header fell back to the built-in Infoblox mark for a company
+// that was not Infoblox.
+
+const webPage = `<!DOCTYPE html><html lang="en"><head><title>Overview - Brandfetch</title></head><body>a logo service's own page</body></html>`
+
+// iconBytes carries the signature of a Windows icon, which is what the second
+// source sends. It sniffs as image/x-icon.
+var iconBytes = append([]byte("\x00\x00\x01\x00"), make([]byte, 80)...)
+
+// pageLogoRequest is the request the page makes: /api/logo with no domain.
+func pageLogoRequest(t *testing.T, stateDir string) (*httptest.ResponseRecorder, *http.Request, *Deps) {
+	t.Helper()
+	d := &Deps{Cfg: &config.Config{Port: "8080"}, StateDir: stateDir, Guard: &httpx.Guard{Port: "8080"}}
+	r := httptest.NewRequest("GET", "/api/logo", nil)
+	r.RemoteAddr = "127.0.0.1:12345"
+	return httptest.NewRecorder(), r, d
+}
+
+func writeState(t *testing.T, dir, name string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// saveBrand posts a company domain the way the brand dialog does.
+func saveBrand(t *testing.T, d *Deps, domain string) {
+	t.Helper()
+	r := httptest.NewRequest("POST", "/api/brand", nil)
+	r.RemoteAddr = "127.0.0.1:12345"
+	r.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	d.brandPost(rr, r, map[string]any{"domain": domain, "name": "Example"})
+	if rr.Code != 200 {
+		t.Fatalf("saving the brand: status %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+// A 200 carrying a web page is refused whatever it is labelled, and the logo
+// already stored survives it.
+func TestCacheLogo_WebPageWith200_IsRefusedAndLeavesDestUntouched(t *testing.T) {
+	for _, label := range []string{"text/html; charset=utf-8", "image/png"} {
+		t.Run(label, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", label)
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte(webPage))
+			}))
+			defer srv.Close()
+
+			dir := t.TempDir()
+			writeState(t, dir, "logo.png", pngBytes)
+			dest := filepath.Join(dir, "logo.png")
+			if err := cacheLogo(context.Background(), srv.URL, dest); err == nil {
+				t.Fatalf("a web page was accepted as a logo")
+			}
+			got, _ := os.ReadFile(dest)
+			if !bytes.Equal(got, pngBytes) {
+				t.Fatalf("the stored logo was replaced by a web page: %q", got)
+			}
+		})
+	}
+}
+
+// An install that already holds a web page in logo.png must stop serving it.
+// With no company saved there is nothing to fall back to, so it is a 404.
+func TestLogo_StoredWebPage_IsNotServed(t *testing.T) {
+	dir := t.TempDir()
+	writeState(t, dir, "logo.png", []byte(webPage))
+	router := withCDN(t)
+	rr, r, d := pageLogoRequest(t, dir)
+	d.logo(rr, r)
+
+	if rr.Code != 404 {
+		t.Fatalf("status = %d, want 404: the stored file is not an image", rr.Code)
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("the stored web page reached the browser: %q", rr.Body.String())
+	}
+	if len(router.calls) != 0 {
+		t.Fatalf("no company is saved, yet %d outside call(s) were made: %v", len(router.calls), router.urls)
+	}
+}
+
+// The page asks for /api/logo with no domain. When there is no stored logo to
+// serve, the saved company is the one looked up.
+func TestLogo_NothingUsableStored_ServesTheSavedCompanysLogo(t *testing.T) {
+	cases := []struct {
+		name   string
+		stored []byte
+	}{
+		{"a web page is stored", []byte(webPage)},
+		{"nothing is stored", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.stored != nil {
+				writeState(t, dir, "logo.png", tc.stored)
+			}
+			writeState(t, dir, "brand.json", []byte(`{"domain":"example.com","name":"Example"}`))
+			router := withCDN(t, cdnReply{status: 200, ct: "image/x-icon", body: iconBytes})
+			rr, r, d := pageLogoRequest(t, dir)
+			d.logo(rr, r)
+
+			if rr.Code != 200 || !bytes.Equal(rr.Body.Bytes(), iconBytes) {
+				t.Fatalf("the saved company's logo was not served: %d %q", rr.Code, rr.Body.String())
+			}
+			if ct := rr.Header().Get("Content-Type"); ct != "image/x-icon" {
+				t.Fatalf("Content-Type = %q, want image/x-icon", ct)
+			}
+			if len(router.urls) != 1 || !strings.Contains(router.urls[0], "example.com") {
+				t.Fatalf("outside calls = %v, want one, for example.com", router.urls)
+			}
+		})
+	}
+}
+
+// A stored logo goes out under the type its bytes have. The second source sends
+// an icon, and it used to be labelled image/png because the file is logo.png.
+func TestLogo_StoredIcon_IsLabelledAsAnIcon(t *testing.T) {
+	dir := t.TempDir()
+	writeState(t, dir, "logo.png", iconBytes)
+	withCDN(t)
+	rr, r, d := pageLogoRequest(t, dir)
+	d.logo(rr, r)
+
+	if rr.Code != 200 || !bytes.Equal(rr.Body.Bytes(), iconBytes) {
+		t.Fatalf("the stored icon was not served: %d %q", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "image/x-icon" {
+		t.Fatalf("Content-Type = %q, want image/x-icon", ct)
+	}
+}
+
+// The case from the running install: the first source sends its web page, so
+// the second one fills the cache, and the page then gets a picture.
+func TestBrandPost_FirstSourceSendsAWebPage_TheSecondFillsTheCache(t *testing.T) {
+	dir := t.TempDir()
+	router := withCDN(t,
+		cdnReply{status: 200, ct: "text/html; charset=utf-8", body: []byte(webPage)},
+		cdnReply{status: 200, ct: "image/x-icon", body: iconBytes},
+	)
+	rr, r, d := pageLogoRequest(t, dir)
+	saveBrand(t, d, "example.com")
+
+	want := []string{"cdn.brandfetch.io", "icons.duckduckgo.com"}
+	if strings.Join(router.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("sources asked = %v, want %v", router.calls, want)
+	}
+	stored, _ := os.ReadFile(filepath.Join(dir, "logo.png"))
+	if !bytes.Equal(stored, iconBytes) {
+		t.Fatalf("logo.png does not hold the second source's icon: %q", stored)
+	}
+
+	d.logo(rr, r)
+	if rr.Code != 200 || !bytes.Equal(rr.Body.Bytes(), iconBytes) {
+		t.Fatalf("the page did not get the cached icon: %d %q", rr.Code, rr.Body.String())
+	}
+	if len(router.calls) != 2 {
+		t.Fatalf("serving the cached icon cost another outside call: %v", router.urls)
+	}
+}
+
+// A stored logo belongs to the company it was fetched for. When the company
+// changes and no source has a logo for the new one, the old picture must go, or
+// the header shows one company's logo beside another company's name.
+func TestBrandPost_NoLogoForANewCompany_RemovesTheOldCompanysLogo(t *testing.T) {
+	dir := t.TempDir()
+	writeState(t, dir, "brand.json", []byte(`{"domain":"old.example","name":"Old"}`))
+	writeState(t, dir, "logo.png", pngBytes)
+	withCDN(t,
+		cdnReply{status: 404, ct: "text/html", body: []byte(htmlErrorPage)},
+		cdnReply{status: 404, ct: "text/html", body: []byte(htmlErrorPage)},
+	)
+	_, _, d := pageLogoRequest(t, dir)
+	saveBrand(t, d, "new.example")
+
+	if _, err := os.Stat(filepath.Join(dir, "logo.png")); !os.IsNotExist(err) {
+		t.Fatalf("the old company's logo is still stored after the company changed (stat err: %v)", err)
+	}
+}
+
+// Saving the same company again while no source answers must not cost the logo
+// already stored for it. The first row passed before this change as well: both
+// rows are here to keep the removal rule above from reaching the same company.
+func TestBrandPost_NoSourceAnswers_KeepsTheSameCompanysLogo(t *testing.T) {
+	for _, again := range []string{"example.com", "EXAMPLE.COM"} {
+		t.Run(again, func(t *testing.T) {
+			dir := t.TempDir()
+			writeState(t, dir, "brand.json", []byte(`{"domain":"example.com","name":"Example"}`))
+			writeState(t, dir, "logo.png", pngBytes)
+			withCDN(t, cdnReply{transport: true}, cdnReply{transport: true})
+			_, _, d := pageLogoRequest(t, dir)
+			saveBrand(t, d, again)
+
+			stored, _ := os.ReadFile(filepath.Join(dir, "logo.png"))
+			if !bytes.Equal(stored, pngBytes) {
+				t.Fatalf("the stored logo was lost on a failed refresh: %q", stored)
+			}
+		})
+	}
+}
+
+// Clearing the company leaves no company for the stored logo to belong to.
+func TestBrandPost_ClearingTheCompany_RemovesItsLogo(t *testing.T) {
+	dir := t.TempDir()
+	writeState(t, dir, "brand.json", []byte(`{"domain":"example.com","name":"Example"}`))
+	writeState(t, dir, "logo.png", pngBytes)
+	router := withCDN(t)
+	_, _, d := pageLogoRequest(t, dir)
+	saveBrand(t, d, "")
+
+	if _, err := os.Stat(filepath.Join(dir, "logo.png")); !os.IsNotExist(err) {
+		t.Fatalf("the cleared company's logo is still stored (stat err: %v)", err)
+	}
+	if len(router.calls) != 0 {
+		t.Fatalf("clearing the company made %d outside call(s): %v", len(router.calls), router.urls)
 	}
 }
