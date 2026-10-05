@@ -1,5 +1,6 @@
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
+import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
 // The 130px status donut drawn by Infra ("Host Status") and by Overview (the
 // same picture, plus drilldown), in its own module so it can be
@@ -29,10 +30,11 @@ import { ChartTip } from '../components/ui.jsx'
 // names its unit instead. Geometry, the escape behaviour, and reading the label
 // off the payload row rather than the axis are identical, which is why this is
 // one file and not two.
-export default function StatusDonut({ data, unit, valueFormat, onSliceClick }) {
+export default function StatusDonut({ label, data, unit, valueFormat, onSliceClick }) {
+  const summary = describePoints(data.map((d) => ({ label: d.name, value: d.value })), unit)
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
+      <PieChart {...chartA11y(label, summary)}>
         <Pie
           data={data}
           dataKey="value"

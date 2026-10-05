@@ -74,5 +74,5 @@
   - text: by day
   - 'button "About: Action Volume"': "About: ⓘ"
   - 'button "Options: Action Volume"'
-  - application: /Dec \d+ Jan 1/
+  - application "Action Volume chart": /Dec \d+ Jan 1/
   - text: High 1 Medium 0 Low 1

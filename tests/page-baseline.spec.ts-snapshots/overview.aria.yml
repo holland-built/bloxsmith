@@ -26,11 +26,11 @@
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
-  - application: /\d+:\d+ AM \d+:\d+ AM/
+  - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
-  - application
+  - application "Host Status chart"
   - text: 3 hosts
   - button /Degraded \d+%/
   - button /Offline \d+%/
@@ -43,7 +43,7 @@
   - text: /addresses used · top \d+ of 3 subnets/
   - 'button "About: Top Consumers"': "About: ⓘ"
   - 'button "Options: Top Consumers"'
-  - application
+  - application "Top Consumers chart"
   - heading "Subnet Heatmap" [level=2]
   - text: util by subnet — 3 loaded of 3
   - 'button "About: Subnet Heatmap"': "About: ⓘ"

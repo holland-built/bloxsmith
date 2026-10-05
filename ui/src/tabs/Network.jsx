@@ -182,7 +182,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
         /* Already said "<70% · 486 subnets" before ChartTip existed; that
            tooltip now lives in charts/CategoryBars.jsx along with the bars. */
         <Suspense fallback={<Skeleton h={220} />}>
-          <CategoryBars data={counts} unit="subnets" height={220} xKey="label" showY />
+          <CategoryBars label="Utilization Distribution" data={counts} unit="subnets" height={220} xKey="label" showY />
         </Suspense>
       )}
     </Card>

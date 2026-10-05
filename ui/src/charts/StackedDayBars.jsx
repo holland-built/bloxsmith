@@ -1,5 +1,6 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
+import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
 // Security's blocked/allowed-per-day chart, in its own module so recharts stays
 // off that tab's critical path. See charts/HostStatusDonut.jsx for the
@@ -11,10 +12,13 @@ import { ChartTip } from '../components/ui.jsx'
 // would mean four more props that only this caller ever sets, and a component
 // whose body is mostly branches — the version of "reuse" that costs more than
 // the duplication it removes.
-export default function StackedDayBars({ data, blockedColor, allowedColor, tickFormat, height = 150 }) {
+export default function StackedDayBars({ label, data, blockedColor, allowedColor, tickFormat, height = 150 }) {
+  // Two runs over the same days, one sentence each, in the tooltip's order.
+  const run = (key) => (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d.day) : d.day, value: d[key] }))
+  const summary = `${describePoints(run('blocked'), 'blocked')} ${describePoints(run('allowed'), 'allowed')}`
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <XAxis
           dataKey="day"
           tickFormatter={tickFormat}

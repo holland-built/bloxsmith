@@ -51,7 +51,7 @@
   - 'button "About: Threat Events — by Severity"': "About: ⓘ"
   - 'button "Options: Threat Events — by Severity"'
   - text: critical 1 high 2 medium 3 low 4
-  - application: /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
+  - application "Threat Events — by Severity chart": /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
   - heading "Security Inventory" [level=2]
   - text: what is configured
   - 'button "About: Security Inventory"': "About: ⓘ"
@@ -150,4 +150,4 @@
   - 'button "About: Threat Feed Activity"': "About: ⓘ"
   - 'button "Options: Threat Feed Activity"'
   - text: /\d+ Blocked 0 Allowed/
-  - application: /Dec \d+ Dec \d+/
+  - application "Threat Feed Activity chart": /Dec \d+ Dec \d+/

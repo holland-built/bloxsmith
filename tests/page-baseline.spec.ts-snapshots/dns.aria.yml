@@ -6,7 +6,7 @@
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
-  - application: /\d+:\d+ AM \d+:\d+ AM/
+  - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
   - button "About dns-zone-kpis": ⓘ
   - button "Options for Zone Counts": ⋯
   - text: Zones 2 Zones w/ issues 1 Anomalies 1
@@ -28,7 +28,7 @@
   - heading "Query Volume — 7d" [level=2]
   - 'button "About: Query Volume — 7d"': "About: ⓘ"
   - 'button "Options: Query Volume — 7d"'
-  - application
+  - application "Query Volume — 7d chart"
   - heading "DNS Zones" [level=2]
   - text: 2 zones
   - textbox "Filter zones":

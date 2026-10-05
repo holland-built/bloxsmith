@@ -159,6 +159,7 @@ function SeverityHero({ panelId, hub, events }) {
                right-hand count uses. Recharts' default said `value : 0`. */
             <Suspense fallback={<Skeleton h={180} />}>
               <CategoryBars
+                label="Threat Events — by Severity"
                 data={hourly}
                 unit="events"
                 height={180}
@@ -694,6 +695,7 @@ function ThreatFeed({ panelId, threats }) {
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
+              label="Threat Feed Activity"
               data={chartData}
               blockedColor={COLORS.crit}
               allowedColor={COLORS.accent}

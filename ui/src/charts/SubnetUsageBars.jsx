@@ -1,6 +1,7 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
+import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
 // Overview's "Top Subnets by Utilization", in its own module so recharts stays
 // off that tab's critical path. See charts/StatusDonut.jsx for the measurement.
@@ -15,10 +16,12 @@ import { fmtValue } from '../lib/chartFormat.js'
 // like the other charts. It is a property of the bar's POSITION in the list —
 // `1 - (i / n) * 0.6` — not of the datum, so a caller resolving it would have to
 // know the list length and duplicate this arithmetic to say the same thing.
-export default function SubnetUsageBars({ data, color, height = 180, onBarClick }) {
+export default function SubnetUsageBars({ label, data, color, height = 180, onBarClick }) {
+  // Named the way the tooltip names a bar: its address, else its CIDR.
+  const summary = describePoints(data.map((s) => ({ label: s.addr ?? s.cidr, value: s.used })), 'addresses used')
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <XAxis dataKey="addr" tick={false} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} />
         <YAxis hide />
         {/* This panel's sentence was already the one the other ten charts are
