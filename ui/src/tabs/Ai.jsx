@@ -346,7 +346,7 @@ function KeptResult({ kept, children }) {
   const t = new Date(kept.at)
   const hhmm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`
   return (
-    <div data-kept-result="" className="mt-2 pl-3 border-l-2 border-border">
+    <div data-kept-result="" className="mt-2 pl-3 border-l border-border">
       <div className="text-note text-muted mb-1">from your earlier lookup of {kept.q}, at {hhmm}</div>
       {children}
     </div>
