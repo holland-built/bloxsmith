@@ -513,6 +513,7 @@ function DnsHero({ dns, panelId }) {
               for the very same point. One decimal, and the unit spelled out. */}
           <Suspense fallback={<Skeleton h={230} />}>
             <GradientArea
+              label="DNS Query Rate — 24h"
               data={chartData}
               color={COLORS.series}
               gradientId="dnsFill"
@@ -566,6 +567,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId, loading 
         <div onPointerDownCapture={tap.onPointerDownCapture}>
         <Suspense fallback={<Skeleton h={BARS_H} />}>
           <SubnetUsageBars
+            label="Top Consumers"
             data={top}
             color={COLORS.purple}
             height={BARS_H}
@@ -895,6 +897,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
           <div className="relative w-[130px] h-[130px] shrink-0" onPointerDownCapture={tap.onPointerDownCapture}>
             <Suspense fallback={<div className="w-full h-full" />}>
               <StatusDonut
+                label="Host Status"
                 data={pieData}
                 valueFormat={(v) => `${fmtValue(v)} ${Number(v) === 1 ? 'host' : 'hosts'}`}
                 onSliceClick={(d) => {

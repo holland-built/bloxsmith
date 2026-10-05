@@ -14,7 +14,7 @@
   - text: 3 loaded of 3 total
   - 'button "About: Utilization Distribution"': "About: ⓘ"
   - 'button "Options: Utilization Distribution"'
-  - application: /<\d+% \d+–\d+% ≥\d+% 0 1 2 3 4/
+  - application "Utilization Distribution chart": /<\d+% \d+–\d+% ≥\d+% 0 1 2 3 4/
   - heading "IPAM Spaces — Top Used" [level=2]
   - text: addresses used
   - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"

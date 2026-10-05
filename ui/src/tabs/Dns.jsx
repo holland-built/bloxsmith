@@ -154,6 +154,7 @@ function QpsHero({ panelId, qps }) {
               which fmtShortDay hands back untouched. */}
           <Suspense fallback={<Skeleton h={230} />}>
             <GradientArea
+              label="DNS Query Rate — 24h"
               data={chartData}
               color={COLORS.series}
               gradientId="qpsFill"
@@ -335,6 +336,7 @@ function QueryVolume7d({ panelId, analytics }) {
            different kind of unreadable than the index it replaced. */
         <Suspense fallback={<Skeleton h={200} />}>
           <GradientArea
+            label="Query Volume — 7d"
             data={chartData}
             color={COLORS.purple}
             gradientId="volFill"

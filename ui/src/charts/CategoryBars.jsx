@@ -1,5 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
+import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
 // The bar chart three tabs draw — Audit's "Activity Summary", Network's subnet
 // utilisation buckets, Incidents' IQ action trend — in its own module so
@@ -34,6 +35,7 @@ import { ChartTip } from '../components/ui.jsx'
 // caller to choose. Density is what those two callers actually wanted, and
 // minTickGap already says that without also making the text smaller.
 export default function CategoryBars({
+  label,
   data,
   unit,
   height = 140,
@@ -44,9 +46,13 @@ export default function CategoryBars({
   fill,
   minTickGap,
 }) {
+  const summary = describePoints(
+    (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d[xKey]) : d[xKey], value: d[yKey] })),
+    unit,
+  )
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey={xKey}

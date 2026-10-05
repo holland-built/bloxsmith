@@ -226,7 +226,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
                 bar flashing behind it would be more movement than the empty
                 space it replaces. The box keeps its 130px either way. */}
             <Suspense fallback={<div className="w-full h-full" />}>
-              <StatusDonut data={pieData} unit="hosts" />
+              <StatusDonut label="Host Status" data={pieData} unit="hosts" />
             </Suspense>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-copy font-semibold">{total.toLocaleString()}</span>

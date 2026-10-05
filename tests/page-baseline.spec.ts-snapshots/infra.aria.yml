@@ -48,7 +48,7 @@
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
-  - application
+  - application "Host Status chart"
   - text: /3 hosts Degraded \d+% Offline \d+% Other \d+%/
   - heading "Service Health" [level=2]
   - text: deployed services

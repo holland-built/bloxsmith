@@ -1,5 +1,6 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
+import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
 // The gradient-filled area chart Dns draws twice — queries per second, and
 // query volume by day — in its own module so recharts stays off that tab's
@@ -17,6 +18,7 @@ import { ChartTip } from '../components/ui.jsx'
 // is the same value `useThemeColors()` resolves (lib/theme.jsx:77-78) by a
 // shorter route, and follows a theme switch without a re-render.
 export default function GradientArea({
+  label,
   data,
   color,
   gradientId,
@@ -25,9 +27,14 @@ export default function GradientArea({
   tickFormat,
   yDomain,
 }) {
+  // The labels are spelled the way the axis spells them.
+  const summary = describePoints(
+    (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d.label) : d.label, value: d.value })),
+    unit,
+  )
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={0.35} />

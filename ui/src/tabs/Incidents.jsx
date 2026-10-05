@@ -645,6 +645,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
         <>
           <Suspense fallback={<Skeleton h={150} />}>
             <CategoryBars
+              label="Action Volume"
               data={byDay}
               unit="actions"
               height={150}
