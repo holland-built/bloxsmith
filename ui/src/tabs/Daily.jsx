@@ -5,6 +5,7 @@ import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
 import { sampleCountLabel, sampleScopeNote } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
+import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -86,22 +87,25 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   const { COLORS } = useChartTheme()
   // `subnets` (data.subnets) is the union of the first-5,000 page and every
   // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
-  // >= 70 — a subnet at util >= 85 is necessarily >= 70, so it cannot be missing
-  // from the union. Counting rows here is therefore an exact estate figure for
-  // this tile, not a coverage-set sample — do not swap this for a `_totals`
-  // lookup (`_totals.subnetsCrit` is util >= 90, a different threshold).
+  // >= 70 — a subnet in the red band is necessarily >= 70, so it cannot be
+  // missing from the union. Counting rows here is therefore an exact
+  // whole-network figure for this tile, not a coverage-set sample.
   //
-  // The threshold is INCLUSIVE (>= 85) to agree with the drill-down this row
-  // links to: Network.jsx keeps `u >= minUtil`, so a strict `> 85` here would
-  // show a subnet at exactly 85.0% in the list but not in the count. The
-  // `<= 28` rule mirrors that same drill-down (Network.jsx `base`), which drops
-  // /29-/32 infra links; it is disclosed in the help copy for this panel.
-  const atLeast85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) >= 85)
+  // NOT `_totals.subnetsCrit`, though it is the same threshold since
+  // 2026-10-04 (this tile counted from 85 until then): that total includes the
+  // /29-/32 infra links, and this count leaves them out.
+  //
+  // The red band is inclusive at its lower edge (lib/utilBands.js), which
+  // agrees with the drill-down this row links to: Network.jsx keeps
+  // `u >= minUtil`. The `<= 28` rule mirrors that same drill-down (Network.jsx
+  // `base`), which drops /29-/32 infra links; it is disclosed in the help copy
+  // for this panel.
+  const critSubnets = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && utilBand(Number(s.util) || 0) === 'crit')
   const badHosts = hosts.filter((h) => !/online|active/i.test(h.status || ''))
   const zonesWithIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
 
   // The line under each number says what is behind it, from the same rows the
-  // number counts. >= 90 is complete for the same reason >= 85 is (see above).
+  // number counts.
   const byStatus = {}
   for (const h of badHosts) {
     const k = (h.status || 'unknown').toLowerCase()
@@ -110,14 +114,13 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   const issueTypes = {}
   for (const z of zonesWithIssues) for (const t of z.issues) issueTypes[t] = (issueTypes[t] || 0) + 1
   const commonTypes = Object.entries(issueTypes).sort((a, b) => b[1] - a[1]).slice(0, 3)
-  const at90 = atLeast85.filter((s) => (Number(s.util) || 0) >= 90).length
 
   // Each KPI reads a DIFFERENT feed (subnets/hosts/zones) — one can be dead
   // while the other two are fine, so the gate is per-row, not per-card.
   const cells = [
     {
-      label: 'Subnets ≥85% Util', value: atLeast85.length, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets,
-      detail: `${at90.toLocaleString()} of them are at 90% or more. /29–/32 links are left out.`,
+      label: `Subnets ≥${UTIL_CRIT}% Util`, value: critSubnets.length, color: COLORS.crit, hash: `network?minUtil=${UTIL_CRIT}`, status: meta.subnets,
+      detail: '/29–/32 links are left out.',
     },
     {
       label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=not-online', status: meta.hosts,

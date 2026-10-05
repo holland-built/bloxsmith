@@ -37,35 +37,36 @@ test.beforeEach(async ({ page }) => {
 test('Network: the band counts are the chart\'s own bands, from the same rows', async ({ page }) => {
   await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
     subnets: [
-      { id: 'a', addr: '10.0.0.0', cidr: 24, total: 256, used: 223, util: 87 },
-      { id: 'b', addr: '10.0.1.0', cidr: 24, total: 256, used: 218, util: 85 },
+      { id: 'a', addr: '10.0.0.0', cidr: 24, total: 256, used: 233, util: 91 },
+      { id: 'b', addr: '10.0.1.0', cidr: 24, total: 256, used: 225, util: 88 },
       { id: 'c', addr: '10.0.2.0', cidr: 24, total: 256, used: 184, util: 72 },
       { id: 'd', addr: '10.0.3.0', cidr: 24, total: 256, used: 128, util: 50 },
     ],
-    totals: { subnets: 40, subnetsCrit: 0, subnetsWarn: 3 },
+    totals: { subnets: 40, subnetsCrit: 1, subnetsWarn: 3 },
   })));
   await page.goto('/#network');
   await expect(headline(page, /^Subnets 40$/)).toBeVisible();
-  // 87 is over 85; 85 and 72 are in 70–85 inclusive, as the chart draws them.
-  await expect(headline(page, /^Over 85% 1$/)).toBeVisible();
-  await expect(headline(page, /^70–85% 2$/)).toBeVisible();
+  // 91 is 90 or more; 88 and 72 are in 70–89, as the chart draws them. 88 is
+  // the one that moved: it was "over 85", and red, until 2026-10-04.
+  await expect(headline(page, /^≥90% 1$/)).toBeVisible();
+  await expect(headline(page, /^70–89% 2$/)).toBeVisible();
 });
 
 test('Network: when the server capped its at-risk read, the bands say they count loaded rows', async ({ page }) => {
   await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
-    subnets: [{ id: 'a', addr: '10.0.0.0', cidr: 24, total: 256, used: 223, util: 87 }],
+    subnets: [{ id: 'a', addr: '10.0.0.0', cidr: 24, total: 256, used: 233, util: 91 }],
     // The estate has 5 subnets at 70% or more; only one of them was loaded.
     totals: { subnets: 40, subnetsCrit: 3, subnetsWarn: 5, degraded: true },
   })));
   await page.goto('/#network');
-  await expect(headline(page, /^Over 85% \(of loaded\) 1$/)).toBeVisible();
-  await expect(headline(page, /^70–85% \(of loaded\) 0$/)).toBeVisible();
+  await expect(headline(page, /^≥90% \(of loaded\) 1$/)).toBeVisible();
+  await expect(headline(page, /^70–89% \(of loaded\) 0$/)).toBeVisible();
 });
 
 test('Network, DNS, Infra: a dead /api/data is a dash in the strip, never 0', async ({ page }) => {
   await page.route('**/api/data*', dead);
   for (const [tab, labels] of [
-    ['network', [/^Subnets/, /^Over 85%/, /^70–85%/]],
+    ['network', [/^Subnets/, /^≥90%/, /^70–89%/]],
     ['dns', [/^Zones [—0-9]/, /^Zones with issues/]],
     ['infra', [/^Hosts/, /^Offline/, /^Degraded/, /^Unknown/]],
   ] as const) {
