@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
+import { API_KEY_BOX } from '../lib/secretBox.js'
 
 // vpost — POST JSON, always resolves {ok,data}.
 const vpost = (url, body) =>
@@ -48,12 +49,13 @@ function Setup({ onDone }) {
         restart to unlock. There is no recovery if you forget it.
       </p>
       <label className="block text-note text-dim mb-1" htmlFor="vs-pass">Passphrase</label>
-      <input id="vs-pass" className={inCls} type="password" value={p1} onChange={(e) => setP1(e.target.value)} autoFocus />
+      <input id="vs-pass" className={inCls} type="password" autoComplete="new-password" value={p1} onChange={(e) => setP1(e.target.value)} autoFocus />
       <label className="block text-note text-dim mt-3 mb-1" htmlFor="vs-confirm">Confirm passphrase</label>
       <input
         id="vs-confirm"
         className={inCls}
         type="password"
+        autoComplete="new-password"
         value={p2}
         onChange={(e) => setP2(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}
@@ -92,6 +94,7 @@ function Unlock({ onDone }) {
         id="vu-pass"
         className={inCls}
         type="password"
+        autoComplete="current-password"
         value={p}
         onChange={(e) => setP(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}
@@ -178,6 +181,7 @@ function FirstTenant({ onDone }) {
         id="vat-key"
         className={inCls}
         type="password"
+        {...API_KEY_BOX}
         value={key}
         onChange={(e) => { setKey(e.target.value); setTest('') }}
         onKeyDown={(e) => e.key === 'Enter' && go()}
@@ -198,6 +202,7 @@ function FirstTenant({ onDone }) {
         id="vat-groq"
         className={inCls}
         type="password"
+        {...API_KEY_BOX}
         value={groq}
         onChange={(e) => setGroq(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}

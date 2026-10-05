@@ -8,9 +8,9 @@
 //                  auto-capitalising.
 //   prose          a comment, a question, a display name. Left alone, because
 //                  spell-check is the point. Listed below, one by one.
-//   a secret       a passphrase, a token, an API key (type="password"). Left
-//                  alone: what a password manager may do with those is the
-//                  owner's decision and was not part of this change.
+//   a secret       a passphrase, a token, an API key (type="password"). Says
+//                  which, in ui/src/lib/secretBox.js: a passphrase tells a
+//                  password manager to fill it, a key tells it to stay out.
 //
 // Until 2026-10-04 one input in the app said anything. A new text box now has
 // to be put in one of the three, here, or this fails.
@@ -22,6 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MACHINE_TEXT } from './machineText.js'
+import { API_KEY_BOX } from './secretBox.js'
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -117,4 +118,57 @@ test('a secret is never given MACHINE_TEXT', () => {
   // autoComplete="off" on a password box is a decision about password managers.
   const bad = all.filter((t) => isSecret(t) && isMachine(t)).map((t) => `${t.rel}:${t.line}`)
   assert.deepEqual(bad, [], `a type="password" box spreads MACHINE_TEXT:\n  ${bad.join('\n  ')}`)
+})
+
+const isKeyBox = (t) => t.text.includes('API_KEY_BOX')
+const passphraseKind = (t) => /autoComplete="(new|current)-password"/.exec(t.text)?.[1] ?? null
+
+test('a key box tells password managers to stay out, with all four settings', () => {
+  assert.deepEqual(API_KEY_BOX, {
+    autoComplete: 'off',
+    'data-1p-ignore': 'true',
+    'data-lpignore': 'true',
+    'data-bwignore': 'true',
+  })
+})
+
+test('every secret box says which kind it is: a passphrase to fill, or a key to leave alone', () => {
+  const unsaid = all
+    .filter((t) => isSecret(t) && !isKeyBox(t) && !passphraseKind(t))
+    .map((t) => `${t.rel}:${t.line}`)
+  assert.deepEqual(
+    unsaid,
+    [],
+    'spread {...API_KEY_BOX} onto it, or give it autoComplete="new-password" or "current-password":\n  ' + unsaid.join('\n  '),
+  )
+})
+
+test('each passphrase box has the kind its screen needs: new to create and confirm, current to unlock', () => {
+  const kindOf = (id) => {
+    const hits = all.filter((t) => isSecret(t) && t.text.includes(`id="${id}"`))
+    assert.equal(hits.length, 1, `expected one box with id ${id}, found ${hits.length}`)
+    return passphraseKind(hits[0])
+  }
+  assert.equal(kindOf('vs-pass'), 'new')
+  assert.equal(kindOf('vs-confirm'), 'new')
+  assert.equal(kindOf('vu-pass'), 'current')
+})
+
+test('the app has three passphrase boxes and seven key boxes', () => {
+  const secrets = all.filter(isSecret)
+  assert.equal(secrets.filter(passphraseKind).length, 3)
+  assert.equal(secrets.filter(isKeyBox).length, 7)
+  assert.equal(secrets.length, 10, 'a new secret box was added: say which kind it is, then update these counts')
+})
+
+test('a key box does not also set autoComplete by hand, because the later one wins', () => {
+  const bad = all
+    .filter((t) => isKeyBox(t) && /\bautoComplete=/.test(t.text))
+    .map((t) => `${t.rel}:${t.line}`)
+  assert.deepEqual(bad, [], `these spread API_KEY_BOX and set autoComplete beside it:\n  ${bad.join('\n  ')}`)
+})
+
+test('a box is not both a passphrase and a key', () => {
+  const both = all.filter((t) => isKeyBox(t) && passphraseKind(t)).map((t) => `${t.rel}:${t.line}`)
+  assert.deepEqual(both, [])
 })

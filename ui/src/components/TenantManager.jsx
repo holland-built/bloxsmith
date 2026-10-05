@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
+import { API_KEY_BOX } from '../lib/secretBox.js'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
@@ -405,6 +406,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 id="tm-add-key"
                 className={inCls}
                 type="password"
+                {...API_KEY_BOX}
                 value={add.key}
                 onChange={(e) => setAdd((a) => ({ ...a, key: e.target.value, test: '' }))}
                 placeholder="paste token"
@@ -417,6 +419,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 id="tm-add-groq"
                 className={inCls}
                 type="password"
+                {...API_KEY_BOX}
                 value={add.groq}
                 onChange={(e) => setAdd((a) => ({ ...a, groq: e.target.value }))}
               />
@@ -452,6 +455,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 id="tm-edit-key"
                 className={inCls}
                 type="password"
+                {...API_KEY_BOX}
                 value={edit.key}
                 onChange={(e) => setEdit((s) => ({ ...s, key: e.target.value, test: '' }))}
                 autoFocus
@@ -687,7 +691,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   id="tm-axur-key"
                   className={inCls}
                   type="password"
-                  autoComplete="off"
+                  {...API_KEY_BOX}
                   value={axur.key}
                   onChange={(e) => setAxur((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))}
                   placeholder={axur.stored ? 'a key is saved — type to replace it' : 'paste token'}
@@ -771,6 +775,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 id="tm-dash-token"
                 className={inCls + ' mb-4'}
                 type="password"
+                {...API_KEY_BOX}
                 value={dashToken}
                 onChange={(e) => saveToken(e.target.value)}
                 placeholder="X-Auth-Token for lock/admin actions"
