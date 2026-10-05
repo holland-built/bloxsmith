@@ -207,7 +207,18 @@ function IpamSpaces({ panelId, ipam }) {
   // spaces and drew 12, and the panel said only "addresses used" — so 19 spaces
   // were missing with nothing on screen admitting it. Same wording as Overview's
   // "top 12 of N subnets", which is this repo's standard for a capped ranking.
-  const capLabel = eligible.length > rows.length ? `top ${rows.length} of ${eligible.length.toLocaleString()}` : null
+  //
+  // AND THE LIST ITSELF CAN BE A SLICE. The server makes one read of at most
+  // 500 spaces (go/internal/dashboard/csp.go, CSPIpamUtil) and says `atLimit`
+  // when that read came back full. On a tenant with more spaces than that, the
+  // busiest ones may not be among them: seen live on 2026-10-04, this panel's
+  // "top" space showed 24 addresses while single subnets below it used 512.
+  // "top 12 of 496" would then claim a ranking over everything, so the label
+  // names what was actually read and a line under the bars says why.
+  const atLimit = ipam.data?.atLimit === true && Number.isFinite(ipam.data?.limit)
+  const capLabel = atLimit
+    ? `top ${rows.length} of the first ${ipam.data.limit.toLocaleString()} read`
+    : eligible.length > rows.length ? `top ${rows.length} of ${eligible.length.toLocaleString()}` : null
   // CSPIpamUtil returns status:"error" at HTTP 200 on an upstream failure —
   // the fetch itself never errors, so `ipam.error` alone never catches this.
   const status = ipam.data?.status
@@ -234,6 +245,12 @@ function IpamSpaces({ panelId, ipam }) {
               </div>
             )
           })}
+          {atLimit && (
+            <p data-ipam-partial="" className="mt-1 text-note text-dim">
+              Only the first {ipam.data.limit.toLocaleString()} spaces were read, which is the most the server reads at
+              once. A busier space may be missing from this list.
+            </p>
+          )}
         </div>
       )}
     </Card>

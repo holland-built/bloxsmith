@@ -82,8 +82,21 @@ test('the IPAM spaces panel states the denominator its top-12 was taken from', (
   )
   assert.match(
     NETWORK,
-    /const capLabel = eligible\.length > rows\.length \? `top \$\{rows\.length\} of \$\{eligible\.length\.toLocaleString\(\)\}` : null/,
+    /: eligible\.length > rows\.length \? `top \$\{rows\.length\} of \$\{eligible\.length\.toLocaleString\(\)\}` : null/,
     'the label is "top N of M" over the ELIGIBLE rows — the denominator has to be a number this code counted',
+  )
+  // ...unless the server's one read came back full (2026-10-04). Then M would
+  // claim a ranking over every space when only the first 500 were read, so the
+  // label names the read instead, from the limit the server reports.
+  assert.match(
+    NETWORK,
+    /const capLabel = atLimit\n\s+\? `top \$\{rows\.length\} of the first \$\{ipam\.data\.limit\.toLocaleString\(\)\} read`/,
+    'a read that came back full must be labelled as the first N read, not as "of M"',
+  )
+  assert.match(
+    NETWORK,
+    /const atLimit = ipam\.data\?\.atLimit === true && Number\.isFinite\(ipam\.data\?\.limit\)/,
+    'atLimit is taken from the feed, with the limit it names',
   )
   assert.match(
     NETWORK,

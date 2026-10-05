@@ -372,7 +372,7 @@ const CLAIMS = [
   },
   {
     panel: 'network-ipam-spaces',
-    says: /The twelve address spaces handing out the most addresses/,
+    says: /The twelve busiest address spaces among those read/,
     file: NETWORK,
     proofs: [
       { re: /const IPAM_SPACES_CAP = 12/, expect: 'IPAM_SPACES_CAP = 12' },
@@ -516,6 +516,23 @@ const CLAIMS = [
       { re: /label: `<\$\{UTIL_WARN\}%`, test: \(u\) => utilBand\(u\) === 'ok', color: COLORS\.series/, expect: "the green bar is utilBand()'s 'ok' band, labelled from UTIL_WARN" },
       { re: /label: `\$\{UTIL_WARN\}–\$\{UTIL_CRIT - 1\}%`, test: \(u\) => utilBand\(u\) === 'warn', color: COLORS\.warn/, expect: "the amber bar is the 'warn' band, labelled 70–89%" },
       { re: /label: `≥\$\{UTIL_CRIT\}%`, test: \(u\) => utilBand\(u\) === 'crit', color: COLORS\.crit/, expect: "the red bar is the 'crit' band, labelled from UTIL_CRIT" },
+    ],
+  },
+  {
+    panel: 'network-ipam-spaces',
+    says: /only the first 500 are read, and a line under the list says so/,
+    file: GO_CSP,
+    proofs: [
+      { re: /const ipamSpacesLimit = 500/, expect: 'the one read of the space tree is limited to 500 rows' },
+      { re: /if len\(rows\) >= ipamSpacesLimit \{\n\t\tresp\["atLimit"\] = true/, expect: 'a read that came back full is marked atLimit' },
+    ],
+  },
+  {
+    panel: 'network-ipam-spaces',
+    says: /only the first 500 are read, and a line under the list says so/,
+    file: NETWORK,
+    proofs: [
+      { re: /\{atLimit && \(\n\s+<p data-ipam-partial=""/, expect: 'the line under the list is drawn exactly when the feed says atLimit' },
     ],
   },
   {
