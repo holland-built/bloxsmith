@@ -102,7 +102,7 @@ export const PANEL_HELP = {
     look: 'Green is under 70% full, amber 70–89%, red 90% or more. A subnet that reports no figure is left out of the bars and counted in the line at the top right.',
   },
   'network-ipam-spaces': {
-    what: 'The twelve address spaces handing out the most addresses right now.',
+    what: 'The twelve busiest address spaces among those read. Past 500 spaces only the first 500 are read, and a line under the list says so.',
     look: 'Bar length is how full a space is, and its colour follows: amber from 70% full, red from 90%. The number on the right is addresses in use, not the percentage.',
   },
   'network-dhcp-leases': {

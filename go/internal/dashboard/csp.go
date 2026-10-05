@@ -677,13 +677,38 @@ func (s *Service) CSPDNSServices() map[string]any {
 	return rowsResp(normDNSServices(rest.Unwrap(body)))
 }
 
+// ipamSpacesLimit is the row limit of the one read CSPIpamUtil makes.
+const ipamSpacesLimit = 500
+
+// CSPIpamUtil is the Network tab's "IPAM Spaces — Top Used" feed: one read of
+// the IP-space tree, which the page then ranks by addresses used.
+//
+// ONE READ IS A SLICE ON A BIG TENANT, AND THIS SAYS SO. Seen live on
+// 2026-10-04: exactly 500 rows came back and the "top used" space showed 24
+// addresses, while single subnets on the same page used 512. The busiest
+// spaces were simply not among the 500 the upstream happened to return, and
+// nothing on screen admitted the list was partial.
+//
+// It is not made complete here, for the reason hosts.go gives: `_offset`,
+// `_order_by` and `_is_total_size_needed` have never been sent to this
+// endpoint anywhere in this repo, and a param nobody has exercised is how a
+// working feed becomes an unavailable one. So the response states the one
+// thing that is known: the read came back full. `atLimit` is NOT `truncated`,
+// which this package keeps for an authoritative total that exceeds the rows in
+// hand; a full read is evidence that there may be more, not proof.
 func (s *Service) CSPIpamUtil() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/ddi/v1/ipam/htree",
-		map[string]string{"view": "SPACE", "_limit": "500", "_fields": "id,label,utilization"})
+		map[string]string{"view": "SPACE", "_limit": strconv.Itoa(ipamSpacesLimit), "_fields": "id,label,utilization"})
 	if errored(st, err) {
 		return errRows()
 	}
-	return rowsResp(normIpamUtil(rest.Unwrap(body)))
+	rows := normIpamUtil(rest.Unwrap(body))
+	resp := rowsResp(rows)
+	if len(rows) >= ipamSpacesLimit {
+		resp["atLimit"] = true
+		resp["limit"] = ipamSpacesLimit
+	}
+	return resp
 }
 
 func (s *Service) CSPDHCPLeases() map[string]any {
