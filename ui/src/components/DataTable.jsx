@@ -110,8 +110,8 @@ function widthsEqual(a, b) {
 // (tabs/Infra.jsx), and both the tbody and measure() test `render` first, so a
 // column like that is painted and measured as a render column. Calling it a
 // badge would hand it to the opposite invariant.
-// rowName is what a screen reader hears instead of the row's own text, because
-// aria-label REPLACES the content rather than adding to it.
+// rowName names the button that opens a row: "View details for <rowName>". The
+// row's cells are read as well now, so the name has to match what they show.
 //
 // This used to be `r.name ?? r.id ?? 'row'`, which is correct for the tables
 // whose rows carry one of those keys and silently useless for the ones that do
@@ -130,8 +130,8 @@ function rowName(r, cols) {
   // THE VISIBLE COLUMNS COME BEFORE r.name AND r.id, and that order is the
   // whole point rather than a detail.
   //
-  // aria-label replaces what a row says with what we say about it, so the two
-  // have to agree: a reader who hears a name and then looks for it must find
+  // The label says which row the button opens, so it and the row have to
+  // agree: a reader who hears a name and then looks for it must find
   // it on screen. r.name is often an INTERNAL identifier that the table never
   // paints. Measured while building this: the fixture's subnet rows carry
   // name="baseline-net-c" while the row displays "10.30.0.0", so preferring
@@ -252,6 +252,10 @@ export function DataTable({
   const cols = visibleColumns(columns, sorted)
   const growCols = pickGrowCols(cols)
   const isGrowCol = (c) => growCols.includes(c)
+  // The cell that holds a row's own button: the first one that is never
+  // hidden. A `priority: 'low'` column disappears in a narrow panel, and a
+  // button inside a hidden cell cannot be reached at all.
+  const openCol = cols.find((c) => c.priority !== 'low') ?? cols[0]
 
   function handleSort(key) {
     const next = toggleSort(activeSort, key)
@@ -383,11 +387,16 @@ export function DataTable({
       // clones rather than 150. This is what keeps the worst case (rowCap rows
       // x several render columns) off the layout path; Codex raised the cost as
       // finding 2 on the diff and the fixtures are too small to have shown it.
+      // The row's own button (see the first cell, below) is left out of both
+      // the key and the clone. It is laid over the cell and takes no room, and
+      // its name differs on every row, which would make every cell's markup
+      // distinct and undo the saving described above.
       const seenMarkup = new Set()
       for (const tr of bodyRows) {
         const td = tr.children[idx]
         if (!td) continue
-        const markup = td.innerHTML
+        const rowButton = td.querySelector(':scope > [data-row-open]')
+        const markup = rowButton ? td.innerHTML.replace(rowButton.outerHTML, '') : td.innerHTML
         if (seenMarkup.has(markup)) continue
         seenMarkup.add(markup)
         const probeRow = document.createElement('tr')
@@ -401,7 +410,7 @@ export function DataTable({
         // the clone does not carry (those classes are on the td itself).
         probeCell.style.font = tdStyle.font
         probeCell.style.letterSpacing = tdStyle.letterSpacing
-        for (const node of td.childNodes) probeCell.appendChild(node.cloneNode(true))
+        for (const node of td.childNodes) if (node !== rowButton) probeCell.appendChild(node.cloneNode(true))
         probeRow.appendChild(probeCell)
         rows.push(probeRow)
         cells.push(probeCell)
@@ -777,26 +786,19 @@ export function DataTable({
       </thead>
       <tbody>
         {visible.map((r, i) => (
+          // A ROW THAT OPENS SOMETHING STAYS A ROW. It used to carry
+          // role="button" and an aria-label itself. A button's children are
+          // presentational, so a screen reader announced the label and none of
+          // the cells, and the table lost its rows. The click stays here for a
+          // mouse, on any cell; what a keyboard and a screen reader use is the
+          // real <button> in the first cell, whose click bubbles up to this one.
           <tr
             key={rowKey ? rowKey(r, i) : `${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}
             onClick={onRowClick ? () => onRowClick(r) : undefined}
-            onKeyDown={
-              onRowClick
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onRowClick(r)
-                    }
-                  }
-                : undefined
-            }
-            tabIndex={onRowClick ? 0 : undefined}
-            role={onRowClick ? 'button' : undefined}
-            aria-label={onRowClick ? `View details for ${rowName(r, cols)}` : undefined}
             style={rowStyle ? rowStyle(r) : undefined}
             className={
               onRowClick
-                ? 'cursor-pointer hover:bg-line/50 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+                ? 'cursor-pointer hover:bg-line/50 has-[[data-row-open]:focus-visible]:ring-2 has-[[data-row-open]:focus-visible]:ring-accent has-[[data-row-open]:focus-visible]:ring-inset'
                 : undefined
             }
           >
@@ -804,54 +806,66 @@ export function DataTable({
               const v = r[c.key]
               const alignRight = c.align === 'right'
               const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
-              const tdBase = `py-[var(--sp-cell-y)] px-2.5 border-b border-line overflow-hidden ${alignRight ? 'text-right' : ''}${lowPri}`
+              // The button is laid over its cell and see-through, so it takes
+              // no room and moves no text, and focusing it scrolls the row in,
+              // not one pixel of it. It lets the pointer through, so the cell's
+              // tooltip and text selection work as before. The ring is drawn on
+              // the row, above, where it always was.
+              const open =
+                onRowClick && c === openCol ? (
+                  <button
+                    type="button"
+                    data-row-open=""
+                    aria-label={`View details for ${rowName(r, cols)}`}
+                    className="absolute inset-0 w-full opacity-0 pointer-events-none outline-none"
+                  />
+                ) : null
+              const tdBase = `py-[var(--sp-cell-y)] px-2.5 border-b border-line overflow-hidden ${alignRight ? 'text-right' : ''}${lowPri}${open ? ' relative' : ''}`
               // 5. render -> badge -> mono -> default text.
+              // ONE <td>, WHATEVER THE CELL HOLDS, so the row's button goes in
+              // by a single path and no kind of cell can be left without it.
+              let content
               if (c.render) {
-                return (
-                  <td key={c.key} className={tdBase} style={cellStyle(c)}>
-                    {c.render(v, r)}
-                  </td>
-                )
-              }
-              if (c.badge) {
+                content = c.render(v, r)
+              } else if (c.badge) {
                 const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
-                return (
-                  <td key={c.key} className={tdBase} style={cellStyle(c)}>
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
-                      {v || '—'}
-                    </span>
-                  </td>
+                content = (
+                  <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
+                    {v || '—'}
+                  </span>
                 )
-              }
-              if (c.mono) {
-                return (
-                  <td key={c.key} className={tdBase} style={cellStyle(c)}>
-                    <span
-                      className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono"
-                      title={v != null ? String(v) : undefined}
-                    >
-                      {v ?? '—'}
-                    </span>
-                  </td>
+              } else if (c.mono) {
+                content = (
+                  <span
+                    className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono"
+                    title={v != null ? String(v) : undefined}
+                  >
+                    {v ?? '—'}
+                  </span>
                 )
-              }
-              // hug columns stay single-line (nowrap+ellipsis); the grow
-              // column(s) hold the spare width, so non-mono grow cells wrap up
-              // to 2 lines instead of truncating the column that can afford to
-              // show more. mono still favors single-line — wrapping an
-              // FQDN/SKU/IP mid-string hurts readability more than it helps.
-              // break-words matters here: a grow column can be shrunk under
-              // pressure (it's in the opted-in-to-clip pool), and an unbroken
-              // token (an opaque id with no spaces) won't wrap on its own —
-              // without a mid-word break it overflows horizontally instead of
-              // clipping vertically via line-clamp, which is the one thing a
-              // grow column is never supposed to do.
-              const wrapClass = isGrowCol(c) ? 'line-clamp-2 break-words' : 'whitespace-nowrap text-ellipsis'
-              return (
-                <td key={c.key} className={tdBase} style={cellStyle(c)}>
+              } else {
+                // hug columns stay single-line (nowrap+ellipsis); the grow
+                // column(s) hold the spare width, so non-mono grow cells wrap up
+                // to 2 lines instead of truncating the column that can afford to
+                // show more. mono still favors single-line — wrapping an
+                // FQDN/SKU/IP mid-string hurts readability more than it helps.
+                // break-words matters here: a grow column can be shrunk under
+                // pressure (it's in the opted-in-to-clip pool), and an unbroken
+                // token (an opaque id with no spaces) won't wrap on its own —
+                // without a mid-word break it overflows horizontally instead of
+                // clipping vertically via line-clamp, which is the one thing a
+                // grow column is never supposed to do.
+                const wrapClass = isGrowCol(c) ? 'line-clamp-2 break-words' : 'whitespace-nowrap text-ellipsis'
+                content = (
                   <span className={`block overflow-hidden ${wrapClass}`} title={v != null ? String(v) : undefined}>
                     {v ?? '—'}
                   </span>
+                )
+              }
+              return (
+                <td key={c.key} className={tdBase} style={cellStyle(c)}>
+                  {open}
+                  {content}
                 </td>
               )
             })}

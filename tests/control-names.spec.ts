@@ -141,16 +141,19 @@ test('a clickable table row is announced by its own first column', async ({ page
       const out: { panel: string; rows: number; distinct: number; sample: string; mismatched: { label: string; cells: string }[] }[] = [];
       document.querySelectorAll('table').forEach((table, i) => {
         const panel = table.closest('[data-panel-id]')?.getAttribute('data-panel-id') || `table-${i}`;
-        const rows = Array.from(table.querySelectorAll('tbody tr[role="button"]'));
+        // The label is on the button in the row's first cell. It was on the
+        // <tr> itself while the row was the button.
+        const labelOf = (r: Element) => r.querySelector('[data-row-open]')?.getAttribute('aria-label') || '';
+        const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => r.querySelector('[data-row-open]'));
         if (rows.length === 0) return;
-        const labels = rows.map((r) => r.getAttribute('aria-label') || '');
+        const labels = rows.map(labelOf);
         // Does the label quote a value the row paints? Checked against every
         // cell rather than the first, because which column carries the identity
         // differs per table and a leading checkbox or action column carries
         // none.
         const mismatched = rows
           .map((r) => {
-            const label = r.getAttribute('aria-label') || '';
+            const label = labelOf(r);
             const cells = Array.from(r.children)
               .map((c) => (c.textContent || '').trim())
               .filter((v) => v && v !== '\u2014' && v !== '\u2013');
