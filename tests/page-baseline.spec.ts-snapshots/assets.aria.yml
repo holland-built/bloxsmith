@@ -33,8 +33,10 @@
         - columnheader "Last seen":
           - button "Last seen"
     - rowgroup:
-      - button "View details for baseline-asset-a":
-        - cell "baseline-asset-a"
+      - row /View details for baseline-asset-a/:
+        - cell /View details for baseline-asset-a/:
+          - button "View details for baseline-asset-a"
+          - text: "baseline-asset-a"
         - cell "Server"
         - cell "baseline-provider"
         - cell "baseline-vendor"
