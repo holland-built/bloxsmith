@@ -1544,6 +1544,22 @@ function overlayEl(attr, css) {
   return el
 }
 
+// ESCAPE GIVES A POINTER GESTURE UP. A keyboard move could always be abandoned
+// with Escape; a mouse drag could not, and the only way out of one was to let
+// go, which drops and saves. Heard on the window in the CAPTURE phase, and
+// that matters: a drag starts from the Move button inside a panel's menu, and
+// the menu's own Escape handler stops the key before it bubbles this far. It
+// lives for the gesture only: `signal` is the gesture's own AbortController.
+function cancelOnEscape(signal, cancel) {
+  window.addEventListener(
+    'keydown',
+    (ev) => {
+      if (ev.key === 'Escape') cancel()
+    },
+    { signal, capture: true },
+  )
+}
+
 // PanelFitContext is how a self-measuring body (DataTable) tells its Card how
 // much width its content actually needs. A body that does not measure simply
 // never calls it, and the Card keeps its declared span.
@@ -1884,6 +1900,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       )
       hotspot.addEventListener('pointerup', () => done(true), { signal })
       hotspot.addEventListener('pointercancel', () => done(false), { signal })
+      cancelOnEscape(signal, () => done(false))
     },
     [grid, gridItem, panelId],
   )
@@ -2077,6 +2094,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       )
       handleEl.addEventListener('pointerup', () => finish(true), { signal })
       handleEl.addEventListener('pointercancel', () => finish(false), { signal })
+      // The menu's own Escape handler still runs after this one. On a press
+      // that has not become a drag it is what shuts the menu.
+      cancelOnEscape(signal, () => finish(false))
       try {
         handleEl.setPointerCapture(e.pointerId)
       } catch {
