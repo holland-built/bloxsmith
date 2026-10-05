@@ -356,7 +356,9 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
 function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
   const rows = zones
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
-    .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
+    // rowLabel names the row's button for the zone. Without it the name comes
+    // from the first cell, which here is only the count of issues.
+    .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', '), rowLabel: z.fqdn }))
   const feedDead = zonesStatus === 'error' && zones.length === 0
 
   const columns = [

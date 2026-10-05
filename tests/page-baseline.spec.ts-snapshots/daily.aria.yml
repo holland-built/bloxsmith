@@ -98,9 +98,9 @@
         - columnheader "Zone"
         - columnheader "Issues"
     - rowgroup:
-      - row /View details for 1/:
-        - cell /View details for 1/:
-          - button "View details for 1"
+      - row /View details for other\.example\./:
+        - cell /View details for other\.example\./:
+          - button "View details for other.example."
           - text: "1"
         - cell "other.example."
         - cell "low ttl"

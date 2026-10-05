@@ -48,6 +48,17 @@ test('a row that opens something is a table row whose cells can be read', async 
   ).toHaveCount(1);
 });
 
+test('a row whose first cell is only a count is named for what the row is about', async ({ page }) => {
+  // Daily's "DNS Zone Issues" leads each row with a pill holding the number of
+  // issues. The button used to take its name from that: "View details for 1",
+  // on every zone with one issue. The zone is what the row is about.
+  await page.goto('/#daily');
+  const table = panel(page, 'daily-dns-zone-issues').getByRole('table');
+  const row = table.getByRole('row').filter({ hasText: 'other.example.' });
+  await expect(row).toHaveCount(1, { timeout: 20_000 });
+  await expect(row.getByRole('button')).toHaveAccessibleName('View details for other.example.');
+});
+
 test('no table row is itself a button, on any page that has rows to open', async ({ page }) => {
   for (const [tab, id] of [
     ['overview', 'subnet-table'],
