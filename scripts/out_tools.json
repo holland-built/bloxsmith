@@ -1,7 +1,7 @@
 [
   {
     "name": "infoblox-hosts_get_host_config",
-    "description": "Fetch the requested variant of the DNS or DHCP configuration files for a specific on-prem host. Returns the base configuration by default; pass `variant=dfp` to get the DNS Firewall Proxy configuration a NIOS-X host running DFP actually loads. The response names the effective file and why it was chosen. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
+    "description": "Fetch the requested variant of the DNS or DHCP configuration files for a specific on-prem host. Returns the base configuration by default; pass `variant=dfp` to get the DNS Firewall Proxy configuration a NIOS-X host running DFP actually loads, or `variant=ibpolicy` when that host runs DFP together with the On-Prem Policy Engine. The response names the effective file and why it was chosen. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
     "params": [
       "config_type*:string",
       "ophid*:string",
@@ -15,7 +15,7 @@
   },
   {
     "name": "infoblox-portal_list_all_available_services",
-    "description": "List all available Infoblox Portal API services and their descriptions.\n\nYou have access to many services within the Infoblox Portal.\nUse this tool to discover what services are available and if a service exists to handle a request.\nAfter calling `list_all_available_services`, `get_service_info` and `get_method_info`\nyou can call HTTP operations to perform the actions needed.",
+    "description": "List every Infoblox Portal API service with a short description. Returns names and\ndescriptions only, with no endpoints or methods.\n\nPrefer search_available_services to find the service for a request. Use this tool\nwhen that search returns no relevant match, or when it isn't available, to check\nwhether a service exists before concluding the request is unsupported.",
     "params": [],
     "required": []
   },
@@ -31,7 +31,7 @@
   },
   {
     "name": "infoblox-portal_get_method_info",
-    "description": "Get detailed parameter requirements for a specific endpoint.",
+    "description": "Get detailed parameter requirements for a specific endpoint.\n\nCall this ONLY in the following cases:\n- POST, PUT, PATCH, or DELETE: always call before submitting the request.\n- GET with requires_method_info=true: the endpoint has non-standard query parameters.\n\nDo NOT call this for GET endpoints where requires_method_info=false.\nThose endpoints use standard filter params \u2014 use filter_fields from the search result\ndirectly in the _filter query param of make_get_request instead.",
     "params": [
       "service_name*:string",
       "endpoint*:string",
