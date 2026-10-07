@@ -6,294 +6,336 @@
         "title": "NIOS-X Anycast API",
         "version": "v1",
         "paths_count": 9,
-        "description": "The anycast capability enables the HA (High Availability) configuration of NIOS-X applications that run on equipment located on a customer's premises (on-prem hosts). Anycast supports DNS as well as DNS-forwarding services.\n\nAnycast-enabled application setups use multiple on-premises installations for one particular application type. Multiple application instances are configured to use the same endpoint address. Anycast capability is collocated with such an application instance, for monitoring the local application instance and advertising to the upstream router (a customer's equipment) a per-instance, local route to the common application endpoint address, as long as the local application instance is available. Depending on the type of the upstream router, the customer may configure local route advertisement via the BGP (Boarder Gateway Protocol) or OSPF (Open Shortest Path First) routing protocols. Both protocols may be enabled as well. Multiple routes to the common application service address provide redundancy without the need to reconfigure application clients.\n\nShould an application instance become unavailable, the local route advertisements stop. This results in withdrawal of the route (in the upstream router) to the application instance that has gone out of service and ensures that subsequent application requests get routed to the remaining available application instances.\n\n"
+        "description": "The anycast capability enables the HA (High Availability) configuration of NIOS-X applications that run on equipment located on a customer's premises (on-prem hosts). Anycast supports DNS as well as DNS-forwarding services.\n\nAnycast-enabled application setups use multiple on-premises installations for one particular application type. Multiple application instances are configured to use the same endpoint address. Anycast capability is collocated with such an application instance, for monitoring the local application instance and advertising to the upstream router (a customer's equipment) a per-instance, local route to the common application endpoint address, as long as the local application instance is available. Depending on the type of the upstream router, the customer may configure local route advertisement via the BGP (Boarder Gateway Protocol) or OSPF (Open Shortest Path First) routing protocols. Both protocols may be enabled as well. Multiple routes to the common application service address provide redundancy without the need to reconfigure application clients.\n\nShould an application instance become unavailable, the local route advertisements stop. This results in withdrawal of the route (in the upstream router) to the application instance that has gone out of service and ensures that subsequent application requests get routed to the remaining available application instances.\n\n",
+        "base_path": "/api/anycast/v1"
       },
       {
         "service_name": "Atcdfp",
         "title": "Infoblox Cloud DFP API",
         "version": "v1",
         "paths_count": 5,
-        "description": "Infoblox Cloud is a SaaS offering designed to provide protection to devices on and off premises, such as roaming, remote, and branch offices. It provides visibility into infected and compromised devices, prevents DNS-based data exfiltration, and automatically stops device communications with command-and-control servers and botnets, in addition to providing recursive DNS services in the cloud. You can access the services by deploying the Infoblox Endpoint agent or the DNS forwarding proxy.\n\nYou can use a DNS Forwarding Proxy in scenarios where an endpoint agent is to be deployed in a remote office or where installing an agent is not desirable or possible. A DNS Forwarding Proxy runs on bare metal, VM infrastructures, and Infoblox NIOS appliances, and it embeds the client IPs in DNS queries before forwarding them to Infoblox Cloud. The communications are encrypted, and client visibility is maintained. The proxy also provides DNS resolution to local DNS zones when you configure local resolvers. Once you set up a DNS Forwarding Proxy, it becomes the main DNS server for your remote site. It will also cache responses to speed up resolution of future queries.\n\nAfter implementing the DNS Forwarding Proxy, you can rest assured that Infoblox Cloud effectively enforces DNS client\u2013based security policies at your remote sites. On-premises devices that send DNS queries reveal their actual client IP addresses (instead of their NAT IP addresses), and this allows Infoblox Cloud to apply the security policies applicable to the respective endpoints and to identify infected clients.\n"
+        "description": "Infoblox Cloud is a SaaS offering designed to provide protection to devices on and off premises, such as roaming, remote, and branch offices. It provides visibility into infected and compromised devices, prevents DNS-based data exfiltration, and automatically stops device communications with command-and-control servers and botnets, in addition to providing recursive DNS services in the cloud. You can access the services by deploying the Infoblox Endpoint agent or the DNS forwarding proxy.\n\nYou can use a DNS Forwarding Proxy in scenarios where an endpoint agent is to be deployed in a remote office or where installing an agent is not desirable or possible. A DNS Forwarding Proxy runs on bare metal, VM infrastructures, and Infoblox NIOS appliances, and it embeds the client IPs in DNS queries before forwarding them to Infoblox Cloud. The communications are encrypted, and client visibility is maintained. The proxy also provides DNS resolution to local DNS zones when you configure local resolvers. Once you set up a DNS Forwarding Proxy, it becomes the main DNS server for your remote site. It will also cache responses to speed up resolution of future queries.\n\nAfter implementing the DNS Forwarding Proxy, you can rest assured that Infoblox Cloud effectively enforces DNS client\u2013based security policies at your remote sites. On-premises devices that send DNS queries reveal their actual client IP addresses (instead of their NAT IP addresses), and this allows Infoblox Cloud to apply the security policies applicable to the respective endpoints and to identify infected clients.\n",
+        "base_path": "/api/atcdfp/v1"
       },
       {
         "service_name": "Atcep",
         "title": "Infoblox EndPoint API",
         "version": "v1",
         "paths_count": 22,
-        "description": "Infoblox Endpoint is a lightweight roaming agent that redirects DNS traffic from your remote devices to Infoblox Cloud. It enables you to apply appropriate security policies to your roaming end users in remote sites and branch offices.\n\nFor end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nWhen you use Infoblox Endpoint, DNS queries are sent to Infoblox Cloud directly in all scenarios except those where (1) queries target the bypassed domains and (2) internal domains are collected through the DHCP server. If you have internal domains served by your local DNS servers and you want to reach them without interruptions, consider adding them to the bypassed internal domains list; this will ensure that DNS queries for these internal domains get sent to the local DNS servers rather than Infoblox Cloud.\n\nInfoblox Endpoint supports dual-stack IPv4 and IPv6 DNS configurations, thereby protecting all devices, regardless of their network environments. Infoblox Endpoint in a dual-stack environment can proxy IPv6 DNS queries and forward them to Infoblox Cloud over IPv4.\n"
+        "description": "Infoblox Endpoint is a lightweight roaming agent that redirects DNS traffic from your remote devices to Infoblox Cloud. It enables you to apply appropriate security policies to your roaming end users in remote sites and branch offices.\n\nFor end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nWhen you use Infoblox Endpoint, DNS queries are sent to Infoblox Cloud directly in all scenarios except those where (1) queries target the bypassed domains and (2) internal domains are collected through the DHCP server. If you have internal domains served by your local DNS servers and you want to reach them without interruptions, consider adding them to the bypassed internal domains list; this will ensure that DNS queries for these internal domains get sent to the local DNS servers rather than Infoblox Cloud.\n\nInfoblox Endpoint supports dual-stack IPv4 and IPv6 DNS configurations, thereby protecting all devices, regardless of their network environments. Infoblox Endpoint in a dual-stack environment can proxy IPv6 DNS queries and forward them to Infoblox Cloud over IPv4.\n",
+        "base_path": "/api/atcep/v1"
       },
       {
         "service_name": "Atcfw",
         "title": "Infoblox FW API",
         "version": "v1",
         "paths_count": 27,
-        "description": "An extension of the Infoblox Suite, Infoblox Threat Defense Cloud provides visibility into infected and compromised off-premises devices, roaming users, remote sites, and branch offices. You can subscribe to Infoblox Cloud and use its functionality to mitigate and control malware, provide unprecedented insight into your network security posture, and enable timely action. Infoblox Cloud also offers unified policy management, reporting, and threat analytics across the entire spectrum. Using automated and high-quality threat intelligence feeds and unique behavioral analytics, it automatically stops device communications with C&Cs/botnets and prevents DNS-based data exfiltration.\n\nThe mission-critical DNS infrastructure can become a vulnerable component in your network when it is inadequately protected by traditional security solutions and, consequently, used as an attack surface. Compromise of DNS services can result in catastrophic failures in the network and system. To fully protect your network in today\u2019s cyber-security threat environment, Infoblox sets a new DNS security standard by offering scalable, integrated enterprise-grade protection for your DNS infrastructure.\n\nUse the Infoblox Cloud Services Portal to view the status of your subscription and threat-intelligence feeds and to manage your network scope and roaming end users. Use the Infoblox Threat Lookup tool and predefined reports to learn about threats in your networks.\n"
+        "description": "An extension of the Infoblox Suite, Infoblox Threat Defense Cloud provides visibility into infected and compromised off-premises devices, roaming users, remote sites, and branch offices. You can subscribe to Infoblox Cloud and use its functionality to mitigate and control malware, provide unprecedented insight into your network security posture, and enable timely action. Infoblox Cloud also offers unified policy management, reporting, and threat analytics across the entire spectrum. Using automated and high-quality threat intelligence feeds and unique behavioral analytics, it automatically stops device communications with C&Cs/botnets and prevents DNS-based data exfiltration.\n\nThe mission-critical DNS infrastructure can become a vulnerable component in your network when it is inadequately protected by traditional security solutions and, consequently, used as an attack surface. Compromise of DNS services can result in catastrophic failures in the network and system. To fully protect your network in today\u2019s cyber-security threat environment, Infoblox sets a new DNS security standard by offering scalable, integrated enterprise-grade protection for your DNS infrastructure.\n\nUse the Infoblox Cloud Services Portal to view the status of your subscription and threat-intelligence feeds and to manage your network scope and roaming end users. Use the Infoblox Threat Lookup tool and predefined reports to learn about threats in your networks.\n",
+        "base_path": "/api/atcfw/v1"
       },
       {
         "service_name": "AuditLog",
         "title": "Audit Logging",
         "version": "1.0",
         "paths_count": 2,
-        "description": "The service manages audit logs by validating incoming log entities, preserving them in the underlying storage system, and providing read access to them; write access is only available via gRPC from other services in the cluster."
+        "description": "The service manages audit logs by validating incoming log entities, preserving them in the underlying storage system, and providing read access to them; write access is only available via gRPC from other services in the cluster.",
+        "base_path": "/api/auditlog/v1"
       },
       {
         "service_name": "Authnapi",
         "title": "The On-Prem Authentication Service API",
         "version": "v1",
         "paths_count": 11,
-        "description": "The On-Prem Authentication Service API provides means to configure and associate an authentication profiles to be used within user identity acquisition process for the sake of per-usergroup policy enforcement.\n\n"
+        "description": "The On-Prem Authentication Service API provides means to configure and associate an authentication profiles to be used within user identity acquisition process for the sake of per-usergroup policy enforcement.\n\n",
+        "base_path": "/api/authn/v1"
       },
       {
         "service_name": "Authz",
         "title": "Authorization API",
         "version": "v1",
         "paths_count": 6,
-        "description": ""
+        "description": "",
+        "base_path": "/authz/v1"
       },
       {
         "service_name": "BootstrapApp",
         "title": "Bootstrap App",
         "version": "v1",
         "paths_count": 8,
-        "description": ""
+        "description": "",
+        "base_path": "/bootstrap-app/v1"
       },
       {
         "service_name": "BulkService",
         "title": "Data Import/Export API",
         "version": "1.0",
         "paths_count": 7,
-        "description": "The Data Import/Export service provides data transfer into Infoblox services by creating operations. The operations can be import or export. An import operation allows you to import data into Infoblox services whereas the export operations allows data to be exported from Infoblox services.\n\n"
+        "description": "The Data Import/Export service provides data transfer into Infoblox services by creating operations. The operations can be import or export. An import operation allows you to import data into Infoblox services whereas the export operations allows data to be exported from Infoblox services.\n\n",
+        "base_path": "/bulk/v1"
       },
       {
         "service_name": "CDC",
         "title": "Data Connector Service",
         "version": "v1",
         "paths_count": 59,
-        "description": "Infoblox Data Connector is a utility that collects DNS query and response data as well as security logs from specified sources. It works with various components in your hybrid cloud environment to deliver source data to your configured destinations. Data Connector transfers the collected data to defined destinations, such as BloxOne Threat Defense Cloud, the Infoblox NIOS reporting server, and the generic syslog with the CEF or LEEF message format. Data Connector supports integrations by using the Splunk forwarder and generic syslog formats."
+        "description": "Infoblox Data Connector is a utility that collects DNS query and response data as well as security logs from specified sources. It works with various components in your hybrid cloud environment to deliver source data to your configured destinations. Data Connector transfers the collected data to defined destinations, such as BloxOne Threat Defense Cloud, the Infoblox NIOS reporting server, and the generic syslog with the CEF or LEEF message format. Data Connector supports integrations by using the Splunk forwarder and generic syslog formats.",
+        "base_path": "/api/cdc-flow"
       },
       {
         "service_name": "CloudDiscoveryProviders",
         "title": "Discovery Configuration API V2",
         "version": "v2",
         "paths_count": 5,
-        "description": "The Discovery configuration service is a BloxOne Service that provides configuration for accessing and syncing the Cloud assets \n\nBase Paths: \n1. provider: **/api/cloud_discovery/v2/** \n"
+        "description": "The Discovery configuration service is a BloxOne Service that provides configuration for accessing and syncing the Cloud assets \n\nBase Paths: \n1. provider: **/api/cloud_discovery/v2/** \n",
+        "base_path": "/api/cloud_discovery/v2"
       },
       {
         "service_name": "CloudForwarders",
         "title": "Cloud DNS Forwarder API",
         "version": "v1",
         "paths_count": 3,
-        "description": "Allows configuring resources to forward DNS queries from Cloud Providers to B1DDI/NIOS"
+        "description": "Allows configuring resources to forward DNS queries from Cloud Providers to B1DDI/NIOS",
+        "base_path": "/api/dns/v1/cloud_forwarder"
       },
       {
         "service_name": "CustomerMetrics",
         "title": "Customer Metrics ",
         "version": "v1",
         "paths_count": 1,
-        "description": "The API for monitoring metrics supports the download of the most recent metrics values from hosts. Supported metrics are host CPU, memory, port metrics and protocol metrics. Use this API to integrate the BloxOne on-prem solution with your monitoring tools and then to query the current metrics of the infrastructure and services deployed on your hosts.\n\nBefore using the API to query metrics, you must complete the following steps in the Cloud Services Portal:\n* Create a service account and assign a custom role with the <i>Customer Metrics</i> permission, which grants access to the endpoint\n* Create a service API key by using the created service account\n* Use the service API key to access the endpoint.\n\nBy using the `Accept` header, a client can request that a response be returned with a specified media type.\nThe following values of the header are supported:\n* `application/openmetrics-text` (**default**), will provide the output in the standard OpenMetrics (Prometheus) text format.\n* `application/json`, will provide the output in the Prometheus JSON format.\n\nThe `Accept` header is the preferred manner for requesting a specific output format. However if you are unable to set the headers in your request, you can use the `$format` query parameter to specify the output format.\n\n\nThe `Accept` header will take precedence over the `$format` query parameter."
+        "description": "The API for monitoring metrics supports the download of the most recent metrics values from hosts. Supported metrics are host CPU, memory, port metrics and protocol metrics. Use this API to integrate the BloxOne on-prem solution with your monitoring tools and then to query the current metrics of the infrastructure and services deployed on your hosts.\n\nBefore using the API to query metrics, you must complete the following steps in the Cloud Services Portal:\n* Create a service account and assign a custom role with the <i>Customer Metrics</i> permission, which grants access to the endpoint\n* Create a service API key by using the created service account\n* Use the service API key to access the endpoint.\n\nBy using the `Accept` header, a client can request that a response be returned with a specified media type.\nThe following values of the header are supported:\n* `application/openmetrics-text` (**default**), will provide the output in the standard OpenMetrics (Prometheus) text format.\n* `application/json`, will provide the output in the Prometheus JSON format.\n\nThe `Accept` header is the preferred manner for requesting a specific output format. However if you are unable to set the headers in your request, you can use the `$format` query parameter to specify the output format.\n\n\nThe `Accept` header will take precedence over the `$format` query parameter.",
+        "base_path": "/api/monitoring/v1"
       },
       {
         "service_name": "DDIKeys",
         "title": "DDI Keys API",
         "version": "v1",
         "paths_count": 6,
-        "description": "The DDI Keys application is a BloxOne DDI service for managing TSIG keys and GSS-TSIG (Kerberos) keys which are used by other BloxOne DDI applications. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n"
+        "description": "The DDI Keys application is a BloxOne DDI service for managing TSIG keys and GSS-TSIG (Kerberos) keys which are used by other BloxOne DDI applications. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "DNSEvents",
         "title": "BloxOne Cloud API",
         "version": "v1",
         "paths_count": 1,
-        "description": "The BloxOne Cloud API allows you to make REST API calls to gather DNS security data from BloxOne Cloud for SIEM (Security Information and Event Management) purposes."
+        "description": "The BloxOne Cloud API allows you to make REST API calls to gather DNS security data from BloxOne Cloud for SIEM (Security Information and Event Management) purposes.",
+        "base_path": "/api/dnsdata"
       },
       {
         "service_name": "DhcpLeases",
         "title": "DHCP Leases API",
         "version": "v1",
         "paths_count": 10,
-        "description": "The DHCP Leases application is a BloxOne DDI service that stores information about leases. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. Hosts are authoritative for their lease data. Changes to leases are periodically replicated to the cloud and stored by this service for display purposes. There is no lease history, so only current leases are available. In other words, every _dhcp/lease_ for that matter, represents a lease that is currently active. Note that fixed addresses do not have leases.\n\n"
+        "description": "The DHCP Leases application is a BloxOne DDI service that stores information about leases. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. Hosts are authoritative for their lease data. Changes to leases are periodically replicated to the cloud and stored by this service for display purposes. There is no lease history, so only current leases are available. In other words, every _dhcp/lease_ for that matter, represents a lease that is currently active. Note that fixed addresses do not have leases.\n\n",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "DiagnosticService",
         "title": "Diagnostic Service",
         "version": "v1",
         "paths_count": 5,
-        "description": ""
+        "description": "",
+        "base_path": "/diagnostic-service/v1"
       },
       {
         "service_name": "DnsConfig",
         "title": "DNS Configuration API",
         "version": "v1",
         "paths_count": 44,
-        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X. Do NOT use NIOS WAPI passthrough (B1wapiService) for RPZ queries; use this API instead.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ (Response Policy Zone) guidance: Use /dns/rpz to list, create, read, update, or delete RPZ zones. Do NOT use WAPI or B1wapiService for RPZ operations \u2014 all RPZ management is available via this DnsConfig API. RPZ rules (policy records) are DNS records stored under the RPZ zone and are retrieved via the DnsData service /dns/record endpoint filtered by zone id."
+        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X. Do NOT use NIOS WAPI passthrough (B1wapiService) for RPZ queries; use this API instead.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ (Response Policy Zone) guidance: Use /dns/rpz to list, create, read, update, or delete RPZ zones. Do NOT use WAPI or B1wapiService for RPZ operations \u2014 all RPZ management is available via this DnsConfig API. RPZ rules (policy records) are DNS records stored under the RPZ zone and are retrieved via the DnsData service /dns/record endpoint filtered by zone id.",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "DnsData",
         "title": "DNS Data API",
         "version": "v1",
         "paths_count": 3,
-        "description": "The DNS Data is a BloxOne DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ record listing \u2014 IMPORTANT: When listing records for an RPZ zone, always filter by zone id: _filter=zone=='<rpz_zone_id>' where the zone id comes from the /dns/rpz response (e.g. dns/rpz/abc123). Do NOT issue an unfiltered /dns/record call to retrieve RPZ rules \u2014 it will fail in accounts that contain SVCB/HTTPS records (error: SVCB/HTTPS target_name must not be empty). RPZ policy rule records have source containing 'RPZRULE' \u2014 exclude system-generated NS and SOA records (source 'SYSTEM') when presenting rules to the user."
+        "description": "The DNS Data is a BloxOne DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ record listing \u2014 IMPORTANT: When listing records for an RPZ zone, always filter by zone id: _filter=zone=='<rpz_zone_id>' where the zone id comes from the /dns/rpz response (e.g. dns/rpz/abc123). Do NOT issue an unfiltered /dns/record call to retrieve RPZ rules \u2014 it will fail in accounts that contain SVCB/HTTPS records (error: SVCB/HTTPS target_name must not be empty). RPZ policy rule records have source containing 'RPZRULE' \u2014 exclude system-generated NS and SOA records (source 'SYSTEM') when presenting rules to the user.",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "HostActivation",
         "title": "Host Activation Service",
         "version": "v1",
         "paths_count": 9,
-        "description": "Host activation service provides a RESTful interface for managing cert and join token objects. Join tokens are essentially a password that allows on-prem hosts to auto-associate themselves to a customer's account and receive a signed cert."
+        "description": "Host activation service provides a RESTful interface for managing cert and join token objects. Join tokens are essentially a password that allows on-prem hosts to auto-associate themselves to a customer's account and receive a signed cert.",
+        "base_path": "/host-activation/v1"
       },
       {
         "service_name": "Identity",
         "title": "Identity API",
         "version": "v2",
         "paths_count": 22,
-        "description": "The purpose of the Athena Identity Service is to manage users and groups.\nFollowing endpoints require \"user manage\" permission:\n - /v2/users \n - /v2/groups\nFollowing endpoints require administrator role (admin, act_admin, ib-access-control-admin or ib-ddi-admin):\n - POST /v2/compartments\n - PUT /v2/compartments\n - PATCH /v2/compartments"
+        "description": "The purpose of the Athena Identity Service is to manage users and groups.\nFollowing endpoints require \"user manage\" permission:\n - /v2/users \n - /v2/groups\nFollowing endpoints require administrator role (admin, act_admin, ib-access-control-admin or ib-ddi-admin):\n - POST /v2/compartments\n - PUT /v2/compartments\n - PATCH /v2/compartments",
+        "base_path": "/v2"
       },
       {
         "service_name": "Infrastructure",
         "title": "Infrastructure Management API",
         "version": "v1",
         "paths_count": 12,
-        "description": "The Infrastructure Management API provides a RESTful interface for managing Infrastructure Hosts and Services objects.\n\nThe following are the services and their string types (the string types are to be used with the APIs for the `service_type` field):\n | Service name | Service type | \n | ------ | ------ | \n | Access Authentication | authn | \n | Anycast | anycast | \n | Data Connector | cdc | \n | DHCP (NIOS-X cloud) | dhcp | \n | DHCP (NIOS on-prem grid) | ndhcp | \n | DNS (NIOS-X cloud) | dns | \n | DNS (NIOS on-prem grid) | ndns | \n | DNS Forwarding Proxy | dfp | \n | NIOS Grid Connector | orpheus | \n | MS AD Sync | msad | \n | NTP | ntp | \n | BGP | bgp | \n | RIP | rip | \n | OSPF | ospf | \n\n**IMPORTANT \u2014 DNS and DHCP each have two variants that MUST be treated as a group:**\n- **DNS servers**: `dns` (NIOS-X cloud) and `ndns` (NIOS on-prem grid) are both DNS. When a user asks about DNS servers, hosts, or check-in times, ALWAYS query for BOTH `dns` AND `ndns` service types.\n- **DHCP servers**: `dhcp` (NIOS-X cloud) and `ndhcp` (NIOS on-prem grid) are both DHCP. When a user asks about DHCP servers, hosts, or check-in times, ALWAYS query for BOTH `dhcp` AND `ndhcp` service types.\n\nUsers typically want to see all servers regardless of whether they are cloud or on-prem. Never filter to only one variant when showing lists of DNS or DHCP servers.\n\n---\n\n\n### Hosts API\n\nThe Hosts API is used to manage the Infrastructure Host resources.\nThese include the operations related to hosts, such as viewing, creation, update, replacement, disconnection, and deletion of hosts.\nHosts are managed from the Cloud Services Portal -> Manage -> Infrastructure -> the Hosts tab.\n\n**Host IP address fields \u2014 label these correctly:** Each host in this inventory, whatever its `host_type`, exposes exactly two IP address fields: `ip_address` is the host's **Server IP Address** (the IP configured on the server's own network interface) and `nat_ip` is the host's **NAT IP Address** (the NAT-translated address). Hosts do NOT have a separate 'management IP' or 'LAN IP' field. 'WAN' and 'LAN' are per-interface roles \u2014 they separate management traffic (between the server and the Cloud Services Portal) from service/data traffic and are configured under a server's IP Interface Settings, not host-level fields returned by these APIs. When a user asks for a host's IP in 'management', 'LAN', 'WAN', 'WAN interface', 'LAN interface', or any per-interface terms \u2014 however phrased, and even if they explicitly ask for such columns \u2014 the result table or list MUST NOT contain any column, field, or heading whose name contains or implies 'WAN', 'LAN', or 'management'. This is an absolute rule with no exceptions. IQ Agent exposes only two IP fields per host: present `ip_address` as the **Server IP Address** and `nat_ip` as the **NAT IP Address**, and NEVER relabel, rename, or map either field to a WAN, LAN, or management IP (neither in a column nor in prose). Do NOT leave WAN/LAN columns blank, do NOT call, search for, or route to any other service to obtain per-interface IPs, and do NOT claim this data does not exist or is unavailable \u2014 it is simply outside what IQ Agent surfaces. Alongside the two-field result, include a plain sentence such as: 'IQ Agent provides each server's Server IP and NAT IP; a per-interface WAN/LAN IP breakdown is not available through IQ Agent.'\n\n**Host type codes (`host_type`) - the value is a numeric code, not a name:** On `/hosts`, `/hosts/{id}` and `/detail_hosts`, `host_type` is returned as a numeric code (a string of digits such as `\"3\"`), never as a name. Matching on names, for example `host_type ILIKE 'NIOS-X%'` or `lower(host_type) LIKE '%nios-x%'`, always returns zero rows. The codes are:\n\n| `host_type` | Meaning | Is it a NIOS-X server? |\n| ------ | ------ | ------ |\n| `0` | Not Available / unspecified | No |\n| `1` | NIOS | No, this is NIOS |\n| `2` | NIOS HA pair | No, this is NIOS |\n| `3` | NIOS-X VM | Yes |\n| `4` | NIOS-X Appliance | Yes |\n| `5` | NIOS-X Container | Yes |\n| `6` | CNIOS, a containerized NIOS Grid member connected to the Portal (displayed as 'NIOS' in the CSP UI) | No, this is NIOS |\n| `7` | Not assigned; no host reports this code | No |\n| `8` | MSAD agent (Universal Agent for Microsoft Servers) | No, this is an agent, not a server |\n\n**NIOS-X servers are `host_type` 3, 4 and 5, and nothing else.** When a user asks for NIOS-X servers or NIOS-X hosts, however phrased, filter on those three codes, server side where possible: `_filter=host_type in ['3','4','5']`. The OR form `_filter=host_type=='3' or host_type=='4' or host_type=='5'` is equivalent; use it if the `in` form is ever rejected. If server-side filtering fails, filter the same three codes client side. Never respond with an unfiltered host list. When a user asks for NIOS servers, that means `host_type` 1, 2 and 6. NEVER classify a host by the `host/nios_version`, `host/os_version`, `host/deployment_type` or `host/hw` tags or by `host_version`; those are not type indicators and using them produces exactly the wrong set. NEVER drop the type filter and return every host as if all hosts were NIOS-X servers, and never widen the result because a name-based match returned no rows. Treat any code not listed above as Unknown: exclude it from typed lists and say it is unknown rather than guessing.\n\nWhenever a result is filtered to NIOS-X servers, add one sentence saying that NIOS hosts (`host_type` 1, 2 and 6) are managed in the same Infrastructure inventory and are excluded, and that asking for NIOS servers will list them. Do NOT state how many hosts were excluded unless you actually retrieved that set with an explicit high `_limit`: a count taken from an already-filtered result, or from a response that used the default page size, is wrong.\n\n---\n\n\n### Services API\n\nThe Services API is used to manage the Infrastructure Service resources, also known as NIOS-X applications.\nThese include the operations for viewing, creating, updating, starting/stopping, configuring, and deleting services.\nServices are managed from the Cloud Services Portal (CSP) by navigating to Manage -> Infrastructure -> the Services tab.\n\n---\n\n\n### Detail APIs\n\nThe Detail APIs are the read-only APIs used to list all Infrastructure resources: hosts and services.\nEach resource record returned also contains information about its associated resource(s) and the\nstatus information (the Host/Service status) for itself and the associated resource(s).\n\n---\n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality."
+        "description": "The Infrastructure Management API provides a RESTful interface for managing Infrastructure Hosts and Services objects.\n\nThe following are the services and their string types (the string types are to be used with the APIs for the `service_type` field):\n | Service name | Service type | \n | ------ | ------ | \n | Access Authentication | authn | \n | Anycast | anycast | \n | Data Connector | cdc | \n | DHCP (NIOS-X cloud) | dhcp | \n | DHCP (NIOS on-prem grid) | ndhcp | \n | DNS (NIOS-X cloud) | dns | \n | DNS (NIOS on-prem grid) | ndns | \n | DNS Forwarding Proxy | dfp | \n | NIOS Grid Connector | orpheus | \n | MS AD Sync | msad | \n | NTP | ntp | \n | BGP | bgp | \n | RIP | rip | \n | OSPF | ospf | \n\n**IMPORTANT \u2014 DNS and DHCP each have two variants that MUST be treated as a group:**\n- **DNS servers**: `dns` (NIOS-X cloud) and `ndns` (NIOS on-prem grid) are both DNS. When a user asks about DNS servers, hosts, or check-in times, ALWAYS query for BOTH `dns` AND `ndns` service types.\n- **DHCP servers**: `dhcp` (NIOS-X cloud) and `ndhcp` (NIOS on-prem grid) are both DHCP. When a user asks about DHCP servers, hosts, or check-in times, ALWAYS query for BOTH `dhcp` AND `ndhcp` service types.\n\nUsers typically want to see all servers regardless of whether they are cloud or on-prem. Never filter to only one variant when showing lists of DNS or DHCP servers.\n\n---\n\n\n### Hosts API\n\nThe Hosts API is used to manage the Infrastructure Host resources.\nThese include the operations related to hosts, such as viewing, creation, update, replacement, disconnection, and deletion of hosts.\nHosts are managed from the Cloud Services Portal -> Manage -> Infrastructure -> the Hosts tab.\n\n**Host IP address fields \u2014 label these correctly:** Each host in this inventory, whatever its `host_type`, exposes exactly two IP address fields: `ip_address` is the host's **Server IP Address** (the IP configured on the server's own network interface) and `nat_ip` is the host's **NAT IP Address** (the NAT-translated address). Hosts do NOT have a separate 'management IP' or 'LAN IP' field. 'WAN' and 'LAN' are per-interface roles \u2014 they separate management traffic (between the server and the Cloud Services Portal) from service/data traffic and are configured under a server's IP Interface Settings, not host-level fields returned by these APIs. When a user asks for a host's IP in 'management', 'LAN', 'WAN', 'WAN interface', 'LAN interface', or any per-interface terms \u2014 however phrased, and even if they explicitly ask for such columns \u2014 the result table or list MUST NOT contain any column, field, or heading whose name contains or implies 'WAN', 'LAN', or 'management'. This is an absolute rule with no exceptions. IQ Agent exposes only two IP fields per host: present `ip_address` as the **Server IP Address** and `nat_ip` as the **NAT IP Address**, and NEVER relabel, rename, or map either field to a WAN, LAN, or management IP (neither in a column nor in prose). Do NOT leave WAN/LAN columns blank, do NOT call, search for, or route to any other service to obtain per-interface IPs, and do NOT claim this data does not exist or is unavailable \u2014 it is simply outside what IQ Agent surfaces. Alongside the two-field result, include a plain sentence such as: 'IQ Agent provides each server's Server IP and NAT IP; a per-interface WAN/LAN IP breakdown is not available through IQ Agent.'\n\n**Host type codes (`host_type`) - the value is a numeric code, not a name:** On `/hosts`, `/hosts/{id}` and `/detail_hosts`, `host_type` is returned as a numeric code (a string of digits such as `\"3\"`), never as a name. Matching on names, for example `host_type ILIKE 'NIOS-X%'` or `lower(host_type) LIKE '%nios-x%'`, always returns zero rows. The codes are:\n\n| `host_type` | Meaning | Is it a NIOS-X server? |\n| ------ | ------ | ------ |\n| `0` | Not Available / unspecified | No |\n| `1` | NIOS | No, this is NIOS |\n| `2` | NIOS HA pair | No, this is NIOS |\n| `3` | NIOS-X VM | Yes |\n| `4` | NIOS-X Appliance | Yes |\n| `5` | NIOS-X Container | Yes |\n| `6` | CNIOS, a containerized NIOS Grid member connected to the Portal (displayed as 'NIOS' in the CSP UI) | No, this is NIOS |\n| `7` | Not assigned; no host reports this code | No |\n| `8` | MSAD agent (Universal Agent for Microsoft Servers) | No, this is an agent, not a server |\n\n**NIOS-X servers are `host_type` 3, 4 and 5, and nothing else.** When a user asks for NIOS-X servers or NIOS-X hosts, however phrased, filter on those three codes, server side where possible: `_filter=host_type in ['3','4','5']`. The OR form `_filter=host_type=='3' or host_type=='4' or host_type=='5'` is equivalent; use it if the `in` form is ever rejected. If server-side filtering fails, filter the same three codes client side. Never respond with an unfiltered host list. When a user asks for NIOS servers, that means `host_type` 1, 2 and 6. NEVER classify a host by the `host/nios_version`, `host/os_version`, `host/deployment_type` or `host/hw` tags or by `host_version`; those are not type indicators and using them produces exactly the wrong set. NEVER drop the type filter and return every host as if all hosts were NIOS-X servers, and never widen the result because a name-based match returned no rows. Treat any code not listed above as Unknown: exclude it from typed lists and say it is unknown rather than guessing.\n\nWhenever a result is filtered to NIOS-X servers, add one sentence saying that NIOS hosts (`host_type` 1, 2 and 6) are managed in the same Infrastructure inventory and are excluded, and that asking for NIOS servers will list them. Do NOT state how many hosts were excluded unless you actually retrieved that set with an explicit high `_limit`: a count taken from an already-filtered result, or from a response that used the default page size, is wrong.\n\n---\n\n\n### Services API\n\nThe Services API is used to manage the Infrastructure Service resources, also known as NIOS-X applications.\nThese include the operations for viewing, creating, updating, starting/stopping, configuring, and deleting services.\nServices are managed from the Cloud Services Portal (CSP) by navigating to Manage -> Infrastructure -> the Services tab.\n\n---\n\n\n### Detail APIs\n\nThe Detail APIs are the read-only APIs used to list all Infrastructure resources: hosts and services.\nEach resource record returned also contains information about its associated resource(s) and the\nstatus information (the Host/Service status) for itself and the associated resource(s).\n\n---\n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.",
+        "base_path": "/api/infra/v1"
       },
       {
         "service_name": "IpamFederation",
         "title": "IPAM Federation API",
         "version": "v1",
         "paths_count": 15,
-        "description": "The DDI IPAM Federation application enables a SaaS administrator to manage multiple IPAM systems from one central control point CSP.  \n\n"
+        "description": "The DDI IPAM Federation application enables a SaaS administrator to manage multiple IPAM systems from one central control point CSP.  \n\n",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "Ipamsvc",
         "title": "IP Address Management API",
         "version": "v1",
         "paths_count": 65,
-        "description": "The IPAM/DHCP Application is a Universal DDI service for managing infrastructure and DHCP. IPAM capabilities include IP spaces, address blocks, subnets, ranges, addresses, conflict visibility, and next-available allocation workflows. DHCP capabilities include global and scoped configuration, fixed addresses, option spaces/groups/codes, filters, host and server associations, and lease operations. The service also supports high availability through HA groups, enabling resilient on-prem DHCP serving across coordinated hosts. Integrated utilization and DNS-usage insights help operators plan capacity, troubleshoot effectively, and maintain reliable DNS/DHCP operations across distributed environments.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality."
+        "description": "The IPAM/DHCP Application is a Universal DDI service for managing infrastructure and DHCP. IPAM capabilities include IP spaces, address blocks, subnets, ranges, addresses, conflict visibility, and next-available allocation workflows. DHCP capabilities include global and scoped configuration, fixed addresses, option spaces/groups/codes, filters, host and server associations, and lease operations. The service also supports high availability through HA groups, enabling resilient on-prem DHCP serving across coordinated hosts. Integrated utilization and DNS-usage insights help operators plan capacity, troubleshoot effectively, and maintain reliable DNS/DHCP operations across distributed environments.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "Licensing",
         "title": "Licensing 2.0 Licenses API",
         "version": "v1",
         "paths_count": 1,
-        "description": "API for retrieving licensing and subscription information"
+        "description": "API for retrieving licensing and subscription information",
+        "base_path": "/licensing/v1"
       },
       {
         "service_name": "Locations",
         "title": "Location Management API",
         "version": "v1",
         "paths_count": 5,
-        "description": "The **Location Management API** provides a RESTful interface to manage Location resources.\n"
+        "description": "The **Location Management API** provides a RESTful interface to manage Location resources.\n",
+        "base_path": "/api/infra/v1"
       },
       {
         "service_name": "NIOSXasaService",
         "title": "NIOS-X as a Service",
         "version": "v1",
         "paths_count": 10,
-        "description": "The Service facilitates the deployment of the Infoblox NIOS-X as a Service."
+        "description": "The Service facilitates the deployment of the Infoblox NIOS-X as a Service.",
+        "base_path": "/api/universalinfra/v1"
       },
       {
         "service_name": "NTPService",
         "title": "NTP Config Service",
         "version": "v1",
         "paths_count": 3,
-        "description": "NTP Config Service provides the backend infrastructure for facilitating the configuration of the NTP service running on the on-prem host. The supported configuration options include management of upstream reference time servers; symmetric, key-based encryption for authentication; and access-control lists."
+        "description": "NTP Config Service provides the backend infrastructure for facilitating the configuration of the NTP service running on the on-prem host. The supported configuration options include management of upstream reference time servers; symmetric, key-based encryption for authentication; and access-control lists.",
+        "base_path": "/api/ntp/v1"
       },
       {
         "service_name": "Notifications-Config",
         "title": "Notifications Config API",
         "version": "v1.0",
         "paths_count": 31,
-        "description": "The service facilitates configuration management for the notifications and events pipeline. It provides a REST and grpc interface to manage Channels, Channel Types, Filters, Subscriptions, Triggers, Templates, Delivery Mechanism etc.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>"
+        "description": "The service facilitates configuration management for the notifications and events pipeline. It provides a REST and grpc interface to manage Channels, Channel Types, Filters, Subscriptions, Triggers, Templates, Delivery Mechanism etc.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>",
+        "base_path": "/atlas-notifications-config/v1"
       },
       {
         "service_name": "Notifications-Mailbox",
         "title": "Notifications Mailbox",
         "version": "v1.0",
         "paths_count": 7,
-        "description": "The Notifications Mailbox API provides access to user and account-level alerts and notifications generated by Infoblox Portal services.\n\nIMPORTANT \u2014 there is NO host_id, resource_id, or structured host reference in alert responses. The fields service_id and service_data are currently always null.\n\nTo answer questions about notifications or alerts for a specific host, connection, or resource:\n1. Fetch ALL alerts using make_get_request with fetch_all=True on /user_alerts or /account_alerts.\n2. Use the table_name returned by make_get_request (e.g. notifications_mailbox_user_alerts_get.parquet) in the query_stored_data SQL \u2014 do NOT guess or hardcode the filename.\n3. Use query_stored_data with a SQL ILIKE filter on the message and subject fields. Example: SELECT * FROM notifications_mailbox_user_alerts_get.parquet WHERE message ILIKE '%<hostname>%' OR subject ILIKE '%<hostname>%'\n4. If the search term contains a single quote, escape it by doubling it (e.g. O''Brien becomes O''Brien in the SQL string).\n\nDo NOT attempt to filter by host_id or resource_id \u2014 these fields do not exist. Do NOT use any other API or service to find host-related alerts."
+        "description": "The Notifications Mailbox API provides access to user and account-level alerts and notifications generated by Infoblox Portal services.\n\nIMPORTANT \u2014 there is NO host_id, resource_id, or structured host reference in alert responses. The fields service_id and service_data are currently always null.\n\nTo answer questions about notifications or alerts for a specific host, connection, or resource:\n1. Fetch ALL alerts using make_get_request with fetch_all=True on /user_alerts or /account_alerts.\n2. Use the table_name returned by make_get_request (e.g. notifications_mailbox_user_alerts_get.parquet) in the query_stored_data SQL \u2014 do NOT guess or hardcode the filename.\n3. Use query_stored_data with a SQL ILIKE filter on the message and subject fields. Example: SELECT * FROM notifications_mailbox_user_alerts_get.parquet WHERE message ILIKE '%<hostname>%' OR subject ILIKE '%<hostname>%'\n4. If the search term contains a single quote, escape it by doubling it (e.g. O''Brien becomes O''Brien in the SQL string).\n\nDo NOT attempt to filter by host_id or resource_id \u2014 these fields do not exist. Do NOT use any other API or service to find host-related alerts.",
+        "base_path": "/atlas-notifications-mailbox/v1"
       },
       {
         "service_name": "Notifications-Thresholding",
         "title": "Notifications Thresholding API",
         "version": "v1.0",
         "paths_count": 10,
-        "description": "The service is intended to be the owner of the thresholding database for the notifications and events pipeline. It provides a REST and grpc interface with the database, as well as providing added handling for special cases.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>"
+        "description": "The service is intended to be the owner of the thresholding database for the notifications and events pipeline. It provides a REST and grpc interface with the database, as well as providing added handling for special cases.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>",
+        "base_path": "/atlas-notifications-thresholding/v1"
       },
       {
         "service_name": "OnpremCustomerMetricsController",
         "title": "Host Monitoring API",
         "version": "v1",
         "paths_count": 3,
-        "description": "The cloud controller component provides an API layer to support integration of different NIOS-X on-prem solutions with customer monitoring tools."
+        "description": "The cloud controller component provides an API layer to support integration of different NIOS-X on-prem solutions with customer monitoring tools.",
+        "base_path": "/api/hostmonitoring/v1"
       },
       {
         "service_name": "Recyclebin",
         "title": "Recycle Bin",
         "version": "1.0",
         "paths_count": 5,
-        "description": "The Recycle Bin service manages soft-deleted objects from Infoblox Portal (DNS records, IPAM hosts, subnets, ranges, and more). Use this service when a user wants to view recently deleted items or restore accidentally deleted objects.\n\nUse this service to list or restore soft-deleted Infoblox Portal resources. The primary use case is undoing accidental deletions. To restore items: (1) call GET /items to find the deleted item and note its resource_id (a namespaced string), then (2) call PUT /items/restore with body {\"id\": [\"<resource_id value>\"]}. Pass the resource_id value as-is \u2014 it will be automatically normalized before the request is sent. IMPORTANT: the restore request body field is named 'id' (an array), not 'ids' \u2014 this differs from the batch-delete request which uses 'ids'. The retention_period in GET/PUT /policy is in seconds (e.g. 2592000 = 30 days)."
+        "description": "The Recycle Bin service manages soft-deleted objects from Infoblox Portal (DNS records, IPAM hosts, subnets, ranges, and more). Use this service when a user wants to view recently deleted items or restore accidentally deleted objects.\n\nUse this service to list or restore soft-deleted Infoblox Portal resources. The primary use case is undoing accidental deletions. To restore items: (1) call GET /items to find the deleted item and note its resource_id (a namespaced string), then (2) call PUT /items/restore with body {\"id\": [\"<resource_id value>\"]}. Pass the resource_id value as-is \u2014 it will be automatically normalized before the request is sent. IMPORTANT: the restore request body field is named 'id' (an array), not 'ids' \u2014 this differs from the batch-delete request which uses 'ids'. The retention_period in GET/PUT /policy is in seconds (e.g. 2592000 = 30 days).",
+        "base_path": "/api/atlas-recyclebin/v1"
       },
       {
         "service_name": "Redirect",
         "title": "Infoblox Redirect API",
         "version": "v1",
         "paths_count": 4,
-        "description": "You can configure Infoblox Threat Defense Cloud to redirect traffic to the Infoblox server that displays the default or customized redirect page. You can redirect traffic to a custom destination using custom redirects.\n"
+        "description": "You can configure Infoblox Threat Defense Cloud to redirect traffic to the Infoblox server that displays the default or customized redirect page. You can redirect traffic to a custom destination using custom redirects.\n",
+        "base_path": "/api/atcfw/v1"
       },
       {
         "service_name": "Scheduler",
         "title": "Infoblox Threat Defense Scheduled Reports",
         "version": "v1",
         "paths_count": 3,
-        "description": ""
+        "description": "",
+        "base_path": ""
       },
       {
         "service_name": "TIDEBulkExport",
         "title": "TIDE Bulk Export",
         "version": "v1",
         "paths_count": 6,
-        "description": "TIDE contains a large TI dataset (30M+ records) which is almost impossible to export via REST API. This subset of APIs offers a way to export the current TI dataset so customers are able to import data in TIP (e.g. ThreatQ) and SIEMs (e.g. MS Sentinel) solutions"
+        "description": "TIDE contains a large TI dataset (30M+ records) which is almost impossible to export via REST API. This subset of APIs offers a way to export the current TI dataset so customers are able to import data in TIP (e.g. ThreatQ) and SIEMs (e.g. MS Sentinel) solutions",
+        "base_path": ""
       },
       {
         "service_name": "TIDEData",
         "title": "TIDE Data Service",
         "version": "v1",
         "paths_count": 26,
-        "description": "The heart of TIDE is the threats submitted by the Infoblox Cyber Intelligence group and external partners.\n\nThere are two main categories of bulk threat data retrievable in TIDE: threat state and threats by age. Threat state consists of records that are considered current threats, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email). Threats by age consists of all threats submitted in a specified time period.\n\nIf the same indicator was submitted by a data provider four times in one day, a threats-by-age call for daily results would return four records, while a threat state call would return only one, the most recent one submitted.\n\nTIDE threat data is generally event oriented. Sometimes it is necessary instead to see threats by their current state, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email).\n\nThe materialized threat state objects contain the current active threats for all indicators of the specified record type. Threat state objects are materialized multiple times an hour."
+        "description": "The heart of TIDE is the threats submitted by the Infoblox Cyber Intelligence group and external partners.\n\nThere are two main categories of bulk threat data retrievable in TIDE: threat state and threats by age. Threat state consists of records that are considered current threats, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email). Threats by age consists of all threats submitted in a specified time period.\n\nIf the same indicator was submitted by a data provider four times in one day, a threats-by-age call for daily results would return four records, while a threat state call would return only one, the most recent one submitted.\n\nTIDE threat data is generally event oriented. Sometimes it is necessary instead to see threats by their current state, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email).\n\nThe materialized threat state objects contain the current active threats for all indicators of the specified record type. Threat state objects are materialized multiple times an hour.",
+        "base_path": ""
       },
       {
         "service_name": "TIDEDossier",
         "title": "Dossier API",
         "version": "v1",
         "paths_count": 13,
-        "description": "Dossier, sometimes referred to as Intel Lookup, is a threat research tool that provides contextual information from multiple sources simultaneously for a given indicator. The APIs listed below allow a user to search on specific sources and view the results that they return. "
+        "description": "Dossier, sometimes referred to as Intel Lookup, is a threat research tool that provides contextual information from multiple sources simultaneously for a given indicator. The APIs listed below allow a user to search on specific sources and view the results that they return. ",
+        "base_path": ""
       },
       {
         "service_name": "Tdlad",
         "title": "Infoblox LAD API",
         "version": "v1",
         "paths_count": 4,
-        "description": "An extension of the Infoblox Threat Defense Suite, Infoblox LAD is used to detect lookalike domains. You can subscribe to Infoblox LAD and use its functionality to protect domains from spoofing threats.\n\n"
+        "description": "An extension of the Infoblox Threat Defense Suite, Infoblox LAD is used to detect lookalike domains. You can subscribe to Infoblox LAD and use its functionality to protect domains from spoofing threats.\n\n",
+        "base_path": "/api/tdlad/v1"
       },
       {
         "service_name": "Templating",
         "title": "Templating API",
         "version": "v1",
         "paths_count": 6,
-        "description": "The template service facilitates the deployment and configuration of services repeatedly across multiple objects."
+        "description": "The template service facilitates the deployment and configuration of services repeatedly across multiple objects.",
+        "base_path": "/api/templating/infra/v1"
       },
       {
         "service_name": "UpgradePolicy",
         "title": "Schedule Software/Config Updates",
         "version": "v2",
         "paths_count": 4,
-        "description": "By default, Infoblox automatically performs software updates when they become available and applies them to all on-prem hosts, physical and virtual. However, you can override, schedule, and defer updates. In addition, you can configure up to 50 scheduled and deferred updates; this means you have the flexibility to create up to 50 update groups across different on-prem hosts by mapping with appropriate tags. Tags are used to associate deferrals (scheduled or deferred) with a specific group of on-prem hosts. In addition to software update deferrals, config update deferrals can be configured using overrides."
+        "description": "By default, Infoblox automatically performs software updates when they become available and applies them to all on-prem hosts, physical and virtual. However, you can override, schedule, and defer updates. In addition, you can configure up to 50 scheduled and deferred updates; this means you have the flexibility to create up to 50 update groups across different on-prem hosts by mapping with appropriate tags. Tags are used to associate deferrals (scheduled or deferred) with a specific group of on-prem hosts. In addition to software update deferrals, config update deferrals can be configured using overrides.",
+        "base_path": "/api/upgrade_policy"
       },
       {
         "service_name": "cfl",
         "title": "Service Logs",
         "version": "v2",
         "paths_count": 4,
-        "description": "The service logs API supports searching and downloading logs collected from On-Prem hosts."
+        "description": "The service logs API supports searching and downloading logs collected from On-Prem hosts.",
+        "base_path": "/atlas-logs/v2"
       }
     ]
   },
