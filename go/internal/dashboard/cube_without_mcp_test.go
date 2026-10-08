@@ -11,7 +11,7 @@ import (
 )
 
 // directCubeOnlyService is a tenant where the Portal's Cube.js endpoint answers
-// and the MCP refuses every call, the way the Infoblox Sales key does without
+// and the MCP refuses every call, the way a key does when its user lacks
 // the ib-mcp-server-user group (HTTP 403 on initialize too). A panel that only
 // reads cube data must still render, because the direct endpoint can answer it.
 func directCubeOnlyService(t *testing.T, cubeBody string) *Service {
