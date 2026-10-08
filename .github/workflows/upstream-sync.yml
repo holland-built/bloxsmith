@@ -47,7 +47,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, sys, glob
 
-          sources, fatal = [], []
+          sources, fatal, skipped = [], [], []
           paths = sorted(glob.glob("third_party/*/SOURCE.md"))
           if not paths:
               print("::error::No third_party/*/SOURCE.md found. Either the vendored "
@@ -68,6 +68,18 @@ jobs:
                       k, _, v = line.partition(":")
                       meta[k.strip()] = v.strip()
 
+              # A source this job cannot follow says so in writing. Inter is a font
+              # taken from a release zip, not a commit on a branch, so there is no
+              # pin to compare. It must opt out by name and give a reason; a
+              # SOURCE.md with no front matter at all still stops the run above.
+              if meta.get("sync") == "none":
+                  if meta.get("reason"):
+                      skipped.append(f"{name}: NOT WATCHED — {meta['reason']}")
+                  else:
+                      fatal.append(f"{path}: 'sync: none' needs a 'reason' line saying "
+                                   f"why this source is not compared")
+                  continue
+
               upstream = meta.get("upstream", "")
               ref = meta.get("ref", "")
               sha = meta.get("pinned_sha", "")
@@ -85,6 +97,10 @@ jobs:
               sources.append({"name": name, "path": path, "upstream": upstream,
                               "ref": ref, "sha": sha})
 
+          if not sources and not fatal:
+              fatal.append("every third_party/*/SOURCE.md opts out with 'sync: none', "
+                           "so there is nothing left to compare")
+
           if fatal:
               for msg in fatal:
                   print(f"::error::{msg}")
@@ -96,6 +112,8 @@ jobs:
               fh.write(f"sources={json.dumps(sources)}\n")
           for s in sources:
               print(f"{s['name']}: {s['upstream']} {s['ref']} @ {s['sha'][:12]}")
+          for line in skipped:
+              print(line)
           PY
 
       # THE CLASSIFIER. Comparing a pinned SHA to `git ls-remote` only answers "are

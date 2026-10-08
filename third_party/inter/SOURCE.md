@@ -1,3 +1,7 @@
+---
+sync: none
+reason: taken from the v4.1 release zip, not from a commit on a branch
+---
 # Inter
 
 The typeface the dark theme uses, bundled so the app needs no web font service.
