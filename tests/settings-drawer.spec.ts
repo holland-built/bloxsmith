@@ -33,8 +33,8 @@ test.beforeEach(async ({ page }) => {
       hasAxur: true,
       llm: { base_url: '', hasKey: false, model: '' },
       tenants: [
-        { id: 'ams', label: 'Infoblox SE AMS' },
-        { id: 'sales', label: 'Infoblox Sales' },
+        { id: 'lab', label: 'Example Lab' },
+        { id: 'sales', label: 'Example Sales' },
       ],
       version: 'v3.81.1',
       writeAllowed: [],
@@ -43,10 +43,10 @@ test.beforeEach(async ({ page }) => {
   // The CSP account picker only draws when the account list answers, and the
   // write block only offers "Allow changes" when the tenant is read-only.
   await page.route('**/api/accounts*', (route) =>
-    json(route, { accounts: [{ id: 'a1', name: 'Infoblox Sales' }, { id: 'a2', name: 'Infoblox SE AMS' }], active: 'a1' }),
+    json(route, { accounts: [{ id: 'a1', name: 'Example Sales' }, { id: 'a2', name: 'Example Lab' }], active: 'a1' }),
   );
   await page.route('**/api/vault/write-target*', (route) =>
-    json(route, { known: true, tenant: 'sales/-', label: 'Infoblox Sales', writable: false }),
+    json(route, { known: true, tenant: 'sales/-', label: 'Example Sales', writable: false }),
   );
 });
 
@@ -116,7 +116,7 @@ test('the buttons say what they do: Change key and Remove, not chg and a cross',
   const sheet = await openSheet(page);
 
   await expect(sheet.getByRole('button', { name: 'chg', exact: true })).toHaveCount(0);
-  for (const tenant of ['Infoblox SE AMS', 'Infoblox Sales']) {
+  for (const tenant of ['Example Lab', 'Example Sales']) {
     await expect(sheet.getByRole('button', { name: `Change key for ${tenant}` })).toHaveText('Change key');
     await expect(sheet.getByRole('button', { name: `Remove ${tenant}` })).toHaveText('Remove');
   }
@@ -129,13 +129,13 @@ test('the buttons say what they do: Change key and Remove, not chg and a cross',
 
 test('removing a connection asks first, in words, and Keep puts it back', async ({ page }) => {
   const sheet = await openSheet(page);
-  await sheet.getByRole('button', { name: 'Remove Infoblox SE AMS' }).click();
+  await sheet.getByRole('button', { name: 'Remove Example Lab' }).click();
 
-  await expect(sheet.getByText('Remove Infoblox SE AMS?')).toBeVisible();
-  await expect(sheet.getByRole('button', { name: 'Confirm remove Infoblox SE AMS' })).toHaveText('Remove');
-  await sheet.getByRole('button', { name: 'Keep Infoblox SE AMS' }).click();
-  await expect(sheet.getByText('Remove Infoblox SE AMS?')).toHaveCount(0);
-  await expect(sheet.getByRole('button', { name: 'Change key for Infoblox SE AMS' })).toBeVisible();
+  await expect(sheet.getByText('Remove Example Lab?')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Confirm remove Example Lab' })).toHaveText('Remove');
+  await sheet.getByRole('button', { name: 'Keep Example Lab' }).click();
+  await expect(sheet.getByText('Remove Example Lab?')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'Change key for Example Lab' })).toBeVisible();
 });
 
 test('no heading or label in the drawer is capitals or monospace', async ({ page }) => {
