@@ -36,6 +36,7 @@ import sys
 # `deprecated`/`sunsetDate` carry a deadline, `successor` names the migration
 # target, `version` moves when the shape changes underneath a query.
 CUBE_META_FIELDS = ("deprecated", "lifecycleStage", "successor", "sunsetDate", "version")
+DEPRECATION_FIELDS = ("deprecated", "lifecycleStage", "successor", "sunsetDate")
 
 
 def _norm(v):
@@ -51,6 +52,35 @@ def _norm(v):
     if isinstance(v, str) and v.strip() == "":
         return None
     return v
+
+
+def _other_fields(s, l, known, prefix=""):
+    """Differences in every field that is NOT in `known`.
+
+    Each comparison below names the fields it understands and reports them in its
+    own words. That list is also the edge of what it can see: on 2026-10-07 every
+    service gained a `base_path` and a cube's `title` changed, and the report said
+    nothing, because neither field was on a list. This is the catch-all for the
+    fields nobody listed, so a field Infoblox adds tomorrow is reported on the
+    day it appears.
+    """
+    bits = []
+    for k in sorted((set(s) | set(l)) - set(known)):
+        a, b = _norm(s.get(k)), _norm(l.get(k))
+        if a == b:
+            continue
+        # Long values (a rewritten paragraph, a nested object) would bury the
+        # report; say that they changed and leave the text to the diff.
+        short = len(repr(a)) <= 60 and len(repr(b)) <= 60
+        if a is None:
+            bits.append(f"new field {prefix}{k}" + (f"={b!r}" if short else ""))
+        elif b is None:
+            bits.append(f"dropped field {prefix}{k}")
+        elif short:
+            bits.append(f"{prefix}{k} {a!r} -> {b!r}")
+        else:
+            bits.append(f"{prefix}{k} changed")
+    return bits
 
 
 def _load(path):
@@ -81,8 +111,12 @@ def _tool_map(path):
             "params": params,
             "required": set(t.get("required") or []),
             "description": (t.get("description") or "").strip(),
+            "raw": t,
         }
     return out
+
+
+TOOL_KNOWN_FIELDS = ("name", "description", "params", "required")
 
 
 def diff_tools(snap_path, live_path):
@@ -112,6 +146,7 @@ def diff_tools(snap_path, live_path):
             bits.append(f"NOW REQUIRED: {', '.join(now_required)}")
         if now_optional:
             bits.append(f"no longer required: {', '.join(now_optional)}")
+        bits += _other_fields(s["raw"], l["raw"], TOOL_KNOWN_FIELDS)
         if bits:
             changed.append(f"{n}: {'; '.join(bits)}")
         if s["description"] != l["description"]:
@@ -140,6 +175,9 @@ def diff_services(snap_path, live_path):
             bits.append(f"paths {s.get('paths_count')} -> {l.get('paths_count')}")
         if _norm(s.get("version")) != _norm(l.get("version")):
             bits.append(f"version {s.get('version')} -> {l.get('version')}")
+        if (s.get("description") or "").strip() != (l.get("description") or "").strip():
+            bits.append("description changed")
+        bits += _other_fields(s, l, ("service_name", "paths_count", "version", "description"))
         if bits:
             changed.append(f"{n}: {', '.join(bits)}")
     return {"added": added, "removed": removed, "changed": changed}
@@ -168,6 +206,8 @@ def _cube_map(path):
         out[c["name"]] = {
             "meta": {f: _norm(meta.get(f)) for f in CUBE_META_FIELDS},
             "description": (c.get("description") or "").strip(),
+            "raw": c,
+            "raw_meta": meta,
         }
     return out
 
@@ -188,11 +228,15 @@ def diff_cubes(snap_path, live_path):
             })
         elif was and not now:
             undeprecated.append(n)
+        # Deprecation is reported in its own section, with its successor and
+        # sunset date; don't say those twice.
+        said = (DEPRECATION_FIELDS if now and not was else ("deprecated",))
         bits = [f"{f} {s['meta'][f]!r} -> {l['meta'][f]!r}"
                 for f in CUBE_META_FIELDS
-                if f != "deprecated" and s["meta"][f] != l["meta"][f]]
-        # Deprecation is reported in its own section; don't say it twice.
-        if bits and not (now and not was):
+                if f not in said and s["meta"][f] != l["meta"][f]]
+        bits += _other_fields(s["raw_meta"], l["raw_meta"], CUBE_META_FIELDS, "meta.")
+        bits += _other_fields(s["raw"], l["raw"], ("name", "description", "meta"))
+        if bits:
             meta_changed.append(f"{n}: {'; '.join(bits)}")
         if s["description"] != l["description"]:
             desc_changed.append(n)
@@ -475,12 +519,83 @@ def _selftest():
     check("new required is drift", [x for x in t["changed"] if x.startswith("gains_req")],
           ["gains_req: NOW REQUIRED: x"])
 
+    # FIELDS NOBODY LISTED. On 2026-10-07 every service gained a `base_path` and a
+    # cube's `title` was rewritten, and the report said nothing: each comparison
+    # read only the fields it had been told about. These cases use field names
+    # the code has never heard of, so a comparison that goes back to a fixed list
+    # fails here.
+    snap_s = w(d, "ss.json", {"all_services": {"services": [
+        {"service_name": "GainsField", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "d"},
+        {"service_name": "Retitled", "title": "Old name", "version": "v1", "paths_count": 3,
+         "description": "d"},
+        {"service_name": "Reworded", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "old words"},
+        {"service_name": "Quiet", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "d", "base_path": None},
+    ]}})
+    live_s = w(d, "ls.json", {"all_services": {"services": [
+        {"service_name": "GainsField", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "d", "base_path": "/api/x/v1"},
+        {"service_name": "Retitled", "title": "New name", "version": "v1", "paths_count": 3,
+         "description": "d"},
+        {"service_name": "Reworded", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "new words"},
+        {"service_name": "Quiet", "title": "T", "version": "v1", "paths_count": 3,
+         "description": "d", "base_path": ""},
+    ]}})
+    s = diff_services(snap_s, live_s)
+    check("service new field is drift", [x for x in s["changed"] if x.startswith("GainsField")],
+          ["GainsField: new field base_path='/api/x/v1'"])
+    check("service retitle is drift", [x for x in s["changed"] if x.startswith("Retitled")],
+          ["Retitled: title 'Old name' -> 'New name'"])
+    check("service reworded description is drift",
+          [x for x in s["changed"] if x.startswith("Reworded")],
+          ["Reworded: description changed"])
+    check("service null-vs-empty field is not drift",
+          [x for x in s["changed"] if x.startswith("Quiet")], [])
+
+    snap_c2 = w(d, "sc2.json", {"all_cubes": {"cubes": [
+        {"name": "Retitled", "title": "Old Title", "description": "d", "meta": {}},
+        {"name": "MetaNote", "title": "T", "description": "d", "meta": {"ai_context": "a"}},
+        {"name": "Same", "title": "T", "description": "d", "type": "cube", "meta": {}},
+        {"name": "RetiredAndRetitled", "title": "Old", "description": "d",
+         "meta": {"version": "1.0.0"}},
+    ]}})
+    live_c2 = w(d, "lc2.json", {"all_cubes": {"cubes": [
+        {"name": "Retitled", "title": "New Title", "description": "d", "meta": {}},
+        {"name": "MetaNote", "title": "T", "description": "d", "meta": {"ai_context": "b"}},
+        {"name": "Same", "title": "T", "description": "d", "type": "cube", "meta": {}},
+        {"name": "RetiredAndRetitled", "title": "New", "description": "d",
+         "meta": {"deprecated": True, "successor": "X", "sunsetDate": "2027-01-01",
+                  "lifecycleStage": "deprecated", "version": "1.1.0"}},
+    ]}})
+    c2 = diff_cubes(snap_c2, live_c2)
+    # The deprecation table already carries successor and sunset, so those are
+    # not repeated. A retitle or a version bump on the same night is a separate
+    # fact and stays.
+    check("cube retitle is drift", c2["meta_changed"],
+          ["MetaNote: meta.ai_context 'a' -> 'b'",
+           "RetiredAndRetitled: version '1.0.0' -> '1.1.0'; title 'Old' -> 'New'",
+           "Retitled: title 'Old Title' -> 'New Title'"])
+
+    snap_t2 = w(d, "st2.json", [
+        {"name": "annotated", "description": "d", "params": [], "required": []}])
+    live_t2 = w(d, "lt2.json", [
+        {"name": "annotated", "description": "d", "params": [], "required": [],
+         "read_only": True}])
+    check("tool new field is drift", diff_tools(snap_t2, live_t2)["changed"],
+          ["annotated: new field read_only=True"])
+
     # Identical input on both sides must report NOTHING. A detector that flags an
     # unchanged pair is as useless as one that misses a real change.
     c_same = diff_cubes(snap_c, snap_c)
     t_same = diff_tools(snap_t, snap_t)
     s_empty = {"added": [], "removed": [], "changed": []}
     check("no false drift on identical input", any_change(t_same, s_empty, c_same), False)
+    check("no false drift on identical services", diff_services(snap_s, snap_s), s_empty)
+    check("no false drift on identical cube fields",
+          diff_cubes(snap_c2, snap_c2)["meta_changed"], [])
 
     # ...AND IT MUST ALSO BE ABLE TO SAY YES. Until now every assertion about
     # any_change() expected False, so `def any_change(...): return False` passed
