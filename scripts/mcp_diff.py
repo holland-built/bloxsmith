@@ -36,6 +36,7 @@ import sys
 # `deprecated`/`sunsetDate` carry a deadline, `successor` names the migration
 # target, `version` moves when the shape changes underneath a query.
 CUBE_META_FIELDS = ("deprecated", "lifecycleStage", "successor", "sunsetDate", "version")
+DEPRECATION_FIELDS = ("deprecated", "lifecycleStage", "successor", "sunsetDate")
 
 
 def _norm(v):
@@ -227,12 +228,12 @@ def diff_cubes(snap_path, live_path):
             })
         elif was and not now:
             undeprecated.append(n)
+        # Deprecation is reported in its own section, with its successor and
+        # sunset date; don't say those twice.
+        said = (DEPRECATION_FIELDS if now and not was else ("deprecated",))
         bits = [f"{f} {s['meta'][f]!r} -> {l['meta'][f]!r}"
                 for f in CUBE_META_FIELDS
-                if f != "deprecated" and s["meta"][f] != l["meta"][f]]
-        # Deprecation is reported in its own section; don't say it twice.
-        if now and not was:
-            bits = []
+                if f not in said and s["meta"][f] != l["meta"][f]]
         bits += _other_fields(s["raw_meta"], l["raw_meta"], CUBE_META_FIELDS, "meta.")
         bits += _other_fields(s["raw"], l["raw"], ("name", "description", "meta"))
         if bits:
@@ -558,21 +559,24 @@ def _selftest():
         {"name": "Retitled", "title": "Old Title", "description": "d", "meta": {}},
         {"name": "MetaNote", "title": "T", "description": "d", "meta": {"ai_context": "a"}},
         {"name": "Same", "title": "T", "description": "d", "type": "cube", "meta": {}},
-        {"name": "RetiredAndRetitled", "title": "Old", "description": "d", "meta": {}},
+        {"name": "RetiredAndRetitled", "title": "Old", "description": "d",
+         "meta": {"version": "1.0.0"}},
     ]}})
     live_c2 = w(d, "lc2.json", {"all_cubes": {"cubes": [
         {"name": "Retitled", "title": "New Title", "description": "d", "meta": {}},
         {"name": "MetaNote", "title": "T", "description": "d", "meta": {"ai_context": "b"}},
         {"name": "Same", "title": "T", "description": "d", "type": "cube", "meta": {}},
         {"name": "RetiredAndRetitled", "title": "New", "description": "d",
-         "meta": {"deprecated": True, "successor": "X", "sunsetDate": "2027-01-01"}},
+         "meta": {"deprecated": True, "successor": "X", "sunsetDate": "2027-01-01",
+                  "lifecycleStage": "deprecated", "version": "1.1.0"}},
     ]}})
     c2 = diff_cubes(snap_c2, live_c2)
     # The deprecation table already carries successor and sunset, so those are
-    # not repeated. A retitle on the same night is a separate fact and stays.
+    # not repeated. A retitle or a version bump on the same night is a separate
+    # fact and stays.
     check("cube retitle is drift", c2["meta_changed"],
           ["MetaNote: meta.ai_context 'a' -> 'b'",
-           "RetiredAndRetitled: title 'Old' -> 'New'",
+           "RetiredAndRetitled: version '1.0.0' -> '1.1.0'; title 'Old' -> 'New'",
            "Retitled: title 'Old Title' -> 'New Title'"])
 
     snap_t2 = w(d, "st2.json", [
