@@ -7,7 +7,12 @@ module bloxsmith
 // '1.26.x'` in both workflows resolves to the newest patch, but the jobs run
 // with GOTOOLCHAIN=local, so the version named HERE is the one that decides.
 // Leaving this at 1.26.3 meant the toolchain fix could never arrive.
-go 1.26.6
+//
+// Raised from 1.26.6 to 1.26.9 on 2026-10-10 for the same reason: govulncheck
+// found ten reachable standard-library advisories, GO-2026-6603 to GO-2026-6617
+// (net/http, net/textproto, crypto/tls), every one "Fixed in ...@go1.26.9". The
+// exact pins in the workflows move with this line.
+go 1.26.9
 
 require (
 	github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611

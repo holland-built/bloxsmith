@@ -145,7 +145,7 @@ jobs:
           # PINNED EXACTLY, matching ci.yml, and for the reason ci.yml records:
           # a floating '1.26.x' resolved to 1.26.5 against a go.mod requiring
           # 1.26.6, and with GOTOOLCHAIN=local the job cannot fetch its way out.
-          go-version: '1.26.6'
+          go-version: '1.26.9'
 
       # TEXT MODE, NOT --json, AND THAT IS THE WHOLE POINT.
       #
