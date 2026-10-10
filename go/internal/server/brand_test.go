@@ -617,3 +617,37 @@ func TestBrandPost_ClearingTheCompany_RemovesItsLogo(t *testing.T) {
 		t.Fatalf("clearing the company made %d outside call(s): %v", len(router.calls), router.urls)
 	}
 }
+
+// Brandfetch sends a logo only to a caller that looks like a browser showing a
+// page: a full browser User-Agent and a Referer, both. Measured 2026-10-10 on
+// cdn.brandfetch.io/infoblox.com: with either one missing, or with the bare
+// "Mozilla/5.0" this file used to send, the reply is HTTP 200 and its web page.
+// So every install saved the second source's 32px site icon. This stands in for
+// that rule, and the saved file must be the logo.
+func TestCacheLogo_SourceThatAnswersOnlyABrowser_GetsTheLogo(t *testing.T) {
+	var referer string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		referer = r.Referer()
+		if !strings.Contains(r.UserAgent(), "Chrome/") || r.Referer() == "" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(webPage))
+			return
+		}
+		_, _ = w.Write(pngBytes)
+	}))
+	defer srv.Close()
+
+	dest := filepath.Join(t.TempDir(), "logo.png")
+	if err := cacheLogo(context.Background(), srv.URL, dest); err != nil {
+		t.Fatalf("the logo was refused: %v", err)
+	}
+	got, _ := os.ReadFile(dest)
+	if !bytes.Equal(got, pngBytes) {
+		t.Fatalf("logo.png does not hold the logo: %q", got)
+	}
+	// Brandfetch takes any Referer. This install's own address must never be
+	// the one it gets.
+	if referer != "https://brandfetch.com/" {
+		t.Fatalf("Referer = %q, want Brandfetch's own site and nothing about this install", referer)
+	}
+}
