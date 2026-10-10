@@ -49,7 +49,7 @@ jobs:
           # (running go 1.26.5)". The floating range and the local-toolchain
           # setting only work together while the manifest is current. Bump this
           # alongside go.mod.
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: go/go.sum
 
       # Don't publish a tag that never passed tests: a tag can point at any

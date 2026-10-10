@@ -143,7 +143,7 @@ jobs:
           # (running go 1.26.5)". The floating range and the local-toolchain
           # setting only work together while the manifest is current. Bump this
           # alongside go.mod.
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: go/go.sum
 
       # `go test` without -race has been the only thing checking this repo's
@@ -543,7 +543,7 @@ jobs:
           # (running go 1.26.5)". The floating range and the local-toolchain
           # setting only work together while the manifest is current. Bump this
           # alongside go.mod.
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: go/go.sum
 
       # The same three commands the Linux job runs, on darwin. The keychain tests
@@ -1258,7 +1258,7 @@ jobs:
           # (running go 1.26.5)". The floating range and the local-toolchain
           # setting only work together while the manifest is current. Bump this
           # alongside go.mod.
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache-dependency-path: go/go.sum
 
       # 10 minutes because this step is a registry fetch and a browser
