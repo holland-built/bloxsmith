@@ -30,6 +30,21 @@ var brandSanitize = regexp.MustCompile(`[^a-zA-Z0-9.\-]`)
 // Infoblox REST proxy; short timeouts mirror Python's urlopen timeouts).
 var brandHTTP = &http.Client{Timeout: 8 * time.Second}
 
+// Brandfetch sends its logo only to a caller that looks like a browser showing
+// a page: a full browser User-Agent AND a Referer. Measured 2026-10-10 on
+// cdn.brandfetch.io/infoblox.com: with either one missing, or with a bare
+// "Mozilla/5.0", it answers HTTP 200 with its own web page. The Referer names
+// Brandfetch's site, never this install, so the request says nothing about
+// where it came from.
+//
+// This is the owner's choice over a Brandfetch client ID, knowing it can stop
+// working whenever Brandfetch changes that rule. When it does, cacheLogo
+// refuses the web page and the next source fills the cache, as before.
+const (
+	logoUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+	logoReferer   = "https://brandfetch.com/"
+)
+
 func (d *Deps) logoFile() string  { return filepath.Join(d.StateDir, "logo.png") }
 func (d *Deps) brandFile() string { return filepath.Join(d.StateDir, "brand.json") }
 
@@ -204,8 +219,8 @@ func (d *Deps) brandPost(w http.ResponseWriter, r *http.Request, b map[string]an
 	}
 	cached := false
 	if domain != "" {
-		// Brandfetch answers a server with HTTP 200 and its own web page, which
-		// cacheLogo refuses, so the second source is the one that fills the cache.
+		// When Brandfetch answers with its own web page (see logoUserAgent),
+		// cacheLogo refuses it and the second source fills the cache.
 		sources := []string{
 			"https://cdn.brandfetch.io/" + domain + "/w/128/h/128",
 			"https://icons.duckduckgo.com/ip3/" + domain + ".ico",
@@ -251,7 +266,8 @@ func cacheLogo(ctx context.Context, url, dest string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", logoUserAgent)
+	req.Header.Set("Referer", logoReferer)
 	resp, err := brandHTTP.Do(req)
 	if err != nil {
 		return err
