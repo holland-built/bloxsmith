@@ -212,7 +212,7 @@ See **Code signing** below.
 
 The query box needs an AI model that can call tools. Everything else works without it. The
 default is Groq, which has a free tier: get a key at <https://console.groq.com>, then add it in
-the dashboard (**Settings** > **Connections**, in the **Groq API key** box) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
+the dashboard (**Settings** > **Connections**: the **Groq API key** box appears when you add a connection) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
 works: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
 
 </details>
