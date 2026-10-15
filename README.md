@@ -212,7 +212,7 @@ See **Code signing** below.
 
 The query box needs an AI model that can call tools. Everything else works without it. The
 default is Groq, which has a free tier: get a key at <https://console.groq.com>, then add it in
-the dashboard (sidebar > **AI provider**) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
+the dashboard (**Settings** > **Connections**, in the **Groq API key** box) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
 works: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
 
 </details>
@@ -431,19 +431,19 @@ Report signing problems in the GitHub issue tracker.
 <summary><b>How it works</b></summary>
 
 ```
-browser --HTTP--> bloxsmith (Go program) --MCP--> csp.infoblox.com/mcp
+browser --HTTP--> bloxsmith (Go program) --HTTPS--> csp.infoblox.com (REST APIs and /mcp)
                         \-- optional: AI model (Groq or OpenAI-compatible)
 ```
 
-A browser cannot call the Infoblox MCP endpoint directly, so the Go program sits in between and
-holds your API key.
+A browser cannot call the Infoblox APIs directly, so the Go program sits in between and holds
+your API key.
 
 </details>
 
 <details>
 <summary><b>Build, run and test</b></summary>
 
-You need Go 1.26 or newer and Node.js 24.
+You need Go 1.26.9 or newer and Node.js 24.
 
 ```bash
 # get the code
