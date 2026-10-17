@@ -14,6 +14,17 @@
     ]
   },
   {
+    "name": "infoblox-portal_search_available_services",
+    "description": "Search for Infoblox Portal API services relevant to the current task.\n\nReturns a ranked list of services with their endpoints. Each response includes\nnext_steps guidance on how to proceed based on what was found.\n\nPass only the relevant HTTP methods to reduce endpoint noise for large services.\nFor example, pass `[\"GET\"]` for read-only tasks, or `[\"POST\"]` for create operations.",
+    "params": [
+      "service_description*:string",
+      "http_methods:array"
+    ],
+    "required": [
+      "service_description"
+    ]
+  },
+  {
     "name": "infoblox-portal_list_all_available_services",
     "description": "List every Infoblox Portal API service with a short description. Returns names and\ndescriptions only, with no endpoints or methods.\n\nPrefer search_available_services to find the service for a request. Use this tool\nwhen that search returns no relevant match, or when it isn't available, to check\nwhether a service exists before concluding the request is unsupported.",
     "params": [],
@@ -139,6 +150,16 @@
     ]
   },
   {
+    "name": "infoblox-portal_search_available_cubes",
+    "description": "Search for the most relevant CubeJS cubes using semantic similarity.\n\nUse this tool to discover which cube contains the data you need. Returns\nlightweight summaries (name, description, and field-name lists) for the\ntop matching cubes. The search index is built from each cube's name,\ndescription, all measure names/descriptions, and all dimension\nnames/descriptions, so queries like 'bytes transferred by host' or\n'query type breakdown' match on field-level concepts, not just titles.",
+    "params": [
+      "query*:string"
+    ],
+    "required": [
+      "query"
+    ]
+  },
+  {
     "name": "infoblox-portal_list_all_cubes",
     "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics), DHCP (activity logs, metrics, overlapping blocks), IPAM (address blocks, subnets, IP address utilization), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, only summaries are\nreturned.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
     "params": [],
@@ -186,6 +207,17 @@
     "required": [
       "sql_query",
       "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_show_table",
+    "description": "This tool is used to present query results with zero transcription risk and with human-friendly rendering.\nThe assistant is responsible for preparing the dataset before calling this tool so the displayed table is\nconcise and readable.\n\nHard requirements (MUST)\n* User-ready table: The table shown must be ready for end-user consumption: clear column names,\n    human-readable values, and no internal identifiers unless explicitly requested.\n* Column limits: Prefer \u2264 5 columns. If more than 5 columns are relevant, the assistant MUST either:\n    split into multiple tables, or summarize and show only the most important columns.\n* No internal identifiers: Do not include id, uuid, ophid, opaque keys, or similar identifier columns unless the\n    user explicitly asks.\n* Dates: Display timestamps in YYYY-MM-DD HH:MM:SS UTC (UTC-0) where applicable.\n* Numeric formatting: Round floats to 2 decimals unless higher precision is required by the user's question.\n    Use consistent units.\n* Flattening: Nested objects must be flattened into columns. Lists should be joined into a single string with\n    a delimiter (e.g., \", \"), or summarized (e.g., \"3 items\") when very long.\n* Semantic Value Humanization (required): Raw categorical/enum/boolean values MUST be rendered in a\n    human-friendly form. The assistant MUST apply the following generic rules across all domains\n    (DNS, DHCP, IPAM, security, assets, etc.):\n    - Normalize first: trim whitespace, lowercase for matching, and treat _/- as word separators.\n        Treat boolean-like values (true/false, yes/no, on/off, enabled/disabled, 1/0) as booleans.\n    - Detect \u201csemantic columns\u201d: A column is semantic if either:\n        + the column name suggests a semantic category (examples: status, state, health, severity, result,\n            outcome, action, enabled, disabled, mode, presence, compliance, risk, priority), or\n        + the column has low cardinality (e.g., \u2264 12 distinct values in the displayed set) and values resemble\n            enums/booleans.\n    - Render with indicator + label: For semantic columns, display values as:\n        \"<indicator> <Title Case Label>\"\n        Use a consistent indicator scheme (only when meaning is clear):\n\n            online|good|healthy|allowed|success|active|enabled|present \u2192 \ud83d\udfe2\n            caution|warning|degraded|partial|throttled \u2192 \ud83d\udfe1\n            bad|error|failed|critical|blocked|denied|unhealthy \u2192 \ud83d\udd34\n            inactive|offline|down|disabled|absent \u2192 \u26ab\n            unknown|pending|unrecognized|null|empty \u2192 \u26aa\n\n    - Fallback safely: If semantics cannot be inferred without guessing, Title Case the raw value without an\n        icon (or use \u26aa Unknown for null/empty). The assistant MUST NOT invent meanings.\n\nHumanized column names: Column headers MUST be Title Case with spaces (e.g. maintenance_mode \u2192 Maintenance Mode)\n\nStrong preferences (SHOULD)\n* Prefer ordering by relevance (e.g., highest severity first, most recent first, top N by count).\n* For repeated long strings (FQDNs, record names), consider truncation only if it improves readability and\n    still answers the question.\n\nIMPORTANT: show_table renders exactly what is in the provided stored table; it does not automatically\n    humanize values. The assistant must apply styling and humanization before calling this tool.",
+    "params": [
+      "table_hrid*:string",
+      "title:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "table_hrid"
     ]
   },
   {
