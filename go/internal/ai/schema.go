@@ -87,7 +87,7 @@ const toolsJSON = `[
     "description": "Get IPAM subnets with utilization. Use address param for a specific subnet.",
     "parameters": {"type": "object",
       "properties": {
-        "address": {"type": "string", "description": "Filter by subnet address, e.g. '192.168.100.0'"},
+        "address": {"type": "string", "description": "Filter by subnet address, e.g. '10.0.0.0'"},
         "cidr":    {"type": "integer", "description": "CIDR prefix length, e.g. 24"}
       }}
   }},
@@ -106,7 +106,7 @@ const toolsJSON = `[
     "name": "get_dhcp_leases",
     "description": "Get DHCP leases. Optionally filter by subnet address.",
     "parameters": {"type": "object",
-      "properties": {"subnet": {"type": "string", "description": "Subnet prefix to filter, e.g. '192.168.100'"}}}
+      "properties": {"subnet": {"type": "string", "description": "Subnet prefix to filter, e.g. '10.0.0'"}}}
   }},
   {"type": "function", "function": {
     "name": "get_threat_feeds",
