@@ -569,7 +569,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId, loading 
           <SubnetUsageBars
             label="Top Consumers"
             data={top}
-            color={COLORS.purple}
+            color={COLORS.series}
             height={BARS_H}
             onBarClick={(payload) => {
               const addr = payload?.addr

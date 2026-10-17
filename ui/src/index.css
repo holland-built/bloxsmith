@@ -127,6 +127,8 @@
   --color-link: #6e9fff;
   /* The colour of a measured series. See the note at the top of this block. */
   --color-series: #73bf69;
+  /* One job only: the Host Status "Other" slice, a state the app does not sort
+     (e.g. pending). It must not be told apart from Unknown's grey by shade. */
   --color-purple: #b877d9;
   --color-ok: #73bf69;
   --color-warn: #f2cc0c;

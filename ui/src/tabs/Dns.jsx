@@ -338,7 +338,7 @@ function QueryVolume7d({ panelId, analytics }) {
           <GradientArea
             label="Query Volume — 7d"
             data={chartData}
-            color={COLORS.purple}
+            color={COLORS.series}
             gradientId="volFill"
             unit="queries"
             height={200}

@@ -203,7 +203,7 @@ function KpiStack({ panelId, hub, events, acks }) {
     { label: 'Unacked Critical', value: unackedCrit, color: COLORS.crit },
     { label: 'Blocked', value: d.blocked ?? 0, color: COLORS.series },
     { label: 'Logged', value: d.logged ?? 0, color: COLORS.other },
-    { label: totalCell.label, value: totalCell.value, color: COLORS.purple },
+    { label: totalCell.label, value: totalCell.value },
   ]
 
   return (
