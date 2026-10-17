@@ -663,7 +663,7 @@ const CLAIMS = [
     file: SECURITY,
     proofs: [
       { re: /const totalCell = totalEventsTile\(d, 'Total Events', 'Events Shown'\)/, expect: 'the tile label is chosen by totalEventsTile, not hardcoded' },
-      { re: /\{ label: totalCell\.label, value: totalCell\.value, color: COLORS\.purple \}/, expect: 'and both its label and value come from that decision' },
+      { re: /\{ label: totalCell\.label, value: totalCell\.value \}/, expect: 'and both its label and value come from that decision' },
     ],
   },
   {

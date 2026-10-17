@@ -1,4 +1,4 @@
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
@@ -7,15 +7,13 @@ import { chartA11y, describePoints } from '../lib/chartSummary.js'
 // off that tab's critical path. See charts/StatusDonut.jsx for the measurement.
 //
 // NOT FOLDED INTO CategoryBars. This one has no CartesianGrid, hides its X
-// ticks entirely (the addresses are in the tooltip, not on the axis), fades each
-// bar by rank rather than colouring by category, and its bars are a drilldown
-// target. That is five differences on a chart with about eight decisions in it,
-// so sharing would mean a component that is mostly branches.
+// ticks entirely (the addresses are in the tooltip, not on the axis), paints
+// every bar one colour rather than colouring by category, and its bars are a
+// drilldown target. That is five differences on a chart with about eight
+// decisions in it, so sharing would mean a component that is mostly branches.
 //
-// THE FADE IS BY RANK AND IS COMPUTED HERE, not handed in as a per-row colour
-// like the other charts. It is a property of the bar's POSITION in the list —
-// `1 - (i / n) * 0.6` — not of the datum, so a caller resolving it would have to
-// know the list length and duplicate this arithmetic to say the same thing.
+// NO FADE BY RANK. The bars used to dim from first to last; the height already
+// says the rank, so the fade said it twice and made the last bars look disabled.
 export default function SubnetUsageBars({ label, data, color, height = 180, onBarClick }) {
   // Named the way the tooltip names a bar: its address, else its CIDR.
   const summary = describePoints(data.map((s) => ({ label: s.addr ?? s.cidr, value: s.used })), 'addresses used')
@@ -41,15 +39,12 @@ export default function SubnetUsageBars({ label, data, color, height = 180, onBa
         />
         <Bar
           dataKey="used"
+          fill={color}
           radius={[3, 3, 0, 0]}
           isAnimationActive={false}
           cursor="pointer"
           onClick={onBarClick}
-        >
-          {data.map((s, i) => (
-            <Cell key={i} fill={color} fillOpacity={1 - (i / data.length) * 0.6} />
-          ))}
-        </Bar>
+        />
       </BarChart>
     </ResponsiveContainer>
   )
