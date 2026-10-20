@@ -98,3 +98,32 @@ func TestToolCallWithDifferentArgumentsStillRuns(t *testing.T) {
 		t.Fatalf("get_hosts ran %d times, want 2", tools.calls["get_hosts"])
 	}
 }
+
+type failingTools struct{ calls *int }
+
+func (f failingTools) RunAITool(ctx context.Context, name string, args map[string]any) string {
+	*f.calls++
+	return "Could not reach Infoblox to look up DNS zones (network error)."
+}
+
+// A failed lookup is not remembered: the model asking again is a retry.
+func TestFailedToolCallIsRunAgainWhenRepeated(t *testing.T) {
+	round := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		round++
+		w.Header().Set("Content-Type", "application/json")
+		if round <= 2 {
+			_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"tool_calls","message":{"content":"","tool_calls":[{"id":"c","function":{"name":"get_dns","arguments":"{}"}}]}}],"usage":{"total_tokens":1}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"answer\":\"ok\",\"suggestions\":[]}"}}],"usage":{"total_tokens":1}}`))
+	}))
+	defer srv.Close()
+	calls := 0
+	svc := New(fakeCreds{base: srv.URL}, failingTools{&calls}, newFakeBudget(func() string { return "2026-10-20" }))
+	var trace []map[string]any
+	svc.runLoop("q", "", &trace)
+	if calls != 2 {
+		t.Fatalf("a failed get_dns ran %d times, want 2 (the retry must run)", calls)
+	}
+}

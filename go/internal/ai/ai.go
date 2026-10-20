@@ -336,7 +336,11 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 				continue
 			}
 			result := s.tools.RunAITool(ctx, tc.Function.Name, argMap)
-			seen[callKey] = toolFact(result)
+			// Only a result with a counted summary is remembered. A failure
+			// ("Could not reach Infoblox...") has none, so asking again retries it.
+			if fact := toolFact(result); fact != "" {
+				seen[callKey] = fact
+			}
 			// Built AFTER the tool runs so it can carry the tool's own summary line.
 			*trace = append(*trace, map[string]any{
 				"tool": tc.Function.Name,
