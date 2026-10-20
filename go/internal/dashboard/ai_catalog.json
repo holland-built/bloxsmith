@@ -1,23 +1,8 @@
 [
  {
-  "path": "/api/anycast/v1/accm/ac_configs",
-  "service": "Anycast",
-  "summary": "Retrieve Multiple Anycast Configurations"
- },
- {
-  "path": "/api/anycast/v1/accm/ac_runtime_statuses",
-  "service": "Anycast",
-  "summary": "Read a list of Anycast Configurations"
- },
- {
   "path": "/api/atcdfp/v1/dfp_services",
   "service": "Atcdfp",
   "summary": "List DNS Forwarding Proxy services."
- },
- {
-  "path": "/api/atcdfp/v1/report_view",
-  "service": "Atcdfp",
-  "summary": "Get Report View."
  },
  {
   "path": "/api/atcep/v1/roaming_device/os_versions",
@@ -45,11 +30,6 @@
   "summary": "List Roaming Devices."
  },
  {
-  "path": "/api/atcep/v1/roaming_devices_metadata",
-  "service": "Atcep",
-  "summary": "List Metadata of Roaming Devices."
- },
- {
   "path": "/api/atcfw/v1/app_approvals",
   "service": "Atcfw",
   "summary": "/app_approvals"
@@ -68,11 +48,6 @@
   "path": "/api/atcfw/v1/category_filters",
   "service": "Atcfw",
   "summary": "List Category Filters."
- },
- {
-  "path": "/api/atcfw/v1/content_categories",
-  "service": "Atcfw",
-  "summary": "List Content Categories."
  },
  {
   "path": "/api/atcfw/v1/internal_domain_lists",
@@ -230,11 +205,6 @@
   "summary": "Retrieve DHCP fingerprint classes."
  },
  {
-  "path": "/api/ddi/v1/dhcp/global_lease",
-  "service": "DhcpLeases",
-  "summary": "Retrieve the global DHCP lease configuration."
- },
- {
   "path": "/api/ddi/v1/dhcp/lease",
   "service": "DhcpLeases",
   "summary": "Retrieve DHCP leases."
@@ -273,11 +243,6 @@
   "path": "/api/ddi/v1/dns/forward_zone",
   "service": "DnsConfig",
   "summary": "List Forward Zone objects."
- },
- {
-  "path": "/api/ddi/v1/dns/global",
-  "service": "DnsConfig",
-  "summary": "Read the Global configuration object."
  },
  {
   "path": "/api/ddi/v1/dns/host",
@@ -320,11 +285,6 @@
   "summary": "Retrieve DNS resource records."
  },
  {
-  "path": "/api/infra/v1/applications",
-  "service": "Infrastructure",
-  "summary": "List applications (Service types) for a particular account."
- },
- {
   "path": "/api/infra/v1/detail_hosts",
   "service": "Infrastructure",
   "summary": "List all hosts and associated services (applications)."
@@ -360,11 +320,6 @@
   "summary": "Retrieve the __ForwardLookingDelegation__ objects."
  },
  {
-  "path": "/api/ddi/v1/federation/list_next_available_fld",
-  "service": "IpamFederation",
-  "summary": "List the next available __ForwardLookingDelegation__ objects."
- },
- {
   "path": "/api/ddi/v1/federation/overlapping_block",
   "service": "IpamFederation",
   "summary": "Retrieve the overlapping block."
@@ -373,11 +328,6 @@
   "path": "/api/ddi/v1/federation/reserved_block",
   "service": "IpamFederation",
   "summary": "Retrieve the reserved block."
- },
- {
-  "path": "/api/ddi/v1/dhcp/config_profile/profiles",
-  "service": "Ipamsvc",
-  "summary": "/dhcp/config_profile/profiles"
  },
  {
   "path": "/api/ddi/v1/dhcp/config_profile/subnets",
@@ -393,11 +343,6 @@
   "path": "/api/ddi/v1/dhcp/fixed_address",
   "service": "Ipamsvc",
   "summary": "Retrieve fixed addresses."
- },
- {
-  "path": "/api/ddi/v1/dhcp/global",
-  "service": "Ipamsvc",
-  "summary": "Retrieve the global configuration."
  },
  {
   "path": "/api/ddi/v1/dhcp/ha_group",
@@ -460,11 +405,6 @@
   "summary": "Retrieve the address blocks."
  },
  {
-  "path": "/api/ddi/v1/ipam/asm",
-  "service": "Ipamsvc",
-  "summary": "Retrieve suggested updates for Automated Scope Management."
- },
- {
   "path": "/api/ddi/v1/ipam/dns_usage",
   "service": "Ipamsvc",
   "summary": "Retrieve DNS usage for multiple objects."
@@ -488,20 +428,5 @@
   "path": "/api/ddi/v1/ipam/subnet",
   "service": "Ipamsvc",
   "summary": "Retrieve subnets."
- },
- {
-  "path": "/tide/api/services/intel/lookup/feedback/types",
-  "service": "TIDEDossier",
-  "summary": "Get supported feedback types"
- },
- {
-  "path": "/tide/api/services/intel/lookup/sources",
-  "service": "TIDEDossier",
-  "summary": "Get available Dossier sources"
- },
- {
-  "path": "/tide/api/services/intel/lookup/targets",
-  "service": "TIDEDossier",
-  "summary": "Get supported indicator types"
  }
 ]

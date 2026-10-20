@@ -2,8 +2,8 @@
 """Build go/internal/dashboard/ai_catalog.json from scripts/out_services.json.
 
 The Ask tab's find_data / api_get tools may read only the paths listed in the
-output: list endpoints (no {id} in the path) whose catalogued methods include
-GET. Paths that hand out secrets or bulk downloads are left out on purpose.
+output: list endpoints (no {id} in the path, taking _filter or _limit) whose
+catalogued methods include GET. Paths that hand out secrets or bulk downloads are left out on purpose.
 
 Run after the nightly drift job refreshes out_services.json:
     python3 scripts/build-ai-catalog.py
@@ -35,6 +35,11 @@ def main():
         for path in sorted(raw["endpoints"]):
             get = raw["endpoints"][path]["methods"].get("GET")
             if get is None or "{" in path or SKIP_PATH.search(path):
+                continue
+            # A list endpoint takes _filter or _limit. Without them the GET returns one
+            # object (dns/global) that api_get would report as "0 records".
+            params = " ".join(get.get("parameters") or [])
+            if "_filter (query)" not in params and "_limit (query)" not in params:
                 continue
             summary = (get.get("summary") or "").strip()
             if not summary:

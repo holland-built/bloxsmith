@@ -39,6 +39,9 @@ func TestCatalogHoldsNoSecretPaths(t *testing.T) {
 			t.Errorf("catalog must not hold %s", e.Path)
 		}
 	}
+	if _, ok := aiCatalogByPath["/api/ddi/v1/dns/global"]; ok {
+		t.Error("single-object paths like dns/global must not be in the catalog")
+	}
 	if len(aiCatalog) < 50 {
 		t.Fatalf("catalog looks empty: %d paths", len(aiCatalog))
 	}
@@ -94,6 +97,9 @@ func TestAPIGetWithoutAPageTotalSaysAtLeastAtTheBound(t *testing.T) {
 	if !strings.Contains(out, fmt.Sprintf("At least %d", apiGetLimit)) {
 		t.Fatalf("a full page without a total must not be reported as exact: %s", out)
 	}
+	if strings.Contains(out, `"total_count":`) {
+		t.Fatalf("no exact total_count may be given when the total is unknown: %s", out)
+	}
 }
 
 func TestAPIGetRejectsOversizedOrOddArguments(t *testing.T) {
@@ -116,10 +122,11 @@ func TestAPIGetRejectsOversizedOrOddArguments(t *testing.T) {
 
 func TestAPIGetHidesSecretLookingFields(t *testing.T) {
 	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
-		writeResults(w, []map[string]any{{"name": "k1", "secret": "s3cr3t", "nested": map[string]any{"password": "p4ss"}}})
+		writeResults(w, []map[string]any{{"name": "k1", "secret": "s3cr3t", "nested": map[string]any{"password": "p4ss"},
+			"deep": []any{[]any{map[string]any{"api_key": "k3y"}}}}})
 	})
 	out := s.RunAITool(context.Background(), "api_get", map[string]any{"path": "/api/ddi/v1/dns/acl"})
-	if strings.Contains(out, "s3cr3t") || strings.Contains(out, "p4ss") || !strings.Contains(out, "k1") {
+	if strings.Contains(out, "s3cr3t") || strings.Contains(out, "p4ss") || strings.Contains(out, "k3y") || !strings.Contains(out, "k1") {
 		t.Fatalf("secret-looking values must be hidden: %s", out)
 	}
 }

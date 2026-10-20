@@ -162,37 +162,49 @@ func (s *Service) apiGet(args map[string]any) string {
 	}
 	maps := make([]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		maps = append(maps, hideSecrets(asMap(r)))
+		maps = append(maps, hideSecrets(asMap(r)).(map[string]any))
 	}
 	total := pageTotalSize(body, -1)
-	exact := total >= 0
-	if !exact {
+	if total < 0 && len(maps) >= apiGetLimit {
+		// No total and a full page: the real count is unknown, so no total_count
+		// field at all, rather than one the model would take as exact.
+		sample := capMaps(maps, aiSampleCap)
+		return jstr(struct {
+			Summary   string           `json:"summary"`
+			Untrusted string           `json:"UNTRUSTED_DATA_NOTICE"`
+			AtLeast   int              `json:"total_count_at_least"`
+			Returned  int              `json:"returned"`
+			Truncated bool             `json:"truncated"`
+			Sample    []map[string]any `json:"sample"`
+		}{
+			Summary: fmt.Sprintf("At least %d records exist; Infoblox did not report the exact total. "+
+				"The %d below are a sample, not the full list.", apiGetLimit, len(sample)),
+			Untrusted: untrustedNotice, AtLeast: apiGetLimit, Returned: len(sample), Truncated: true, Sample: sample,
+		})
+	}
+	if total < 0 {
+		// fewer rows than asked for: the page holds everything
 		total = len(maps)
 	}
-	p := cappedPayloadWithTotal(maps, aiSampleCap, total, "records")
-	if !exact && len(maps) >= apiGetLimit {
-		p.Summary = fmt.Sprintf("At least %d records exist; Infoblox did not report the exact total. "+
-			"The %d below are a sample, not the full list.", apiGetLimit, p.Returned)
-	}
-	return jstr(p)
+	return jstr(cappedPayloadWithTotal(maps, aiSampleCap, total, "records"))
 }
 
-func hideSecrets(m map[string]any) map[string]any {
-	for k, v := range m {
-		if secretKeyRE.MatchString(k) {
-			m[k] = "[hidden]"
-			continue
-		}
-		switch t := v.(type) {
-		case map[string]any:
-			m[k] = hideSecrets(t)
-		case []any:
-			for i, x := range t {
-				if xm, ok := x.(map[string]any); ok {
-					t[i] = hideSecrets(xm)
-				}
+// hideSecrets replaces the value of every secret-looking key, at any depth,
+// including maps inside lists inside lists.
+func hideSecrets(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, x := range t {
+			if secretKeyRE.MatchString(k) {
+				t[k] = "[hidden]"
+			} else {
+				t[k] = hideSecrets(x)
 			}
 		}
+	case []any:
+		for i, x := range t {
+			t[i] = hideSecrets(x)
+		}
 	}
-	return m
+	return v
 }
