@@ -1025,6 +1025,7 @@ eleven tools the same path sends:
 | `get_dns_analytics` | device names and device IPs by query volume |
 | `search_entity` | whatever the search matched |
 | `dossier_lookup` / `lookalike_domains` / `asset_insights` | indicators, domains, device names |
+| `api_get` | up to 25 records from any of the read-only list paths in `go/internal/dashboard/ai_catalog.json` (zones, records, subnets, policies...); fields named like secret, password or token are hidden |
 
 The AI tab now names the destination host before you type anything, read from your
 configured `LLM_BASE_URL` rather than hardcoded — so a self-hosted or proxied endpoint

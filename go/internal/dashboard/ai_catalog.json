@@ -1,0 +1,507 @@
+[
+ {
+  "path": "/api/anycast/v1/accm/ac_configs",
+  "service": "Anycast",
+  "summary": "Retrieve Multiple Anycast Configurations"
+ },
+ {
+  "path": "/api/anycast/v1/accm/ac_runtime_statuses",
+  "service": "Anycast",
+  "summary": "Read a list of Anycast Configurations"
+ },
+ {
+  "path": "/api/atcdfp/v1/dfp_services",
+  "service": "Atcdfp",
+  "summary": "List DNS Forwarding Proxy services."
+ },
+ {
+  "path": "/api/atcdfp/v1/report_view",
+  "service": "Atcdfp",
+  "summary": "Get Report View."
+ },
+ {
+  "path": "/api/atcep/v1/roaming_device/os_versions",
+  "service": "Atcep",
+  "summary": "The RPC method used to get distinct OS versions of active endpoints."
+ },
+ {
+  "path": "/api/atcep/v1/roaming_device/status",
+  "service": "Atcep",
+  "summary": "Read roaming device status counts for account."
+ },
+ {
+  "path": "/api/atcep/v1/roaming_device/vpn_vendor_count",
+  "service": "Atcep",
+  "summary": "/roaming_device/vpn_vendor_count"
+ },
+ {
+  "path": "/api/atcep/v1/roaming_device_groups",
+  "service": "Atcep",
+  "summary": "List Roaming Device Groups."
+ },
+ {
+  "path": "/api/atcep/v1/roaming_devices",
+  "service": "Atcep",
+  "summary": "List Roaming Devices."
+ },
+ {
+  "path": "/api/atcep/v1/roaming_devices_metadata",
+  "service": "Atcep",
+  "summary": "List Metadata of Roaming Devices."
+ },
+ {
+  "path": "/api/atcfw/v1/app_approvals",
+  "service": "Atcfw",
+  "summary": "/app_approvals"
+ },
+ {
+  "path": "/api/atcfw/v1/application_filters",
+  "service": "Atcfw",
+  "summary": "List Application Filters."
+ },
+ {
+  "path": "/api/atcfw/v1/block_approvals",
+  "service": "Atcfw",
+  "summary": "Read Address Block Approvals"
+ },
+ {
+  "path": "/api/atcfw/v1/category_filters",
+  "service": "Atcfw",
+  "summary": "List Category Filters."
+ },
+ {
+  "path": "/api/atcfw/v1/content_categories",
+  "service": "Atcfw",
+  "summary": "List Content Categories."
+ },
+ {
+  "path": "/api/atcfw/v1/internal_domain_lists",
+  "service": "Atcfw",
+  "summary": "List Internal Domains."
+ },
+ {
+  "path": "/api/atcfw/v1/named_lists",
+  "service": "Atcfw",
+  "summary": "List Named Lists."
+ },
+ {
+  "path": "/api/atcfw/v1/network_lists",
+  "service": "Atcfw",
+  "summary": "List Network Lists."
+ },
+ {
+  "path": "/api/atcfw/v1/pop_regions",
+  "service": "Atcfw",
+  "summary": "List PoP Regions."
+ },
+ {
+  "path": "/api/atcfw/v1/security_policies",
+  "service": "Atcfw",
+  "summary": "List Security Policies."
+ },
+ {
+  "path": "/api/atcfw/v1/security_policy_rules",
+  "service": "Atcfw",
+  "summary": "List Security Policy Rules."
+ },
+ {
+  "path": "/api/atcfw/v1/threat_feeds",
+  "service": "Atcfw",
+  "summary": "List Threat Feeds."
+ },
+ {
+  "path": "/api/cdc-flow/v1/applications",
+  "service": "CDC",
+  "summary": "List applications"
+ },
+ {
+  "path": "/api/cdc-flow/v1/cdcs/hosts",
+  "service": "CDC",
+  "summary": "List data connector\u2013enabled on-prem hosts"
+ },
+ {
+  "path": "/api/cdc-flow/v1/data_sources",
+  "service": "CDC",
+  "summary": "List data sources"
+ },
+ {
+  "path": "/api/cdc-flow/v1/display/applications",
+  "service": "CDC",
+  "summary": "List applications defined for a given account"
+ },
+ {
+  "path": "/api/cdc-flow/v1/display/destinations",
+  "service": "CDC",
+  "summary": "List destinations defined for a given account"
+ },
+ {
+  "path": "/api/cdc-flow/v1/display/etls/filters",
+  "service": "CDC",
+  "summary": "List ETL filters defined for a given account"
+ },
+ {
+  "path": "/api/cdc-flow/v1/display/etls/ingress_filters",
+  "service": "CDC",
+  "summary": "/v1/display/etls/ingress_filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/display/sources",
+  "service": "CDC",
+  "summary": "List the sources defined for a given account"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/fqdn",
+  "service": "CDC",
+  "summary": "List ETL FQDN filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/hostname",
+  "service": "CDC",
+  "summary": "List ETL hostname filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/ip_network",
+  "service": "CDC",
+  "summary": "List ETL IP network  filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/local_zones",
+  "service": "CDC",
+  "summary": "List ETL Local Zone filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/ophid",
+  "service": "CDC",
+  "summary": "List ETL ophid filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/record_type",
+  "service": "CDC",
+  "summary": "List ETL DNS Record Type filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/regex",
+  "service": "CDC",
+  "summary": "List ETL regex  filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/etls/filters/threat_class_property",
+  "service": "CDC",
+  "summary": "List ETL Threat Class Property filters"
+ },
+ {
+  "path": "/api/cdc-flow/v1/sources/bloxone",
+  "service": "CDC",
+  "summary": "List Bloxone sources"
+ },
+ {
+  "path": "/api/cdc-flow/v1/sources/nios",
+  "service": "CDC",
+  "summary": "List NIOS sources"
+ },
+ {
+  "path": "/api/cdc-flow/v1/sources/schedule",
+  "service": "CDC",
+  "summary": "List schedule sources"
+ },
+ {
+  "path": "/api/cdc-flow/v2/flows/data",
+  "service": "CDC",
+  "summary": "List flows in data connector."
+ },
+ {
+  "path": "/api/cdc-flow/v2/services",
+  "service": "CDC",
+  "summary": "List the data connector enabled on on-prem hosts."
+ },
+ {
+  "path": "/api/dnsdata/v2/dns_event",
+  "service": "DNSEvents",
+  "summary": "List DNS security policy hits."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/fingerprint",
+  "service": "DhcpLeases",
+  "summary": "Retrieve DHCP fingerprints."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/fingerprint_class",
+  "service": "DhcpLeases",
+  "summary": "Retrieve DHCP fingerprint classes."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/global_lease",
+  "service": "DhcpLeases",
+  "summary": "Retrieve the global DHCP lease configuration."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/lease",
+  "service": "DhcpLeases",
+  "summary": "Retrieve DHCP leases."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/system_fingerprint",
+  "service": "DhcpLeases",
+  "summary": "Retrieve DHCP system fingerprints."
+ },
+ {
+  "path": "/api/ddi/v1/dns/acl",
+  "service": "DnsConfig",
+  "summary": "List ACL objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/auth_nsg",
+  "service": "DnsConfig",
+  "summary": "List AuthNSG objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/auth_zone",
+  "service": "DnsConfig",
+  "summary": "List AuthZone objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/delegation",
+  "service": "DnsConfig",
+  "summary": "List Delegation objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/forward_nsg",
+  "service": "DnsConfig",
+  "summary": "List ForwardNSG objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/forward_zone",
+  "service": "DnsConfig",
+  "summary": "List Forward Zone objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/global",
+  "service": "DnsConfig",
+  "summary": "Read the Global configuration object."
+ },
+ {
+  "path": "/api/ddi/v1/dns/host",
+  "service": "DnsConfig",
+  "summary": "List DNS Host objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/rpz",
+  "service": "DnsConfig",
+  "summary": "List RPZ objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/server",
+  "service": "DnsConfig",
+  "summary": "List Server objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/service",
+  "service": "DnsConfig",
+  "summary": "List DNS Service objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/stub_zone",
+  "service": "DnsConfig",
+  "summary": "List Stub Zone objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/view",
+  "service": "DnsConfig",
+  "summary": "List View objects."
+ },
+ {
+  "path": "/api/ddi/v1/dtc/lbdn",
+  "service": "DnsConfig",
+  "summary": "List LBDN objects."
+ },
+ {
+  "path": "/api/ddi/v1/dns/record",
+  "service": "DnsData",
+  "summary": "Retrieve DNS resource records."
+ },
+ {
+  "path": "/api/infra/v1/applications",
+  "service": "Infrastructure",
+  "summary": "List applications (Service types) for a particular account."
+ },
+ {
+  "path": "/api/infra/v1/detail_hosts",
+  "service": "Infrastructure",
+  "summary": "List all hosts and associated services (applications)."
+ },
+ {
+  "path": "/api/infra/v1/detail_services",
+  "service": "Infrastructure",
+  "summary": "List all the Services (applications) along with its associated Hosts."
+ },
+ {
+  "path": "/api/infra/v1/hosts",
+  "service": "Infrastructure",
+  "summary": "List all the Host resources for an account."
+ },
+ {
+  "path": "/api/infra/v1/services",
+  "service": "Infrastructure",
+  "summary": "List all the Service resources for an account."
+ },
+ {
+  "path": "/api/ddi/v1/federation/federated_block",
+  "service": "IpamFederation",
+  "summary": "Retrieve the federated blocks."
+ },
+ {
+  "path": "/api/ddi/v1/federation/federated_realm",
+  "service": "IpamFederation",
+  "summary": "Retrieve federated realms."
+ },
+ {
+  "path": "/api/ddi/v1/federation/forward_looking_delegation",
+  "service": "IpamFederation",
+  "summary": "Retrieve the __ForwardLookingDelegation__ objects."
+ },
+ {
+  "path": "/api/ddi/v1/federation/list_next_available_fld",
+  "service": "IpamFederation",
+  "summary": "List the next available __ForwardLookingDelegation__ objects."
+ },
+ {
+  "path": "/api/ddi/v1/federation/overlapping_block",
+  "service": "IpamFederation",
+  "summary": "Retrieve the overlapping block."
+ },
+ {
+  "path": "/api/ddi/v1/federation/reserved_block",
+  "service": "IpamFederation",
+  "summary": "Retrieve the reserved block."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/config_profile/profiles",
+  "service": "Ipamsvc",
+  "summary": "/dhcp/config_profile/profiles"
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/config_profile/subnets",
+  "service": "Ipamsvc",
+  "summary": "/dhcp/config_profile/subnets"
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/filter",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP filters."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/fixed_address",
+  "service": "Ipamsvc",
+  "summary": "Retrieve fixed addresses."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/global",
+  "service": "Ipamsvc",
+  "summary": "Retrieve the global configuration."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/ha_group",
+  "service": "Ipamsvc",
+  "summary": "Retrieve HA groups."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/hardware_filter",
+  "service": "Ipamsvc",
+  "summary": "Retrieve hardware filters."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/host",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP hosts."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/mac_address_item",
+  "service": "Ipamsvc",
+  "summary": "Retrieve mac address items."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/option_code",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP option codes."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/option_filter",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP option filters."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/option_group",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP option groups."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/option_space",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP option spaces."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/server",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DHCP configuration profiles."
+ },
+ {
+  "path": "/api/ddi/v1/dhcp/service",
+  "service": "Ipamsvc",
+  "summary": "List DHCP service instance objects."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/address",
+  "service": "Ipamsvc",
+  "summary": "Retrieve IP addresses."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/address_block",
+  "service": "Ipamsvc",
+  "summary": "Retrieve the address blocks."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/asm",
+  "service": "Ipamsvc",
+  "summary": "Retrieve suggested updates for Automated Scope Management."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/dns_usage",
+  "service": "Ipamsvc",
+  "summary": "Retrieve DNS usage for multiple objects."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/host",
+  "service": "Ipamsvc",
+  "summary": "Retrieve the IPAM hosts."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/ip_space",
+  "service": "Ipamsvc",
+  "summary": "Retrieve IP spaces."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/range",
+  "service": "Ipamsvc",
+  "summary": "Retrieve ranges."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/subnet",
+  "service": "Ipamsvc",
+  "summary": "Retrieve subnets."
+ },
+ {
+  "path": "/tide/api/services/intel/lookup/feedback/types",
+  "service": "TIDEDossier",
+  "summary": "Get supported feedback types"
+ },
+ {
+  "path": "/tide/api/services/intel/lookup/sources",
+  "service": "TIDEDossier",
+  "summary": "Get available Dossier sources"
+ },
+ {
+  "path": "/tide/api/services/intel/lookup/targets",
+  "service": "TIDEDossier",
+  "summary": "Get supported indicator types"
+ }
+]
