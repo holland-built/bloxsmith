@@ -248,6 +248,7 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 	// calls spends real money learning that.
 	maxTokens := answerTokens
 	retriedForLength := false
+	retriedForMinute := false
 	for i := 0; i < 6; i++ {
 		resp, err := s.chat(ctx, key, base, model, messages, maxTokens)
 		if err != nil {
@@ -255,6 +256,24 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 				return timeoutJSON
 			}
 			log.Printf("_generate_ai_answer: %v", err)
+			// A per-minute limit is the one 429 that waiting clears, and the
+			// provider says how long. One question re-sends its whole history on
+			// every tool round, so the third call of a single question can cross
+			// a 7,000-a-minute input cap on its own (2026-10-20: "try again in
+			// 16.62s" with ~50s of this query's deadline left). Wait it out once,
+			// when the wait fits; a daily cap never qualifies.
+			if wait, ok := perMinuteWait(err.Error()); ok && !retriedForMinute {
+				if dl, _ := ctx.Deadline(); time.Until(dl) > wait+10*time.Second {
+					retriedForMinute = true
+					select {
+					case <-time.After(wait):
+						i-- // the same round, asked again; not a new tool round
+						continue
+					case <-ctx.Done():
+						return timeoutJSON
+					}
+				}
+			}
 			// The daily cap NEVER appears anywhere except this error text
 			// (Groq's rate-limit response headers only carry per-minute /
 			// per-request limits). This is the one and only place it can be
@@ -395,6 +414,22 @@ func rateLimitDetail(msg string) string {
 // "7m11.135999999s", and a stricter pattern would silently drop the wait and
 // leave the operator with no idea how long.
 var retryAfterRe = regexp.MustCompile(`try again in ([0-9]+(?:\.[0-9]+)?(?:[hms][0-9.]*)*[hms])`)
+
+// perMinuteWait is the provider's stated wait for a per-minute limit, and only
+// that: a daily cap, an unreadable wait, a 429 that names no per-minute limit, or
+// "Request too large" (one call bigger than the whole minute's allowance, which no
+// wait fixes) all return false, so nothing here waits on a guess.
+func perMinuteWait(msg string) (time.Duration, bool) {
+	if isDailyTokenLimit(msg) || !strings.Contains(msg, "per minute") || strings.Contains(msg, "Request too large") {
+		return 0, false
+	}
+	m := retryAfterRe.FindStringSubmatch(msg)
+	if len(m) != 2 {
+		return 0, false
+	}
+	d, err := time.ParseDuration(m[1])
+	return d, err == nil && d > 0
+}
 
 // isDailyTokenLimit is the one place that recognizes Groq's TPD phrasing.
 // rateLimitDetail's kind switch and dailyTokenLimit below both call this
