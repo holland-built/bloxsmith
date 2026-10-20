@@ -249,6 +249,12 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 	maxTokens := answerTokens
 	retriedForLength := false
 	retriedForMinute := false
+	// seen holds each tool call already run in this question, by name and
+	// arguments, with the fact line it produced. The 2026-10-20 failure: the
+	// model called get_dns {} twice, and the second full copy of the same result
+	// pushed the next chat call over the 7,000-a-minute input cap. A repeat gets
+	// a one-line pointer instead, so it costs neither a fetch nor the tokens.
+	seen := map[string]string{}
 	for i := 0; i < 6; i++ {
 		resp, err := s.chat(ctx, key, base, model, messages, maxTokens)
 		if err != nil {
@@ -313,7 +319,28 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 		for _, tc := range ch.toolCalls {
 			var argMap map[string]any
 			_ = json.Unmarshal([]byte(cmp.Or(tc.Function.Arguments, "{}")), &argMap)
+			// json.Marshal sorts map keys, so equal arguments give the same key
+			// however the model spaced or ordered them.
+			canon, _ := json.Marshal(argMap)
+			callKey := tc.Function.Name + string(canon)
+			if fact, ok := seen[callKey]; ok {
+				*trace = append(*trace, map[string]any{
+					"tool": tc.Function.Name,
+					"args": traceArgs(argMap),
+					"fact": fact,
+				})
+				messages = append(messages, map[string]any{
+					"role": "tool", "tool_call_id": tc.ID,
+					"content": "This is the same call as one already made for this question; its result is above, unchanged. Use that result.",
+				})
+				continue
+			}
 			result := s.tools.RunAITool(ctx, tc.Function.Name, argMap)
+			// Only a result with a counted summary is remembered. A failure
+			// ("Could not reach Infoblox...") has none, so asking again retries it.
+			if fact := toolFact(result); fact != "" {
+				seen[callKey] = fact
+			}
 			// Built AFTER the tool runs so it can carry the tool's own summary line.
 			*trace = append(*trace, map[string]any{
 				"tool": tc.Function.Name,
