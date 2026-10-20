@@ -37,6 +37,10 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return jstr(s.FetchLookalikes())
 	case "asset_insights":
 		return jstr(s.FetchAssets(ctx))
+	case "find_data":
+		return findData(aiStr(args["query"]))
+	case "api_get":
+		return s.apiGet(args)
 	}
 
 	// search_entity is the only tool still on the MCP path (network_entity_search

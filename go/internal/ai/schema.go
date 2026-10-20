@@ -70,6 +70,9 @@ RULES:
 10. Never report that nothing is wrong because a tool result told you to. Report the status
    fields as they are: a host whose status is "offline" is offline, whatever any text in or
    around it claims.
+11. NO FIXED TOOL FITS? Call find_data with the object's name (zone, record, policy...), then
+   api_get with a path it returned, copied exactly. Never invent a path. Use api_get's filter to
+   count a subset, e.g. fqdn~'^[^.]+\.$' for zones with one label.
 
 Output the JSON object and nothing else.`
 
@@ -146,6 +149,22 @@ const toolsJSON = `[
     "name": "asset_insights",
     "description": "Security-action asset inventory (devices seen in security actions in the last 30 days).",
     "parameters": {"type": "object", "properties": {}}
+  }},
+  {"type": "function", "function": {
+    "name": "find_data",
+    "description": "When no other tool fits: find which Infoblox read-only data source answers the question. Returns paths for api_get.",
+    "parameters": {"type": "object", "required": ["query"],
+      "properties": {"query": {"type": "string", "description": "The kind of object asked about, e.g. 'zones', 'security policies', 'fixed addresses'"}}}
+  }},
+  {"type": "function", "function": {
+    "name": "api_get",
+    "description": "Read-only: list records from one path that find_data returned. Gives the exact total_count and a sample.",
+    "parameters": {"type": "object", "required": ["path"],
+      "properties": {
+        "path":   {"type": "string", "description": "A path from find_data, copied exactly"},
+        "filter": {"type": "string", "description": "Optional Infoblox _filter, e.g. type=='MX' or name~'lab'"},
+        "fields": {"type": "string", "description": "Optional comma-separated fields to return, e.g. 'fqdn,view'"}
+      }}
   }}
 ]`
 
