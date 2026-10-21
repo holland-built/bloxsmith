@@ -805,7 +805,20 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	}
 
 	if dry {
-		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": []any{}}
+		// GET on nextavailableip lists the next free addresses without
+		// reserving them (operation subnetListNextAvailableIP; POST is the one
+		// that allocates). Until 2026-10-21 the preview answered an empty list
+		// without asking, so it showed nothing and could not tell a full subnet
+		// from a free one.
+		free, err := c.Rest.GetStrict(objPath+"/nextavailableip", map[string]string{"count": strconv.Itoa(count)})
+		if err != nil {
+			msg := "lookup failed"
+			if ue, ok := err.(*rest.UpstreamError); ok {
+				msg = ue.Public()
+			}
+			return M{"ok": false, "error": fmt.Sprintf("could not list free addresses: %s", msg)}, 502
+		}
+		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": addressSummaries(free)}
 		if name != "" {
 			result["name"] = name
 		}

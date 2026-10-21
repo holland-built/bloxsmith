@@ -53,6 +53,7 @@ type allocReq struct {
 // record POST FAILS — that is the only way the compensating release executes.
 type allocConfig struct {
 	allocStatus int    // status for POST .../nextavailableip (0 => 200)
+	listStatus  int    // status for GET .../nextavailableip, the preview (0 => 200)
 	allocBody   string // its JSON body
 	dnsStatus   int    // status for POST /api/ddi/v1/dns/record (0 => 201)
 	dnsBody     string // its JSON body
@@ -105,6 +106,15 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method {
+		case http.MethodGet:
+			// the preview's look-only listing of the next free addresses
+			if !strings.HasSuffix(r.URL.Path, "/nextavailableip") {
+				t.Errorf("fake received an unexpected GET path: %s", r.URL.Path)
+				w.WriteHeader(500)
+				return
+			}
+			w.WriteHeader(allocStatusOr(cfg.listStatus, 200))
+			_, _ = io.WriteString(w, allocStringOr(cfg.allocBody, allocTwoAddresses))
 		case http.MethodPost:
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/nextavailableip"):
@@ -150,6 +160,18 @@ func allocStringOr(v, def string) string {
 }
 
 func (f *allocFake) client() *Client { return newTestClient(f.srv) }
+
+// writes counts captured requests that could change the tenant: everything
+// except GET.
+func (f *allocFake) writes() int {
+	n := 0
+	for _, r := range f.all() {
+		if r.method != http.MethodGet {
+			n++
+		}
+	}
+	return n
+}
 
 // all returns every captured request in arrival order.
 func (f *allocFake) all() []allocReq {
@@ -623,21 +645,20 @@ func TestAllocateDryIsTheDefaultAndTouchesNothing(t *testing.T) {
 	if res["dry_run"] != true {
 		t.Fatalf("dry_run = %v, want true — an omitted dry flag must not reserve real IPs", res["dry_run"])
 	}
-	if n := len(f.all()); n != 0 {
-		t.Fatalf("upstream requests = %d, want 0 on a preview", n)
+	// A preview only reads: it lists the next free addresses with GET and must
+	// never reserve (POST) or release (DELETE) one.
+	if n := f.writes(); n != 0 {
+		t.Fatalf("upstream writes = %d, want 0 on a preview", n)
 	}
 	if res["would_allocate"] != 2 {
 		t.Fatalf("would_allocate = %v, want 2", res["would_allocate"])
 	}
-	// A preview reserved nothing, so the list is present and empty. It must not
-	// be absent or null: "no addresses yet, by design" and "the addresses could
-	// not be determined" must not render the same.
+	// The list holds the addresses that WOULD be taken. A failed listing is an
+	// error (TestAllocatePreviewSaysWhenTheListingFails), so "none free" and
+	// "could not be determined" never render the same.
 	addrs, ok := res["addresses"].([]any)
-	if !ok {
-		t.Fatalf("addresses = %#v, want a present, empty list on a preview", res["addresses"])
-	}
-	if len(addrs) != 0 {
-		t.Fatalf("addresses = %v, want empty — a preview reserves nothing", addrs)
+	if !ok || len(addrs) != 2 {
+		t.Fatalf("addresses = %#v, want the 2 free addresses on a preview", res["addresses"])
 	}
 }
 
@@ -667,8 +688,8 @@ func TestAllocateDryEchoesTheDNSPayloadWithoutValidatingIt(t *testing.T) {
 	if liveStatus != 400 {
 		t.Fatalf("live status = %d, want 400 — this test exists because it differs from the dry 200", liveStatus)
 	}
-	if n := len(f.all()); n != 0 {
-		t.Fatalf("upstream requests = %d, want 0 in both runs", n)
+	if n := f.writes(); n != 0 {
+		t.Fatalf("upstream writes = %d, want 0 in both runs", n)
 	}
 }
 
@@ -835,5 +856,33 @@ func TestAllocateCountOutsideOneToSixtyFourIsRefusedBeforeAnyRequest(t *testing.
 		if _, status := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": n, "dry": true}); status != 200 {
 			t.Fatalf("count %v dry run: status %d, want 200", n, status)
 		}
+	}
+}
+
+// The preview used to answer `"addresses": []` without asking Infoblox, so it
+// showed nothing and could not tell a full subnet from a free one. It now lists
+// the next free addresses with the look-only GET, and must never reserve
+// (POST) or release (DELETE) anything.
+func TestAllocatePreviewListsTheNextFreeAddressesWithoutTakingThem(t *testing.T) {
+	f := newAllocFake(t, allocConfig{})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-42", "count": float64(2), "dry": true})
+	if status != 200 || res["dry_run"] != true {
+		t.Fatalf("status %d, res %v", status, res)
+	}
+	got, _ := json.Marshal(res["addresses"])
+	if !strings.Contains(string(got), "10.7.0.4") || !strings.Contains(string(got), "10.7.0.5") {
+		t.Fatalf("want both free addresses in the preview, got %s", got)
+	}
+	reqs := f.all()
+	if len(reqs) != 1 || reqs[0].method != http.MethodGet || reqs[0].query.Get("count") != "2" {
+		t.Fatalf("want exactly one GET with count=2, got %+v", reqs)
+	}
+}
+
+func TestAllocatePreviewSaysWhenTheListingFails(t *testing.T) {
+	f := newAllocFake(t, allocConfig{listStatus: 500, allocBody: `{"error":"boom"}`})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-42", "count": float64(2), "dry": true})
+	if status == 200 || res["ok"] != false {
+		t.Fatalf("a failed listing must not look like an empty preview: %d %v", status, res)
 	}
 }
