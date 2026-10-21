@@ -262,6 +262,10 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 				return timeoutJSON
 			}
 			log.Printf("_generate_ai_answer: %v", err)
+			if pe, ok := err.(*providerError); ok && pe.Answer != "" {
+				log.Printf("_generate_ai_answer: answer recovered from a call to a tool that does not exist")
+				return pe.Answer
+			}
 			// A per-minute limit is the one 429 that waiting clears, and the
 			// provider says how long. One question re-sends its whole history on
 			// every tool round, so the third call of a single question can cross
@@ -535,6 +539,47 @@ func sanitizeLogLine(s string) string {
 type providerError struct {
 	Status int
 	Body   string
+	// Answer is a finished answer recovered from a 400 by answerFromFailedCall.
+	Answer string
+}
+
+// failedCallCap bounds what is read from an error reply. It is larger than
+// aiBodyCap because a recovered answer can be longer than 2 KB; only the
+// aiBodyCap-bounded copy is ever logged.
+const failedCallCap = 64 << 10
+
+// answerFromFailedCall recovers the answer when gpt-oss sends it as a call to a
+// tool that does not exist (2026-10-20: a tool named "json" whose arguments
+// were {"answer": ..., "suggestions": [...]}). Groq refuses that with a 400
+// tool_use_failed and returns the generation in failed_generation. The answer
+// in it was right; showing an error instead threw it away.
+//
+// Only the observed shape counts: a call to "json" with a non-empty "answer"
+// string. Any other name, ours or made up, is a real failed call and stays one.
+func answerFromFailedCall(raw []byte) string {
+	var e struct {
+		Error struct {
+			Code             string `json:"code"`
+			FailedGeneration string `json:"failed_generation"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &e) != nil || e.Error.Code != "tool_use_failed" {
+		return ""
+	}
+	var gen struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if json.Unmarshal([]byte(e.Error.FailedGeneration), &gen) != nil || gen.Name != "json" {
+		return ""
+	}
+	var args struct {
+		Answer string `json:"answer"`
+	}
+	if json.Unmarshal(gen.Arguments, &args) != nil || strings.TrimSpace(args.Answer) == "" {
+		return ""
+	}
+	return string(gen.Arguments)
 }
 
 func (e *providerError) Error() string {
@@ -674,7 +719,7 @@ func (s *Service) chat(ctx context.Context, key, base, model string, messages []
 		// server can ever learn the account's daily cap (see runLoop) — never
 		// called. LimitReader bounds it at read time, the way rest.getStrict
 		// already does with snippetCap.
-		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, aiBodyCap+1))
+		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, failedCallCap))
 		body := cleanProviderBody(raw)
 		if rerr != nil {
 			// The prefix that DID arrive is kept: it often already carries the
@@ -683,7 +728,11 @@ func (s *Service) chat(ctx context.Context, key, base, model string, messages []
 			// to an empty body.
 			body = strings.TrimSpace(body + " [its reply could not be fully read: " + rerr.Error() + "]")
 		}
-		return nil, &providerError{Status: resp.StatusCode, Body: body}
+		pe := &providerError{Status: resp.StatusCode, Body: body}
+		if resp.StatusCode == http.StatusBadRequest && rerr == nil {
+			pe.Answer = answerFromFailedCall(raw)
+		}
+		return nil, pe
 	}
 	var out chatResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
