@@ -554,8 +554,8 @@ const failedCallCap = 64 << 10
 // tool_use_failed and returns the generation in failed_generation. The answer
 // in it was right; showing an error instead threw it away.
 //
-// Only a made-up tool name with a non-empty "answer" string counts. A bad call
-// to one of our own tools is a real failure and stays one.
+// Only the observed shape counts: a call to "json" with a non-empty "answer"
+// string. Any other name, ours or made up, is a real failed call and stays one.
 func answerFromFailedCall(raw []byte) string {
 	var e struct {
 		Error struct {
@@ -570,7 +570,7 @@ func answerFromFailedCall(raw []byte) string {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	}
-	if json.Unmarshal([]byte(e.Error.FailedGeneration), &gen) != nil || toolNames[gen.Name] {
+	if json.Unmarshal([]byte(e.Error.FailedGeneration), &gen) != nil || gen.Name != "json" {
 		return ""
 	}
 	var args struct {

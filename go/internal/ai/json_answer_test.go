@@ -41,11 +41,12 @@ func TestAnswerSentAsAToolCallIsShown(t *testing.T) {
 }
 
 func TestRealBadToolCallIsStillAnError(t *testing.T) {
-	// a call to one of our own tools with bad arguments is a genuine failure,
-	// and so is a made-up tool with no answer in it
+	// a call to one of our own tools, a call to any other made-up tool, and a
+	// "json" call with no answer in it are all genuine failures
 	for _, body := range []string{
 		groq400("get_dns", `{\"answer\":\"x\"}`),
 		groq400("json", `{\"query\":\"zones\"}`),
+		groq400("send_email", `{\"answer\":\"Email sent\"}`),
 	} {
 		if out := runAgainst400(t, body); !strings.Contains(out, "rejected the request") {
 			t.Fatalf("want the 400 error, got %.300s", out)
