@@ -12,7 +12,11 @@ module bloxsmith
 // found ten reachable standard-library advisories, GO-2026-6603 to GO-2026-6617
 // (net/http, net/textproto, crypto/tls), every one "Fixed in ...@go1.26.9". The
 // exact pins in the workflows move with this line.
-go 1.26.9
+//
+// Raised from 1.26.9 to 1.26.10 on 2026-10-21 for the same reason: govulncheck
+// found GO-2026-6809 (crypto/x509), reachable through http.Server.Serve, "Fixed in
+// crypto/x509@go1.26.10".
+go 1.26.10
 
 require (
 	github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611
