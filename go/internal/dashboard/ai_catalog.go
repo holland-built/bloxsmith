@@ -1,12 +1,20 @@
 package dashboard
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+
+	"bloxsmith/internal/mcp"
+	"bloxsmith/internal/rest"
 )
 
 // THE ASK TAB'S GENERAL LOOKUPS: find_data and api_get.
@@ -31,6 +39,7 @@ var aiCatalogJSON []byte
 
 type aiCatalogEntry struct {
 	Path    string `json:"path"`
+	Base    string `json:"base"`
 	Service string `json:"service"`
 	Summary string `json:"summary"`
 }
@@ -101,9 +110,8 @@ func findData(query string) string {
 			hits = append(hits, scored{e, n})
 		}
 	}
-	if len(hits) == 0 {
-		return "No Infoblox data source matched those words. Try the object's own name, " +
-			"for example zone, record, subnet, lease, host, view or policy."
+	if len(hits) == 0 || strings.TrimSpace(strings.ToLower(query)) == "all" {
+		return allSources()
 	}
 	// stable: equal scores keep the catalog's order
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
@@ -124,11 +132,150 @@ func findData(query string) string {
 	return jstr(out)
 }
 
+// allSources is every catalog path, grouped by base path so the whole list
+// fits the 3000-character tool cap. When no word matched, the model picks by
+// meaning: "what domains do we host" shares no word with dns/auth_zone.
+func allSources() string {
+	groups := map[string][]string{}
+	for _, e := range aiCatalog {
+		groups[e.Base] = append(groups[e.Base], strings.TrimPrefix(e.Path, e.Base+"/"))
+	}
+	return jstr(struct {
+		Note    string              `json:"note"`
+		Sources map[string][]string `json:"sources"`
+	}{
+		Note: "No source matched those words, so here is every one. Pick the one that fits the question " +
+			"by meaning, then call api_get with its base and name joined by /, e.g. /api/ddi/v1/dns/auth_zone.",
+		Sources: groups,
+	})
+}
+
+// INFOBLOX'S OWN SEARCH, WHEN THE ACCOUNT ALLOWS IT.
+//
+// search_available_services is Infoblox's AI-ranked search over its whole API,
+// kept current by Infoblox. It is tried first and the built-in keyword match is
+// the fallback, because an account without the MCP Server user group answers
+// every tools/call with 403 (the Infoblox Sales account does). A 403 is
+// remembered for an hour through the same backoff the attack-surface feeds use,
+// so later questions do not each pay for the refusal.
+//
+// Its answer only RANKS: catalogPathsIn keeps the paths that are already in the
+// catalog, so a path Infoblox names that the app does not allow is dropped, and
+// api_get's rule (catalog paths only) is unchanged.
+
+const infobloxSearchTool = "infoblox-portal_search_available_services"
+
+// The gateway has been seen to hang past a minute; a find_data that waits
+// that long would eat the whole question's 55 seconds.
+const infobloxSearchTimeout = 8 * time.Second
+
+func (s *Service) findDataTool(ctx context.Context, query string) string {
+	if strings.TrimSpace(strings.ToLower(query)) == "all" {
+		return findData(query)
+	}
+	if hits := s.infobloxSearch(ctx, query); len(hits) > 0 {
+		type match struct {
+			Path    string `json:"path"`
+			Summary string `json:"summary"`
+		}
+		out := struct {
+			Source  string  `json:"source"`
+			Matches []match `json:"matches"`
+			Next    string  `json:"next"`
+		}{Source: "Infoblox search", Next: "Call api_get with one of these paths. Add a filter to count a subset."}
+		for i, e := range hits {
+			if i == findDataMax {
+				break
+			}
+			out.Matches = append(out.Matches, match{e.Path, e.Summary})
+		}
+		return jstr(out)
+	}
+	return findData(query)
+}
+
+func (s *Service) infobloxSearch(ctx context.Context, query string) []aiCatalogEntry {
+	if s.Mcp == nil || strings.TrimSpace(query) == "" || s.entitlementDenied(infobloxSearchTool) {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, infobloxSearchTimeout)
+	defer cancel()
+	err := s.Mcp.Initialize(ctx)
+	text := ""
+	if err == nil {
+		text, err = s.Mcp.CallTool(ctx, infobloxSearchTool, map[string]any{
+			"service_description": query, "http_methods": []string{"GET"},
+		})
+	}
+	if err != nil {
+		var se *mcp.StatusError
+		if errors.As(err, &se) && se.Code == 403 {
+			if s.entitlementMark403(infobloxSearchTool) {
+				log.Printf("find_data: Infoblox search refused (403); using the built-in list for an hour")
+			}
+		}
+		return nil
+	}
+	return catalogPathsIn(text)
+}
+
+// catalogPathsIn returns the catalog entries named in text, in the order text
+// first names them. An entry counts when its base path appears in text and its
+// endpoint appears as a whole path: "/ipam/address" does not match inside
+// "/ipam/address_block".
+func catalogPathsIn(text string) []aiCatalogEntry {
+	type at struct {
+		e   aiCatalogEntry
+		pos int
+	}
+	var found []at
+	for _, e := range aiCatalog {
+		if !strings.Contains(text, e.Base) {
+			continue
+		}
+		end := strings.TrimPrefix(e.Path, e.Base)
+		for from := 0; ; {
+			i := strings.Index(text[from:], end)
+			if i < 0 {
+				break
+			}
+			i += from
+			next := i + len(end)
+			if next >= len(text) || !isPathChar(text[next]) {
+				found = append(found, at{e, i})
+				break
+			}
+			from = next
+		}
+	}
+	sort.SliceStable(found, func(i, j int) bool { return found[i].pos < found[j].pos })
+	out := make([]aiCatalogEntry, len(found))
+	for i, f := range found {
+		out[i] = f.e
+	}
+	return out
+}
+
+func isPathChar(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-'
+}
+
 // apiGetLimit is how many rows one api_get fetches, the same bound get_dns uses. The exact total comes from
 // page.total_size; this bound only matters when an endpoint does not report it.
 const apiGetLimit = 5000
 
 const apiGetFilterMax = 200
+
+// apiGetSampleCap is smaller than aiSampleCap: api_get rows are whole
+// records of any shape, and 25 of them overran the 3000-character tool cut.
+const apiGetSampleCap = 10
+
+// apiGetWrongField is the answer when Infoblox refuses a filter or the rows
+// hold none of the asked-for fields: a wrong field name or filter syntax, not
+// a lookup failure.
+const apiGetWrongField = "Infoblox did not accept this filter or fields list for %s: a field name or the filter syntax is wrong. " +
+	"Call api_get again on the same path with no filter and no fields, read the field names in the sample, " +
+	"then retry with those names and a simple filter such as fqdn~'example'."
 
 var apiGetFieldsRE = regexp.MustCompile(`^[A-Za-z0-9_.,]{0,200}$`)
 
@@ -158,17 +305,26 @@ func (s *Service) apiGet(args map[string]any) string {
 	}
 	rows, body, err := s.Rest.GetPageStrict(path, params)
 	if err != nil {
+		if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == http.StatusBadRequest && (filter != "" || fields != "") {
+			return fmt.Sprintf(apiGetWrongField, path)
+		}
 		return aiLookupFailed("records from "+path, aiUpstreamDetail(err))
 	}
 	maps := make([]map[string]any, 0, len(rows))
+	allEmpty := true
 	for _, r := range rows {
-		maps = append(maps, hideSecrets(asMap(r)).(map[string]any))
+		m := hideSecrets(asMap(r)).(map[string]any)
+		allEmpty = allEmpty && len(m) == 0
+		maps = append(maps, m)
+	}
+	if fields != "" && len(maps) > 0 && allEmpty {
+		return fmt.Sprintf(apiGetWrongField, path)
 	}
 	total := pageTotalSize(body, -1)
 	if total < 0 && len(maps) >= apiGetLimit {
 		// No total and a full page: the real count is unknown, so no total_count
 		// field at all, rather than one the model would take as exact.
-		sample := capMaps(maps, aiSampleCap)
+		sample := capMaps(maps, apiGetSampleCap)
 		return jstr(struct {
 			Summary   string           `json:"summary"`
 			Untrusted string           `json:"UNTRUSTED_DATA_NOTICE"`
@@ -186,7 +342,7 @@ func (s *Service) apiGet(args map[string]any) string {
 		// fewer rows than asked for: the page holds everything
 		total = len(maps)
 	}
-	return jstr(cappedPayloadWithTotal(maps, aiSampleCap, total, "records"))
+	return jstr(cappedPayloadWithTotal(maps, apiGetSampleCap, total, "records"))
 }
 
 // hideSecrets replaces the value of every secret-looking key, at any depth,

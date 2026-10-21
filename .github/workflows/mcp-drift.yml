@@ -504,6 +504,11 @@ jobs:
           for live, snap in PAIRS:
               shutil.copyfile(live, snap)
 
+          # The Ask tab's list of readable sources is built from out_services.json,
+          # so it is rebuilt from the fresh snapshot in the same commit.
+          import subprocess
+          subprocess.run([sys.executable, "scripts/build-ai-catalog.py"], check=True)
+
           def cell(v):
               return "—" if v is None else str(v)
 
@@ -567,7 +572,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add scripts/out_tools.json scripts/out_services.json scripts/out_cubes.json
+          git add scripts/out_tools.json scripts/out_services.json scripts/out_cubes.json \
+            go/internal/dashboard/ai_catalog.json
 
           # NOTHING TO REFRESH IS A SUCCESS, NOT A FAILURE. `git commit` exits 1 on
           # an empty index, which would turn "the baselines were already current"

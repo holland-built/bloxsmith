@@ -2,6 +2,12 @@ package dashboard
 
 import (
 	"context"
+	"io"
+	"net/http/httptest"
+	"time"
+
+	"bloxsmith/internal/cache"
+	"bloxsmith/internal/mcp"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,10 +31,17 @@ func TestFindDataRanksZonePathsForAZoneQuestion(t *testing.T) {
 	}
 }
 
-func TestFindDataWithNoMatchSaysSo(t *testing.T) {
-	out := findData("zzqx")
-	if !strings.Contains(out, "No Infoblox data source matched") {
-		t.Fatalf("got %s", out)
+// No word matched: the model gets every source name, grouped, and picks by
+// meaning ("what domains do we host" has no word in common with auth_zone).
+func TestFindDataWithNoMatchListsEverySource(t *testing.T) {
+	for _, q := range []string{"zzqx", "all"} {
+		out := findData(q)
+		if !strings.Contains(out, `"/api/ddi/v1"`) || !strings.Contains(out, `"dns/auth_zone"`) {
+			t.Fatalf("%q: want the grouped source list, got %.300s", q, out)
+		}
+		if len(out) > 2900 {
+			t.Fatalf("%q: the list must fit the 3000-character tool cap, got %d", q, len(out))
+		}
 	}
 }
 
@@ -137,6 +150,148 @@ func TestAPIGetUpstreamFailureIsNotReportedAsEmpty(t *testing.T) {
 	})
 	out := s.RunAITool(context.Background(), "api_get", map[string]any{"path": "/api/ddi/v1/dns/acl"})
 	if !strings.Contains(out, "Could not reach Infoblox") {
+		t.Fatalf("got %s", out)
+	}
+}
+
+// The 2026-10-20 live failure: the model asked auth_zone for "name", which it
+// does not have (it is fqdn), and gave up on a result that said nothing.
+func TestAPIGetSaysWhenAFilterOrFieldIsWrong(t *testing.T) {
+	refused, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	out := refused.RunAITool(context.Background(), "api_get", map[string]any{
+		"path": "/api/ddi/v1/dns/auth_zone", "filter": "name=='x'"})
+	if !strings.Contains(out, "field name") || strings.Contains(out, "Could not reach") {
+		t.Fatalf("a 400 on a filter must point at the field names: %s", out)
+	}
+
+	empty, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		writeResultsWithPage(w, []map[string]any{{}, {}}, map[string]any{"total_size": "2"})
+	})
+	out = empty.RunAITool(context.Background(), "api_get", map[string]any{
+		"path": "/api/ddi/v1/dns/auth_zone", "fields": "name"})
+	if !strings.Contains(out, "field name") {
+		t.Fatalf("rows with none of the asked-for fields must say so: %s", out)
+	}
+}
+
+func TestAPIGetSendsASmallSample(t *testing.T) {
+	rows := make([]map[string]any, 40)
+	for i := range rows {
+		rows[i] = map[string]any{"fqdn": fmt.Sprintf("z%d.", i)}
+	}
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		writeResultsWithPage(w, rows, map[string]any{"total_size": "40"})
+	})
+	var p toolPayload
+	out := s.RunAITool(context.Background(), "api_get", map[string]any{"path": "/api/ddi/v1/dns/auth_zone"})
+	if err := json.Unmarshal([]byte(out), &p); err != nil {
+		t.Fatalf("not a payload: %v\n%s", err, out)
+	}
+	if p.Returned != 10 || p.TotalCount != 40 {
+		t.Fatalf("want 10 sample rows of 40, got %+v", p)
+	}
+}
+
+// A reply shaped like Infoblox's search: base paths and endpoints in its own
+// ranked order, with a path the app does not allow and a lookalike prefix.
+const infobloxSearchReply = `{"services":[{"service_name":"Ipamsvc","base_path":"/api/ddi/v1/",` +
+	`"endpoints":[{"path":"/ipam/address_block","methods":["GET"]}]},` +
+	`{"service_name":"DnsData","base_path":"/api/ddi/v1/","endpoints":[{"path":"/dns/record","methods":["GET"]}]},` +
+	`{"service_name":"Identity","base_path":"/api/iam/v2/","endpoints":[{"path":"/keys","methods":["GET"]}]}]}`
+
+func TestInfobloxSearchKeepsItsOrderAndOnlyAllowedPaths(t *testing.T) {
+	got := catalogPathsIn(infobloxSearchReply)
+	var paths []string
+	for _, e := range got {
+		paths = append(paths, e.Path)
+	}
+	want := "/api/ddi/v1/ipam/address_block /api/ddi/v1/dns/record"
+	if strings.Join(paths, " ") != want {
+		t.Fatalf("got %v, want %s (not /ipam/address, not /iam/v2/keys)", paths, want)
+	}
+}
+
+// fakeSearchMCP answers the handshake, then tools/call with reply or status.
+func fakeSearchMCP(t *testing.T, status int, reply string, calls *int) *Service {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var req struct {
+			Method string `json:"method"`
+			ID     int    `json:"id"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		w.Header().Set("Content-Type", "application/json")
+		switch req.Method {
+		case "initialize":
+			w.Header().Set("Mcp-Session-Id", "s1")
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":` + itoa(req.ID) + `,"result":{}}`))
+		case "tools/call":
+			*calls++
+			if req.Params.Name != "infoblox-portal_search_available_services" {
+				t.Errorf("unexpected tool %q", req.Params.Name)
+			}
+			if status != 200 {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"error":{"code":-32600,"message":"Authorization denied"}}`))
+				return
+			}
+			text, _ := json.Marshal(reply)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":` + itoa(req.ID) + `,"result":{"content":[{"type":"text","text":` + string(text) + `}]}}`))
+		default:
+			w.WriteHeader(http.StatusAccepted)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return &Service{Mcp: mcp.New(srv.URL+"/mcp", func() string { return "Token k" }), Cache: cache.New(), ent: &entitlement{}}
+}
+
+func TestFindDataUsesInfobloxSearchWhenAllowed(t *testing.T) {
+	calls := 0
+	s := fakeSearchMCP(t, 200, infobloxSearchReply, &calls)
+	out := s.findDataTool(context.Background(), "what address blocks and records exist")
+	if !strings.Contains(out, "/api/ddi/v1/ipam/address_block") || !strings.Contains(out, "Infoblox search") {
+		t.Fatalf("want Infoblox's ranked matches, got %s", out)
+	}
+}
+
+// "all" means every source even when Infoblox's search is allowed.
+func TestFindDataAllSkipsInfobloxSearch(t *testing.T) {
+	calls := 0
+	s := fakeSearchMCP(t, 200, infobloxSearchReply, &calls)
+	out := s.findDataTool(context.Background(), "all")
+	if calls != 0 || strings.Contains(out, "Infoblox search") || !strings.Contains(out, "/api/ddi/v1") {
+		t.Fatalf("want every source and no search call (calls=%d), got %s", calls, out)
+	}
+}
+
+// The Sales account: every tools/call is 403. find_data still answers from the
+// built-in list, and the refusal is remembered so later questions do not pay
+// for it again.
+func TestFindDataFallsBackAndRemembersARefusal(t *testing.T) {
+	calls := 0
+	s := fakeSearchMCP(t, http.StatusForbidden, "", &calls)
+	for i := 0; i < 2; i++ {
+		out := s.findDataTool(context.Background(), "how many zones")
+		if !strings.Contains(out, "/api/ddi/v1/dns/auth_zone") {
+			t.Fatalf("fallback missing: %s", out)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("Infoblox search was asked %d times after a 403, want 1", calls)
+	}
+}
+
+func TestFindDataWithoutMCPUsesTheBuiltInList(t *testing.T) {
+	s := &Service{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if out := s.findDataTool(ctx, "how many zones"); !strings.Contains(out, "/api/ddi/v1/dns/auth_zone") {
 		t.Fatalf("got %s", out)
 	}
 }

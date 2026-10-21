@@ -5,7 +5,7 @@ The Ask tab's find_data / api_get tools may read only the paths listed in the
 output: list endpoints (no {id} in the path, taking _filter or _limit) whose
 catalogued methods include GET. Paths that hand out secrets or bulk downloads are left out on purpose.
 
-Run after the nightly drift job refreshes out_services.json:
+The MCP drift job's refresh runs this; run it by hand after editing the rules:
     python3 scripts/build-ai-catalog.py
 """
 import json
@@ -45,7 +45,7 @@ def main():
             if not summary:
                 # fall back to the first line of the description, else the path
                 summary = (get.get("description") or "").strip().split("\n")[0] or path
-            out.append({"path": base + path, "service": service, "summary": summary[:120]})
+            out.append({"path": base + path, "base": base, "service": service, "summary": summary[:120]})
     OUT.write_text(json.dumps(out, indent=1) + "\n")
     print(f"{len(out)} paths -> {OUT.relative_to(ROOT)}")
 
