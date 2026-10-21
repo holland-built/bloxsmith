@@ -655,7 +655,12 @@ func chatURL(base string) string {
 		base = "https://api.groq.com"
 	}
 	if u, err := url.Parse(base); err == nil && u.Host != "" {
-		if p := strings.TrimRight(u.Path, "/"); p != "" {
+		// Groq keeps the old join whatever path was saved with it, so a saved
+		// https://api.groq.com/openai still reaches the same address.
+		if p := strings.TrimRight(u.Path, "/"); p != "" && !strings.EqualFold(u.Hostname(), "api.groq.com") {
+			if strings.HasSuffix(p, "/chat/completions") {
+				return u.Scheme + "://" + u.Host + p
+			}
 			return u.Scheme + "://" + u.Host + p + "/chat/completions"
 		}
 		return u.Scheme + "://" + u.Host + "/openai/v1/chat/completions"

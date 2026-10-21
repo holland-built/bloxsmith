@@ -106,6 +106,8 @@ func TestChatURL(t *testing.T) {
 	for base, want := range map[string]string{
 		"https://generativelanguage.googleapis.com/v1beta/openai/": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 		"https://api.groq.com/openai/v1":                           "https://api.groq.com/openai/v1/chat/completions",
+		"https://api.groq.com/openai":                              "https://api.groq.com/openai/v1/chat/completions",
+		"https://llm.example/v1/chat/completions":                  "https://llm.example/v1/chat/completions",
 	} {
 		if got := chatURL(base); got != want {
 			t.Errorf("chatURL(%q) = %q, want %q", base, got, want)
