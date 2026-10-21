@@ -137,8 +137,50 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 		}
 		emit(map[string]any{"step": fmt.Sprintf("Resolving block %s…", block)})
 		if dry {
-			emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create /%s in block %s", cidr, block)})
-			emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": nil, "cidr": cidr}})
+			// The preview names the subnet the live run would most likely create,
+			// worked out from the block's own contents by guessNextSubnet (which
+			// says why Infoblox's look-only call cannot be used). Only reads are
+			// sent. A preview's failures are emitted here and return nil: nothing
+			// was written, so no provision-subnet-error row belongs in the log
+			// (see the tail below).
+			cidrN, ok := parseIntStr(cidr)
+			if !ok {
+				emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
+				return nil
+			}
+			blockNet, next, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
+			if gerr != nil {
+				// Not knowing which subnet is no reason to fail the preview: the
+				// live run asks Infoblox, which picks one itself.
+				msg := gerr.Error()
+				if ue, ok := gerr.(*rest.UpstreamError); ok {
+					msg = ue.Public()
+				}
+				emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create a /%d in block %s "+
+					"(could not work out which one: %s)", cidrN, block, msg)})
+				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": nil, "cidr": cidrN}})
+				return nil
+			}
+			if cidrN < blockNet.Bits() || cidrN > blockNet.Addr().BitLen() {
+				emit(map[string]any{"error": fmt.Sprintf("a /%d does not fit in block %s", cidrN, blockNet)})
+				return nil
+			}
+			if !next.IsValid() {
+				emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet)})
+				return nil
+			}
+			addr := next.Addr().String()
+			emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create %s (probably; Infoblox makes the "+
+				"final pick) in block %s", next, blockNet)})
+			if makeZone {
+				if fqdn, ferr := provision.CidrToReverseZone(addr, cidrN); ferr == nil {
+					emit(map[string]any{"step": "[DRY-RUN] Would create DNS zone " + fqdn})
+				} else {
+					emit(map[string]any{"error": "the reverse DNS zone name could not be worked out: " + ferr.Error()})
+					return nil
+				}
+			}
+			emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN}})
 			return nil
 		}
 		cidrN, ok := parseIntStr(cidr)
