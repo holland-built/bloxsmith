@@ -100,4 +100,17 @@ func TestChatURL(t *testing.T) {
 	if got := chatURL("https://llm.internal.example"); got != "https://llm.internal.example/openai/v1/chat/completions" {
 		t.Errorf("custom base = %q", got)
 	}
+	// A base that carries its own path is used as written, the way the key
+	// test (vault.LLMTest) already treats it. Gemini's OpenAI-compatible
+	// address is one; Groq's own saved default is another and must not change.
+	for base, want := range map[string]string{
+		"https://generativelanguage.googleapis.com/v1beta/openai/": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+		"https://api.groq.com/openai/v1":                           "https://api.groq.com/openai/v1/chat/completions",
+		"https://api.groq.com/openai":                              "https://api.groq.com/openai/v1/chat/completions",
+		"https://llm.example/v1/chat/completions":                  "https://llm.example/v1/chat/completions",
+	} {
+		if got := chatURL(base); got != want {
+			t.Errorf("chatURL(%q) = %q, want %q", base, got, want)
+		}
+	}
 }

@@ -213,7 +213,16 @@ See **Code signing** below.
 The query box needs an AI model that can call tools. Everything else works without it. The
 default is Groq, which has a free tier: get a key at <https://console.groq.com>, then add it in
 the dashboard (**Settings** > **Connections**: the **Groq API key** box appears when you add a connection) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
-works: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
+works, including Google Gemini, OpenAI and a local Ollama. The Settings box takes only a Groq
+key. For any other provider, set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL`:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider) has the values for each.
+
+| Provider | Free limit (example, check your own account) | What it receives |
+|---|---|---|
+| Groq | Some models allow 8,000 tokens a minute, which can be less than one question a minute | Your questions and everything the lookups return from your tenant |
+| Gemini (Flash-Lite) | Higher per minute, with a daily cap | The same. On the free plan, Google may use all of it, tenant data included, to improve its products |
+
+Limits differ by model and account and change often. Your provider's console shows the current numbers.
 
 </details>
 
