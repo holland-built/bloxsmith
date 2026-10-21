@@ -260,6 +260,16 @@ func TestFindDataUsesInfobloxSearchWhenAllowed(t *testing.T) {
 	}
 }
 
+// "all" means every source even when Infoblox's search is allowed.
+func TestFindDataAllSkipsInfobloxSearch(t *testing.T) {
+	calls := 0
+	s := fakeSearchMCP(t, 200, infobloxSearchReply, &calls)
+	out := s.findDataTool(context.Background(), "all")
+	if calls != 0 || strings.Contains(out, "Infoblox search") || !strings.Contains(out, "/api/ddi/v1") {
+		t.Fatalf("want every source and no search call (calls=%d), got %s", calls, out)
+	}
+}
+
 // The Sales account: every tools/call is 403. find_data still answers from the
 // built-in list, and the refusal is remembered so later questions do not pay
 // for it again.

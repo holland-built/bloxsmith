@@ -170,6 +170,9 @@ const infobloxSearchTool = "infoblox-portal_search_available_services"
 const infobloxSearchTimeout = 8 * time.Second
 
 func (s *Service) findDataTool(ctx context.Context, query string) string {
+	if strings.TrimSpace(strings.ToLower(query)) == "all" {
+		return findData(query)
+	}
 	if hits := s.infobloxSearch(ctx, query); len(hits) > 0 {
 		type match struct {
 			Path    string `json:"path"`
@@ -268,9 +271,11 @@ const apiGetFilterMax = 200
 const apiGetSampleCap = 10
 
 // apiGetWrongField is the answer when Infoblox refuses a filter or the rows
-// hold none of the asked-for fields: a wrong field name, not a lookup failure.
-const apiGetWrongField = "Infoblox did not accept a field name in this filter or fields list for %s. " +
-	"Call api_get again on the same path with no filter and no fields, read the field names in the sample, then retry."
+// hold none of the asked-for fields: a wrong field name or filter syntax, not
+// a lookup failure.
+const apiGetWrongField = "Infoblox did not accept this filter or fields list for %s: a field name or the filter syntax is wrong. " +
+	"Call api_get again on the same path with no filter and no fields, read the field names in the sample, " +
+	"then retry with those names and a simple filter such as fqdn~'example'."
 
 var apiGetFieldsRE = regexp.MustCompile(`^[A-Za-z0-9_.,]{0,200}$`)
 
