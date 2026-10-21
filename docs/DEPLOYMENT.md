@@ -571,6 +571,11 @@ LLM_API_KEY=sk-...
 LLM_MODEL=gpt-4o-mini
 LLM_BASE_URL=https://api.openai.com/v1
 
+# Google Gemini (free plan: Google may use what is sent to improve its products)
+LLM_API_KEY=...
+LLM_MODEL=gemini-3.5-flash-lite
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+
 # Together.ai
 LLM_API_KEY=...
 LLM_MODEL=meta-llama/Llama-3.3-70B-Instruct-Turbo

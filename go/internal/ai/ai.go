@@ -643,14 +643,21 @@ const (
 	providerFailureOther = "the AI provider returned an error. The status is in the server log."
 )
 
-// chatURL mirrors the groq SDK URL join: base_url (default https://api.groq.com)
-// joined with the absolute path "/openai/v1/chat/completions" — an absolute path
-// replaces any path already on base_url, exactly as httpx.URL.join does.
+// chatURL builds the chat address from base_url (default https://api.groq.com).
+// A bare host gets Groq's path, "/openai/v1/chat/completions". A base that
+// carries its own path gets "/chat/completions" added, the same join the key
+// test (vault.LLMTest) uses, so a base that passes that test is the one used
+// here. Until 2026-10-21 the path was always replaced with Groq's, which sent
+// Gemini's https://generativelanguage.googleapis.com/v1beta/openai/ to a
+// path that does not exist.
 func chatURL(base string) string {
 	if base == "" {
 		base = "https://api.groq.com"
 	}
 	if u, err := url.Parse(base); err == nil && u.Host != "" {
+		if p := strings.TrimRight(u.Path, "/"); p != "" {
+			return u.Scheme + "://" + u.Host + p + "/chat/completions"
+		}
 		return u.Scheme + "://" + u.Host + "/openai/v1/chat/completions"
 	}
 	return strings.TrimRight(base, "/") + "/openai/v1/chat/completions"
