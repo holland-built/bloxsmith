@@ -65,7 +65,7 @@ func previewBlockUpstream(t *testing.T, subnets string) http.HandlerFunc {
 			}
 			io.WriteString(w, subnets)
 		case strings.HasSuffix(r.URL.Path, "/ipam/address_block"):
-			io.WriteString(w, `{"results":[]}`)
+			io.WriteString(w, `{"results":[]}`) // Infoblox sends no page object for an empty list
 		default:
 			t.Errorf("unexpected read %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -77,7 +77,7 @@ func previewBlockUpstream(t *testing.T, subnets string) http.HandlerFunc {
 // the subnet and the reverse zone the live run would most likely create.
 func TestSubnetStream_DryRun_NamesTheSubnetItWouldCreate(t *testing.T) {
 	d, logPath := newResidualDeps(t, previewBlockUpstream(t,
-		`{"results":[{"address":"172.16.128.0","cidr":24},{"address":"172.16.129.0","cidr":24}]}`))
+		`{"results":[{"address":"172.16.128.0","cidr":24},{"address":"172.16.129.0","cidr":24}],"page":{"total_size":"2"}}`))
 	rr := httptest.NewRecorder()
 	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&make_zone=1&dry=1"))
 
@@ -96,11 +96,34 @@ func TestSubnetStream_DryRun_SaysWhenTheBlockIsFull(t *testing.T) {
 	for i := 128; i < 136; i++ {
 		all = append(all, fmt.Sprintf(`{"address":"172.16.%d.0","cidr":24}`, i))
 	}
-	d, _ := newResidualDeps(t, previewBlockUpstream(t, `{"results":[`+strings.Join(all, ",")+`]}`))
+	d, _ := newResidualDeps(t, previewBlockUpstream(t, `{"results":[`+strings.Join(all, ",")+`],"page":{"total_size":"8"}}`))
 	rr := httptest.NewRecorder()
 	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
 	noDoneFrame(t, parseSSEFrames(t, rr.Body.String()))
 	if !strings.Contains(rr.Body.String(), "no free /24 left in block 172.16.128.0/21") {
 		t.Fatalf("want a full block named, got %s", rr.Body.String())
+	}
+}
+
+// A list that may be incomplete, or a child that cannot be read, must not
+// produce a guess: the preview falls back to naming only the size and block.
+func TestSubnetStream_DryRun_FallsBackWhenTheBlockCannotBeReadInFull(t *testing.T) {
+	var many []string
+	for i := 0; i < previewNoTotalMax; i++ {
+		many = append(many, `{"address":"10.0.0.0","cidr":32}`)
+	}
+	for name, subnets := range map[string]string{
+		"more rows than returned":  `{"results":[{"address":"172.16.128.0","cidr":24}],"page":{"total_size":"3"}}`,
+		"unreadable child":         `{"results":[{"address":"","cidr":24}],"page":{"total_size":"1"}}`,
+		"no total and a long list": `{"results":[` + strings.Join(many, ",") + `]}`,
+	} {
+		d, _ := newResidualDeps(t, previewBlockUpstream(t, subnets))
+		rr := httptest.NewRecorder()
+		d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+		body := rr.Body.String()
+		if strings.Contains(body, "probably") || !strings.Contains(body, "could not work out which one") {
+			t.Errorf("%s: want the fallback wording, got %s", name, body)
+		}
+		terminalFrameOf(t, parseSSEFrames(t, body))
 	}
 }

@@ -16,6 +16,10 @@ import (
 // rather than guess from a partial list.
 const previewListLimit = 5000
 
+// previewNoTotalMax is the most rows a list without a reported total may hold
+// and still count as complete (see guessNextSubnet).
+const previewNoTotalMax = 1000
+
 // guessNextSubnet works out the subnet a live Provision would most likely
 // create: the lowest free, aligned /bits inside the block, after every subnet
 // and child block already in it. Infoblox's own look-only call
@@ -43,20 +47,31 @@ func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block
 	}
 	var used []netip.Prefix
 	for _, path := range []string{"/api/ddi/v1/ipam/subnet", "/api/ddi/v1/ipam/address_block"} {
-		rows, err := c.GetStrict(path, map[string]string{
+		rows, page, err := c.GetPageStrict(path, map[string]string{
 			"_filter": `parent=="` + esc + `"`, "_fields": "address,cidr",
-			"_limit": strconv.Itoa(previewListLimit)})
+			"_limit": strconv.Itoa(previewListLimit), "_is_total_size_needed": "true"})
 		if err != nil {
 			return block, next, err
 		}
-		if len(rows) >= previewListLimit {
-			return block, next, fmt.Errorf("the block holds more than %d objects", previewListLimit)
+		// A list cut short, by our limit or by a smaller cap upstream, would hide
+		// a child and name an occupied range as free. Only a reported total that
+		// matches the rows proves the list is whole. The address_block list never
+		// reports one (seen 2026-10-21, with 0 rows and with 1), so without a
+		// total a list is taken as whole only when it is far below any page cap
+		// Infoblox could be applying.
+		total, ok := findTotal(page, len(rows))
+		complete := ok && total == len(rows) || !ok && len(rows) < previewNoTotalMax
+		if !complete || len(rows) >= previewListLimit {
+			return block, next, fmt.Errorf("the block's contents could not be read in full")
 		}
 		for _, r := range rows {
 			m, _ := r.(map[string]any)
-			if p, ok := prefixOf(m); ok {
-				used = append(used, p)
+			p, ok := prefixOf(m)
+			if !ok {
+				// skipping it could name its range as free
+				return block, next, fmt.Errorf("a child of the block has no readable address")
 			}
+			used = append(used, p)
 		}
 	}
 	next, _ = firstFreePrefix(block, used, bits)
