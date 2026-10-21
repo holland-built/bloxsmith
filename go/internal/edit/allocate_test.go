@@ -683,13 +683,19 @@ func TestAllocateDryEchoesTheDNSPayloadWithoutValidatingIt(t *testing.T) {
 		t.Fatalf("dry record = %v, want the payload echoed back unvalidated", rec)
 	}
 
+	if n := f.writes(); n != 0 {
+		t.Fatalf("upstream writes = %d, want 0 on the preview", n)
+	}
+	afterDry := len(f.all())
+
 	// Same payload, live: rejected. The preview said nothing was wrong.
 	_, liveStatus := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": float64(2), "dry": false, "dns": badDNS})
 	if liveStatus != 400 {
 		t.Fatalf("live status = %d, want 400 — this test exists because it differs from the dry 200", liveStatus)
 	}
-	if n := f.writes(); n != 0 {
-		t.Fatalf("upstream writes = %d, want 0 in both runs", n)
+	// The live run is refused before it reaches Infoblox at all, reads included.
+	if n := len(f.all()) - afterDry; n != 0 {
+		t.Fatalf("upstream requests on the live run = %d, want 0", n)
 	}
 }
 
