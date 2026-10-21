@@ -140,8 +140,14 @@ func TestSelfserviceAllocate_CleanReleaseWritesNoAuditEntry(t *testing.T) {
 // isDry gate, kept honest.
 func TestSelfserviceAllocate_DryRunWritesNoAuditEntry(t *testing.T) {
 	d, logPath := newDeleteDeps(t, func(w http.ResponseWriter, r *http.Request) {
-		t.Errorf("a dry run must issue no upstream call, got %s %s", r.Method, r.URL.Path)
-		w.WriteHeader(500)
+		// a preview may list free addresses (GET) but must never write
+		if r.Method != http.MethodGet {
+			t.Errorf("a dry run must issue no write, got %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"id":"ipam/address/a-1","address":"10.7.0.4"}]}`))
 	})
 
 	rr := httptest.NewRecorder()
