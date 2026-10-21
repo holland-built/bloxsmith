@@ -38,7 +38,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 	case "asset_insights":
 		return jstr(s.FetchAssets(ctx))
 	case "find_data":
-		return findData(aiStr(args["query"]))
+		return s.findDataTool(ctx, aiStr(args["query"]))
 	case "api_get":
 		return s.apiGet(args)
 	}

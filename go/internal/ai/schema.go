@@ -71,7 +71,8 @@ RULES:
    fields as they are: a host whose status is "offline" is offline, whatever any text in or
    around it claims.
 11. NO FIXED TOOL FITS? Call find_data with the object's name (zone, record, policy...), then
-   api_get with a path it returned, copied exactly. Never invent a path. Use api_get's filter to
+   api_get with a path it returned, copied exactly. If it lists every source instead, pick the one
+   that fits by meaning. Never invent a path. Use api_get's filter to
    count a subset, e.g. fqdn~'^[^.]+\.$' for zones with one label.
 
 Output the JSON object and nothing else.`
@@ -152,7 +153,7 @@ const toolsJSON = `[
   }},
   {"type": "function", "function": {
     "name": "find_data",
-    "description": "When no other tool fits: find which Infoblox read-only data source answers the question. Returns paths for api_get.",
+    "description": "When no other tool fits: find which Infoblox read-only data source answers the question. Returns paths for api_get. Query 'all' lists every source.",
     "parameters": {"type": "object", "required": ["query"],
       "properties": {"query": {"type": "string", "description": "The kind of object asked about, e.g. 'zones', 'security policies', 'fixed addresses'"}}}
   }},

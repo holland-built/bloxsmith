@@ -40,6 +40,15 @@ jobs:
         with:
           node-version: '24'
 
+      # The Ask tab's source list must match the services snapshot it is built from.
+      - name: AI source list up to date
+        run: |
+          python3 scripts/build-ai-catalog.py
+          git diff --exit-code go/internal/dashboard/ai_catalog.json || {
+            echo "::error::ai_catalog.json is stale — run: python3 scripts/build-ai-catalog.py"
+            exit 1
+          }
+
       # UI freshness: rebuild ui/dist and fail if go/web does not match it.
       - name: UI dist up to date (vite build --check)
         run: |
