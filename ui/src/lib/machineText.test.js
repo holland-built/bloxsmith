@@ -66,6 +66,7 @@ const PROSE = [
   ['components/BrandLogo.jsx', 'brand-edit-name', 'a company display name'],
   ['components/VaultGate.jsx', 'vat-name', 'a name the operator gives a tenant'],
   ['components/TenantManager.jsx', 'tm-add-label', 'a name the operator gives a tenant'],
+  ['tabs/ChartBuilder.jsx', 'chart-save-title', 'a name the operator gives a saved chart'],
 ]
 
 const all = jsxFiles(SRC).flatMap((f) => {

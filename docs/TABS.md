@@ -334,6 +334,8 @@ Pick **What to count** (DNS queries, Security hits, DNS queries per second, or D
 
 The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked.
 
+**Add to a page** puts the chart on Overview, DNS, Security, Network or Infra under a name you choose. It becomes an ordinary panel there: Arrange panels moves or hides it, and **Remove from this page** in its About (ⓘ) takes it off. Only the picks are saved, so the chart is redrawn from your Infoblox account each time the page opens, and from whichever account is active. Saved charts are kept on this machine, with the panel layouts, and every account sees the same ones.
+
 **Show cube names** swaps the plain names for the real cube and field names, for anyone who wants to copy them. The setting is kept in this browser.
 
 If Infoblox does not answer, the chart says so in red. That is different from "no activity", which means it answered and there was nothing to count.

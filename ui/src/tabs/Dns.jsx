@@ -10,6 +10,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
 // ---------- main ----------
 
@@ -48,6 +49,8 @@ function headlines(qps, services, zones, zonesStatus, zonesFailed) {
 }
 
 export default function Dns() {
+  // Charts added from Build a chart; they join the grid as ordinary panels.
+  const savedCharts = useSavedChartPanels('dns')
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
   const services = useApi('/api/csp/dns-services', { poll: 30000 })
   // Re-enabled 2026-07-22: MCP calls now carry a bounded 12s deadline (mcp.go post()),
@@ -102,6 +105,7 @@ export default function Dns() {
         <DnssecHealth panelId="dns-dnssec-health" dnssec={dnssec} />
         <RpzPanel panelId="dns-rpz" rpz={rpz} />
         <DtcLbdnPanel panelId="dns-dtc-lbdn" dtcLbdn={dtcLbdn} />
+        {savedCharts}
       </CardGrid>
     </div>
   )

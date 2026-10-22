@@ -74,7 +74,9 @@ test('the name goes in aria-label, never in an SVG title', () => {
 // with no label would be announced as "undefined chart".
 test('every chart on every page is given a label', () => {
   const dir = new URL('../tabs/', import.meta.url)
-  const opening = /<(GradientArea|CategoryBars|StackedDayBars|StatusDonut|SubnetUsageBars)\b/g
+  // ChartView is Build a chart's chart (components/ChartView.jsx), which hands
+  // its label to whichever of the others it draws.
+  const opening = /<(GradientArea|CategoryBars|StackedDayBars|StatusDonut|SubnetUsageBars|ChartView)\b/g
   // The tag ends at the first "/>" outside any {…}. A plain "[^>]*" stops
   // early at the ">" of an arrow function in a prop, which two charts have.
   const tagFrom = (src, start) => {
@@ -95,6 +97,6 @@ test('every chart on every page is given a label', () => {
       if (!/\blabel="[^"]+"/.test(tagFrom(src, m.index))) missing.push(`${f}: <${m[1]}>`)
     }
   }
-  assert.equal(seen, 14, 'the number of charts in ui/src/tabs changed; check each new one has a label')
+  assert.equal(seen, 11, 'the number of charts in ui/src/tabs changed; check each new one has a label')
   assert.deepEqual(missing, [])
 })

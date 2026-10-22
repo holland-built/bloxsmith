@@ -9,6 +9,7 @@ import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -36,6 +37,8 @@ function ipCompare(a, b) {
 const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
 
 export default function Network() {
+  // Charts added from Build a chart; they join the grid as ordinary panels.
+  const savedCharts = useSavedChartPanels('network')
   const data = useApi('/api/data', { poll: 30000 })
   const ipam = useApi('/api/csp/ipam-util', { poll: 30000 })
   const dhcp = useApi('/api/csp/dhcp-leases', { poll: 30000 })
@@ -99,6 +102,7 @@ export default function Network() {
             <DhcpLeases key="network-dhcp-leases" panelId="network-dhcp-leases" dhcp={dhcp} innerRef={leasesRef} />,
           ],
         })}
+        {savedCharts}
       </CardGrid>
     </div>
   )

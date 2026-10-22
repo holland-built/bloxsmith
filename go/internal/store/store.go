@@ -159,6 +159,10 @@ func (s *Store) ViewWrite(blob map[string]any) (map[string]any, int) {
 		"folder":   str(blob, "folder"),
 		"saved_at": savedAt,
 	}
+	// A saved chart's picks; the server handler has already checked them.
+	if c, ok := blob["chart"]; ok {
+		rec["chart"] = c
+	}
 	if err := atomicWriteJSON(p, rec); err != nil {
 		return map[string]any{"ok": false, "error": "internal error"}, 500
 	}
