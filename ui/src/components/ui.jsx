@@ -4,13 +4,32 @@ import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { markArranged } from '../lib/arrangedOnce.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
-import { PANEL_HELP } from '../lib/panelHelp.js'
+import { PANEL_HELP, builtLine } from '../lib/panelHelp.js'
 import { shouldHidePanel, showAnyway } from '../lib/services.js'
 import {
   declaredSpan, fillRows, insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
   shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
 } from '../lib/layout.js'
 import { utilBand } from '../lib/utilBands.js'
+
+// Where each panel's numbers come from (dashboard/panel_sources.go), by id.
+// Loaded the first time any About opens, not with the page: all 90 entries in
+// the entry chunk put #provision over tests/bundle-budget.spec.ts's budget.
+let panelSourcesById = null
+let panelSourcesLoad = null
+function usePanelBuiltLine(panelId, open) {
+  const [, setLoaded] = useState(false)
+  useEffect(() => {
+    if (!open || panelSourcesById) return
+    panelSourcesLoad ??= import('../lib/panelSources.json').then((m) => {
+      panelSourcesById = new Map(m.default.map((p) => [p.id, p]))
+    })
+    let live = true
+    panelSourcesLoad.then(() => live && setLoaded(true), () => {})
+    return () => { live = false }
+  }, [open])
+  return open && panelSourcesById ? builtLine(panelSourcesById.get(panelId)) : null
+}
 
 // Static COLORS as CSS var() strings: fine for inline HTML styles (auto-flip with
 // theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
@@ -2494,6 +2513,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   const [helpPeek, setHelpPeek] = useState(false)
   const [helpFocus, setHelpFocus] = useState(false)
   const helpOpen = helpPinned || helpPeek || helpFocus
+  const built = usePanelBuiltLine(panelId, helpOpen)
   const helpId = panelId ? `panel-help-${panelId}` : undefined
   const aboutWordId = panelId ? `panel-about-${panelId}` : undefined
 
@@ -2581,6 +2601,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
               said once instead, in the "Arrange this page" window. */}
           <p>{help.what}</p>
           {help.look && <p className="mt-1">{help.look}</p>}
+          {built && <p className="mt-1" data-panel-built="">{built}</p>}
         </>
       )}
     </div>

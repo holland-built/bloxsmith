@@ -4,7 +4,8 @@ import test from 'node:test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PANEL_HELP } from './panelHelp.js'
+import { PANEL_HELP, builtLine } from './panelHelp.js'
+import PANEL_SOURCES from './panelSources.json' with { type: 'json' }
 
 // ---------------------------------------------------------------------------
 // Part 1 — shape.
@@ -298,4 +299,39 @@ test('(d) no panelId is used twice', () => {
     'panelId must be unique app-wide — Card writes it into the DOM as id="panel-title-<id>", ' +
       `so a repeat is a duplicate DOM id:\n  ${dupes.join('\n  ')}`,
   )
+})
+
+// ---------------------------------------------------------------------------
+// Part 3 — how each panel is built.
+//
+// panelSources.json is dashboard/panel_sources.go's list, kept identical to it
+// by a Go test. Every panel with help must have a source and the other way
+// round, or an About would end without saying where its numbers come from.
+// ---------------------------------------------------------------------------
+
+test('every panel with help says how it is built, and nothing else does', () => {
+  const help = Object.keys(PANEL_HELP).sort()
+  const built = PANEL_SOURCES.map((p) => p.id).sort()
+  assert.deepEqual(built.filter((id) => !help.includes(id)), [], 'in panel_sources.go but not in PANEL_HELP')
+  assert.deepEqual(help.filter((id) => !built.includes(id)), [], 'in PANEL_HELP but not in panel_sources.go')
+})
+
+test('the built line says where the numbers come from and whether Build a chart can redraw it', () => {
+  const of = (id) => builtLine(PANEL_SOURCES.find((p) => p.id === id))
+  assert.equal(of('dns-query-volume-7d'), "Built from Infoblox's DNS activity records. Build a chart can redraw this.")
+  assert.equal(
+    of('dns-hero'),
+    "Built from Infoblox's DNS server metrics. Build a chart can draw a copy of the chart, though the latest-hour figure and the comparison beside it are worked out in the app.",
+  )
+  assert.equal(
+    of('subnet-heatmap'),
+    "Built from the subnet list. Build a chart can't redraw it: how full each subnet is, and its colour band, is worked out in the app.",
+  )
+  for (const p of PANEL_SOURCES) {
+    const line = builtLine(p)
+    assert.match(line, /^Built from [^.]+\. Build a chart can/, `${p.id}: ${line}`)
+    assert.ok(line.endsWith('.') && !line.endsWith('..'), `${p.id}: ${line}`)
+    assert.doesNotMatch(line, /undefined/, p.id)
+  }
+  assert.equal(builtLine(undefined), null)
 })

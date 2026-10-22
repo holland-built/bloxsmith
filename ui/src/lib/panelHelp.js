@@ -427,3 +427,18 @@ export const PANEL_HELP = {
     look: 'With cube names off, a plain-words copy of the query sits beside the real one.',
   },
 }
+
+// ---------------------------------------------------------------------------
+// The last line of every About: where the panel's numbers come from, and
+// whether Build a chart can redraw it. The facts are dashboard/panel_sources.go
+// (as panelSources.json); only the sentence around them lives here.
+// ---------------------------------------------------------------------------
+
+/** One panel's "how it's built" sentence, or null when there is no source. */
+export function builtLine(src) {
+  if (!src) return null
+  const from = `Built from ${src.source}.`
+  if (src.builder === 'exact') return `${from} Build a chart can redraw this.`
+  if (src.builder === 'copy') return `${from} Build a chart can draw a copy of the chart, though ${src.why}.`
+  return `${from} Build a chart can't redraw it: ${src.why}.`
+}
