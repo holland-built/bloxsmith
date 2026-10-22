@@ -48,7 +48,7 @@ test('the sentence follows the picks', async ({ page }) => {
 test('choices that do not fit are hidden, not greyed out', async ({ page }) => {
   await page.goto('/#chart');
   const split = page.getByLabel('Split by');
-  await expect(split.locator('option')).toHaveText(['Device', 'Record type', 'Nothing, one total']);
+  await expect(split.locator('option')).toHaveText(['Device', 'Record type', 'Domain', 'Answer', 'Nothing, one total']);
 
   await page.getByLabel('What to count').selectOption({ label: 'DNS queries per second' });
   await expect(split.locator('option')).toHaveText(['Nothing, one total']);
@@ -57,6 +57,53 @@ test('choices that do not fit are hidden, not greyed out', async ({ page }) => {
   await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour']);
   await expect(page.getByLabel('How many')).toHaveCount(0);
   await expect(page.locator('option[disabled]')).toHaveCount(0);
+});
+
+test('round two adds things to count and split by, each hidden where it does not fit', async ({ page }) => {
+  await page.goto('/#chart');
+  const count = page.getByLabel('What to count');
+  const split = page.getByLabel('Split by');
+  await expect(count.locator('option')).toHaveText(['DNS queries', 'Security hits', 'DNS queries per second', 'DHCP lease changes']);
+  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 24 hours', 'Last 7 days', 'Last 30 days']);
+
+  // A domain is a top N only: over time offers nothing but one total.
+  await split.selectOption({ label: 'Domain' });
+  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['No, one total']);
+  await expect(heading(page)).toHaveText('Top 10 domains by DNS queries, last 7 days');
+
+  await count.selectOption({ label: 'Security hits' });
+  await expect(split.locator('option')).toHaveText(['What happened', 'Threat type', 'Policy', 'Severity', 'Nothing, one total']);
+  // The security cube keeps one row a day: no rolling 24 hours, no by hour.
+  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 7 days', 'Last 30 days']);
+  await split.selectOption({ label: 'Policy' });
+  await expect(heading(page)).toHaveText('Top 10 policies by Security hits, last 7 days');
+
+  await count.selectOption({ label: 'DHCP lease changes' });
+  await expect(split.locator('option')).toHaveText(['What changed', 'Nothing, one total']);
+
+  // Last 24 hours slices by hour, never by day.
+  await split.selectOption({ label: 'Nothing, one total' });
+  await page.getByLabel('When').selectOption({ label: 'Last 24 hours' });
+  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour']);
+  await expect(heading(page)).toHaveText('DHCP lease changes by hour, last 24 hours');
+  await expect(page.locator('option[disabled]')).toHaveCount(0);
+});
+
+test('how the chart was made is short labelled lines, the query folded away', async ({ page }) => {
+  await page.goto('/#chart');
+  const how = page.locator('[data-panel-id="chart-how"]');
+  await expect(how.locator('dt')).toHaveText(['Counted', 'Split by', 'When', 'Showing']);
+  await expect(how.locator('dd')).toHaveText(['DNS queries', 'Device', 'Last 7 days', 'Top 10, highest first']);
+  await expect(page.getByText('The question, in plain words')).toHaveCount(0);
+
+  // The real query and the first rows sit under one closed fold.
+  const fold = how.locator('details');
+  await expect(fold.locator('summary')).toHaveText('The query as sent');
+  await expect(fold).not.toHaveAttribute('open', /.*/);
+  await expect(how.locator('pre')).toBeHidden();
+  await fold.locator('summary').click();
+  await expect(how.locator('pre')).toContainText('NetworkNstarDnsActivity.total_query_count');
+  await expect(how.locator('table')).toBeVisible();
 });
 
 test('every pick sends an allowed GET', async ({ page }) => {

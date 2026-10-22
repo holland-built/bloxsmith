@@ -36,19 +36,28 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"dns":     "NetworkNstarDnsActivity.total_query_count",
 		"threats": "PortunusAggThreat_ch.requests",
 		"qps":     "HostMetrics.avg_value",
+		"dhcp":    "NetworkNstarDhcpLeaseActivity.total_count",
 	}
-	cubes := map[string]string{"dns": "NetworkNstarDnsActivity", "threats": "PortunusAggThreat_ch", "qps": "HostMetrics"}
+	cubes := map[string]string{"dns": "NetworkNstarDnsActivity", "threats": "PortunusAggThreat_ch",
+		"qps": "HostMetrics", "dhcp": "NetworkNstarDhcpLeaseActivity"}
 	endpoints := map[string]string{
 		"dns":     "/api/cubejs/v1/query",
 		"threats": "/api/cubejs-security/v1/query",
 		"qps":     "/api/cubejs/v1/query",
+		"dhcp":    "/api/cubejs/v1/query",
 	}
 	dims := map[string][]any{
-		"device": {"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
-		"qtype":  {"NetworkNstarDnsActivity.query_type"},
-		"action": {"PortunusAggThreat_ch.action"},
+		"device":   {"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
+		"qtype":    {"NetworkNstarDnsActivity.query_type"},
+		"domain":   {"NetworkNstarDnsActivity.qname"},
+		"rcode":    {"NetworkNstarDnsActivity.rcode"},
+		"action":   {"PortunusAggThreat_ch.action"},
+		"tclass":   {"PortunusAggThreat_ch.tclass"},
+		"policy":   {"PortunusAggThreat_ch.policy_name"},
+		"severity": {"PortunusAggThreat_ch.severity"},
+		"leaseop":  {"NetworkNstarDhcpLeaseActivity.lease_op"},
 	}
-	ranges := map[string]string{"today": "today", "7d": "last 7 days", "30d": "last 30 days"}
+	ranges := map[string]string{"today": "today", "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days"}
 
 	combos := ChartCombos()
 	if len(combos) == 0 {
@@ -107,14 +116,99 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 	}
 }
 
+// TestBuildChartQuery_NewPicksExactly writes out, whole, the query each pick
+// added in round two sends, so a field name typo cannot hide behind a map.
+func TestBuildChartQuery_NewPicksExactly(t *testing.T) {
+	top := func(cube, measure, field, window string, n int) map[string]any {
+		return map[string]any{
+			"measures":       []any{cube + "." + measure},
+			"dimensions":     []any{cube + "." + field},
+			"timeDimensions": []any{map[string]any{"dimension": cube + ".timestamp", "dateRange": window}},
+			"order":          map[string]any{cube + "." + measure: "desc"},
+			"limit":          float64(n),
+		}
+	}
+	const dns, sec, dhcp = "/api/cubejs/v1/query", "/api/cubejs-security/v1/query", "/api/cubejs/v1/query"
+	for _, c := range []struct {
+		p        ChartPicks
+		want     map[string]any
+		endpoint string
+	}{
+		{ChartPicks{Count: "dns", Split: "domain", Window: "7d", Over: "none", Top: 10},
+			top("NetworkNstarDnsActivity", "total_query_count", "qname", "last 7 days", 10), dns},
+		{ChartPicks{Count: "dns", Split: "rcode", Window: "30d", Over: "none", Top: 5},
+			top("NetworkNstarDnsActivity", "total_query_count", "rcode", "last 30 days", 5), dns},
+		{ChartPicks{Count: "threats", Split: "tclass", Window: "7d", Over: "none", Top: 5},
+			top("PortunusAggThreat_ch", "requests", "tclass", "last 7 days", 5), sec},
+		{ChartPicks{Count: "threats", Split: "policy", Window: "today", Over: "none", Top: 5},
+			top("PortunusAggThreat_ch", "requests", "policy_name", "today", 5), sec},
+		{ChartPicks{Count: "threats", Split: "severity", Window: "7d", Over: "none", Top: 5},
+			top("PortunusAggThreat_ch", "requests", "severity", "last 7 days", 5), sec},
+		{ChartPicks{Count: "dhcp", Split: "leaseop", Window: "7d", Over: "none", Top: 5},
+			top("NetworkNstarDhcpLeaseActivity", "total_count", "lease_op", "last 7 days", 5), dhcp},
+		{ChartPicks{Count: "dhcp", Split: "none", Window: "30d", Over: "day"},
+			map[string]any{
+				"measures": []any{"NetworkNstarDhcpLeaseActivity.total_count"},
+				"timeDimensions": []any{map[string]any{"dimension": "NetworkNstarDhcpLeaseActivity.timestamp",
+					"dateRange": "last 30 days", "granularity": "day"}},
+			}, dhcp},
+		{ChartPicks{Count: "dns", Split: "none", Window: "24h", Over: "hour"},
+			map[string]any{
+				"measures": []any{"NetworkNstarDnsActivity.total_query_count"},
+				"timeDimensions": []any{map[string]any{"dimension": "NetworkNstarDnsActivity.timestamp",
+					"dateRange": "last 24 hours", "granularity": "hour"}},
+			}, dns},
+	} {
+		q, ep, err := BuildChartQuery(c.p)
+		if err != nil {
+			t.Errorf("%+v: refused: %v", c.p, err)
+			continue
+		}
+		if got := roundTrip(t, q); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%+v:\n got %v\nwant %v", c.p, got, c.want)
+		}
+		if ep != c.endpoint {
+			t.Errorf("%+v: endpoint = %s, want %s", c.p, ep, c.endpoint)
+		}
+	}
+}
+
+// TestBuildChartQuery_RedrawsTheDNSQueryRatePanel: queries per second over the
+// last 24 hours by hour is the DNS tab's query-rate panel (CSPDNSQps), and it
+// must send that panel's query exactly, or the two would disagree.
+func TestBuildChartQuery_RedrawsTheDNSQueryRatePanel(t *testing.T) {
+	var panel, built string
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := json.Marshal(cubeQueryFromRequest(t, r))
+		panel = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"data":[]}}`))
+	})
+	s.CSPDNSQps()
+	q, ep, err := BuildChartQuery(ChartPicks{Count: "qps", Split: "none", Window: "24h", Over: "hour"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(roundTrip(t, q))
+	built = string(b)
+	if panel == "" || built != panel {
+		t.Fatalf("builder query differs from the panel's:\n built %s\n panel %s", built, panel)
+	}
+	if ep != "/api/cubejs/v1/query" {
+		t.Fatalf("endpoint = %s", ep)
+	}
+}
+
 // TestChartCombos_FollowThePickerRules pins the rules themselves: by hour only
-// with today, by day only with 7 or 30 days, top N only for a split with no
-// time slicing, and each measure split only by its own cube's fields.
+// with today or the last 24 hours, by day only with 7 or 30 days, top N only
+// for a split with no time slicing, and each measure split only by its own
+// cube's fields.
 func TestChartCombos_FollowThePickerRules(t *testing.T) {
 	splits := map[string]map[string]bool{
-		"dns":     {"device": true, "qtype": true, "none": true},
-		"threats": {"action": true, "none": true},
+		"dns":     {"device": true, "qtype": true, "domain": true, "rcode": true, "none": true},
+		"threats": {"action": true, "tclass": true, "policy": true, "severity": true, "none": true},
 		"qps":     {"none": true},
+		"dhcp":    {"leaseop": true, "none": true},
 	}
 	seen := map[ChartPicks]bool{}
 	for _, p := range ChartCombos() {
@@ -125,10 +219,10 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		if !splits[p.Count][p.Split] {
 			t.Errorf("%+v: %s cannot be split by %s", p, p.Count, p.Split)
 		}
-		if p.Over == "hour" && p.Window != "today" {
-			t.Errorf("%+v: by hour is only for today", p)
+		if p.Over == "hour" && p.Window != "today" && p.Window != "24h" {
+			t.Errorf("%+v: by hour is only for today or the last 24 hours", p)
 		}
-		if p.Over == "day" && p.Window == "today" {
+		if p.Over == "day" && p.Window != "7d" && p.Window != "30d" {
 			t.Errorf("%+v: by day is only for 7 or 30 days", p)
 		}
 		wantTop := p.Split != "none" && p.Over == "none"
@@ -138,6 +232,14 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		if p.Split == "none" && p.Over == "none" {
 			t.Errorf("%+v: a single total has no chart to draw", p)
 		}
+		// Measured 2026-10-22: every hourly slice of PortunusAggThreat_ch comes
+		// back as one row at midnight, so "by hour" would draw a single bar.
+		if p.Count == "threats" && (p.Over == "hour" || p.Window == "24h") {
+			t.Errorf("%+v: security hits are kept by day, not by hour or a rolling 24 hours", p)
+		}
+		if p.Split != "none" && p.Over != "none" && p.Split != "action" {
+			t.Errorf("%+v: only blocked vs allowed splits over time", p)
+		}
 	}
 	// The four charts the owner will build by picking must all be reachable.
 	for _, p := range []ChartPicks{
@@ -145,6 +247,11 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		{Count: "dns", Split: "none", Window: "today", Over: "hour"},
 		{Count: "threats", Split: "action", Window: "30d", Over: "day"},
 		{Count: "dns", Split: "qtype", Window: "7d", Over: "none", Top: 10},
+		{Count: "qps", Split: "none", Window: "24h", Over: "hour"},
+		{Count: "dns", Split: "domain", Window: "24h", Over: "none", Top: 25},
+		{Count: "threats", Split: "severity", Window: "30d", Over: "none", Top: 10},
+		{Count: "dhcp", Split: "leaseop", Window: "today", Over: "none", Top: 5},
+		{Count: "dhcp", Split: "none", Window: "today", Over: "hour"},
 	} {
 		if !seen[p] {
 			t.Errorf("%+v: missing from the allow-list", p)
@@ -154,17 +261,28 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 
 func TestBuildChartQuery_RefusesPicksOutsideTheCatalog(t *testing.T) {
 	for _, p := range []ChartPicks{
-		{Count: "domains", Split: "none", Window: "7d", Over: "day"},            // unknown measure
-		{Count: "threats", Split: "qtype", Window: "7d", Over: "none", Top: 10}, // field from another cube
-		{Count: "qps", Split: "device", Window: "7d", Over: "none", Top: 10},    // HostMetrics has no split
-		{Count: "dns", Split: "none", Window: "7d", Over: "hour"},               // by hour needs today
-		{Count: "dns", Split: "none", Window: "today", Over: "day"},             // by day needs 7/30 days
-		{Count: "dns", Split: "device", Window: "7d", Over: "none", Top: 1000},  // top outside 5/10/25
-		{Count: "dns", Split: "device", Window: "7d", Over: "none"},             // split with no top
-		{Count: "dns", Split: "none", Window: "7d", Over: "day", Top: 10},       // top with no split
-		{Count: "dns", Split: "none", Window: "90d", Over: "day"},               // unknown window
-		{Count: "dns", Split: "none", Window: "7d", Over: "none"},               // one bare total
-		{Count: "dns", Split: "device", Window: "7d", Over: "day"},              // device over time
+		{Count: "domains", Split: "none", Window: "7d", Over: "day"},             // unknown measure
+		{Count: "threats", Split: "qtype", Window: "7d", Over: "none", Top: 10},  // field from another cube
+		{Count: "qps", Split: "device", Window: "7d", Over: "none", Top: 10},     // HostMetrics has no split
+		{Count: "dns", Split: "none", Window: "7d", Over: "hour"},                // by hour needs today
+		{Count: "dns", Split: "none", Window: "today", Over: "day"},              // by day needs 7/30 days
+		{Count: "dns", Split: "device", Window: "7d", Over: "none", Top: 1000},   // top outside 5/10/25
+		{Count: "dns", Split: "device", Window: "7d", Over: "none"},              // split with no top
+		{Count: "dns", Split: "none", Window: "7d", Over: "day", Top: 10},        // top with no split
+		{Count: "dns", Split: "none", Window: "90d", Over: "day"},                // unknown window
+		{Count: "dns", Split: "none", Window: "7d", Over: "none"},                // one bare total
+		{Count: "dns", Split: "device", Window: "7d", Over: "day"},               // device over time
+		{Count: "threats", Split: "domain", Window: "7d", Over: "none", Top: 10}, // DNS field on the security cube
+		{Count: "dns", Split: "tclass", Window: "7d", Over: "none", Top: 10},     // security field on the DNS cube
+		{Count: "dhcp", Split: "device", Window: "7d", Over: "none", Top: 10},    // DNS field on the DHCP cube
+		{Count: "dns", Split: "severity", Window: "7d", Over: "none", Top: 5},    // security field on the DNS cube
+		{Count: "dns", Split: "none", Window: "24h", Over: "day"},                // by day needs 7/30 days
+		{Count: "dns", Split: "domain", Window: "7d", Over: "day"},               // domains are top N only
+		{Count: "threats", Split: "tclass", Window: "30d", Over: "day"},          // threat types are top N only
+		{Count: "dhcp", Split: "leaseop", Window: "7d", Over: "day"},             // what changed is top N only
+		{Count: "threats", Split: "action", Window: "today", Over: "hour"},       // the security cube keeps days only
+		{Count: "threats", Split: "none", Window: "24h", Over: "hour"},           // the security cube keeps days only
+		{Count: "threats", Split: "policy", Window: "24h", Over: "none", Top: 5}, // a rolling 24 hours of day rows
 	} {
 		if q, ep, err := BuildChartQuery(p); err == nil {
 			t.Errorf("%+v: accepted, built %v for %s", p, q, ep)
@@ -285,6 +403,26 @@ func TestChartOptions_EveryFieldHasAPlainName(t *testing.T) {
 	// The tenant sends these capitalised (measured live 2026-10-21).
 	if vals["Block"] != "Blocked" || vals["Allow"] != "Allowed" {
 		t.Errorf("action values = %v, want Block->Blocked, Allow->Allowed", vals)
+	}
+	vals = asMap(opts["values"])
+	// rcode is a number on the wire; the three seen on the tenant have words.
+	rc := asMap(vals["NetworkNstarDnsActivity.rcode"])
+	if rc["0"] != "Answered" || rc["2"] != "Server failed" || rc["3"] != "No such name" {
+		t.Errorf("rcode values = %v", rc)
+	}
+	if asMap(opts["otherValues"])["NetworkNstarDnsActivity.rcode"] != "Answer code %s" {
+		t.Errorf("an unknown rcode must read as \"Answer code N\", got %v", opts["otherValues"])
+	}
+	// About 2.55M security hits have no severity; they are shown, not dropped.
+	if asMap(vals["PortunusAggThreat_ch.severity"])[""] != "Not graded" {
+		t.Errorf("blank severity must read as Not graded, got %v", vals["PortunusAggThreat_ch.severity"])
+	}
+	// Every split with a top N needs a plural for "Top 10 <plural>".
+	for _, s := range asSlice(opts["splits"]) {
+		m := asMap(s)
+		if pl, _ := m["plural"].(string); m["id"] != "none" && m["id"] != "action" && pl == "" {
+			t.Errorf("split %v has no plural", m["id"])
+		}
 	}
 	if len(asSlice(opts["combos"])) != len(ChartCombos()) {
 		t.Errorf("options must carry the whole allow-list")

@@ -4,8 +4,8 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, 
 import Switch from '../components/Switch.jsx'
 import { setCubeNames, useCubeNames } from '../lib/cubeNames.js'
 import {
-  DEFAULT_PICKS, chartData, chartKind, chartUrl, choiceName, choicesFor, fieldName, plainQuery,
-  sampleTable, sentence, settlePicks,
+  DEFAULT_PICKS, chartData, chartKind, chartUrl, choiceName, choicesFor, describePicks, fieldName,
+  sampleTable, sentence, settlePicks, shortLabel,
 } from '../lib/chartBuilder.js'
 
 // Build a chart: plain menus in, one Cube.js query out, a chart of what the
@@ -81,7 +81,8 @@ function TheChart({ opts, picks, rows }) {
           />
         </div>
       ) : (
-        <CategoryBars label="Your" data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} />
+        // Domains run long; shortLabel keeps each one under its own bar.
+        <CategoryBars label="Your" data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} />
       )}
     </Suspense>
   )
@@ -103,7 +104,7 @@ function ResultPanel({ panelId, opts, picks, result, cube }) {
   )
 }
 
-function HowPanel({ panelId, opts, result, cube }) {
+function HowPanel({ panelId, opts, picks, result, cube }) {
   const query = result.data?.query
   const table = sampleTable(opts, (result.data?.rows ?? []).slice(0, 5), cube)
   return (
@@ -115,45 +116,43 @@ function HowPanel({ panelId, opts, result, cube }) {
           <p className="text-note text-muted">
             Sent to <code>{result.data.endpoint}</code> on your Infoblox account. No AI was used.
           </p>
-          <div className={`grid gap-4 ${cube ? '' : 'md:grid-cols-2'}`}>
-            {!cube && (
-              <div>
-                <h3 className="text-note font-semibold mb-1">The question, in plain words</h3>
-                <pre className="text-note bg-field border border-border rounded-control p-2 overflow-x-auto">
-                  {JSON.stringify(plainQuery(opts, query), null, 2)}
-                </pre>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-copy">
+            {describePicks(opts, picks, cube).map(({ label, text }) => (
+              <div key={label} className="contents">
+                <dt className="text-muted">{label}</dt>
+                <dd className="break-words">{text}</dd>
               </div>
-            )}
-            <div>
-              <h3 className="text-note font-semibold mb-1">The query as sent</h3>
-              <pre className="text-note bg-field border border-border rounded-control p-2 overflow-x-auto">
-                {JSON.stringify(query, null, 2)}
-              </pre>
-            </div>
-          </div>
-          {table.rows.length > 0 && (
-            <div className="overflow-x-auto">
-              <h3 className="text-note font-semibold mb-1">The first {table.rows.length} rows Infoblox sent back</h3>
-              <table className="text-note w-full">
-                <thead>
-                  <tr>
-                    {table.headers.map((h, i) => (
-                      <th key={i} scope="col" className="text-left font-semibold text-muted py-1 pr-4">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {table.rows.map((r, i) => (
-                    <tr key={i} className="border-t border-line">
-                      {r.map((v, j) => (
-                        <td key={j} className="py-1 pr-4 tabular-nums">{v}</td>
+            ))}
+          </dl>
+          <details>
+            <summary className="text-note font-semibold cursor-pointer select-none">The query as sent</summary>
+            <pre className="text-note bg-field border border-border rounded-control p-2 mt-2 overflow-x-auto">
+              {JSON.stringify(query, null, 2)}
+            </pre>
+            {table.rows.length > 0 && (
+              <div className="overflow-x-auto mt-4">
+                <h3 className="text-note font-semibold mb-1">The first {table.rows.length} rows Infoblox sent back</h3>
+                <table className="text-note w-full">
+                  <thead>
+                    <tr>
+                      {table.headers.map((h, i) => (
+                        <th key={i} scope="col" className="text-left font-semibold text-muted py-1 pr-4">{h}</th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {table.rows.map((r, i) => (
+                      <tr key={i} className="border-t border-line">
+                        {r.map((v, j) => (
+                          <td key={j} className="py-1 pr-4 tabular-nums">{v}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </details>
         </div>
       )}
     </Card>
@@ -171,7 +170,7 @@ function Builder({ opts }) {
         <Pickers opts={opts} picks={picks} onPick={onPick} cube={cube} />
       </Card>
       <ResultPanel panelId="chart-result" opts={opts} picks={picks} result={result} cube={cube} />
-      <HowPanel panelId="chart-how" opts={opts} result={result} cube={cube} />
+      <HowPanel panelId="chart-how" opts={opts} picks={picks} result={result} cube={cube} />
     </CardGrid>
   )
 }

@@ -13,14 +13,18 @@
     - option "DNS queries" [selected]
     - option "Security hits"
     - option "DNS queries per second"
+    - option "DHCP lease changes"
   - text: Split by
   - combobox "Split by":
     - option "Device" [selected]
     - option "Record type"
+    - option "Domain"
+    - option "Answer"
     - option "Nothing, one total"
   - text: When
   - combobox "When":
     - option "Today"
+    - option /Last \d+ hours/
     - option "Last 7 days" [selected]
     - option /Last \d+ days/
   - text: Over time
@@ -42,23 +46,12 @@
     - text: Sent to
     - code: /api/cubejs/v1/query
     - text: on your Infoblox account. No AI was used.
-  - heading "The question, in plain words" [level=3]
-  - text: "/\\{ \"measures\": \\[ \"DNS queries\" \\], \"dimensions\": \\[ \"Device\", \"Device address\" \\], \"timeDimensions\": \\[ \\{ \"dimension\": \"Time\", \"dateRange\": \"last 7 days\" \\} \\], \"order\": \\{ \"DNS queries\": \"desc\" \\}, \"limit\": \\d+ \\}/"
-  - heading "The query as sent" [level=3]
-  - text: "/\\{ \"measures\": \\[ \"NetworkNstarDnsActivity\\.total_query_count\" \\], \"dimensions\": \\[ \"NetworkNstarDnsActivity\\.device_name\", \"NetworkNstarDnsActivity\\.device_ip\" \\], \"timeDimensions\": \\[ \\{ \"dimension\": \"NetworkNstarDnsActivity\\.timestamp\", \"dateRange\": \"last 7 days\" \\} \\], \"order\": \\{ \"NetworkNstarDnsActivity\\.total_query_count\": \"desc\" \\}, \"limit\": \\d+ \\}/"
-  - heading "The first 2 rows Infoblox sent back" [level=3]
-  - table:
-    - rowgroup:
-      - row "Device Device address DNS queries":
-        - columnheader "Device"
-        - columnheader "Device address"
-        - columnheader "DNS queries"
-    - rowgroup:
-      - row /baseline-ws-1 \d+\.\d+\.\d+\.\d+ \d+/:
-        - cell "baseline-ws-1"
-        - cell /\d+\.\d+\.\d+\.\d+/
-        - cell /\d+/
-      - row /baseline-ws-2 \d+\.\d+\.\d+\.\d+ \d+/:
-        - cell "baseline-ws-2"
-        - cell /\d+\.\d+\.\d+\.\d+/
-        - cell /\d+/
+  - term: Counted
+  - definition: DNS queries
+  - term: Split by
+  - definition: Device
+  - term: When
+  - definition: Last 7 days
+  - term: Showing
+  - definition: /Top \d+, highest first/
+  - group: The query as sent

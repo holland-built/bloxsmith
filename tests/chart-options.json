@@ -24,6 +24,27 @@
     {
       "count": "dns",
       "split": "device",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "device",
       "window": "7d",
       "over": "none",
       "top": 5
@@ -87,6 +108,27 @@
     {
       "count": "dns",
       "split": "qtype",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
       "window": "7d",
       "over": "none",
       "top": 5
@@ -122,6 +164,174 @@
     {
       "count": "dns",
       "split": "qtype",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
       "window": "30d",
       "over": "none",
       "top": 25
@@ -130,6 +340,13 @@
       "count": "dns",
       "split": "none",
       "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "24h",
       "over": "hour",
       "top": 0
     },
@@ -171,13 +388,6 @@
     {
       "count": "threats",
       "split": "action",
-      "window": "today",
-      "over": "hour",
-      "top": 0
-    },
-    {
-      "count": "threats",
-      "split": "action",
       "window": "7d",
       "over": "none",
       "top": 5
@@ -233,10 +443,192 @@
     },
     {
       "count": "threats",
-      "split": "none",
+      "split": "tclass",
       "window": "today",
-      "over": "hour",
-      "top": 0
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "30d",
+      "over": "none",
+      "top": 25
     },
     {
       "count": "threats",
@@ -262,12 +654,131 @@
     {
       "count": "qps",
       "split": "none",
+      "window": "24h",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
       "window": "7d",
       "over": "day",
       "top": 0
     },
     {
       "count": "qps",
+      "split": "none",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "24h",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
       "split": "none",
       "window": "30d",
       "over": "day",
@@ -278,6 +789,7 @@
     {
       "cube": "NetworkNstarDnsActivity",
       "endpoint": "/api/cubejs/v1/query",
+      "filters": null,
       "id": "dns",
       "measure": "NetworkNstarDnsActivity.total_query_count",
       "name": "DNS queries"
@@ -285,6 +797,7 @@
     {
       "cube": "PortunusAggThreat_ch",
       "endpoint": "/api/cubejs-security/v1/query",
+      "filters": null,
       "id": "threats",
       "measure": "PortunusAggThreat_ch.requests",
       "name": "Security hits"
@@ -292,9 +805,26 @@
     {
       "cube": "HostMetrics",
       "endpoint": "/api/cubejs/v1/query",
+      "filters": [
+        {
+          "member": "HostMetrics.metric_name",
+          "operator": "equals",
+          "values": [
+            "dns_qps_iq"
+          ]
+        }
+      ],
       "id": "qps",
       "measure": "HostMetrics.avg_value",
       "name": "DNS queries per second"
+    },
+    {
+      "cube": "NetworkNstarDhcpLeaseActivity",
+      "endpoint": "/api/cubejs/v1/query",
+      "filters": null,
+      "id": "dhcp",
+      "measure": "NetworkNstarDhcpLeaseActivity.total_count",
+      "name": "DHCP lease changes"
     }
   ],
   "names": {
@@ -302,34 +832,49 @@
     "HostMetrics.avg_value": "Queries per second",
     "HostMetrics.metric_name": "Metric",
     "HostMetrics.timestamp": "Time",
+    "NetworkNstarDhcpLeaseActivity": "DHCP lease activity",
+    "NetworkNstarDhcpLeaseActivity.lease_op": "What changed",
+    "NetworkNstarDhcpLeaseActivity.timestamp": "Time",
+    "NetworkNstarDhcpLeaseActivity.total_count": "Lease changes recorded",
     "NetworkNstarDnsActivity": "DNS activity",
     "NetworkNstarDnsActivity.device_ip": "Device address",
     "NetworkNstarDnsActivity.device_name": "Device",
+    "NetworkNstarDnsActivity.qname": "Domain",
     "NetworkNstarDnsActivity.query_type": "Record type",
+    "NetworkNstarDnsActivity.rcode": "Answer",
     "NetworkNstarDnsActivity.timestamp": "Time",
     "NetworkNstarDnsActivity.total_query_count": "DNS queries",
     "PortunusAggThreat_ch": "Security hits",
     "PortunusAggThreat_ch.action": "What happened",
+    "PortunusAggThreat_ch.policy_name": "Policy",
     "PortunusAggThreat_ch.requests": "Hits",
+    "PortunusAggThreat_ch.severity": "Severity",
+    "PortunusAggThreat_ch.tclass": "Threat type",
     "PortunusAggThreat_ch.timestamp": "Time"
+  },
+  "otherValues": {
+    "NetworkNstarDnsActivity.rcode": "Answer code %s"
   },
   "overs": [
     {
       "fields": null,
       "id": "none",
       "name": "No, one total",
+      "plural": "",
       "value": ""
     },
     {
       "fields": null,
       "id": "hour",
       "name": "By hour",
+      "plural": "",
       "value": "hour"
     },
     {
       "fields": null,
       "id": "day",
       "name": "By day",
+      "plural": "",
       "value": "day"
     }
   ],
@@ -341,6 +886,7 @@
       ],
       "id": "device",
       "name": "Device",
+      "plural": "devices",
       "value": ""
     },
     {
@@ -349,6 +895,25 @@
       ],
       "id": "qtype",
       "name": "Record type",
+      "plural": "record types",
+      "value": ""
+    },
+    {
+      "fields": [
+        "NetworkNstarDnsActivity.qname"
+      ],
+      "id": "domain",
+      "name": "Domain",
+      "plural": "domains",
+      "value": ""
+    },
+    {
+      "fields": [
+        "NetworkNstarDnsActivity.rcode"
+      ],
+      "id": "rcode",
+      "name": "Answer",
+      "plural": "answers",
       "value": ""
     },
     {
@@ -357,12 +922,50 @@
       ],
       "id": "action",
       "name": "What happened",
+      "plural": "",
+      "value": ""
+    },
+    {
+      "fields": [
+        "PortunusAggThreat_ch.tclass"
+      ],
+      "id": "tclass",
+      "name": "Threat type",
+      "plural": "threat types",
+      "value": ""
+    },
+    {
+      "fields": [
+        "PortunusAggThreat_ch.policy_name"
+      ],
+      "id": "policy",
+      "name": "Policy",
+      "plural": "policies",
+      "value": ""
+    },
+    {
+      "fields": [
+        "PortunusAggThreat_ch.severity"
+      ],
+      "id": "severity",
+      "name": "Severity",
+      "plural": "severities",
+      "value": ""
+    },
+    {
+      "fields": [
+        "NetworkNstarDhcpLeaseActivity.lease_op"
+      ],
+      "id": "leaseop",
+      "name": "What changed",
+      "plural": "kinds of change",
       "value": ""
     },
     {
       "fields": null,
       "id": "none",
       "name": "Nothing, one total",
+      "plural": "",
       "value": ""
     }
   ],
@@ -375,9 +978,17 @@
     "HostMetrics.metric_name": {
       "dns_qps_iq": "DNS queries per second"
     },
+    "NetworkNstarDnsActivity.rcode": {
+      "0": "Answered",
+      "2": "Server failed",
+      "3": "No such name"
+    },
     "PortunusAggThreat_ch.action": {
       "Allow": "Allowed",
       "Block": "Blocked"
+    },
+    "PortunusAggThreat_ch.severity": {
+      "": "Not graded"
     }
   },
   "windows": [
@@ -385,18 +996,28 @@
       "fields": null,
       "id": "today",
       "name": "Today",
+      "plural": "",
       "value": "today"
+    },
+    {
+      "fields": null,
+      "id": "24h",
+      "name": "Last 24 hours",
+      "plural": "",
+      "value": "last 24 hours"
     },
     {
       "fields": null,
       "id": "7d",
       "name": "Last 7 days",
+      "plural": "",
       "value": "last 7 days"
     },
     {
       "fields": null,
       "id": "30d",
       "name": "Last 30 days",
+      "plural": "",
       "value": "last 30 days"
     }
   ]

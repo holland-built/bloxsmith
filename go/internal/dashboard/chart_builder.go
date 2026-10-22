@@ -32,10 +32,14 @@ type chartCount struct {
 	ID, Name, Cube, Measure, Endpoint string
 	Splits                            []string
 	Filters                           []map[string]any
+	// DaysOnly: the cube keeps one row per day, so "by hour" would draw a
+	// single bar at midnight, and a rolling 24 hours can't be cut from day rows.
+	DaysOnly bool
 }
 
 type chartChoice struct {
 	ID, Name string
+	Plural   string   // split: what "Top 10 ..." calls them
 	Fields   []string // split: the dimensions it adds
 	Value    string   // window: the dateRange; over: the granularity
 }
@@ -44,6 +48,7 @@ const (
 	cubeDNS     = "NetworkNstarDnsActivity"
 	cubeThreats = "PortunusAggThreat_ch"
 	cubeHost    = "HostMetrics"
+	cubeDHCP    = "NetworkNstarDhcpLeaseActivity"
 	// Security cubes live on their own service (csp.go CSPThreats).
 	cubeEndpoint         = "/api/cubejs/v1/query"
 	cubeSecurityEndpoint = "/api/cubejs-security/v1/query"
@@ -57,25 +62,40 @@ var chartCatalog = struct {
 	Tops    []int
 	Names   map[string]string
 	Values  map[string]map[string]string
+	// OtherValues names a value Values doesn't list, "%s" being the value,
+	// so an answer code nobody mapped still shows instead of being dropped.
+	OtherValues map[string]string
 }{
 	Counts: []chartCount{
 		{ID: "dns", Name: "DNS queries", Cube: cubeDNS, Measure: cubeDNS + ".total_query_count",
-			Endpoint: cubeEndpoint, Splits: []string{"device", "qtype", "none"}},
+			Endpoint: cubeEndpoint, Splits: []string{"device", "qtype", "domain", "rcode", "none"}},
 		{ID: "threats", Name: "Security hits", Cube: cubeThreats, Measure: cubeThreats + ".requests",
-			Endpoint: cubeSecurityEndpoint, Splits: []string{"action", "none"}},
+			Endpoint: cubeSecurityEndpoint, Splits: []string{"action", "tclass", "policy", "severity", "none"},
+			// Every hourly slice came back as one midnight row (measured live 2026-10-22).
+			DaysOnly: true},
 		{ID: "qps", Name: "DNS queries per second", Cube: cubeHost, Measure: cubeHost + ".avg_value",
 			Endpoint: cubeEndpoint, Splits: []string{"none"},
 			Filters: []map[string]any{{"member": cubeHost + ".metric_name", "operator": "equals",
 				"values": []string{"dns_qps_iq"}}}},
+		// Changes the lease log recorded, not the leases held now.
+		{ID: "dhcp", Name: "DHCP lease changes", Cube: cubeDHCP, Measure: cubeDHCP + ".total_count",
+			Endpoint: cubeEndpoint, Splits: []string{"leaseop", "none"}},
 	},
 	Splits: []chartChoice{
-		{ID: "device", Name: "Device", Fields: []string{cubeDNS + ".device_name", cubeDNS + ".device_ip"}},
-		{ID: "qtype", Name: "Record type", Fields: []string{cubeDNS + ".query_type"}},
+		{ID: "device", Name: "Device", Plural: "devices", Fields: []string{cubeDNS + ".device_name", cubeDNS + ".device_ip"}},
+		{ID: "qtype", Name: "Record type", Plural: "record types", Fields: []string{cubeDNS + ".query_type"}},
+		{ID: "domain", Name: "Domain", Plural: "domains", Fields: []string{cubeDNS + ".qname"}},
+		{ID: "rcode", Name: "Answer", Plural: "answers", Fields: []string{cubeDNS + ".rcode"}},
 		{ID: "action", Name: "What happened", Fields: []string{cubeThreats + ".action"}},
+		{ID: "tclass", Name: "Threat type", Plural: "threat types", Fields: []string{cubeThreats + ".tclass"}},
+		{ID: "policy", Name: "Policy", Plural: "policies", Fields: []string{cubeThreats + ".policy_name"}},
+		{ID: "severity", Name: "Severity", Plural: "severities", Fields: []string{cubeThreats + ".severity"}},
+		{ID: "leaseop", Name: "What changed", Plural: "kinds of change", Fields: []string{cubeDHCP + ".lease_op"}},
 		{ID: "none", Name: "Nothing, one total"},
 	},
 	Windows: []chartChoice{
 		{ID: "today", Name: "Today", Value: "today"},
+		{ID: "24h", Name: "Last 24 hours", Value: "last 24 hours"},
 		{ID: "7d", Name: "Last 7 days", Value: "last 7 days"},
 		{ID: "30d", Name: "Last 30 days", Value: "last 30 days"},
 	},
@@ -91,26 +111,43 @@ var chartCatalog = struct {
 		cubeDNS + ".device_name":       "Device",
 		cubeDNS + ".device_ip":         "Device address",
 		cubeDNS + ".query_type":        "Record type",
+		cubeDNS + ".qname":             "Domain",
+		cubeDNS + ".rcode":             "Answer",
 		cubeDNS + ".timestamp":         "Time",
 		cubeThreats:                    "Security hits",
 		cubeThreats + ".requests":      "Hits",
 		cubeThreats + ".action":        "What happened",
+		cubeThreats + ".tclass":        "Threat type",
+		cubeThreats + ".policy_name":   "Policy",
+		cubeThreats + ".severity":      "Severity",
 		cubeThreats + ".timestamp":     "Time",
 		cubeHost:                       "DNS server metrics",
 		cubeHost + ".avg_value":        "Queries per second",
 		cubeHost + ".metric_name":      "Metric",
 		cubeHost + ".timestamp":        "Time",
+		cubeDHCP:                       "DHCP lease activity",
+		cubeDHCP + ".total_count":      "Lease changes recorded",
+		cubeDHCP + ".lease_op":         "What changed",
+		cubeDHCP + ".timestamp":        "Time",
 	},
 	Values: map[string]map[string]string{
 		// As the tenant sends them, capitalised (measured live 2026-10-21).
 		cubeThreats + ".action":   {"Block": "Blocked", "Allow": "Allowed"},
 		cubeHost + ".metric_name": {"dns_qps_iq": "DNS queries per second"},
+		// The codes seen on the tenant (measured 2026-10-22); others fall to OtherValues.
+		cubeDNS + ".rcode": {"0": "Answered", "2": "Server failed", "3": "No such name"},
+		// About 2.55M hits (the CAT class) carry no severity at all.
+		cubeThreats + ".severity": {"": "Not graded"},
+	},
+	OtherValues: map[string]string{
+		cubeDNS + ".rcode": "Answer code %s",
 	},
 }
 
 // chartAllowed is the picker rules, stated once:
 //   - a measure splits only by its own cube's fields;
-//   - by hour only with today, by day only with 7 or 30 days;
+//   - by hour only with today or the last 24 hours, by day only with 7 or 30 days;
+//   - a cube kept by day gets neither by hour nor the last 24 hours;
 //   - a split over time only for security hits (blocked vs logged, stacked);
 //   - no split means it must be over time, since one bare total has no chart;
 //   - top N exactly when there is a split and no over-time.
@@ -118,7 +155,11 @@ func chartAllowed(c chartCount, split, window, over string, top int) bool {
 	if !slices.Contains(c.Splits, split) {
 		return false
 	}
-	if over == "hour" && window != "today" || over == "day" && window == "today" {
+	hourly := window == "today" || window == "24h"
+	if c.DaysOnly && (over == "hour" || window == "24h") {
+		return false
+	}
+	if over == "hour" && !hourly || over == "day" && hourly {
 		return false
 	}
 	if split == "none" && over == "none" {
@@ -245,14 +286,14 @@ func ChartOptions() map[string]any {
 	choices := func(xs []chartChoice) []map[string]any {
 		out := make([]map[string]any, 0, len(xs))
 		for _, x := range xs {
-			out = append(out, map[string]any{"id": x.ID, "name": x.Name, "fields": x.Fields, "value": x.Value})
+			out = append(out, map[string]any{"id": x.ID, "name": x.Name, "plural": x.Plural, "fields": x.Fields, "value": x.Value})
 		}
 		return out
 	}
 	counts := make([]map[string]any, 0, len(chartCatalog.Counts))
 	for _, c := range chartCatalog.Counts {
 		counts = append(counts, map[string]any{"id": c.ID, "name": c.Name, "cube": c.Cube,
-			"measure": c.Measure, "endpoint": c.Endpoint})
+			"measure": c.Measure, "endpoint": c.Endpoint, "filters": c.Filters})
 	}
 	return map[string]any{
 		"counts":  counts,
@@ -263,5 +304,7 @@ func ChartOptions() map[string]any {
 		"combos":  ChartCombos(),
 		"names":   chartCatalog.Names,
 		"values":  chartCatalog.Values,
+
+		"otherValues": chartCatalog.OtherValues,
 	}
 }
