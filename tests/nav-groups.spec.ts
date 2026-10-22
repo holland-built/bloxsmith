@@ -34,6 +34,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['editor', 'Editor'],
   ['drift', 'Drift'],
   ['ai', 'AI Assistant'],
+  ['chart', 'Build a chart'],
 ];
 
 const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
@@ -45,7 +46,7 @@ const GROUP_TABS: Record<string, string[]> = {
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Provision', 'Self-Service', 'Editor', 'Drift'],
-  Ask: ['AI'],
+  Ask: ['AI', 'Build a chart'],
 };
 
 function esc(s: string) {

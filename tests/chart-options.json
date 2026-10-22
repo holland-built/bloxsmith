@@ -1,0 +1,403 @@
+{
+  "combos": [
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    }
+  ],
+  "counts": [
+    {
+      "cube": "NetworkNstarDnsActivity",
+      "endpoint": "/api/cubejs/v1/query",
+      "id": "dns",
+      "measure": "NetworkNstarDnsActivity.total_query_count",
+      "name": "DNS queries"
+    },
+    {
+      "cube": "PortunusAggThreat_ch",
+      "endpoint": "/api/cubejs-security/v1/query",
+      "id": "threats",
+      "measure": "PortunusAggThreat_ch.requests",
+      "name": "Security hits"
+    },
+    {
+      "cube": "HostMetrics",
+      "endpoint": "/api/cubejs/v1/query",
+      "id": "qps",
+      "measure": "HostMetrics.avg_value",
+      "name": "DNS queries per second"
+    }
+  ],
+  "names": {
+    "HostMetrics": "DNS server metrics",
+    "HostMetrics.avg_value": "Queries per second",
+    "HostMetrics.metric_name": "Metric",
+    "HostMetrics.timestamp": "Time",
+    "NetworkNstarDnsActivity": "DNS activity",
+    "NetworkNstarDnsActivity.device_ip": "Device address",
+    "NetworkNstarDnsActivity.device_name": "Device",
+    "NetworkNstarDnsActivity.query_type": "Record type",
+    "NetworkNstarDnsActivity.timestamp": "Time",
+    "NetworkNstarDnsActivity.total_query_count": "DNS queries",
+    "PortunusAggThreat_ch": "Security hits",
+    "PortunusAggThreat_ch.action": "What happened",
+    "PortunusAggThreat_ch.requests": "Hits",
+    "PortunusAggThreat_ch.timestamp": "Time"
+  },
+  "overs": [
+    {
+      "fields": null,
+      "id": "none",
+      "name": "No, one total",
+      "value": ""
+    },
+    {
+      "fields": null,
+      "id": "hour",
+      "name": "By hour",
+      "value": "hour"
+    },
+    {
+      "fields": null,
+      "id": "day",
+      "name": "By day",
+      "value": "day"
+    }
+  ],
+  "splits": [
+    {
+      "fields": [
+        "NetworkNstarDnsActivity.device_name",
+        "NetworkNstarDnsActivity.device_ip"
+      ],
+      "id": "device",
+      "name": "Device",
+      "value": ""
+    },
+    {
+      "fields": [
+        "NetworkNstarDnsActivity.query_type"
+      ],
+      "id": "qtype",
+      "name": "Record type",
+      "value": ""
+    },
+    {
+      "fields": [
+        "PortunusAggThreat_ch.action"
+      ],
+      "id": "action",
+      "name": "What happened",
+      "value": ""
+    },
+    {
+      "fields": null,
+      "id": "none",
+      "name": "Nothing, one total",
+      "value": ""
+    }
+  ],
+  "tops": [
+    5,
+    10,
+    25
+  ],
+  "values": {
+    "HostMetrics.metric_name": {
+      "dns_qps_iq": "DNS queries per second"
+    },
+    "PortunusAggThreat_ch.action": {
+      "Allow": "Allowed",
+      "Block": "Blocked"
+    }
+  },
+  "windows": [
+    {
+      "fields": null,
+      "id": "today",
+      "name": "Today",
+      "value": "today"
+    },
+    {
+      "fields": null,
+      "id": "7d",
+      "name": "Last 7 days",
+      "value": "last 7 days"
+    },
+    {
+      "fields": null,
+      "id": "30d",
+      "name": "Last 30 days",
+      "value": "last 30 days"
+    }
+  ]
+}

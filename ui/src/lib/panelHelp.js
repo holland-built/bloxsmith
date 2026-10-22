@@ -413,4 +413,17 @@ export const PANEL_HELP = {
     what: 'Type one domain, IP address or host name and see what is known about it on the threat feeds.',
     look: 'A link under the result opens the full dossier — the same name seen through your assets, DNS, IPAM and recent changes. Blocking needs a dashboard token.',
   },
+
+  // ---- ChartBuilder ----
+  'chart-picks': {
+    what: 'The menus that decide the chart. Only choices that work together are listed, so every combination draws something.',
+  },
+  'chart-result': {
+    what: 'The chart for your choices, drawn from the numbers Infoblox sent back. No AI writes or changes them.',
+    look: 'When Infoblox does not answer, the panel says so. That is kept apart from "no activity", which means it answered with nothing to count.',
+  },
+  'chart-how': {
+    what: 'The query the app sent, word for word, and the first rows that came back, so each number on the chart can be checked.',
+    look: 'With cube names off, a plain-words copy of the query sits beside the real one.',
+  },
 }

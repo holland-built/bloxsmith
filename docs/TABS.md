@@ -45,6 +45,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [Editor](#editor) | **yes** | Direct create/update/delete on objects |
 | [Drift](#drift) | no | Template vs. reality |
 | [AI](#ai) | one action | Ask questions, look up threats |
+| [Build a chart](#build-a-chart) | no | Make a DNS or security chart by picking from menus |
 
 ## Rearranging panels
 
@@ -319,6 +320,18 @@ If the vault is locked, queries return "Vault locked — unlock to query."
 Enter a domain, IP, or host. Returns matching threat-intel entities plus a dossier for the entity.
 
 **Block domain** adds the looked-up domain to your blocking policy — a real change to your tenant. It needs a dashboard token (set it under ⋯ Settings) and can be undone with **Unblock** in the same place.
+
+## Build a chart
+
+**Read-only.** Make a chart by picking from menus, with no typing and no AI.
+
+Pick **What to count** (DNS queries, Security hits, or DNS queries per second), what to **Split by**, **When**, **Over time**, and **How many**. Only choices that work together are listed: security hits split only by what happened, By hour comes with Today, and By day with the last 7 or 30 days. The chart type follows from the picks.
+
+The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** shows the query word for word and the first rows Infoblox returned, so every number can be checked.
+
+**Show cube names** swaps the plain names for the real cube and field names, for anyone who wants to copy them. The setting is kept in this browser.
+
+If Infoblox does not answer, the chart says so in red. That is different from "no activity", which means it answered and there was nothing to count.
 
 ---
 

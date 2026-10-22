@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test';
+import CHART_OPTIONS from './chart-options.json';
 
 // Synthetic API responses for tests/page-baseline.spec.ts (tier 2 of
 // plans/033-page-baselines.md).
@@ -540,6 +541,24 @@ const AUDIT_LOG = {
   truncated: false,
 };
 
+// One /api/chart answer: the default picks (top 10 devices, last 7 days).
+// Shape from dashboard.RunChart: rows keep their Cube.field keys.
+const CHART_RESULT = {
+  status: 'ok',
+  endpoint: '/api/cubejs/v1/query',
+  query: {
+    measures: ['NetworkNstarDnsActivity.total_query_count'],
+    dimensions: ['NetworkNstarDnsActivity.device_name', 'NetworkNstarDnsActivity.device_ip'],
+    timeDimensions: [{ dimension: 'NetworkNstarDnsActivity.timestamp', dateRange: 'last 7 days' }],
+    order: { 'NetworkNstarDnsActivity.total_query_count': 'desc' },
+    limit: 10,
+  },
+  rows: [
+    { 'NetworkNstarDnsActivity.device_name': 'baseline-ws-1', 'NetworkNstarDnsActivity.device_ip': '10.10.0.21', 'NetworkNstarDnsActivity.total_query_count': '48211' },
+    { 'NetworkNstarDnsActivity.device_name': 'baseline-ws-2', 'NetworkNstarDnsActivity.device_ip': '10.10.0.22', 'NetworkNstarDnsActivity.total_query_count': '9120' },
+  ],
+};
+
 const PER_PAGE: Record<string, Handler[]> = {
   changes: [{ method: 'GET', path: '/api/csp-audit', body: CSP_AUDIT, required: true }],
   drift: [
@@ -636,6 +655,13 @@ const PER_PAGE: Record<string, Handler[]> = {
   // /api/threat-lookup are all on submit. Measured by probe, and the opposite of
   // what a grep of Ai.jsx suggests.
   ai: [],
+  // Build a chart: the menus on load, then one /api/chart per set of picks.
+  // The body is the server's own options payload, kept in step by a Go test
+  // (dashboard/chart_builder_test.go TestChartOptions_MatchesTheUIFixture).
+  chart: [
+    { method: 'GET', path: '/api/chart/options', body: CHART_OPTIONS, required: true },
+    { method: 'GET', path: '/api/chart', body: CHART_RESULT, required: true },
+  ],
   dossier: [
     { method: 'GET', path: '/api/dossier', body: DOSSIER, required: true },
     { method: 'GET', path: '/api/search/dns', body: SEARCH_DNS, required: true },
