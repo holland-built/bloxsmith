@@ -1,0 +1,101 @@
+import { test, expect } from './fixtures';
+import { installFixtures } from './page-fixtures';
+
+// The Build a chart tab, driven only by picking: the sentence follows the
+// picks, choices that don't fit are hidden, every pick sends one allowed GET,
+// and the "Show cube names" switch swaps the labels and is kept on reload.
+//
+// /api/chart answers by what was asked, so each assertion is about the picks
+// the page actually sent rather than a single canned body.
+
+const ROWS: Record<string, unknown[]> = {
+  dns: [
+    { 'NetworkNstarDnsActivity.device_name': 'ws-014.lab', 'NetworkNstarDnsActivity.device_ip': '10.20.0.24', 'NetworkNstarDnsActivity.total_query_count': '48211' },
+  ],
+  threats: [
+    { 'PortunusAggThreat_ch.timestamp.day': '2026-10-20T00:00:00.000', 'PortunusAggThreat_ch.action': 'Block', 'PortunusAggThreat_ch.requests': '41' },
+  ],
+};
+
+test.beforeEach(async ({ page }) => {
+  await installFixtures(page, 'chart');
+  await page.route('**/api/chart?*', (route) => {
+    const q = new URL(route.request().url()).searchParams;
+    return route.fulfill({
+      json: {
+        status: 'ok',
+        endpoint: q.get('count') === 'threats' ? '/api/cubejs-security/v1/query' : '/api/cubejs/v1/query',
+        query: { measures: ['NetworkNstarDnsActivity.total_query_count'] },
+        rows: ROWS[q.get('count') ?? ''] ?? [],
+      },
+    });
+  });
+});
+
+const heading = (page: import('@playwright/test').Page) =>
+  page.locator('[data-panel-id="chart-result"] h2, [data-panel-id="chart-result"] h3').first();
+
+test('the sentence follows the picks', async ({ page }) => {
+  await page.goto('/#chart');
+  await expect(heading(page)).toHaveText('Top 10 devices by DNS queries, last 7 days');
+
+  await page.getByLabel('What to count').selectOption({ label: 'Security hits' });
+  await page.getByLabel('Over time').selectOption({ label: 'By day' });
+  await page.getByLabel('When').selectOption({ label: 'Last 30 days' });
+  await expect(heading(page)).toHaveText('Security hits by day, blocked vs allowed, last 30 days');
+});
+
+test('choices that do not fit are hidden, not greyed out', async ({ page }) => {
+  await page.goto('/#chart');
+  const split = page.getByLabel('Split by');
+  await expect(split.locator('option')).toHaveText(['Device', 'Record type', 'Nothing, one total']);
+
+  await page.getByLabel('What to count').selectOption({ label: 'DNS queries per second' });
+  await expect(split.locator('option')).toHaveText(['Nothing, one total']);
+  // Over time for today offers only By hour, and How many disappears.
+  await page.getByLabel('When').selectOption({ label: 'Today' });
+  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour']);
+  await expect(page.getByLabel('How many')).toHaveCount(0);
+  await expect(page.locator('option[disabled]')).toHaveCount(0);
+});
+
+test('every pick sends an allowed GET', async ({ page }) => {
+  const sent: string[] = [];
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname === '/api/chart') sent.push(u.search);
+  });
+  await page.goto('/#chart');
+  await page.getByLabel('Split by').selectOption({ label: 'Record type' });
+  await expect.poll(() => sent).toContain('?count=dns&split=qtype&window=7d&over=none&top=10');
+});
+
+test('the switch swaps the labels for cube names and is kept on reload', async ({ page }) => {
+  await page.goto('/#chart');
+  const sw = page.getByRole('switch', { name: 'Show cube names' });
+  await expect(sw).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DNS queries');
+  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('Device');
+
+  await sw.click();
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('NetworkNstarDnsActivity.total_query_count');
+  await expect(heading(page)).toHaveText(
+    'NetworkNstarDnsActivity.total_query_count by NetworkNstarDnsActivity.device_name, NetworkNstarDnsActivity.device_ip, last 7 days, limit 10',
+  );
+  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('NetworkNstarDnsActivity.device_name');
+  await expect(page.getByText('The question, in plain words')).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole('switch', { name: 'Show cube names' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('NetworkNstarDnsActivity.total_query_count');
+});
+
+test('an upstream failure says so, and is not shown as no activity', async ({ page }) => {
+  await page.route('**/api/chart?*', (route) =>
+    route.fulfill({ json: { status: 'error', reason: 'Infoblox didn\'t answer this query (upstream error).', rows: [] } }),
+  );
+  await page.goto('/#chart');
+  await expect(page.locator('[data-feed-unavailable="This chart could not be drawn"]')).toBeVisible();
+  await expect(page.getByText('no activity')).toHaveCount(0);
+});

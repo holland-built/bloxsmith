@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,8 @@ import (
 // (server.py do_GET 5054-5295): the incidents engine (/api/incidents +
 // drill-down), /api/actions, /api/insights, the source
 // registry (/api/sources + /api/source/<id>) and the analytics reads
-// (/api/dns-analytics, /api/host-metrics, /api/threat-lookup).
+// (/api/dns-analytics, /api/host-metrics, /api/threat-lookup), and the Build a
+// chart tab's two reads (/api/chart/options, /api/chart).
 func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/actions", d.actions)
 	mux.HandleFunc("GET /api/actions/{id}", d.actionDetail)
@@ -27,6 +29,8 @@ func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/dns-analytics", d.dnsAnalytics)
 	mux.HandleFunc("GET /api/host-metrics", d.hostMetrics)
 	mux.HandleFunc("GET /api/threat-lookup", d.threatLookup)
+	mux.HandleFunc("GET /api/chart/options", d.chartOptions)
+	mux.HandleFunc("GET /api/chart", d.chart)
 }
 
 // actions is GET /api/actions (server.py:5077): the raw IQ Actions payload.
@@ -263,6 +267,36 @@ func (d *Deps) threatLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.json(w, r, 200, d.dash(r).ThreatLookup(r.Context(), q))
+}
+
+// chartOptions is GET /api/chart/options: the Build a chart menus, their plain
+// names and every allowed combination. No tenant call.
+func (d *Deps) chartOptions(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart/options")
+	d.json(w, r, 200, dashboard.ChartOptions())
+}
+
+// chart is GET /api/chart?count=&split=&window=&over=&top=: one chart from
+// the allow-list. A pick outside it is a 400 and never reaches the tenant.
+func (d *Deps) chart(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart")
+	q := r.URL.Query()
+	p := dashboard.ChartPicks{Count: q.Get("count"), Split: q.Get("split"), Window: q.Get("window"), Over: q.Get("over")}
+	if t := q.Get("top"); t != "" {
+		n, err := strconv.Atoi(t)
+		if err != nil {
+			d.json(w, r, 400, map[string]any{"error": "How many must be a number."})
+			return
+		}
+		p.Top = n
+	}
+	if _, _, err := dashboard.BuildChartQuery(p); err != nil {
+		d.json(w, r, 400, map[string]any{"error": "That combination of choices isn't available."})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	d.json(w, r, 200, d.dash(r).RunChart(ctx, p))
 }
 
 // getCat reads a signal/incident category as a string.
