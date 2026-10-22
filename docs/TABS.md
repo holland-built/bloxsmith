@@ -325,13 +325,121 @@ Enter a domain, IP, or host. Returns matching threat-intel entities plus a dossi
 
 **Read-only.** Make a chart by picking from menus, with no typing and no AI.
 
-Pick **What to count** (DNS queries, Security hits, or DNS queries per second), what to **Split by**, **When**, **Over time**, and **How many**. Only choices that work together are listed: security hits split only by what happened, By hour comes with Today, and By day with the last 7 or 30 days. The chart type follows from the picks.
+Pick **What to count** (DNS queries, Security hits, DNS queries per second, or DHCP lease changes), what to **Split by**, **When**, **Over time**, and **How many**. Only choices that work together are listed:
 
-The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** shows the query word for word and the first rows Infoblox returned, so every number can be checked.
+- DNS queries split by device, record type, domain or answer (answered, no such name, server failed). Security hits split by what happened, threat type, policy or severity; hits Infoblox gave no severity show as **Not graded**. DHCP lease changes split by what changed. These are changes the lease log recorded, not the leases held now.
+- By hour comes with Today or the last 24 hours, and By day with the last 7 or 30 days.
+- Security hits are kept by Infoblox one day at a time, so they are never offered by hour or over the last 24 hours.
+- Only blocked vs allowed can be split and shown over time together. Every other split is a top 5, 10 or 25.
+
+The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked.
 
 **Show cube names** swaps the plain names for the real cube and field names, for anyone who wants to copy them. The setting is kept in this browser.
 
 If Infoblox does not answer, the chart says so in red. That is different from "no activity", which means it answered and there was nothing to count.
+
+## How each panel is built
+
+Every panel's About (ⓘ) ends with a line saying where its numbers come from and whether Build a chart can redraw it. The same facts, for every panel:
+
+- **Yes** means Build a chart draws the same chart from the same Infoblox records.
+- **As a copy** means it draws the chart, but not something the panel adds on top, such as a headline figure.
+- **No** means the panel is not built from the activity records Build a chart reads, or the app works something out that a chart of raw counts can't show.
+
+<!-- panel-sources:start -->
+| Page | Panel | Built from | Can Build a chart redraw it? | Why not |
+|---|---|---|---|---|
+| Overview | DNS Query Rate — 24h | Infoblox's DNS server metrics | As a copy | the latest-hour figure and the comparison beside it are worked out in the app |
+| Overview | Top Consumers | the subnet list | No | it ranks subnets by addresses in use, worked out in the app |
+| Overview | Subnet Heatmap | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
+| Overview | Host Status | the host list | No | the hosts are counted by status in the app |
+| Overview | Services and incidents | the service list and the app's incident checks | No | the incidents are worked out in the app |
+| Overview | Top Subnets by Utilization | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
+| Overview | License Inventory | the licence list and account alerts | No | it is a list, not a chart |
+| Daily | Open Issues | the subnet, host and zone lists | No | the issues are worked out in the app |
+| Daily | Security Today | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
+| Daily | Top Capacity Risks | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
+| Daily | Hosts Needing Attention | the host list | No | it is a list, not a chart |
+| Daily | DNS Zone Issues | the DNS zone list | No | the zone problems are worked out in the app |
+| Network | Utilization Distribution | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
+| Network | IPAM Spaces — Top Used | the IP space tree | No | it ranks spaces by addresses used, worked out in the app |
+| Network | DHCP Leases | the DHCP lease list | No | it is a searchable list, not a chart |
+| Network | Which Subnets Run Out First? | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
+| DNS | DNS Query Rate — 24h | Infoblox's DNS server metrics | As a copy | the latest-hour figure and the comparison beside it are worked out in the app |
+| DNS | Zone Counts | the DNS zone list | No | the counts and zone checks are worked out in the app |
+| DNS | DNS Services | the DNS service list | No | it is a list, not a chart |
+| DNS | Query Volume — 7d | Infoblox's DNS activity records | Yes |  |
+| DNS | DNS Zones | the DNS zone list | No | it is a list, not a chart |
+| DNS | DNSSEC Health | the DNS zone list | No | the signing checks are worked out in the app |
+| DNS | RPZ Policy Zones | the response policy zone list | No | it is a list, not a chart |
+| DNS | DTC Load-Balanced Names | the load-balanced name list | No | it is a list, not a chart |
+| Security | Threat Events — by Severity | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
+| Security | Response Summary | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
+| Security | Triage Inbox | a sample of the last hour's DNS security events | No | it is a list to work through, not a chart |
+| Security | Security Inventory | the security policy, feed and service lists | No | it counts several lists in the app |
+| Security | Lookalike Domains | Infoblox's lookalike domain service | No | it is a list, not a chart |
+| Security | Axur Supplier Risk | Axur's supplier risk service | No | it comes from Axur, not Infoblox |
+| Security | CTEM Exposure | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | Threat Feed Activity | Infoblox's security hit records | As a copy | the blocked and allowed totals above the bars are worked out in the app |
+| Security | SOC Insights | Infoblox's SOC insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | Asset Insights | Infoblox's asset insight records | No | it is a single total, and Build a chart draws charts |
+| Security | Exposures | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | Asset Risk | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | Exposed Surface | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | CTEM Assets | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Infra | Host Inventory | the host list | No | it is a list, not a chart |
+| Infra | Host Status | the host list | No | the hosts are counted by status in the app |
+| Infra | Service Health | the service list | No | each group's health is rolled up in the app |
+| Infra | Host Health | the host list | No | it is a list, not a chart |
+| Infra | On-Prem Hosts | the on-prem host list | No | it is a list, not a chart |
+| Infra | Asset Discovery | Infoblox's asset discovery records | No | it is a single total, and Build a chart draws charts |
+| Infra | Jobs | the job list | No | it is a list, not a chart |
+| Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
+| Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |
+| Assets | Assets | Infoblox's asset records | No | it is a searchable, paged table, not a chart |
+| Assets | Asset detail | Infoblox's asset records | No | it shows one asset's details, not a chart |
+| Incidents | Categories | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
+| Incidents | Severity Counts | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
+| Incidents | Triage | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
+| Incidents | SOC Queue | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
+| Incidents | Action Volume | Infoblox IQ actions | No | the actions are counted by day in the app, not read from activity records |
+| Audit | Activity Summary | this app's own audit log | No | it is this app's own record, not Infoblox's |
+| Audit | Audit Log | this app's own audit log | No | it is a list, not a chart |
+| Audit | CSP Portal Audit | the Infoblox audit log | No | it is a list, not a chart |
+| Changes | Notability | the Infoblox audit log | No | how notable each change is, is worked out in the app |
+| Changes | Changed objects | the Infoblox audit log | No | it is a list, not a chart |
+| Provision | Subnet: Request | the Infoblox API | No | it is a form, not a chart |
+| Provision | Subnet: Live log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Subnet: Result | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Full site: Request | the Infoblox API | No | it is a form, not a chart |
+| Provision | Full site: Live log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Full site: DHCP ranges not created | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Full site: Result | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Full site: Tear down this site | the Infoblox API | No | it is a form, not a chart |
+| Provision | Full site: Teardown log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Full site: Teardown result | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Seed demo: Request | the Infoblox API | No | it is a form, not a chart |
+| Provision | Seed demo: Progress | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Seed demo: Log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Seed demo: Summary | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Seed demo: Tear down demo | the Infoblox API | No | it is a form, not a chart |
+| Provision | Seed demo: Teardown progress | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Seed demo: Teardown log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
+| Self-Service | Allocate Address | the Infoblox API | No | it is a form, not a chart |
+| Self-Service | Create DNS Record | the Infoblox API | No | it is a form, not a chart |
+| Self-Service | Manage Records | the Infoblox API | No | it is a form, not a chart |
+| Self-Service | Manage Addresses | the Infoblox API | No | it is a form, not a chart |
+| Editor | Create or edit an object | the Infoblox API | No | it is a form, not a chart |
+| Drift | Check drift | your templates and the Infoblox API | No | it is a form, not a chart |
+| Drift | Error | your templates and the Infoblox API | No | it reports what a change did, not a chart |
+| Drift | Result | your templates and the Infoblox API | No | it compares your templates with what is there, worked out in the app |
+| AI | Ask AI | the AI model, reading the Infoblox API | No | the AI writes the answer, and Build a chart uses no AI |
+| AI | Threat lookup | Infoblox's threat intelligence | No | it looks up one name at a time, not a chart |
+| Build a chart | Choose | your picks | No | it is Build a chart's own menu |
+| Build a chart | Your chart | Infoblox's activity records, as your picks ask | No | it is Build a chart itself |
+| Build a chart | How this chart was made | Infoblox's activity records, as your picks ask | No | it is Build a chart itself |
+<!-- panel-sources:end -->
 
 ---
 

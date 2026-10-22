@@ -403,3 +403,17 @@ test('the ⓘ fits every busy header from 1920 down to 390', async ({ page }) =>
   expect(checkedButtons, 'expected to have measured a lot of headers').toBeGreaterThan(50);
   expect(findings, findings.join('\n') || undefined).toEqual([]);
 });
+
+test('an open About ends with how the panel is built and whether Build a chart can redraw it', async ({ page }) => {
+  await page.goto('/#dns');
+  const volume = page.getByRole('button', { name: 'About: Query Volume — 7d', exact: true });
+  await volume.click();
+  const volumeBody = page.locator(`#${await volume.getAttribute('aria-controls')}`);
+  await expect(volumeBody.locator('p').last()).toHaveText("Built from Infoblox's DNS activity records. Build a chart can redraw this.");
+
+  await page.goto('/#overview');
+  const heatmap = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  await heatmap.click();
+  const heatmapBody = page.locator(`#${await heatmap.getAttribute('aria-controls')}`);
+  await expect(heatmapBody.locator('[data-panel-built]')).toHaveText(/^Built from the subnet list\. Build a chart can't redraw it: /);
+});
