@@ -228,6 +228,23 @@ export function sampleTable(opts, rows, cube) {
   }
 }
 
+/**
+ * A link that opens Build a chart on these picks, with any extra parameters
+ * (saved=<id> to edit a saved chart, replace=<panelId> to replace a panel).
+ */
+export function chartLink(picks, extra = {}) {
+  const q = new URLSearchParams({ count: picks.count, split: picks.split, window: picks.window, over: picks.over })
+  if (picks.top > 0) q.set('top', String(picks.top))
+  for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v)
+  return `#chart?${q}`
+}
+
+/** The picks a #chart?… link carries, or null when it carries none. Not yet settled. */
+export function picksFromParams(params) {
+  if (!params?.count) return null
+  return { count: params.count, split: params.split, window: params.window, over: params.over, top: Number(params.top) || 0 }
+}
+
 /** The GET that runs these picks. */
 export function chartUrl(picks) {
   const q = new URLSearchParams({ count: picks.count, split: picks.split, window: picks.window, over: picks.over })

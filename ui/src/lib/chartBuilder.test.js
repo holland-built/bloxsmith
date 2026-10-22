@@ -8,7 +8,7 @@ import test from 'node:test'
 import OPTIONS from '../../../tests/chart-options.json' with { type: 'json' }
 import {
   DEFAULT_PICKS, choicesFor, settlePicks, chartKind, choiceName, sentence,
-  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel,
+  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel, chartLink, picksFromParams,
 } from './chartBuilder.js'
 
 const picks = (count, split, window, over, top = 0) => ({ count, split, window, over, top })
@@ -321,4 +321,23 @@ test('the sample table drops the duplicate time column and names values plainly'
   assert.deepEqual(sampleTable(OPTIONS, rows, true).headers, ['PortunusAggThreat_ch.action', 'PortunusAggThreat_ch.requests', 'PortunusAggThreat_ch.timestamp.day'])
   assert.deepEqual(sampleTable(OPTIONS, rows, true).rows[0][0], 'Allow')
   assert.deepEqual(sampleTable(OPTIONS, [], false), { headers: [], rows: [] })
+})
+
+test('a link to the builder carries the picks, and reads back as them', () => {
+  const p = picks('dns', 'none', '7d', 'day')
+  assert.equal(chartLink(p), '#chart?count=dns&split=none&window=7d&over=day')
+  assert.equal(chartLink(picks('dns', 'domain', '7d', 'none', 10), { saved: 'k3x9q2m7ab12' }), '#chart?count=dns&split=domain&window=7d&over=none&top=10&saved=k3x9q2m7ab12')
+  assert.deepEqual(picksFromParams({ count: 'dns', split: 'none', window: '7d', over: 'day' }), p)
+  assert.deepEqual(picksFromParams({ count: 'dns', split: 'domain', window: '7d', over: 'none', top: '10' }), picks('dns', 'domain', '7d', 'none', 10))
+  assert.equal(picksFromParams({}), null)
+  assert.equal(picksFromParams({ saved: 'x' }), null)
+})
+
+test('a link with picks that do not fit snaps to ones that do', () => {
+  // Security hits cannot be split by domain or sliced by hour.
+  const p = settlePicks(OPTIONS, picksFromParams({ count: 'threats', split: 'domain', window: '24h', over: 'hour', top: '999' }))
+  assert.ok(OPTIONS.combos.some((c) => JSON.stringify(c) === JSON.stringify(p)), JSON.stringify(p))
+  assert.equal(p.count, 'threats')
+  // An unknown count falls back to the first one.
+  assert.equal(settlePicks(OPTIONS, picksFromParams({ count: 'cpu', split: 'none', window: '7d', over: 'day' })).count, 'dns')
 })

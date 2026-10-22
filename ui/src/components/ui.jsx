@@ -5,6 +5,7 @@ import { markArranged } from '../lib/arrangedOnce.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP, builtLine } from '../lib/panelHelp.js'
+import { chartLink } from '../lib/chartBuilder.js'
 import { shouldHidePanel, showAnyway } from '../lib/services.js'
 import {
   declaredSpan, fillRows, insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
@@ -17,7 +18,7 @@ import { utilBand } from '../lib/utilBands.js'
 // the entry chunk put #provision over tests/bundle-budget.spec.ts's budget.
 let panelSourcesById = null
 let panelSourcesLoad = null
-function usePanelBuiltLine(panelId, open) {
+function usePanelSource(panelId, open) {
   const [, setLoaded] = useState(false)
   useEffect(() => {
     if (!open || panelSourcesById) return
@@ -28,7 +29,7 @@ function usePanelBuiltLine(panelId, open) {
     panelSourcesLoad.then(() => live && setLoaded(true), () => {})
     return () => { live = false }
   }, [open])
-  return open && panelSourcesById ? builtLine(panelSourcesById.get(panelId)) : null
+  return open && panelSourcesById ? panelSourcesById.get(panelId) ?? null : null
 }
 
 // Static COLORS as CSS var() strings: fine for inline HTML styles (auto-flip with
@@ -223,6 +224,10 @@ export function ChartTip({
 // measurement lands, the layout is exactly what it was before this change.
 
 const GridFitContext = createContext(null)
+// The grid a panel sits in: snapshot() its layout, apply(next, true) to change
+// and save it, the same path Arrange panels uses. Null outside a CardGrid.
+// A saved chart's "Restore original" puts the panel it replaced back this way.
+export const useGridLayout = () => useContext(GridFitContext)
 
 // applyLayout writes an explicit grid-column span onto each direct child of the
 // grid. It runs against the DOM rather than React children on purpose: a couple
@@ -2517,7 +2522,8 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   const [helpPeek, setHelpPeek] = useState(false)
   const [helpFocus, setHelpFocus] = useState(false)
   const helpOpen = helpPinned || helpPeek || helpFocus
-  const built = usePanelBuiltLine(panelId, helpOpen)
+  const source = usePanelSource(panelId, helpOpen)
+  const built = builtLine(source)
   const helpId = panelId ? `panel-help-${panelId}` : undefined
   const aboutWordId = panelId ? `panel-about-${panelId}` : undefined
 
@@ -2606,6 +2612,16 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
           <p>{help.what}</p>
           {help.look && <p className="mt-1">{help.look}</p>}
           {built && <p className="mt-1" data-panel-built="">{built}</p>}
+          {/* A panel Build a chart can draw opens there on its picks; one it
+              draws exactly can also be replaced by a chart made from them. */}
+          {source?.picks && (
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <a href={chartLink(source.picks)} className="text-link underline">Open in Build a chart</a>
+              {source.builder === 'exact' && (
+                <a href={chartLink(source.picks, { replace: panelId })} className="text-link underline">Replace this panel</a>
+              )}
+            </p>
+          )}
           {aboutExtra && <div className="mt-2">{aboutExtra}</div>}
         </>
       )}

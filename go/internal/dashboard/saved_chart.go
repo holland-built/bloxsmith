@@ -57,5 +57,24 @@ func ValidSavedChart(name string, raw any) (map[string]any, error) {
 	if _, _, err := BuildChartQuery(p); err != nil {
 		return nil, err
 	}
-	return map[string]any{"v": 1, "title": title, "tab": tab, "picks": p}, nil
+	out := map[string]any{"v": 1, "title": title, "tab": tab, "picks": p}
+	// replaces: the built-in panel this chart stands in for. Only one Build a
+	// chart draws exactly, and only on that panel's own page.
+	if r, ok := c["replaces"]; ok {
+		id, _ := r.(string)
+		if !replaceable(id, tab) {
+			return nil, fmt.Errorf("a chart can only replace a panel Build a chart draws exactly, on its own page")
+		}
+		out["replaces"] = id
+	}
+	return out, nil
+}
+
+func replaceable(panelID, tab string) bool {
+	for _, s := range panelSources {
+		if s.ID == panelID {
+			return s.Builder == "exact" && strings.ToLower(s.Page) == tab
+		}
+	}
+	return false
 }

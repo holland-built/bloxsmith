@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   SAVED_CHART_PAGES, newChartId, chartViewName, buildChartBlob, parseSavedChart, loadSavedCharts, saveChart, removeChart,
+  loadSavedChart, replacePanel,
 } from './savedCharts.js'
 
 const picks = { count: 'dns', split: 'domain', window: '7d', over: 'none', top: 10 }
@@ -92,4 +93,58 @@ test('save posts the body and throws when the server refuses it; remove deletes 
 
   const refused = fakeFetch({ 'POST /api/views': { status: 400, body: { ok: false, error: "that combination of choices isn't available" } } })
   await assert.rejects(saveChart({ id: 'k3x9q2m7ab12', title: 'x', tab: 'dns', picks }, refused.impl), /isn't available/)
+})
+
+test('a replacing chart carries the panel it replaces, there and back', () => {
+  const blob = buildChartBlob({ id: 'k3x9q2m7ab12', title: 'Queries', tab: 'dns', picks, replaces: 'dns-query-volume-7d' })
+  assert.equal(blob.chart.replaces, 'dns-query-volume-7d')
+  assert.equal(parseSavedChart({ ...blob, saved_at: 't' }).replaces, 'dns-query-volume-7d')
+  assert.equal('replaces' in buildChartBlob({ id: 'k3x9q2m7ab12', title: 'Q', tab: 'dns', picks }).chart, false)
+})
+
+test('one saved chart reads back by id, or null when it is gone', async () => {
+  const rec = { name: '__chart_k3x9q2m7ab12', saved_at: 't', chart: { v: 1, title: 'Q', tab: 'dns', picks } }
+  const { impl } = fakeFetch({ 'GET /api/views/__chart_k3x9q2m7ab12': { body: rec } })
+  assert.equal((await loadSavedChart('k3x9q2m7ab12', impl)).title, 'Q')
+  assert.equal(await loadSavedChart('nothere12345', impl), null)
+})
+
+// A fake of the view store: listing, read, write and delete over one Map.
+function fakeStore(initial = {}) {
+  const views = new Map(Object.entries(initial))
+  const calls = []
+  const impl = async (url, opts = {}) => {
+    const method = opts.method ?? 'GET'
+    calls.push(`${method} ${url}`)
+    const name = decodeURIComponent(url.replace('/api/views/', ''))
+    const reply = (status, body) => ({ ok: status < 400, status, json: async () => body })
+    if (url === '/api/views' && method === 'GET') return reply(200, { views: [...views.keys()].map((n) => ({ name: n })) })
+    if (url === '/api/views' && method === 'POST') {
+      const b = JSON.parse(opts.body)
+      views.set(b.name, b)
+      return reply(200, { ok: true })
+    }
+    if (method === 'DELETE') return views.delete(name) ? reply(200, { ok: true }) : reply(404, {})
+    return views.has(name) ? reply(200, views.get(name)) : reply(404, {})
+  }
+  return { impl, views, calls }
+}
+
+test('replace saves the chart and hides the original in the page layout, keeping the rest of it', async () => {
+  const store = fakeStore({
+    __layout_dns: { name: '__layout_dns', order: ['dns-zones'], layout: { version: 1, spans: { 'dns-zones': 3 }, hidden: ['dns-rpz'] } },
+  })
+  const chart = { id: 'k3x9q2m7ab12', title: 'Queries', tab: 'dns', picks, replaces: 'dns-query-volume-7d' }
+  await replacePanel(chart, store.impl)
+  assert.equal(store.views.get('__chart_k3x9q2m7ab12').chart.replaces, 'dns-query-volume-7d')
+  const layout = store.views.get('__layout_dns')
+  assert.deepEqual(layout.layout.hidden, ['dns-rpz', 'dns-query-volume-7d'])
+  assert.deepEqual(layout.order, ['dns-zones'])
+  assert.deepEqual(layout.layout.spans, { 'dns-zones': 3 })
+})
+
+test('replace on a page with no saved layout starts one with only that panel hidden', async () => {
+  const store = fakeStore()
+  await replacePanel({ id: 'k3x9q2m7ab12', title: 'Q', tab: 'dns', picks, replaces: 'dns-query-volume-7d' }, store.impl)
+  assert.deepEqual(store.views.get('__layout_dns').layout.hidden, ['dns-query-volume-7d'])
 })

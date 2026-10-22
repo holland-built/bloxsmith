@@ -119,7 +119,7 @@ export const PANEL_HELP = {
   // (Card's helpKey). panelHelp.test.js knows it has no literal panelId.
   'saved-chart': {
     what: 'A chart you made in Build a chart and added to this page. It is redrawn from your Infoblox account each time the page opens.',
-    look: 'Remove takes it off this page. Arrange panels moves it like any other panel.',
+    look: 'Open it in Build a chart to change it. Remove takes it off; on a chart that replaced a panel, Restore original brings that panel back instead.',
   },
 
   // ---- Dns ----

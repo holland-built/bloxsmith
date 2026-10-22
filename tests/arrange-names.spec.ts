@@ -75,6 +75,9 @@ for (const id of TABS) {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto(`/#${id}`);
     await expect(page.locator('h1').first()).toBeVisible();
+    // Panels first: #chart draws its grid only once its menus have loaded, and
+    // counting the button before then skipped the tab about one run in five.
+    await expect(page.locator('[data-panel-id]').first()).toBeVisible();
 
     // The button is absent by design on a one-panel tab with nothing hidden
     // (#editor renders exactly one panel and always will) — CardGrid gates the

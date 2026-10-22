@@ -409,7 +409,7 @@ test('an open About ends with how the panel is built and whether Build a chart c
   const volume = page.getByRole('button', { name: 'About: Query Volume — 7d', exact: true });
   await volume.click();
   const volumeBody = page.locator(`#${await volume.getAttribute('aria-controls')}`);
-  await expect(volumeBody.locator('p').last()).toHaveText("Built from Infoblox's DNS activity records. Build a chart can redraw this.");
+  await expect(volumeBody.locator('[data-panel-built]')).toHaveText("Built from Infoblox's DNS activity records. Build a chart can redraw this.");
 
   await page.goto('/#overview');
   const heatmap = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });

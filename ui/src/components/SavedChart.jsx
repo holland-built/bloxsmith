@@ -1,34 +1,50 @@
 import { useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, Empty, FeedUnavailable, Skeleton } from './ui.jsx'
+import { Card, Empty, FeedUnavailable, Skeleton, useGridLayout } from './ui.jsx'
 import ChartView from './ChartView.jsx'
-import { chartUrl } from '../lib/chartBuilder.js'
+import { chartLink, chartUrl } from '../lib/chartBuilder.js'
 import { removeChart } from '../lib/savedCharts.js'
+import { saveLayout } from '../lib/layout.js'
 
 // A chart made in Build a chart and added to a page. It is an ordinary panel
 // (panelId saved-<id>), so Arrange panels moves and hides it like any other.
 // It stores only the picks and redraws from the active tenant every time.
 
-function RemoveControl({ id, onRemoved }) {
+// Remove, or for a chart that replaced a built-in panel, Restore original:
+// the panel comes off the page's hidden list (saved, then shown through the
+// page's own grid, as "Put back" in Arrange panels does), then the chart is
+// deleted.
+function AboutControls({ chart, onRemoved }) {
+  const grid = useGridLayout()
   const [state, setState] = useState({ busy: false, error: null })
   const remove = async () => {
     setState({ busy: true, error: null })
     try {
-      await removeChart(id)
+      if (chart.replaces && grid) {
+        // Saved and waited for BEFORE the chart is deleted: if the layout
+        // can't be written, the chart (and its Restore) stays.
+        const snap = grid.snapshot()
+        const next = { ...snap, hidden: snap.hidden.filter((id) => id !== chart.replaces) }
+        await saveLayout(chart.tab, next)
+        grid.apply(next, false)
+      }
+      await removeChart(chart.id)
       onRemoved()
     } catch (e) {
       setState({ busy: false, error: e.message })
     }
   }
+  const label = chart.replaces ? 'Restore original' : 'Remove from this page'
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <a href={chartLink(chart.picks, { saved: chart.id })} className="text-note text-link underline">Open in Build a chart</a>
       <button
         type="button"
         onClick={remove}
         disabled={state.busy}
         className="rounded-control text-note text-crit underline underline-offset-2 hover:no-underline disabled:opacity-60"
       >
-        {state.busy ? 'Removing…' : 'Remove from this page'}
+        {state.busy ? 'Working…' : label}
       </button>
       {state.error && <span role="alert" className="text-note text-crit">{state.error}</span>}
     </div>
@@ -47,7 +63,7 @@ export default function SavedChart({ panelId, chart, onRemoved }) {
       helpKey="saved-chart"
       title={`${chart.title}`}
       span={3}
-      aboutExtra={<RemoveControl id={chart.id} onRemoved={onRemoved} />}
+      aboutExtra={<AboutControls chart={chart} onRemoved={onRemoved} />}
     >
       {options.loading || result.loading ? (
         <Skeleton h={220} />

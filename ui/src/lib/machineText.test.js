@@ -67,6 +67,7 @@ const PROSE = [
   ['components/VaultGate.jsx', 'vat-name', 'a name the operator gives a tenant'],
   ['components/TenantManager.jsx', 'tm-add-label', 'a name the operator gives a tenant'],
   ['tabs/ChartBuilder.jsx', 'chart-save-title', 'a name the operator gives a saved chart'],
+  ['tabs/ChartBuilder.jsx', 'chart-replace-title', 'a name the operator gives a replacing chart'],
 ]
 
 const all = jsxFiles(SRC).flatMap((f) => {
