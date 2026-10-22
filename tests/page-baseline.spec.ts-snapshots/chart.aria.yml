@@ -1,0 +1,64 @@
+- main "Build a chart tab":
+  - heading "Build a chart" [level=1]
+  - switch "Show cube names"
+  - paragraph:
+    - text: Pick what to count and how to slice it. The app writes the query from a fixed list, runs it on your Infoblox account and draws what comes back. No AI is involved, so every number is Infoblox's own.
+    - button "Docs →"
+  - button "Arrange panels"
+  - heading "Choose" [level=2]
+  - 'button "About: Choose"': "About: ⓘ"
+  - 'button "Options: Choose"'
+  - text: What to count
+  - combobox "What to count":
+    - option "DNS queries" [selected]
+    - option "Security hits"
+    - option "DNS queries per second"
+  - text: Split by
+  - combobox "Split by":
+    - option "Device" [selected]
+    - option "Record type"
+    - option "Nothing, one total"
+  - text: When
+  - combobox "When":
+    - option "Today"
+    - option "Last 7 days" [selected]
+    - option /Last \d+ days/
+  - text: Over time
+  - combobox "Over time":
+    - option "No, one total" [selected]
+  - text: How many
+  - combobox "How many":
+    - option "Top 5"
+    - option /Top \d+/ [selected]
+    - option /Top \d+/
+  - heading /Top \d+ devices by DNS queries, last 7 days/ [level=2]
+  - 'button /About: Top \d+ devices by DNS queries, last 7 days/': "About: ⓘ"
+  - 'button /Options: Top \d+ devices by DNS queries, last 7 days/'
+  - application "Your chart": baseline-ws-1 baseline-ws-2
+  - heading "How this chart was made" [level=2]
+  - 'button "About: How this chart was made"': "About: ⓘ"
+  - 'button "Options: How this chart was made"'
+  - paragraph:
+    - text: Sent to
+    - code: /api/cubejs/v1/query
+    - text: on your Infoblox account. No AI was used.
+  - heading "The question, in plain words" [level=3]
+  - text: "/\\{ \"measures\": \\[ \"DNS queries\" \\], \"dimensions\": \\[ \"Device\", \"Device address\" \\], \"timeDimensions\": \\[ \\{ \"dimension\": \"Time\", \"dateRange\": \"last 7 days\" \\} \\], \"order\": \\{ \"DNS queries\": \"desc\" \\}, \"limit\": \\d+ \\}/"
+  - heading "The query as sent" [level=3]
+  - text: "/\\{ \"measures\": \\[ \"NetworkNstarDnsActivity\\.total_query_count\" \\], \"dimensions\": \\[ \"NetworkNstarDnsActivity\\.device_name\", \"NetworkNstarDnsActivity\\.device_ip\" \\], \"timeDimensions\": \\[ \\{ \"dimension\": \"NetworkNstarDnsActivity\\.timestamp\", \"dateRange\": \"last 7 days\" \\} \\], \"order\": \\{ \"NetworkNstarDnsActivity\\.total_query_count\": \"desc\" \\}, \"limit\": \\d+ \\}/"
+  - heading "The first 2 rows Infoblox sent back" [level=3]
+  - table:
+    - rowgroup:
+      - row "Device Device address DNS queries":
+        - columnheader "Device"
+        - columnheader "Device address"
+        - columnheader "DNS queries"
+    - rowgroup:
+      - row /baseline-ws-1 \d+\.\d+\.\d+\.\d+ \d+/:
+        - cell "baseline-ws-1"
+        - cell /\d+\.\d+\.\d+\.\d+/
+        - cell /\d+/
+      - row /baseline-ws-2 \d+\.\d+\.\d+\.\d+ \d+/:
+        - cell "baseline-ws-2"
+        - cell /\d+\.\d+\.\d+\.\d+/
+        - cell /\d+/
