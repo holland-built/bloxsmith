@@ -8,6 +8,7 @@ import { fmtValue } from '../lib/chartFormat.js'
 import { alarmTone, cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { useSavedChartPanels } from '../components/SavedChart.jsx'
 
 
 // Tap once to read it, tap again to follow it.
@@ -80,6 +81,8 @@ const SubnetUsageBars = lazy(() => import('../charts/SubnetUsageBars.jsx'))
 const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 
 export default function Overview() {
+  // Charts added from Build a chart; they join the grid as ordinary panels.
+  const savedCharts = useSavedChartPanels('overview')
   const arrangedOnce = useHasArranged()
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
   // The other half of the pair described in ConnStatus.jsx: the header's status
@@ -167,6 +170,7 @@ export default function Overview() {
         <ServicesIncidents panelId="services-incidents" />
         <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} loading={data.loading} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
+        {savedCharts}
       </CardGrid>
     </div>
   )

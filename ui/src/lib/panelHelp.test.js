@@ -225,6 +225,16 @@ function scanFiles() {
 
 const FILES = scanFiles()
 
+// Help keys shared by panels whose ids are made at runtime: every saved chart
+// is saved-<id>, and SavedChart.jsx passes helpKey="saved-chart" to its Card.
+const DYNAMIC_HELP = new Set(['saved-chart'])
+
+test('the dynamic help keys are really used as a helpKey', () => {
+  for (const key of DYNAMIC_HELP) {
+    assert.ok(FILES.some(({ src }) => src.includes(`helpKey="${key}"`)), `no Card passes helpKey="${key}"`)
+  }
+})
+
 test('scanner sanity: it found source files and Card call sites at all', () => {
   // Without this, a bad path or a broken strip would make every assertion
   // below pass on an empty set — the failure mode that would quietly retire
@@ -269,7 +279,8 @@ test('(b)/(c) the panelIds in the app and the keys of PANEL_HELP are the same se
   const inDict = new Set(Object.keys(PANEL_HELP))
 
   const noHelp = [...inApp].filter((id) => !inDict.has(id)).sort()
-  const orphaned = [...inDict].filter((id) => !inApp.has(id)).sort()
+  // Help for panels whose id is made at runtime, so no literal panelId names it.
+  const orphaned = [...inDict].filter((id) => !inApp.has(id) && !DYNAMIC_HELP.has(id)).sort()
 
   assert.deepEqual(
     noHelp,
@@ -310,7 +321,7 @@ test('(d) no panelId is used twice', () => {
 // ---------------------------------------------------------------------------
 
 test('every panel with help says how it is built, and nothing else does', () => {
-  const help = Object.keys(PANEL_HELP).sort()
+  const help = Object.keys(PANEL_HELP).filter((id) => !DYNAMIC_HELP.has(id)).sort()
   const built = PANEL_SOURCES.map((p) => p.id).sort()
   assert.deepEqual(built.filter((id) => !help.includes(id)), [], 'in panel_sources.go but not in PANEL_HELP')
   assert.deepEqual(help.filter((id) => !built.includes(id)), [], 'in PANEL_HELP but not in panel_sources.go')

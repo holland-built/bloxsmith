@@ -1,11 +1,12 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
+import ChartView from '../components/ChartView.jsx'
 import Switch from '../components/Switch.jsx'
 import { setCubeNames, useCubeNames } from '../lib/cubeNames.js'
+import { SAVED_CHART_PAGES, newChartId, saveChart } from '../lib/savedCharts.js'
 import {
-  DEFAULT_PICKS, chartData, chartKind, chartUrl, choiceName, choicesFor, describePicks, fieldName,
-  sampleTable, sentence, settlePicks, shortLabel,
+  DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, sampleTable, sentence, settlePicks,
 } from '../lib/chartBuilder.js'
 
 // Build a chart: plain menus in, one Cube.js query out, a chart of what the
@@ -13,12 +14,6 @@ import {
 // The menus, the names and the allowed combinations all come from
 // /api/chart/options (dashboard/chart_builder.go); the logic is
 // lib/chartBuilder.js.
-
-// Only the panel drawing a chart waits for recharts (see charts/StatusDonut.jsx).
-const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
-const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
-const StackedDayBars = lazy(() => import('../charts/StackedDayBars.jsx'))
-const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 
 const MENUS = [
   { level: 'count', label: 'What to count' },
@@ -56,38 +51,6 @@ function Pickers({ opts, picks, onPick, cube }) {
   )
 }
 
-const DONUT_KEYS = ['series', 'purple', 'ok', 'warn', 'crit', 'other']
-
-// label="Your" reads as "Your chart" to a screen reader; the panel heading
-// above carries the sentence. chartSummary.test.js wants the label literal.
-function TheChart({ opts, picks, rows }) {
-  const { COLORS } = useChartTheme()
-  const cube = useCubeNames()
-  const data = useMemo(() => chartData(opts, picks, rows, cube), [opts, picks, rows, cube])
-  const unit = fieldName(opts, opts.counts.find((c) => c.id === picks.count).measure, cube)
-  const kind = chartKind(picks)
-  return (
-    <Suspense fallback={<Skeleton h={220} />}>
-      {kind === 'line' ? (
-        <GradientArea label="Your" data={data} color={COLORS.series} gradientId="chartBuilderFill" unit={unit} height={220} />
-      ) : kind === 'stacked' ? (
-        <StackedDayBars label="Your" data={data} blockedColor={COLORS.crit} allowedColor={COLORS.series} height={220} />
-      ) : kind === 'donut' ? (
-        <div className="h-[160px]">
-          <StatusDonut
-            label="Your"
-            unit={unit}
-            data={data.map((d, i) => ({ ...d, color: COLORS[DONUT_KEYS[i % DONUT_KEYS.length]] }))}
-          />
-        </div>
-      ) : (
-        // Domains run long; shortLabel keeps each one under its own bar.
-        <CategoryBars label="Your" data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} />
-      )}
-    </Suspense>
-  )
-}
-
 function ResultPanel({ panelId, opts, picks, result, cube }) {
   const heading = sentence(opts, picks, cube)
   const status = result.data?.status
@@ -98,9 +61,94 @@ function ResultPanel({ panelId, opts, picks, result, cube }) {
       ) : status === 'empty' ? (
         <Empty>Infoblox has no activity to count for these choices.</Empty>
       ) : (
-        <TheChart opts={opts} picks={picks} rows={result.data?.rows ?? []} />
+        // label="Your" reads as "Your chart" to a screen reader; the panel
+        // heading above carries the sentence.
+        <ChartView label="Your" opts={opts} picks={picks} rows={result.data?.rows ?? []} />
+      )}
+      {!result.loading && !result.error && (status === 'ok' || status === 'empty') && (
+        <AddToPage key={JSON.stringify(picks)} picks={picks} defaultTitle={sentence(opts, picks, false)} />
       )}
     </Card>
+  )
+}
+
+// The name a saved chart's panel heading shows. Matches the server's limit
+// (dashboard/saved_chart.go savedChartTitleMax).
+const TITLE_MAX = 80
+
+/**
+ * "Add to a page": a name and a page, then the chart joins that page as an
+ * ordinary panel. Keyed on the picks, so changing a pick closes the form and
+ * clears an old "Added" line that would no longer be true of this chart.
+ */
+function AddToPage({ picks, defaultTitle }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState(defaultTitle.slice(0, TITLE_MAX))
+  const [tab, setTab] = useState(SAVED_CHART_PAGES[0].id)
+  const [state, setState] = useState({ busy: false, error: null, added: null })
+  const page = (id) => SAVED_CHART_PAGES.find((p) => p.id === id)
+
+  if (!open) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="px-3 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium"
+        >
+          Add to a page
+        </button>
+        {state.added && (
+          <span role="status" className="text-note text-muted">
+            Added to {page(state.added).name}. <a href={`#${state.added}`} className="text-link underline">Open {page(state.added).name}</a>
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  const add = async (e) => {
+    e.preventDefault()
+    setState({ busy: true, error: null, added: null })
+    try {
+      await saveChart({ id: newChartId(), title, tab, picks })
+      setState({ busy: false, error: null, added: tab })
+      setOpen(false)
+    } catch (err) {
+      setState({ busy: false, error: err.message, added: null })
+    }
+  }
+  return (
+    <form onSubmit={add} className="mt-3 flex flex-wrap items-end gap-3">
+      <div className="flex flex-col gap-1 min-w-[16rem] flex-1">
+        <label htmlFor="chart-save-title" className="text-note text-muted">Name on the page</label>
+        <input
+          id="chart-save-title"
+          value={title}
+          maxLength={TITLE_MAX}
+          required
+          onChange={(e) => setTitle(e.target.value)}
+          className={FIELD_CLS}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="chart-save-tab" className="text-note text-muted">Page</label>
+        <select id="chart-save-tab" value={tab} onChange={(e) => setTab(e.target.value)} className={FIELD_CLS}>
+          {SAVED_CHART_PAGES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
+      <button
+        type="submit"
+        disabled={state.busy || !title.trim()}
+        className="px-3 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium disabled:opacity-60"
+      >
+        {state.busy ? 'Adding…' : 'Add'}
+      </button>
+      <button type="button" onClick={() => setOpen(false)} className="py-1.5 text-copy text-link underline">
+        Cancel
+      </button>
+      {state.error && <p role="alert" className="basis-full text-note text-crit">{state.error}</p>}
+    </form>
   )
 }
 

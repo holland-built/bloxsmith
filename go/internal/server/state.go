@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"bloxsmith/internal/audit"
+	"bloxsmith/internal/dashboard"
 	"bloxsmith/internal/httpx"
 )
 
@@ -352,7 +353,22 @@ func (d *Deps) viewsList(w http.ResponseWriter, r *http.Request) {
 }
 
 // viewWrite is POST /api/views and /api/views/import (server.py:6085).
+//
+// A saved chart (a __chart_ name) is checked against Build a chart's own
+// allow-list and refused with a 400 when it doesn't fit. Every other view is
+// stored as before, and a chart field on one is dropped.
 func (d *Deps) viewWrite(w http.ResponseWriter, r *http.Request, b map[string]any) {
+	name, _ := b["name"].(string)
+	if strings.HasPrefix(strings.TrimSpace(name), dashboard.SavedChartPrefix) {
+		chart, err := dashboard.ValidSavedChart(strings.TrimSpace(name), b["chart"])
+		if err != nil {
+			d.json(w, r, 400, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		b["chart"] = chart
+	} else {
+		delete(b, "chart")
+	}
 	payload, status := d.Store.ViewWrite(b)
 	d.json(w, r, status, payload)
 }

@@ -114,6 +114,14 @@ export const PANEL_HELP = {
     look: 'Amber from 70% full, red from 90%. A subnet nobody measured gets a grey Unknown badge, no bar and dashes, and sorts to the bottom whichever way you sort.',
   },
 
+  // ---- A chart saved from Build a chart, on any page ----
+  // Every saved chart's panelId is saved-<id>; they all share this entry
+  // (Card's helpKey). panelHelp.test.js knows it has no literal panelId.
+  'saved-chart': {
+    what: 'A chart you made in Build a chart and added to this page. It is redrawn from your Infoblox account each time the page opens.',
+    look: 'Remove takes it off this page. Arrange panels moves it like any other panel.',
+  },
+
   // ---- Dns ----
   'dns-query-rate': {
     what: 'How many lookups a second your DNS servers answered, hour by hour, across the last 24 hours.',

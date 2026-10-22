@@ -8,6 +8,7 @@ import { useHashParams } from '../lib/hash.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { useSavedChartPanels } from '../components/SavedChart.jsx'
 
 // ---------- helpers ----------
 
@@ -41,6 +42,8 @@ function feedStatus(api, name) {
 // ---------- main ----------
 
 export default function Infra() {
+  // Charts added from Build a chart; they join the grid as ordinary panels.
+  const savedCharts = useSavedChartPanels('infra')
   const data = useApi('/api/data', { poll: 30000 })
   const health = useApi('/api/csp/host-health', { poll: 15000 })
   const onprem = useApi('/api/csp/onprem-hosts', { poll: 30000 })
@@ -148,6 +151,7 @@ export default function Infra() {
             { key: 'status', label: 'Status', badge: true },
           ]}
         />
+        {savedCharts}
       </CardGrid>
     </div>
   )

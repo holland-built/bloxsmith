@@ -1662,7 +1662,11 @@ function surfaceRadius(el) {
   return getComputedStyle(el).getPropertyValue('--radius-surface').trim()
 }
 
-export function Card({ title, panelName, note, right, span = 2, panelId, fit: fitEnabled = true, className = '', innerRef, children }) {
+// helpKey: the PANEL_HELP entry to show when it isn't the panelId, for panels
+// whose id is made at runtime (a saved chart is saved-<id>, its help is
+// "saved-chart"). aboutExtra: a control that belongs in the About, shown when
+// it is open (a saved chart's Remove).
+export function Card({ title, panelName, note, right, span = 2, panelId, helpKey, aboutExtra, fit: fitEnabled = true, className = '', innerRef, children }) {
   const spanClass = SPAN_CLASS[span] || SPAN_CLASS[6]
   const ref = useRef(null)
   const headRef = useRef(null)
@@ -2496,7 +2500,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // nothing about what is mounted while it is false. panel-help.spec.ts asserts
   // that document.body.textContent does not contain a closed panel's sentence,
   // which fails the moment anyone renders it unconditionally.
-  const help = panelId ? PANEL_HELP[panelId] : null
+  const help = panelId ? PANEL_HELP[helpKey ?? panelId] : null
   // In an effect, not in the render body: React renders a component twice under
   // StrictMode and again on every fit pass, and an error thrown from render
   // ordering is harder to read than one attached to a mount.
@@ -2602,6 +2606,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
           <p>{help.what}</p>
           {help.look && <p className="mt-1">{help.look}</p>}
           {built && <p className="mt-1" data-panel-built="">{built}</p>}
+          {aboutExtra && <div className="mt-2">{aboutExtra}</div>}
         </>
       )}
     </div>

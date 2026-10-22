@@ -8,6 +8,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampleCount.js'
 import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
+import { useSavedChartPanels } from '../components/SavedChart.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -41,6 +42,8 @@ const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
 const StackedDayBars = lazy(() => import('../charts/StackedDayBars.jsx'))
 
 export default function Security() {
+  // Charts added from Build a chart; they join the grid as ordinary panels.
+  const savedCharts = useSavedChartPanels('security')
   const hub = useApi('/api/hub/security')
   const threats = useApi('/api/csp/threats', { poll: 30000 })
   const lookalikes = useApi('/api/lookalikes')
@@ -102,6 +105,7 @@ export default function Security() {
         <ExposedSurfacePanel panelId="security-exposed-surface" hostnames={exposedHostnames} ips={exposedIps} />
         <CtemAssetsPanel panelId="security-ctem-assets" ctemAssets={ctemAssets} />
         <ThreatFeed panelId="security-threat-feed-activity" threats={threats} />
+        {savedCharts}
       </CardGrid>
     </div>
   )
