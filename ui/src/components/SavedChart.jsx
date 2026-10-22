@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { Card, Empty, FeedUnavailable, Skeleton } from './ui.jsx'
 import ChartView from './ChartView.jsx'
 import { chartUrl } from '../lib/chartBuilder.js'
-import { loadSavedCharts, removeChart } from '../lib/savedCharts.js'
+import { removeChart } from '../lib/savedCharts.js'
 
 // A chart made in Build a chart and added to a page. It is an ordinary panel
 // (panelId saved-<id>), so Arrange panels moves and hides it like any other.
@@ -35,7 +35,7 @@ function RemoveControl({ id, onRemoved }) {
   )
 }
 
-function SavedChart({ panelId, chart, onRemoved }) {
+export default function SavedChart({ panelId, chart, onRemoved }) {
   const options = useApi('/api/chart/options')
   const result = useApi(chartUrl(chart.picks))
   const status = result.data?.status
@@ -63,20 +63,4 @@ function SavedChart({ panelId, chart, onRemoved }) {
       )}
     </Card>
   )
-}
-
-/**
- * The saved charts for one page, as panels to put inside its CardGrid. They
- * have to be the grid's own children for Arrange panels to see them, which is
- * why this hands back elements rather than rendering a wrapper.
- */
-export function useSavedChartPanels(tab) {
-  const [charts, setCharts] = useState([])
-  const reload = useCallback(() => {
-    let live = true
-    loadSavedCharts(tab).then((c) => live && setCharts(c))
-    return () => { live = false }
-  }, [tab])
-  useEffect(reload, [reload])
-  return charts.map((c) => <SavedChart key={c.id} panelId={`saved-${c.id}`} chart={c} onRemoved={reload} />)
 }

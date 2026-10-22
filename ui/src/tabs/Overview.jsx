@@ -8,7 +8,7 @@ import { fmtValue } from '../lib/chartFormat.js'
 import { alarmTone, cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
-import { useSavedChartPanels } from '../components/SavedChart.jsx'
+import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
 
 // Tap once to read it, tap again to follow it.

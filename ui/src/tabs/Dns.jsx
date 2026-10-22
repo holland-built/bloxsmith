@@ -10,7 +10,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
-import { useSavedChartPanels } from '../components/SavedChart.jsx'
+import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
 // ---------- main ----------
 

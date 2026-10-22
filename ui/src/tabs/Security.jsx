@@ -8,7 +8,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampleCount.js'
 import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
-import { useSavedChartPanels } from '../components/SavedChart.jsx'
+import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
