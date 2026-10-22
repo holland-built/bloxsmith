@@ -74,12 +74,16 @@ export function fieldName(opts, field, cube) {
 }
 
 // Matched without regard to case: the tenant sends "Block", and older notes
-// and Security.jsx spell it "block".
+// and Security.jsx spell it "block". A blank matches a "" key ("Not graded"),
+// and a value with no name takes the field's otherValues pattern if it has one
+// ("Answer code 5"), so nothing is dropped or left as a bare number.
 function valueName(opts, field, value, cube) {
   if (cube) return value
   const names = opts.values?.[field] ?? {}
   const key = Object.keys(names).find((k) => k.toLowerCase() === String(value).toLowerCase())
-  return key ? names[key] : value
+  if (key !== undefined) return names[key]
+  const other = opts.otherValues?.[field]
+  return other ? other.replace('%s', String(value)) : value
 }
 
 /** One sentence saying what the chart shows. */
@@ -95,12 +99,13 @@ export function sentence(opts, picks, cube) {
     return `${count.measure}${by.length ? ` by ${by.join(', ')}` : ''}, ${window.value}${top}`
   }
   const when = window.name.toLowerCase()
-  // A split with named values ("blocked vs logged") says them; a top N over
-  // two values would read oddly as "Top 5 what happeneds".
-  const named = split.fields?.length === 1 ? opts.values?.[split.fields[0]] : null
-  if (picks.top > 0 && !named) {
-    return `Top ${picks.top} ${split.name.toLowerCase()}s by ${count.name}, ${when}`
+  // The catalog gives each top N split its plural ("policies", not
+  // "policys"). What happened has none: it says its values instead
+  // ("blocked vs allowed"), since "Top 5 what happeneds" reads oddly.
+  if (picks.top > 0 && split.plural) {
+    return `Top ${picks.top} ${split.plural} by ${count.name}, ${when}`
   }
+  const named = !split.plural && split.fields?.length === 1 ? opts.values?.[split.fields[0]] : null
   let head = count.name
   if (over.value) head += ` ${over.name.toLowerCase()}`
   if (named) {
@@ -112,6 +117,44 @@ export function sentence(opts, picks, cube) {
     head += `, ${words.join(' vs ')}`
   }
   return `${head}, ${when}`
+}
+
+/**
+ * "How this chart was made" as short labelled lines, one per pick that
+ * applies: Counted, Split by, When, Over time, Showing (the top N) and Only
+ * counting (a fixed filter the count carries, such as the qps metric).
+ */
+export function describePicks(opts, picks, cube) {
+  const count = countOf(opts, picks)
+  const lines = [{ label: 'Counted', text: choiceName(opts, 'count', picks.count, cube) }]
+  if (picks.split !== 'none') lines.push({ label: 'Split by', text: choiceName(opts, 'split', picks.split, cube) })
+  lines.push({ label: 'When', text: choiceName(opts, 'window', picks.window, cube) })
+  if (picks.over !== 'none') lines.push({ label: 'Over time', text: choiceName(opts, 'over', picks.over, cube) })
+  if (picks.top > 0) {
+    lines.push({ label: 'Showing', text: cube ? `limit ${picks.top}, ${count.measure} desc` : `Top ${picks.top}, highest first` })
+  }
+  for (const f of count.filters ?? []) {
+    const values = f.values.map((v) => valueName(opts, f.member, v, cube)).join(cube ? ', ' : ' or ')
+    lines.push({
+      label: 'Only counting',
+      text: cube ? `${f.member} ${f.operator} ${values}` : `rows where ${fieldName(opts, f.member, false)} is ${values}`,
+    })
+  }
+  return lines
+}
+
+const LABEL_MAX = 20
+
+/**
+ * A bar label short enough to sit under its bar: the start and end, "…"
+ * between. One argument only: recharts calls a tick formatter with the index
+ * second, which must not be read as a length.
+ */
+export function shortLabel(s) {
+  const t = String(s)
+  if (t.length <= LABEL_MAX) return t
+  const tail = Math.floor((LABEL_MAX - 1) / 2)
+  return `${t.slice(0, LABEL_MAX - 1 - tail)}…${t.slice(-tail)}`
 }
 
 const num = (v) => Number(v) || 0
@@ -154,6 +197,14 @@ export function chartData(opts, picks, rows, cube) {
     const field = fields.find((f) => r[f] !== undefined && r[f] !== null && r[f] !== '') ?? fields[0]
     return { name: String(valueName(opts, field, r[field] ?? '', cube)), value: num(r[count.measure]), row: r, field }
   })
+  // One field: rows that read the same (a blank and a missing severity are
+  // both "Not graded") are one bar, not two, re-sorted so the merged total
+  // keeps "highest first" true.
+  if (fields.length === 1) {
+    const merged = new Map()
+    for (const { name, value } of named) merged.set(name, (merged.get(name) ?? 0) + value)
+    return [...merged].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  }
   // Two devices can share a name; the next field (the address) tells them apart.
   return named.map(({ name, value, row, field }) => {
     const rest = fields.slice(fields.indexOf(field) + 1).map((f) => row[f]).filter(Boolean)
@@ -175,24 +226,6 @@ export function sampleTable(opts, rows, cube) {
     headers: cols.map((c) => fieldName(opts, c, cube)),
     rows: rows.map((r) => cols.map((c) => String(valueName(opts, c, r[c] ?? '', cube)))),
   }
-}
-
-/** The real query with every cube, field and value swapped for its plain name. */
-export function plainQuery(opts, query) {
-  const walk = (x) => {
-    if (Array.isArray(x)) return x.map(walk)
-    if (x && typeof x === 'object') {
-      return Object.fromEntries(
-        Object.entries(x).map(([k, v]) => [
-          fieldName(opts, k, false),
-          k === 'values' ? v.map((s) => valueName(opts, x.member, s, false)) : walk(v),
-        ]),
-      )
-    }
-    if (typeof x === 'string' && x.includes('.')) return fieldName(opts, x, false)
-    return x
-  }
-  return walk(query)
 }
 
 /** The GET that runs these picks. */

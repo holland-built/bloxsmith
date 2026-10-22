@@ -8,7 +8,7 @@ import test from 'node:test'
 import OPTIONS from '../../../tests/chart-options.json' with { type: 'json' }
 import {
   DEFAULT_PICKS, choicesFor, settlePicks, chartKind, choiceName, sentence,
-  chartData, fieldName, plainQuery, chartUrl, sampleTable,
+  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel,
 } from './chartBuilder.js'
 
 const picks = (count, split, window, over, top = 0) => ({ count, split, window, over, top })
@@ -18,15 +18,31 @@ test('the default picks are an allowed combination', () => {
 })
 
 test('each measure only offers its own cube\'s splits', () => {
-  assert.deepEqual(choicesFor(OPTIONS, picks('dns')).split, ['device', 'qtype', 'none'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('threats')).split, ['action', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns')).split, ['device', 'qtype', 'domain', 'rcode', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats')).split, ['action', 'tclass', 'policy', 'severity', 'none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('qps')).split, ['none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dhcp')).split, ['leaseop', 'none'])
 })
 
-test('by hour only with today, by day only with 7 or 30 days', () => {
+test('by hour only with today or the last 24 hours, by day only with 7 or 30 days', () => {
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'today')).over, ['hour'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '24h')).over, ['hour'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '7d')).over, ['day'])
   assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', '30d')).over, ['none', 'day'])
+  // The security cube keeps one row a day, so it never slices by hour.
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', 'today')).over, ['none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'domain', '24h')).over, ['none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dhcp', 'none')).window, ['today', '24h', '7d', '30d'])
+  // Nor a rolling 24 hours: day rows can't be cut at this time yesterday.
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action')).window, ['today', '7d', '30d'])
+})
+
+test('the new splits are top N only', () => {
+  for (const [c, s] of [['dns', 'domain'], ['dns', 'rcode'], ['threats', 'tclass'], ['threats', 'policy'], ['threats', 'severity'], ['dhcp', 'leaseop']]) {
+    for (const w of c === 'threats' ? ['today', '7d', '30d'] : ['today', '24h', '7d', '30d']) {
+      assert.deepEqual(choicesFor(OPTIONS, picks(c, s, w)).over, ['none'], `${c}/${s}/${w}`)
+    }
+  }
 })
 
 test('how many is offered only for a split with no over-time', () => {
@@ -43,9 +59,9 @@ test('a pick that stops fitting snaps to the first choice that does', () => {
   // Top 10 devices, then over-time is chosen: the top N drops.
   assert.deepEqual(settlePicks(OPTIONS, picks('threats', 'action', '7d', 'day', 10)), picks('threats', 'action', '7d', 'day', 0))
   // Everything the settler returns is on the server's allow-list.
-  for (const c of ['dns', 'threats', 'qps']) {
-    for (const s of ['device', 'qtype', 'action', 'none']) {
-      for (const w of ['today', '7d', '30d']) {
+  for (const c of ['dns', 'threats', 'qps', 'dhcp']) {
+    for (const s of ['device', 'qtype', 'domain', 'rcode', 'action', 'tclass', 'policy', 'severity', 'leaseop', 'none']) {
+      for (const w of ['today', '24h', '7d', '30d']) {
         for (const o of ['none', 'hour', 'day']) {
           const p = settlePicks(OPTIONS, picks(c, s, w, o, 10))
           assert.ok(OPTIONS.combos.some((x) => JSON.stringify(x) === JSON.stringify(p)), JSON.stringify(p))
@@ -72,6 +88,23 @@ test('the sentence says what the chart shows, in plain words', () => {
   assert.equal(s(picks('threats', 'action', '30d', 'day')), 'Security hits by day, blocked vs allowed, last 30 days')
   assert.equal(s(picks('threats', 'action', '7d', 'none', 5)), 'Security hits, blocked vs allowed, last 7 days')
   assert.equal(s(picks('qps', 'none', '7d', 'day')), 'DNS queries per second by day, last 7 days')
+  assert.equal(s(picks('qps', 'none', '24h', 'hour')), 'DNS queries per second by hour, last 24 hours')
+})
+
+test('every top N sentence uses a real plural', () => {
+  const s = (p) => sentence(OPTIONS, p, false)
+  assert.equal(s(picks('dns', 'domain', '7d', 'none', 10)), 'Top 10 domains by DNS queries, last 7 days')
+  assert.equal(s(picks('dns', 'rcode', '7d', 'none', 5)), 'Top 5 answers by DNS queries, last 7 days')
+  assert.equal(s(picks('threats', 'tclass', '7d', 'none', 5)), 'Top 5 threat types by Security hits, last 7 days')
+  assert.equal(s(picks('threats', 'policy', 'today', 'none', 5)), 'Top 5 policies by Security hits, today')
+  assert.equal(s(picks('threats', 'severity', '30d', 'none', 10)), 'Top 10 severities by Security hits, last 30 days')
+  assert.equal(s(picks('dhcp', 'leaseop', 'today', 'none', 5)), 'Top 5 kinds of change by DHCP lease changes, today')
+  assert.equal(s(picks('dhcp', 'none', '30d', 'day')), 'DHCP lease changes by day, last 30 days')
+  // Every allowed combination reads without "undefined" or a doubled "s".
+  for (const c of OPTIONS.combos) {
+    const text = s(c)
+    assert.doesNotMatch(text, /undefined|null|policys|severitys|happeneds|changeds|answer codes|\bs\b/, text)
+  }
 })
 
 test('with cube names on, the sentence uses the real names', () => {
@@ -122,7 +155,8 @@ test('blocked and allowed read as words, or as the raw values with cube names on
     { 'PortunusAggThreat_ch.action': 'block', 'PortunusAggThreat_ch.requests': '1' },
   ]
   const p = picks('threats', 'action', '7d', 'none', 5)
-  assert.deepEqual(chartData(OPTIONS, p, rows, false).map((d) => d.name), ['Blocked', 'Allowed', 'Blocked'])
+  // Block and block are one outcome, so in plain words they are one bar.
+  assert.deepEqual(chartData(OPTIONS, p, rows, false), [{ name: 'Blocked', value: 42 }, { name: 'Allowed', value: 3 }])
   assert.deepEqual(chartData(OPTIONS, p, rows, true).map((d) => d.name), ['Block', 'Allow', 'block'])
 })
 
@@ -173,19 +207,100 @@ test('record types become donut slices', () => {
   ])
 })
 
-test('the plain query is the real query with every name made plain', () => {
-  const q = {
-    measures: ['HostMetrics.avg_value'],
-    filters: [{ member: 'HostMetrics.metric_name', operator: 'equals', values: ['dns_qps_iq'] }],
-    timeDimensions: [{ dimension: 'HostMetrics.timestamp', dateRange: 'today', granularity: 'hour' }],
+test('how the chart was made: one short labelled line per pick that applies', () => {
+  const d = (p, cube = false) => describePicks(OPTIONS, p, cube)
+  assert.deepEqual(d(picks('dns', 'device', '7d', 'none', 10)), [
+    { label: 'Counted', text: 'DNS queries' },
+    { label: 'Split by', text: 'Device' },
+    { label: 'When', text: 'Last 7 days' },
+    { label: 'Showing', text: 'Top 10, highest first' },
+  ])
+  assert.deepEqual(d(picks('qps', 'none', '24h', 'hour')), [
+    { label: 'Counted', text: 'DNS queries per second' },
+    { label: 'When', text: 'Last 24 hours' },
+    { label: 'Over time', text: 'By hour' },
+    { label: 'Only counting', text: 'rows where Metric is DNS queries per second' },
+  ])
+  assert.deepEqual(d(picks('threats', 'action', '30d', 'day')), [
+    { label: 'Counted', text: 'Security hits' },
+    { label: 'Split by', text: 'What happened' },
+    { label: 'When', text: 'Last 30 days' },
+    { label: 'Over time', text: 'By day' },
+  ])
+  assert.deepEqual(d(picks('dhcp', 'leaseop', 'today', 'none', 5)), [
+    { label: 'Counted', text: 'DHCP lease changes' },
+    { label: 'Split by', text: 'What changed' },
+    { label: 'When', text: 'Today' },
+    { label: 'Showing', text: 'Top 5, highest first' },
+  ])
+  // Every count, every allowed combination: Counted and When are always there.
+  for (const c of OPTIONS.combos) {
+    const labels = d(c).map((l) => l.label)
+    assert.equal(labels[0], 'Counted')
+    assert.ok(labels.includes('When'))
+    assert.ok(d(c).every((l) => l.text && !/undefined/.test(l.text)), JSON.stringify(c))
   }
-  assert.deepEqual(plainQuery(OPTIONS, q), {
-    measures: ['Queries per second'],
-    filters: [{ member: 'Metric', operator: 'equals', values: ['DNS queries per second'] }],
-    timeDimensions: [{ dimension: 'Time', dateRange: 'today', granularity: 'hour' }],
-  })
-  const top = { measures: ['NetworkNstarDnsActivity.total_query_count'], order: { 'NetworkNstarDnsActivity.total_query_count': 'desc' }, limit: 10 }
-  assert.deepEqual(plainQuery(OPTIONS, top), { measures: ['DNS queries'], order: { 'DNS queries': 'desc' }, limit: 10 })
+})
+
+test('with cube names on, the lines use the real names', () => {
+  assert.deepEqual(describePicks(OPTIONS, picks('qps', 'none', 'today', 'hour'), true), [
+    { label: 'Counted', text: 'HostMetrics.avg_value' },
+    { label: 'When', text: 'today' },
+    { label: 'Over time', text: 'hour' },
+    { label: 'Only counting', text: 'HostMetrics.metric_name equals dns_qps_iq' },
+  ])
+  assert.deepEqual(describePicks(OPTIONS, picks('dns', 'domain', '7d', 'none', 25), true), [
+    { label: 'Counted', text: 'NetworkNstarDnsActivity.total_query_count' },
+    { label: 'Split by', text: 'NetworkNstarDnsActivity.qname' },
+    { label: 'When', text: 'last 7 days' },
+    { label: 'Showing', text: 'limit 25, NetworkNstarDnsActivity.total_query_count desc' },
+  ])
+})
+
+test('answer codes read as words, and an unknown code still shows', () => {
+  const rows = [
+    { 'NetworkNstarDnsActivity.rcode': '0', 'NetworkNstarDnsActivity.total_query_count': '102600000' },
+    { 'NetworkNstarDnsActivity.rcode': 3, 'NetworkNstarDnsActivity.total_query_count': '55300000' },
+    { 'NetworkNstarDnsActivity.rcode': '2', 'NetworkNstarDnsActivity.total_query_count': '2500000' },
+    { 'NetworkNstarDnsActivity.rcode': '5', 'NetworkNstarDnsActivity.total_query_count': '12' },
+  ]
+  const p = picks('dns', 'rcode', '7d', 'none', 5)
+  assert.deepEqual(chartData(OPTIONS, p, rows, false).map((d) => d.name), ['Answered', 'No such name', 'Server failed', 'Answer code 5'])
+  assert.deepEqual(chartData(OPTIONS, p, rows, true).map((d) => d.name), ['0', '3', '2', '5'])
+  assert.deepEqual(sampleTable(OPTIONS, rows, false).rows.map((r) => r[0]), ['Answered', 'No such name', 'Server failed', 'Answer code 5'])
+})
+
+test('a blank severity reads as Not graded and is kept, as one bar', () => {
+  const rows = [
+    { 'PortunusAggThreat_ch.severity': '', 'PortunusAggThreat_ch.requests': '2550000' },
+    { 'PortunusAggThreat_ch.severity': null, 'PortunusAggThreat_ch.requests': '7' },
+    { 'PortunusAggThreat_ch.severity': 'High', 'PortunusAggThreat_ch.requests': '370000' },
+  ]
+  const data = chartData(OPTIONS, picks('threats', 'severity', '7d', 'none', 5), rows, false)
+  // Blank and missing both read as Not graded, so they are one bar, not two.
+  assert.deepEqual(data, [
+    { name: 'Not graded', value: 2550007 },
+    { name: 'High', value: 370000 },
+  ])
+  assert.deepEqual(sampleTable(OPTIONS, rows, false).rows.map((r) => r[0]), ['Not graded', 'Not graded', 'High'])
+  // A merged bar moves to where its total puts it, so highest first still holds.
+  const mixed = [
+    { 'PortunusAggThreat_ch.severity': 'High', 'PortunusAggThreat_ch.requests': '90' },
+    { 'PortunusAggThreat_ch.severity': '', 'PortunusAggThreat_ch.requests': '80' },
+    { 'PortunusAggThreat_ch.severity': 'Medium', 'PortunusAggThreat_ch.requests': '75' },
+    { 'PortunusAggThreat_ch.severity': null, 'PortunusAggThreat_ch.requests': '70' },
+  ]
+  assert.deepEqual(chartData(OPTIONS, picks('threats', 'severity', '7d', 'none', 5), mixed, false).map((d) => d.name), ['Not graded', 'High', 'Medium'])
+})
+
+test('long bar labels are shortened in the middle, short ones kept', () => {
+  assert.equal(shortLabel('www.facebook.com.'), 'www.facebook.com.')
+  // recharts passes the tick index second; it must not shorten anything.
+  assert.equal(shortLabel('baseline-ws-1', 0), 'baseline-ws-1')
+  const long = 'e1234.dscb.akamaiedge.example-cdn.net.'
+  const short = shortLabel(long)
+  assert.ok(short.length <= 20, short)
+  assert.ok(short.startsWith('e1234') && short.endsWith('cdn.net.') && short.includes('…'), short)
 })
 
 test('the request URL carries the picks, and top only when it applies', () => {
