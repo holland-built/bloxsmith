@@ -28,9 +28,11 @@ security data.
 | Subnets and DHCP | Leases, how full each subnet is, which ones are running out |
 | DNS | Records, zones, query rates |
 | Security | Policies, threat indicators, audit logs |
+| Assets | Every device Infoblox has found, searchable by name and type |
+| Build a chart | Your own DNS, security or DHCP chart, picked from menus, that you can add to the Overview, Network, DNS, Security or Infra page |
 | AI query box (optional) | Ask questions about your data in plain English |
 
-[What each tab does](docs/TABS.md) lists all 15 tabs and says which ones change things in Infoblox.
+[What each tab does](docs/TABS.md) lists all 16 tabs and says which ones change things in Infoblox.
 
 ## Quick start
 
