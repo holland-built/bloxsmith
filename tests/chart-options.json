@@ -3107,6 +3107,148 @@
       "value": ""
     }
   ],
+  "questions": [
+    {
+      "name": "Which kinds of asset have no DNS name?",
+      "picks": {
+        "count": "assets",
+        "split": "atype",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "missing",
+        "is": "is",
+        "value": "DNS Forward Record"
+      }
+    },
+    {
+      "name": "Which kinds of asset is IPAM not tracking?",
+      "picks": {
+        "count": "assets",
+        "split": "atype",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "missing",
+        "is": "is",
+        "value": "IPAM"
+      }
+    },
+    {
+      "name": "Where are the zombie assets found?",
+      "picks": {
+        "count": "assets",
+        "split": "source",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "problem",
+        "is": "is",
+        "value": "Zombie"
+      }
+    },
+    {
+      "name": "Which kinds of asset are noncompliant?",
+      "picks": {
+        "count": "assets",
+        "split": "atype",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "problem",
+        "is": "is",
+        "value": "Noncompliant"
+      }
+    },
+    {
+      "name": "Who found the assets nobody could identify?",
+      "picks": {
+        "count": "assets",
+        "split": "source",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "atype",
+        "is": "is",
+        "value": "Unclassified"
+      }
+    },
+    {
+      "name": "Who makes the IoT devices?",
+      "picks": {
+        "count": "assets",
+        "split": "vendor",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "acat",
+        "is": "is",
+        "value": "IoT"
+      }
+    },
+    {
+      "name": "Which regions hold the cloud assets?",
+      "picks": {
+        "count": "assets",
+        "split": "region",
+        "window": "now",
+        "over": "none",
+        "top": 10,
+        "only": "where",
+        "is": "is",
+        "value": "Cloud"
+      }
+    },
+    {
+      "name": "What problems do on-premises assets have?",
+      "picks": {
+        "count": "assets",
+        "split": "problem",
+        "window": "now",
+        "over": "none",
+        "top": 0,
+        "only": "where",
+        "is": "is",
+        "value": "Onprem"
+      }
+    },
+    {
+      "name": "What kinds of asset appeared this month?",
+      "picks": {
+        "count": "newassets",
+        "split": "atype",
+        "window": "thismonth",
+        "over": "none",
+        "top": 10
+      }
+    },
+    {
+      "name": "Which policies blocked the most this week?",
+      "picks": {
+        "count": "threats",
+        "split": "policy",
+        "window": "7d",
+        "over": "none",
+        "top": 10,
+        "only": "action",
+        "is": "is",
+        "value": "Block"
+      }
+    },
+    {
+      "name": "Which names were looked up but don't exist?",
+      "picks": {
+        "count": "dns",
+        "split": "domain",
+        "window": "24h",
+        "over": "none",
+        "top": 10,
+        "only": "rcode",
+        "is": "is",
+        "value": "3"
+      }
+    }
+  ],
   "splits": [
     {
       "buckets": null,

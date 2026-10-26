@@ -31,6 +31,7 @@ func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/threat-lookup", d.threatLookup)
 	mux.HandleFunc("GET /api/chart/options", d.chartOptions)
 	mux.HandleFunc("GET /api/chart", d.chart)
+	mux.HandleFunc("GET /api/chart/values", d.chartValues)
 }
 
 // actions is GET /api/actions (server.py:5077): the raw IQ Actions payload.
@@ -281,7 +282,8 @@ func (d *Deps) chartOptions(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) chart(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/chart")
 	q := r.URL.Query()
-	p := dashboard.ChartPicks{Count: q.Get("count"), Split: q.Get("split"), Window: q.Get("window"), Over: q.Get("over")}
+	p := dashboard.ChartPicks{Count: q.Get("count"), Split: q.Get("split"), Window: q.Get("window"), Over: q.Get("over"),
+		Only: q.Get("only"), Is: q.Get("is"), Value: q.Get("value")}
 	if t := q.Get("top"); t != "" {
 		n, err := strconv.Atoi(t)
 		if err != nil {
@@ -297,6 +299,22 @@ func (d *Deps) chart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	d.json(w, r, 200, d.dash(r).RunChart(ctx, p))
+}
+
+// chartValues is GET /api/chart/values?count=&only=&window=: the values the
+// "Only show" menu offers for one field. A field the count doesn't have is a
+// 400 and never reaches the tenant.
+func (d *Deps) chartValues(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart/values")
+	q := r.URL.Query()
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	res := d.dash(r).ChartValues(ctx, q.Get("count"), q.Get("only"), q.Get("window"))
+	if res["status"] == "invalid" {
+		d.json(w, r, 400, map[string]any{"error": "That field can't be filtered on for this chart."})
+		return
+	}
+	d.json(w, r, 200, res)
 }
 
 // getCat reads a signal/incident category as a string.

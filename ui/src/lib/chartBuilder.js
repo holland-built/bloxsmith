@@ -31,14 +31,58 @@ export function choicesFor(opts, picks) {
   return Object.fromEntries(LEVELS.map((l, i) => [l, allowedAt(opts, picks, i)]))
 }
 
-/** The picks with any that stopped fitting moved to the first choice that does. */
+/**
+ * The picks with any that stopped fitting moved to the first choice that does.
+ * The "Only show" filter is kept while its field still fits, else dropped.
+ */
 export function settlePicks(opts, picks) {
   const out = {}
   LEVELS.forEach((l, i) => {
     const allowed = allowedAt(opts, out, i)
     out[l] = allowed.find((v) => String(v) === String(picks[l])) ?? allowed[0]
   })
+  if (picks.only && (picks.is === 'is' || picks.is === 'not') && filterFields(opts, out).includes(picks.only)) {
+    out.only = picks.only
+    out.is = picks.is
+    out.value = picks.value ?? ''
+  }
   return out
+}
+
+/** The fields "Only show" can filter on: the count's own splits, not the split itself. */
+export function filterFields(opts, picks) {
+  const out = []
+  for (const c of opts.combos) {
+    if (c.count === picks.count && c.split !== 'none' && c.split !== picks.split && !out.includes(c.split)) out.push(c.split)
+  }
+  return out
+}
+
+const FILTER_OPS = { is: 'equals', not: 'notEquals' }
+const BUCKET_OPS = { is: 'contains', not: 'notContains' }
+
+/** A value of a split's field as the menu shows it ("Blocked" for Block). */
+export function valueLabel(opts, split, value, cube) {
+  return String(valueName(opts, choice(opts, 'split', split).fields[0], value, cube))
+}
+
+/** True when the split counts each value on its own (several per asset). */
+export function isBucketSplit(opts, split) {
+  return choice(opts, 'split', split)?.buckets?.length > 0
+}
+
+/** The filter in words ("What happened is Blocked"), or null when there is none to apply. */
+function filterText(opts, picks, cube) {
+  if (!picks.only || !picks.value) return null
+  const f = choice(opts, 'split', picks.only)
+  const field = f.fields[0]
+  const bucket = f.buckets?.length > 0
+  if (cube) {
+    const op = (bucket ? BUCKET_OPS : FILTER_OPS)[picks.is]
+    return `${field} ${op} ${bucket ? `"${picks.value}"` : picks.value}`
+  }
+  const verb = bucket ? (picks.is === 'is' ? 'includes' : 'does not include') : picks.is === 'is' ? 'is' : 'is not'
+  return `${f.name} ${verb} ${valueName(opts, field, picks.value, false)}`
 }
 
 /**
@@ -99,8 +143,15 @@ function valueName(opts, field, value, cube) {
   return other ? other.replace('%s', String(value)) : value
 }
 
-/** One sentence saying what the chart shows. */
+/** One sentence saying what the chart shows, and what it only shows. */
 export function sentence(opts, picks, cube) {
+  const base = baseSentence(opts, picks, cube)
+  const only = filterText(opts, picks, cube)
+  if (!only) return base
+  return cube ? `${base}, ${only}` : `${base}, only where ${only}`
+}
+
+function baseSentence(opts, picks, cube) {
   const count = countOf(opts, picks)
   const split = choice(opts, 'split', picks.split)
   const window = choice(opts, 'window', picks.window)
@@ -156,6 +207,8 @@ export function describePicks(opts, picks, cube) {
         : `counted on its own, so an asset with two is in both bars`,
     })
   }
+  const only = filterText(opts, picks, cube)
+  if (only) lines.push({ label: 'Only showing', text: only })
   for (const f of count.filters ?? []) {
     const values = f.values.map((v) => valueName(opts, f.member, v, cube)).join(cube ? ', ' : ' or ')
     lines.push({
@@ -291,8 +344,7 @@ export function toCsv(table) {
  * (saved=<id> to edit a saved chart, replace=<panelId> to replace a panel).
  */
 export function chartLink(picks, extra = {}) {
-  const q = new URLSearchParams({ count: picks.count, split: picks.split, window: picks.window, over: picks.over })
-  if (picks.top > 0) q.set('top', String(picks.top))
+  const q = pickParams(picks)
   for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v)
   return `#chart?${q}`
 }
@@ -300,12 +352,24 @@ export function chartLink(picks, extra = {}) {
 /** The picks a #chart?… link carries, or null when it carries none. Not yet settled. */
 export function picksFromParams(params) {
   if (!params?.count) return null
-  return { count: params.count, split: params.split, window: params.window, over: params.over, top: Number(params.top) || 0 }
+  const p = { count: params.count, split: params.split, window: params.window, over: params.over, top: Number(params.top) || 0 }
+  if (params.only) Object.assign(p, { only: params.only, is: params.is, value: params.value ?? '' })
+  return p
+}
+
+// The picks as query parameters. The filter goes along only once it has a value.
+function pickParams(picks) {
+  const q = new URLSearchParams({ count: picks.count, split: picks.split, window: picks.window, over: picks.over })
+  if (picks.top > 0) q.set('top', String(picks.top))
+  if (picks.only && picks.value) {
+    q.set('only', picks.only)
+    q.set('is', picks.is)
+    q.set('value', picks.value)
+  }
+  return q
 }
 
 /** The GET that runs these picks. */
 export function chartUrl(picks) {
-  const q = new URLSearchParams({ count: picks.count, split: picks.split, window: picks.window, over: picks.over })
-  if (picks.top > 0) q.set('top', String(picks.top))
-  return `/api/chart?${q}`
+  return `/api/chart?${pickParams(picks)}`
 }

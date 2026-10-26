@@ -337,6 +337,10 @@ Pick **What to count** (DNS queries, Security hits, DNS queries per second, DHCP
 
 Pick **No, one total** under Over time to show the count as one large number. Names too long to fit under a bar, such as domains, turn the bars sideways so each name has a row of its own.
 
+**Start from a question** sets every menu at once for a ready-made chart, such as *Which kinds of asset have no DNS name?* or *Which policies blocked the most this week?* Most come from the [UAI Query Library](https://github.com/IngmarVG-IB/infoblox-uai-query-library)'s tested questions. Change any menu afterwards.
+
+**Only show** narrows the chart to one value of another field: pick the field, then *is* or *is not*, then a value from the ones Infoblox has for it (the 50 most common). For Problem and Missing record it reads *includes* or *does not include*. Changing what you count or split by drops a filter that no longer fits.
+
 The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked. **Download as CSV** saves every row Infoblox sent back as a spreadsheet file.
 
 **Add to a page** puts the chart on Overview, DNS, Security, Network or Infra under a name you choose. It becomes an ordinary panel there: Arrange panels moves or hides it, and **Remove from this page** in its About (ⓘ) takes it off. Only the picks are saved, so the chart is redrawn from your Infoblox account each time the page opens, and from whichever account is active. Saved charts are kept on this machine, with the panel layouts, and every account sees the same ones.

@@ -53,7 +53,8 @@ func ValidSavedChart(name string, raw any) (map[string]any, error) {
 	if top != float64(int(top)) {
 		return nil, fmt.Errorf("that combination of choices isn't available")
 	}
-	p := ChartPicks{Count: str("count"), Split: str("split"), Window: str("window"), Over: str("over"), Top: int(top)}
+	p := ChartPicks{Count: str("count"), Split: str("split"), Window: str("window"), Over: str("over"), Top: int(top),
+		Only: str("only"), Is: str("is"), Value: str("value")}
 	if _, _, err := BuildChartQuery(p); err != nil {
 		return nil, err
 	}
