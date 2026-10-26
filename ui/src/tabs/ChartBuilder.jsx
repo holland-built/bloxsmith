@@ -8,7 +8,7 @@ import { SAVED_CHART_PAGES, loadSavedChart, newChartId, replacePanel, saveChart 
 import { useHashParams } from '../lib/hash.js'
 import PANEL_SOURCES from '../lib/panelSources.json'
 import {
-  DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, picksFromParams, sampleTable, sentence, settlePicks,
+  DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, picksFromParams, sampleTable, sentence, settlePicks, toCsv, pickOne,
 } from '../lib/chartBuilder.js'
 
 // Build a chart: plain menus in, one Cube.js query out, a chart of what the
@@ -268,9 +268,20 @@ function SaveChanges({ id, picks, defaultTitle }) {
   )
 }
 
+// Saves the table as a file, the way Overview's Top Consumers export does.
+function downloadCsv(table, name) {
+  const url = URL.createObjectURL(new Blob([toCsv(table)], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function HowPanel({ panelId, opts, picks, result, cube }) {
   const query = result.data?.query
-  const table = sampleTable(opts, (result.data?.rows ?? []).slice(0, 5), cube)
+  const rows = result.data?.rows ?? []
+  const table = sampleTable(opts, rows.slice(0, 5), cube)
   return (
     <Card panelId={panelId} title="How this chart was made" span={6}>
       {!query ? (
@@ -280,6 +291,15 @@ function HowPanel({ panelId, opts, picks, result, cube }) {
           <p className="text-note text-muted">
             Sent to <code>{result.data.endpoint}</code> on your Infoblox account. No AI was used.
           </p>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => downloadCsv(sampleTable(opts, rows, cube), `${picks.count}-${picks.split}-${picks.window}.csv`)}
+              className="self-start py-1.5 text-copy text-link underline"
+            >
+              Download {rows.length === 1 ? 'the 1 row' : `all ${rows.length} rows`} as CSV
+            </button>
+          )}
           <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-copy">
             {describePicks(opts, picks, cube).map(({ label, text }) => (
               <div key={label} className="contents">
@@ -329,7 +349,7 @@ function Builder({ opts, params }) {
   const cube = useCubeNames()
   const [picks, setPicks] = useState(() => settlePicks(opts, picksFromParams(params) ?? DEFAULT_PICKS))
   const result = useApi(chartUrl(picks))
-  const onPick = (level, value) => setPicks((p) => settlePicks(opts, { ...p, [level]: value }))
+  const onPick = (level, value) => setPicks((p) => pickOne(opts, p, level, value))
   return (
     <CardGrid layoutKey="chart">
       <Card panelId="chart-picks" title="Choose" span={2}>

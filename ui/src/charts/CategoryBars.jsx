@@ -45,11 +45,42 @@ export default function CategoryBars({
   tickFormat,
   fill,
   minTickGap,
+  horizontal = false,
 }) {
   const summary = describePoints(
     (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d[xKey]) : d[xKey], value: d[yKey] })),
     unit,
   )
+  // Build a chart lays bars sideways when their names are too long to sit
+  // under them (domains, policies): each name then gets a row to itself.
+  if (horizontal) {
+    // Wide enough for the longest name and no wider (about 7px a character at
+    // the note size), so short names leave the bars the rest of a narrow card.
+    const longest = Math.max(...data.map((d) => String(tickFormat ? tickFormat(d[xKey]) : d[xKey]).length))
+    const labelWidth = Math.min(260, longest * 7 + 12)
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart layout="vertical" data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
+          <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" hide />
+          <YAxis
+            type="category"
+            dataKey={xKey}
+            width={labelWidth}
+            interval={0}
+            tickFormatter={tickFormat}
+            tick={{ fill: 'var(--color-tick)', className: 'text-note' }}
+            axisLine={{ stroke: 'var(--color-grid)' }}
+            tickLine={false}
+          />
+          <Tooltip content={<ChartTip name={unit} />} />
+          <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false}>
+            {fill ? null : data.map((d) => <Cell key={d[xKey]} fill={d.color} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>

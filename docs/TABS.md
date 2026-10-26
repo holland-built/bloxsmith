@@ -332,7 +332,9 @@ Pick **What to count** (DNS queries, Security hits, DNS queries per second, or D
 - Security hits are kept by Infoblox one day at a time, so they are never offered by hour or over the last 24 hours.
 - Only blocked vs allowed can be split and shown over time together. Every other split is a top 5, 10 or 25.
 
-The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked.
+Pick **No, one total** under Over time to show the count as one large number. Names too long to fit under a bar, such as domains, turn the bars sideways so each name has a row of its own.
+
+The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked. **Download as CSV** saves every row Infoblox sent back as a spreadsheet file.
 
 **Add to a page** puts the chart on Overview, DNS, Security, Network or Infra under a name you choose. It becomes an ordinary panel there: Arrange panels moves or hides it, and **Remove from this page** in its About (ⓘ) takes it off. Only the picks are saved, so the chart is redrawn from your Infoblox account each time the page opens, and from whichever account is active. Saved charts are kept on this machine, with the panel layouts, and every account sees the same ones.
 
@@ -384,7 +386,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Security | CTEM Exposure | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Threat Feed Activity | Infoblox's security hit records | As a copy | the blocked and allowed totals above the bars are worked out in the app |
 | Security | SOC Insights | Infoblox's SOC insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
-| Security | Asset Insights | Infoblox's asset insight records | No | it is a single total, and Build a chart draws charts |
+| Security | Asset Insights | Infoblox's asset insight records | No | it counts asset records, which Build a chart does not read yet |
 | Security | Exposures | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Risk | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Exposed Surface | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
@@ -394,7 +396,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Infra | Service Health | the service list | No | each group's health is rolled up in the app |
 | Infra | Host Health | the host list | No | it is a list, not a chart |
 | Infra | On-Prem Hosts | the on-prem host list | No | it is a list, not a chart |
-| Infra | Asset Discovery | Infoblox's asset discovery records | No | it is a single total, and Build a chart draws charts |
+| Infra | Asset Discovery | Infoblox's asset discovery records | No | it counts asset records, which Build a chart does not read yet |
 | Infra | Jobs | the job list | No | it is a list, not a chart |
 | Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
 | Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |

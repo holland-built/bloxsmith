@@ -54,7 +54,7 @@ test('choices that do not fit are hidden, not greyed out', async ({ page }) => {
   await expect(split.locator('option')).toHaveText(['Nothing, one total']);
   // Over time for today offers only By hour, and How many disappears.
   await page.getByLabel('When').selectOption({ label: 'Today' });
-  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour']);
+  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour', 'No, one total']);
   await expect(page.getByLabel('How many')).toHaveCount(0);
   await expect(page.locator('option[disabled]')).toHaveCount(0);
 });
@@ -84,7 +84,7 @@ test('round two adds things to count and split by, each hidden where it does not
   // Last 24 hours slices by hour, never by day.
   await split.selectOption({ label: 'Nothing, one total' });
   await page.getByLabel('When').selectOption({ label: 'Last 24 hours' });
-  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour']);
+  await expect(page.getByLabel('Over time').locator('option')).toHaveText(['By hour', 'No, one total']);
   await expect(heading(page)).toHaveText('DHCP lease changes by hour, last 24 hours');
   await expect(page.locator('option[disabled]')).toHaveCount(0);
 });
@@ -145,4 +145,40 @@ test('an upstream failure says so, and is not shown as no activity', async ({ pa
   await page.goto('/#chart');
   await expect(page.locator('[data-feed-unavailable="This chart could not be drawn"]')).toBeVisible();
   await expect(page.getByText('no activity')).toHaveCount(0);
+});
+
+test('no split and one total draws the total as a number', async ({ page }) => {
+  await page.goto('/#chart');
+  await page.getByLabel('Split by').selectOption({ label: 'Nothing, one total' });
+  await page.getByLabel('Over time').selectOption({ label: 'No, one total' });
+  await expect(heading(page)).toHaveText('DNS queries, last 7 days');
+  await expect(page.getByRole('img', { name: 'Your chart: DNS queries, 48,211' })).toBeVisible();
+});
+
+test('names too long to sit under a bar lie sideways, each on a row of its own', async ({ page }) => {
+  const long = 'telemetry.eu.example-cdn-provider.net';
+  await page.route('**/api/chart?*', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ok',
+        endpoint: '/api/cubejs/v1/query',
+        query: {},
+        rows: [{ 'NetworkNstarDnsActivity.qname': long, 'NetworkNstarDnsActivity.total_query_count': '900' }],
+      },
+    }),
+  );
+  await page.goto('/#chart?count=dns&split=domain&window=7d&over=none&top=10');
+  await expect(page.locator('svg text').filter({ hasText: long })).toBeVisible();
+});
+
+test('every row Infoblox sent back can be saved as a CSV file', async ({ page }) => {
+  await page.goto('/#chart');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download the 1 row as CSV' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('dns-device-7d.csv');
+  const fs = await import('node:fs/promises');
+  const text = await fs.readFile(await download.path(), 'utf8');
+  expect(text).toBe('Device,Device address,DNS queries\r\nws-014.lab,10.20.0.24,48211\r\n');
 });

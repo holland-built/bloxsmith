@@ -8,7 +8,7 @@ import test from 'node:test'
 import OPTIONS from '../../../tests/chart-options.json' with { type: 'json' }
 import {
   DEFAULT_PICKS, choicesFor, settlePicks, chartKind, choiceName, sentence,
-  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel, chartLink, picksFromParams,
+  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel, chartLink, picksFromParams, toCsv, sideways, pickOne,
 } from './chartBuilder.js'
 
 const picks = (count, split, window, over, top = 0) => ({ count, split, window, over, top })
@@ -25,10 +25,10 @@ test('each measure only offers its own cube\'s splits', () => {
 })
 
 test('by hour only with today or the last 24 hours, by day only with 7 or 30 days', () => {
-  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'today')).over, ['hour'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '24h')).over, ['hour'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '7d')).over, ['day'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', '30d')).over, ['none', 'day'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'today')).over, ['hour', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '24h')).over, ['hour', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '7d')).over, ['day', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', '30d')).over, ['day', 'none'])
   // The security cube keeps one row a day, so it never slices by hour.
   assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', 'today')).over, ['none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'domain', '24h')).over, ['none'])
@@ -340,4 +340,32 @@ test('a link with picks that do not fit snaps to ones that do', () => {
   assert.equal(p.count, 'threats')
   // An unknown count falls back to the first one.
   assert.equal(settlePicks(OPTIONS, picksFromParams({ count: 'cpu', split: 'none', window: '7d', over: 'day' })).count, 'dns')
+})
+
+test('no split and no over-time is one total, drawn as a number', () => {
+  const p = picks('dns', 'none', '7d', 'none')
+  assert.equal(chartKind(p), 'number')
+  assert.deepEqual(chartData(OPTIONS, p, [{ 'NetworkNstarDnsActivity.total_query_count': '41208' }], false), [{ name: 'DNS queries', value: 41208 }])
+  assert.deepEqual(chartData(OPTIONS, p, [], false), [{ name: 'DNS queries', value: 0 }])
+  assert.equal(sentence(OPTIONS, p, false), 'DNS queries, last 7 days')
+})
+
+test('bars turn sideways only when a name would be cut short', () => {
+  assert.equal(sideways([{ name: 'core-dns-01' }, { name: 'A' }]), false)
+  assert.equal(sideways([{ name: 'telemetry.eu.example-cdn-provider.net' }]), true)
+})
+
+test('the CSV quotes what a spreadsheet would split on', () => {
+  const csv = toCsv({ headers: ['Domain', 'DNS queries'], rows: [['a.example.com', '12'], ['say "hi", ok', '3']] })
+  assert.equal(csv, 'Domain,DNS queries\r\na.example.com,12\r\n"say ""hi"", ok",3\r\n')
+})
+
+test('a cell starting with = + - or @ is not run as a formula', () => {
+  assert.equal(toCsv({ headers: ['x'], rows: [['=1+1'], ['-5'], ['@x']] }), "x\r\n'=1+1\r\n'-5\r\n'@x\r\n")
+})
+
+test('choosing no split starts over time again, and one total stays a choice', () => {
+  const from = picks('dhcp', 'leaseop', '24h', 'none', 10)
+  assert.deepEqual(pickOne(OPTIONS, from, 'split', 'none'), picks('dhcp', 'none', '24h', 'hour'))
+  assert.deepEqual(pickOne(OPTIONS, picks('dhcp', 'none', '24h', 'hour'), 'over', 'none'), picks('dhcp', 'none', '24h', 'none'))
 })

@@ -229,9 +229,6 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		if wantTop != (p.Top > 0) {
 			t.Errorf("%+v: top N must be set exactly when split and no over-time", p)
 		}
-		if p.Split == "none" && p.Over == "none" {
-			t.Errorf("%+v: a single total has no chart to draw", p)
-		}
 		// Measured 2026-10-22: every hourly slice of PortunusAggThreat_ch comes
 		// back as one row at midnight, so "by hour" would draw a single bar.
 		if p.Count == "threats" && (p.Over == "hour" || p.Window == "24h") {
@@ -252,6 +249,9 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		{Count: "threats", Split: "severity", Window: "30d", Over: "none", Top: 10},
 		{Count: "dhcp", Split: "leaseop", Window: "today", Over: "none", Top: 5},
 		{Count: "dhcp", Split: "none", Window: "today", Over: "hour"},
+		// One total, drawn as a single number.
+		{Count: "dns", Split: "none", Window: "7d", Over: "none"},
+		{Count: "threats", Split: "none", Window: "today", Over: "none"},
 	} {
 		if !seen[p] {
 			t.Errorf("%+v: missing from the allow-list", p)
@@ -270,7 +270,7 @@ func TestBuildChartQuery_RefusesPicksOutsideTheCatalog(t *testing.T) {
 		{Count: "dns", Split: "device", Window: "7d", Over: "none"},              // split with no top
 		{Count: "dns", Split: "none", Window: "7d", Over: "day", Top: 10},        // top with no split
 		{Count: "dns", Split: "none", Window: "90d", Over: "day"},                // unknown window
-		{Count: "dns", Split: "none", Window: "7d", Over: "none"},                // one bare total
+		{Count: "dns", Split: "none", Window: "7d", Over: "none", Top: 10},       // a top N of one total
 		{Count: "dns", Split: "device", Window: "7d", Over: "day"},               // device over time
 		{Count: "threats", Split: "domain", Window: "7d", Over: "none", Top: 10}, // DNS field on the security cube
 		{Count: "dns", Split: "tclass", Window: "7d", Over: "none", Top: 10},     // security field on the DNS cube
