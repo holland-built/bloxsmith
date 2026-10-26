@@ -33,18 +33,23 @@ func roundTrip(t *testing.T, v any) map[string]any {
 // fails a test instead of being copied into it.
 func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 	measures := map[string]string{
-		"dns":     "NetworkNstarDnsActivity.total_query_count",
-		"threats": "PortunusAggThreat_ch.requests",
-		"qps":     "HostMetrics.avg_value",
-		"dhcp":    "NetworkNstarDhcpLeaseActivity.total_count",
+		"dns":       "NetworkNstarDnsActivity.total_query_count",
+		"threats":   "PortunusAggThreat_ch.requests",
+		"qps":       "HostMetrics.avg_value",
+		"dhcp":      "NetworkNstarDhcpLeaseActivity.total_count",
+		"assets":    "AssetDetails_ch_agg.assetsCount",
+		"newassets": "AssetDetails_ch_agg.assetsCount",
 	}
-	cubes := map[string]string{"dns": "NetworkNstarDnsActivity", "threats": "PortunusAggThreat_ch",
-		"qps": "HostMetrics", "dhcp": "NetworkNstarDhcpLeaseActivity"}
+	times := map[string]string{"dns": "NetworkNstarDnsActivity.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
+		"qps": "HostMetrics.timestamp", "dhcp": "NetworkNstarDhcpLeaseActivity.timestamp",
+		"newassets": "AssetDetails_ch_agg.first_seen"}
 	endpoints := map[string]string{
-		"dns":     "/api/cubejs/v1/query",
-		"threats": "/api/cubejs-security/v1/query",
-		"qps":     "/api/cubejs/v1/query",
-		"dhcp":    "/api/cubejs/v1/query",
+		"dns":       "/api/cubejs/v1/query",
+		"threats":   "/api/cubejs-security/v1/query",
+		"qps":       "/api/cubejs/v1/query",
+		"dhcp":      "/api/cubejs/v1/query",
+		"assets":    "/api/cubejs/v1/query",
+		"newassets": "/api/cubejs/v1/query",
 	}
 	dims := map[string][]any{
 		"device":   {"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
@@ -56,8 +61,18 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"policy":   {"PortunusAggThreat_ch.policy_name"},
 		"severity": {"PortunusAggThreat_ch.severity"},
 		"leaseop":  {"NetworkNstarDhcpLeaseActivity.lease_op"},
+		"atype":    {"AssetDetails_ch_agg.taxonomy_type_label"},
+		"acat":     {"AssetDetails_ch_agg.taxonomy_super_category_label"},
+		"os":       {"AssetDetails_ch_agg.os_type"},
+		"source":   {"AssetDetails_ch_agg.provider_label"},
+		"where":    {"AssetDetails_ch_agg.deploymentContext"},
+		"vendor":   {"AssetDetails_ch_agg.vendor"},
+		"region":   {"AssetDetails_ch_agg.region_label"},
 	}
-	ranges := map[string]string{"today": "today", "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days"}
+	// Bucket splits add a filter per bucket when run, not a dimension.
+	buckets := map[string]bool{"problem": true, "missing": true}
+	ranges := map[string]string{"today": "today", "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days",
+		"thismonth": "this month", "lastmonth": "last month", "90d": "last 90 days"}
 
 	combos := ChartCombos()
 	if len(combos) == 0 {
@@ -76,15 +91,22 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		if ms := asSlice(q["measures"]); len(ms) != 1 || ms[0] != measures[p.Count] {
 			t.Errorf("%+v: measures = %v", p, q["measures"])
 		}
-		if p.Split == "none" {
+		if p.Split == "none" || buckets[p.Split] {
 			if _, ok := q["dimensions"]; ok {
 				t.Errorf("%+v: no split but dimensions = %v", p, q["dimensions"])
 			}
 		} else if got := asSlice(q["dimensions"]); !reflect.DeepEqual(got, dims[p.Split]) {
 			t.Errorf("%+v: dimensions = %v, want %v", p, got, dims[p.Split])
 		}
+		if p.Count == "assets" {
+			// A snapshot has no time to window.
+			if _, ok := q["timeDimensions"]; ok || p.Window != "now" {
+				t.Errorf("%+v: assets must be now with no timeDimensions, got %v", p, q["timeDimensions"])
+			}
+			continue
+		}
 		td := asMap(asSlice(q["timeDimensions"])[0])
-		if td["dimension"] != cubes[p.Count]+".timestamp" || td["dateRange"] != ranges[p.Window] {
+		if td["dimension"] != times[p.Count] || td["dateRange"] != ranges[p.Window] {
 			t.Errorf("%+v: timeDimensions = %+v", p, td)
 		}
 		if p.Over == "none" {
@@ -210,6 +232,13 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		"qps":     {"none": true},
 		"dhcp":    {"leaseop": true, "none": true},
 	}
+	assetSplit := map[string]bool{"atype": true, "acat": true, "os": true, "source": true, "where": true,
+		"vendor": true, "region": true, "none": true}
+	splits["newassets"] = assetSplit
+	splits["assets"] = map[string]bool{"problem": true, "missing": true}
+	for k := range assetSplit {
+		splits["assets"][k] = true
+	}
 	seen := map[ChartPicks]bool{}
 	for _, p := range ChartCombos() {
 		if seen[p] {
@@ -222,10 +251,16 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		if p.Over == "hour" && p.Window != "today" && p.Window != "24h" {
 			t.Errorf("%+v: by hour is only for today or the last 24 hours", p)
 		}
-		if p.Over == "day" && p.Window != "7d" && p.Window != "30d" {
-			t.Errorf("%+v: by day is only for 7 or 30 days", p)
+		if p.Over == "day" && p.Window != "7d" && p.Window != "30d" && p.Window != "thismonth" && p.Window != "lastmonth" {
+			t.Errorf("%+v: by day is only for 7 or 30 days or a calendar month", p)
 		}
-		wantTop := p.Split != "none" && p.Over == "none"
+		if p.Over == "week" && p.Window != "30d" && p.Window != "90d" {
+			t.Errorf("%+v: by week is only for 30 or 90 days", p)
+		}
+		if (p.Count == "assets") != (p.Window == "now") || p.Count == "assets" && p.Over != "none" {
+			t.Errorf("%+v: assets are now only, with no over-time, and nothing else is now", p)
+		}
+		wantTop := p.Split != "none" && p.Over == "none" && p.Split != "problem" && p.Split != "missing"
 		if wantTop != (p.Top > 0) {
 			t.Errorf("%+v: top N must be set exactly when split and no over-time", p)
 		}
@@ -252,6 +287,18 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 		// One total, drawn as a single number.
 		{Count: "dns", Split: "none", Window: "7d", Over: "none"},
 		{Count: "threats", Split: "none", Window: "today", Over: "none"},
+		// Assets, the new windows and by week.
+		{Count: "assets", Split: "none", Window: "now", Over: "none"},
+		{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10},
+		{Count: "assets", Split: "where", Window: "now", Over: "none", Top: 5},
+		{Count: "assets", Split: "problem", Window: "now", Over: "none"},
+		{Count: "assets", Split: "missing", Window: "now", Over: "none"},
+		{Count: "newassets", Split: "none", Window: "90d", Over: "week"},
+		{Count: "newassets", Split: "atype", Window: "30d", Over: "none", Top: 10},
+		{Count: "dns", Split: "none", Window: "90d", Over: "week"},
+		{Count: "dns", Split: "none", Window: "thismonth", Over: "day"},
+		{Count: "threats", Split: "action", Window: "lastmonth", Over: "day"},
+		{Count: "dhcp", Split: "leaseop", Window: "90d", Over: "none", Top: 10},
 	} {
 		if !seen[p] {
 			t.Errorf("%+v: missing from the allow-list", p)
@@ -261,28 +308,39 @@ func TestChartCombos_FollowThePickerRules(t *testing.T) {
 
 func TestBuildChartQuery_RefusesPicksOutsideTheCatalog(t *testing.T) {
 	for _, p := range []ChartPicks{
-		{Count: "domains", Split: "none", Window: "7d", Over: "day"},             // unknown measure
-		{Count: "threats", Split: "qtype", Window: "7d", Over: "none", Top: 10},  // field from another cube
-		{Count: "qps", Split: "device", Window: "7d", Over: "none", Top: 10},     // HostMetrics has no split
-		{Count: "dns", Split: "none", Window: "7d", Over: "hour"},                // by hour needs today
-		{Count: "dns", Split: "none", Window: "today", Over: "day"},              // by day needs 7/30 days
-		{Count: "dns", Split: "device", Window: "7d", Over: "none", Top: 1000},   // top outside 5/10/25
-		{Count: "dns", Split: "device", Window: "7d", Over: "none"},              // split with no top
-		{Count: "dns", Split: "none", Window: "7d", Over: "day", Top: 10},        // top with no split
-		{Count: "dns", Split: "none", Window: "90d", Over: "day"},                // unknown window
-		{Count: "dns", Split: "none", Window: "7d", Over: "none", Top: 10},       // a top N of one total
-		{Count: "dns", Split: "device", Window: "7d", Over: "day"},               // device over time
-		{Count: "threats", Split: "domain", Window: "7d", Over: "none", Top: 10}, // DNS field on the security cube
-		{Count: "dns", Split: "tclass", Window: "7d", Over: "none", Top: 10},     // security field on the DNS cube
-		{Count: "dhcp", Split: "device", Window: "7d", Over: "none", Top: 10},    // DNS field on the DHCP cube
-		{Count: "dns", Split: "severity", Window: "7d", Over: "none", Top: 5},    // security field on the DNS cube
-		{Count: "dns", Split: "none", Window: "24h", Over: "day"},                // by day needs 7/30 days
-		{Count: "dns", Split: "domain", Window: "7d", Over: "day"},               // domains are top N only
-		{Count: "threats", Split: "tclass", Window: "30d", Over: "day"},          // threat types are top N only
-		{Count: "dhcp", Split: "leaseop", Window: "7d", Over: "day"},             // what changed is top N only
-		{Count: "threats", Split: "action", Window: "today", Over: "hour"},       // the security cube keeps days only
-		{Count: "threats", Split: "none", Window: "24h", Over: "hour"},           // the security cube keeps days only
-		{Count: "threats", Split: "policy", Window: "24h", Over: "none", Top: 5}, // a rolling 24 hours of day rows
+		{Count: "domains", Split: "none", Window: "7d", Over: "day"},              // unknown measure
+		{Count: "threats", Split: "qtype", Window: "7d", Over: "none", Top: 10},   // field from another cube
+		{Count: "qps", Split: "device", Window: "7d", Over: "none", Top: 10},      // HostMetrics has no split
+		{Count: "dns", Split: "none", Window: "7d", Over: "hour"},                 // by hour needs today
+		{Count: "dns", Split: "none", Window: "today", Over: "day"},               // by day needs 7/30 days
+		{Count: "dns", Split: "device", Window: "7d", Over: "none", Top: 1000},    // top outside 5/10/25
+		{Count: "dns", Split: "device", Window: "7d", Over: "none"},               // split with no top
+		{Count: "dns", Split: "none", Window: "7d", Over: "day", Top: 10},         // top with no split
+		{Count: "dns", Split: "none", Window: "90d", Over: "day"},                 // unknown window
+		{Count: "dns", Split: "none", Window: "7d", Over: "none", Top: 10},        // a top N of one total
+		{Count: "dns", Split: "device", Window: "7d", Over: "day"},                // device over time
+		{Count: "threats", Split: "domain", Window: "7d", Over: "none", Top: 10},  // DNS field on the security cube
+		{Count: "dns", Split: "tclass", Window: "7d", Over: "none", Top: 10},      // security field on the DNS cube
+		{Count: "dhcp", Split: "device", Window: "7d", Over: "none", Top: 10},     // DNS field on the DHCP cube
+		{Count: "dns", Split: "severity", Window: "7d", Over: "none", Top: 5},     // security field on the DNS cube
+		{Count: "dns", Split: "none", Window: "24h", Over: "day"},                 // by day needs 7/30 days
+		{Count: "dns", Split: "domain", Window: "7d", Over: "day"},                // domains are top N only
+		{Count: "threats", Split: "tclass", Window: "30d", Over: "day"},           // threat types are top N only
+		{Count: "dhcp", Split: "leaseop", Window: "7d", Over: "day"},              // what changed is top N only
+		{Count: "threats", Split: "action", Window: "today", Over: "hour"},        // the security cube keeps days only
+		{Count: "threats", Split: "none", Window: "24h", Over: "hour"},            // the security cube keeps days only
+		{Count: "threats", Split: "policy", Window: "24h", Over: "none", Top: 5},  // a rolling 24 hours of day rows
+		{Count: "assets", Split: "none", Window: "7d", Over: "none"},              // assets are a snapshot: now only
+		{Count: "assets", Split: "none", Window: "now", Over: "day"},              // a snapshot has no over-time
+		{Count: "dns", Split: "none", Window: "now", Over: "none"},                // DNS activity has no "now"
+		{Count: "assets", Split: "problem", Window: "now", Over: "none", Top: 10}, // buckets show every bucket
+		{Count: "newassets", Split: "problem", Window: "30d", Over: "none"},       // problems only on the snapshot
+		{Count: "dns", Split: "device", Window: "now", Over: "none", Top: 10},     // asset window on DNS
+		{Count: "dns", Split: "atype", Window: "7d", Over: "none", Top: 10},       // asset field on the DNS cube
+		{Count: "dns", Split: "none", Window: "90d", Over: "day"},                 // 90 days is by week
+		{Count: "dns", Split: "none", Window: "7d", Over: "week"},                 // by week needs 30 or 90 days
+		{Count: "threats", Split: "none", Window: "thismonth", Over: "hour"},      // by hour needs today
+		{Count: "qps", Split: "none", Window: "90d", Over: "week"},                // HostMetrics refuses a week step
 	} {
 		if q, ep, err := BuildChartQuery(p); err == nil {
 			t.Errorf("%+v: accepted, built %v for %s", p, q, ep)
@@ -392,7 +450,9 @@ func TestChartOptions_EveryFieldHasAPlainName(t *testing.T) {
 		q = roundTrip(t, q)
 		fields := append([]any{}, asSlice(q["measures"])...)
 		fields = append(fields, asSlice(q["dimensions"])...)
-		fields = append(fields, asMap(asSlice(q["timeDimensions"])[0])["dimension"])
+		if td := asSlice(q["timeDimensions"]); len(td) > 0 {
+			fields = append(fields, asMap(td[0])["dimension"])
+		}
 		for _, f := range fields {
 			if n, _ := names[f.(string)].(string); n == "" {
 				t.Errorf("%s has no plain name", f)
@@ -420,7 +480,8 @@ func TestChartOptions_EveryFieldHasAPlainName(t *testing.T) {
 	// Every split with a top N needs a plural for "Top 10 <plural>".
 	for _, s := range asSlice(opts["splits"]) {
 		m := asMap(s)
-		if pl, _ := m["plural"].(string); m["id"] != "none" && m["id"] != "action" && pl == "" {
+		// A bucket split shows every bucket, never a top N.
+		if pl, _ := m["plural"].(string); m["id"] != "none" && m["id"] != "action" && len(asSlice(m["buckets"])) == 0 && pl == "" {
 			t.Errorf("split %v has no plural", m["id"])
 		}
 	}
@@ -455,5 +516,77 @@ func TestChartOptions_MatchesTheUIFixture(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Fatalf("%s is out of date; run with UPDATE_CHART_FIXTURE=1", path)
+	}
+}
+
+// TestRunChart_BucketsCountEachValueOnItsOwn: a field holding several values
+// per asset is counted once per value, with a contains filter on the quoted
+// value, and comes back as one row per bucket in group-by shape.
+func TestRunChart_BucketsCountEachValueOnItsOwn(t *testing.T) {
+	counts := map[string]string{`"DNS Forward Record"`: "383", `"DNS Pointer Record"`: "383", `"IPAM"`: "49"}
+	var calls atomic.Int32
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		q := cubeQueryFromRequest(t, r)
+		if _, ok := q["dimensions"]; ok {
+			t.Errorf("a bucket count must not group by, got dimensions %v", q["dimensions"])
+		}
+		f := asMap(asSlice(q["filters"])[0])
+		if f["member"] != "AssetDetails_ch_agg.insight_indicators_label" || f["operator"] != "contains" {
+			t.Errorf("filter = %v", f)
+		}
+		v := asSlice(f["values"])[0].(string)
+		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetails_ch_agg.assetsCount":"` + counts[v] + `"}]}}`))
+	})
+	res := s.RunChart(context.Background(), ChartPicks{Count: "assets", Split: "missing", Window: "now", Over: "none"})
+	if res["status"] != "ok" || calls.Load() != 3 {
+		t.Fatalf("status %v after %d calls, want ok after 3", res["status"], calls.Load())
+	}
+	want := []map[string]any{
+		{"AssetDetails_ch_agg.insight_indicators_label": "DNS Forward Record", "AssetDetails_ch_agg.assetsCount": "383"},
+		{"AssetDetails_ch_agg.insight_indicators_label": "DNS Pointer Record", "AssetDetails_ch_agg.assetsCount": "383"},
+		{"AssetDetails_ch_agg.insight_indicators_label": "IPAM", "AssetDetails_ch_agg.assetsCount": "49"},
+	}
+	if !reflect.DeepEqual(res["rows"], want) {
+		t.Fatalf("rows = %v", res["rows"])
+	}
+	if qs, _ := res["query"].([]map[string]any); len(qs) != 3 {
+		t.Fatalf("query as sent must list all three counts, got %v", res["query"])
+	}
+}
+
+// TestRunChart_OneFailedBucketFailsTheChart: a missing bar would read as zero.
+func TestRunChart_OneFailedBucketFailsTheChart(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		v := asSlice(asMap(asSlice(cubeQueryFromRequest(t, r)["filters"])[0])["values"])[0].(string)
+		if v == `"Zombie"` {
+			w.WriteHeader(502)
+			return
+		}
+		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetails_ch_agg.assetsCount":"5"}]}}`))
+	})
+	res := s.RunChart(context.Background(), ChartPicks{Count: "assets", Split: "problem", Window: "now", Over: "none"})
+	if res["status"] != "error" {
+		t.Fatalf("status = %v, want error", res["status"])
+	}
+}
+
+// TestBuildChartQuery_AssetsExactly writes out the asset queries whole.
+func TestBuildChartQuery_AssetsExactly(t *testing.T) {
+	q, _, err := BuildChartQuery(ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"dimensions":["AssetDetails_ch_agg.taxonomy_type_label"],"limit":10,"measures":["AssetDetails_ch_agg.assetsCount"],"order":{"AssetDetails_ch_agg.assetsCount":"desc"}}`
+	if b, _ := json.Marshal(q); string(b) != want {
+		t.Errorf("assets by type:\n got %s\nwant %s", b, want)
+	}
+	q, _, err = BuildChartQuery(ChartPicks{Count: "newassets", Split: "none", Window: "90d", Over: "week"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = `{"measures":["AssetDetails_ch_agg.assetsCount"],"timeDimensions":[{"dateRange":"last 90 days","dimension":"AssetDetails_ch_agg.first_seen","granularity":"week"}]}`
+	if b, _ := json.Marshal(q); string(b) != want {
+		t.Errorf("new assets by week:\n got %s\nwant %s", b, want)
 	}
 }

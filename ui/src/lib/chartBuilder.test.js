@@ -28,13 +28,13 @@ test('by hour only with today or the last 24 hours, by day only with 7 or 30 day
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'today')).over, ['hour', 'none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '24h')).over, ['hour', 'none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '7d')).over, ['day', 'none'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', '30d')).over, ['day', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', '30d')).over, ['day', 'week', 'none'])
   // The security cube keeps one row a day, so it never slices by hour.
   assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action', 'today')).over, ['none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'domain', '24h')).over, ['none'])
-  assert.deepEqual(choicesFor(OPTIONS, picks('dhcp', 'none')).window, ['today', '24h', '7d', '30d'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dhcp', 'none')).window, ['today', '24h', '7d', '30d', 'thismonth', 'lastmonth', '90d'])
   // Nor a rolling 24 hours: day rows can't be cut at this time yesterday.
-  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action')).window, ['today', '7d', '30d'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('threats', 'action')).window, ['today', '7d', '30d', 'thismonth', 'lastmonth', '90d'])
 })
 
 test('the new splits are top N only', () => {
@@ -368,4 +368,49 @@ test('choosing no split starts over time again, and one total stays a choice', (
   const from = picks('dhcp', 'leaseop', '24h', 'none', 10)
   assert.deepEqual(pickOne(OPTIONS, from, 'split', 'none'), picks('dhcp', 'none', '24h', 'hour'))
   assert.deepEqual(pickOne(OPTIONS, picks('dhcp', 'none', '24h', 'hour'), 'over', 'none'), picks('dhcp', 'none', '24h', 'none'))
+})
+
+test('assets are counted as they are now, by type or by problem', () => {
+  assert.deepEqual(choicesFor(OPTIONS, picks('assets', 'atype')).window, ['now'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('assets', 'atype', 'now')).over, ['none'])
+  assert.equal(sentence(OPTIONS, picks('assets', 'atype', 'now', 'none', 10), false), 'Top 10 asset types by Assets, latest inventory')
+  assert.equal(sentence(OPTIONS, picks('assets', 'missing', 'now', 'none'), false), 'Assets by missing record, latest inventory')
+  assert.equal(sentence(OPTIONS, picks('assets', 'none', 'now', 'none'), true), 'AssetDetails_ch_agg.assetsCount, now')
+  assert.equal(chartKind(picks('assets', 'where', 'now', 'none', 5)), 'donut')
+})
+
+test('problem bars use plain names and stay highest first', () => {
+  const rows = [
+    { 'AssetDetails_ch_agg.insight_indicators_label': 'IPAM', 'AssetDetails_ch_agg.assetsCount': '49' },
+    { 'AssetDetails_ch_agg.insight_indicators_label': 'DNS Forward Record', 'AssetDetails_ch_agg.assetsCount': '383' },
+  ]
+  assert.deepEqual(chartData(OPTIONS, picks('assets', 'missing', 'now', 'none'), rows, false), [
+    { name: 'DNS name (forward record)', value: 383 },
+    { name: 'IPAM record', value: 49 },
+  ])
+  const lines = describePicks(OPTIONS, picks('assets', 'missing', 'now', 'none'), false)
+  assert.ok(lines.some((l) => l.label === 'Each bar' && /in both bars/.test(l.text)))
+  assert.equal(new Set(lines.map((l) => l.label)).size, lines.length)
+})
+
+test('a blank operating system reads as Not reported', () => {
+  const rows = [{ 'AssetDetails_ch_agg.os_type': '', 'AssetDetails_ch_agg.assetsCount': '1449' }]
+  assert.deepEqual(chartData(OPTIONS, picks('assets', 'os', 'now', 'none', 10), rows, false), [{ name: 'Not reported', value: 1449 }])
+})
+
+test('new assets run over first seen, by week', () => {
+  const p = picks('newassets', 'none', '90d', 'week')
+  assert.equal(chartKind(p), 'line')
+  const rows = [
+    { 'AssetDetails_ch_agg.first_seen.week': '2026-09-07T00:00:00.000', 'AssetDetails_ch_agg.assetsCount': '37' },
+    { 'AssetDetails_ch_agg.first_seen.week': '2026-08-31T00:00:00.000', 'AssetDetails_ch_agg.assetsCount': '16' },
+  ]
+  assert.deepEqual(chartData(OPTIONS, p, rows, false).map((d) => d.value), [16, 37])
+  assert.equal(sentence(OPTIONS, p, false), 'New assets still held by week, last 90 days')
+})
+
+test('longer windows: by week for 30 or 90 days, by day for a calendar month', () => {
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '90d')).over, ['week', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '30d')).over, ['day', 'week', 'none'])
+  assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'lastmonth')).over, ['day', 'none'])
 })

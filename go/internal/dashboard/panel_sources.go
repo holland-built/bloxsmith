@@ -41,7 +41,7 @@ const (
 	whyFullness = "how full each subnet is, and its colour band, is worked out in the app"
 	whySample   = "it reads a sample of the last hour's events, not a full count"
 	whyIncident = "the incidents are worked out in the app"
-	whyTotal    = "it counts asset records, which Build a chart does not read yet"
+	whyTotal    = "it counts a different set of asset records from the ones Build a chart reads"
 	whyTable    = "it is a searchable, paged table, not a chart"
 
 	srcSubnets = "the subnet list"

@@ -56,7 +56,8 @@ export function pickOne(opts, picks, level, value) {
 export function chartKind(picks) {
   if (picks.over !== 'none') return picks.split === 'none' ? 'line' : 'stacked'
   if (picks.split === 'none') return 'number'
-  return picks.split === 'qtype' ? 'donut' : 'bars'
+  // Few slices that make up a whole: record types, cloud vs on-premises.
+  return picks.split === 'qtype' || picks.split === 'where' ? 'donut' : 'bars'
 }
 
 function choice(opts, level, id) {
@@ -106,9 +107,9 @@ export function sentence(opts, picks, cube) {
   const over = choice(opts, 'over', picks.over)
   if (cube) {
     const by = [...(split.fields ?? [])]
-    if (over.value) by.push(`${count.cube}.timestamp.${over.value}`)
+    if (over.value) by.push(`${count.time}.${over.value}`)
     const top = picks.top > 0 ? `, limit ${picks.top}` : ''
-    return `${count.measure}${by.length ? ` by ${by.join(', ')}` : ''}, ${window.value}${top}`
+    return `${count.measure}${by.length ? ` by ${by.join(', ')}` : ''}, ${window.value || 'now'}${top}`
   }
   const when = window.name.toLowerCase()
   // The catalog gives each top N split its plural ("policies", not
@@ -117,6 +118,7 @@ export function sentence(opts, picks, cube) {
   if (picks.top > 0 && split.plural) {
     return `Top ${picks.top} ${split.plural} by ${count.name}, ${when}`
   }
+  if (split.buckets?.length) return `${count.name} by ${split.name.toLowerCase()}, ${when}`
   const named = !split.plural && split.fields?.length === 1 ? opts.values?.[split.fields[0]] : null
   let head = count.name
   if (over.value) head += ` ${over.name.toLowerCase()}`
@@ -144,6 +146,15 @@ export function describePicks(opts, picks, cube) {
   if (picks.over !== 'none') lines.push({ label: 'Over time', text: choiceName(opts, 'over', picks.over, cube) })
   if (picks.top > 0) {
     lines.push({ label: 'Showing', text: cube ? `limit ${picks.top}, ${count.measure} desc` : `Top ${picks.top}, highest first` })
+  }
+  const split = choice(opts, 'split', picks.split)
+  if (split.buckets?.length) {
+    lines.push({
+      label: 'Each bar',
+      text: cube
+        ? `one query per value, ${split.fields[0]} contains "<value>"`
+        : `counted on its own, so an asset with two is in both bars`,
+    })
   }
   for (const f of count.filters ?? []) {
     const values = f.values.map((v) => valueName(opts, f.member, v, cube)).join(cube ? ', ' : ' or ')
@@ -206,8 +217,8 @@ export function chartData(opts, picks, rows, cube) {
     return [{ name: choiceName(opts, 'count', picks.count, cube), value: total }]
   }
   if (kind === 'line' || kind === 'stacked') {
-    const tKey = `${count.cube}.timestamp.${granularity}`
-    const timeOf = (r) => String(r[tKey] ?? r[`${count.cube}.timestamp`] ?? '')
+    const tKey = `${count.time}.${granularity}`
+    const timeOf = (r) => String(r[tKey] ?? r[count.time] ?? '')
     const sorted = [...rows].sort((a, b) => timeOf(a).localeCompare(timeOf(b)))
     if (kind === 'line') {
       return sorted.map((r) => ({ label: timeLabel(timeOf(r), granularity), value: num(r[count.measure]) }))
