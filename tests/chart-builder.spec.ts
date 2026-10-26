@@ -205,3 +205,30 @@ test('assets count what Infoblox holds now, and problems are one bar each', asyn
   await expect(page.getByLabel('How many')).toHaveCount(0);
   await expect(page.getByText('counted on its own, so an asset with two is in both bars')).toBeVisible();
 });
+
+test('a question sets every menu, filter included', async ({ page }) => {
+  await page.goto('/#chart');
+  await page.getByLabel('Start from a question').selectOption({ label: 'Which policies blocked the most this week?' });
+  await expect(heading(page)).toHaveText('Top 10 policies by Security hits, last 7 days, only where What happened is Blocked');
+  await expect(page.getByLabel('Only show')).toHaveValue('action');
+  // The menu reads "Choose a question" again, so the picks can be changed.
+  await expect(page.getByLabel('Start from a question')).toHaveValue('');
+});
+
+test('only show offers real values and sends the filter', async ({ page }) => {
+  const sent: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/api/chart?')) sent.push(r.url()); });
+  await page.route('**/api/chart/values?*', (route) =>
+    route.fulfill({ json: { status: 'ok', values: ['Block', 'Allow'] } }),
+  );
+  await page.goto('/#chart?count=threats&split=policy&window=7d&over=none&top=10');
+  await page.getByLabel('Only show').selectOption({ label: 'What happened' });
+  await expect(page.getByLabel('Value').locator('option')).toHaveText(['Choose…', 'Blocked', 'Allowed']);
+  await page.getByLabel('Is or is not').selectOption({ label: 'is not' });
+  await page.getByLabel('Value').selectOption({ label: 'Allowed' });
+  await expect(heading(page)).toHaveText('Top 10 policies by Security hits, last 7 days, only where What happened is not Allowed');
+  await expect.poll(() => sent.some((u) => u.includes('only=action&is=not&value=Allow'))).toBe(true);
+  // Splitting by the filtered field drops the filter.
+  await page.getByLabel('Split by').selectOption({ label: 'What happened' });
+  await expect(page.getByLabel('Only show')).toHaveValue('');
+});

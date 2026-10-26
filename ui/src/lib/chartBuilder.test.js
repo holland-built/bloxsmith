@@ -8,7 +8,7 @@ import test from 'node:test'
 import OPTIONS from '../../../tests/chart-options.json' with { type: 'json' }
 import {
   DEFAULT_PICKS, choicesFor, settlePicks, chartKind, choiceName, sentence,
-  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel, chartLink, picksFromParams, toCsv, sideways, pickOne,
+  chartData, fieldName, describePicks, chartUrl, sampleTable, shortLabel, chartLink, picksFromParams, toCsv, sideways, pickOne, filterFields,
 } from './chartBuilder.js'
 
 const picks = (count, split, window, over, top = 0) => ({ count, split, window, over, top })
@@ -413,4 +413,49 @@ test('longer windows: by week for 30 or 90 days, by day for a calendar month', (
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '90d')).over, ['week', 'none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', '30d')).over, ['day', 'week', 'none'])
   assert.deepEqual(choicesFor(OPTIONS, picks('dns', 'none', 'lastmonth')).over, ['day', 'none'])
+})
+
+const withOnly = (p, only, is, value) => ({ ...p, only, is, value })
+
+test('only show offers the count\'s own fields, never the split itself', () => {
+  assert.deepEqual(filterFields(OPTIONS, picks('threats', 'policy', '7d', 'none', 10)), ['action', 'tclass', 'severity'])
+  assert.deepEqual(filterFields(OPTIONS, picks('qps', 'none', '7d', 'day')), [])
+  assert.ok(filterFields(OPTIONS, picks('assets', 'atype', 'now', 'none', 10)).includes('missing'))
+})
+
+test('a filter that stops fitting is dropped, one that fits is kept', () => {
+  const p = withOnly(picks('threats', 'policy', '7d', 'none', 10), 'action', 'is', 'Block')
+  assert.deepEqual(settlePicks(OPTIONS, p), p)
+  // Splitting by the filtered field drops the filter.
+  assert.equal(pickOne(OPTIONS, p, 'split', 'action').only, undefined)
+  // Another count without that field drops it too.
+  assert.equal(pickOne(OPTIONS, p, 'count', 'dns').only, undefined)
+})
+
+test('the filter travels in the link and the GET, only when it has a value', () => {
+  const p = withOnly(picks('threats', 'policy', '7d', 'none', 10), 'action', 'is', 'Block')
+  assert.equal(chartUrl(p), '/api/chart?count=threats&split=policy&window=7d&over=none&top=10&only=action&is=is&value=Block')
+  assert.deepEqual(picksFromParams({ count: 'threats', split: 'policy', window: '7d', over: 'none', top: '10', only: 'action', is: 'is', value: 'Block' }), p)
+  assert.match(chartLink(p), /only=action&is=is&value=Block/)
+  assert.equal(chartUrl(withOnly(picks('threats', 'policy', '7d', 'none', 10), 'action', 'is', '')), '/api/chart?count=threats&split=policy&window=7d&over=none&top=10')
+})
+
+test('the sentence and the how-it-was-made lines say what is filtered', () => {
+  const p = withOnly(picks('threats', 'policy', '7d', 'none', 10), 'action', 'is', 'Block')
+  assert.equal(sentence(OPTIONS, p, false), 'Top 10 policies by Security hits, last 7 days, only where What happened is Blocked')
+  const a = withOnly(picks('assets', 'atype', 'now', 'none', 10), 'missing', 'not', 'IPAM')
+  assert.equal(sentence(OPTIONS, a, false), 'Top 10 asset types by Assets, latest inventory, only where Missing record does not include IPAM record')
+  assert.ok(describePicks(OPTIONS, p, false).some((l) => l.label === 'Only showing' && l.text === 'What happened is Blocked'))
+  assert.ok(describePicks(OPTIONS, p, true).some((l) => l.text === 'PortunusAggThreat_ch.action equals Block'))
+})
+
+test('every question opens on picks that fit as they are', () => {
+  assert.ok(OPTIONS.questions.length >= 6)
+  for (const q of OPTIONS.questions) {
+    const p = { only: undefined, is: undefined, value: undefined, ...q.picks }
+    const settled = settlePicks(OPTIONS, p)
+    for (const k of ['count', 'split', 'window', 'over', 'top', 'only', 'is', 'value']) {
+      assert.equal(String(settled[k] ?? ''), String(p[k] ?? ''), `${q.name}: ${k}`)
+    }
+  }
 })

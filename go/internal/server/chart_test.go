@@ -82,3 +82,43 @@ func TestChartRoute_BadPickIs400AndNeverReachesTheTenant(t *testing.T) {
 		t.Fatalf("a refused pick reached the tenant %d times", calls)
 	}
 }
+
+func TestChartRoute_CarriesTheFilter(t *testing.T) {
+	var got string
+	mux := chartMux(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query().Get("query")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"data":[]}}`))
+	})
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/chart?count=threats&split=policy&window=7d&over=none&top=10&only=action&is=is&value=Block", nil))
+	if rr.Code != 200 || !strings.Contains(got, `"operator":"equals","values":["Block"]`) {
+		t.Fatalf("status %d, query sent %s", rr.Code, got)
+	}
+	rr = httptest.NewRecorder()
+	got = ""
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/chart?count=threats&split=policy&window=7d&over=none&top=10&only=device&is=is&value=x", nil))
+	if rr.Code != 400 || got != "" {
+		t.Fatalf("a filter on another cube's field: status %d, sent %q", rr.Code, got)
+	}
+}
+
+func TestChartValuesRoute(t *testing.T) {
+	var calls atomic.Int32
+	mux := chartMux(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"data":[{"PortunusAggThreat_ch.action":"Block","PortunusAggThreat_ch.requests":"5"}]}}`))
+	})
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/chart/values?count=threats&only=action&window=7d", nil))
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"Block"`) {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	rr = httptest.NewRecorder()
+	before := calls.Load()
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/chart/values?count=dns&only=atype&window=7d", nil))
+	if rr.Code != 400 || calls.Load() != before {
+		t.Fatalf("a field the count doesn't have: status %d after %d calls", rr.Code, calls.Load()-before)
+	}
+}

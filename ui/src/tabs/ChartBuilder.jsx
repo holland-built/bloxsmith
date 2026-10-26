@@ -8,7 +8,7 @@ import { SAVED_CHART_PAGES, loadSavedChart, newChartId, replacePanel, saveChart 
 import { useHashParams } from '../lib/hash.js'
 import PANEL_SOURCES from '../lib/panelSources.json'
 import {
-  DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, picksFromParams, sampleTable, sentence, settlePicks, toCsv, pickOne,
+  DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, picksFromParams, sampleTable, sentence, settlePicks, toCsv, pickOne, filterFields, valueLabel, isBucketSplit,
 } from '../lib/chartBuilder.js'
 
 // Build a chart: plain menus in, one Cube.js query out, a chart of what the
@@ -25,10 +25,96 @@ const MENUS = [
   { level: 'top', label: 'How many' },
 ]
 
-function Pickers({ opts, picks, onPick, cube }) {
+// A ready-made chart. Picking one sets every menu; the menu itself always
+// reads "Choose a question" again, since the picks can then be changed.
+function QuestionMenu({ opts, onPicks }) {
+  if (!opts.questions?.length) return null
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor="chart-question" className="text-note text-muted">Start from a question</label>
+      <select
+        id="chart-question"
+        value=""
+        onChange={(e) => {
+          const q = opts.questions.find((x) => x.name === e.target.value)
+          if (q) onPicks(settlePicks(opts, q.picks))
+        }}
+        className={`${FIELD_CLS} w-full`}
+      >
+        <option value="">Choose a question…</option>
+        {opts.questions.map((q) => (
+          <option key={q.name} value={q.name}>{q.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// "Only show": one field of the count's own, is or is not, and a value from
+// the ones Infoblox actually has for it.
+function OnlyShow({ opts, picks, onFilter, cube }) {
+  const fields = filterFields(opts, picks)
+  const values = useApi(
+    picks.only
+      ? `/api/chart/values?${new URLSearchParams({ count: picks.count, only: picks.only, window: picks.window })}`
+      : null,
+  )
+  if (!fields.length) return null
+  const bucket = picks.only && isBucketSplit(opts, picks.only)
+  const list = values.data?.values ?? []
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor="chart-only-field" className="text-note text-muted">Only show</label>
+      <select
+        id="chart-only-field"
+        value={picks.only ?? ''}
+        onChange={(e) => onFilter(e.target.value ? { only: e.target.value, is: 'is', value: '' } : { only: undefined })}
+        className={`${FIELD_CLS} w-full`}
+      >
+        <option value="">Everything</option>
+        {fields.map((f) => (
+          <option key={f} value={f}>{choiceName(opts, 'split', f, cube)}</option>
+        ))}
+      </select>
+      {picks.only && (
+        <div className="flex flex-col gap-2 mt-1">
+          <select
+            id="chart-only-is"
+            aria-label="Is or is not"
+            value={picks.is}
+            onChange={(e) => onFilter({ is: e.target.value })}
+            className={`${FIELD_CLS} w-full`}
+          >
+            <option value="is">{bucket ? 'includes' : 'is'}</option>
+            <option value="not">{bucket ? 'does not include' : 'is not'}</option>
+          </select>
+          <select
+            id="chart-only-value"
+            aria-label="Value"
+            value={picks.value ?? ''}
+            disabled={values.loading || !list.length}
+            onChange={(e) => onFilter({ value: e.target.value })}
+            className={`${FIELD_CLS} w-full`}
+          >
+            <option value="">
+              {values.loading ? 'Loading…' : values.error || values.data?.status === 'error' ? 'Could not load the values' : list.length ? 'Choose…' : 'Nothing to choose'}
+            </option>
+            {/* A value from a link or a saved chart stays choosable even when it is not in the top 50. */}
+            {(picks.value && !list.includes(picks.value) ? [picks.value, ...list] : list).map((v) => (
+              <option key={v} value={v}>{valueLabel(opts, picks.only, v, cube)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Pickers({ opts, picks, onPick, onPicks, onFilter, cube }) {
   const choices = choicesFor(opts, picks)
   return (
     <div className="flex flex-col gap-3">
+      <QuestionMenu opts={opts} onPicks={onPicks} />
       {MENUS.map(({ level, label }) => {
         // How many has nothing to choose when no top N applies; hidden, not greyed.
         if (level === 'top' && choices.top.every((t) => !t)) return null
@@ -49,6 +135,7 @@ function Pickers({ opts, picks, onPick, cube }) {
           </div>
         )
       })}
+      <OnlyShow opts={opts} picks={picks} onFilter={onFilter} cube={cube} />
     </div>
   )
 }
@@ -350,10 +437,11 @@ function Builder({ opts, params }) {
   const [picks, setPicks] = useState(() => settlePicks(opts, picksFromParams(params) ?? DEFAULT_PICKS))
   const result = useApi(chartUrl(picks))
   const onPick = (level, value) => setPicks((p) => pickOne(opts, p, level, value))
+  const onFilter = (change) => setPicks((p) => settlePicks(opts, { ...p, ...change }))
   return (
     <CardGrid layoutKey="chart">
       <Card panelId="chart-picks" title="Choose" span={2}>
-        <Pickers opts={opts} picks={picks} onPick={onPick} cube={cube} />
+        <Pickers opts={opts} picks={picks} onPick={onPick} onPicks={setPicks} onFilter={onFilter} cube={cube} />
       </Card>
       <ResultPanel panelId="chart-result" opts={opts} picks={picks} params={params} result={result} cube={cube} />
       <HowPanel panelId="chart-how" opts={opts} picks={picks} result={result} cube={cube} />

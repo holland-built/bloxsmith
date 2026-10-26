@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
+	"unicode"
 
 	"bloxsmith/internal/cache"
 )
@@ -27,7 +29,22 @@ type ChartPicks struct {
 	Window string `json:"window"`
 	Over   string `json:"over"`
 	Top    int    `json:"top"`
+	// One optional "Only show" filter: Only is one of the count's own splits
+	// (never the split itself), Is is "is" or "not", Value is what to match.
+	// The screen offers values from ChartValues, but any short plain string is
+	// accepted: it is only ever a filter value, never part of a field name.
+	Only  string `json:"only,omitempty"`
+	Is    string `json:"is,omitempty"`
+	Value string `json:"value,omitempty"`
 }
+
+// chartQuestion is a ready-made chart: a plain question and the picks that answer it.
+type chartQuestion struct {
+	Name  string
+	Picks ChartPicks
+}
+
+const chartValueMax = 256
 
 type chartCount struct {
 	ID, Name, Cube, Measure, Endpoint string
@@ -88,8 +105,11 @@ var chartCatalog = struct {
 	Windows []chartChoice
 	Overs   []chartChoice
 	Tops    []int
-	Names   map[string]string
-	Values  map[string]map[string]string
+	// Questions are ready-made charts, most of them from the UAI Query
+	// Library's tested questions (github.com/IngmarVG-IB/infoblox-uai-query-library).
+	Questions []chartQuestion
+	Names     map[string]string
+	Values    map[string]map[string]string
 	// OtherValues names a value Values doesn't list, "%s" being the value,
 	// so an answer code nobody mapped still shows instead of being dropped.
 	OtherValues map[string]string
@@ -159,6 +179,29 @@ var chartCatalog = struct {
 		{ID: "none", Name: "No, one total"},
 	},
 	Tops: []int{5, 10, 25},
+	Questions: []chartQuestion{
+		{"Which kinds of asset have no DNS name?", ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10,
+			Only: "missing", Is: "is", Value: "DNS Forward Record"}},
+		{"Which kinds of asset is IPAM not tracking?", ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10,
+			Only: "missing", Is: "is", Value: "IPAM"}},
+		{"Where are the zombie assets found?", ChartPicks{Count: "assets", Split: "source", Window: "now", Over: "none", Top: 10,
+			Only: "problem", Is: "is", Value: "Zombie"}},
+		{"Which kinds of asset are noncompliant?", ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10,
+			Only: "problem", Is: "is", Value: "Noncompliant"}},
+		{"Who found the assets nobody could identify?", ChartPicks{Count: "assets", Split: "source", Window: "now", Over: "none", Top: 10,
+			Only: "atype", Is: "is", Value: "Unclassified"}},
+		{"Who makes the IoT devices?", ChartPicks{Count: "assets", Split: "vendor", Window: "now", Over: "none", Top: 10,
+			Only: "acat", Is: "is", Value: "IoT"}},
+		{"Which regions hold the cloud assets?", ChartPicks{Count: "assets", Split: "region", Window: "now", Over: "none", Top: 10,
+			Only: "where", Is: "is", Value: "Cloud"}},
+		{"What problems do on-premises assets have?", ChartPicks{Count: "assets", Split: "problem", Window: "now", Over: "none",
+			Only: "where", Is: "is", Value: "Onprem"}},
+		{"What kinds of asset appeared this month?", ChartPicks{Count: "newassets", Split: "atype", Window: "thismonth", Over: "none", Top: 10}},
+		{"Which policies blocked the most this week?", ChartPicks{Count: "threats", Split: "policy", Window: "7d", Over: "none", Top: 10,
+			Only: "action", Is: "is", Value: "Block"}},
+		{"Which names were looked up but don't exist?", ChartPicks{Count: "dns", Split: "domain", Window: "24h", Over: "none", Top: 10,
+			Only: "rcode", Is: "is", Value: "3"}},
+	},
 	Names: map[string]string{
 		cubeDNS:                                       "DNS activity",
 		cubeDNS + ".total_query_count":                "DNS queries",
@@ -325,14 +368,103 @@ func BuildChartQuery(p ChartPicks) (map[string]any, string, error) {
 	if len(split.Fields) > 0 && len(split.Buckets) == 0 {
 		q["dimensions"] = split.Fields
 	}
-	if len(count.Filters) > 0 {
-		q["filters"] = count.Filters
+	filters := slices.Clone(count.Filters)
+	if p.Only != "" || p.Is != "" || p.Value != "" {
+		f, err := onlyFilter(*count, p)
+		if err != nil {
+			return nil, "", err
+		}
+		filters = append(filters, f)
+	}
+	if len(filters) > 0 {
+		q["filters"] = filters
 	}
 	if p.Top > 0 {
 		q["order"] = map[string]any{count.Measure: "desc"}
 		q["limit"] = p.Top
 	}
 	return q, count.Endpoint, nil
+}
+
+// onlyFilter is the "Only show" filter as a Cube filter, or why it can't be one.
+func onlyFilter(count chartCount, p ChartPicks) (map[string]any, error) {
+	bad := fmt.Errorf("that filter isn't available")
+	only, ok := findChoice(chartCatalog.Splits, p.Only)
+	if !ok || p.Only == "none" || p.Only == p.Split || !slices.Contains(count.Splits, p.Only) {
+		return nil, bad
+	}
+	if p.Is != "is" && p.Is != "not" {
+		return nil, bad
+	}
+	if p.Value == "" || len(p.Value) > chartValueMax || strings.ContainsFunc(p.Value, unicode.IsControl) {
+		return nil, bad
+	}
+	if len(only.Buckets) > 0 {
+		if !slices.Contains(only.Buckets, p.Value) {
+			return nil, bad
+		}
+		op := map[string]string{"is": "contains", "not": "notContains"}[p.Is]
+		return map[string]any{"member": only.Fields[0], "operator": op, "values": []string{`"` + p.Value + `"`}}, nil
+	}
+	op := map[string]string{"is": "equals", "not": "notEquals"}[p.Is]
+	return map[string]any{"member": only.Fields[0], "operator": op, "values": []string{p.Value}}, nil
+}
+
+// chartValuesMax is how many values the "Only show" menu offers: the most
+// common ones, since a menu of thousands of domains helps nobody.
+const chartValuesMax = 50
+
+// ChartValues is the values the "Only show" menu offers for one field of a
+// count: a bucket field's fixed list, or the most common values over the
+// window. A blank value is left out: "is blank" is not a filter Cube takes.
+func (s *Service) ChartValues(ctx context.Context, countID, only, windowID string) map[string]any {
+	invalid := map[string]any{"status": "invalid", "values": []string{}}
+	var count *chartCount
+	for i := range chartCatalog.Counts {
+		if chartCatalog.Counts[i].ID == countID {
+			count = &chartCatalog.Counts[i]
+		}
+	}
+	field, ok := findChoice(chartCatalog.Splits, only)
+	window, okW := findChoice(chartCatalog.Windows, windowID)
+	if count == nil || !ok || !okW || only == "none" || !slices.Contains(count.Splits, only) ||
+		count.Snapshot != (windowID == "now") {
+		return invalid
+	}
+	if len(field.Buckets) > 0 {
+		return map[string]any{"status": "ok", "values": field.Buckets}
+	}
+	q := map[string]any{
+		"measures":   []string{count.Measure},
+		"dimensions": field.Fields[:1],
+		"order":      map[string]any{count.Measure: "desc"},
+		"limit":      chartValuesMax,
+	}
+	if !count.Snapshot {
+		q["timeDimensions"] = []map[string]any{{"dimension": count.timeField(), "dateRange": window.Value}}
+	}
+	if len(count.Filters) > 0 {
+		q["filters"] = count.Filters
+	}
+	qj, _ := json.Marshal(q)
+	ck := cache.Key("chartvalues", count.Endpoint, map[string]string{"query": string(qj)}, false)
+	if v, ok := s.Cache.Get(ck); ok {
+		return v.(map[string]any)
+	}
+	g := s.Cache.Gen()
+	body, st, err := s.Rest.GetEx(count.Endpoint, map[string]string{"query": string(qj)})
+	if errored(st, err) {
+		return map[string]any{"status": "error", "values": []string{}}
+	}
+	values := []string{}
+	for _, r := range cubeData(body) {
+		if v := fmt.Sprint(asMap(r)[field.Fields[0]]); v != "" && v != "<nil>" {
+			values = append(values, v)
+		}
+	}
+	result := map[string]any{"status": "ok", "values": values}
+	s.Cache.SetGen(ck, result, g)
+	return result
 }
 
 // RunChart builds the query and runs it on the tenant. Rows keep their
@@ -455,8 +587,15 @@ func ChartOptions() map[string]any {
 		"overs":   choices(chartCatalog.Overs),
 		"tops":    chartCatalog.Tops,
 		"combos":  ChartCombos(),
-		"names":   chartCatalog.Names,
-		"values":  chartCatalog.Values,
+		"questions": func() []map[string]any {
+			out := make([]map[string]any, 0, len(chartCatalog.Questions))
+			for _, q := range chartCatalog.Questions {
+				out = append(out, map[string]any{"name": q.Name, "picks": q.Picks})
+			}
+			return out
+		}(),
+		"names":  chartCatalog.Names,
+		"values": chartCatalog.Values,
 
 		"otherValues": chartCatalog.OtherValues,
 	}
