@@ -99,10 +99,12 @@ var chartCatalog = struct {
 		{ID: "7d", Name: "Last 7 days", Value: "last 7 days"},
 		{ID: "30d", Name: "Last 30 days", Value: "last 30 days"},
 	},
+	// "One total" is last so a pick that stops fitting settles on a line
+	// over time, the chart this menu drew before one total was allowed.
 	Overs: []chartChoice{
-		{ID: "none", Name: "No, one total"},
 		{ID: "hour", Name: "By hour", Value: "hour"},
 		{ID: "day", Name: "By day", Value: "day"},
+		{ID: "none", Name: "No, one total"},
 	},
 	Tops: []int{5, 10, 25},
 	Names: map[string]string{
@@ -149,7 +151,7 @@ var chartCatalog = struct {
 //   - by hour only with today or the last 24 hours, by day only with 7 or 30 days;
 //   - a cube kept by day gets neither by hour nor the last 24 hours;
 //   - a split over time only for security hits (blocked vs logged, stacked);
-//   - no split means it must be over time, since one bare total has no chart;
+//   - no split and no over-time is one total, drawn as a single number;
 //   - top N exactly when there is a split and no over-time.
 func chartAllowed(c chartCount, split, window, over string, top int) bool {
 	if !slices.Contains(c.Splits, split) {
@@ -160,9 +162,6 @@ func chartAllowed(c chartCount, split, window, over string, top int) bool {
 		return false
 	}
 	if over == "hour" && !hourly || over == "day" && hourly {
-		return false
-	}
-	if split == "none" && over == "none" {
 		return false
 	}
 	if split != "none" && over != "none" && split != "action" {

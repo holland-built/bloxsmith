@@ -346,8 +346,22 @@
     {
       "count": "dns",
       "split": "none",
+      "window": "today",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
       "window": "24h",
       "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "24h",
+      "over": "none",
       "top": 0
     },
     {
@@ -360,8 +374,22 @@
     {
       "count": "dns",
       "split": "none",
+      "window": "7d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
       "window": "30d",
       "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
       "top": 0
     },
     {
@@ -389,6 +417,13 @@
       "count": "threats",
       "split": "action",
       "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "7d",
       "over": "none",
       "top": 5
     },
@@ -409,7 +444,7 @@
     {
       "count": "threats",
       "split": "action",
-      "window": "7d",
+      "window": "30d",
       "over": "day",
       "top": 0
     },
@@ -433,13 +468,6 @@
       "window": "30d",
       "over": "none",
       "top": 25
-    },
-    {
-      "count": "threats",
-      "split": "action",
-      "window": "30d",
-      "over": "day",
-      "top": 0
     },
     {
       "count": "threats",
@@ -633,6 +661,13 @@
     {
       "count": "threats",
       "split": "none",
+      "window": "today",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
       "window": "7d",
       "over": "day",
       "top": 0
@@ -640,8 +675,22 @@
     {
       "count": "threats",
       "split": "none",
+      "window": "7d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
       "window": "30d",
       "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
       "top": 0
     },
     {
@@ -654,8 +703,22 @@
     {
       "count": "qps",
       "split": "none",
+      "window": "today",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
       "window": "24h",
       "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "24h",
+      "over": "none",
       "top": 0
     },
     {
@@ -668,8 +731,22 @@
     {
       "count": "qps",
       "split": "none",
+      "window": "7d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
       "window": "30d",
       "over": "day",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
       "top": 0
     },
     {
@@ -766,8 +843,22 @@
     {
       "count": "dhcp",
       "split": "none",
+      "window": "today",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
       "window": "24h",
       "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "24h",
+      "over": "none",
       "top": 0
     },
     {
@@ -780,8 +871,22 @@
     {
       "count": "dhcp",
       "split": "none",
+      "window": "7d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
       "window": "30d",
       "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
       "top": 0
     }
   ],
@@ -858,13 +963,6 @@
   "overs": [
     {
       "fields": null,
-      "id": "none",
-      "name": "No, one total",
-      "plural": "",
-      "value": ""
-    },
-    {
-      "fields": null,
       "id": "hour",
       "name": "By hour",
       "plural": "",
@@ -876,6 +974,13 @@
       "name": "By day",
       "plural": "",
       "value": "day"
+    },
+    {
+      "fields": null,
+      "id": "none",
+      "name": "No, one total",
+      "plural": "",
+      "value": ""
     }
   ],
   "splits": [

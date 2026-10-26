@@ -330,7 +330,7 @@
     "kind": "cube",
     "source": "Infoblox's asset insight records",
     "builder": "no",
-    "why": "it is a single total, and Build a chart draws charts"
+    "why": "it counts asset records, which Build a chart does not read yet"
   },
   {
     "id": "security-exposures",
@@ -420,7 +420,7 @@
     "kind": "cube",
     "source": "Infoblox's asset discovery records",
     "builder": "no",
-    "why": "it is a single total, and Build a chart draws charts"
+    "why": "it counts asset records, which Build a chart does not read yet"
   },
   {
     "id": "infra-jobs",

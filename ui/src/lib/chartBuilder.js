@@ -41,9 +41,21 @@ export function settlePicks(opts, picks) {
   return out
 }
 
-/** Over time draws a line (stacked bars when split), record types a donut, the rest bars. */
+/**
+ * The picks after one menu changes, settled. Choosing no split starts over
+ * time again (a line), the chart it drew before one total was allowed; one
+ * total is still there to pick.
+ */
+export function pickOne(opts, picks, level, value) {
+  const next = { ...picks, [level]: value }
+  if (level === 'split' && value === 'none') delete next.over
+  return settlePicks(opts, next)
+}
+
+/** One total draws a number, over time a line (stacked bars when split), record types a donut, the rest bars. */
 export function chartKind(picks) {
   if (picks.over !== 'none') return picks.split === 'none' ? 'line' : 'stacked'
+  if (picks.split === 'none') return 'number'
   return picks.split === 'qtype' ? 'donut' : 'bars'
 }
 
@@ -151,10 +163,21 @@ const LABEL_MAX = 20
  * second, which must not be read as a length.
  */
 export function shortLabel(s) {
+  return cut(s, LABEL_MAX)
+}
+
+const WIDE_MAX = 40
+
+/** The same for a sideways bar, whose label has a whole row's width. */
+export function wideLabel(s) {
+  return cut(s, WIDE_MAX)
+}
+
+function cut(s, max) {
   const t = String(s)
-  if (t.length <= LABEL_MAX) return t
-  const tail = Math.floor((LABEL_MAX - 1) / 2)
-  return `${t.slice(0, LABEL_MAX - 1 - tail)}…${t.slice(-tail)}`
+  if (t.length <= max) return t
+  const tail = Math.floor((max - 1) / 2)
+  return `${t.slice(0, max - 1 - tail)}…${t.slice(-tail)}`
 }
 
 const num = (v) => Number(v) || 0
@@ -164,14 +187,24 @@ function timeLabel(s, granularity) {
   return fmtShortDay(s)
 }
 
+/** True when a bar's name would be cut short under it, so the bars lie sideways instead. */
+export function sideways(data) {
+  return data.some((d) => String(d.name).length > LABEL_MAX)
+}
+
 /**
  * The rows in the shape the chart for these picks takes:
- * line [{label, value}], stacked [{day, blocked, allowed}], bars and donut [{name, value}].
+ * line [{label, value}], stacked [{day, blocked, allowed}], bars, donut and number [{name, value}].
  */
 export function chartData(opts, picks, rows, cube) {
   const count = countOf(opts, picks)
   const granularity = choice(opts, 'over', picks.over).value
   const kind = chartKind(picks)
+  if (kind === 'number') {
+    // One row comes back; none means nothing was counted, which is 0.
+    const total = rows.reduce((sum, r) => sum + num(r[count.measure]), 0)
+    return [{ name: choiceName(opts, 'count', picks.count, cube), value: total }]
+  }
   if (kind === 'line' || kind === 'stacked') {
     const tKey = `${count.cube}.timestamp.${granularity}`
     const timeOf = (r) => String(r[tKey] ?? r[`${count.cube}.timestamp`] ?? '')
@@ -226,6 +259,20 @@ export function sampleTable(opts, rows, cube) {
     headers: cols.map((c) => fieldName(opts, c, cube)),
     rows: rows.map((r) => cols.map((c) => String(valueName(opts, c, r[c] ?? '', cube)))),
   }
+}
+
+// A spreadsheet runs a cell that starts with one of these as a formula.
+const FORMULA = /^[=+\-@\t\r]/
+
+function csvCell(v) {
+  let t = String(v)
+  if (FORMULA.test(t)) t = `'${t}`
+  return /[",\r\n]/.test(t) ? `"${t.replaceAll('"', '""')}"` : t
+}
+
+/** A sampleTable as CSV text, one line per row, ready to save as a file. */
+export function toCsv(table) {
+  return [table.headers, ...table.rows].map((r) => r.map(csvCell).join(',') + '\r\n').join('')
 }
 
 /**

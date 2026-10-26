@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react'
 import { Skeleton, useChartTheme } from './ui.jsx'
 import { useCubeNames } from '../lib/cubeNames.js'
-import { chartData, chartKind, fieldName, shortLabel } from '../lib/chartBuilder.js'
+import { chartData, chartKind, fieldName, shortLabel, sideways, wideLabel } from '../lib/chartBuilder.js'
 
 // The chart Build a chart draws for a set of picks, shared by the builder and
 // by every chart saved onto a page (SavedChart.jsx), so a saved chart looks
@@ -36,11 +36,33 @@ export default function ChartView({ label, opts, picks, rows }) {
             data={data.map((d, i) => ({ ...d, color: COLORS[DONUT_KEYS[i % DONUT_KEYS.length]] }))}
           />
         </div>
+      ) : kind === 'number' ? (
+        <BigNumber label={label} name={data[0].name} value={data[0].value} />
+      ) : sideways(data) ? (
+        // Names too long to sit under a bar (domains, policies) get a row each.
+        <CategoryBars
+          label={label}
+          data={data}
+          unit={unit}
+          fill={COLORS.series}
+          height={Math.max(160, data.length * 26 + 8)}
+          tickFormat={wideLabel}
+          horizontal
+        />
       ) : (
-        // Domains run long; shortLabel keeps each one under its own bar.
         <CategoryBars label={label} data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} />
       )}
     </Suspense>
   )
 }
 
+// One total. An average (queries per second) keeps one decimal; a count has none.
+function BigNumber({ label, name, value }) {
+  const text = value.toLocaleString(undefined, { maximumFractionDigits: 1 })
+  return (
+    <div role="img" aria-label={`${label} chart: ${name}, ${text}`} className="h-[160px] flex flex-col items-center justify-center gap-1">
+      <span className="text-figure font-semibold tabular-nums">{text}</span>
+      <span className="text-note text-muted">{name}</span>
+    </div>
+  )
+}
