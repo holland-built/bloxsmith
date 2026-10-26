@@ -325,10 +325,13 @@ Enter a domain, IP, or host. Returns matching threat-intel entities plus a dossi
 
 **Read-only.** Make a chart by picking from menus, with no typing and no AI.
 
-Pick **What to count** (DNS queries, Security hits, DNS queries per second, or DHCP lease changes), what to **Split by**, **When**, **Over time**, and **How many**. Only choices that work together are listed:
+Pick **What to count** (DNS queries, Security hits, DNS queries per second, DHCP lease changes, Assets, or New assets still held), what to **Split by**, **When**, **Over time**, and **How many**. Only choices that work together are listed:
 
 - DNS queries split by device, record type, domain or answer (answered, no such name, server failed). Security hits split by what happened, threat type, policy or severity; hits Infoblox gave no severity show as **Not graded**. DHCP lease changes split by what changed. These are changes the lease log recorded, not the leases held now.
-- By hour comes with Today or the last 24 hours, and By day with the last 7 or 30 days.
+- **Assets** counts every asset Infoblox holds now, so its only time choice is **Latest inventory**. Split it by asset type, category, operating system, what found it, cloud or on-premises, vendor or region. **Problem** (noncompliant, unregistered, zombie, lifecycle) and **Missing record** (DNS name, reverse DNS, IPAM) count each one on its own, so an asset with two is in both bars.
+- **New assets still held** counts assets by when Infoblox first saw them. An asset removed since is no longer counted.
+- By hour comes with Today or the last 24 hours, By day with the last 7 or 30 days or a calendar month, and By week with the last 30 or 90 days. DNS queries per second has no By week.
+- How far back a chart can reach depends on how long your account has kept the data.
 - Security hits are kept by Infoblox one day at a time, so they are never offered by hour or over the last 24 hours.
 - Only blocked vs allowed can be split and shown over time together. Every other split is a top 5, 10 or 25.
 
@@ -386,7 +389,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Security | CTEM Exposure | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Threat Feed Activity | Infoblox's security hit records | As a copy | the blocked and allowed totals above the bars are worked out in the app |
 | Security | SOC Insights | Infoblox's SOC insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
-| Security | Asset Insights | Infoblox's asset insight records | No | it counts asset records, which Build a chart does not read yet |
+| Security | Asset Insights | Infoblox's asset insight records | No | it counts a different set of asset records from the ones Build a chart reads |
 | Security | Exposures | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Risk | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Exposed Surface | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
@@ -396,7 +399,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Infra | Service Health | the service list | No | each group's health is rolled up in the app |
 | Infra | Host Health | the host list | No | it is a list, not a chart |
 | Infra | On-Prem Hosts | the on-prem host list | No | it is a list, not a chart |
-| Infra | Asset Discovery | Infoblox's asset discovery records | No | it counts asset records, which Build a chart does not read yet |
+| Infra | Asset Discovery | Infoblox's asset discovery records | No | it counts a different set of asset records from the ones Build a chart reads |
 | Infra | Jobs | the job list | No | it is a list, not a chart |
 | Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
 | Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |

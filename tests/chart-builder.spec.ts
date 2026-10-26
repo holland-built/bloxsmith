@@ -63,8 +63,8 @@ test('round two adds things to count and split by, each hidden where it does not
   await page.goto('/#chart');
   const count = page.getByLabel('What to count');
   const split = page.getByLabel('Split by');
-  await expect(count.locator('option')).toHaveText(['DNS queries', 'Security hits', 'DNS queries per second', 'DHCP lease changes']);
-  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 24 hours', 'Last 7 days', 'Last 30 days']);
+  await expect(count.locator('option')).toHaveText(['DNS queries', 'Security hits', 'DNS queries per second', 'DHCP lease changes', 'Assets', 'New assets still held']);
+  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 24 hours', 'Last 7 days', 'Last 30 days', 'This month', 'Last month', 'Last 90 days']);
 
   // A domain is a top N only: over time offers nothing but one total.
   await split.selectOption({ label: 'Domain' });
@@ -74,7 +74,7 @@ test('round two adds things to count and split by, each hidden where it does not
   await count.selectOption({ label: 'Security hits' });
   await expect(split.locator('option')).toHaveText(['What happened', 'Threat type', 'Policy', 'Severity', 'Nothing, one total']);
   // The security cube keeps one row a day: no rolling 24 hours, no by hour.
-  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 7 days', 'Last 30 days']);
+  await expect(page.getByLabel('When').locator('option')).toHaveText(['Today', 'Last 7 days', 'Last 30 days', 'This month', 'Last month', 'Last 90 days']);
   await split.selectOption({ label: 'Policy' });
   await expect(heading(page)).toHaveText('Top 10 policies by Security hits, last 7 days');
 
@@ -181,4 +181,27 @@ test('every row Infoblox sent back can be saved as a CSV file', async ({ page })
   const fs = await import('node:fs/promises');
   const text = await fs.readFile(await download.path(), 'utf8');
   expect(text).toBe('Device,Device address,DNS queries\r\nws-014.lab,10.20.0.24,48211\r\n');
+});
+
+test('assets count what Infoblox holds now, and problems are one bar each', async ({ page }) => {
+  await page.route('**/api/chart?*', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ok',
+        endpoint: '/api/cubejs/v1/query',
+        query: [],
+        rows: [
+          { 'AssetDetails_ch_agg.insight_classifications_label': 'Noncompliant', 'AssetDetails_ch_agg.assetsCount': '536' },
+          { 'AssetDetails_ch_agg.insight_classifications_label': 'Zombie', 'AssetDetails_ch_agg.assetsCount': '98' },
+        ],
+      },
+    }),
+  );
+  await page.goto('/#chart');
+  await page.getByLabel('What to count').selectOption({ label: 'Assets' });
+  await expect(page.getByLabel('When').locator('option')).toHaveText(['Latest inventory']);
+  await page.getByLabel('Split by').selectOption({ label: 'Problem' });
+  await expect(heading(page)).toHaveText('Assets by problem, latest inventory');
+  await expect(page.getByLabel('How many')).toHaveCount(0);
+  await expect(page.getByText('counted on its own, so an asset with two is in both bars')).toBeVisible();
 });

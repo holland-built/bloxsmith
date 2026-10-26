@@ -86,6 +86,69 @@
     },
     {
       "count": "dns",
+      "split": "device",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "device",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
       "split": "qtype",
       "window": "today",
       "over": "none",
@@ -170,6 +233,69 @@
     },
     {
       "count": "dns",
+      "split": "qtype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "qtype",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
       "split": "domain",
       "window": "today",
       "over": "none",
@@ -254,6 +380,69 @@
     },
     {
       "count": "dns",
+      "split": "domain",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "domain",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
       "split": "rcode",
       "window": "today",
       "over": "none",
@@ -333,6 +522,69 @@
       "count": "dns",
       "split": "rcode",
       "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dns",
+      "split": "rcode",
+      "window": "90d",
       "over": "none",
       "top": 25
     },
@@ -389,6 +641,55 @@
       "count": "dns",
       "split": "none",
       "window": "30d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "thismonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "90d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "dns",
+      "split": "none",
+      "window": "90d",
       "over": "none",
       "top": 0
     },
@@ -452,6 +753,13 @@
       "count": "threats",
       "split": "action",
       "window": "30d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "30d",
       "over": "none",
       "top": 5
     },
@@ -471,6 +779,90 @@
     },
     {
       "count": "threats",
+      "split": "action",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "90d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "action",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
       "split": "tclass",
       "window": "today",
       "over": "none",
@@ -534,6 +926,69 @@
     },
     {
       "count": "threats",
+      "split": "tclass",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "tclass",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
       "split": "policy",
       "window": "today",
       "over": "none",
@@ -597,6 +1052,69 @@
     },
     {
       "count": "threats",
+      "split": "policy",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "policy",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
       "split": "severity",
       "window": "today",
       "over": "none",
@@ -655,6 +1173,69 @@
       "count": "threats",
       "split": "severity",
       "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "threats",
+      "split": "severity",
+      "window": "90d",
       "over": "none",
       "top": 25
     },
@@ -690,6 +1271,55 @@
       "count": "threats",
       "split": "none",
       "window": "30d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "thismonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "90d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "threats",
+      "split": "none",
+      "window": "90d",
       "over": "none",
       "top": 0
     },
@@ -750,6 +1380,41 @@
       "top": 0
     },
     {
+      "count": "qps",
+      "split": "none",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "thismonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "qps",
+      "split": "none",
+      "window": "90d",
+      "over": "none",
+      "top": 0
+    },
+    {
       "count": "dhcp",
       "split": "leaseop",
       "window": "today",
@@ -830,6 +1495,69 @@
       "count": "dhcp",
       "split": "leaseop",
       "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "dhcp",
+      "split": "leaseop",
+      "window": "90d",
       "over": "none",
       "top": 25
     },
@@ -886,6 +1614,1357 @@
       "count": "dhcp",
       "split": "none",
       "window": "30d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "thismonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "90d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "dhcp",
+      "split": "none",
+      "window": "90d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "assets",
+      "split": "atype",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "atype",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "atype",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "acat",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "acat",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "acat",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "os",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "os",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "os",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "source",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "source",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "source",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "where",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "where",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "where",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "vendor",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "vendor",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "vendor",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "region",
+      "window": "now",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "assets",
+      "split": "region",
+      "window": "now",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "assets",
+      "split": "region",
+      "window": "now",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "assets",
+      "split": "problem",
+      "window": "now",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "assets",
+      "split": "missing",
+      "window": "now",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "assets",
+      "split": "none",
+      "window": "now",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "atype",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "acat",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "os",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "source",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "where",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "vendor",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "today",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "today",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "today",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "24h",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "24h",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "24h",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "7d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "7d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "7d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "30d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "30d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "30d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "thismonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "thismonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "thismonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "90d",
+      "over": "none",
+      "top": 5
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "90d",
+      "over": "none",
+      "top": 10
+    },
+    {
+      "count": "newassets",
+      "split": "region",
+      "window": "90d",
+      "over": "none",
+      "top": 25
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "today",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "today",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "24h",
+      "over": "hour",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "24h",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "7d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "7d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "30d",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "30d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "30d",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "thismonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "thismonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "day",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "lastmonth",
+      "over": "none",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "90d",
+      "over": "week",
+      "top": 0
+    },
+    {
+      "count": "newassets",
+      "split": "none",
+      "window": "90d",
       "over": "none",
       "top": 0
     }
@@ -897,7 +2976,8 @@
       "filters": null,
       "id": "dns",
       "measure": "NetworkNstarDnsActivity.total_query_count",
-      "name": "DNS queries"
+      "name": "DNS queries",
+      "time": "NetworkNstarDnsActivity.timestamp"
     },
     {
       "cube": "PortunusAggThreat_ch",
@@ -905,7 +2985,8 @@
       "filters": null,
       "id": "threats",
       "measure": "PortunusAggThreat_ch.requests",
-      "name": "Security hits"
+      "name": "Security hits",
+      "time": "PortunusAggThreat_ch.timestamp"
     },
     {
       "cube": "HostMetrics",
@@ -921,7 +3002,8 @@
       ],
       "id": "qps",
       "measure": "HostMetrics.avg_value",
-      "name": "DNS queries per second"
+      "name": "DNS queries per second",
+      "time": "HostMetrics.timestamp"
     },
     {
       "cube": "NetworkNstarDhcpLeaseActivity",
@@ -929,10 +3011,41 @@
       "filters": null,
       "id": "dhcp",
       "measure": "NetworkNstarDhcpLeaseActivity.total_count",
-      "name": "DHCP lease changes"
+      "name": "DHCP lease changes",
+      "time": "NetworkNstarDhcpLeaseActivity.timestamp"
+    },
+    {
+      "cube": "AssetDetails_ch_agg",
+      "endpoint": "/api/cubejs/v1/query",
+      "filters": null,
+      "id": "assets",
+      "measure": "AssetDetails_ch_agg.assetsCount",
+      "name": "Assets",
+      "time": "AssetDetails_ch_agg.timestamp"
+    },
+    {
+      "cube": "AssetDetails_ch_agg",
+      "endpoint": "/api/cubejs/v1/query",
+      "filters": null,
+      "id": "newassets",
+      "measure": "AssetDetails_ch_agg.assetsCount",
+      "name": "New assets still held",
+      "time": "AssetDetails_ch_agg.first_seen"
     }
   ],
   "names": {
+    "AssetDetails_ch_agg": "Assets",
+    "AssetDetails_ch_agg.assetsCount": "Assets",
+    "AssetDetails_ch_agg.deploymentContext": "Cloud or on-premises",
+    "AssetDetails_ch_agg.first_seen": "First seen",
+    "AssetDetails_ch_agg.insight_classifications_label": "Problem",
+    "AssetDetails_ch_agg.insight_indicators_label": "Missing record",
+    "AssetDetails_ch_agg.os_type": "Operating system",
+    "AssetDetails_ch_agg.provider_label": "Found by",
+    "AssetDetails_ch_agg.region_label": "Region",
+    "AssetDetails_ch_agg.taxonomy_super_category_label": "Category",
+    "AssetDetails_ch_agg.taxonomy_type_label": "Asset type",
+    "AssetDetails_ch_agg.vendor": "Vendor",
     "HostMetrics": "DNS server metrics",
     "HostMetrics.avg_value": "Queries per second",
     "HostMetrics.metric_name": "Metric",
@@ -962,6 +3075,7 @@
   },
   "overs": [
     {
+      "buckets": null,
       "fields": null,
       "id": "hour",
       "name": "By hour",
@@ -969,6 +3083,7 @@
       "value": "hour"
     },
     {
+      "buckets": null,
       "fields": null,
       "id": "day",
       "name": "By day",
@@ -976,6 +3091,15 @@
       "value": "day"
     },
     {
+      "buckets": null,
+      "fields": null,
+      "id": "week",
+      "name": "By week",
+      "plural": "",
+      "value": "week"
+    },
+    {
+      "buckets": null,
       "fields": null,
       "id": "none",
       "name": "No, one total",
@@ -985,6 +3109,7 @@
   ],
   "splits": [
     {
+      "buckets": null,
       "fields": [
         "NetworkNstarDnsActivity.device_name",
         "NetworkNstarDnsActivity.device_ip"
@@ -995,6 +3120,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "NetworkNstarDnsActivity.query_type"
       ],
@@ -1004,6 +3130,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "NetworkNstarDnsActivity.qname"
       ],
@@ -1013,6 +3140,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "NetworkNstarDnsActivity.rcode"
       ],
@@ -1022,6 +3150,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "PortunusAggThreat_ch.action"
       ],
@@ -1031,6 +3160,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "PortunusAggThreat_ch.tclass"
       ],
@@ -1040,6 +3170,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "PortunusAggThreat_ch.policy_name"
       ],
@@ -1049,6 +3180,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "PortunusAggThreat_ch.severity"
       ],
@@ -1058,6 +3190,7 @@
       "value": ""
     },
     {
+      "buckets": null,
       "fields": [
         "NetworkNstarDhcpLeaseActivity.lease_op"
       ],
@@ -1067,6 +3200,106 @@
       "value": ""
     },
     {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.taxonomy_type_label"
+      ],
+      "id": "atype",
+      "name": "Asset type",
+      "plural": "asset types",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.taxonomy_super_category_label"
+      ],
+      "id": "acat",
+      "name": "Category",
+      "plural": "categories",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.os_type"
+      ],
+      "id": "os",
+      "name": "Operating system",
+      "plural": "operating systems",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.provider_label"
+      ],
+      "id": "source",
+      "name": "Found by",
+      "plural": "sources",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.deploymentContext"
+      ],
+      "id": "where",
+      "name": "Cloud or on-premises",
+      "plural": "places",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.vendor"
+      ],
+      "id": "vendor",
+      "name": "Vendor",
+      "plural": "vendors",
+      "value": ""
+    },
+    {
+      "buckets": null,
+      "fields": [
+        "AssetDetails_ch_agg.region_label"
+      ],
+      "id": "region",
+      "name": "Region",
+      "plural": "regions",
+      "value": ""
+    },
+    {
+      "buckets": [
+        "Noncompliant",
+        "Unregistered",
+        "Zombie",
+        "Lifecycle"
+      ],
+      "fields": [
+        "AssetDetails_ch_agg.insight_classifications_label"
+      ],
+      "id": "problem",
+      "name": "Problem",
+      "plural": "",
+      "value": ""
+    },
+    {
+      "buckets": [
+        "DNS Forward Record",
+        "DNS Pointer Record",
+        "IPAM"
+      ],
+      "fields": [
+        "AssetDetails_ch_agg.insight_indicators_label"
+      ],
+      "id": "missing",
+      "name": "Missing record",
+      "plural": "",
+      "value": ""
+    },
+    {
+      "buckets": null,
       "fields": null,
       "id": "none",
       "name": "Nothing, one total",
@@ -1080,6 +3313,20 @@
     25
   ],
   "values": {
+    "AssetDetails_ch_agg.deploymentContext": {
+      "Onprem": "On-premises"
+    },
+    "AssetDetails_ch_agg.insight_indicators_label": {
+      "DNS Forward Record": "DNS name (forward record)",
+      "DNS Pointer Record": "Reverse DNS (pointer record)",
+      "IPAM": "IPAM record"
+    },
+    "AssetDetails_ch_agg.os_type": {
+      "": "Not reported"
+    },
+    "AssetDetails_ch_agg.vendor": {
+      "": "Not reported"
+    },
     "HostMetrics.metric_name": {
       "dns_qps_iq": "DNS queries per second"
     },
@@ -1098,6 +3345,15 @@
   },
   "windows": [
     {
+      "buckets": null,
+      "fields": null,
+      "id": "now",
+      "name": "Latest inventory",
+      "plural": "",
+      "value": ""
+    },
+    {
+      "buckets": null,
       "fields": null,
       "id": "today",
       "name": "Today",
@@ -1105,6 +3361,7 @@
       "value": "today"
     },
     {
+      "buckets": null,
       "fields": null,
       "id": "24h",
       "name": "Last 24 hours",
@@ -1112,6 +3369,7 @@
       "value": "last 24 hours"
     },
     {
+      "buckets": null,
       "fields": null,
       "id": "7d",
       "name": "Last 7 days",
@@ -1119,11 +3377,36 @@
       "value": "last 7 days"
     },
     {
+      "buckets": null,
       "fields": null,
       "id": "30d",
       "name": "Last 30 days",
       "plural": "",
       "value": "last 30 days"
+    },
+    {
+      "buckets": null,
+      "fields": null,
+      "id": "thismonth",
+      "name": "This month",
+      "plural": "",
+      "value": "this month"
+    },
+    {
+      "buckets": null,
+      "fields": null,
+      "id": "lastmonth",
+      "name": "Last month",
+      "plural": "",
+      "value": "last month"
+    },
+    {
+      "buckets": null,
+      "fields": null,
+      "id": "90d",
+      "name": "Last 90 days",
+      "plural": "",
+      "value": "last 90 days"
     }
   ]
 }
