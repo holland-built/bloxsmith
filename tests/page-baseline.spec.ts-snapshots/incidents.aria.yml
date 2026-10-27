@@ -5,7 +5,7 @@
   - text: click to filter Triage
   - 'button "About: Categories"': "About: ⓘ"
   - 'button "Options: Categories"'
-  - 'button "2 capacity · worst: high"'
+  - 'button "2 Capacity · worst: high"'
   - heading "Triage" [level=2]
   - textbox "Filter incidents":
     - /placeholder: Filter…
@@ -15,33 +15,33 @@
   - 'button "Options: Triage"'
   - table:
     - rowgroup:
-      - row "Ack Category Entity Severity Message Age":
+      - row "Ack Category What Severity Message Age":
         - columnheader "Ack"
         - columnheader "Category":
           - button "Category"
-        - columnheader "Entity":
-          - button "Entity"
+        - columnheader "What":
+          - button "What"
         - columnheader "Severity":
           - button "Severity"
         - columnheader "Message"
         - columnheader "Age":
           - button "Age"
     - rowgroup:
-      - row /Acknowledge signal dns dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
+      - row /Acknowledge signal Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
         - cell "Acknowledge signal":
           - checkbox "Acknowledge signal"
-        - cell "dns"
-        - cell "dns/auth_zone/baseline-2"
-        - cell "Medium"
-        - cell "other.example is unsigned"
-        - cell /\d+[hmsp]+/
-      - row /Acknowledge signal capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
-        - cell "Acknowledge signal":
-          - checkbox "Acknowledge signal"
-        - cell "capacity"
+        - cell "Capacity"
         - cell "ipam/subnet/baseline-3"
         - cell "Critical"
         - cell /baseline-net-c is \d+% used/
+        - cell /\d+[hmsp]+/
+      - row /Acknowledge signal DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
+        - cell "Acknowledge signal":
+          - checkbox "Acknowledge signal"
+        - cell "DNS"
+        - cell "dns/auth_zone/baseline-2"
+        - cell "Medium"
+        - cell "other.example is unsigned"
         - cell /\d+[hmsp]+/
   - button "About incidents-severity": ⓘ
   - button "Options for Severity Counts": ⋯

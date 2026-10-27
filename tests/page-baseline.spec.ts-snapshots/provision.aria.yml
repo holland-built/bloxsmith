@@ -31,8 +31,8 @@
     - status
     - combobox "Block" [disabled]:
       - option "Pick a space first" [selected]
-  - text: CIDR prefix
-  - spinbutton "CIDR prefix": /\d+/
+  - text: "Size (prefix: 24 = 256 addresses)"
+  - 'spinbutton "Size (prefix: 24 = 256 addresses)"': /\d+/
   - text: Name
   - textbox "Name":
     - /placeholder: subnet name

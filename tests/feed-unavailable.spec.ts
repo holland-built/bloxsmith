@@ -160,8 +160,8 @@ test.describe('Audit → Activity Summary panel (audit chain)', () => {
     await expect(card.getByText(/2 recorded events/i)).toBeVisible();
     // The kinds themselves, not just the count: a tally that lost its grouping
     // would still print "2 recorded events" over a blank panel.
-    await expect(card.getByText(/provision-subnet/i)).toBeVisible();
-    await expect(card.getByText(/write-refused-read-only/i)).toBeVisible();
+    await expect(card.getByText('Subnet created')).toBeVisible();
+    await expect(card.getByText('Change blocked (read-only)')).toBeVisible();
     await expect(card.getByText(/audit log unavailable/i)).toHaveCount(0);
     await expect(card.getByText(/^no data$/i)).toHaveCount(0);
   });

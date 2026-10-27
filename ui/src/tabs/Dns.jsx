@@ -11,6 +11,7 @@ import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import { issueWord } from '../lib/plainWords.js'
 
 // ---------- main ----------
 
@@ -133,7 +134,7 @@ function QpsHero({ panelId, qps }) {
       panelId={panelId}
       span={4}
       title="DNS Query Rate — 24h"
-      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />queries per second</span>}
     >
       {qps.loading ? (
         <Skeleton h={250} />
@@ -245,13 +246,13 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
       note: unchecked > 0 ? `${unchecked.toLocaleString()} publish no TTL` : null,
     },
     {
-      label: 'Zones w/ issues',
+      label: 'Zones needing attention',
       value: issueCount.toLocaleString(),
       color: issueCount > 0 ? COLORS.crit : COLORS.ok,
       note: coverage,
     },
     {
-      label: 'Anomalies',
+      label: 'Unusual settings',
       value: anomalyCount.toLocaleString(),
       color: anomalyCount > 0 ? COLORS.warn : COLORS.ok,
       note: coverage,
@@ -394,7 +395,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const rows = useMemo(() => sorted.map((z) => {
     const hasIssues = Array.isArray(z.issues) && z.issues.length > 0
     const issuesCell = hasIssues ? (
-      <span className="font-mono text-note" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
+      <span className="text-note" style={{ color: COLORS.crit }}>{z.issues.map(issueWord).join(', ')}</span>
     ) : z.anomaly ? (
       <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
     ) : ttlChecked(z) ? '—' : (

@@ -10,6 +10,7 @@ import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
 import { sampleSince } from '../lib/sampleCount.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import { plainMessage } from '../lib/plainWords.js'
 
 
 // Tap once to read it, tap again to follow it.
@@ -290,7 +291,7 @@ function ServicesIncidents({ panelId }) {
   const signals = Array.isArray(inc.data?.signals) ? inc.data.signals : []
   const incText = (i) => {
     const own = signals.filter((sg) => sg.category === i.category)
-    return i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message
+    return plainMessage(i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message)
   }
   const incTone = (i) => (i.severity === 'crit' ? 'crit' : i.severity === 'warn' ? 'warn' : 'neutral')
   const rank = { crit: 0, warn: 1, neutral: 2 }
@@ -496,7 +497,7 @@ function DnsHero({ dns, panelId }) {
       // the popup and the heading on screen are the same phrase to look for.
       panelName="DNS Query Rate — 24h"
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
-      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />queries per second</span>}
     >
       {dns.loading ? (
         <Skeleton h={250} />

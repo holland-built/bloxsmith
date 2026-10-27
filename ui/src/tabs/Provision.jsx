@@ -445,7 +445,7 @@ function SubnetMode() {
               options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
             />
           </Field>
-          <Field label="CIDR prefix">
+          <Field label="Size (prefix: 24 = 256 addresses)">
             <input {...MACHINE_TEXT} type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
           </Field>
           <Field label="Name">
@@ -574,7 +574,7 @@ function SiteMode({ isAdmin }) {
             <FetchError error={spacesApi.error} stale={spaces.length > 0} />
             <FetchError error={templatesApi.error} stale={templates.length > 0} />
             {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
-            {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>no templates</Empty>}
+            {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
           </div>
 
           <PreviewApply

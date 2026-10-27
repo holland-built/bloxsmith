@@ -7,11 +7,11 @@
     - /placeholder: Filter…
   - combobox "Filter by event":
     - option "All events" [selected]
-    - option "dns-record-delete-error"
-    - option "provision-subnet"
-    - option "update-apply"
-    - option "write-authorized"
-    - option "write-refused-read-only"
+    - option "Couldn't delete a DNS record"
+    - option "Subnet created"
+    - option "App updated"
+    - option "Change allowed"
+    - option "Change blocked (read-only)"
   - text: "5"
   - 'button "About: Audit Log"': "About: ⓘ"
   - 'button "Options: Audit Log"'
@@ -29,36 +29,36 @@
         - columnheader "Detail":
           - button "Detail"
     - rowgroup:
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator dns-record-delete-error error=upstream refused · id=dns\/record\/baseline-1/:
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn't delete a DNS record error=upstream refused · id=dns\/record\/baseline-1/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
-        - cell "dns-record-delete-error"
+        - cell "Couldn't delete a DNS record"
         - cell "error=upstream refused · id=dns/record/baseline-1"
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator write-refused-read-only method=POST · path=\/api\/edit\/dnsrecord · reason=tenant-read-only · tenant=baseline\/-/:
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) method=POST · path=\/api\/edit\/dnsrecord · reason=tenant-read-only · tenant=baseline\/-/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
-        - cell "write-refused-read-only"
+        - cell "Change blocked (read-only)"
         - cell "method=POST · path=/api/edit/dnsrecord · reason=tenant-read-only · tenant=baseline/-"
-      - row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator provision-subnet block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/:
+      - row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator Subnet created block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/:
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
         - cell "baseline-operator"
-        - cell "provision-subnet"
+        - cell "Subnet created"
         - cell /block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/
-      - row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator write-authorized method=POST · path=\/api\/provision\/subnet/:
+      - row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator Change allowed method=POST · path=\/api\/provision\/subnet/:
         - cell /1\/1\/\d+, 7:\d+:\d+ AM/
         - cell "baseline-operator"
-        - cell "write-authorized"
+        - cell "Change allowed"
         - cell "method=POST · path=/api/provision/subnet"
-      - row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator update-apply from=v0\.0\.0-baseline/:
+      - row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator App updated from=v0\.0\.0-baseline/:
         - cell /1\/1\/\d+, 6:\d+:\d+ AM/
         - cell "baseline-operator"
-        - cell "update-apply"
+        - cell "App updated"
         - cell "from=v0.0.0-baseline"
   - heading "Activity Summary" [level=2]
   - text: 5 recorded events
   - 'button "About: Activity Summary"': "About: ⓘ"
   - 'button "Options: Activity Summary"'
-  - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
+  - text: Couldn't delete a DNS record 1 Subnet created 1 App updated 1 Change allowed 1 Change blocked (read-only) 1
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
   - textbox "Search user or resource":

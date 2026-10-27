@@ -6,6 +6,7 @@ import { sliceState } from '../lib/data.js'
 import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
+import { issueWord } from '../lib/plainWords.js'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -128,8 +129,8 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
         (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
     },
     {
-      label: 'DNS Zones w/ Issues', value: zonesWithIssues.length, color: COLORS.warn, hash: 'dns?issues=1', status: meta.zones,
-      detail: commonTypes.length ? `Most common: ${commonTypes.map(([t, n]) => `${t} (${n.toLocaleString()})`).join(', ')}.` : '',
+      label: 'DNS zones needing attention', value: zonesWithIssues.length, color: COLORS.warn, hash: 'dns?issues=1', status: meta.zones,
+      detail: commonTypes.length ? `Most common: ${commonTypes.map(([t, n]) => `${issueWord(t)} (${n.toLocaleString()})`).join(', ')}.` : '',
     },
   ]
 
@@ -362,7 +363,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
     // rowLabel names the row's button for the zone. Without it the name comes
     // from the first cell, which here is only the count of issues.
-    .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', '), rowLabel: z.fqdn }))
+    .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.map(issueWord).join(', '), rowLabel: z.fqdn }))
   const feedDead = zonesStatus === 'error' && zones.length === 0
 
   const columns = [

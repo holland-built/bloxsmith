@@ -125,7 +125,7 @@ export default function Drift() {
             <div>
               <FetchError error={templatesApi.error} stale={templates.length > 0} />
               <FetchError error={spacesApi.error} stale={spaces.length > 0} />
-              {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>no templates</Empty>}
+              {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
               {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             </div>
             <button

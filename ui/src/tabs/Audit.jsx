@@ -5,6 +5,7 @@ import { sampleCountLabel } from '../lib/sampleCount.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { eventWord } from '../lib/plainWords.js'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
 // are the two that get a colour. Everything else is one neutral tone rather than
@@ -260,7 +261,7 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
           {rows.map((r) => (
             <div key={r.event}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-note truncate" title={r.event}>{r.event}</span>
+                <span className="text-note truncate" title={r.event}>{eventWord(r.event)}</span>
                 <span className="text-copy font-semibold tabular-nums" style={{ color: r.color }}>
                   {r.count.toLocaleString()}
                 </span>
@@ -289,8 +290,8 @@ function EventPill({ event }) {
   const { COLORS } = useChartTheme()
   const color = eventColor(event || '', COLORS)
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `${color}22`, color }}>
-      {event || '—'}
+    <span title={event || undefined} className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `${color}22`, color }}>
+      {event ? eventWord(event) : '—'}
     </span>
   )
 }
@@ -529,7 +530,7 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
           >
             <option value="">All events</option>
             {kinds.map((k) => (
-              <option key={k} value={k}>{k}</option>
+              <option key={k} value={k}>{eventWord(k)}</option>
             ))}
           </select>
           {/* The filtered count, and the set it was filtered FROM when they
