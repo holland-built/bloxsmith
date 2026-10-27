@@ -16,7 +16,7 @@ const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 const DONUT_KEYS = ['series', 'purple', 'ok', 'warn', 'crit', 'other']
 
 /** The chart for one set of picks. label names it for a screen reader ("<label> chart"). */
-export default function ChartView({ label, opts, picks, rows }) {
+export default function ChartView({ label, opts, picks, rows, barHref }) {
   const { COLORS } = useChartTheme()
   const cube = useCubeNames()
   const data = useMemo(() => chartData(opts, picks, rows, cube), [opts, picks, rows, cube])
@@ -49,9 +49,10 @@ export default function ChartView({ label, opts, picks, rows }) {
           tickFormat={wideLabel}
           horizontal
           values
+          barHref={barHref}
         />
       ) : (
-        <CategoryBars label={label} data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} values />
+        <CategoryBars label={label} data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} values barHref={barHref} />
       )}
     </Suspense>
   )

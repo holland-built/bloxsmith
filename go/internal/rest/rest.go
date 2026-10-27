@@ -279,6 +279,10 @@ func New(baseURL string, auth *Auth) *Client {
 //
 // Background work (pollers, the account manager's own calls) deliberately keeps
 // using the unpinned Client: it belongs to no request and must see live state.
+// BaseURL is the Infoblox address this client talks to (INFOBLOX_URL),
+// without a trailing slash.
+func (c *Client) BaseURL() string { return c.baseURL }
+
 func (c *Client) Pin() *Client {
 	cp := *c
 	cp.pinned = c.auth.Value()

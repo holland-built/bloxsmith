@@ -85,6 +85,12 @@ type chartChoice struct {
 	Fields   []string // split: the dimensions it adds; with Buckets, the field they filter
 	Value    string   // window: the dateRange; over: the granularity
 	Buckets  []string // split: one count per value instead of a group-by (see chartBucket)
+	// split: the Infoblox Portal's Asset Inventory filter for the same field,
+	// so a bar can open the portal on those assets. Field and operator were
+	// checked by hand in the portal on 2026-10-27 (asset.Type IN ["Virtual
+	// Machine"] and the rest each returned their assets). Empty means no
+	// portal field is known for this split.
+	PortalField, PortalOp string
 }
 
 const (
@@ -146,18 +152,18 @@ var chartCatalog = struct {
 		{ID: "severity", Name: "Severity", Plural: "severities", Fields: []string{cubeThreats + ".severity"}},
 		{ID: "leaseop", Name: "What changed", Plural: "kinds of change", Fields: []string{cubeDHCP + ".lease_op"}},
 		// Asset splits, each a field holding one value per asset (measured 2026-10-26).
-		{ID: "atype", Name: "Asset type", Plural: "asset types", Fields: []string{cubeAssets + ".taxonomy_type_label"}},
+		{ID: "atype", Name: "Asset type", Plural: "asset types", Fields: []string{cubeAssets + ".taxonomy_type_label"}, PortalField: "asset.Type", PortalOp: "IN"},
 		{ID: "acat", Name: "Category", Plural: "categories", Fields: []string{cubeAssets + ".taxonomy_super_category_label"}},
-		{ID: "os", Name: "Operating system", Plural: "operating systems", Fields: []string{cubeAssets + ".os_type"}},
-		{ID: "source", Name: "Found by", Plural: "sources", Fields: []string{cubeAssets + ".provider_label"}},
-		{ID: "where", Name: "Cloud or on-premises", Plural: "places", Fields: []string{cubeAssets + ".deploymentContext"}},
-		{ID: "vendor", Name: "Vendor", Plural: "vendors", Fields: []string{cubeAssets + ".vendor"}},
+		{ID: "os", Name: "Operating system", Plural: "operating systems", Fields: []string{cubeAssets + ".os_type"}, PortalField: "asset.OSType", PortalOp: "IN"},
+		{ID: "source", Name: "Found by", Plural: "sources", Fields: []string{cubeAssets + ".provider_label"}, PortalField: "asset.Providers", PortalOp: "CONTAINS"},
+		{ID: "where", Name: "Cloud or on-premises", Plural: "places", Fields: []string{cubeAssets + ".deploymentContext"}, PortalField: "asset.LocationType", PortalOp: "IN"},
+		{ID: "vendor", Name: "Vendor", Plural: "vendors", Fields: []string{cubeAssets + ".vendor"}, PortalField: "asset.Vendor", PortalOp: "IN"},
 		{ID: "region", Name: "Region", Plural: "regions", Fields: []string{cubeAssets + ".region_label"}},
 		// Several values per asset, so one count each (see chartBucket).
 		{ID: "problem", Name: "Problem", Fields: []string{cubeAssets + ".insight_classifications_label"},
-			Buckets: []string{"Noncompliant", "Unregistered", "Zombie", "Lifecycle"}},
+			Buckets: []string{"Noncompliant", "Unregistered", "Zombie", "Lifecycle"}, PortalField: "asset.Classifications", PortalOp: "IN"},
 		{ID: "missing", Name: "Missing record", Fields: []string{cubeAssets + ".insight_indicators_label"},
-			Buckets: []string{"DNS Forward Record", "DNS Pointer Record", "IPAM"}},
+			Buckets: []string{"DNS Forward Record", "DNS Pointer Record", "IPAM"}, PortalField: "asset.MissingRecords", PortalOp: "IN"},
 		{ID: "none", Name: "Nothing, one total"},
 	},
 	Windows: []chartChoice{
@@ -571,7 +577,11 @@ func ChartOptions() map[string]any {
 	choices := func(xs []chartChoice) []map[string]any {
 		out := make([]map[string]any, 0, len(xs))
 		for _, x := range xs {
-			out = append(out, map[string]any{"id": x.ID, "name": x.Name, "plural": x.Plural, "fields": x.Fields, "value": x.Value, "buckets": x.Buckets})
+			m := map[string]any{"id": x.ID, "name": x.Name, "plural": x.Plural, "fields": x.Fields, "value": x.Value, "buckets": x.Buckets}
+			if x.PortalField != "" {
+				m["portal"] = map[string]string{"field": x.PortalField, "op": x.PortalOp}
+			}
+			out = append(out, m)
 		}
 		return out
 	}

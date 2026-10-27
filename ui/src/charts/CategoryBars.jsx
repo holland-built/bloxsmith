@@ -51,6 +51,7 @@ export default function CategoryBars({
   minTickGap,
   horizontal = false,
   values = false,
+  barHref,
 }) {
   // One decimal, except below 1, where that would print a real 0.04 as 0.
   const fmt = (v) =>
@@ -60,6 +61,15 @@ export default function CategoryBars({
   const valueLabel = values ? (
     <LabelList dataKey={yKey} position={horizontal ? 'right' : 'top'} formatter={fmt} fill="var(--color-tick)" className="text-note tabular-nums" />
   ) : null
+  // Build a chart's asset bars open the Infoblox Portal on those assets. A bar
+  // with no link (a blank value, a split the portal has no field for) is not
+  // clickable. ChartBuilder lists the same links as real links for keyboards.
+  const hrefOf = (entry) => (barHref ? barHref(entry?.payload ?? entry) : null)
+  const open = (entry) => {
+    const u = hrefOf(entry)
+    if (u) window.open(u, '_blank', 'noopener,noreferrer')
+  }
+  const cellStyle = (d) => (hrefOf(d) ? { cursor: 'pointer' } : undefined)
   const summary = describePoints(
     (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d[xKey]) : d[xKey], value: d[yKey] })),
     unit,
@@ -87,8 +97,8 @@ export default function CategoryBars({
             tickLine={false}
           />
           <Tooltip content={<ChartTip name={unit} />} />
-          <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0}>
-            {fill ? null : data.map((d) => <Cell key={d[xKey]} fill={d.color} />)}
+          <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0} onClick={barHref ? open : undefined}>
+            {data.map((d) => <Cell key={d[xKey]} fill={fill ?? d.color} style={cellStyle(d)} />)}
             {valueLabel}
           </Bar>
         </BarChart>
@@ -115,10 +125,8 @@ export default function CategoryBars({
         {/* The bar's own category is the hover's first line, so the number
             underneath only needs its unit. */}
         <Tooltip content={<ChartTip name={unit} />} />
-        <Bar dataKey={yKey} fill={fill} radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0}>
-          {fill
-            ? null
-            : data.map((d) => <Cell key={d[xKey]} fill={d.color} />)}
+        <Bar dataKey={yKey} fill={fill} radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0} onClick={barHref ? open : undefined}>
+          {data.map((d) => <Cell key={d[xKey]} fill={fill ?? d.color} style={cellStyle(d)} />)}
           {valueLabel}
         </Bar>
       </BarChart>

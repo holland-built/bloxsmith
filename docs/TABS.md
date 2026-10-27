@@ -343,6 +343,8 @@ Pick **No, one total** under Over time to show the count as one large number. Na
 
 The chart type follows from the picks. The sentence above the chart says what it shows. The app builds the query from a fixed list, sends it to your Infoblox account and draws what comes back. **How this chart was made** lists the picks in short lines; open **The query as sent** to see the query word for word and the first rows Infoblox returned, so every number can be checked. **Download as CSV** saves every row Infoblox sent back as a spreadsheet file.
 
+**Open these assets in Infoblox** appears under an asset chart. It opens the Infoblox Portal's Asset Inventory in a new tab with the same filter filled in; press **Apply** there. Click a bar, or open **Open one of the bars**, to see just that bar's assets. The portal opens on whichever account your browser last used, so switch it to the same account as this app or the counts won't match. Bars for a blank value ("Not reported") and splits the portal has no filter for (Category, Region) have no link.
+
 **Add to a page** puts the chart on Overview, DNS, Security, Network or Infra under a name you choose. It becomes an ordinary panel there: Arrange panels moves or hides it, and **Remove from this page** in its About (ⓘ) takes it off. Only the picks are saved, so the chart is redrawn from your Infoblox account each time the page opens, and from whichever account is active. Saved charts are kept on this machine, with the panel layouts, and every account sees the same ones.
 
 **Show cube names** swaps the plain names for the real cube and field names, for anyone who wants to copy them. The setting is kept in this browser.
