@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isSample, knownTotal, sampleCountLabel, sampleScopeNote, totalEventsTile } from './sampleCount.js'
+import { isSample, knownTotal, sampleCountLabel, sampleScopeNote, sampleSince, totalEventsTile } from './sampleCount.js'
 
 const COMPLETE = { returned: 7, truncated: false, total: 7 }
 const CAPPED_WITH_TOTAL = { returned: 50, truncated: true, total: 1204 }
@@ -99,4 +99,17 @@ test('an incoherent payload is not rescued here — the server drops bad totals'
   // as given rather than silently repaired, so the bug is visible at its
   // source instead of being masked in two places.
   assert.equal(sampleCountLabel({ returned: 50, truncated: true, total: 3 }, 'events'), '50 of 3 events')
+})
+
+test('sampleSince names the oldest event time, or null with none', () => {
+  const now = new Date(2026, 9, 27, 23, 5)
+  const at = (h, m) => new Date(2026, 9, 27, h, m).toISOString()
+  const data = { events: [{ event_time: at(23, 1) }, { event_time: at(22, 47) }, { event_time: 'junk' }] }
+  const want = new Date(2026, 9, 27, 22, 47).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  assert.equal(sampleSince(data, now), want)
+  assert.equal(sampleSince({ events: [] }, now), null)
+  assert.equal(sampleSince(null, now), null)
+  // An oldest event on another day carries its date.
+  const older = sampleSince({ events: [{ event_time: new Date(2026, 9, 25, 9, 0).toISOString() }] }, now)
+  assert.match(older, /25/)
 })

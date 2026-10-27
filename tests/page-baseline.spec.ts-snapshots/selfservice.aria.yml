@@ -1,4 +1,15 @@
 - main "Self-Service tab":
+  - navigation "On this page":
+    - paragraph: On this page
+    - list:
+      - listitem:
+        - button "Allocate Address"
+      - listitem:
+        - button "Create DNS Record"
+      - listitem:
+        - button "Manage Records"
+      - listitem:
+        - button "Manage Addresses"
   - heading "Self-Service" [level=1]
   - paragraph:
     - text: "The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a record to an existing DNS zone. Preview checks the request against the server; Apply commits it."
@@ -8,16 +19,22 @@
   - text: pick space → block → subnet
   - 'button "About: Allocate Address"': "About: ⓘ"
   - 'button "Options: Allocate Address"'
-  - text: IP Space
-  - combobox "IP Space":
-    - option "Select space…" [selected]
-    - option "Baseline Space"
+  - group "IP Space":
+    - text: ""
+    - searchbox "Search IP Space"
+    - status
+    - combobox "IP Space":
+      - option "Select space…" [selected]
+      - option "Baseline Space"
   - text: Block
   - combobox "Block" [disabled]:
     - option "Any block" [selected]
-  - text: Subnet
-  - combobox "Subnet" [disabled]:
-    - option "Select subnet…" [selected]
+  - group "Subnet":
+    - text: ""
+    - searchbox "Search Subnet" [disabled]
+    - status
+    - combobox "Subnet" [disabled]:
+      - option "Select subnet…" [selected]
   - text: Count
   - spinbutton "Count": "1"
   - text: Name (optional)

@@ -84,7 +84,7 @@ export function HeadlineStrip({ items, label }) {
           <>
             <span className="text-note text-muted">{it.label}</span>
             <span className="text-figure font-semibold tabular-nums mt-1" style={tone ? { color: TONE[tone].dot } : undefined}>
-              {it.value == null ? '—' : it.value}
+              {it.value == null ? (it.loading ? <span className="text-copy font-normal text-muted">Loading…</span> : '—') : it.value}
               {it.unit ? <span className="text-note font-normal text-muted"> {it.unit}</span> : null}
             </span>
             {it.note ? <span className="text-note text-muted mt-auto pt-1">{it.note}</span> : null}

@@ -3,7 +3,7 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skel
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { sampleCountLabel, sampleScopeNote } from '../lib/sampleCount.js'
+import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 
@@ -198,6 +198,9 @@ function SecurityToday({ sec, panelId }) {
   // "50 threats blocked this hour". Measured live that day, the cap was being
   // hit. The heading now names the sample and this line names its scope.
   const scopeNote = sampleScopeNote(sec.data, 'events')
+  // When the sample starts, so a figure that moves between loads reads as a
+  // moving window rather than a change in the day.
+  const since = scopeNote ? sampleSince(sec.data) : null
 
   return (
     <Card
@@ -224,6 +227,7 @@ function SecurityToday({ sec, panelId }) {
             ))}
           </dl>
           {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
+          {since && <div className="text-note text-dim">The oldest is from {since}.</div>}
         </>
       )}
     </Card>

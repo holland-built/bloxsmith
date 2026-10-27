@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
 
@@ -34,6 +34,10 @@ import { chartA11y, describePoints } from '../lib/chartSummary.js'
 // so every tick in the app is --text-note and there is nothing left for a
 // caller to choose. Density is what those two callers actually wanted, and
 // minTickGap already says that without also making the text smaller.
+//
+// `values` is Build a chart's: it prints each bar's number on the bar and
+// keeps a tiny bar a few pixels wide. Without it one big bar hid the rest, so
+// a top 10 looked like a single row with three blank names under it.
 export default function CategoryBars({
   label,
   data,
@@ -46,7 +50,16 @@ export default function CategoryBars({
   fill,
   minTickGap,
   horizontal = false,
+  values = false,
 }) {
+  // One decimal, except below 1, where that would print a real 0.04 as 0.
+  const fmt = (v) =>
+    typeof v !== 'number' ? v
+      : Math.abs(v) > 0 && Math.abs(v) < 1 ? v.toLocaleString(undefined, { maximumSignificantDigits: 2 })
+        : v.toLocaleString(undefined, { maximumFractionDigits: 1 })
+  const valueLabel = values ? (
+    <LabelList dataKey={yKey} position={horizontal ? 'right' : 'top'} formatter={fmt} fill="var(--color-tick)" className="text-note tabular-nums" />
+  ) : null
   const summary = describePoints(
     (data ?? []).map((d) => ({ label: tickFormat ? tickFormat(d[xKey]) : d[xKey], value: d[yKey] })),
     unit,
@@ -60,7 +73,7 @@ export default function CategoryBars({
     const labelWidth = Math.min(260, longest * 7 + 12)
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart layout="vertical" data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
+        <BarChart layout="vertical" data={data} margin={{ top: 4, right: values ? 56 : 12, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
           <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" hide />
           <YAxis
@@ -74,8 +87,9 @@ export default function CategoryBars({
             tickLine={false}
           />
           <Tooltip content={<ChartTip name={unit} />} />
-          <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false}>
+          <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0}>
             {fill ? null : data.map((d) => <Cell key={d[xKey]} fill={d.color} />)}
+            {valueLabel}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -83,7 +97,7 @@ export default function CategoryBars({
   }
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
+      <BarChart data={data} margin={{ top: values ? 18 : 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey={xKey}
@@ -101,10 +115,11 @@ export default function CategoryBars({
         {/* The bar's own category is the hover's first line, so the number
             underneath only needs its unit. */}
         <Tooltip content={<ChartTip name={unit} />} />
-        <Bar dataKey={yKey} fill={fill} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+        <Bar dataKey={yKey} fill={fill} radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0}>
           {fill
             ? null
             : data.map((d) => <Cell key={d[xKey]} fill={d.color} />)}
+          {valueLabel}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
