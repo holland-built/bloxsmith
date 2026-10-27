@@ -38,6 +38,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
   const [statusError, setStatusError] = useState(false)
   const [accounts, setAccounts] = useState([])
   const [accountsError, setAccountsError] = useState(null)
+  // 401/403 from the server's account list: the key lacks the scope. Not a
+  // fault, so it is said calmly; any other failure keeps the red warning.
+  const [accountsNoScope, setAccountsNoScope] = useState(false)
   // /api/accounts returns {accounts, active} and the active id was being
   // dropped, which is why the picker could not show which one you were on.
   const [activeAccount, setActiveAccount] = useState('')
@@ -97,8 +100,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
         setAccounts(d.accounts || [])
         setActiveAccount(d.active || '')
         setAccountsError(d && d.error ? d.error : null)
+        setAccountsNoScope(!!(d && d.error && (d.status === 401 || d.status === 403)))
       })
-      .catch(() => setAccountsError('network error'))
+      .catch(() => { setAccountsError('network error'); setAccountsNoScope(false) })
   }
 
   useEffect(() => { load() }, [])
@@ -534,7 +538,15 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
                 {accountsError ? (
                   <div className="mb-4">
-                    <FeedUnavailable label="Account switching unavailable" reason={accountsError} />
+                    {accountsNoScope ? (
+                      // Not red: the key simply lacks the scope, and switching
+                      // between the connections listed above still works.
+                      <p className="text-note text-muted">
+                        This key can't list the other Infoblox accounts it may reach, so you can't pick one of those here. Switching between the connections above still works.
+                      </p>
+                    ) : (
+                      <FeedUnavailable label="Account switching unavailable" reason={accountsError} onRetry={load} />
+                    )}
                   </div>
                 ) : accounts.length > 0 && (
                   <>

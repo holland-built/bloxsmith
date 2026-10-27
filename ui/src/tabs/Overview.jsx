@@ -7,6 +7,7 @@ import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { alarmTone, cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
+import { sampleSince } from '../lib/sampleCount.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 
@@ -180,7 +181,8 @@ export default function Overview() {
 
 // The numbers across the top. A tile jumps to the panel that explains it, or
 // opens the tab that does when the detail is not on this page. A figure that is
-// loading or failed is null, which the strip shows as a dash, and one whose
+// loading or failed is null; the strip says Loading… while its feed is
+// loading and shows a dash once it has failed, and one whose
 // feed is down also says "unavailable": a dead feed is never read as "none".
 //
 // Three of these stood in a panel of their own ("Leases & Subnets") with a
@@ -231,24 +233,24 @@ function headlines(dns, data, sec, sliceStatus) {
   const secCrit = secOk ? sec.data.counts?.critical ?? null : null
   const secHigh = secOk ? sec.data.counts?.high ?? null : null
   const secBad = secCrit === null || secHigh === null ? null : secCrit + secHigh
-  const secNote = !sec.loading && !secOk ? 'unavailable' : secOk && sec.data.truncated ? `in the latest ${sec.data.returned} events` : null
+  const secNote = !sec.loading && !secOk ? 'unavailable' : secOk && sec.data.truncated ? `in the latest ${sec.data.returned} events${sampleSince(sec.data) ? `, since ${sampleSince(sec.data)}` : ''}` : null
 
   const fmt = (v) => (v == null ? null : v.toLocaleString())
   const zeroIsUnknown = (tone, partial) => (partial && tone === 'ok' ? undefined : tone)
   return [
-    { panelId: 'dns-hero', label: 'DNS queries', value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec' },
-    { panelId: 'host-status', label: 'Hosts', value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null },
+    { panelId: 'dns-hero', label: 'DNS queries', loading: dns.loading, value: Number.isFinite(qps) ? (qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)) : null, unit: 'per sec' },
+    { panelId: 'host-status', label: 'Hosts', loading: !settled, value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null },
     // Green needs the whole estate: no offline host among the ones loaded says
     // nothing about the ones that were not. Red does not: one is enough.
-    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
+    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, loading: !settled, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
     {
       // The same rule: a zero counted over loaded rows is not an all-clear.
-      href: `#network?minUtil=${UTIL_CRIT}`, label: critLabel, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
+      href: `#network?minUtil=${UTIL_CRIT}`, label: critLabel, loading: !settled, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
       note: subnetsDown ? 'unavailable' : bandOk ? `${(totals.subnetsWarn - totals.subnetsCrit).toLocaleString()} at ${UTIL_WARN}–${UTIL_CRIT - 1}%` : null,
     },
-    { href: '#network?focus=leases', label: 'Active Leases', value: fmt(activeLeases), note: leasesDown ? 'unavailable' : null },
+    { href: '#network?focus=leases', label: 'Active Leases', loading: !settled, value: fmt(activeLeases), note: leasesDown ? 'unavailable' : null },
     {
-      href: '#security', label: 'Security events', value: fmt(secBad), unit: 'critical or high',
+      href: '#security', label: 'Security events', loading: sec.loading, value: fmt(secBad), unit: 'critical or high',
       tone: secBad === null ? undefined : secCrit > 0 ? 'crit' : secHigh > 0 ? 'warn' : 'ok', note: secNote,
     },
   ]

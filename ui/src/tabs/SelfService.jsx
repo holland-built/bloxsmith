@@ -8,19 +8,29 @@
 // attribution itself: this file is minified into go/web/, so nothing here reaches
 // a user. NOTICE.md ships inside the release archive and the container image, and
 // that is what carries the notice.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import FilterSelect from '../components/FilterSelect.jsx'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
 const EDITABLE_RTYPES = ['A', 'AAAA', 'CNAME', 'PTR', 'NS', 'DNAME', 'TXT', 'MX', 'SRV', 'CAA']
 
-function Field({ label, children }) {
-  return (
-    <label className="flex flex-col gap-1 text-note text-muted">
+// A search box plus its dropdown is two controls, so that field is a named
+// group rather than one <label> wrapped around both (as in Provision).
+function Field({ label, group = false, children }) {
+  const id = useId()
+  const cls = 'flex flex-col gap-1 text-note text-muted'
+  return group ? (
+    <div role="group" aria-labelledby={id} className={cls}>
+      <span id={id}>{label}</span>
+      {children}
+    </div>
+  ) : (
+    <label className={cls}>
       {label}
       {children}
     </label>
@@ -94,6 +104,20 @@ function useWriteFlow(url) {
 
 // ---------- allocate ----------
 
+const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? ` — ${s.name}` : '')
+
+// The preview said what it would do as raw JSON. Say it as a sentence; the
+// JSON stays under Details for anyone checking the ids.
+function allocateSentence(preview, subnet, name) {
+  const rows = Array.isArray(preview) ? preview : null
+  const addrs = rows?.map((r) => r?.address).filter(Boolean) ?? []
+  if (!addrs.length) return null
+  const list = addrs.length === 1 ? addrs[0] : `${addrs.length} addresses (${addrs.join(', ')})`
+  const where = subnet ? ` in subnet ${subnetLabel(subnet)}` : ''
+  const called = name.trim() ? `, named ${name.trim()}` : ''
+  return `This will take ${list}${where}${called}.`
+}
+
 function AllocatePanel({ panelId }) {
   const spacesApi = useApi('/api/ipam/spaces')
   const [space, setSpace] = useState('')
@@ -117,15 +141,14 @@ function AllocatePanel({ panelId }) {
   return (
     <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <Field label="IP Space">
-          <select
-            className={inputCls}
+        <Field label="IP Space" group>
+          <FilterSelect
+            label="IP Space"
             value={space}
-            onChange={(e) => { setSpace(e.target.value); setBlock(''); setSubnetId(''); flow.markStale() }}
-          >
-            <option value="">Select space…</option>
-            {spaces.map((s) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
-          </select>
+            onChange={(v) => { setSpace(v); setBlock(''); setSubnetId(''); flow.markStale() }}
+            options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
+            placeholder="Select space…"
+          />
         </Field>
         <Field label="Block">
           <select
@@ -138,16 +161,15 @@ function AllocatePanel({ panelId }) {
             {blocks.map((b) => <option key={b.id} value={b.id}>{b.address || b.name || b.id}</option>)}
           </select>
         </Field>
-        <Field label="Subnet">
-          <select
-            className={inputCls}
+        <Field label="Subnet" group>
+          <FilterSelect
+            label="Subnet"
             value={subnetId}
-            onChange={(e) => { setSubnetId(e.target.value); flow.markStale() }}
+            onChange={(v) => { setSubnetId(v); flow.markStale() }}
+            options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
+            placeholder="Select subnet…"
             disabled={!space}
-          >
-            <option value="">Select subnet…</option>
-            {subnets.map((s) => <option key={s.id} value={s.id}>{(s.address || '') + (s.cidr ? `/${s.cidr}` : '')}{s.name ? ` — ${s.name}` : ''}</option>)}
-          </select>
+          />
         </Field>
         <Field label="Count">
           <input {...MACHINE_TEXT}
@@ -178,7 +200,11 @@ function AllocatePanel({ panelId }) {
         error={flow.error}
         message={flow.message}
       >
-        <PreviewBox data={flow.preview} note="preview — no address has been taken yet" />
+        <PreviewBox
+          data={flow.preview}
+          note="preview — no address has been taken yet"
+          summary={allocateSentence(flow.preview, subnets.find((s) => s.id === subnetId), name)}
+        />
       </PreviewApply>
 
       <FetchError error={spacesApi.error} stale={spaces.length > 0} />

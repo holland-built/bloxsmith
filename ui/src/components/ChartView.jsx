@@ -48,9 +48,10 @@ export default function ChartView({ label, opts, picks, rows }) {
           height={Math.max(160, data.length * 26 + 8)}
           tickFormat={wideLabel}
           horizontal
+          values
         />
       ) : (
-        <CategoryBars label={label} data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} />
+        <CategoryBars label={label} data={data} unit={unit} fill={COLORS.series} height={220} minTickGap={8} tickFormat={shortLabel} values />
       )}
     </Suspense>
   )

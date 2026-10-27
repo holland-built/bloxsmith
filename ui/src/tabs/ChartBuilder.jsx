@@ -140,6 +140,14 @@ function Pickers({ opts, picks, onPick, onPicks, onFilter, cube }) {
   )
 }
 
+// "Top 10" over four bars looks like six went missing. Say that only four
+// had anything to count.
+function FewerThanTop({ picks, rows }) {
+  if (!(picks.top > 0) || rows.length === 0 || rows.length >= picks.top) return null
+  const n = rows.length
+  return <p className="text-note text-muted mb-2">Only {n === 1 ? '1 has' : `${n} have`} anything to count, so this shows {n === 1 ? '1' : `all ${n}`}.</p>
+}
+
 function ResultPanel({ panelId, opts, picks, params, result, cube }) {
   const heading = sentence(opts, picks, cube)
   const status = result.data?.status
@@ -152,7 +160,10 @@ function ResultPanel({ panelId, opts, picks, params, result, cube }) {
       ) : (
         // label="Your" reads as "Your chart" to a screen reader; the panel
         // heading above carries the sentence.
-        <ChartView label="Your" opts={opts} picks={picks} rows={result.data?.rows ?? []} />
+        <>
+          <FewerThanTop picks={picks} rows={result.data?.rows ?? []} />
+          <ChartView label="Your" opts={opts} picks={picks} rows={result.data?.rows ?? []} />
+        </>
       )}
       {!result.loading && !result.error && (status === 'ok' || status === 'empty') && (
         // Opened to replace a panel, to change a saved chart, or neither.

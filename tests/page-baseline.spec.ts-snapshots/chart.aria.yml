@@ -8,12 +8,28 @@
   - heading "Choose" [level=2]
   - 'button "About: Choose"': "About: ⓘ"
   - 'button "Options: Choose"'
+  - text: Start from a question
+  - combobox "Start from a question":
+    - option "Choose a question…" [selected]
+    - option "Which kinds of asset have no DNS name?"
+    - option "Which kinds of asset is IPAM not tracking?"
+    - option "Where are the zombie assets found?"
+    - option "Which kinds of asset are noncompliant?"
+    - option "Who found the assets nobody could identify?"
+    - option "Who makes the IoT devices?"
+    - option "Which regions hold the cloud assets?"
+    - option "What problems do on-premises assets have?"
+    - option "What kinds of asset appeared this month?"
+    - option "Which policies blocked the most this week?"
+    - option "Which names were looked up but don't exist?"
   - text: What to count
   - combobox "What to count":
     - option "DNS queries" [selected]
     - option "Security hits"
     - option "DNS queries per second"
     - option "DHCP lease changes"
+    - option "Assets"
+    - option "New assets still held"
   - text: Split by
   - combobox "Split by":
     - option "Device" [selected]
@@ -27,6 +43,9 @@
     - option /Last \d+ hours/
     - option "Last 7 days" [selected]
     - option /Last \d+ days/
+    - option "This month"
+    - option "Last month"
+    - option /Last \d+ days/
   - text: Over time
   - combobox "Over time":
     - option "No, one total" [selected]
@@ -35,10 +54,18 @@
     - option "Top 5"
     - option /Top \d+/ [selected]
     - option /Top \d+/
+  - text: Only show
+  - combobox "Only show":
+    - option "Everything" [selected]
+    - option "Record type"
+    - option "Domain"
+    - option "Answer"
   - heading /Top \d+ devices by DNS queries, last 7 days/ [level=2]
   - 'button /About: Top \d+ devices by DNS queries, last 7 days/': "About: ⓘ"
   - 'button /Options: Top \d+ devices by DNS queries, last 7 days/'
-  - application "Your chart": baseline-ws-1 baseline-ws-2
+  - paragraph: Only 2 have anything to count, so this shows all 2.
+  - application "Your chart": /baseline-ws-1 baseline-ws-2 \d+,\d+ \d+,\d+/
+  - button "Add to a page"
   - heading "How this chart was made" [level=2]
   - 'button "About: How this chart was made"': "About: ⓘ"
   - 'button "Options: How this chart was made"'
@@ -46,6 +73,7 @@
     - text: Sent to
     - code: /api/cubejs/v1/query
     - text: on your Infoblox account. No AI was used.
+  - button "Download all 2 rows as CSV"
   - term: Counted
   - definition: DNS queries
   - term: Split by

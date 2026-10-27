@@ -27,7 +27,8 @@ test.beforeEach(async ({ page }) => {
 test('while the new space\'s blocks load, the Block picker offers none of the old space\'s', async ({ page }) => {
   await page.goto('/#selfservice');
   const panel = page.locator('[data-panel-id="selfservice-allocate"]');
-  const space = panel.getByLabel('IP Space');
+  // The dropdown itself: the IP Space field also has a search box now.
+  const space = panel.getByRole('combobox', { name: 'IP Space' });
   const block = panel.getByLabel('Block');
   await space.selectOption({ label: 'Amsterdam Lab' });
   await expect(block.locator('option', { hasText: '10.1.0.0/16' })).toHaveCount(1);

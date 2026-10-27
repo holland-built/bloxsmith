@@ -118,3 +118,21 @@ export function totalEventsTile(data, totalLabel, sampleLabel) {
   if (!isSample(data)) return { label: totalLabel, value: returned }
   return { label: sampleLabel, value: returned }
 }
+
+/**
+ * The time the oldest of a sampled feed's events happened, as a short clock
+ * time ("10:47 PM"), or null when there are no times to read.
+ *
+ * "20 in the latest 50 events" read as a total, and the next load's 4 read as
+ * good news. Saying when the 50 start ("since 10:47 PM") makes it plain that
+ * the window is minutes long and moves.
+ */
+export function sampleSince(data, now = new Date()) {
+  const times = (data?.events ?? []).map((e) => Date.parse(e?.event_time)).filter((t) => Number.isFinite(t))
+  if (!times.length) return null
+  const oldest = new Date(Math.min(...times))
+  const sameDay = oldest.toDateString() === now.toDateString()
+  return sameDay
+    ? oldest.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : oldest.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}

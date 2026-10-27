@@ -176,8 +176,8 @@ test('the headline tiles are the same height before and after /api/data lands', 
 
   const strip = page.getByRole('list', { name: 'Headline numbers' });
   await expect(strip.getByRole('listitem')).toHaveCount(6);
-  // A dash, not a zero and not a skeleton: the tile is already its final box.
-  await expect(strip.getByRole('button', { name: 'Hosts —', exact: true })).toBeVisible();
+  // "Loading…", not a zero and not a skeleton: the tile is already its final box.
+  await expect(strip.getByRole('button', { name: 'Hosts Loading…', exact: true })).toBeVisible();
   const loading = (await strip.boundingBox())!.height;
 
   release();

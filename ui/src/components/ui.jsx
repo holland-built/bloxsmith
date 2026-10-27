@@ -3009,14 +3009,27 @@ export function PreviewApply({
 
 // Renders a previewed payload. Never styled as success — a preview is a
 // statement of intent, not a result, and green reads as "it worked".
-export function PreviewBox({ data, note = 'preview — nothing applied yet' }) {
+// With a summary, the plain sentence leads and the raw reply folds under
+// Details; without one, the raw reply shows as before.
+export function PreviewBox({ data, note = 'preview — nothing applied yet', summary }) {
   if (data == null) return null
+  const raw = (
+    <pre className="text-note whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
+      {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+    </pre>
+  )
   return (
     <div className="rounded-control border border-border bg-field p-3">
       <div className="text-note text-dim mb-1.5">{note}</div>
-      <pre className="text-note whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
-        {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
-      </pre>
+      {summary ? (
+        <>
+          <p className="text-copy text-txt">{summary}</p>
+          <details className="mt-2">
+            <summary className="text-note text-muted cursor-pointer">Details</summary>
+            {raw}
+          </details>
+        </>
+      ) : raw}
     </div>
   )
 }
@@ -3103,8 +3116,14 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
   )
 }
 
+// A blank grey box reads as broken, so the placeholder says what it is doing.
 export function Skeleton({ h = 140 }) {
-  return <div className="animate-pulse motion-reduce:animate-none bg-line rounded-control w-full" style={{ height: h }} />
+  return (
+    <div role="status" className="relative w-full" style={{ height: h }}>
+      <div className="absolute inset-0 animate-pulse motion-reduce:animate-none bg-line rounded-control" />
+      <span className="absolute inset-0 grid place-items-center text-note text-muted">Loading…</span>
+    </div>
+  )
 }
 
 // Where amber and red start is lib/utilBands.js, the one place every page
