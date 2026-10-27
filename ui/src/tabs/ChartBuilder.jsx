@@ -9,7 +9,9 @@ import { useHashParams } from '../lib/hash.js'
 import PANEL_SOURCES from '../lib/panelSources.json'
 import {
   DEFAULT_PICKS, chartUrl, choiceName, choicesFor, describePicks, picksFromParams, sampleTable, sentence, settlePicks, toCsv, pickOne, filterFields, valueLabel, isBucketSplit,
+  chartData, rawByName,
 } from '../lib/chartBuilder.js'
+import { portalLink } from '../lib/portalLink.js'
 
 // Build a chart: plain menus in, one Cube.js query out, a chart of what the
 // tenant sent back. No model is involved, so every number came from Infoblox.
@@ -148,6 +150,49 @@ function FewerThanTop({ picks, rows }) {
   return <p className="text-note text-muted mb-2">Only {n === 1 ? '1 has' : `${n} have`} anything to count, so this shows {n === 1 ? '1' : `all ${n}`}.</p>
 }
 
+// Asset bars open the Infoblox Portal on the assets they count. Only here,
+// where OpenInInfoblox lists the same links for a keyboard, so a chart saved
+// onto a page has no mouse-only control.
+function barHrefFor(opts, picks, rows, cube) {
+  if (picks.count !== 'assets') return undefined
+  const raws = rawByName(opts, picks, rows, cube)
+  return (d) => (raws.has(d?.name) ? portalLink(opts, picks, raws.get(d.name)) : null)
+}
+
+// The same assets in the Infoblox Portal: the whole chart, and each bar on
+// its own (the bars are clickable too; these are the links a keyboard and a
+// screen reader can reach). The portal fills the filter in and waits for Apply.
+function OpenInInfoblox({ opts, picks, rows, cube }) {
+  // The portal opens on whichever Infoblox account the browser last used, and
+  // another account's counts look like a broken link (0 laptops where this
+  // app counted 1,128, seen 2026-10-27). So the account to pick is named.
+  const vault = useApi('/api/vault/status')
+  const account = vault.data?.tenants?.find((t) => t.id === vault.data?.active)?.label
+  const all = portalLink(opts, picks)
+  if (!all) return null
+  const raws = rawByName(opts, picks, rows, cube)
+  const bars = chartData(opts, picks, rows, cube)
+    .map((d) => ({ name: d.name, href: raws.has(d.name) ? portalLink(opts, picks, raws.get(d.name)) : null }))
+    .filter((b) => b.href)
+  const link = 'text-accent underline'
+  return (
+    <div className="mt-3 text-note text-muted">
+      <a href={all} target="_blank" rel="noopener noreferrer" className={`${link} text-copy`}>Open these assets in Infoblox</a>
+      {' '}· opens the Infoblox Portal in a new tab. Press Apply there, and check the portal is on {account ? <b className="text-txt">{account}</b> : 'the same account as this app'}, or the counts won't match.
+      {bars.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer">Open one {bars.length === 1 ? 'bar' : `of the ${bars.length} bars`} in Infoblox</summary>
+          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            {bars.map((b) => (
+              <li key={b.name}><a href={b.href} target="_blank" rel="noopener noreferrer" className={link}>{b.name}</a></li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  )
+}
+
 function ResultPanel({ panelId, opts, picks, params, result, cube }) {
   const heading = sentence(opts, picks, cube)
   const status = result.data?.status
@@ -162,7 +207,8 @@ function ResultPanel({ panelId, opts, picks, params, result, cube }) {
         // heading above carries the sentence.
         <>
           <FewerThanTop picks={picks} rows={result.data?.rows ?? []} />
-          <ChartView label="Your" opts={opts} picks={picks} rows={result.data?.rows ?? []} />
+          <ChartView label="Your" opts={opts} picks={picks} rows={result.data?.rows ?? []} barHref={barHrefFor(opts, picks, result.data?.rows ?? [], cube)} />
+          <OpenInInfoblox opts={opts} picks={picks} rows={result.data?.rows ?? []} cube={cube} />
         </>
       )}
       {!result.loading && !result.error && (status === 'ok' || status === 'empty') && (

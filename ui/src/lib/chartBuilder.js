@@ -373,3 +373,24 @@ function pickParams(picks) {
 export function chartUrl(picks) {
   return `/api/chart?${pickParams(picks)}`
 }
+
+/**
+ * Each bar's raw value, by the name the chart shows, for a one-field split.
+ * A name two raw values share (a blank and a missing value both read "Not
+ * reported") has no single value to send, so it is left out.
+ */
+export function rawByName(opts, picks, rows, cube) {
+  const split = choice(opts, 'split', picks.split)
+  const fields = split?.fields ?? []
+  if (fields.length !== 1) return new Map()
+  const seen = new Map()
+  for (const r of rows) {
+    const raw = r[fields[0]] ?? ''
+    const name = String(valueName(opts, fields[0], raw, cube))
+    if (!seen.has(name)) seen.set(name, new Set())
+    seen.get(name).add(String(raw))
+  }
+  const out = new Map()
+  for (const [name, raws] of seen) if (raws.size === 1) out.set(name, [...raws][0])
+  return out
+}

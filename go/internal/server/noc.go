@@ -274,7 +274,14 @@ func (d *Deps) threatLookup(w http.ResponseWriter, r *http.Request) {
 // names and every allowed combination. No tenant call.
 func (d *Deps) chartOptions(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/chart/options")
-	d.json(w, r, 200, dashboard.ChartOptions())
+	opts := dashboard.ChartOptions()
+	// Where "Open in Infoblox" sends a bar: this server's own Infoblox
+	// address (INFOBLOX_URL), so a tenant on another region opens its own
+	// portal. Left out when there is no client to ask.
+	if d.Rest != nil {
+		opts["portal"] = d.Rest.BaseURL()
+	}
+	d.json(w, r, 200, opts)
 }
 
 // chart is GET /api/chart?count=&split=&window=&over=&top=: one chart from

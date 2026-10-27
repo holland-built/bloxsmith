@@ -3349,6 +3349,10 @@
       "id": "atype",
       "name": "Asset type",
       "plural": "asset types",
+      "portal": {
+        "field": "asset.Type",
+        "op": "IN"
+      },
       "value": ""
     },
     {
@@ -3369,6 +3373,10 @@
       "id": "os",
       "name": "Operating system",
       "plural": "operating systems",
+      "portal": {
+        "field": "asset.OSType",
+        "op": "IN"
+      },
       "value": ""
     },
     {
@@ -3379,6 +3387,10 @@
       "id": "source",
       "name": "Found by",
       "plural": "sources",
+      "portal": {
+        "field": "asset.Providers",
+        "op": "CONTAINS"
+      },
       "value": ""
     },
     {
@@ -3389,6 +3401,10 @@
       "id": "where",
       "name": "Cloud or on-premises",
       "plural": "places",
+      "portal": {
+        "field": "asset.LocationType",
+        "op": "IN"
+      },
       "value": ""
     },
     {
@@ -3399,6 +3415,10 @@
       "id": "vendor",
       "name": "Vendor",
       "plural": "vendors",
+      "portal": {
+        "field": "asset.Vendor",
+        "op": "IN"
+      },
       "value": ""
     },
     {
@@ -3424,6 +3444,10 @@
       "id": "problem",
       "name": "Problem",
       "plural": "",
+      "portal": {
+        "field": "asset.Classifications",
+        "op": "IN"
+      },
       "value": ""
     },
     {
@@ -3438,6 +3462,10 @@
       "id": "missing",
       "name": "Missing record",
       "plural": "",
+      "portal": {
+        "field": "asset.MissingRecords",
+        "op": "IN"
+      },
       "value": ""
     },
     {
