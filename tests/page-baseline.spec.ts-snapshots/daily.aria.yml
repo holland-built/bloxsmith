@@ -8,7 +8,7 @@
   - 'button "Options: Open Issues"'
   - button /1 Subnets ≥\d+% Util \/\d+–\/\d+ links are left out\./
   - button "3 Hosts Not Online 3 hosts loaded. 1 ok, 1 degraded, 1 offline."
-  - 'button "1 DNS Zones w/ Issues Most common: low ttl (1)."'
+  - 'button "1 DNS zones needing attention Most common: low ttl (1)."'
   - heading "Security Today" [level=2]
   - text: 2 events
   - 'button "About: Security Today"': "About: ⓘ"

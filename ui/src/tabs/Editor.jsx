@@ -8,16 +8,16 @@ const inputCls = `${FIELD_CLS} w-full`
 const FIELD_SPECS = {
   dns_zone: {
     label: 'DNS Zone', endpoint: '/api/edit/dns_zone', fields: [
-      { key: 'fqdn', label: 'FQDN', kind: 'text', placeholder: 'zone.example.com.', required: true },
-      { key: 'view', label: 'View ID', kind: 'text', placeholder: 'view id', required: true },
+      { key: 'fqdn', label: 'Zone name', kind: 'text', placeholder: 'zone.example.com.', required: true },
+      { key: 'view', label: 'DNS view ID', kind: 'text', placeholder: 'view id', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text', placeholder: 'env=prod,team=noc' },
     ],
   },
   subnet: {
     label: 'Subnet', endpoint: '/api/edit/subnet', fields: [
-      { key: 'block_id', label: 'Address Block ID', kind: 'text', placeholder: 'block id', required: true },
-      { key: 'cidr', label: 'CIDR (prefix length)', kind: 'number', placeholder: '24', required: true },
+      { key: 'block_id', label: 'Address block ID', kind: 'text', placeholder: 'block id', required: true },
+      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '24', required: true },
       { key: 'name', label: 'Name', kind: 'text' },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
@@ -26,7 +26,7 @@ const FIELD_SPECS = {
   address_block: {
     label: 'Address Block', endpoint: '/api/edit/address_block', fields: [
       { key: 'address', label: 'Address', kind: 'text', placeholder: '10.20.0.0', required: true },
-      { key: 'cidr', label: 'CIDR (prefix length)', kind: 'number', placeholder: '16', required: true },
+      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '16', required: true },
       { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
@@ -52,7 +52,7 @@ const FIELD_SPECS = {
       { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
       { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
       { key: 'address', label: 'Block address', kind: 'text', placeholder: '10.20.0.0' },
-      { key: 'cidr', label: 'CIDR (prefix length)', kind: 'number', placeholder: '16' },
+      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '16' },
       { key: 'status', label: 'Status', kind: 'text', placeholder: 'available' },
       { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space' },
     ],
@@ -233,8 +233,8 @@ export default function Editor() {
     <div className="max-w-[820px] p-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
       <TabIntro anchor="editor">
-        Direct create, update, and delete on individual DNS/DHCP objects. Blank Object ID creates; pasting an ID
-        switches the form to update and reveals Delete. Preview first, then Apply. Editor-created subnets and
+        Make, change or delete one DNS or DHCP item at a time. Leave the ID box empty to make a new one; paste
+        an existing item's ID to change it, which also shows Delete. Preview first, then Apply. Editor-created subnets and
         address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
       </TabIntro>
 
@@ -257,7 +257,7 @@ export default function Editor() {
         <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
         <div data-form-cols="" className="flex flex-col gap-3">
           <label data-field="" className="text-note text-muted flex flex-col gap-1">
-            <span>Object ID (leave blank to create new)</span>
+            <span>ID of an existing one (leave blank to make a new one)</span>
             <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
           </label>
 

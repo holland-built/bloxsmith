@@ -4,6 +4,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { categoryWord, plainMessage } from '../lib/plainWords.js'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -236,7 +237,7 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
                     read first it would say "Critical" ahead of the split. */}
                 <i aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
                 <span className="font-mono text-field-txt">{count.toLocaleString()}</span>
-                <span className="text-muted">{c.category}</span>
+                <span className="text-muted">{categoryWord(c.category)}</span>
                 <span className="text-muted">· {split ?? `worst: ${m.label.toLowerCase()}`}</span>
               </button>
             )
@@ -315,6 +316,16 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
 
 // ---------- incidents table ----------
 
+// The thing a signal is about, by name. Zone and subnet messages start with it
+// ("aws.private.: High Neg-TTL", "Windows Wireless at 80% utilization").
+function subjectOf(s) {
+  const msg = String(s.message || '')
+  if (s.entity_type === 'zone' && msg.includes(': ')) return msg.split(': ')[0]
+  if (s.entity_type === 'subnet' && / at \d+% utilization$/.test(msg)) return msg.replace(/ at \d+% utilization$/, '') || s.entity_id
+  if (s.entity_type === 'posture') return 'All DNS zones'
+  return s.entity_id || '—'
+}
+
 function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, acks, onToggleAck, onClearAcks, panelId }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
@@ -329,8 +340,10 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
         if (!q) return true
         return [s.category, s.entity_id, s.message].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
       })
-      .sort((a, b) => (Number(b.detected_at) || 0) - (Number(a.detected_at) || 0))
-  }, [signals, category, filter])
+      // Worst first, then newest: the one critical used to sit under eleven
+      // identical mediums because the order was newest only.
+      .sort((a, b) => sevRank(a.severity, COLORS) - sevRank(b.severity, COLORS) || (Number(b.detected_at) || 0) - (Number(a.detected_at) || 0))
+  }, [signals, category, filter, COLORS])
 
   const columns = [
     {
@@ -346,8 +359,10 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
         />
       ),
     },
-    { key: 'category', label: 'Category', sortable: true },
-    { key: 'entity_id', label: 'Entity', mono: true, sortable: true },
+    { key: 'category', label: 'Category', sortable: true, render: (v) => categoryWord(v) },
+    // What it is about, by name. The id stays on hover for anyone matching it
+    // against Infoblox; a zone's name is the start of its message.
+    { key: 'entity_id', label: 'What', sortable: true, render: (v, s) => <span title={v || undefined}>{subjectOf(s)}</span> },
     {
       key: 'severity',
       label: 'Severity',
@@ -355,7 +370,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       comparator: (a, b) => sevRank(a.severity, COLORS) - sevRank(b.severity, COLORS),
       render: (_v, s) => <SeverityPill severity={s.severity} />,
     },
-    { key: 'message', label: 'Message', grow: true },
+    { key: 'message', label: 'Message', grow: true, render: (v) => plainMessage(v) },
     {
       key: 'detected_at',
       label: 'Age',

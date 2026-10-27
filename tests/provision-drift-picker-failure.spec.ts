@@ -113,7 +113,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Provision / Full site — failed read vs genuine empty', () => {
-  test('a failed /api/templates read shows a fetch-error, not "no templates"', async ({ page }) => {
+  test('a failed /api/templates read shows a fetch-error, not "no site templates are installed"', async ({ page }) => {
     await stub(page, SPACES, { spaces: [SPACE] });
     await stub(page, TEMPLATES, 500);
 
@@ -122,10 +122,10 @@ test.describe('Provision / Full site — failed read vs genuine empty', () => {
 
     const request = card(page, 'Request');
     await expect(request.getByText(/could not load current data: 500/i)).toBeVisible();
-    await expect(request.getByText('no templates', { exact: true })).toHaveCount(0);
+    await expect(request.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toHaveCount(0);
   });
 
-  test('a genuinely empty /api/templates read still shows "no templates"', async ({ page }) => {
+  test('a genuinely empty /api/templates read still says no site templates are installed', async ({ page }) => {
     await stub(page, SPACES, { spaces: [SPACE] });
     await stub(page, TEMPLATES, []);
 
@@ -133,7 +133,7 @@ test.describe('Provision / Full site — failed read vs genuine empty', () => {
     await page.getByRole('button', { name: 'Full site' }).click();
 
     const request = card(page, 'Request');
-    await expect(request.getByText('no templates', { exact: true })).toBeVisible();
+    await expect(request.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toBeVisible();
     await expect(request.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 });
@@ -173,7 +173,7 @@ test.describe('Provision / Seed demo — failed read vs genuine empty', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Drift pickers — failed read vs genuine empty', () => {
-  test('a failed /api/templates read shows a fetch-error, not "no templates"', async ({ page }) => {
+  test('a failed /api/templates read shows a fetch-error, not "no site templates are installed"', async ({ page }) => {
     await stub(page, TEMPLATES, 500);
     await stub(page, SPACES, { spaces: [SPACE] });
 
@@ -181,17 +181,17 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     const check = card(page, 'Check drift');
     await expect(check.getByText(/could not load current data: 500/i)).toBeVisible();
-    await expect(check.getByText('no templates', { exact: true })).toHaveCount(0);
+    await expect(check.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toHaveCount(0);
   });
 
-  test('a genuinely empty /api/templates read still shows "no templates"', async ({ page }) => {
+  test('a genuinely empty /api/templates read still says no site templates are installed', async ({ page }) => {
     await stub(page, TEMPLATES, []);
     await stub(page, SPACES, { spaces: [SPACE] });
 
     await page.goto('/#drift');
 
     const check = card(page, 'Check drift');
-    await expect(check.getByText('no templates', { exact: true })).toBeVisible();
+    await expect(check.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toBeVisible();
     await expect(check.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 

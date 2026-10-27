@@ -202,14 +202,16 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       title="Asset Inventory"
       note="CSP discovery"
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Shrinks on a phone: at a fixed 220px the box ran off the left
+              edge of the card. */}
           <input {...MACHINE_TEXT}
             placeholder="Search by name…"
             aria-label="Search assets by name"
             value={input}
             onChange={(e) => onInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-            className={`${FIELD_CLS} w-[220px]`}
+            className={`${FIELD_CLS} min-w-0 w-full sm:w-[220px]`}
           />
           <button
             type="button"

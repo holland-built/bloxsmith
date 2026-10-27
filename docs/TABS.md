@@ -205,7 +205,7 @@ Your role is shown as a pill at the top right (`VIEWER` / `OPERATOR` / `ADMIN`).
 Carve one subnet out of an existing block.
 
 1. Pick an **IP space**, then a **block** inside it.
-2. Set the **CIDR prefix** (e.g. `24`), a **name**, and an optional comment.
+2. Set the **Size** (the prefix, e.g. `24` for 256 addresses), a **name**, and an optional comment.
 3. Optionally tick **Create matching DNS zone**.
 4. **Preview** — the log streams the plan without writing. Then **Provision**.
 
@@ -275,7 +275,7 @@ Pick an **IP space**, then a **subnet**, to list its addresses. **Release** is a
 
 Six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, and Tags (block re-tag).
 
-**How the mode is decided:** the **Object ID** field at the top.
+**How the mode is decided:** the **ID of an existing one** box at the top.
 
 - Leave it blank → the form **creates** a new object.
 - Paste an existing object ID → the form **updates** that object, and a Delete button appears.

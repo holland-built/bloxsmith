@@ -30,7 +30,7 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
 
   // Unlike the other two drill-downs in this file, this legend row does not
   // exist in the DOM until /api/data has resolved AND at least one host
-  // buckets as Offline — 'Subnets ≥90%' and 'DNS Zones w/ Issues' are static
+  // buckets as Offline — 'Subnets ≥90%' and 'DNS zones needing attention' are static
   // KPI labels present from first paint (they fall back to a "(loaded rows)"
   // variant while data is in flight, so the label text is there regardless).
   // A bare `getByText('Offline', { exact: true }).first()` only ever resolved
@@ -103,7 +103,7 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
 
 test('Daily zones-with-issues KPI drills to DNS issues-only view', async ({ page }) => {
   await page.goto('/#daily');
-  await page.getByText('DNS Zones w/ Issues').click();
+  await page.getByText('DNS zones needing attention').click();
   await expect(page).toHaveURL(/#dns\?issues=1/);
   await expect(page.getByText(/issues only/)).toBeVisible();
 });

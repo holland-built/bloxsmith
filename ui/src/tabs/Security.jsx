@@ -397,11 +397,16 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       },
     },
     { key: 'qname', label: 'Query', mono: true, grow: true, sortable: true },
-    { key: 'policy_action', label: 'Action', sortable: true },
+    // On a phone the domain was cut to three letters to make room for these
+    // two, so they give way first there (DataTable hides priority:'low' below
+    // 360px). The domain is what the row is about; these can wait for a wider
+    // screen.
+    { key: 'policy_action', label: 'Action', sortable: true, priority: 'low' },
     {
       key: 'event_time',
       label: 'Time',
       keep: true,
+      priority: 'low',
       sortable: true,
       render: (_v, r) => (
         <span

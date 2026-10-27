@@ -26,7 +26,7 @@ function incidents(opts: { count: number; signals: object[]; truncated: boolean 
 }
 
 const chip = (page: import('@playwright/test').Page) =>
-  page.locator('[data-panel-id="incidents-categories"]').getByRole('button', { name: /subnet-utilization/ });
+  page.locator('[data-panel-id="incidents-categories"]').getByRole('button', { name: /Subnet filling up/ });
 
 test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
@@ -63,5 +63,5 @@ test('a screen reader hears the split, not the old worst-severity word first', a
   const rows = [sig('subnet-utilization', 'crit', 1), sig('subnet-utilization', 'crit', 2), sig('subnet-utilization', 'warn', 3)];
   await page.route('**/api/incidents', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(incidents({ count: 3, signals: rows, truncated: false })) }));
   await page.goto('/#incidents');
-  await expect(chip(page)).toHaveAccessibleName('3 subnet-utilization · 2 critical, 1 medium');
+  await expect(chip(page)).toHaveAccessibleName('3 Subnet filling up · 2 critical, 1 medium');
 });
