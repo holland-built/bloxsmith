@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
@@ -55,6 +56,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
   const [grantBusy, setGrantBusy] = useState(false)
   const [grantErr, setGrantErr] = useState('')
 
+  // The AI provider: address and model are settings, shown as stored; the key
+  // is a secret, never returned by the server and never prefilled.
+  const [ai, setAi] = useState({ base: '', model: '', key: '', hasKey: false, busy: false, msg: '', err: '', loaded: false })
   const [add, setAdd] = useState({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })
   const [edit, setEdit] = useState(null) // { id, label, key, err, busy, test }
   // `key` is the typed secret and never anything the server sent — there is no
@@ -80,6 +84,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
         // the key itself. Merged rather than assigned so a reload cannot wipe a
         // secret the operator is part-way through typing.
         setAxur((a) => ({ ...a, stored: !!d.hasAxur }))
+        // Filled once, so a status reload cannot overwrite what is being typed.
+        setAi((a) => (a.loaded ? { ...a, hasKey: !!d.llm?.hasKey }
+          : { ...a, base: d.llm?.base_url || '', model: d.llm?.model || '', hasKey: !!d.llm?.hasKey, loaded: true }))
       })
       .catch(() => setStatusError(true))
     // Which tenant a write would land in, and whether it has been opted in.
@@ -254,6 +261,27 @@ export default function TenantManager({ onClose, onOpenHelp }) {
   }
 
   const saveAxur = () => putAxur(axur.key, 'Axur key saved.')
+
+  // Test sends the typed key to the typed address, so nothing stored is sent
+  // anywhere new (vault.LLMTest refuses a new address with the stored key).
+  // Save needs the key too: the server stores key, address and model together.
+  const aiBody = () => ({ key: ai.key, base_url: ai.base.trim(), model: ai.model.trim() })
+  const testAi = async () => {
+    setAi((a) => ({ ...a, busy: true, err: '', msg: '' }))
+    const { ok, data } = await vpost('/api/vault/llm-test', aiBody())
+    setAi((a) => ok && data.ok
+      ? { ...a, busy: false, msg: `It answered (model ${data.model}). Save to use it.` }
+      : { ...a, busy: false, err: data.error === 'LLM test failed' ? 'No answer. Check the key, the address and the model name.' : data.error || 'The test did not run.' })
+  }
+  const saveAi = async () => {
+    setAi((a) => ({ ...a, busy: true, err: '', msg: '' }))
+    const { ok, data } = await vpost('/api/vault/llm', aiBody())
+    if (ok && data.ok !== false) {
+      setAi((a) => ({ ...a, key: '', hasKey: true, busy: false, msg: 'Saved. The AI tab uses it from the next question.' }))
+      return
+    }
+    setAi((a) => ({ ...a, busy: false, err: data.error === 'locked' ? 'The vault is locked — unlock it first.' : data.error || 'Could not save.' }))
+  }
   // The wording is exact about what removal does. If AXUR_API_KEY is set in the
   // environment, clearing the vault entry falls back to it rather than turning
   // Axur off, and `stored` coming back false is the only way to see which
@@ -731,6 +759,37 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                       Remove
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* The AI tab's provider. Any provider that takes OpenAI-style
+                  chat requests works; Claude's API does, at the address below. */}
+              <div className="text-copy font-medium mb-2">AI provider (for the AI tab)</div>
+              <div className="mb-4 rounded-control border border-border bg-field p-3">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button type="button" className={miniBtn} onClick={() => setAi((a) => ({ ...a, base: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', msg: '', err: '' }))}>Use Claude</button>
+                  <button type="button" className={miniBtn} onClick={() => setAi((a) => ({ ...a, base: '', model: '', msg: '', err: '' }))}>Use Groq (default)</button>
+                </div>
+                <label htmlFor="tm-ai-base" className="block text-note text-dim mb-1">Provider address</label>
+                <input id="tm-ai-base" {...MACHINE_TEXT} className={inCls} value={ai.base} placeholder="empty = Groq"
+                  onChange={(e) => setAi((a) => ({ ...a, base: e.target.value, msg: '', err: '' }))} />
+                <label htmlFor="tm-ai-model" className="block text-note text-dim mt-2 mb-1">Model</label>
+                <input id="tm-ai-model" {...MACHINE_TEXT} className={inCls} value={ai.model} placeholder="empty = the app's default"
+                  onChange={(e) => setAi((a) => ({ ...a, model: e.target.value, msg: '', err: '' }))} />
+                <label htmlFor="tm-ai-key" className="block text-note text-dim mt-2 mb-1">API key</label>
+                <input id="tm-ai-key" className={inCls} type="password" {...API_KEY_BOX} value={ai.key}
+                  placeholder={ai.hasKey ? 'a key is saved — type a new one to change anything here' : 'paste key'}
+                  onChange={(e) => setAi((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))} />
+                <div className="text-note text-dim mt-1.5">Encrypted in the vault. Test before saving; saving replaces the current key, address and model.</div>
+                {ai.err && <div role="alert" className="mt-2 text-note text-crit">{ai.err}</div>}
+                {ai.msg && <div role="status" className="mt-2 text-note text-ok">{ai.msg}</div>}
+                <div className="flex gap-2 mt-2">
+                  <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50" onClick={testAi} disabled={ai.busy || !ai.key}>
+                    {ai.busy ? 'Working…' : 'Test'}
+                  </button>
+                  <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={saveAi} disabled={ai.busy || !ai.key}>
+                    Save AI provider
+                  </button>
                 </div>
               </div>
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -82,8 +83,11 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		// list tools below return no page object even with this param and
 		// their row counts already sit under their _limit, so it is NOT added
 		// there — it would just be cargo-culted dead weight.
+		// Fullest first, sorted by Infoblox across the whole tenant: a tenant
+		// can hold more subnets than one 5,000-row read (72,496 on the live
+		// one), so sorting only what came back would miss the fullest.
 		params := map[string]string{"_fields": "name,address,cidr,utilization", "_limit": "5000",
-			"_is_total_size_needed": "true"}
+			"_is_total_size_needed": "true", "_order_by": "utilization.utilization desc"}
 		if addr := aiStr(args["address"]); addr != "" {
 			if aiAddrRE.MatchString(addr) {
 				params["address"] = addr
@@ -92,15 +96,42 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		if c, ok := aiInt(args["cidr"]); ok && c >= 0 && c <= 128 {
 			params["cidr"] = strconv.Itoa(c)
 		}
+		// "Which subnets are nearly full?" was answered from the first 25 rows
+		// in Infoblox's own order (2026-10-27: 25 of 1,103, all at 0-3%, while
+		// one sat at 80%). The fullness filter is the one the dashboard's
+		// at-risk read already sends (dashboard.go), so Infoblox counts the
+		// whole tenant and the total below is the number at or above it.
+		minUtil, hasMin := aiInt(args["min_utilization"])
+		//
+		// The cidr clause leaves out /29 to /32, as the dashboard's lists do:
+		// they are point-to-point links, full by design, and on the live tenant
+		// they were 862 of the 1,118 subnets at 80% or more (probed
+		// 2026-10-27). cidr>=33 keeps IPv6, which only IPv6 can be; a regex on
+		// the address for ':' was refused by CSP.
+		if hasMin && minUtil >= 0 && minUtil <= 100 {
+			params["_filter"] = "utilization.utilization>=" + strconv.Itoa(minUtil) + " and (cidr<=28 or cidr>=33)"
+		} else {
+			hasMin = false
+		}
 		body, status, err := s.Rest.GetEx("/api/ddi/v1/ipam/subnet", params)
 		if err != nil || status == 0 || status >= 400 {
 			return aiLookupFailed("subnets", aiExDetail(status, err))
 		}
 		data := normSubnets(rest.Unwrap(body))
 		if len(data) == 0 {
+			if hasMin {
+				return fmt.Sprintf("No subnet is %d%% used or more (IPv4 /29 to /32 links are left out).", minUtil)
+			}
 			return "No subnet data."
 		}
-		return jstr(cappedPayloadWithTotal(data, aiSampleCap, pageTotalSize(body, len(data)), "subnets"))
+		// Kept in that order here too, in case an upstream ignores _order_by;
+		// a subnet that reports no utilization goes last.
+		sort.SliceStable(data, func(i, j int) bool { return utilOf(data[i]) > utilOf(data[j]) })
+		noun := "subnets"
+		if hasMin {
+			noun = fmt.Sprintf("subnets at %d%% used or more (IPv4 /29 to /32 links left out)", minUtil)
+		}
+		return jstr(cappedPayloadWithTotal(data, aiSampleCap, pageTotalSize(body, len(data)), noun))
 
 	case "get_hosts":
 		// _is_total_size_needed mirrors get_subnets: detail_hosts is a second
@@ -384,6 +415,14 @@ func cappedPayload(rows []map[string]any, n int, noun string) toolPayload {
 // the caller instead of derived from len(rows) — for endpoints (get_subnets)
 // where the fetched-and-capped row count is NOT the true tenant-wide total;
 // see pageTotalSize.
+// utilOf is a normalized subnet's percent used, or -1 when it reported none.
+func utilOf(row map[string]any) int {
+	if v, ok := row["util"].(int); ok {
+		return v
+	}
+	return -1
+}
+
 func cappedPayloadWithTotal(rows []map[string]any, n int, total int, noun string) toolPayload {
 	sample := capMaps(rows, n)
 	returned := len(sample)
@@ -453,6 +492,8 @@ func countedNoun(n int, noun string) string {
 			return "host with status " + strings.TrimPrefix(noun, "hosts with status ")
 		case strings.HasPrefix(noun, "DHCP leases under "):
 			return "DHCP lease under " + strings.TrimPrefix(noun, "DHCP leases under ")
+		case strings.HasPrefix(noun, "subnets at "):
+			return "subnet at " + strings.TrimPrefix(noun, "subnets at ")
 		case noun == "DNS views":
 			return "DNS view"
 		case noun == "DNS zones":
