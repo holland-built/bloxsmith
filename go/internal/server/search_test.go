@@ -796,7 +796,7 @@ func TestSearchRoutesAreReadsNotWrites(t *testing.T) {
 	rr := &recordingRouter{}
 	d.registerSearchRoutes(rr)
 
-	want := []string{"GET /api/search/ipam", "GET /api/search/dns"}
+	want := []string{"GET /api/search/ipam", "GET /api/search/dns", "GET /api/search/subnet"}
 	if len(rr.patterns) != len(want) {
 		t.Fatalf("registered %v, want exactly %v", rr.patterns, want)
 	}

@@ -18,7 +18,7 @@ const SUGGESTIONS = [
 
 // ---------- chat ----------
 
-function Message({ item }) {
+function Message({ item, onRetry }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -34,6 +34,7 @@ function Message({ item }) {
           style={{ borderColor: 'var(--color-crit)', background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}
         >
           {item.error}
+          {onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
         </div>
       </div>
     )
@@ -52,6 +53,7 @@ function Message({ item }) {
             ))}
           </div>
         )}
+        {item.ranOut && onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
         {!!(item.trace && item.trace.length) && (
           <div className="mt-2 pt-2 border-t border-border font-mono text-note text-muted space-y-0.5">
             {item.trace.map((t, i) => (
@@ -69,6 +71,34 @@ function Message({ item }) {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function RetryButton({ onClick }) {
+  return (
+    <div className="mt-2">
+      <button type="button" className="text-note font-medium px-2 py-0.5 rounded-control border border-border hover:border-border-hover" onClick={onClick}>
+        Try again
+      </button>
+    </div>
+  )
+}
+
+// While a question runs there is nothing to stream, so say what is happening
+// and how long it has taken: 35 silent seconds read as a hang.
+function Working() {
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setSecs((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="flex justify-start">
+      <div className="px-3 py-2 rounded-control border border-border bg-field text-note text-muted">
+        Looking this up in your Infoblox account… <span className="tabular-nums">{secs} s</span>
+        {secs >= 20 ? <div>Questions that need several lookups can take up to a minute.</div> : null}
       </div>
     </div>
   )
@@ -146,11 +176,11 @@ function ChatCard({ panelId }) {
           return
         }
         if (j && j.error) {
-          setItems((list) => [...list, { role: 'assistant', error: String(j.error) }])
+          setItems((list) => [...list, { role: 'assistant', error: String(j.error), question: q }])
           return
         }
         if (!r.ok && !(j && typeof j.answer === 'string')) {
-          setItems((list) => [...list, { role: 'assistant', error: `HTTP ${r.status}` }])
+          setItems((list) => [...list, { role: 'assistant', error: `HTTP ${r.status}`, question: q }])
           return
         }
         setItems((list) => [
@@ -160,11 +190,15 @@ function ChatCard({ panelId }) {
             text: j && typeof j.answer === 'string' ? j.answer : 'Query returned an unexpected response.',
             suggestions: j && Array.isArray(j.suggestions) ? j.suggestions : [],
             trace: j && Array.isArray(j.trace) ? j.trace : null,
+            question: q,
+            // The server's words when its lookups ran and no answer came of
+            // them (go/internal/ai/ai.go ranOutJSON): offer the same question again.
+            ranOut: j && typeof j.answer === 'string' && j.answer.includes("couldn't put an answer together"),
           },
         ])
       })
       .catch(() => {
-        setItems((list) => [...list, { role: 'assistant', error: 'Query failed — server unreachable' }])
+        setItems((list) => [...list, { role: 'assistant', error: 'Query failed — server unreachable', question: q }])
       })
       .finally(() => setBusy(false))
   }
@@ -177,8 +211,9 @@ function ChatCard({ panelId }) {
         {items.length === 0 ? (
           <Empty>Ask a question or pick a suggestion below</Empty>
         ) : (
-          items.map((it, i) => <Message key={i} item={it} />)
+          items.map((it, i) => <Message key={i} item={it} onRetry={busy ? null : submit} />)
         )}
+        {busy ? <Working /> : null}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {SUGGESTIONS.map((sg, i) => (

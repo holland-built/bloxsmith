@@ -16,6 +16,9 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
  * lib/indicator.test.js, where every tab-shaped string is asserted to classify
  * as null).
  */
+// The event the top bar's Search button sends to open this, the same as Cmd+K.
+export const OPEN_SEARCH = 'bloxsmith:open-search'
+
 export default function Palette({ tabs, onPick }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -37,8 +40,17 @@ export default function Palette({ tabs, onPick }) {
         setOpen(false)
       }
     }
+    const openFromButton = () => {
+      setOpen(true)
+      setQ('')
+      setIdx(0)
+    }
     window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
+    window.addEventListener(OPEN_SEARCH, openFromButton)
+    return () => {
+      window.removeEventListener('keydown', on)
+      window.removeEventListener(OPEN_SEARCH, openFromButton)
+    }
   }, [])
 
   useEffect(() => {

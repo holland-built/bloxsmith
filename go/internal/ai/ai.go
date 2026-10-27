@@ -229,7 +229,6 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 		map[string]any{"role": "user", "content": userMsg},
 	}
 
-	lastContent := ""
 	sawChoice := false
 	// The per-call answer budget, and the one retry allowed to raise it.
 	//
@@ -299,7 +298,6 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 		}
 		ch := resp.Choices[0]
 		sawChoice = true
-		lastContent = ch.content
 		if ch.FinishReason != "tool_calls" {
 			if ch.content == "" {
 				// Ran out of room before saying anything. Buy more room, once.
@@ -359,11 +357,34 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 			})
 		}
 	}
-	if sawChoice && lastContent != "" {
-		return lastContent
+	// Every round went on lookups and none on an answer. Seen live 2026-10-26:
+	// "Which subnets are nearly full?" ran four lookups, used up the rounds and
+	// showed "No response." over a trace that held the answer. Ask once more
+	// with the tools taken away, so the only thing left to do is answer from
+	// what was found.
+	if sawChoice && ctx.Err() == nil {
+		final := append(messages, map[string]any{
+			"role":    "user",
+			"content": "You have used every lookup this question allows. Answer now from the tool results above, in the same format as before, and say plainly anything you could not check.",
+		})
+		if resp, err := s.chatWith(ctx, key, base, model, final, maxTokens, false); err == nil {
+			spentTokens += resp.Usage.TotalTokens
+			if len(resp.Choices) > 0 && resp.Choices[0].content != "" {
+				return resp.Choices[0].content
+			}
+		} else {
+			log.Printf("_generate_ai_answer: final answer without tools: %v", err)
+		}
 	}
-	return `{"answer": "No response.", "suggestions": []}`
+	// Any text that came with the last lookup round ("Let me check the
+	// subnets…") is not an answer, so it is not passed off as one.
+	return ranOutJSON
 }
+
+// ranOutJSON is the answer when the lookups ran and no answer came of them,
+// even when asked for one with the tools taken away. The trace under it still
+// shows what was found.
+const ranOutJSON = `{"answer": "I looked things up but couldn't put an answer together this time. The steps I took are listed below. Try again, or ask a narrower question.", "suggestions": ["try a narrower question", "show network summary"]}`
 
 // A 429 IS NOT ONE FAILURE, AND "WAIT A MOMENT" WAS THE WRONG ADVICE.
 //
@@ -697,12 +718,20 @@ type toolCall struct {
 // chat is client.chat.completions.create (server.py:4061): one POST to the
 // OpenAI-compatible endpoint with the tool schema and tool_choice=auto.
 func (s *Service) chat(ctx context.Context, key, base, model string, messages []any, maxTokens int) (*chatResp, error) {
+	return s.chatWith(ctx, key, base, model, messages, maxTokens, true)
+}
+
+// chatWith is chat with the tool schema optional. Without it the model can
+// only answer, which is what runLoop's last call needs.
+func (s *Service) chatWith(ctx context.Context, key, base, model string, messages []any, maxTokens int, tools bool) (*chatResp, error) {
 	reqBody := map[string]any{
-		"model":       model,
-		"max_tokens":  maxTokens,
-		"messages":    messages,
-		"tools":       aiTools,
-		"tool_choice": "auto",
+		"model":      model,
+		"max_tokens": maxTokens,
+		"messages":   messages,
+	}
+	if tools {
+		reqBody["tools"] = aiTools
+		reqBody["tool_choice"] = "auto"
 	}
 	raw, err := json.Marshal(reqBody)
 	if err != nil {

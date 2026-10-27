@@ -30,7 +30,7 @@ const ChartBuilder = lazy(() => import('./tabs/ChartBuilder.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
 import { FOCUS_RING, Skeleton } from './components/ui.jsx'
 import { PageBar } from './components/kit.jsx'
-import Palette from './components/Palette.jsx'
+import Palette, { OPEN_SEARCH } from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
 import { updateReady, useUpdate } from './lib/updateState.js'
 import ConnStatus from './components/ConnStatus.jsx'
@@ -685,6 +685,16 @@ export default function App() {
               the groups (a dossier) have no group and so no bar. */}
           {groupOf(tab) && (
             <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
+              {/* Search was Cmd+K only, which nobody finds and a phone cannot
+                  press. This opens the same search. */}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+                aria-keyshortcuts="Meta+K Control+K"
+                className={`px-2.5 py-1 rounded-control border border-border text-copy text-txt hover:border-border-hover ${FOCUS_RING}`}
+              >
+                Search<span className="hidden md:inline text-muted"> ⌘K</span>
+              </button>
               {tab !== 'ai' && (
                 <a href="#ai" className={`px-2.5 py-1 rounded-control border border-border text-copy text-txt no-underline hover:border-border-hover ${FOCUS_RING}`}>
                   Ask

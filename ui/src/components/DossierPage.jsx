@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { dossierVerdict } from '../lib/dossierVerdict.js'
 import DossierPanel from './DossierPanel.jsx'
 import { Empty, Skeleton } from './ui.jsx'
-import { abortAfter } from '../lib/api.js'
+import { abortAfter, useApi } from '../lib/api.js'
+import { dossierSummary } from '../lib/dossierSummary.js'
 import { useHashParams } from '../lib/hash.js'
 import { dossierMoreLine } from '../lib/dossierMore.js'
 import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '../lib/indicator.js'
@@ -793,6 +794,15 @@ export default function DossierPage() {
   )
 
   const announcement = useAnnouncer(q, results)
+  // The subnet an IPv4 address sits in. A free address has no IPAM record, so
+  // without this the page said "none" and never named where the address lives.
+  const subnetApi = useApi(kind?.kind === 'ipv4' ? `/api/search/subnet?q=${encodeURIComponent(q)}` : null)
+  const subnets = subnetApi.data?.availability === 'ok' ? subnetApi.data.rows : null
+  const summary = dossierSummary(
+    q,
+    { assets: results.assets?.state, dns: results.dns?.state, ipam: results.ipam?.state },
+    kind?.kind === 'ipv4' && subnetApi.loading ? undefined : subnets,
+  )
 
   return (
     <div>
@@ -828,6 +838,12 @@ export default function DossierPage() {
           </span>
         </div>
       </div>
+
+      {summary && (kind?.kind !== 'ipv4' || !subnetApi.loading) && (
+        <p data-dossier-summary className="ledger-cell px-[var(--sp-ledger-inset)] py-3 border-b border-line bg-card text-copy text-txt">
+          {summary}
+        </p>
+      )}
 
       <Ribbon results={results} />
 
