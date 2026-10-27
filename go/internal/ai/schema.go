@@ -88,11 +88,12 @@ const toolsJSON = `[
   }},
   {"type": "function", "function": {
     "name": "get_subnets",
-    "description": "Get IPAM subnets with utilization. Use address param for a specific subnet.",
+    "description": "Get IPAM subnets with utilization, fullest first. For 'nearly full', 'running out' or 'most used', pass min_utilization (e.g. 80): Infoblox then counts every subnet at or above it, leaving out IPv4 /29 to /32 point-to-point links, which are always full. Use address param for a specific subnet.",
     "parameters": {"type": "object",
       "properties": {
         "address": {"type": "string", "description": "Filter by subnet address, e.g. '10.0.0.0'"},
-        "cidr":    {"type": "integer", "description": "CIDR prefix length, e.g. 24"}
+        "cidr":    {"type": "integer", "description": "CIDR prefix length, e.g. 24"},
+        "min_utilization": {"type": "integer", "description": "Only subnets at least this percent used, 0-100, e.g. 80 for nearly full"}
       }}
   }},
   {"type": "function", "function": {
