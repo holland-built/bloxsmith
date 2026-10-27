@@ -357,12 +357,13 @@ test('--sp-ledger-inset is declared, and every ledger cell uses it', () => {
 
   const dossier = stripJs(fs.readFileSync(path.join(REPO, 'ui/src/components/DossierPage.jsx'), 'utf8'))
   const used = (dossier.match(/px-\[var\(--sp-ledger-inset\)\]/g) || []).length
-  // FOUR, counted: the field cell (CELL), the two ledger head cells, and the
-  // threat-intel panel embedded below the last row. All four share one left
-  // edge, and that alignment is the whole point of the ledger.
+  // FIVE, counted: the field cell (CELL), the two ledger head cells, the
+  // threat-intel panel embedded below the last row, and the plain answer above
+  // the ribbon. All five share one left edge, and that alignment is the whole
+  // point of the ledger.
   assert.equal(
-    used, 4,
-    `expected 4 uses of --sp-ledger-inset in DossierPage.jsx, found ${used} — a ledger cell has drifted off the shared inset, which is how the four hand-written 11px values got out of step in the first place`
+    used, 5,
+    `expected 5 uses of --sp-ledger-inset in DossierPage.jsx, found ${used} — a ledger cell has drifted off the shared inset, which is how the four hand-written 11px values got out of step in the first place`
   )
   assert.equal(
     (dossier.match(/px-\[11px\]/g) || []).length, 0,

@@ -1,7 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -61,6 +64,7 @@ const searchQueryMax = 256
 func (d *Deps) registerSearchRoutes(mux router) {
 	mux.HandleFunc("GET /api/search/ipam", d.searchIPAM)
 	mux.HandleFunc("GET /api/search/dns", d.searchDNS)
+	mux.HandleFunc("GET /api/search/subnet", d.searchSubnet)
 }
 
 // searchFetch is pagedFetch's body with the response-writing removed. It issues
@@ -294,4 +298,70 @@ func searchResponse(rows []any, extra map[string]any) map[string]any {
 		resp[k] = v
 	}
 	return resp
+}
+
+// searchSubnet answers GET /api/search/subnet?q=<IPv4> — the subnets an
+// address falls inside, smallest first. A free address has no ipam/address
+// object, so searchIPAM finds nothing for it, and the search page said "none"
+// without ever naming the subnet the address sits in.
+//
+// CSP has no "contains" filter, and its <= on address compares text, not
+// numbers ("10.29.127.32" <= "10.80.0.5"; probed 2026-10-27). == is exact and
+// works, so this asks for every network address the IP could have, one per
+// prefix length /8 to /32, in a single or-filter, and keeps the rows whose own
+// prefix really does hold the address. IPv6 would need 120 of those clauses
+// and is answered "empty" rather than half-asked.
+func (d *Deps) searchSubnet(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/search/subnet")
+	ip, err := netip.ParseAddr(strings.TrimSpace(r.URL.Query().Get("q")))
+	if err != nil || !ip.Is4() {
+		d.json(w, r, 200, map[string]any{
+			"availability": "empty",
+			"reason":       "only an IPv4 address can be placed in a subnet here",
+			"rows":         []any{},
+		})
+		return
+	}
+	var clauses []string
+	for bits := 8; bits <= 32; bits++ {
+		p, _ := ip.Prefix(bits)
+		clauses = append(clauses, `address=="`+p.Addr().String()+`"`)
+	}
+	rows, extra, ue := d.searchFetch(r, "/api/ddi/v1/ipam/subnet",
+		map[string]string{"_filter": strings.Join(clauses, " or ")})
+	if ue != nil {
+		d.json(w, r, 200, searchUnavailable(ue))
+		return
+	}
+	d.json(w, r, 200, searchResponse(containing(ip, pick(rows, "id", "address", "cidr", "name", "space")), extra))
+}
+
+// containing keeps the subnets whose prefix holds ip, smallest subnet first.
+// A row matched on its network address alone can still be a /28 that stops
+// short of ip, so each row's own cidr decides.
+func containing(ip netip.Addr, rows []any) []any {
+	type hit struct {
+		row  any
+		bits int
+	}
+	var hits []hit
+	for _, ri := range rows {
+		m := getMap(ri)
+		addr, err := netip.ParseAddr(fmt.Sprint(m["address"]))
+		bits, berr := strconv.Atoi(fmt.Sprint(m["cidr"]))
+		if err != nil || berr != nil {
+			continue
+		}
+		p, err := addr.Prefix(bits)
+		if err != nil || p.Addr() != addr || !p.Contains(ip) {
+			continue
+		}
+		hits = append(hits, hit{ri, bits})
+	}
+	sort.SliceStable(hits, func(i, j int) bool { return hits[i].bits > hits[j].bits })
+	out := []any{}
+	for _, h := range hits {
+		out = append(out, h.row)
+	}
+	return out
 }
