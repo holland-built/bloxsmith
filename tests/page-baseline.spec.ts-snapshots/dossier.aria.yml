@@ -1,9 +1,11 @@
 - main "Search result tab":
   - heading "Search result — everything about baseline.example" [level=1]
   - status: "Assets: loaded. DNS records: loaded. IP address management: not applicable. Threat intel: loaded. Recent changes: not applicable. All sources have answered."
-  - text: QUERY Search everything
+  - text: Search Search everything
   - textbox "Search everything": baseline.example
   - text: Recognised as Hostname
+  - paragraph: "baseline.example is in use: a DNS record, an asset mention it. No threat intel flags it."
+  - heading "Where this came from" [level=2]
   - img "Loaded"
   - text: Assets Loaded
   - img "Loaded"

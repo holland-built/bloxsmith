@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { dossierVerdict } from '../lib/dossierVerdict.js'
+import { dossierHasVerdict, dossierVerdict } from '../lib/dossierVerdict.js'
 import DossierPanel from './DossierPanel.jsx'
 import { Empty, Skeleton } from './ui.jsx'
 import { abortAfter, useApi } from '../lib/api.js'
@@ -802,6 +802,7 @@ export default function DossierPage() {
     q,
     { assets: results.assets?.state, dns: results.dns?.state, ipam: results.ipam?.state },
     kind?.kind === 'ipv4' && subnetApi.loading ? undefined : subnets,
+    results.threat?.state === 'ok' && dossierHasVerdict(results.threat.body) ? dossierVerdict(results.threat.body.summary) : undefined,
   )
 
   return (
@@ -817,8 +818,8 @@ export default function DossierPage() {
 
       {/* Query bar */}
       <div className="flex flex-col min-[561px]:flex-row min-[561px]:h-[40px] border-b border-border bg-field">
-        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-note tracking-[0.12em] text-dim">
-          QUERY
+        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border text-note text-dim">
+          Search
         </div>
         <label className="flex-1 flex items-center px-3 focus-within:ring-2 focus-within:ring-accent focus-within:ring-inset h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
           <span className="sr-only">Search everything</span>
@@ -832,19 +833,24 @@ export default function DossierPage() {
           />
         </label>
         <div className="flex items-center gap-2 px-4 h-[34px] min-[561px]:h-auto">
-          <span className="text-note uppercase tracking-[0.09em] text-dim">Recognised as</span>
-          <span className="font-mono text-note text-field-txt tracking-[0.06em] uppercase font-semibold">
+          <span className="text-note text-dim">Recognised as</span>
+          <span className="text-note text-field-txt font-semibold">
             {kind ? kind.label : q ? 'Free text' : DASH}
           </span>
         </div>
       </div>
 
       {summary && (kind?.kind !== 'ipv4' || !subnetApi.loading) && (
-        <p data-dossier-summary className="ledger-cell px-[var(--sp-ledger-inset)] py-3 border-b border-line bg-card text-copy text-txt">
+        <p data-dossier-summary className="ledger-cell px-[var(--sp-ledger-inset)] py-4 border-b border-line bg-card text-copy font-semibold text-txt">
           {summary}
         </p>
       )}
 
+      {q && (
+        <h2 className="ledger-cell px-[var(--sp-ledger-inset)] pt-4 pb-2 text-copy font-semibold">
+          Where this came from
+        </h2>
+      )}
       <Ribbon results={results} />
 
       {/* Ledger head */}
