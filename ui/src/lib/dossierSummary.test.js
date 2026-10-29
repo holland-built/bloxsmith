@@ -43,3 +43,16 @@ test('an address in several IP spaces names each subnet', () => {
   const s = dossierSummary('10.80.0.5', { assets: 'none', dns: 'none', ipam: 'none' }, two)
   assert.match(s, /It's inside 2 subnets, one per IP space: 10\.80\.0\.0\/24 \(a\); 10\.80\.0\.0\/22 \(b\)\./)
 })
+
+test('the threat verdict is said once it has answered, and never holds the answer back', () => {
+  const st = { assets: 'none', dns: 'none', ipam: 'ok' }
+  const sub = [{ address: '10.103.145.0', cidr: 24 }]
+  assert.equal(
+    dossierSummary('10.103.145.88', st, sub, 'Clean'),
+    "10.103.145.88 is in use: an IPAM record mentions it. It's inside subnet 10.103.145.0/24. No threat intel flags it.",
+  )
+  assert.match(dossierSummary('10.103.145.88', st, sub, 'Malicious'), /Threat intel flags it as malicious\.$/)
+  assert.doesNotMatch(dossierSummary('10.103.145.88', st, sub, 'Not assessed'), /threat/i)
+  assert.doesNotMatch(dossierSummary('10.103.145.88', st, sub, undefined), /threat/i)
+  assert.equal(dossierSummary('10.103.145.88', { ...st, dns: 'loading' }, sub, 'Clean'), null)
+})

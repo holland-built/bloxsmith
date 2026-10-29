@@ -4,7 +4,9 @@
 //
 // states: { assets, dns, ipam } each one of ok | none | loading | error |
 // unsupported | na. subnets: the rows /api/search/subnet sent, smallest
-// first, or null when it was not asked or failed.
+// first, or null when it was not asked or failed. verdict: the threat intel
+// verdict (Malicious | Clean | Not assessed) once it has answered, else
+// undefined; it adds a sentence, and never holds the rest back.
 
 const USED_BY = { ipam: 'an IPAM record', dns: 'a DNS record', assets: 'an asset' }
 
@@ -14,7 +16,15 @@ export function subnetName(s) {
   return s.name ? `${net} (${s.name})` : net
 }
 
-export function dossierSummary(q, states, subnets) {
+export function dossierSummary(q, states, subnets, verdict) {
+  const s = summaryCore(q, states, subnets)
+  if (!s) return s
+  if (verdict === 'Malicious') return `${s} Threat intel flags it as malicious.`
+  if (verdict === 'Clean') return `${s} No threat intel flags it.`
+  return s
+}
+
+function summaryCore(q, states, subnets) {
   if (!q) return null
   // A source that has not reported yet is still loading, not "none".
   if (Object.keys(USED_BY).some((k) => !states[k] || states[k] === 'loading' || states[k] === 'noquery')) return null
