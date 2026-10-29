@@ -6,7 +6,9 @@ import { test, expect } from '@playwright/test';
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
-test('the Search button on the page bar opens the same search as Cmd+K', async ({ page }) => {
+test('on a phone the Search button on the page bar opens the same search as Cmd+K', async ({ page }) => {
+  // From md up the header's search box does this job and the button is hidden.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await page.getByRole('button', { name: /^Search/ }).click();
   await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();

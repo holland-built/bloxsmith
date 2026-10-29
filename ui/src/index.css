@@ -518,6 +518,9 @@ html[data-density="compact"] {
 }
 
 html { background: var(--color-bg); }
+/* Below md the job bar is fixed along the bottom (JobNav.jsx, h-14). Anything
+   scrolled into view, by Tab or by a link, stops above it, not under it. */
+@media (width < 48rem) { html { scroll-padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); } }
 body {
   margin: 0;
   font-family: var(--font-sans);

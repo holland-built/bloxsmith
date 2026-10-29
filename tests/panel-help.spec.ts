@@ -343,6 +343,8 @@ const BUSY_TABS = ['#security', '#assets', '#network', '#dns'];
 const WIDTHS = [1920, 1280, 1024, 768, 390];
 
 test('the ⓘ fits every busy header from 1920 down to 390', async ({ page }) => {
+  // 20 page loads with settle waits: about 30s on master already, the default budget.
+  test.setTimeout(90_000);
   const findings: string[] = [];
   let checkedButtons = 0;
 

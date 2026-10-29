@@ -2,9 +2,9 @@ import type { Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { installBaselineWorld } from './page-fixtures';
 
-// The top bar after the 2026-10-02 overhaul: plain-text sections, a tenant chip
-// that says what a change would do, one Settings button, and Provision. Theme,
-// spacing and the "What these controls do" dialog live in Settings now.
+// The top bar after the 2026-10-29 flow redesign: All pages, the search-or-ask
+// box, a tenant chip that says what a change would do, and one Settings button.
+// Theme, spacing and the "What these controls do" dialog live in Settings.
 //
 // THE TENANT CHIP'S WRITE WORDS ARE THE ONE PART WORTH BREAKING ON PURPOSE. They
 // sit beside the tenant name because that is the fact an operator needs before
@@ -32,16 +32,17 @@ test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
 });
 
-test('the bar holds sections, a tenant chip, Settings and Provision, and nothing else', async ({ page }) => {
+test('the bar holds All pages, the search box, a tenant chip and Settings, and nothing else', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
   const header = page.locator('header');
 
-  await expect(header.locator('button[data-group]')).toHaveCount(5);
+  await expect(header.locator('button[data-menu]')).toHaveText(/^All pages/);
+  await expect(header.locator('[data-onebox]')).toBeVisible();
   await expect(header.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(header.getByRole('link', { name: 'Provision' })).toBeVisible();
-  await expect(header.getByRole('link', { name: 'Provision' })).toContainText('+ Provision');
   await expect(header.getByText(TENANT)).toBeVisible();
+  // The admin builder is no longer the main button; Get an address is in the rail.
+  await expect(header.getByRole('link', { name: /Provision/ })).toHaveCount(0);
 
   // Moved to Settings, not duplicated.
   await expect(header.getByRole('button', { name: /density$/ })).toHaveCount(0);
@@ -49,20 +50,16 @@ test('the bar holds sections, a tenant chip, Settings and Provision, and nothing
   await expect(header.getByRole('button', { name: 'What these controls do' })).toHaveCount(0);
 });
 
-test('section buttons are plain sentence-case text, not numbered mono capitals', async ({ page }) => {
+test('All pages is plain sentence-case text, not mono capitals', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  const first = page.locator('header button[data-group="status"]');
-  await expect(first).toHaveText(/^Status/);
-
-  const style = await first.evaluate((el) => {
+  const btn = page.locator('header button[data-menu]');
+  const style = await btn.evaluate((el) => {
     const cs = getComputedStyle(el);
     return { transform: cs.textTransform, family: cs.fontFamily };
   });
   expect(style.transform).toBe('none');
   expect(style.family.toLowerCase()).not.toContain('mono');
-  // The digit keys still open them; the bar just stops drawing the digit.
-  await expect(first).toHaveAttribute('aria-keyshortcuts', '1');
 });
 
 for (const [name, target, words] of [
@@ -300,13 +297,11 @@ async function headerFits(page: Page) {
       scrollWidth: h.scrollWidth,
       clientWidth: h.clientWidth,
       settings: right(h.querySelector('button[aria-label="Settings"]')),
-      provision: right([...h.querySelectorAll('a')].find((a) => /Provision/.test(a.textContent || '')) ?? null),
       viewport: window.innerWidth,
     };
   });
   expect(m.scrollWidth, `header overflows: ${JSON.stringify(m)}`).toBeLessThanOrEqual(m.clientWidth);
   expect(m.settings, `Settings pushed off screen: ${JSON.stringify(m)}`).toBeLessThanOrEqual(m.viewport);
-  expect(m.provision, `Provision pushed off screen: ${JSON.stringify(m)}`).toBeLessThanOrEqual(m.viewport);
 }
 
 for (const [w, h] of [

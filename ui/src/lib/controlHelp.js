@@ -31,17 +31,20 @@
 //
 // Rules:
 //   - Plain words. No jargon, no component names, no endpoint names.
-//   - Describe only what the control actually does. The Provision button
-//     navigates; it does not provision anything, and saying otherwise would be
-//     a promise the app does not keep.
+//   - Describe only what the control actually does. Saying more would be a
+//     promise the app does not keep.
 //   - Key order is the header's own left-to-right order, and the shape test
 //     holds it there. A reader is looking at the row while they read this.
 // ---------------------------------------------------------------------------
 
 export const CONTROL_HELP = {
-  sections: {
-    label: 'Status, Inventory, Risk, Change, Ask',
-    what: 'The five groups of tabs. Press the keys 1 to 5 to open one, or click it. The group you are in is highlighted.',
+  'all-pages': {
+    label: 'All pages',
+    what: 'Every page in the app, in five groups. The everyday ones, Inbox, Get an address, Reports and Charts, are also down the left side.',
+  },
+  'search-box': {
+    label: 'Search or ask',
+    what: 'Type an IP, a subnet or a name to look it up, or a question for the AI. Before you press Enter it says where Enter will take you.',
   },
   updates: {
     label: 'Update v…',
@@ -62,9 +65,5 @@ export const CONTROL_HELP = {
   density: {
     label: 'The two row icons',
     what: 'In Settings. Compact fits more rows on screen. Comfortable gives everything more space. It changes spacing only — no table loses a column and no panel is hidden.',
-  },
-  provision: {
-    label: '+ Provision',
-    what: 'Goes to the Provision tab, where new networks, hosts and records are created. It only takes you there — pressing it changes nothing.',
   },
 }

@@ -64,10 +64,11 @@ export default function Network() {
   const subnetsStatus = feedDown ? 'error' : meta.subnets
 
   const leasesRef = useRef(null)
+  // The Inbox's "See full subnets" lands on the table, not two charts above it.
+  const subnetsRef = useRef(null)
   useEffect(() => {
-    if (hp.focus === 'leases' && leasesRef.current) {
-      leasesRef.current.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
-    }
+    const el = hp.focus === 'leases' ? leasesRef.current : hp.focus === 'subnets' ? subnetsRef.current : null
+    el?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [hp.focus])
 
   return (
@@ -94,7 +95,7 @@ export default function Network() {
             layout. The id lives here rather than on the <Card> inside
             DhcpLeases for the same reason it does on Overview: the grid reads
             it off this element. */}
-        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} innerRef={subnetsRef} />
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dhcp,
           state: owned,
@@ -398,7 +399,7 @@ function exhaustionSort(dir) {
 // it is a cap nothing can label.
 const EXHAUSTION_CAP = 150
 
-function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
+function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -510,6 +511,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
 
   return (
     <Card
+      innerRef={innerRef}
       panelId={panelId}
       span={6}
       // The heading is a fragment — it carries a clear-filter chip when the tab

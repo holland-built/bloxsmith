@@ -3,14 +3,14 @@ import { Component, Suspense, lazy, useEffect, useRef, useState } from 'react'
 // the app shipped as one ~903 KB file, so opening #provision — a tab with no
 // charts on it at all — still downloaded recharts and the other 14 tabs.
 //
-// Overview is lazy too, deliberately. It is the default tab, so it is tempting
-// to import it eagerly "because it is always needed": it is not. The landing
-// tab comes from the URL hash, and someone who opens #security or clicks the
-// header's "+ Provision" never renders Overview at all — an eager Overview is
-// pure dead weight on every one of those loads, and it carries recharts with it.
+// Overview is lazy too, deliberately. The landing tab comes from the URL hash
+// (the Inbox when there is none), and someone who opens #security never
+// renders Overview at all — an eager Overview is pure dead weight on every one
+// of those loads, and it carries recharts with it.
 //
 // The TABS entries below keep exactly the shape they had (`{ id, label, el }`),
 // so the DEV completeness check and the Palette are untouched by this.
+const Inbox = lazy(() => import('./tabs/Inbox.jsx'))
 const Overview = lazy(() => import('./tabs/Overview.jsx'))
 const Daily = lazy(() => import('./tabs/Daily.jsx'))
 const Network = lazy(() => import('./tabs/Network.jsx'))
@@ -45,10 +45,13 @@ const TenantManager = lazy(() => import('./components/TenantManager.jsx'))
 // to be opened.
 import './lib/density.js'
 import HeaderHelp from './components/HeaderHelp.jsx'
+import OneBox from './components/OneBox.jsx'
+import { JobRail, JobBar } from './components/JobNav.jsx'
 import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 
 const TABS = [
+  { id: 'home', label: 'Inbox', el: Inbox },
   { id: 'overview', label: 'Overview', el: Overview },
   { id: 'daily', label: 'Daily', el: Daily },
   { id: 'network', label: 'Network', el: Network },
@@ -90,7 +93,7 @@ const PAGES = [...TABS, ...HIDDEN_PAGES]
 function hashTab() {
   // '#editor?type=subnet' deep-links: tab id is the part before '?'
   const h = location.hash.replace('#', '').split('?')[0]
-  return PAGES.some((t) => t.id === h) ? h : 'overview'
+  return PAGES.some((t) => t.id === h) ? h : 'home'
 }
 
 // ---------- group nav ----------
@@ -98,17 +101,15 @@ function hashTab() {
 // 14 tabs used to render as one flat strip fitted by ~165 lines of
 // measure-then-render machinery (hidden probes, a ResizeObserver, a
 // callback-ref mount detector) whose entire job was squeezing 14 items into
-// one row. Five group buttons need no arithmetic to place: they render
-// unconditionally on the first paint, and how many of them are shown is a
-// static CSS breakpoint (see the nav markup), so there is no measure-then-
-// correct second paint left to race against.
+// one row. The groups now live in one "All pages" menu, and the everyday jobs
+// in the rail (components/JobNav.jsx), so nothing is measured at all.
 //
 // This is a presentation layer OVER `TABS`. Tab ids, their order in `TABS`,
 // `hashTab()` and the Palette are all untouched — every `#id` URL keeps
 // behaving exactly as before, it is only the way a tab is *reached by mouse*
 // that changed.
 const GROUPS = [
-  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
+  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['home', 'overview', 'daily'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
   { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift'] },
@@ -359,7 +360,6 @@ export default function App() {
   const menuRef = useRef(null)
   const mainRef = useRef(null)
   const settingsBtnRef = useRef(null)
-  const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
   // WCAG 2.4.2. The tabs are a hash router, so the title is the only thing the
   // browser history and the window list say about where you are.
@@ -493,39 +493,6 @@ export default function App() {
     setShowHeaderHelp(true)
   }
 
-  // Digits 1-5 open their group. Each button draws its digit as a keycap, and
-  // a keycap that isn't bound to anything is a lie — so the binding is real.
-  // It stands down for editable targets (these tabs are full of text inputs)
-  // and for any modified keypress, so it can never eat a real keystroke.
-  //
-  // It also stands down while the settings sheet is open: that sheet is a modal
-  // dialog now, and a digit reaching past it would open a menu behind the
-  // dialog — focus in one place, the thing that just opened in another.
-  //
-  // The control-help dialog is the same kind of modal and gets the same
-  // standdown for the same reason — it is not a second special case.
-  useEffect(() => {
-    if (showAccounts || showHeaderHelp) return undefined
-    const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      const t = e.target
-      if (t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName ?? '')) return
-      const i = Number(e.key) - 1
-      if (!Number.isInteger(i) || i < 0 || i >= GROUPS.length) return
-      const id = GROUPS[i].id
-      // Below `xl` the five cells are display:none and their keycaps are not
-      // on screen, so the digit must not silently swallow the keypress there.
-      // offsetParent is null exactly when the button is not being displayed —
-      // a visibility question, not a width measurement.
-      if (!btnRefs.current[id]?.offsetParent) return
-      e.preventDefault()
-      setOpenGroup((cur) => (cur === id ? null : id))
-      btnRefs.current[id].focus()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [showAccounts, showHeaderHelp])
-
   return (
     <VaultGate>
       <div className="min-h-screen bg-bg text-txt">
@@ -552,65 +519,11 @@ export default function App() {
             {/* The wordmark folds below `lg`. The logo button above does NOT fold:
                 it is 20px, and it is the only way into brand editing. */}
             <strong className="tracking-tight shrink-0 hidden lg:inline">Bloxsmith</strong>
-            {/* Five group buttons, plain text. Which form shows is a static CSS
-                breakpoint, so both forms are right on the very first paint and
-                nothing is measured. Below `xl` they give way to one "Menu"
-                button, because the right-hand cluster is shrink-0 and five
-                labelled buttons would otherwise paint over it.
-
-                min-w-fit, NOT min-w-0: a flex-1 item with min-width:0 collapses
-                its own box to zero when the row is over-full and lets its
-                shrink-0 contents paint over the neighbour. fit-content makes the
-                nav own its real width, so an over-full header scrolls honestly
-                instead of overlapping silently. */}
-            <nav aria-label="Sections" className="flex-1 min-w-fit flex items-center gap-2 sm:gap-3">
-              <div className="hidden xl:flex items-center gap-1 shrink-0">
-                {GROUPS.map((g, i) => {
-                  const open = openGroup === g.id
-                  const current = currentGroup === g.id
-                  return (
-                    <div key={g.id} className="relative flex">
-                      {/* Two attributes below are the whole of what a screen
-                          reader gets that a sighted user gets from paint:
-                          `aria-current` says WHICH group holds the tab you are on
-                          (the tint alone is colour), and `aria-label` names the
-                          button as a section, because the AI tab's send button
-                          is also called "Ask" and two controls answering to one
-                          name is an ambiguous answer. The digit keys still open
-                          these; aria-keyshortcuts and the tooltip say so, and so
-                          does the "What these controls do" dialog. */}
-                      <button
-                        ref={(el) => { btnRefs.current[g.id] = el }}
-                        type="button"
-                        data-group={g.id}
-                        data-current={current}
-                        aria-haspopup="menu"
-                        aria-expanded={open}
-                        aria-current={current ? 'true' : undefined}
-                        aria-label={`${g.label} section`}
-                        aria-keyshortcuts={String(i + 1)}
-                        title={g.question ? `${g.label} — ${g.question} (press ${i + 1})` : `${g.label} (press ${i + 1})`}
-                        onClick={() => setOpenGroup(open ? null : g.id)}
-                        onKeyDown={onTriggerKey(g.id)}
-                        className={
-                          'flex items-center gap-1.5 h-8 px-3 rounded-control text-copy font-medium whitespace-nowrap cursor-pointer ' +
-                          (open || current ? 'bg-line-2 text-txt' : 'text-muted hover:bg-line hover:text-txt')
-                        }
-                      >
-                        {g.label}
-                        <Caret open={open} />
-                      </button>
-                      {open && (
-                        <MenuPanel ref={menuRef} label={g.label} onKeyDown={onMenuKey}>
-                          <GroupSection group={g} tab={tab} onPick={() => setOpenGroup(null)} />
-                        </MenuPanel>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              {/* Collapsed form, below xl. One button, every group inside it. */}
-              <div className="relative flex xl:hidden shrink-0">
+            {/* One "All pages" menu at every width, holding the five groups.
+                It is shrink-0; the search box beside it is the part that gives. */}
+            <nav aria-label="All pages" className="shrink-0 flex items-center gap-2 sm:gap-3">
+              {/* Every page, grouped. The everyday jobs are also in the rail. */}
+              <div className="relative flex shrink-0">
                 <button
                   ref={(el) => { btnRefs.current.menu = el }}
                   type="button"
@@ -624,11 +537,11 @@ export default function App() {
                     (openGroup === 'menu' ? 'bg-line-2 text-txt' : 'text-muted hover:bg-line hover:text-txt')
                   }
                 >
-                  Menu
+                  All pages
                   <Caret open={openGroup === 'menu'} />
                 </button>
                 {openGroup === 'menu' && (
-                  <MenuPanel ref={menuRef} label="Sections" onKeyDown={onMenuKey}>
+                  <MenuPanel ref={menuRef} label="All pages" onKeyDown={onMenuKey}>
                     {GROUPS.map((g) => (
                       <GroupSection key={g.id} group={g} tab={tab} onPick={() => setOpenGroup(null)} />
                     ))}
@@ -636,17 +549,20 @@ export default function App() {
                 )}
               </div>
             </nav>
-            {/* Five things on the right: an update (only when one is ready), the
-                tenant chip with its write state, the light/dark button, Settings,
-                and Provision. Light/dark is here because people flip it often
-                and expect to see it; the three-way switch with "System", and
+            <div className="flex-1 min-w-0 flex justify-center">
+              {/* The Inbox has its own, larger box; one is enough. */}
+              {tab !== 'home' && <div className="hidden md:block w-full max-w-xl"><OneBox /></div>}
+            </div>
+            {/* Four things on the right: an update (only when one is ready), the
+                tenant chip with its write state, the light/dark button, and
+                Settings. Light/dark is here because people flip it often and
+                expect to see it; the three-way switch with "System", and
                 spacing, stay in Settings. The "What these controls do" dialog
                 is reached from Settings too.
 
-                Two things give way on a small screen, because a phone cannot hold
-                a tenant chip that carries its write state beside all of this:
-                below `sm` Provision shrinks to its "+", and below `md` every
-                update message becomes a dot on Settings, where the sheet has the
+                On a phone the search box gives way (the page bar's Search
+                button opens the same search), and below `md` every update
+                message becomes a dot on Settings, where the sheet has the
                 Install button. The chip is NOT one of the things that gives way. */}
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               <UpdateButton />
@@ -671,48 +587,38 @@ export default function App() {
                   <circle cx="5" cy="11" r="1.6" />
                 </svg>
               </button>
-              <a
-                href="#provision"
-                aria-label="Provision"
-                title="Provision"
-                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy font-medium no-underline"
-              >
-                +<span className="hidden sm:inline"> Provision</span>
-              </a>
             </div>
           </header>
           {/* Where you are, Kentik-style: the group and the tab. Pages outside
               the groups (a dossier) have no group and so no bar. */}
-          {groupOf(tab) && (
+          {groupOf(tab) && tab !== 'home' && (
             <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
-              {/* Search was Cmd+K only, which nobody finds and a phone cannot
-                  press. This opens the same search. */}
+              {/* The header's box is hidden on a phone; this opens the same search. */}
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
                 aria-keyshortcuts="Meta+K Control+K"
-                className={`px-2.5 py-1 rounded-control border border-border text-copy text-txt hover:border-border-hover ${FOCUS_RING}`}
+                className={`md:hidden px-2.5 py-1 rounded-control border border-border text-copy text-txt hover:border-border-hover ${FOCUS_RING}`}
               >
-                Search<span className="hidden md:inline text-muted"> ⌘K</span>
+                Search
               </button>
-              {tab !== 'ai' && (
-                <a href="#ai" className={`px-2.5 py-1 rounded-control border border-border text-copy text-txt no-underline hover:border-border-hover ${FOCUS_RING}`}>
-                  Ask
-                </a>
-              )}
             </PageBar>
           )}
           {/* The landing place for focus after a tab change, and the only named
               region on the page — its name is the tab, so a screen reader that
               lands here is told which tab it landed on. tabIndex -1 makes it a
               focus target without putting it in the Tab order. */}
-          <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="outline-none">
-            <TabErrorBoundary tab={tab}>
-              <Suspense fallback={<TabLoading />}>
-                <Active />
-              </Suspense>
-            </TabErrorBoundary>
-          </main>
+          <div className="flex">
+            <JobRail tab={tab} />
+            <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="outline-none flex-1 min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+              <TabErrorBoundary tab={tab}>
+                <Suspense fallback={<TabLoading />}>
+                  <Active />
+                </Suspense>
+              </TabErrorBoundary>
+            </main>
+          </div>
+          <JobBar tab={tab} />
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>
         {/* Said out loud on every tab change. Focus moving into <main> covers

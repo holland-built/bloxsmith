@@ -54,10 +54,10 @@ test('a Settings file that cannot be fetched leaves a way out', async ({ page })
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('Settings could not load.')).toHaveCount(0);
   await expect(page.getByRole('button', SETTINGS)).toBeFocused();
-  // The page is usable again: a header link works, which it would not inside
+  // The page is usable again: a nav link works, which it would not inside
   // an inert tree.
-  await page.getByRole('link', { name: 'Provision', exact: true }).click();
-  await expect(page).toHaveURL(/#provision/);
+  await page.getByRole('link', { name: 'Get an address', exact: true }).click();
+  await expect(page).toHaveURL(/#selfservice/);
 });
 
 test('a Settings file that never arrives can be cancelled', async ({ page }) => {
@@ -69,6 +69,6 @@ test('a Settings file that never arrives can be cancelled', async ({ page }) => 
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByText('Loading settings…')).toHaveCount(0);
   await expect(page.getByRole('button', SETTINGS)).toBeFocused();
-  await page.getByRole('link', { name: 'Provision', exact: true }).click();
-  await expect(page).toHaveURL(/#provision/);
+  await page.getByRole('link', { name: 'Get an address', exact: true }).click();
+  await expect(page).toHaveURL(/#selfservice/);
 });

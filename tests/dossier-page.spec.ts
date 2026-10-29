@@ -135,7 +135,7 @@ const row = (page: import('@playwright/test').Page, s: string) => page.locator(`
 async function openPalette(page: import('@playwright/test').Page) {
   // The nav is rendered by the same component tree that owns the listener, so
   // its presence is the closest available proxy for "the effect has run".
-  await page.locator('nav[aria-label="Sections"]').waitFor();
+  await page.locator('nav[aria-label="All pages"]').waitFor();
   const dialog = page.getByRole('dialog', { name: 'Command palette' });
   await expect(async () => {
     await page.keyboard.press('ControlOrMeta+k');
@@ -175,9 +175,9 @@ test.describe('palette: indicator search', () => {
   test('an empty query still lists every tab and offers no indicator row', async ({ page }) => {
     await page.goto('/#overview');
     const dialog = await openPalette(page);
-    // 16 tabs (Build a chart made it 16) — the palette still receives TABS,
+    // 17 tabs (the Inbox made it 17) — the palette still receives TABS,
     // never PAGES, so the hidden dossier page must not be in this list.
-    await expect(dialog.getByRole('option')).toHaveCount(16);
+    await expect(dialog.getByRole('option')).toHaveCount(17);
     await expect(dialog.getByText(/Search everything for/)).toHaveCount(0);
     await expect(dialog.getByRole('option', { name: /^Dossier$/ })).toHaveCount(0);
   });

@@ -186,7 +186,7 @@ test.describe('VaultGate (failed vault status read)', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
     await expect(page.getByText(/vault status unavailable/i)).toBeVisible();
-    await expect(page.locator('header button[data-group]')).toHaveCount(0);
+    await expect(page.locator('header button[data-menu]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /^Overview/ })).toHaveCount(0);
   });
 
@@ -194,10 +194,8 @@ test.describe('VaultGate (failed vault status read)', () => {
     await page.route('**/api/vault/status*', (route) => fulfillJson(route, { vaultMode: false, ready: true }));
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
-    const groups = page.locator('header button[data-group]');
-    await expect(groups).toHaveCount(5);
-    await expect(groups.first()).toBeVisible();
-    await expect(page.locator('h1').first()).toHaveText(/^Overview/);
+    await expect(page.locator('header button[data-menu]')).toBeVisible();
+    await expect(page.locator('h1').first()).toHaveText('Needs a look');
     await expect(page.getByText(/vault status unavailable/i)).toHaveCount(0);
   });
 });

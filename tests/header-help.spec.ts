@@ -30,13 +30,13 @@ const SETTINGS = { name: 'Settings', exact: true };
 // left to right, then the two switches that live in Settings. Written out here
 // rather than imported so the test fails if the dictionary is edited to dodge it.
 const TERMS = [
-  'Status, Inventory, Risk, Change, Ask',
+  'All pages',
+  'Search or ask',
   'Update v…',
   'The tenant name',
   'The sliders button',
   'Sun · Monitor · Moon',
   'The two row icons',
-  '+ Provision',
 ];
 
 // Verbatim out of CONTROL_HELP — the three paragraphs that used to sit in the
@@ -98,11 +98,12 @@ test('the density entry answers the question that was actually asked', async ({ 
   await expect(dialog).toContainText('Comfortable gives everything more space');
 });
 
-test('the dialog says the number keys open the sections', async ({ page }) => {
-  // The bar stopped drawing a digit on each section button, so this is where a
-  // reader finds out the keys exist.
+test('the dialog names the everyday pages kept down the left side', async ({ page }) => {
+  // The five section buttons and their number keys are gone; All pages and the
+  // left-side list replaced them, so this is where a reader learns that.
   const dialog = await openDialog(page);
-  await expect(dialog).toContainText('Press the keys 1 to 5');
+  await expect(dialog).toContainText('Inbox, Get an address, Reports and Charts');
+  await expect(dialog).not.toContainText('Press the keys 1 to 5');
 });
 
 test('the link closes Settings and opens the dialog, rather than stacking two', async ({ page }) => {
