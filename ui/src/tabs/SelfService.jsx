@@ -14,6 +14,7 @@ import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
+import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -136,6 +137,31 @@ function AllocatePanel({ panelId }) {
   const blocks = blocksApi.data?.blocks ?? []
   const subnets = subnetsApi.data?.subnets ?? []
 
+  // Start where the last address was handed out, once, and only with ids the
+  // lists still hold. Anyone who has already picked keeps their pick.
+  const tenant = useApi('/api/vault/status').data?.active
+  // `pending` is the remembered pick while its subnet list loads; it belongs
+  // to one space, so a list for any other space never fills it.
+  const tried = useRef(false)
+  const pending = useRef(null)
+  useEffect(() => {
+    if (tried.current || !tenant || !spacesApi.data) return
+    tried.current = true
+    const last = readLast(tenant)
+    const s = last && !space ? stillThere(last.space, (spacesApi.data.spaces ?? []).map((x) => x.id)) : ''
+    if (!s) return
+    pending.current = last
+    setSpace(s)
+  }, [tenant, spacesApi.data, space])
+  useEffect(() => {
+    const want = pending.current
+    if (!want || !subnetsApi.data) return
+    pending.current = null
+    if (want.space !== space || block || subnetId) return
+    const id = stillThere(want.subnet, (subnetsApi.data.subnets ?? []).map((x) => x.id))
+    if (id) setSubnetId(id)
+  }, [subnetsApi.data, space, subnetId, block])
+
   const body = () => ({ subnet_id: subnetId, count: Number(count) || 1, name })
 
   return (
@@ -195,7 +221,7 @@ function AllocatePanel({ panelId }) {
         stale={flow.stale}
         disabled={!subnetId}
         onPreview={() => flow.runPreview(body(), 'Allocate')}
-        onApply={() => flow.runApply(body(), () => 'Address allocated.')}
+        onApply={() => flow.runApply(body(), () => { saveLast(tenant, space, subnetId); return 'Address allocated.' })}
         applyLabel="Allocate"
         error={flow.error}
         message={flow.message}
