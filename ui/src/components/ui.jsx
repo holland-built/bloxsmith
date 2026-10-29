@@ -1093,11 +1093,10 @@ export function CardGrid({ className = '', layoutKey, children }) {
             // colour, a gradient, a shadow, an icon or an animation — the tint
             // and the border are doing the work, and the words stay words.
             //
-            // It stays SECOND to "+ Provision" in the top bar by one deliberate
+            // It stays SECOND to a page's primary action by one deliberate
             // step: that button is a SOLID accent fill with white text, this one
             // is the tonal version of the same accent. Filled beats tinted at a
-            // glance, which is the ranking a page control should have against
-            // the page's primary action.
+            // glance, which is the ranking a page control should have.
             className="cursor-pointer rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-note font-semibold text-txt hover:bg-accent/25 hover:border-accent"
           >
             Arrange panels

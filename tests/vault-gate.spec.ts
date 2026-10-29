@@ -22,7 +22,7 @@ test('vault locked: shows passphrase input, no tab nav', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.locator('input[type="password"]').first()).toBeVisible();
-  await expect(page.locator('header button[data-group]')).toHaveCount(0);
+  await expect(page.locator('header button[data-menu]')).toHaveCount(0);
   await expect(page.locator('a[href="#overview"]')).toHaveCount(0);
 });
 
@@ -38,9 +38,6 @@ test('vault not in use: tabs visible', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/');
 
-  const groups = page.locator('header button[data-group]');
-  await expect(groups).toHaveCount(5);
-  await expect(groups.first()).toBeVisible();
-  await page.locator('header button[data-group="status"]').click();
+  await page.locator('header button[data-menu]').click();
   await expect(page.locator('header a[role="menuitem"][href="#overview"]')).toBeVisible();
 });

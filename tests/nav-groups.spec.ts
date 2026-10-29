@@ -1,24 +1,18 @@
 import { test, expect } from './fixtures';
 
-// Predicate P6 for the tab-regrouping item (14 flat tabs -> 5 dropdown groups).
+// Every page stays reachable now that the header carries one "All pages" menu
+// (2026-10-29 flow redesign) instead of five group buttons. The everyday jobs
+// also sit in a rail; tests/inbox-and-jobs.spec.ts covers that.
 //
-// The measured-overflow nav this replaces existed ONLY to fit 14 items in one
-// row, and it shipped broken twice. Five static group buttons need no
-// measurement — so the guard that replaces the measurer is not "does the
-// arithmetic still work", it is the three clauses below:
-//
-//   (a) all 14 hash ids still render their own tab, unchanged
-//   (b) the header carries exactly 5 group buttons at 1920
+//   (a) every hash id still renders its own tab, unchanged
+//   (b) the header carries one All pages menu at every width
 //   (c) the header does not overflow horizontally at 1920 OR at 390
-//
-// (c) is the clause that replaces "screenshot it and look". It is measured on
-// the real <header>, not on the nav alone, because the failure mode being
-// guarded is the tab row colliding with the right-hand controls cluster.
 
 // id -> the h1 that tab and only that tab renders (read from ui/src/tabs/*.jsx).
 // Matched at the START of the heading so a tab may append to its own title
 // without this spec dictating copy.
 const TAB_HEADINGS: [string, string][] = [
+  ['home', 'Needs a look'],
   ['overview', 'Overview'],
   ['daily', 'Daily Briefing'],
   ['network', 'Network'],
@@ -42,12 +36,14 @@ const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 // Which group owns which tab. Duplicated from App.jsx on purpose: a test that
 // imports the thing it checks would pass on any regrouping, including a wrong one.
 const GROUP_TABS: Record<string, string[]> = {
-  Status: ['Overview', 'Daily'],
+  Status: ['Inbox', 'Overview', 'Daily'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Provision', 'Self-Service', 'Editor', 'Drift'],
   Ask: ['AI', 'Build a chart'],
 };
+
+const MENU = 'header button[data-menu]';
 
 function esc(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -64,24 +60,19 @@ for (const [id, heading] of TAB_HEADINGS) {
 }
 
 // ---------------------------------------------------------------------------
-// P6 (b) — exactly 5 group buttons in the header at 1920
+// P6 (b) — one All pages menu, and no group buttons, at 1920 and at 390
 // ---------------------------------------------------------------------------
-test('P6b: header has exactly 5 group buttons at 1920x1080', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/#overview');
-  await expect(page.locator('header')).toHaveCount(1);
-
-  const groupBtns = page.locator('header button[data-group]');
-  await expect(groupBtns).toHaveCount(5);
-  await expect(groupBtns).toHaveText(GROUP_LABELS.map((l) => new RegExp(esc(l), 'i')));
-
-  // Every one is a real menu trigger, not a styled div.
-  for (const label of GROUP_LABELS) {
-    await expect(
-      page.locator(`header button[data-group="${label.toLowerCase()}"]`),
-    ).toHaveAttribute('aria-haspopup', 'menu');
-  }
-});
+for (const w of [1920, 390]) {
+  test(`P6b: the header has one All pages menu and no group buttons at ${w}px`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.goto('/#overview');
+    const menu = page.locator(MENU);
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveText(/^All pages/);
+    await expect(menu).toHaveAttribute('aria-haspopup', 'menu');
+    await expect(page.locator('header button[data-group]')).toHaveCount(0);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // P6 (c) — the header never scrolls sideways, at either width
@@ -122,71 +113,53 @@ for (const [w, h] of [
 }
 
 // ---------------------------------------------------------------------------
-// The group menus themselves: contents, one-at-a-time, Escape, active group.
-// Not part of P6's three clauses, but P6a only proves the hashes still work —
-// it does not prove a user can REACH a tab now that the flat strip is gone.
+// The menu itself: contents, groups, Escape, outside click, keyboard.
+// P6a only proves the hashes work; these prove a user can REACH every page.
 // ---------------------------------------------------------------------------
-test('each group menu lists exactly its own tabs, and links to them', async ({ page }) => {
+test('All pages lists every tab under its own group, and Escape returns focus', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  await expect(page.locator('header')).toHaveCount(1);
-
+  const btn = page.locator(MENU);
+  await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
   for (const label of GROUP_LABELS) {
-    const btn = page.locator(`header button[data-group="${label.toLowerCase()}"]`);
-    await expect(btn).toHaveAttribute('aria-expanded', 'false');
-    await btn.click();
-    await expect(btn).toHaveAttribute('aria-expanded', 'true');
-
-    // Prefix-matched: the item for the tab you are already on also carries a
-    // check mark, which is part of its text content.
-    const items = page.locator('header [role="menu"] a[role="menuitem"]');
-    await expect(items).toHaveText(GROUP_TABS[label].map((t) => new RegExp(`^${esc(t)}`)));
-    // Only one menu is ever open.
-    await expect(page.locator('header [role="menu"]')).toHaveCount(1);
-    await page.keyboard.press('Escape');
-    await expect(btn).toHaveAttribute('aria-expanded', 'false');
-    await expect(btn).toBeFocused();
+    // Prefix-matched: the current page's item also carries a check mark.
+    await expect(
+      page.locator(`header [role="menu"] [role="group"][aria-label="${label}"] a[role="menuitem"]`),
+    ).toHaveText(GROUP_TABS[label].map((t) => new RegExp(`^${esc(t)}`)));
   }
+  await page.keyboard.press('Escape');
+  await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  await expect(btn).toBeFocused();
 });
 
-test('the group holding the current tab is marked active', async ({ page }) => {
+test('the current page is marked in the menu in words, not colour alone', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
-
-  // audit lives in Risk; ai lives in Ask. Exactly one group is current at a time.
-  for (const [id, expected] of [
-    ['audit', 'risk'],
-    ['ai', 'ask'],
-    ['overview', 'status'],
-  ] as const) {
+  for (const id of ['audit', 'ai', 'overview']) {
     await page.goto(`/#${id}`);
-    await expect(page.locator('header button[data-group]').first()).toBeVisible();
-    const current = await page.evaluate(() =>
-      [...document.querySelectorAll('header button[data-group]')]
-        .filter((b) => b.getAttribute('data-current') === 'true')
-        .map((b) => b.getAttribute('data-group')),
+    await page.locator(MENU).click();
+    const marked = await page.evaluate(() =>
+      [...document.querySelectorAll('header a[role="menuitem"][aria-current="page"]')].map((a) => a.getAttribute('href')),
     );
-    expect(current, `#${id} should mark exactly one group current`).toEqual([expected]);
+    expect(marked, `#${id} should mark exactly its own item`).toEqual([`#${id}`]);
+    await page.keyboard.press('Escape');
   }
 });
 
 test('a menu item navigates to its tab and the menu closes', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  await page.locator('header button[data-group="risk"]').click();
+  await page.locator(MENU).click();
   await page.locator('header a[role="menuitem"]', { hasText: /^Incidents$/ }).click();
-
   await expect(page.locator('h1').first()).toHaveText(/^Incidents/);
   await expect(page.locator('header [role="menu"]')).toHaveCount(0);
-  await expect(page.locator('header button[data-group="risk"]')).toHaveAttribute(
-    'data-current',
-    'true',
-  );
 });
 
-test('clicking outside closes an open group menu', async ({ page }) => {
+test('clicking outside closes the menu', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  const btn = page.locator('header button[data-group="inventory"]');
+  const btn = page.locator(MENU);
   await btn.click();
   await expect(page.locator('header [role="menu"]')).toHaveCount(1);
   await page.locator('h1').first().click();
@@ -194,24 +167,10 @@ test('clicking outside closes an open group menu', async ({ page }) => {
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
 });
 
-// Below the xl breakpoint the five cells collapse to one "Menu" cell. This is
-// a static CSS breakpoint, so what has to be proved is not that it measured
-// correctly but that nothing became unreachable: every tab stays one click away.
-test('at 390px the bar collapses to one Menu button that still reaches every tab', async ({
-  page,
-}) => {
+test('at 390px All pages still reaches every tab', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?cb=p6-390#overview');
-
-  const menu = page.locator('header button[data-menu]');
-  await expect(menu).toBeVisible();
-  // The five wide-width cells are present but not displayed, so they cannot
-  // paint over the right-hand controls.
-  for (const label of GROUP_LABELS) {
-    await expect(page.locator(`header button[data-group="${label.toLowerCase()}"]`)).toBeHidden();
-  }
-
-  await menu.click();
+  await page.locator(MENU).click();
   const hrefs = await page.evaluate(() =>
     [...document.querySelectorAll('header [role="menu"] a[role="menuitem"]')].map((a) =>
       (a as HTMLAnchorElement).getAttribute('href'),
@@ -241,20 +200,9 @@ test('at 390px the theme switch is not on the bar and still works from Settings'
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-// ---------------------------------------------------------------------------
-// Keyboard and screen-reader behaviour of the new nav (2026-08-07 a11y audit).
-//
-// Each test below failed first for the reason named in its comment, so none of
-// them is a restatement of markup that already existed.
-// ---------------------------------------------------------------------------
-
 // A `role="menu"` that announces as a menu and does not move focus is worse
 // than no role at all: a screen reader in menu mode gets nothing to steer.
-// Before the fix, ArrowDown scrolled the document (scrollY 40) and focus never
-// left the group button.
-test('an open group menu owns focus, and arrow keys move within it instead of scrolling', async ({
-  page,
-}) => {
+test('the open menu owns focus, and arrow keys move within it instead of scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
 
@@ -264,72 +212,30 @@ test('an open group menu owns focus, and arrow keys move within it instead of sc
       return { role: a?.getAttribute('role') ?? null, href: a?.getAttribute('href') ?? null };
     });
 
-  await page.locator('header button[data-group="risk"]').click();
-
-  // Risk owns security, incidents, audit, changes — in that order.
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#security' });
-
+  await page.locator(MENU).click();
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
   await page.keyboard.press('ArrowDown');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#incidents' });
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#changes' });
-  // Wraps.
-  await page.keyboard.press('ArrowDown');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#security' });
-  await page.keyboard.press('ArrowUp');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#changes' });
-
-  await page.keyboard.press('Home');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#security' });
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#overview' });
   await page.keyboard.press('End');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#changes' });
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#chart' });
+  // Wraps both ways.
+  await page.keyboard.press('ArrowDown');
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
+  await page.keyboard.press('ArrowUp');
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#chart' });
+  await page.keyboard.press('Home');
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
 
-  // The page itself must not have moved under any of that.
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
-
   await page.keyboard.press('Escape');
   await expect(page.locator('header [role="menu"]')).toHaveCount(0);
-  await expect(page.locator('header button[data-group="risk"]')).toBeFocused();
+  await expect(page.locator(MENU)).toBeFocused();
 });
 
-// Which group holds the current tab was conveyed by a background colour and an
-// aria-hidden accent bar only — and the "Tab —" readout that spells it out in
-// words renders at 2xl and no narrower. Before the fix aria-current was null on
-// all five buttons at every width.
-test('the current group carries aria-current, not colour alone', async ({ page }) => {
-  for (const [id, expected] of [
-    ['audit', 'risk'],
-    ['ai', 'ask'],
-    ['overview', 'status'],
-  ] as const) {
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto(`/#${id}`);
-    await expect(page.locator('header button[data-group]').first()).toBeVisible();
-    const marked = await page.evaluate(() =>
-      [...document.querySelectorAll('header button[data-group]')]
-        .filter((b) => b.getAttribute('aria-current') === 'true')
-        .map((b) => b.getAttribute('data-group')),
-    );
-    expect(marked, `#${id} should mark exactly one group with aria-current`).toEqual([expected]);
-  }
-});
-
-// Two controls named exactly "Ask" existed on the AI tab — the nav group and
-// the send button — which is ambiguous by accessible name for anyone
-// navigating by it (and a Playwright strict-mode violation, see
-// tests/ai-budget.spec.ts). The nav buttons now name themselves as sections.
-test('each group button names itself as a section, so no two controls share a name', async ({
-  page,
-}) => {
+// Only the AI tab's send button answers to "Ask"; nothing in the header does.
+test('no header control shares the name of the AI send button', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#ai');
-  for (const label of GROUP_LABELS) {
-    await expect(
-      page.locator(`header button[data-group="${label.toLowerCase()}"]`),
-    ).toHaveAttribute('aria-label', `${label} section`);
-  }
-  // The AI tab's send button keeps the bare name; nothing else answers to it.
   await expect(page.getByRole('button', { name: 'Ask', exact: true })).toHaveCount(1);
 });
 
@@ -338,7 +244,7 @@ test('each group button names itself as a section, so no two controls share a na
 test('activating a menu item moves focus into the new tab and announces it', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/#overview');
-  await page.locator('header button[data-group="risk"]').click();
+  await page.locator(MENU).click();
   await page.locator('header a[role="menuitem"][href="#incidents"]').click();
 
   await expect(page.locator('h1').first()).toHaveText(/^Incidents/);
@@ -350,19 +256,15 @@ test('activating a menu item moves focus into the new tab and announces it', asy
   await expect(page.locator('[data-tab-live]')).toHaveText('Incidents tab');
 });
 
-// role="menu" may own menuitems, groups and separators — not bare divs. The
-// collapsed form put 15 menuitems and 5 role-less heading divs in one menu, so
-// the Status/Estate/Risk grouping was lost at xl and below.
-test('at 390px the single Menu keeps the five groups as real groups', async ({ page }) => {
+// role="menu" may own menuitems, groups and separators — not bare divs.
+test('the menu keeps the five groups as real groups', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?cb=groups-390#overview');
-  await page.locator('header button[data-menu]').click();
+  await page.locator(MENU).click();
 
   const groups = page.locator('header [role="menu"] > [role="group"]');
   await expect(groups).toHaveCount(5);
-  expect(
-    await groups.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))),
-  ).toEqual(GROUP_LABELS);
+  expect(await groups.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(GROUP_LABELS);
   for (const label of GROUP_LABELS) {
     await expect(
       page.locator(`header [role="menu"] [role="group"][aria-label="${label}"] a[role="menuitem"]`),
@@ -414,14 +316,4 @@ test('the settings sheet is a real modal dialog: focus, trap, Escape, return', a
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(trigger).toBeFocused();
-});
-
-// The five-cell form must be the one on screen at desk widths.
-test('at 1920px the collapsed Menu button is not displayed', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/#overview');
-  await expect(page.locator('header button[data-menu]')).toBeHidden();
-  for (const label of GROUP_LABELS) {
-    await expect(page.locator(`header button[data-group="${label.toLowerCase()}"]`)).toBeVisible();
-  }
 });

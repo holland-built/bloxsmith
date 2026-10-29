@@ -29,13 +29,13 @@ const ALLOWED_KEYS = new Set(['label', 'what'])
 // than derived, so removing a control from the header without removing it from
 // this dictionary is a red test and a decision, not a silent orphan.
 const EXPECTED = [
-  'sections',
+  'all-pages',
+  'search-box',
   'updates',
   'connection-status',
   'settings',
   'theme',
   'density',
-  'provision',
 ]
 
 test('CONTROL_HELP is a plain object', () => {

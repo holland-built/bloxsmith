@@ -1,3 +1,4 @@
+import { questionFromHash } from '../lib/oneBox.js'
 import { useEffect, useRef, useState } from 'react'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
@@ -135,7 +136,17 @@ function BudgetLine({ budget }) {
 
 function ChatCard({ panelId }) {
   const { COLORS } = useChartTheme()
-  const [input, setInput] = useState('')
+  // A question typed in the header's box arrives as #ai?q=…, typed in, not sent.
+  const [input, setInput] = useState(() => questionFromHash(location.hash))
+  // A second question from the header box while already here changes only the hash.
+  useEffect(() => {
+    const onHash = () => {
+      const q = questionFromHash(location.hash)
+      if (q) setInput(q)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const [busy, setBusy] = useState(false)
   const [items, setItems] = useState([])
   const [budget, setBudget] = useState(null)
