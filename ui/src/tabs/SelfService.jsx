@@ -148,19 +148,19 @@ function AllocatePanel({ panelId }) {
     if (tried.current || !tenant || !spacesApi.data) return
     tried.current = true
     const last = readLast(tenant)
-    const s = last && !space ? stillThere(last.space, spaces.map((x) => x.id)) : ''
+    const s = last && !space ? stillThere(last.space, (spacesApi.data.spaces ?? []).map((x) => x.id)) : ''
     if (!s) return
     pending.current = last
     setSpace(s)
-  }, [tenant, spacesApi.data])
+  }, [tenant, spacesApi.data, space])
   useEffect(() => {
     const want = pending.current
     if (!want || !subnetsApi.data) return
     pending.current = null
     if (want.space !== space || block || subnetId) return
-    const id = stillThere(want.subnet, subnets.map((x) => x.id))
+    const id = stillThere(want.subnet, (subnetsApi.data.subnets ?? []).map((x) => x.id))
     if (id) setSubnetId(id)
-  }, [subnetsApi.data, space])
+  }, [subnetsApi.data, space, subnetId, block])
 
   const body = () => ({ subnet_id: subnetId, count: Number(count) || 1, name })
 
