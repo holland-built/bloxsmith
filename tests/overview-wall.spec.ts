@@ -62,6 +62,11 @@ test('a count of zero is green, and only then', async ({ page }) => {
   await expect(tile(page, 'Hosts not online')).toContainText('0');
   await expect(tile(page, 'Subnets ≥90%')).toHaveAttribute('data-tone', 'ok');
   await expect(tile(page, 'Subnets ≥90%')).toContainText('1 at 70–89%');
+  // Good news is not filled with colour: only a tile that needs action is
+  // tinted, so a red one is the first thing the eye finds (review 2026-10-30).
+  const bg = await tile(page, 'Hosts not online').evaluate((el) => getComputedStyle(el).backgroundColor);
+  const card = await tile(page, 'Hosts').evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).toBe(card);
 });
 
 test('a zero counted over part of the estate is not painted green', async ({ page }) => {
@@ -154,7 +159,7 @@ test('the hosts that are not active are named under the donut, worst first', asy
   const rows = page.locator('[data-panel-id="host-status"] ul li');
   await expect(rows).toHaveCount(3, { timeout: 20_000 });
   await expect(rows.nth(0)).toContainText('baseline-host-c');
-  await expect(rows.nth(0)).toContainText('Offline');
+  await expect(rows.nth(0)).toContainText('Not online');
   await expect(rows.nth(1)).toContainText('baseline-host-b');
   await expect(rows.nth(1)).toContainText('Degraded');
 });

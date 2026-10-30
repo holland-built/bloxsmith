@@ -73,17 +73,20 @@ export function HeadlineStrip({ items, label }) {
     <ul aria-label={label} className={`grid gap-[var(--sp-grid-gap)] mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
       {items.map((it) => {
         const tone = it.value != null && TONE[it.tone] && it.tone !== 'neutral' ? it.tone : null
-        const style = tone
+        // Only a tile that needs action is tinted. "ok" keeps its data-tone
+        // but stays plain, so good news never competes with a red tile.
+        const fill = tone && tone !== 'ok' ? tone : null
+        const style = fill
           ? {
-              background: `color-mix(in srgb, ${TONE[tone].dot} 14%, var(--color-card))`,
-              borderColor: `color-mix(in srgb, ${TONE[tone].dot} 40%, var(--color-card-border))`,
+              background: `color-mix(in srgb, ${TONE[fill].dot} 14%, var(--color-card))`,
+              borderColor: `color-mix(in srgb, ${TONE[fill].dot} 40%, var(--color-card-border))`,
             }
           : undefined
-        const cls = `${TILE} ${tone ? 'hover:brightness-110' : 'bg-card border-card-border hover:bg-line'} ${FOCUS_RING}`
+        const cls = `${TILE} ${fill ? 'hover:brightness-110' : 'bg-card border-card-border hover:bg-line'} ${FOCUS_RING}`
         const body = (
           <>
             <span className="text-note text-muted">{it.label}</span>
-            <span className="text-figure font-semibold tabular-nums mt-1" style={tone ? { color: TONE[tone].dot } : undefined}>
+            <span className="text-figure font-semibold tabular-nums mt-1" style={fill ? { color: TONE[fill].dot } : undefined}>
               {it.value == null ? (it.loading ? <span className="text-copy font-normal text-muted">Loading…</span> : '—') : it.value}
               {it.unit ? <span className="text-note font-normal text-muted"> {it.unit}</span> : null}
             </span>
