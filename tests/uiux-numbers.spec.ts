@@ -42,3 +42,17 @@ test('Network: IPAM Spaces bars are sized by addresses used, like the numbers be
     .locator('div.h-full').evaluate((el) => el.getBoundingClientRect().width);
   expect(await width('big-space')).toBeGreaterThan(await width('small-space'));
 });
+
+test('Assets: a Cube.js time with no zone is read as UTC, so Last seen is never in the future', async ({ page }) => {
+  // Cube.js sends "2026-10-30T17:58:25.000" meaning UTC. new Date() reads a
+  // zoneless string as local time, which put Last seen hours ahead on 2026-10-30.
+  const utcNoZone = new Date(Date.now() - 60_000).toISOString().replace('Z', '');
+  await page.route('**/api/csp/assets*', (route) => route.fulfill({
+    json: { availability: 'ok', dir: 'desc', sort: 'last_seen', page: 1, page_size: 50, has_more: false, total: 1,
+      rows: [{ cqid: 'cq/t', last_seen: utcNoZone, name: 'tz-asset', provider: 'p', type: 'Server', vendor: 'v' }] },
+  }));
+  await page.goto('/#assets');
+  const row = page.getByRole('row', { name: /tz-asset/ });
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await expect(row).toContainText(await page.evaluate((iso) => new Date(iso + 'Z').toLocaleString(), utcNoZone));
+});
