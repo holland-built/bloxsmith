@@ -10,7 +10,8 @@
 // that is what carries the notice.
 import { useEffect, useId, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { PageRail } from '../components/kit.jsx'
+import { useReadOnly } from '../lib/writeTarget.js'
+import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
@@ -714,6 +715,7 @@ function ManageAddressesPanel({ panelId }) {
 const SHOW_MANAGE_ADDRESSES = true
 
 export default function SelfService() {
+  const ro = useReadOnly()
   return (
     <PageRail>
     <div className="w-full px-6 py-5">
@@ -722,6 +724,7 @@ export default function SelfService() {
         The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a
         record to an existing DNS zone. Preview checks the request against the server; Apply commits it.
       </TabIntro>
+      <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply is off." />
       {/* The two flex rows these panels used to sit in are one CardGrid now, and
           the div around each panel is gone rather than kept: a div wrapping a
           Card hides that Card's panelId from the grid, which reads props.panelId

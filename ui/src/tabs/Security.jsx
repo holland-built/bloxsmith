@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { useReadOnly } from '../lib/writeTarget.js'
+import { ReadOnlyNote } from '../components/kit.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
@@ -238,7 +240,7 @@ function KpiStack({ panelId, hub, events, acks }) {
 
 // ---------- block action ----------
 
-function BlockCell({ domain }) {
+function BlockCell({ domain, readOnly }) {
   const { COLORS } = useChartTheme()
   // idle | busy | verified | rejected | unverified | tokenRequired.
   // "verified" is the ONLY state that may show a green tick — it means a
@@ -316,13 +318,15 @@ function BlockCell({ domain }) {
     )
   }
   return (
-    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted hover:text-field-txt">Block</button>
+    <button onClick={() => run('block')} disabled={readOnly} title={readOnly ? 'Off: this tenant is read-only' : undefined}
+      className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted hover:text-field-txt disabled:opacity-50 disabled:cursor-not-allowed">Block</button>
   )
 }
 
 // ---------- triage inbox ----------
 
 function TriageInbox({ panelId, hub, events, acks, setAcks }) {
+  const ro = useReadOnly()
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
   const [sevFilter, setSevFilter] = useState('all')
@@ -379,7 +383,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       key: 'block',
       label: 'Block',
       keep: true,
-      render: (_v, r) => <BlockCell domain={r.qname} />,
+      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} />,
     },
     {
       key: 'severity',
@@ -444,6 +448,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
         </div>
       }
     >
+      <ReadOnlyNote ro={ro} what="Block is off, so nothing is added to the block list." />
       {hub.loading ? <Skeleton h={260} /> : unavailable ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : rows.length === 0 ? (

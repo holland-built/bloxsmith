@@ -193,3 +193,13 @@ export function PageRail({ children }) {
     </div>
   )
 }
+
+/** One line saying the tenant is read-only and what still works. */
+export function ReadOnlyNote({ ro, what }) {
+  if (!ro.readOnly) return null
+  return (
+    <p data-read-only-note="" role="status" className="text-note text-warn mb-2">
+      {ro.name} is read-only. {what} An admin can switch it to read-write in Settings.
+    </p>
+  )
+}

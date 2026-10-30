@@ -34,6 +34,8 @@ const HUB_SECURITY_ONE_EVENT = {
 
 test('block-domain 401 with no dashToken surfaces "token required" message', async ({ page }) => {
   await page.route('**/api/hub/security*', (route) => fulfillJson(route, HUB_SECURITY_ONE_EVENT));
+  // A writable tenant: on a read-only one Block is off and never sends (uiux-read-only.spec.ts).
+  await page.route('**/api/vault/write-target*', (route) => fulfillJson(route, { known: true, tenant: 't/-', label: 'T', writable: true }));
 
   await page.route('**/api/block-domain', (route) =>
     route.fulfill({
