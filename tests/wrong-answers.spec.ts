@@ -176,7 +176,7 @@ test('Infra: maintenance being off is not reported as "Operational"', async ({ p
   const answered = page.waitForResponse('**/api/csp/maintenance');
   await page.goto('/#infra');
   await (await answered).finished();
-  await expect(page.getByRole('button', { name: 'Offline 1' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('button', { name: 'Not online 1' })).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
   await expect(page.getByText('Operational', { exact: true })).toHaveCount(0);

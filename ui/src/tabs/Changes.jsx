@@ -260,8 +260,10 @@ function Feed({ groups }) {
     <div
       // tabIndex: a box that scrolls has to be reachable, or a keyboard cannot
       // scroll it. The rows hold nothing focusable of their own.
+      // relative: each row's sr-only label is position:absolute, and without a
+      // positioned box here they escape it and stretch the page ~28px a row.
       tabIndex={0}
-      className={`max-h-[520px] overflow-auto outline-none ${FOCUS_RING}`}
+      className={`relative max-h-[520px] overflow-auto outline-none ${FOCUS_RING}`}
       role="table"
       aria-label="Changed objects, grouped by resource"
       aria-colcount={FEED_COLUMNS.length}

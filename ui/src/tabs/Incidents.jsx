@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { useReadOnly } from '../lib/writeTarget.js'
+import { ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
@@ -454,6 +456,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 // ---------- SOC action queue ----------
 
 function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusState, onSetStatus, openActionId, onOpenAction, panelId }) {
+  const ro = useReadOnly()
   const { COLORS } = useChartTheme()
   const columns = [
     {
@@ -490,9 +493,10 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
           <div className="flex flex-col gap-0.5">
             <button
               type="button"
-              disabled={st.pending}
+              disabled={st.pending || ro.readOnly}
+              title={ro.readOnly ? 'Off: this tenant is read-only' : undefined}
               onClick={() => onSetStatus(r.id, next)}
-              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-note disabled:opacity-50"
+              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-note disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {st.pending ? 'saving…' : label}
             </button>
@@ -517,6 +521,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
         <Empty>no pending actions</Empty>
       ) : (
         <>
+          <ReadOnlyNote ro={ro} what="Resolve and Reopen are off." />
           <DataTable rows={rows} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
           {openActionId != null && <ActionDetailDrawer actionId={openActionId} onClose={() => onOpenAction(null)} />}
         </>

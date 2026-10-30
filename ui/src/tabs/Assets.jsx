@@ -42,7 +42,10 @@ function buildUrl({ q, type, sort, dir, page }) {
 
 function fmtSeen(v) {
   if (!v) return '—'
-  const d = new Date(v)
+  // Cube.js sends UTC with no zone ("2026-10-30T17:58:25.000"). new Date()
+  // reads a zoneless date-time as local time, which put Last seen hours ahead.
+  const s = String(v)
+  const d = new Date(/T\d\d:\d\d(:\d\d(\.\d+)?)?$/.test(s) ? `${s}Z` : s)
   return isNaN(d) ? String(v) : d.toLocaleString()
 }
 

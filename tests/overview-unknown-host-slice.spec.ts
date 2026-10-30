@@ -99,11 +99,11 @@ test.describe('Overview → Host Status donut (hosts reported as "unknown")', ()
     // The rest of the donut is untouched by the split.
     await expect(legendRow(page, 'Active').locator('b')).toHaveText('50%');
     await expect(legendRow(page, 'Degraded').locator('b')).toHaveText('10%');
-    await expect(legendRow(page, 'Offline').locator('b')).toHaveText('10%');
+    await expect(legendRow(page, 'Not online').locator('b')).toHaveText('10%');
 
     // Severity order matches Infra's bucket order — Unknown above Other, since
     // "we were not told" is a thing to go and check and "pending" is not.
-    await expect(card.locator('span.text-muted.flex-1')).toHaveText(['Active', 'Degraded', 'Offline', 'Unknown', 'Other']);
+    await expect(card.locator('span.text-muted.flex-1')).toHaveText(['Active', 'Degraded', 'Not online', 'Unknown', 'Other']);
   });
 
   test('the Unknown swatch is the same colour Infra paints it', async ({ page }) => {

@@ -8,9 +8,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
-async function feeds(page: Page, { incidents, hosts, sec }: { incidents?: unknown[] | null; hosts?: unknown[]; sec?: unknown }) {
+async function feeds(page: Page, { incidents, hosts, sec, signals }: { incidents?: unknown[] | null; hosts?: unknown[]; sec?: unknown; signals?: unknown[] }) {
   await page.route('**/api/incidents', (r) =>
-    incidents === null ? r.fulfill({ status: 500, body: 'boom' }) : r.fulfill(json({ incidents: incidents ?? [], signals: [] })),
+    incidents === null ? r.fulfill({ status: 500, body: 'boom' }) : r.fulfill(json({ incidents: incidents ?? [], signals: signals ?? [] })),
   );
   await page.route('**/api/hub/security*', (r) => r.fulfill(json(sec ?? { availability: 'ok', counts: { critical: 0, high: 0 } })));
   await page.route('**/api/data', (r) =>
@@ -33,12 +33,38 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   await expect(page.locator('[data-panel-id]').first()).toBeVisible();
   const rows = page.locator('[data-inbox-row]');
   await expect(rows).toHaveCount(3);
-  await expect(rows.nth(0)).toContainText('1 hosts are offline');
-  await expect(rows.nth(1)).toContainText('1,746 × Subnet filling up');
+  await expect(rows.nth(0)).toContainText('1 of 2 hosts is not online');
+  await expect(rows.nth(1)).toContainText('1,746 subnets are filling up');
   await expect(rows.nth(1)).toContainText('3 are 90% full or more');
-  await expect(rows.nth(2)).toContainText('64 × DNS zone timing');
-  await expect(rows.nth(1).getByRole('link', { name: 'See full subnets' })).toHaveAttribute('href', '#network?minUtil=90&focus=subnets');
-  await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are offline/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20offline%3F');
+  await expect(rows.nth(2)).toContainText('64 zones have DNS timing problems');
+  await expect(page.locator('[data-needs-a-look]')).not.toContainText('×');
+  // The sentence is the link; there is no column of buttons.
+  await expect(rows.nth(1).getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
+  await expect(page.locator('[data-needs-a-look] a.bg-accent')).toHaveCount(0);
+  await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are not online/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
+});
+
+test('an incident made of one finding says the finding itself, not "1 ×"', async ({ page }) => {
+  await feeds(page, {
+    incidents: [
+      { key: 'dnssec-unsigned', category: 'dnssec-unsigned', count: 1, severity: 'warn', message: '1 dnssec unsigned' },
+      { key: 'subnet-utilization', category: 'subnet-utilization', count: 1, severity: 'warn', message: '1 subnet utilization' },
+    ],
+    signals: [
+      { category: 'dnssec-unsigned', message: '602 of 602 DNS zones unsigned (DNSSEC)', severity: 'warn' },
+      { category: 'subnet-utilization', message: 'Windows Wireless at 80% utilization', severity: 'warn' },
+    ],
+    hosts: [{ name: 'b', status: 'online' }],
+  });
+  await page.route('**/api/data', (r) =>
+    r.fulfill(json({ _meta: { hosts: 'ok' }, _totals: { hosts: 1, subnets: 10, subnetsCrit: 0, subnetsWarn: 1 }, hosts: [{ name: 'b', status: 'online' }] })),
+  );
+  await page.goto('/');
+  const box = page.locator('[data-needs-a-look]');
+  await expect(box).toContainText('602 of 602 DNS zones not signed (DNSSEC)');
+  await expect(box).toContainText('Windows Wireless is 80% full');
+  await expect(box).toContainText('none at 90% yet');
+  await expect(box).not.toContainText('0 are 90% full');
 });
 
 test('a quiet day says so in one line', async ({ page }) => {

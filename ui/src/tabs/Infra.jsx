@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
@@ -172,7 +173,7 @@ function headlines(hosts, totalHosts, hostsStatus) {
   const v = (k) => (ok ? b[k].toLocaleString() : null)
   return [
     { panelId: 'infra-host-inventory', label: 'Hosts', value: ok && typeof totalHosts === 'number' ? totalHosts.toLocaleString() : null },
-    { panelId: 'infra-host-status', label: `Offline${loaded}`, value: v('offline'), tone: alarmTone(n('offline'), 'crit') },
+    { panelId: 'infra-host-status', label: `Not online${loaded}`, value: v('offline'), tone: alarmTone(n('offline'), 'crit') },
     { panelId: 'infra-host-status', label: `Degraded${loaded}`, value: v('degraded'), tone: alarmTone(n('degraded'), 'warn') },
     { panelId: 'infra-host-status', label: `Unknown${loaded}`, value: v('unknown') },
   ]
@@ -209,7 +210,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   const partial = totalHosts != null && totalHosts !== loaded
   const pieData = Object.entries(buckets)
     .filter(([, v]) => v > 0)
-    .map(([name, value]) => ({ name, value, color: colorMap[name] }))
+    .map(([key, value]) => ({ key, name: bucketWord(key), value, color: colorMap[key] }))
 
   return (
     <Card span={2} panelId={panelId} title="Host Status">
@@ -239,7 +240,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
           </div>
           <div className="flex-1 flex flex-col gap-2">
             {pieData.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-note">
+              <div key={d.key} className="flex items-center gap-1.5 text-note">
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
                 <b>{((d.value / loaded) * 100).toFixed(0)}%</b>

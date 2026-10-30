@@ -1,5 +1,28 @@
 - main "Overview tab":
   - heading "Overview" [level=1]
+  - region "Needs a look3, worst first":
+    - heading "Needs a look" [level=2]:
+      - text: ""
+      - status: 3, worst first
+    - list "Needs a look":
+      - listitem:
+        - img "Critical"
+        - link "1 of 3 hosts is not online":
+          - /url: "#infra?status=offline"
+        - 'link "Ask the AI: Which hosts are not online?"':
+          - /url: "#ai?q=Which%20hosts%20are%20not%20online%3F"
+          - text: Ask why
+      - listitem:
+        - img "Critical"
+        - link "3 critical or high security events":
+          - /url: "#security"
+        - 'link "Ask the AI: Which domains are on threat feeds?"':
+          - /url: "#ai?q=Which%20domains%20are%20on%20threat%20feeds%3F"
+          - text: Ask why
+      - listitem:
+        - img "Warning"
+        - link "2 subnets close to full":
+          - /url: "#incidents"
   - paragraph:
     - text: Your network at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
     - button "Docs →"
@@ -9,7 +32,7 @@
     - listitem:
       - button "Hosts 3"
     - listitem:
-      - button "Hosts offline 1"
+      - button "Hosts not online 1"
     - listitem:
       - link /Subnets ≥\d+% 1 0 at \d+–\d+%/:
         - /url: "#network?minUtil=90"
@@ -26,17 +49,17 @@
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
-  - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
+  - application /DNS Query Rate — \d+[hmsp]+ chart/: /\d+:\d+ AM \d+:\d+ AM/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
   - application "Host Status chart"
   - text: 3 hosts
   - button /Degraded \d+%/
-  - button /Offline \d+%/
+  - button /Not online \d+%/
   - button /Other \d+%/
   - list:
-    - listitem: baseline-host-c Offline
+    - listitem: baseline-host-c Not online
     - listitem: baseline-host-b Degraded
     - listitem: baseline-host-a Other
   - heading "Top Consumers" [level=2]
@@ -92,26 +115,26 @@
         - columnheader "Free":
           - button "Free"
     - rowgroup:
-      - row /View details for \d+\.\d+\.0\.0/:
-        - cell /View details for \d+\.\d+\.0\.0/:
+      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 other-site \d+% Critical 5 free/:
+        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - text: ""
         - cell "other-site"
         - cell /\d+%/
         - cell "Critical"
         - cell "5 free"
-      - row /View details for \d+\.\d+\.0\.0/:
-        - cell /View details for \d+\.\d+\.0\.0/:
+      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 baseline-site \d+% Warning \d+ free/:
+        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - text: ""
         - cell "baseline-site"
         - cell /\d+%/
         - cell "Warning"
         - cell /\d+ free/
-      - row /View details for \d+\.\d+\.0\.0/:
-        - cell /View details for \d+\.\d+\.0\.0/:
+      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 baseline-site \d+% Healthy \d+ free/:
+        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - text: ""
         - cell "baseline-site"
         - cell /\d+%/
         - cell "Healthy"

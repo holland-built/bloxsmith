@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { PageRail } from '../components/kit.jsx'
+import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { useReadOnly } from '../lib/writeTarget.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -89,6 +90,7 @@ function parseTags(str) {
 }
 
 export default function Editor() {
+  const ro = useReadOnly()
   const params = hashParams()
   const initialType = EDITOR_TYPES.some((t) => t.key === params.type) ? params.type : 'dns_zone'
 
@@ -237,6 +239,7 @@ export default function Editor() {
         an existing item's ID to change it, which also shows Delete. Preview first, then Apply. Editor-created subnets and
         address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
       </TabIntro>
+      <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply and Delete are off." />
 
       <div className="flex flex-wrap gap-1.5 mb-4">
         {EDITOR_TYPES.map((t) => (

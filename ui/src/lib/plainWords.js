@@ -17,6 +17,15 @@ const ISSUE = {
   'TTL Too High': 'cache time too long',
 }
 
+/**
+ * A host-status bucket as shown on screen. The "Offline" bucket holds hosts
+ * Infoblox reports as offline, down OR error, so it is shown as "Not online"
+ * rather than claim which. The bucket name itself stays the key (URLs, colours).
+ */
+export function bucketWord(name) {
+  return name === 'Offline' ? 'Not online' : name
+}
+
 /** A category id in words: the known ones by name, any other one de-dashed. */
 export function categoryWord(id) {
   const s = String(id ?? '')

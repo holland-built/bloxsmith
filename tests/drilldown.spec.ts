@@ -42,7 +42,7 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
   // any plain text on the page) removes the .first() guesswork, and waiting
   // on it explicitly before clicking mirrors write-lock's fix: wait for the
   // specific condition that makes the click meaningful, don't race the fetch.
-  const offlineRow = page.getByRole('button', { name: /^Offline/ });
+  const offlineRow = page.getByRole('button', { name: /^Not online/ });
   // THIS is the assertion that was actually failing, not the chip below.
   //
   // Reproduced on demand at last (2026-08-01): `curl :8090/api/cache-bust`

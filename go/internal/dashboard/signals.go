@@ -132,13 +132,10 @@ func BuildSignals(data map[string]any) []map[string]any {
 		}
 	}
 	if unsignedCount > 0 {
-		// crit only when every zone with a known status is unsigned (a
-		// tenant-wide posture failure); warn when some zones are signed,
-		// since the gap is real but not total.
+		// Always warn. Unsigned zones are a coverage gap, not an outage: when
+		// every zone was unsigned this used to be crit, and it then outranked
+		// offline hosts at the top of Overview (UI/UX review, 2026-10-30).
 		severity := "warn"
-		if unsignedCount == knownCount {
-			severity = "crit"
-		}
 		signals = append(signals, map[string]any{
 			"source":      "dns",
 			"entity_type": "posture",
