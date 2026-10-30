@@ -4,7 +4,7 @@
     - listitem:
       - button "Hosts 3"
     - listitem:
-      - button "Offline 1"
+      - button "Not online 1"
     - listitem:
       - button "Degraded 1"
     - listitem:
@@ -49,7 +49,7 @@
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
   - application "Host Status chart"
-  - text: /3 hosts Degraded \d+% Offline \d+% Other \d+%/
+  - text: /3 hosts Degraded \d+% Not online \d+% Other \d+%/
   - heading "Service Health" [level=2]
   - text: deployed services
   - 'button "About: Service Health"': "About: ⓘ"

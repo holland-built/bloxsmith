@@ -9,10 +9,14 @@ export function useReadOnly() {
   const [state, setState] = useState({ readOnly: false, name: '' })
   useEffect(() => {
     let live = true
+    let seq = 0
     const load = async () => {
+      // Only the newest answer counts: an older "writable" arriving after a
+      // newer "read-only" must not switch Block back on.
+      const mine = ++seq
       const r = await authFetch('/api/vault/write-target', { cache: 'no-store' })
       const d = r.ok ? r.data : null
-      if (live) setState({ readOnly: !!(d && d.known && d.writable === false), name: d?.label || d?.tenant || 'This tenant' })
+      if (live && mine === seq) setState({ readOnly: !!(d && d.known && d.writable === false), name: d?.label || d?.tenant || 'This tenant' })
     }
     load()
     // Provision's "Switch to read-write" fires this when the permission changes.

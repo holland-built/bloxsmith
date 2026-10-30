@@ -68,7 +68,7 @@ test('Network, DNS, Infra: a dead /api/data is a dash in the strip, never 0', as
   for (const [tab, labels] of [
     ['network', [/^Subnets/, /^≥90%/, /^70–89%/]],
     ['dns', [/^Zones [—0-9]/, /^Zones with issues/]],
-    ['infra', [/^Hosts/, /^Offline/, /^Degraded/, /^Unknown/]],
+    ['infra', [/^Hosts/, /^Not online/, /^Degraded/, /^Unknown/]],
   ] as const) {
     await page.goto(`/#${tab}`);
     for (const label of labels) {

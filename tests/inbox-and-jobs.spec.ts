@@ -39,7 +39,7 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   await expect(rows.nth(2)).toContainText('64 zones have DNS timing problems');
   await expect(page.locator('[data-needs-a-look]')).not.toContainText('×');
   // The sentence is the link; there is no column of buttons.
-  await expect(rows.nth(1).getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=90&focus=subnets');
+  await expect(rows.nth(1).getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
   await expect(page.locator('[data-needs-a-look] a.bg-accent')).toHaveCount(0);
   await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are not online/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
 });

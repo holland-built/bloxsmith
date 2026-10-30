@@ -18,7 +18,9 @@ const isOffline = (s) => {
 
 // Where each kind of incident is fixed, and the question to ask about it.
 const FIX = {
-  'subnet-utilization': { href: '#network?minUtil=90&focus=subnets', ask: 'Which subnets are nearly full?' },
+  // 70: the subnet signal starts there (signals.go), so the list holds every
+  // subnet this row counts, not only the ones at 90%.
+  'subnet-utilization': { href: '#network?minUtil=70&focus=subnets', ask: 'Which subnets are nearly full?' },
   'dns-ttl-anomaly': { href: '#dns', ask: 'Are any of my DNS zones misconfigured?' },
   'dhcp-expired-lease': { href: '#network?focus=leases', ask: 'Which DHCP leases have expired?' },
   'dnssec-unsigned': { href: '#dns', ask: 'Which DNS zones are not signed?' },
@@ -40,7 +42,10 @@ function inboxRows({ hosts, incidents, signals, sec }) {
     // finding's own sentence ("602 of 602 DNS zones not signed") says what is
     // wrong; "1 × Zones not signed" counted the group, not the zones.
     const own = (signals ?? []).filter((sg) => sg.category === i.category)
-    const text = i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message || `${i.count} ${String(i.category).replace(/-/g, ' ')}`
+    let text = i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message || String(i.category).replace(/-/g, ' ')
+    // The server's group message starts with its count ("11 dns ttl anomaly");
+    // one that does not still gets it, so the row never loses the number.
+    if (text !== own[0]?.message && !/^\d/.test(text)) text = `${i.count} ${text}`
     rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
   }
   return rows.sort((a, b) => (a.sev === 'crit' ? 0 : 1) - (b.sev === 'crit' ? 0 : 1))
@@ -92,13 +97,14 @@ export default function NeedsALook() {
           {rows.map((r) => (
             <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 border-b border-border">
               <span role="img" aria-label={r.sev === 'crit' ? 'Critical' : 'Warning'} className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.sev === 'crit' ? 'bg-crit' : 'bg-warn'}`} />
-              {/* The sentence is the link. A column of identical buttons sat far
+              {/* inline-flex: an inline box ignores the touch 44px min-height in
+                  index.css. The sentence is the link. A column of identical buttons sat far
                   from the words it belonged to and drew the eye before them. */}
               <span className="flex-1 min-w-[12rem] text-copy">
-                <a href={r.href} className={`font-semibold text-txt no-underline hover:underline hover:text-link ${FOCUS_RING}`}>{r.title}</a>
+                <a href={r.href} className={`inline-flex items-center font-semibold text-txt no-underline hover:underline hover:text-link ${FOCUS_RING}`}>{r.title}</a>
                 {r.sub && <span className="text-muted"> · {r.sub}</span>}
                 {r.ask && (
-                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-3 text-note text-link underline ${FOCUS_RING}`}>Ask why</a>
+                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-3 inline-flex items-center text-note text-link underline ${FOCUS_RING}`}>Ask why</a>
                 )}
               </span>
             </li>
