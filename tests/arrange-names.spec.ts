@@ -32,7 +32,7 @@ import { test, expect } from './fixtures';
 // this array is a tab nothing here ever looks at.
 const TABS = [
   'overview', 'daily', 'network', 'dns', 'security', 'infra', 'assets', 'incidents',
-  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'ai', 'chart',
+  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'demo', 'ai', 'chart',
 ];
 
 // A panelId's shape: kebab-case, which is what panelHelp.test.js already

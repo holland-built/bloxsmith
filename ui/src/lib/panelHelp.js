@@ -412,6 +412,24 @@ export const PANEL_HELP = {
     look: 'A red count is how many differences were found, green means none. Six per group are shown, worst group first; "+N more" opens the rest.',
   },
 
+  // ---- Demo server ----
+  'demo-settings': {
+    what: 'The Proxmox host, demo network, NIOS-X image and join token, set once and kept in the encrypted vault.',
+    look: 'The join token is never shown again; leave it blank to keep the stored one. Missing or unsafe fields are listed under the button.',
+  },
+  'demo-build': {
+    what: 'Checks everything is ready, then builds the demo server step by step: next free address, VM, Portal join, DNS, and a test lookup.',
+    look: 'Preview only checks and changes nothing. Build it appears once every check passes. Each step says Running, Done or Failed; the output hides secrets.',
+  },
+  'demo-code': {
+    what: 'The OpenTofu or Terraform files the build runs against Infoblox, one tab per step.',
+    look: 'This is the same code that runs, not an example. It shows after Preview.',
+  },
+  'demo-runs': {
+    what: 'Every demo build, newest first, with its address, zone and VM.',
+    look: 'Tear down lists what it would remove and waits for you to confirm. Anything that no longer belongs to the run is left alone. The demo network is kept.',
+  },
+
   // ---- Ai ----
   'ai-ask': {
     what: 'Ask about your own network in ordinary words. Answers are built by running real lookups against your data, not from what the model remembers.',

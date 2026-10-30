@@ -26,6 +26,7 @@ const Drift = lazy(() => import('./tabs/Drift.jsx'))
 const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
 const Ai = lazy(() => import('./tabs/Ai.jsx'))
 const ChartBuilder = lazy(() => import('./tabs/ChartBuilder.jsx'))
+const DemoServer = lazy(() => import('./tabs/DemoServer.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
 import { FOCUS_RING, Skeleton } from './components/ui.jsx'
 import { PageBar } from './components/kit.jsx'
@@ -71,6 +72,7 @@ const TABS = [
   { id: 'selfservice', label: 'Self-Service', el: SelfService },
   { id: 'editor', label: 'Editor', el: Editor },
   { id: 'drift', label: 'Drift', el: Drift },
+  { id: 'demo', label: 'Demo server', el: DemoServer },
   { id: 'ai', label: 'AI', el: Ai },
   { id: 'chart', label: 'Build a chart', el: ChartBuilder },
 ]
@@ -111,7 +113,7 @@ const GROUPS = [
   { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
-  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift'] },
+  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift', 'demo'] },
   { id: 'ask', label: 'Ask', question: '', tabIds: ['ai', 'chart'] },
 ]
 

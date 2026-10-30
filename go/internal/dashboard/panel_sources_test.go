@@ -52,8 +52,8 @@ func TestPanelSources_FactsHoldTogether(t *testing.T) {
 			t.Errorf("%s: a | would break the docs table", p.ID)
 		}
 	}
-	if len(seen) != 90 {
-		t.Errorf("%d panels, want the 90 in panel-inventory.md", len(seen))
+	if len(seen) != 94 {
+		t.Errorf("%d panels, want 94: the 90 in panel-inventory.md plus the 4 on Demo server", len(seen))
 	}
 }
 

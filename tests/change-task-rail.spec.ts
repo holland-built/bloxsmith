@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-for (const tab of ['provision', 'selfservice', 'editor', 'drift']) {
+for (const tab of ['provision', 'selfservice', 'editor', 'drift', 'demo']) {
   test(`#${tab}: the rail names exactly the panels on the page, in order`, async ({ page }) => {
     await page.goto(`/#${tab}`);
     await expect(rail(page)).toBeVisible();

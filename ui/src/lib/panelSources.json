@@ -792,6 +792,42 @@
     "why": "it compares your templates with what is there, worked out in the app"
   },
   {
+    "id": "demo-settings",
+    "page": "Demo server",
+    "name": "Settings",
+    "kind": "local",
+    "source": "the app's own vault",
+    "builder": "no",
+    "why": "it is a form, not a chart"
+  },
+  {
+    "id": "demo-build",
+    "page": "Demo server",
+    "name": "Build",
+    "kind": "rest",
+    "source": "Proxmox and the Infoblox API",
+    "builder": "no",
+    "why": "it is a live log, not a chart"
+  },
+  {
+    "id": "demo-code",
+    "page": "Demo server",
+    "name": "The Infoblox code",
+    "kind": "local",
+    "source": "the app's own files",
+    "builder": "no",
+    "why": "it is code, not a chart"
+  },
+  {
+    "id": "demo-runs",
+    "page": "Demo server",
+    "name": "Runs",
+    "kind": "local",
+    "source": "the app's own run records",
+    "builder": "no",
+    "why": "it is a list, not a chart"
+  },
+  {
     "id": "ai-ask",
     "page": "AI",
     "name": "Ask AI",
