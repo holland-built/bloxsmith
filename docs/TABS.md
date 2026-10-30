@@ -4,7 +4,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 
 Tabs fall into two groups:
 
-- **Read-only** — Inbox, Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They poll and display; they never write to Infoblox. Assets is the one exception to the polling half: it re-reads only when you ask it to, for the reason given in its own section.
+- **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They poll and display; they never write to Infoblox. Assets is the one exception to the polling half: it re-reads only when you ask it to, for the reason given in its own section.
 - **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
 
 One property holds across almost every panel on every tab: a feed that failed to load is never rendered the same way as a feed that loaded and came back empty. Where a call errors, times out, or the upstream returns a payload the panel can't trust, the panel says so — "feed unavailable," a chain-verify warning, a fetch-error line — instead of falling back to the same blank state a healthy, empty tenant would produce. If a panel shows no rows, that now means there genuinely are none, not that something failed silently on the way to the screen.
@@ -67,7 +67,7 @@ Panels cannot be created or deleted: the set on each tab is fixed and ships with
 
 ## Moving around
 
-The app opens on the **Inbox**. The everyday jobs, **Inbox**, **Get an address**, **Reports** and **Charts**, sit down the left side; on a phone they are a bar along the bottom. Every other page is under **All pages** at the top left.
+The app opens on **Overview**. The everyday jobs, **Overview**, **Get an address**, **Daily report** and **Charts**, sit down the left side; on a phone they are a bar along the bottom. Every other page is under **All pages** at the top left.
 
 The box at the top takes two kinds of thing:
 
@@ -76,15 +76,11 @@ The box at the top takes two kinds of thing:
 
 Asking for an address ("give me an address in Dublin") opens Get an address, and asking for a chart opens Build a chart. Before you press Enter, the box says where Enter will take you. Cmd+K (Ctrl+K) opens the same search from anywhere.
 
-## Inbox
-
-What needs a look, worst first. Each row is one kind of problem with its count, a button that opens the page where it is fixed, and **Ask why**, which opens the AI with a question about it.
-
-The rows come from the same feeds as Overview's headline numbers: hosts that are offline, critical and high security events, and the incidents Infoblox reports, one row per kind rather than one per subnet or zone. When a feed can't be read, the Inbox says which one, so an empty list always means nothing was found, never that a feed failed. On a day with nothing to report it says so and gives the host and subnet counts.
-
 ## Overview
 
-Your network at a glance. Refreshes every 30 seconds.
+Your network at a glance, and the page the app opens on. Refreshes every 30 seconds.
+
+- **Needs a look**: a short list above the graphs of what needs attention, worst first: hosts that are offline, critical and high security events, and the incidents Infoblox reports, one row per kind. Each row has a button that opens the page where it is fixed, and **Ask why**, which opens the AI with a question about it. When a feed can't be read it says which one, so an empty list always means nothing was found, never that a feed failed.
 
 - **Headline numbers**: a row of tiles across the top: DNS queries per second, hosts, hosts offline, subnets at 90% or more, active leases, and security events that are critical or high. A tile that counts something bad is red or amber when there is any and green when there is none. A count that could not be read is a dash with no colour, and says "unavailable". Click a tile to jump to its panel, or to the tab that holds the detail.
 - **DNS Query Rate — 24h** — average QPS trend, with the change since the first hour in the window.

@@ -102,7 +102,7 @@ test('the dialog names the everyday pages kept down the left side', async ({ pag
   // The five section buttons and their number keys are gone; All pages and the
   // left-side list replaced them, so this is where a reader learns that.
   const dialog = await openDialog(page);
-  await expect(dialog).toContainText('Inbox, Get an address, Reports and Charts');
+  await expect(dialog).toContainText('Overview, Get an address, Daily report and Charts');
   await expect(dialog).not.toContainText('Press the keys 1 to 5');
 });
 
@@ -180,7 +180,8 @@ test('Overview says how to rearrange it, and that nothing needs saving', async (
   // ⓘ help (the LAYOUT_HELP sentence in components/ui.jsx, rendered only when
   // the grid is managed). This assertion is about the tab intro, so it stays
   // on the tab that has one.
-  const intro = page.locator('main p').first();
+  // The tab intro, not Needs a look above it, which can also hold a line.
+  const intro = page.locator('main p').filter({ hasText: 'Your network at a glance' });
   await expect(intro).toContainText('drag');
   await expect(intro).toContainText('resize');
   await expect(intro).toContainText('saves automatically');

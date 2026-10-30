@@ -4,13 +4,12 @@ import { Component, Suspense, lazy, useEffect, useRef, useState } from 'react'
 // charts on it at all — still downloaded recharts and the other 14 tabs.
 //
 // Overview is lazy too, deliberately. The landing tab comes from the URL hash
-// (the Inbox when there is none), and someone who opens #security never
+// (Overview when there is none), and someone who opens #security never
 // renders Overview at all — an eager Overview is pure dead weight on every one
 // of those loads, and it carries recharts with it.
 //
 // The TABS entries below keep exactly the shape they had (`{ id, label, el }`),
 // so the DEV completeness check and the Palette are untouched by this.
-const Inbox = lazy(() => import('./tabs/Inbox.jsx'))
 const Overview = lazy(() => import('./tabs/Overview.jsx'))
 const Daily = lazy(() => import('./tabs/Daily.jsx'))
 const Network = lazy(() => import('./tabs/Network.jsx'))
@@ -51,7 +50,6 @@ import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 
 const TABS = [
-  { id: 'home', label: 'Inbox', el: Inbox },
   { id: 'overview', label: 'Overview', el: Overview },
   { id: 'daily', label: 'Daily', el: Daily },
   { id: 'network', label: 'Network', el: Network },
@@ -93,7 +91,8 @@ const PAGES = [...TABS, ...HIDDEN_PAGES]
 function hashTab() {
   // '#editor?type=subnet' deep-links: tab id is the part before '?'
   const h = location.hash.replace('#', '').split('?')[0]
-  return PAGES.some((t) => t.id === h) ? h : 'home'
+  // #home was the Inbox page (v3.108); old links and bookmarks land on Overview.
+  return PAGES.some((t) => t.id === h) ? h : 'overview'
 }
 
 // ---------- group nav ----------
@@ -109,7 +108,7 @@ function hashTab() {
 // behaving exactly as before, it is only the way a tab is *reached by mouse*
 // that changed.
 const GROUPS = [
-  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['home', 'overview', 'daily'] },
+  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
   { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift'] },
@@ -550,8 +549,7 @@ export default function App() {
               </div>
             </nav>
             <div className="flex-1 min-w-0 flex justify-center">
-              {/* The Inbox has its own, larger box; one is enough. */}
-              {tab !== 'home' && <div className="hidden md:block w-full max-w-xl"><OneBox /></div>}
+              <div className="hidden md:block w-full max-w-xl"><OneBox /></div>
             </div>
             {/* Four things on the right: an update (only when one is ready), the
                 tenant chip with its write state, the light/dark button, and
@@ -591,7 +589,7 @@ export default function App() {
           </header>
           {/* Where you are, Kentik-style: the group and the tab. Pages outside
               the groups (a dossier) have no group and so no bar. */}
-          {groupOf(tab) && tab !== 'home' && (
+          {groupOf(tab) && (
             <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
               {/* The header's box is hidden on a phone; this opens the same search. */}
               <button

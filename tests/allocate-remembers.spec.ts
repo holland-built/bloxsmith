@@ -31,7 +31,7 @@ async function tenantId(page: import('@playwright/test').Page) {
 }
 
 test('the form starts on the last space and subnet an address came from', async ({ page }) => {
-  await page.goto('/#home');
+  await page.goto('/#overview');
   const t = await tenantId(page);
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST(t));
   await page.goto('/#selfservice');
@@ -42,7 +42,7 @@ test('the form starts on the last space and subnet an address came from', async 
 });
 
 test('a remembered subnet that no longer exists is not picked', async ({ page }) => {
-  await page.goto('/#home');
+  await page.goto('/#overview');
   const t = await tenantId(page);
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST(t, 'ipam/subnet/gone'));
   await page.goto('/#selfservice');
@@ -53,7 +53,7 @@ test('a remembered subnet that no longer exists is not picked', async ({ page })
 });
 
 test('another tenant\'s last pick is not used', async ({ page }) => {
-  await page.goto('/#home');
+  await page.goto('/#overview');
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST('some-other-tenant'));
   await page.goto('/#selfservice');
   await page.waitForTimeout(800);
