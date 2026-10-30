@@ -64,7 +64,7 @@ export default function Network() {
   const subnetsStatus = feedDown ? 'error' : meta.subnets
 
   const leasesRef = useRef(null)
-  // The Inbox's "See full subnets" lands on the table, not two charts above it.
+  // Needs a look's "See full subnets" lands on the table, not two charts above it.
   const subnetsRef = useRef(null)
   useEffect(() => {
     const el = hp.focus === 'leases' ? leasesRef.current : hp.focus === 'subnets' ? subnetsRef.current : null

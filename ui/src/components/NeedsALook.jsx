@@ -1,11 +1,12 @@
 import { useApi } from '../lib/api.js'
 import { categoryWord } from '../lib/plainWords.js'
-import { FOCUS_RING } from '../components/ui.jsx'
-import OneBox from '../components/OneBox.jsx'
+import { FOCUS_RING } from './ui.jsx'
 
-// The home page: what needs a look, worst first, each with the page that
-// fixes it. Built from the same feeds as Overview's headline numbers, so the
-// two never disagree. Incidents arrive already grouped, one row per kind.
+// A short strip at the top of Overview: what needs a look, worst first, each
+// with the page that fixes it. It sits above the graphs, never instead of them,
+// because a NOC screen has to show the graphs without a click. Built from the
+// same feeds as Overview's headline numbers, so the two never disagree.
+// Incidents arrive already grouped, one row per kind.
 
 // Same buckets as Overview's statusBucket(); only "offline" matters here.
 const isOffline = (s) => {
@@ -38,7 +39,7 @@ function inboxRows({ hosts, incidents, sec }) {
   return rows.sort((a, b) => (a.sev === 'crit' ? 0 : 1) - (b.sev === 'crit' ? 0 : 1))
 }
 
-export default function Inbox() {
+export default function NeedsALook() {
   const data = useApi('/api/data', { poll: 30000, adoptIfFresherThan: 2000 })
   const inc = useApi('/api/incidents', { poll: 60000 })
   const sec = useApi('/api/hub/security', { poll: 30000 })
@@ -61,48 +62,43 @@ export default function Inbox() {
   ].filter(Boolean)
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-10">
-      <h1 className="text-copy font-semibold">Needs a look</h1>
-      <div className="mt-3 mb-5"><OneBox big /></div>
-      <p className="text-copy text-muted mb-2" role="status">
-        {loading
-          ? 'Checking…'
-          : rows.length
-            ? `${rows.length} ${rows.length === 1 ? 'thing' : 'things'}, worst first.`
-            : failed.length
-              ? 'Nothing found in the feeds that answered.'
-              : 'Nothing needs you right now.'}
-      </p>
+    <section aria-labelledby="needs-a-look" data-needs-a-look="" className="mb-4">
+      <h2 id="needs-a-look" className="text-copy font-semibold">
+        Needs a look
+        <span className="ml-2 font-normal text-muted" role="status">
+          {loading
+            ? 'Checking…'
+            : rows.length
+              ? `${rows.length}, worst first`
+              : failed.length
+                ? 'nothing found in the feeds that answered'
+                : 'nothing right now'}
+        </span>
+      </h2>
       {failed.length > 0 && !loading && (
-        <p className="text-copy text-warn mb-2">
+        <p className="text-copy text-warn mt-1">
           Couldn't check {failed.join(', ')}. <button type="button" onClick={() => location.reload()} className={`text-link underline ${FOCUS_RING}`}>Try again</button>
         </p>
       )}
       {rows.length > 0 && (
-        <ul className="border-t border-border" aria-label="Needs a look">
+        <ul className="mt-2 border-t border-border" aria-label="Needs a look">
           {rows.map((r) => (
-            <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 border-b border-border">
+            <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 border-b border-border">
               <span role="img" aria-label={r.sev === 'crit' ? 'Critical' : 'Warning'} className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.sev === 'crit' ? 'bg-crit' : 'bg-warn'}`} />
-              <span className="flex-1 min-w-[12rem]">
-                <span className="block text-copy font-semibold">{r.title}</span>
-                {r.sub && <span className="block text-note text-muted">{r.sub}</span>}
+              <span className="flex-1 min-w-[12rem] text-copy">
+                <span className="font-semibold">{r.title}</span>
+                {r.sub && <span className="text-muted"> · {r.sub}</span>}
               </span>
               <span className="flex gap-2">
-                <a href={r.href} className={`px-3 py-1.5 rounded-control bg-accent text-on-accent text-copy no-underline ${FOCUS_RING}`}>{r.act}</a>
+                <a href={r.href} className={`px-3 py-1 rounded-control bg-accent text-on-accent text-copy no-underline ${FOCUS_RING}`}>{r.act}</a>
                 {r.ask && (
-                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`px-3 py-1.5 rounded-control text-copy text-link no-underline hover:bg-line ${FOCUS_RING}`}>Ask why</a>
+                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`px-3 py-1 rounded-control text-copy text-link no-underline hover:bg-line ${FOCUS_RING}`}>Ask why</a>
                 )}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {!loading && !rows.length && !failed.length && totals.hosts != null && (
-        <p className="text-copy">{fmt(totals.hosts)} hosts and {fmt(totals.subnets)} subnets, all within limits.</p>
-      )}
-      <p className="mt-6 text-note text-muted">
-        The full dashboards are under <a href="#overview" className="text-link">Reports</a>.
-      </p>
-    </div>
+    </section>
   )
 }

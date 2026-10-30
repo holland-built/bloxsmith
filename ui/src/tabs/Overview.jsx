@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
+import NeedsALook from '../components/NeedsALook.jsx'
 import { useApi } from '../lib/api.js'
 import { useHasArranged } from '../lib/arrangedOnce.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
@@ -115,6 +116,7 @@ export default function Overview() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Overview</h1>
+      <NeedsALook />
       {/* The layout sentence lives HERE and on no other tab, because Overview
           is the only grid with a layoutKey — every other tab renders a plain
           grid with no handles, no resize edge and nothing to persist. Telling

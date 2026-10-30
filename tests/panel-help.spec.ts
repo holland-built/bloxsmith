@@ -352,6 +352,10 @@ test('the ⓘ fits every busy header from 1920 down to 390', async ({ page }) =>
     await page.setViewportSize({ width, height: 900 });
     for (const tab of BUSY_TABS) {
       await page.goto(`/${tab}`);
+      // Park the pointer. Left where the last page's click was, it can sit over
+      // something whose hover changes the layout under it, and the page then
+      // flips back and forth (issue filed separately).
+      await page.mouse.move(0, 0);
       await expect(page.locator('h1').first()).toBeVisible();
       // The fit system publishes widths from a layout effect and the grid
       // re-applies them; give it a beat to settle before reading geometry.

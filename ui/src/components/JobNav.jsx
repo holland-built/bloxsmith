@@ -3,9 +3,9 @@ import { FOCUS_RING } from './ui.jsx'
 // The everyday jobs, always one click away: a rail beside the page from md up,
 // a bar along the bottom on a phone. Everything else is under All pages.
 const JOBS = [
-  { id: 'home', label: 'Inbox', match: ['home'] },
+  { id: 'overview', label: 'Overview', match: ['overview'] },
   { id: 'selfservice', label: 'Get an address', match: ['selfservice'] },
-  { id: 'overview', label: 'Reports', match: ['overview', 'daily'] },
+  { id: 'daily', label: 'Daily report', match: ['daily'] },
   { id: 'chart', label: 'Charts', match: ['chart'] },
 ]
 

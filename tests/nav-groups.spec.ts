@@ -12,7 +12,6 @@ import { test, expect } from './fixtures';
 // Matched at the START of the heading so a tab may append to its own title
 // without this spec dictating copy.
 const TAB_HEADINGS: [string, string][] = [
-  ['home', 'Needs a look'],
   ['overview', 'Overview'],
   ['daily', 'Daily Briefing'],
   ['network', 'Network'],
@@ -36,7 +35,7 @@ const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 // Which group owns which tab. Duplicated from App.jsx on purpose: a test that
 // imports the thing it checks would pass on any regrouping, including a wrong one.
 const GROUP_TABS: Record<string, string[]> = {
-  Status: ['Inbox', 'Overview', 'Daily'],
+  Status: ['Overview', 'Daily'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Provision', 'Self-Service', 'Editor', 'Drift'],
@@ -213,18 +212,18 @@ test('the open menu owns focus, and arrow keys move within it instead of scrolli
     });
 
   await page.locator(MENU).click();
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
-  await page.keyboard.press('ArrowDown');
   expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#overview' });
+  await page.keyboard.press('ArrowDown');
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#daily' });
   await page.keyboard.press('End');
   expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#chart' });
   // Wraps both ways.
   await page.keyboard.press('ArrowDown');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#overview' });
   await page.keyboard.press('ArrowUp');
   expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#chart' });
   await page.keyboard.press('Home');
-  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#home' });
+  expect(await focusedHref()).toEqual({ role: 'menuitem', href: '#overview' });
 
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await page.keyboard.press('Escape');

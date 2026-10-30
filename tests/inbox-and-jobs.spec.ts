@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The flow redesign of 2026-10-29: the app opens on an Inbox of what needs a
-// look, the everyday jobs sit in a rail (a bottom bar on a phone), and one box
+// The flow redesign of 2026-10-29, corrected on 2026-10-30: the app opens on
+// Overview's graphs, with a short "Needs a look" strip above them (a NOC screen
+// has to show the graphs without a click), the everyday jobs sit in a rail (a bottom bar on a phone), and one box
 // takes both lookups and questions. Measured before: 2 clicks and 1,814 rows to
 // see what was wrong; the main button opened the admin subnet builder.
 
@@ -17,7 +18,7 @@ async function feeds(page: Page, { incidents, hosts, sec }: { incidents?: unknow
   );
 }
 
-test('with no page named, the app opens on the Inbox, worst first, each row with its fix', async ({ page }) => {
+test('with no page named, the app opens on Overview: the graphs, with Needs a look above them', async ({ page }) => {
   await feeds(page, {
     incidents: [
       { key: 'dns-ttl-anomaly', category: 'dns-ttl-anomaly', count: 64, severity: 'warn' },
@@ -26,7 +27,10 @@ test('with no page named, the app opens on the Inbox, worst first, each row with
     hosts: [{ name: 'a', status: 'error' }, { name: 'b', status: 'online' }],
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Needs a look' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Overview/);
+  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toBeVisible();
+  // The graphs are on the first screen, not behind a click.
+  await expect(page.locator('[data-panel-id]').first()).toBeVisible();
   const rows = page.locator('[data-inbox-row]');
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText('1 hosts are offline');
@@ -37,18 +41,18 @@ test('with no page named, the app opens on the Inbox, worst first, each row with
   await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are offline/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20offline%3F');
 });
 
-test('a quiet day says nothing needs you, and still gives the counts', async ({ page }) => {
+test('a quiet day says so in one line', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   await page.goto('/');
-  await expect(page.getByText('Nothing needs you right now.')).toBeVisible();
-  await expect(page.getByText('1 hosts and 10 subnets, all within limits.')).toBeVisible();
+  await expect(page.locator('[data-needs-a-look]')).toContainText('nothing right now');
+  await expect(page.locator('[data-inbox-row]')).toHaveCount(0);
 });
 
 test('a feed that fails is named, never read as nothing wrong', async ({ page }) => {
   await feeds(page, { incidents: null, hosts: [{ name: 'b', status: 'online' }] });
   await page.goto('/');
   await expect(page.getByText(/Couldn't check incidents/)).toBeVisible();
-  await expect(page.getByText('Nothing needs you right now.')).toHaveCount(0);
+  await expect(page.locator('[data-needs-a-look]')).not.toContainText('nothing right now');
 });
 
 test('the box looks up an address, and sends a question to the AI typed in but not sent', async ({ page }) => {
@@ -62,7 +66,7 @@ test('the box looks up an address, and sends a question to the AI typed in but n
   await box.press('Enter');
   await expect(page).toHaveURL(/#dossier\?q=10\.80\.0\.5$/);
 
-  await page.goto('/#home');
+  await page.goto('/#overview');
   await page.locator('[data-onebox]').fill('Which hosts are offline?');
   await page.locator('[data-onebox]').press('Enter');
   await expect(page).toHaveURL(/#ai\?q=/);
@@ -75,7 +79,7 @@ test('the rail holds the four everyday jobs and marks where you are', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#selfservice');
   const rail = page.locator('[data-job-rail]');
-  await expect(rail.getByRole('link')).toHaveText(['Inbox', 'Get an address', 'Reports', 'Charts']);
+  await expect(rail.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Daily report', 'Charts']);
   await expect(rail.getByRole('link', { name: 'Get an address' })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('header').getByRole('link', { name: /Provision/ })).toHaveCount(0);
 });
@@ -86,10 +90,10 @@ test('on a phone the jobs are a bar along the bottom, and All pages reaches ever
   await page.goto('/');
   const bar = page.locator('[data-job-bar]');
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole('link')).toHaveText(['Inbox', 'Get an address', 'Reports', 'Charts']);
+  await expect(bar.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Daily report', 'Charts']);
   await expect(page.locator('[data-job-rail]')).toBeHidden();
   await page.getByRole('button', { name: 'All pages' }).click();
-  await expect(page.getByRole('menuitem')).toHaveCount(17);
+  await expect(page.getByRole('menuitem')).toHaveCount(16);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });
@@ -100,7 +104,7 @@ test('See full subnets lands on the subnet table, not the charts above it', asyn
   await expect(page.locator('[data-panel-id="network-exhaustion"]')).toBeInViewport();
 });
 
-test('while security events are still loading, the Inbox does not say nothing needs you', async ({ page }) => {
+test('while security events are still loading, Needs a look does not say nothing', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   let release!: () => void;
   const held = new Promise<void>((r) => { release = r; });
@@ -110,11 +114,12 @@ test('while security events are still loading, the Inbox does not say nothing ne
     await r.fulfill(json({ availability: 'ok', counts: { critical: 0, high: 0 } }));
   });
   await page.goto('/');
-  await expect(page.getByText('Checking…')).toBeVisible();
+  const strip = page.locator('[data-needs-a-look]');
+  await expect(strip).toContainText('Checking…');
   await page.waitForTimeout(500);
-  await expect(page.getByText('Nothing needs you right now.')).toHaveCount(0);
+  await expect(strip).not.toContainText('nothing right now');
   release();
-  await expect(page.getByText('Nothing needs you right now.')).toBeVisible();
+  await expect(strip).toContainText('nothing right now');
 });
 
 test('a second question from the header box replaces the first in the AI box', async ({ page }) => {

@@ -195,7 +195,7 @@ test.describe('VaultGate (failed vault status read)', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
     await expect(page.locator('header button[data-menu]')).toBeVisible();
-    await expect(page.locator('h1').first()).toHaveText('Needs a look');
+    await expect(page.locator('h1').first()).toHaveText(/^Overview/);
     await expect(page.getByText(/vault status unavailable/i)).toHaveCount(0);
   });
 });
