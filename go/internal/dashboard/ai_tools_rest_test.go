@@ -490,6 +490,7 @@ func TestRunAITool_UpstreamErrorIsNotReportedAsAbsence(t *testing.T) {
 		{"get_threat_feeds", "No threat feed data."},
 		{"get_audit_logs", "No audit log data."},
 		{"get_dns_analytics", "No DNS analytics data."},
+		{"iq_insights", "No IQ actions recorded."},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
@@ -550,6 +551,7 @@ func TestRunAITool_EmptySuccessfulReadKeepsAbsenceWording(t *testing.T) {
 		{"get_threat_feeds", "No threat feed data."},
 		{"get_audit_logs", "No audit log data."},
 		{"get_dns_analytics", "No DNS analytics data."},
+		{"iq_insights", "No IQ actions recorded."},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {

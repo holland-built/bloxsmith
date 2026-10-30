@@ -1028,6 +1028,7 @@ eleven tools the same path sends:
 | `get_audit_logs` | action, resource, result, timestamp, **user identity and role** |
 | `get_threat_feeds` | feed names, threat levels, entry counts |
 | `get_dns_analytics` | device names and device IPs by query volume |
+| `iq_insights` | IQ action titles, types, severity and dates; IQ token counts by category |
 | `search_entity` | whatever the search matched |
 | `dossier_lookup` / `lookalike_domains` / `asset_insights` | indicators, domains, device names |
 | `api_get` | up to 25 records from any of the read-only list paths in `go/internal/dashboard/ai_catalog.json` (zones, records, subnets, policies...); fields named like secret, password or token are hidden |

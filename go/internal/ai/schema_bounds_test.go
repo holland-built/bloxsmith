@@ -53,6 +53,7 @@ func TestToolSchemaAdvertisesTheEnforcedBounds(t *testing.T) {
 		{"get_audit_logs", "limit", AuditLogLimitMin, AuditLogLimitMax},
 		{"get_dns_analytics", "days", AnalyticsDaysMin, AnalyticsDaysMax},
 		{"get_dns_analytics", "limit", AnalyticsLimitMin, AnalyticsLimitMax},
+		{"iq_insights", "limit", IQLimitMin, IQLimitMax},
 	} {
 		lo, hi := bound(c.tool, c.param)
 		if lo != c.lo || hi != c.hi {

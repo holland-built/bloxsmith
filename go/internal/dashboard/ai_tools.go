@@ -42,6 +42,8 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return s.findDataTool(ctx, aiStr(args["query"]))
 	case "api_get":
 		return s.apiGet(args)
+	case "iq_insights":
+		return s.iqInsights(args)
 	}
 
 	// search_entity is the only tool still on the MCP path (network_entity_search
@@ -276,6 +278,50 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		})
 	}
 	return "Unknown tool: " + name
+}
+
+// iqInsights answers Infoblox IQ questions. IQ actions and IQ token usage live
+// only in Cube.js, which find_data and api_get cannot reach, so this reads the
+// same Cube.js endpoint get_dns_analytics does.
+func (s *Service) iqInsights(args map[string]any) string {
+	months := []map[string]any{{"dimension": "IqActions.created_on", "granularity": "month", "dateRange": "last 12 months"}}
+	var q map[string]any
+	what, none := "IQ actions", "No IQ actions recorded."
+	switch aiStr(args["view"]) {
+	case "recent":
+		q = map[string]any{
+			"dimensions": []string{"IqActions.display_id", "IqActions.type", "IqActions.title", "IqActions.severity",
+				"IqActions.status", "IqActions.created_on", "IqActions.resolved_on"},
+			"order": map[string]any{"IqActions.created_on": "desc"},
+			"limit": aiClampInt(args["limit"], ai.IQLimitDefault, ai.IQLimitMin, ai.IQLimitMax),
+		}
+	case "monthly":
+		q = map[string]any{"measures": []string{"IqActions.count"}, "timeDimensions": months}
+	case "tokens":
+		q = map[string]any{
+			"measures":   []string{"TokenUtilProtoSrvIQMonthly.tokens"},
+			"dimensions": []string{"TokenUtilProtoSrvIQMonthly.category"},
+			"timeDimensions": []map[string]any{{"dimension": "TokenUtilProtoSrvIQMonthly.timestamp",
+				"granularity": "month", "dateRange": "last 12 months"}},
+		}
+		// An empty answer is real: IQ token billing is not live on every tenant yet.
+		what, none = "IQ token usage", "No IQ token usage recorded in the last 12 months. IQ token billing may not be switched on for this account yet."
+	default:
+		q = map[string]any{"measures": []string{"IqActions.count"},
+			"dimensions": []string{"IqActions.type", "IqActions.status", "IqActions.severity"},
+			"order":      map[string]any{"IqActions.count": "desc"}}
+	}
+	text, _ := json.Marshal(q)
+	body, status, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(text)})
+	if err != nil || status == 0 || status >= 400 {
+		return aiLookupFailed(what, aiExDetail(status, err))
+	}
+	rows := cubeData(body)
+	if len(rows) == 0 {
+		return none
+	}
+	// Every view is already small: grouped counts, 12 months, or at most IQLimitMax rows.
+	return jstr(map[string]any{"row_count": len(rows), "rows": rows})
 }
 
 // aiClampInt bounds a value the MODEL chose, falling back to def when the
