@@ -65,7 +65,7 @@ echo "VMID=$n"`, nil)
 	// Ship the image once; later runs reuse it.
 	base := filepath.Base(c.Image)
 	remote := remoteImageDir + "/" + base
-	if _, err := d.ssh(ctx, "vm", fmt.Sprintf("test -f '%s'", remote), nil); err != nil {
+	if _, err := d.ssh(ctx, "vm", fmt.Sprintf(`qemu-img info --output=json '%s' | grep -q '"format": "qcow2"'`, remote), nil); err != nil {
 		if _, err := os.Stat(c.Image); err != nil {
 			return fmt.Errorf("the NIOS-X image is not on Proxmox, and not at %s on this machine either", c.Image)
 		}

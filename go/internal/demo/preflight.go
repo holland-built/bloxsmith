@@ -2,6 +2,7 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,7 @@ func (d *Demo) Preflight(ctx context.Context) []Check {
 	}
 	// The network step creates the bloxsmith-demo IP space. If one exists that
 	// this app's state does not know about, the build would stop halfway.
-	if !exists(d.Store.netDir() + "/terraform.tfstate") {
+	if !stateHolds(d.Store.netDir()+"/terraform.tfstate", "bloxone_ipam_ip_space") {
 		body, code, err := d.API.GetEx("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": `name=="bloxsmith-demo"`, "_fields": "id"})
 		rows, _ := asMap(body)["results"].([]any)
 		add(err == nil && code == 200 && len(rows) == 0, "The bloxsmith-demo IP space is free to create",
@@ -37,7 +38,7 @@ func (d *Demo) Preflight(ctx context.Context) []Check {
 	_, lerr := os.Stat(d.Cfg.Image)
 	tools, err := d.ssh(ctx, "check", `for t in qm genisoimage dig flock; do command -v $t >/dev/null || echo "missing $t"; done
 ip -br addr show `+d.Cfg.Bridge+` | grep -q '`+d.Cfg.Gateway+`/' || echo "bridge"
-test -f '`+remoteImageDir+"/"+filepath.Base(d.Cfg.Image)+`' && echo "has-image"
+qemu-img info --output=json '`+remoteImageDir+"/"+filepath.Base(d.Cfg.Image)+`' 2>/dev/null | grep -q '"format": "qcow2"' && echo "has-image"
 echo checked`, nil)
 	// The image is needed here only if Proxmox does not have it yet.
 	add(lerr == nil || strings.Contains(tools, "has-image"), "The NIOS-X image is on Proxmox or on this machine",
@@ -49,6 +50,30 @@ echo checked`, nil)
 		add(!strings.Contains(tools, "bridge"), "The demo bridge "+d.Cfg.Bridge+" is up with "+d.Cfg.Gateway, "Add the bridge with NAT on Proxmox; see the Demo server docs")
 	}
 	return out
+}
+
+// stateHolds says whether a Terraform state file tracks a resource of this type.
+// A file that exists but is empty or stale does not count.
+func stateHolds(path, typ string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var st struct {
+		Resources []struct {
+			Type      string `json:"type"`
+			Instances []any  `json:"instances"`
+		} `json:"resources"`
+	}
+	if json.Unmarshal(b, &st) != nil {
+		return false
+	}
+	for _, r := range st.Resources {
+		if r.Type == typ && len(r.Instances) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Ready says whether every check passed.

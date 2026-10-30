@@ -482,3 +482,21 @@ func TestJoinTimeoutSaysThePortalCouldNotBeRead(t *testing.T) {
 		t.Fatalf("a Portal that refused every check was reported as a slow join: %v", err)
 	}
 }
+
+func TestPreflightDoesNotTrustAnEmptyStateFile(t *testing.T) {
+	api := &fakeAPI{get: func(path string, _ map[string]string) (any, int, error) {
+		if path == "/api/ddi/v1/ipam/ip_space" {
+			return map[string]any{"results": []any{map[string]any{"id": "ipam/ip_space/1"}}}, 200, nil
+		}
+		return map[string]any{}, 200, nil
+	}}
+	d := newDemo(t, &fakeRun{}, api)
+	_ = os.MkdirAll(d.Store.netDir(), 0o700)
+	_ = os.WriteFile(filepath.Join(d.Store.netDir(), "terraform.tfstate"), []byte(`{"version":4,"resources":[]}`), 0o600)
+	for _, c := range d.Preflight(context.Background()) {
+		if strings.Contains(c.Says, "bloxsmith-demo") && !c.OK {
+			return
+		}
+	}
+	t.Fatal("an empty state file hid an existing bloxsmith-demo space")
+}
