@@ -1,5 +1,5 @@
 import { useApi } from '../lib/api.js'
-import { categoryWord } from '../lib/plainWords.js'
+import { plainMessage } from '../lib/plainWords.js'
 import { FOCUS_RING } from './ui.jsx'
 
 // A short strip at the top of Overview: what needs a look, worst first, each
@@ -16,25 +16,30 @@ const isOffline = (s) => {
 
 // Where each kind of incident is fixed, and the question to ask about it.
 const FIX = {
-  'subnet-utilization': { href: '#network?minUtil=90&focus=subnets', act: 'See full subnets', ask: 'Which subnets are nearly full?' },
-  'dns-ttl-anomaly': { href: '#dns', act: 'See the zones', ask: 'Are any of my DNS zones misconfigured?' },
-  'dhcp-expired-lease': { href: '#network?focus=leases', act: 'See the leases', ask: 'Which DHCP leases have expired?' },
-  'dnssec-unsigned': { href: '#dns', act: 'See the zones', ask: 'Which DNS zones are not signed?' },
+  'subnet-utilization': { href: '#network?minUtil=90&focus=subnets', ask: 'Which subnets are nearly full?' },
+  'dns-ttl-anomaly': { href: '#dns', ask: 'Are any of my DNS zones misconfigured?' },
+  'dhcp-expired-lease': { href: '#network?focus=leases', ask: 'Which DHCP leases have expired?' },
+  'dnssec-unsigned': { href: '#dns', ask: 'Which DNS zones are not signed?' },
 }
 
 const fmt = (n) => Number(n).toLocaleString()
 
-function inboxRows({ hosts, incidents, sec }) {
+function inboxRows({ hosts, incidents, signals, sec }) {
   const rows = []
   const offline = hosts ? hosts.filter((h) => isOffline(h.status)).length : 0
   if (offline) {
-    rows.push({ key: 'hosts-offline', sev: 'crit', title: `${fmt(offline)} hosts are offline`, sub: `of ${fmt(hosts.length)} hosts`, href: '#infra?status=offline', act: 'See the hosts', ask: 'Which hosts are offline?' })
+    rows.push({ key: 'hosts-offline', sev: 'crit', title: `${fmt(offline)} of ${fmt(hosts.length)} ${hosts.length === 1 ? 'host' : 'hosts'} ${offline === 1 ? 'is' : 'are'} offline`, sub: '', href: '#infra?status=offline', ask: 'Which hosts are offline?' })
   }
   if (sec && sec.critical + sec.high > 0) {
-    rows.push({ key: 'security', sev: sec.critical ? 'crit' : 'warn', title: `${fmt(sec.critical + sec.high)} critical or high security events`, sub: sec.note, href: '#security', act: 'See the events', ask: 'Which domains are on threat feeds?' })
+    rows.push({ key: 'security', sev: sec.critical ? 'crit' : 'warn', title: `${fmt(sec.critical + sec.high)} critical or high security events`, sub: sec.note, href: '#security', ask: 'Which domains are on threat feeds?' })
   }
   for (const i of incidents ?? []) {
-    rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : 'warn', title: `${fmt(i.count)} × ${categoryWord(i.category)}`, sub: '', ...(FIX[i.category] ?? { href: '#incidents', act: 'See them', ask: '' }) })
+    // An incident is a group of findings. When it holds exactly one, that
+    // finding's own sentence ("602 of 602 DNS zones not signed") says what is
+    // wrong; "1 × Zones not signed" counted the group, not the zones.
+    const own = (signals ?? []).filter((sg) => sg.category === i.category)
+    const text = i.count === 1 && own.length === 1 && own[0].message ? own[0].message : i.message || `${i.count} ${String(i.category).replace(/-/g, ' ')}`
+    rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
   }
   return rows.sort((a, b) => (a.sev === 'crit' ? 0 : 1) - (b.sev === 'crit' ? 0 : 1))
 }
@@ -48,9 +53,9 @@ export default function NeedsALook() {
   const totals = data.data?._totals ?? {}
   const secOk = sec.data?.availability === 'ok'
   const secCounts = secOk ? { critical: sec.data.counts?.critical ?? 0, high: sec.data.counts?.high ?? 0, note: sec.data.truncated ? `in the latest ${sec.data.returned} events` : '' } : null
-  const rows = inboxRows({ hosts, incidents: inc.data?.incidents, sec: secCounts })
+  const rows = inboxRows({ hosts, incidents: inc.data?.incidents, signals: inc.data?.signals, sec: secCounts })
   const full = rows.find((r) => r.key === 'subnet-utilization')
-  if (full && totals.subnetsCrit != null) full.sub = `${fmt(totals.subnetsCrit)} are 90% full or more`
+  if (full && totals.subnetsCrit != null) full.sub = totals.subnetsCrit ? `${fmt(totals.subnetsCrit)} are 90% full or more` : 'none at 90% yet'
 
   const loading = data.loading || inc.loading || sec.loading
   // Each feed that could not be read is said, so a missing row is never taken
@@ -85,14 +90,13 @@ export default function NeedsALook() {
           {rows.map((r) => (
             <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 border-b border-border">
               <span role="img" aria-label={r.sev === 'crit' ? 'Critical' : 'Warning'} className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.sev === 'crit' ? 'bg-crit' : 'bg-warn'}`} />
+              {/* The sentence is the link. A column of identical buttons sat far
+                  from the words it belonged to and drew the eye before them. */}
               <span className="flex-1 min-w-[12rem] text-copy">
-                <span className="font-semibold">{r.title}</span>
+                <a href={r.href} className={`font-semibold text-txt no-underline hover:underline hover:text-link ${FOCUS_RING}`}>{r.title}</a>
                 {r.sub && <span className="text-muted"> · {r.sub}</span>}
-              </span>
-              <span className="flex gap-2">
-                <a href={r.href} className={`px-3 py-1 rounded-control bg-accent text-on-accent text-copy no-underline ${FOCUS_RING}`}>{r.act}</a>
                 {r.ask && (
-                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`px-3 py-1 rounded-control text-copy text-link no-underline hover:bg-line ${FOCUS_RING}`}>Ask why</a>
+                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-3 text-note text-link underline ${FOCUS_RING}`}>Ask why</a>
                 )}
               </span>
             </li>

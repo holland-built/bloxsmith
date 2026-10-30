@@ -37,8 +37,10 @@ func TestBuildSignals_DNSSEC_AllUnsigned(t *testing.T) {
 		t.Fatalf("expected exactly 1 dnssec signal, got %d", len(got))
 	}
 	sig := got[0]
-	if sig["severity"] != "crit" {
-		t.Errorf("expected crit severity when all known zones unsigned, got %v", sig["severity"])
+	// warn, not crit: signing that was never turned on is a coverage gap, and
+	// as crit it outranked real outages at the top of Overview (2026-10-30).
+	if sig["severity"] != "warn" {
+		t.Errorf("expected warn severity when all known zones unsigned, got %v", sig["severity"])
 	}
 	want := "3 of 3 DNS zones unsigned (DNSSEC)"
 	if sig["message"] != want {
@@ -104,8 +106,8 @@ func TestBuildSignals_DNSSEC_UnknownStatusExcluded(t *testing.T) {
 	if got[0]["message"] != want {
 		t.Errorf("message = %q, want %q (unknown-status zones must be excluded)", got[0]["message"], want)
 	}
-	if got[0]["severity"] != "crit" {
-		t.Errorf("severity = %v, want crit (the only known-status zone is unsigned)", got[0]["severity"])
+	if got[0]["severity"] != "warn" {
+		t.Errorf("severity = %v, want warn (an unsigned zone is a coverage gap, never crit)", got[0]["severity"])
 	}
 }
 
