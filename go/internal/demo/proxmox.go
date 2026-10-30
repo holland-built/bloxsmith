@@ -37,9 +37,6 @@ func (d *Demo) ssh(ctx context.Context, step, script string, line func(string)) 
 // failure at any later point still leaves teardown a recorded ID to remove.
 func (d *Demo) buildVM(ctx context.Context, r *Run, emit func(Event)) error {
 	c := d.Cfg.Defaults()
-	if _, err := os.Stat(c.Image); err != nil {
-		return fmt.Errorf("the NIOS-X image is not at %s", c.Image)
-	}
 	say := emitTo(emit, "vm")
 
 	// A never-reused VMID from proxblox's counter on the host.
@@ -69,6 +66,9 @@ echo "VMID=$n"`, nil)
 	base := filepath.Base(c.Image)
 	remote := remoteImageDir + "/" + base
 	if _, err := d.ssh(ctx, "vm", fmt.Sprintf("test -f '%s'", remote), nil); err != nil {
+		if _, err := os.Stat(c.Image); err != nil {
+			return fmt.Errorf("the NIOS-X image is not on Proxmox, and not at %s on this machine either", c.Image)
+		}
 		emit(Event{Step: "vm", Line: "Copying the NIOS-X image to Proxmox (once, about 3 GB)…"})
 		if _, err := d.ssh(ctx, "vm", "mkdir -p "+remoteImageDir, nil); err != nil {
 			return err

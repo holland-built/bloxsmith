@@ -320,7 +320,7 @@ Drift never fixes anything. To close a gap, re-provision the site (missing) or e
 
 **Writes, after a preview.** Builds a NIOS-X server on Proxmox and shows each Infoblox step as code. Made for showing a customer what automation looks like, end to end, in about five minutes.
 
-1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image on this computer, and a join token. The token is kept in the vault and never shown again.
+1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image (only needed on this computer if Proxmox does not have it yet), and a join token. The token is kept in the vault and never shown again.
 2. Press **Preview**. It checks the settings, the API key, OpenTofu (or Terraform), the image, SSH to Proxmox and the bridge, and shows the code. Nothing is created.
 3. Press **Build it**. The steps run in order: make sure the demo network exists, reserve the next free address, build the VM, wait for it to join the Portal, start DNS on it with a name server group and a demo zone, then look up a name from the Proxmox host to prove it answers.
 

@@ -124,7 +124,7 @@ func (d *Demo) tf(ctx context.Context, step, dir string, emit func(Event), args 
 	_ = os.MkdirAll(d.Store.pluginCache(), 0o700)
 	red := d.secrets()
 	return d.Run.Run(ctx, Cmd{Name: bin, Args: append(args, "-no-color"), Dir: dir, Env: d.tfEnv()},
-		func(l string) { emit(Event{Step: step, Line: red.clean(l)}) })
+		emitTo(func(e Event) { e.Line = red.clean(e.Line); emit(e) }, step))
 }
 
 func (d *Demo) tfOutput(ctx context.Context, dir, name string) (string, error) {
@@ -281,8 +281,10 @@ func (d *Demo) Build(ctx context.Context, emit func(Event)) (*Run, error) {
 // machine that took the address.
 func (d *Demo) waitJoin(ctx context.Context, r *Run, emit func(Event)) error {
 	deadline := d.Now().Add(d.Timeout)
+	var lastErr error
 	for {
 		id, created, mac, n, err := d.hostAt(r.IP)
+		lastErr = err
 		switch {
 		case err != nil:
 			emit(Event{Step: "join", Line: "Portal check failed, retrying: " + err.Error()})
@@ -294,6 +296,9 @@ func (d *Demo) waitJoin(ctx context.Context, r *Run, emit func(Event)) error {
 			return fmt.Errorf("%d Portal hosts claim %s; stopping rather than guess", n, r.IP)
 		}
 		if d.Now().After(deadline) {
+			if lastErr != nil {
+				return fmt.Errorf("could not check the Portal for the VM: %w", lastErr)
+			}
 			return errors.New("the VM did not join the Portal in time. Check that the demo network reaches the internet")
 		}
 		emit(Event{Step: "join", Line: "Waiting for the VM to join the Portal…"})
@@ -362,7 +367,11 @@ func (d *Demo) prove(ctx context.Context, r *Run, emit func(Event)) error {
 }
 
 func emitTo(emit func(Event), step string) func(string) {
-	return func(l string) { emit(Event{Step: step, Line: l}) }
+	return func(l string) {
+		if strings.TrimSpace(l) != "" {
+			emit(Event{Step: step, Line: l})
+		}
+	}
 }
 
 func asMap(v any) map[string]any {

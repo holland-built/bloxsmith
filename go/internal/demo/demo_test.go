@@ -12,6 +12,7 @@ import (
 )
 
 const token = "JOINTOKEN-abcdefghijklmnopqrstuvwxyz.ibjt"
+
 // apiKey is a made-up value; the test checks it never reaches the page.
 var apiKey = strings.Repeat("fake", 3) + "-infoblox-credential"
 
@@ -418,5 +419,66 @@ func TestTeardownLeavesAPortalHostWithAnotherMAC(t *testing.T) {
 	_ = d.Store.Save(r)
 	if _, err := d.Teardown(context.Background(), r.Change, func(Event) {}); err == nil || len(api.deleted) != 0 {
 		t.Fatalf("deleted a Portal host with another MAC: err=%v deleted=%v", err, api.deleted)
+	}
+}
+
+func TestPreflightCatchesADemoSpaceThisAppDidNotMake(t *testing.T) {
+	api := &fakeAPI{get: func(path string, _ map[string]string) (any, int, error) {
+		if path == "/api/ddi/v1/ipam/ip_space" {
+			return map[string]any{"results": []any{map[string]any{"id": "ipam/ip_space/1"}}}, 200, nil
+		}
+		return map[string]any{}, 200, nil
+	}}
+	d := newDemo(t, &fakeRun{}, api)
+	for _, c := range d.Preflight(context.Background()) {
+		if strings.Contains(c.Says, "bloxsmith-demo") {
+			if c.OK {
+				t.Fatal("an existing bloxsmith-demo space with no state here was passed as free")
+			}
+			return
+		}
+	}
+	t.Fatal("no check for an existing bloxsmith-demo space")
+}
+
+func TestTeardownFindsAHostThatJoinedAfterTheBuildGaveUp(t *testing.T) {
+	api := &fakeAPI{get: func(path string, _ map[string]string) (any, int, error) {
+		host := map[string]any{"id": "infra/host/7", "ip_address": "10.99.0.2", "created_at": "2026-10-30T16:00:00Z", "mac_address": "aa:bb:cc:dd:ee:ff"}
+		switch {
+		case path == "/api/infra/v1/hosts":
+			return map[string]any{"results": []any{host}}, 200, nil
+		case strings.HasPrefix(path, "/api/infra/v1/hosts/"):
+			return map[string]any{"result": host}, 200, nil
+		}
+		return map[string]any{}, 200, nil
+	}}
+	d := newDemo(t, &fakeRun{}, api)
+	r := &Run{Change: "c-20261030-150000", Created: d.Now(), Status: "failed", IP: "10.99.0.2", MAC: "aa:bb:cc:dd:ee:ff"}
+	_ = d.Store.Save(r)
+	if _, err := d.Teardown(context.Background(), r.Change, func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	if len(api.deleted) != 1 || !strings.HasSuffix(api.deleted[0], "/api/infra/v1/hosts/7") {
+		t.Fatalf("the host that joined late was left in the Portal: %v", api.deleted)
+	}
+}
+
+func TestJoinTimeoutSaysThePortalCouldNotBeRead(t *testing.T) {
+	run := &fakeRun{rules: []rule{
+		{match: "output -raw ip", out: []string{"10.99.0.2"}},
+		{match: "output -raw", out: []string{"id/1"}},
+		{match: "last_vmid", out: []string{"VMID=211"}},
+		{match: "qm create", out: []string{"MAC=aa:bb:cc:dd:ee:ff", "started"}},
+	}}
+	api := &fakeAPI{get: func(path string, _ map[string]string) (any, int, error) {
+		if path == "/api/infra/v1/hosts" {
+			return nil, 401, nil
+		}
+		return map[string]any{}, 200, nil
+	}}
+	d := newDemo(t, run, api)
+	_, err := d.Build(context.Background(), func(Event) {})
+	if err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("a Portal that refused every check was reported as a slow join: %v", err)
 	}
 }

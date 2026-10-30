@@ -66,7 +66,17 @@ func (d *Demo) Teardown(ctx context.Context, change string, emit func(Event)) (*
 		_ = d.Store.Save(r)
 	}
 
-	// 3. The Portal host, only if it is still at this run's IP.
+	// 3. The Portal host, only if it is still at this run's IP. A VM can join
+	// after a build gave up waiting, so look for it by IP and MAC as well.
+	if r.HostID == "" && r.IP != "" && reMAC.MatchString(r.MAC) {
+		id, created, mac, n, err := d.hostAt(r.IP)
+		if err != nil {
+			return stop(fmt.Errorf("could not check the Portal for this run's host: %w", err))
+		}
+		if n == 1 && created.After(r.Created) && strings.EqualFold(mac, r.MAC) {
+			r.HostID = id
+		}
+	}
 	if r.HostID != "" {
 		body, code, err := d.API.GetEx(hostPath(r.HostID), nil)
 		created, _ := time.Parse(time.RFC3339Nano, str(asMap(body)["created_at"]))
