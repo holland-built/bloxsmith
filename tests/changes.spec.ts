@@ -98,6 +98,21 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await expect(page.locator('[data-changes-span]')).toContainText('6');
   });
 
+  test('a long feed scrolls inside its box and does not stretch the page', async ({ page }) => {
+    // Each row carries an sr-only label (position:absolute). If the scroll box
+    // is not positioned, those labels escape it and add ~28px of blank page per
+    // row: 500 rows made the tab ~14,000px tall on 2026-10-30.
+    const rows = Array.from({ length: 400 }, (_, i) =>
+      row({ id: `long-${i}`, ts: agoIso((i + 1) * 60 * 1000), resource: `res-${i % 7}` }));
+    await page.route('**/api/csp-audit*', (route) =>
+      fulfillJson(route, { count: rows.length, rows, status: 'ok', truncated: false }));
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/#changes');
+    await expect(page.locator('[data-changes-group]').first()).toBeVisible();
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    expect(height).toBeLessThan(2500);
+  });
+
   test('(b) rows are grouped by resource, one header per resource', async ({ page }) => {
     await page.route('**/api/csp-audit*', (route) => fulfillJson(route, liveWindow()));
     await page.goto('/#changes');
