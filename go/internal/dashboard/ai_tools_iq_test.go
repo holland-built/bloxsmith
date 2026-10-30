@@ -89,3 +89,49 @@ func TestRunAITool_IQInsights_MonthlyCountsByMonth(t *testing.T) {
 		t.Fatalf("monthly should group by month, sent %v", seen[0])
 	}
 }
+
+func TestRunAITool_IQInsights_TotalIsActionsNotGroups(t *testing.T) {
+	var seen []map[string]any
+	s, _ := newAIToolsTestService(t, iqCube(t, []map[string]any{
+		{"IqActions.type": "DNS Latency Spike", "IqActions.count": "70"},
+		{"IqActions.type": "DNS NXDOMAIN Spike", "IqActions.count": "39"},
+	}, &seen))
+	var got struct {
+		TotalCount int `json:"total_count"`
+	}
+	if err := json.Unmarshal([]byte(s.RunAITool(context.Background(), "iq_insights", map[string]any{})), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalCount != 109 {
+		t.Fatalf("total_count should be the 109 actions, got %d", got.TotalCount)
+	}
+}
+
+func TestRunAITool_IQInsights_AnswerWithoutDataIsAFailure(t *testing.T) {
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":"Continue wait"}`))
+	})
+	out := s.RunAITool(context.Background(), "iq_insights", map[string]any{})
+	if strings.Contains(out, "No IQ actions") || !strings.Contains(out, "lookup failure") {
+		t.Fatalf("a 200 with no data was read as no actions: %q", out)
+	}
+}
+
+func TestRunAITool_IQInsights_LongBreakdownIsCapped(t *testing.T) {
+	rows := make([]map[string]any, 80)
+	for i := range rows {
+		rows[i] = map[string]any{"IqActions.type": "t", "IqActions.count": "1"}
+	}
+	var seen []map[string]any
+	s, _ := newAIToolsTestService(t, iqCube(t, rows, &seen))
+	var got struct {
+		TotalCount int   `json:"total_count"`
+		Truncated  bool  `json:"truncated"`
+		Rows       []any `json:"rows"`
+	}
+	_ = json.Unmarshal([]byte(s.RunAITool(context.Background(), "iq_insights", map[string]any{})), &got)
+	if len(got.Rows) != 50 || !got.Truncated || got.TotalCount != 80 {
+		t.Fatalf("expected 50 rows shown, truncated, total 80; got %d %v %d", len(got.Rows), got.Truncated, got.TotalCount)
+	}
+}

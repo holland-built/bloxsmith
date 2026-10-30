@@ -316,12 +316,33 @@ func (s *Service) iqInsights(args map[string]any) string {
 	if err != nil || status == 0 || status >= 400 {
 		return aiLookupFailed(what, aiExDetail(status, err))
 	}
-	rows := cubeData(body)
+	rows, ok := asMap(asMap(body)["result"])["data"].([]any)
+	if !ok {
+		return aiLookupFailed(what, "the Cube.js answer had no result.data")
+	}
 	if len(rows) == 0 {
 		return none
 	}
-	// Every view is already small: grouped counts, 12 months, or at most IQLimitMax rows.
-	return jstr(map[string]any{"row_count": len(rows), "rows": rows})
+	out := map[string]any{}
+	// For the counted views, total_count is the number of IQ actions, added up
+	// from every row, so a breakdown of 30 groups is never read as 30 actions.
+	if m, _ := q["measures"].([]string); len(m) == 1 && m[0] == "IqActions.count" {
+		total := 0
+		for _, r := range rows {
+			n, _ := strconv.Atoi(aiStr(asMap(r)["IqActions.count"]))
+			total += n
+		}
+		out["total_count"] = total
+		out["note"] = "total_count is the number of IQ actions. rows is a breakdown of them, not a list of actions."
+	}
+	if len(rows) > ai.IQLimitMax {
+		out["truncated"] = true
+		out["rows_shown"] = ai.IQLimitMax
+		out["rows_total"] = len(rows)
+		rows = rows[:ai.IQLimitMax]
+	}
+	out["rows"] = rows
+	return jstr(out)
 }
 
 // aiClampInt bounds a value the MODEL chose, falling back to def when the
