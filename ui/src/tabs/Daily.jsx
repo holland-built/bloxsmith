@@ -255,8 +255,10 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       // that into 0% used with 0 free, which is the TOP of a list ranked by
       // least free space, under a Healthy pill: the subnet nobody measured,
       // shown as the worst one and as fine at once.
-      util: num(s.util),
-      free: freeOf(s),
+      // A reported total of 0 is the same as no figure: an empty block (seen
+      // live as IPv6 0 / 0 rows) has no room to run out of.
+      util: (num(s.total) ?? 0) > 0 ? num(s.util) : null,
+      free: (num(s.total) ?? 0) > 0 ? freeOf(s) : null,
     }))
     // Unmeasured last. A subnet with no figure is not the one with least room.
     .sort((a, b) => cmpMaybe(a.free, b.free, 'asc'))

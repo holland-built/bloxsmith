@@ -208,6 +208,10 @@ function IpamSpaces({ panelId, ipam }) {
     .map((r) => ({ ...r, used: Number(r.used) || 0, total: Number(r.total) || 0, pct: ((Number(r.used) || 0) / (Number(r.total) || 1)) * 100 }))
     .sort((a, b) => b.used - a.used)
   const rows = eligible.slice(0, IPAM_SPACES_CAP)
+  // Bars measure addresses used against the busiest row, the same figure the
+  // number beside each bar and the sort use. They used to show % full, so the
+  // busiest spaces in large pools drew almost no bar.
+  const maxUsed = Math.max(1, ...rows.map((r) => r.used))
   // The cap was silent until 2026-08-19: against the live tenant this ranked 31
   // spaces and drew 12, and the panel said only "addresses used" — so 19 spaces
   // were missing with nothing on screen admitting it. Same wording as Overview's
@@ -244,7 +248,7 @@ function IpamSpaces({ panelId, ipam }) {
               <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-note">
                 <span className="w-[110px] truncate text-muted" title={r.label}>{r.label || r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
-                  <div className="h-full" style={{ width: `${Math.min(100, r.pct)}%`, background: status.color }} />
+                  <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: status.color }} />
                 </div>
                 <span className="w-12 text-right text-muted">{r.used.toLocaleString()}</span>
               </div>
