@@ -318,13 +318,15 @@ Drift never fixes anything. To close a gap, re-provision the site (missing) or e
 
 ## Demo server
 
-**Writes, after a preview.** Builds a NIOS-X server on Proxmox and shows each Infoblox step as code. Made for showing a customer what automation looks like, end to end, in about five minutes.
+**Writes, after a preview.** Builds a NIOS-X server on Proxmox and shows each Infoblox step as code. Made for showing a customer what automation looks like, end to end, usually in about five minutes once the NIOS-X image is on Proxmox.
+
+Before the first run, Proxmox needs a private bridge for the demo network, and this computer needs OpenTofu and an SSH key for Proxmox. The Docker version of Bloxsmith cannot run the demo. The [README's Demo server section](../README.md#demo-server) has the setup, step by step.
 
 1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image (only needed on this computer if Proxmox does not have it yet), and a join token. The token is kept in the vault and never shown again.
 2. Press **Preview**. It checks the settings, the API key, OpenTofu (or Terraform), the image, SSH to Proxmox and the bridge, and shows the code. Nothing is created.
 3. Press **Build it**. The steps run in order: make sure the demo network exists, reserve the next free address, build the VM, wait for it to join the Portal, start DNS on it with a name server group and a demo zone, then look up a name from the Proxmox host to prove it answers.
 
-Every run gets an ID like `c-20261030-150000`. It is tagged on every Infoblox object, written into the VM's description, and kept in a run record under the app's state folder.
+Every run gets an ID like `c-20261030-150000`. It is tagged on the address, DNS service, name server group, zone and records the run made, written into the VM's description, and kept in a run record under the app's state folder.
 
 **Tear down** lists what it would remove first, and removes nothing until you confirm. Before deleting each thing it checks it still belongs to the run: the VM's name, bridge, seed disk and description, and that the Portal host is still at the run's address. Anything that fails a check is left alone and named. The demo network is kept for the next run.
 

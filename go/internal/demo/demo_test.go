@@ -342,8 +342,13 @@ func TestASecondProcessCannotBuildWhileTheLockIsHeld(t *testing.T) {
 	if _, err := d.Store.Lock(d.Now); err != nil {
 		t.Fatal(err)
 	}
-	later := func() time.Time { return d.Now().Add(3 * time.Hour) }
-	if _, err := d.Store.Lock(later); err != nil {
+	// Staleness is read from the file's real timestamp, so age the file and
+	// use the real clock rather than the test's fixed one.
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(filepath.Join(d.Store.Dir, "build.lock"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Store.Lock(time.Now); err != nil {
 		t.Fatalf("a stale lock was not taken over: %v", err)
 	}
 }
