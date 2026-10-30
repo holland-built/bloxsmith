@@ -84,6 +84,8 @@ var tenantWriteAuditEvents = map[string][]string{
 	"GET /api/provision/seed-demo/stream": {"provision-seed-demo", "provision-site-error"},
 	"GET /api/teardown/site/stream":       {"teardown-site", "teardown-site-error"},
 	"GET /api/teardown/seed-demo/stream":  {"teardown-seed-demo", "teardown-site-error"},
+	"GET /api/provision/demo/stream":      {"demo-build", "demo-build-error"},
+	"GET /api/teardown/demo/stream":       {"demo-remove", "demo-remove-error"},
 
 	// --- address blocks ------------------------------------------------------
 	"POST /api/provision/block": {"provision-block", "provision-block-error"},

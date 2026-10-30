@@ -20,7 +20,7 @@ import { installFixtures, ALL_PAGES, FIXED_NOW } from './page-fixtures';
 // (provision-subnet / provision-site / provision-seed).
 const TABS = [
   'overview', 'daily', 'network', 'dns', 'security', 'infra', 'assets', 'incidents',
-  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'ai', 'chart',
+  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'demo', 'ai', 'chart',
 ];
 
 function isNoise(text: string) {

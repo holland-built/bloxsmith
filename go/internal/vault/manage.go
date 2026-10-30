@@ -546,6 +546,24 @@ func (v *Vault) SetAxur(key string) map[string]any {
 	return r
 }
 
+// SetDemo stores (or, with "", clears) the Demo server settings JSON.
+func (v *Vault) SetDemo(js string) map[string]any {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.unlocked {
+		return fail("locked")
+	}
+	snap := v.snapshot()
+	v.demo = strings.TrimSpace(js)
+	if err := v.save(); err != nil {
+		v.restore(snap)
+		return fail(err.Error())
+	}
+	r := ok()
+	r["stored"] = v.demo != ""
+	return r
+}
+
 // TestKey is vault_test_key (server.py:2982): verify a key reaches CSP and
 // return the resolved account name.
 func (v *Vault) TestKey(key string) map[string]any {

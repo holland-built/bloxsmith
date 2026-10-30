@@ -316,6 +316,18 @@ The result is either `✓ in-sync` or a count of drift items, grouped by categor
 
 Drift never fixes anything. To close a gap, re-provision the site (missing) or edit/delete the object (changed, extra).
 
+## Demo server
+
+**Writes, after a preview.** Builds a NIOS-X server on Proxmox and shows each Infoblox step as code. Made for showing a customer what automation looks like, end to end, in about five minutes.
+
+1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image (only needed on this computer if Proxmox does not have it yet), and a join token. The token is kept in the vault and never shown again.
+2. Press **Preview**. It checks the settings, the API key, OpenTofu (or Terraform), the image, SSH to Proxmox and the bridge, and shows the code. Nothing is created.
+3. Press **Build it**. The steps run in order: make sure the demo network exists, reserve the next free address, build the VM, wait for it to join the Portal, start DNS on it with a name server group and a demo zone, then look up a name from the Proxmox host to prove it answers.
+
+Every run gets an ID like `c-20261030-150000`. It is tagged on every Infoblox object, written into the VM's description, and kept in a run record under the app's state folder.
+
+**Tear down** lists what it would remove first, and removes nothing until you confirm. Before deleting each thing it checks it still belongs to the run: the VM's name, bridge, seed disk and description, and that the Portal host is still at the run's address. Anything that fails a check is left alone and named. The demo network is kept for the next run.
+
 ## AI
 
 **Reads, plus one write action.** Two independent panels, side by side on wide screens: Ask AI on the left and Threat lookup beside it. On a phone they stack.
@@ -460,6 +472,10 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Drift | Check drift | your templates and the Infoblox API | No | it is a form, not a chart |
 | Drift | Error | your templates and the Infoblox API | No | it reports what a change did, not a chart |
 | Drift | Result | your templates and the Infoblox API | No | it compares your templates with what is there, worked out in the app |
+| Demo server | Settings | the app's own vault | No | it is a form, not a chart |
+| Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |
+| Demo server | The Infoblox code | the app's own files | No | it is code, not a chart |
+| Demo server | Runs | the app's own run records | No | it is a list, not a chart |
 | AI | Ask AI | the AI model, reading the Infoblox API | No | the AI writes the answer, and Build a chart uses no AI |
 | AI | Threat lookup | Infoblox's threat intelligence | No | it looks up one name at a time, not a chart |
 | Build a chart | Choose | your picks | No | it is Build a chart's own menu |

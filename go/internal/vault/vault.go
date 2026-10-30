@@ -78,7 +78,11 @@ type payload struct {
 	// decodes to "" — no Axur key stored, fall back to AXUR_API_KEY. That is the
 	// right answer for an older file, not a migration gap, exactly as the
 	// WriteAllowed comment above records for its own field.
-	Axur         string   `json:"axur"`
+	Axur string `json:"axur"`
+	// Demo is the Demo server settings (Proxmox target, demo network, NIOS-X
+	// join token) as one JSON object the demo package reads. Held here because
+	// the join token is a secret. Absent in older vaults, which decodes to "".
+	Demo         string   `json:"demo,omitempty"`
 	LLMBase      string   `json:"llm_base"`
 	LLMModel     string   `json:"llm_model"`
 	WriteAllowed []string `json:"write_allowed,omitempty"`
@@ -121,6 +125,7 @@ type Vault struct {
 	active   *string
 	groq     string
 	axur     string
+	demo     string
 	llmBase  string
 	llmModel string
 	key      *fernet.Key // derived Fernet key
@@ -188,6 +193,7 @@ type vaultSnap struct {
 	active       *string
 	groq         string
 	axur         string
+	demo         string
 	llmBase      string
 	llmModel     string
 	writeAllowed []string
@@ -204,7 +210,7 @@ func (v *Vault) snapshot() vaultSnap {
 	}
 	w := make([]string, len(v.writeAllowed))
 	copy(w, v.writeAllowed)
-	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
+	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, demo: v.demo, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
 }
 
 // restore rolls the mutable state back to a snapshot (caller holds v.mu).
@@ -213,6 +219,7 @@ func (v *Vault) restore(s vaultSnap) {
 	v.active = s.active
 	v.groq = s.groq
 	v.axur = s.axur
+	v.demo = s.demo
 	v.llmBase = s.llmBase
 	v.llmModel = s.llmModel
 	v.writeAllowed = s.writeAllowed
@@ -242,6 +249,14 @@ func (v *Vault) AxurKey() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.axur
+}
+
+// DemoConfig returns the stored Demo server settings as JSON, or "" when none
+// are stored or the vault is locked.
+func (v *Vault) DemoConfig() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.demo
 }
 
 // IsUnlocked reports whether the vault is currently unlocked (lock-guarded).
@@ -355,7 +370,7 @@ func (v *Vault) Init(passphrase string) error {
 	v.unlocked = true
 	v.tenants = nil
 	v.active = nil
-	v.groq, v.axur, v.llmBase, v.llmModel = "", "", "", ""
+	v.groq, v.axur, v.demo, v.llmBase, v.llmModel = "", "", "", "", ""
 	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	if err := v.save(); err != nil {
@@ -429,6 +444,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.active = p.Active
 	v.groq = p.Groq
 	v.axur = p.Axur
+	v.demo = p.Demo
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
 	v.writeAllowed = p.WriteAllowed
@@ -502,6 +518,7 @@ func (v *Vault) save() error {
 		Active:       v.active,
 		Groq:         v.groq,
 		Axur:         v.axur,
+		Demo:         v.demo,
 		LLMBase:      v.llmBase,
 		LLMModel:     v.llmModel,
 		WriteAllowed: v.writeAllowed,
@@ -646,6 +663,7 @@ func (v *Vault) lockLocked() {
 	// by asking the vault whether it is unlocked, so a lock reads as "locked",
 	// never as "you never set one".
 	v.axur = ""
+	v.demo = ""
 	// Cleared with the rest of the decrypted state: a locked vault must not be
 	// able to answer "is this tenant writable" from memory. WriteAllowed()
 	// therefore says no while locked, which is the right answer — nothing is

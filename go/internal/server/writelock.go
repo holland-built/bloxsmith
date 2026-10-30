@@ -55,6 +55,8 @@ var tenantWritePaths = map[string]bool{
 	"/api/provision/seed-demo/stream": true,
 	"/api/teardown/site/stream":       true,
 	"/api/teardown/seed-demo/stream":  true,
+	"/api/provision/demo/stream":      true,
+	"/api/teardown/demo/stream":       true,
 
 	// Address-block provisioning / teardown / retag.
 	"/api/provision/block": true,

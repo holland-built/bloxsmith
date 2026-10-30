@@ -34,7 +34,7 @@ import { installBaselineWorld } from './page-fixtures';
 
 const TABS = [
   'overview', 'daily', 'network', 'dns', 'security', 'infra', 'incidents',
-  'audit', 'assets', 'provision', 'selfservice', 'drift', 'changes', 'editor', 'ai',
+  'audit', 'assets', 'provision', 'selfservice', 'drift', 'demo', 'changes', 'editor', 'ai',
 ];
 
 // How long a tab is given to paint its controls.

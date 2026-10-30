@@ -188,6 +188,12 @@ var panelSources = []PanelSource{
 	restPanel("drift-error", "Drift", "Error", "your templates and the Infoblox API", whyResult),
 	restPanel("drift-result", "Drift", "Result", "your templates and the Infoblox API", "it compares your templates with what is there, worked out in the app"),
 
+	// ---- Demo server ----
+	{ID: "demo-settings", Page: "Demo server", Name: "Settings", Kind: "local", Source: "the app's own vault", Builder: "no", Why: whyForm},
+	restPanel("demo-build", "Demo server", "Build", "Proxmox and the Infoblox API", whyLog),
+	{ID: "demo-code", Page: "Demo server", Name: "The Infoblox code", Kind: "local", Source: "the app's own files", Builder: "no", Why: "it is code, not a chart"},
+	{ID: "demo-runs", Page: "Demo server", Name: "Runs", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
+
 	// ---- AI ----
 	{ID: "ai-ask", Page: "AI", Name: "Ask AI", Kind: "local", Source: "the AI model, reading the Infoblox API",
 		Builder: "no", Why: "the AI writes the answer, and Build a chart uses no AI"},

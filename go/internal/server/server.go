@@ -156,6 +156,7 @@ func (d *Deps) registerAll(mux router) {
 	d.registerNOCRoutes(mux)
 	d.registerBrandRoutes(mux)
 	d.registerSecurityWriteRoutes(mux)
+	d.registerDemoRoutes(mux)
 	// The container's own health probe. Registered last of the named routes and
 	// deliberately NOT under /api/, so no gate in this file — the vault lock, the
 	// write guard, the write lock — has any opinion about it. See healthz.

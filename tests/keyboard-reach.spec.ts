@@ -95,7 +95,7 @@ async function expectPaintsOnFocus(target: Locator, where: string) {
 // each define their own `inputCls` from the same source and were missed.
 const FILTER_TABS = [
   'overview', 'network', 'infra', 'assets', 'audit', 'incidents', 'dns',
-  'drift', 'editor', 'provision', 'selfservice',
+  'drift', 'editor', 'provision', 'selfservice', 'demo',
 ];
 
 for (const tab of FILTER_TABS) {
