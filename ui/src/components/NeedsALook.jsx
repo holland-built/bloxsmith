@@ -8,7 +8,9 @@ import { FOCUS_RING } from './ui.jsx'
 // same feeds as Overview's headline numbers, so the two never disagree.
 // Incidents arrive already grouped, one row per kind.
 
-// Same buckets as Overview's statusBucket(); only "offline" matters here.
+// Same buckets as Overview's statusBucket(); only "offline" matters here. It
+// holds hosts Infoblox reports as offline, down OR error, so the words on
+// screen say "not online" rather than guess which one it was.
 const isOffline = (s) => {
   s = s || ''
   return !/^unknown$/i.test(s) && !/online|up|active/i.test(s) && !/degraded|warn/i.test(s) && /off|down|error|fail/i.test(s)
@@ -28,7 +30,7 @@ function inboxRows({ hosts, incidents, signals, sec }) {
   const rows = []
   const offline = hosts ? hosts.filter((h) => isOffline(h.status)).length : 0
   if (offline) {
-    rows.push({ key: 'hosts-offline', sev: 'crit', title: `${fmt(offline)} of ${fmt(hosts.length)} ${hosts.length === 1 ? 'host' : 'hosts'} ${offline === 1 ? 'is' : 'are'} offline`, sub: '', href: '#infra?status=offline', ask: 'Which hosts are offline?' })
+    rows.push({ key: 'hosts-offline', sev: 'crit', title: `${fmt(offline)} of ${fmt(hosts.length)} ${hosts.length === 1 ? 'host' : 'hosts'} ${offline === 1 ? 'is' : 'are'} not online`, sub: '', href: '#infra?status=offline', ask: 'Which hosts are not online?' })
   }
   if (sec && sec.critical + sec.high > 0) {
     rows.push({ key: 'security', sev: sec.critical ? 'crit' : 'warn', title: `${fmt(sec.critical + sec.high)} critical or high security events`, sub: sec.note, href: '#security', ask: 'Which domains are on threat feeds?' })

@@ -33,7 +33,7 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   await expect(page.locator('[data-panel-id]').first()).toBeVisible();
   const rows = page.locator('[data-inbox-row]');
   await expect(rows).toHaveCount(3);
-  await expect(rows.nth(0)).toContainText('1 of 2 hosts is offline');
+  await expect(rows.nth(0)).toContainText('1 of 2 hosts is not online');
   await expect(rows.nth(1)).toContainText('1,746 subnets are filling up');
   await expect(rows.nth(1)).toContainText('3 are 90% full or more');
   await expect(rows.nth(2)).toContainText('64 zones have DNS timing problems');
@@ -41,7 +41,7 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   // The sentence is the link; there is no column of buttons.
   await expect(rows.nth(1).getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=90&focus=subnets');
   await expect(page.locator('[data-needs-a-look] a.bg-accent')).toHaveCount(0);
-  await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are offline/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20offline%3F');
+  await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are not online/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
 });
 
 test('an incident made of one finding says the finding itself, not "1 ×"', async ({ page }) => {

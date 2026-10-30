@@ -28,7 +28,7 @@ test('six tiles lead the page, in this order', async ({ page }) => {
   await expect(strip(page).getByRole('listitem')).toHaveCount(6);
   await expect(strip(page).getByRole('button', { name: /^Hosts \d/ })).toBeVisible({ timeout: 20_000 });
   const labels = await strip(page).getByRole('listitem').evaluateAll((els) => els.map((el) => el.querySelector('span')?.textContent));
-  expect(labels).toEqual(['DNS queries', 'Hosts', 'Hosts offline', 'Subnets ≥90%', 'Active Leases', 'Security events']);
+  expect(labels).toEqual(['DNS queries', 'Hosts', 'Hosts not online', 'Subnets ≥90%', 'Active Leases', 'Security events']);
 });
 
 test('a tile that counts something bad is red or amber when there is any, and says how much', async ({ page }) => {
@@ -36,8 +36,8 @@ test('a tile that counts something bad is red or amber when there is any, and sa
   await page.goto('/#overview');
   // The baseline world: one host offline, one subnet past 90%, and one critical
   // plus two high security events.
-  await expect(tile(page, 'Hosts offline')).toHaveAttribute('data-tone', 'crit', { timeout: 20_000 });
-  await expect(tile(page, 'Hosts offline')).toContainText('1');
+  await expect(tile(page, 'Hosts not online')).toHaveAttribute('data-tone', 'crit', { timeout: 20_000 });
+  await expect(tile(page, 'Hosts not online')).toContainText('1');
   await expect(tile(page, 'Subnets ≥90%')).toHaveAttribute('data-tone', 'crit');
   await expect(tile(page, 'Subnets ≥90%')).toContainText('0 at 70–89%');
   await expect(tile(page, 'Security events')).toHaveAttribute('data-tone', 'crit');
@@ -58,8 +58,8 @@ test('a count of zero is green, and only then', async ({ page }) => {
   healthy._totals.subnetsWarn = 1;
   await page.route('**/api/data', (route) => fulfillJson(route, healthy));
   await page.goto('/#overview');
-  await expect(tile(page, 'Hosts offline')).toHaveAttribute('data-tone', 'ok', { timeout: 20_000 });
-  await expect(tile(page, 'Hosts offline')).toContainText('0');
+  await expect(tile(page, 'Hosts not online')).toHaveAttribute('data-tone', 'ok', { timeout: 20_000 });
+  await expect(tile(page, 'Hosts not online')).toContainText('0');
   await expect(tile(page, 'Subnets ≥90%')).toHaveAttribute('data-tone', 'ok');
   await expect(tile(page, 'Subnets ≥90%')).toContainText('1 at 70–89%');
 });
@@ -79,7 +79,7 @@ test('a zero counted over part of the estate is not painted green', async ({ pag
   partial._totals = { degraded: false, hosts: 40, subnets: 3 };
   await page.route('**/api/data', (route) => fulfillJson(route, partial));
   await page.goto('/#overview');
-  const offline = tile(page, 'Hosts offline (of 3 loaded)');
+  const offline = tile(page, 'Hosts not online (of 3 loaded)');
   await expect(offline).toContainText('0', { timeout: 20_000 });
   await expect(offline).not.toHaveAttribute('data-tone');
   const full = tile(page, 'Subnets ≥90% (loaded rows)');
@@ -92,7 +92,7 @@ test('a tile whose feed is dead is a dash with no colour, and says unavailable',
   await page.route('**/api/data*', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' }));
   await page.goto('/#overview');
   await expect(page.getByText('Hosts feed unavailable').first()).toBeVisible({ timeout: 20_000 });
-  const offline = strip(page).getByRole('button', { name: 'Hosts offline —', exact: true });
+  const offline = strip(page).getByRole('button', { name: 'Hosts not online —', exact: true });
   await expect(offline).toBeVisible();
   await expect(offline).not.toHaveAttribute('data-tone');
   const full = tile(page, 'Subnets ≥90% (loaded rows)');

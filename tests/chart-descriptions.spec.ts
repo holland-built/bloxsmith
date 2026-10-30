@@ -90,7 +90,7 @@ test('a donut says each slice: the hosts by state', async ({ page }) => {
   // "ok" is not one of the states Infra names, so that host is drawn as Other.
   await page.goto('/#infra');
   await expect(page.locator(CHART)).toHaveCount(1, { timeout: 20_000 });
-  expect(await descriptionOf(page, 'Host Status chart')).toBe('Hosts: Degraded 1, Offline 1, Other 1.');
+  expect(await descriptionOf(page, 'Host Status chart')).toBe('Hosts: Degraded 1, Not online 1, Other 1.');
 });
 
 test('a long run gives its ends, its lowest and its highest: a week of queries', async ({ page }) => {

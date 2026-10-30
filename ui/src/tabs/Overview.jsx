@@ -11,7 +11,7 @@ import { HeadlineStrip, StatusPill } from '../components/kit.jsx'
 import { sampleSince } from '../lib/sampleCount.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
-import { plainMessage } from '../lib/plainWords.js'
+import { bucketWord, plainMessage } from '../lib/plainWords.js'
 
 
 // Tap once to read it, tap again to follow it.
@@ -245,7 +245,7 @@ function headlines(dns, data, sec, sliceStatus) {
     { panelId: 'host-status', label: 'Hosts', loading: !settled, value: hostOk && typeof totals.hosts === 'number' ? totals.hosts.toLocaleString() : null },
     // Green needs the whole estate: no offline host among the ones loaded says
     // nothing about the ones that were not. Red does not: one is enough.
-    { panelId: 'host-status', label: `Hosts offline${loadedNote}`, loading: !settled, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
+    { panelId: 'host-status', label: `Hosts not online${loadedNote}`, loading: !settled, value: fmt(offline), tone: zeroIsUnknown(alarmTone(offline, 'crit'), hostsPartial) },
     {
       // The same rule: a zero counted over loaded rows is not an all-clear.
       href: `#network?minUtil=${UTIL_CRIT}`, label: critLabel, loading: !settled, value: fmt(crit), tone: zeroIsUnknown(alarmTone(crit, 'crit'), !hasCritTotal),
@@ -874,7 +874,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
   const loaded = hosts.length
   const pieData = Object.entries(buckets)
     .filter(([, v]) => v > 0)
-    .map(([name, value]) => ({ name, value, color: colorMap[name] }))
+    .map(([key, value]) => ({ key, name: bucketWord(key), value, color: colorMap[key] }))
   // Not active is not the same as down: a host whose state nobody reported is
   // on this list too, under its own word, Unknown.
   const notActive = hosts
@@ -911,7 +911,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
                 valueFormat={(v) => `${fmtValue(v)} ${Number(v) === 1 ? 'host' : 'hosts'}`}
                 onSliceClick={(d) => {
                   if (!d?.name || !tap.drills(d.name)) return
-                  location.hash = 'infra?status=' + d.name.toLowerCase()
+                  location.hash = 'infra?status=' + d.key.toLowerCase()
                 }}
               />
             </Suspense>
@@ -926,11 +926,11 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
           <div className="flex-1 flex flex-col">
             {pieData.map((d) => (
               <div
-                key={d.name}
+                key={d.key}
                 role="button"
                 tabIndex={0}
-                onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.name.toLowerCase() } }}
+                onClick={() => { location.hash = 'infra?status=' + d.key.toLowerCase() }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.key.toLowerCase() } }}
                 className="flex items-center gap-1.5 min-h-6 text-note cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
               >
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
@@ -952,7 +952,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId, loading = false 
                   <li key={h.id ?? h.name} className="flex items-center gap-2 h-6 min-w-0">
                     <i className="w-2 h-2 rounded-mark inline-block shrink-0" style={{ background: colorMap[BUCKET_LABEL[statusBucket(h.status)]] }} />
                     <span className="min-w-0 flex-1 truncate" title={h.name}>{h.name}</span>
-                    <span className="text-note text-muted shrink-0">{BUCKET_LABEL[statusBucket(h.status)]}</span>
+                    <span className="text-note text-muted shrink-0">{bucketWord(BUCKET_LABEL[statusBucket(h.status)])}</span>
                   </li>
                 ))}
               </ul>
