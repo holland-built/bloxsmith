@@ -13,14 +13,24 @@ import (
 // so an image proxblox already copied is reused.
 const remoteImageDir = "/var/lib/vz/template/qcow"
 
-// ssh runs a script on the Proxmox host. The script goes on stdin so nothing
+// sudo is what runs a command as root on Proxmox. A root login needs nothing.
+// Any other login uses sudo -n, which fails at once instead of waiting for a
+// password nobody can type.
+func (c Config) sudo() []string {
+	if strings.HasPrefix(c.PVE, "root@") {
+		return nil
+	}
+	return []string{"sudo", "-n"}
+}
+
+// ssh runs a script on the Proxmox host, as root. The script goes on stdin so nothing
 // in it, the join token included, appears in a process list.
 func (d *Demo) ssh(ctx context.Context, step, script string, line func(string)) (string, error) {
 	var out []string
 	red := d.secrets()
 	err := d.Run.Run(ctx, Cmd{
 		Name:  "ssh",
-		Args:  []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=10", d.Cfg.PVE, "bash", "-s"},
+		Args:  append(append([]string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=10", d.Cfg.PVE}, d.Cfg.sudo()...), "bash", "-s"),
 		Stdin: "set -euo pipefail\n" + script + "\n",
 	}, func(l string) {
 		l = red.clean(l)
@@ -73,7 +83,11 @@ echo "VMID=$n"`, nil)
 		if _, err := d.ssh(ctx, "vm", "mkdir -p "+remoteImageDir, nil); err != nil {
 			return err
 		}
-		if err := d.Run.Run(ctx, Cmd{Name: "rsync", Args: []string{"-a", c.Image, c.PVE + ":" + remote}}, say); err != nil {
+		args := []string{"-a", c.Image, c.PVE + ":" + remote}
+		if c.sudo() != nil {
+			args = append([]string{"--rsync-path=sudo -n rsync"}, args...)
+		}
+		if err := d.Run.Run(ctx, Cmd{Name: "rsync", Args: args}, say); err != nil {
 			return fmt.Errorf("copying the image: %w", err)
 		}
 	}

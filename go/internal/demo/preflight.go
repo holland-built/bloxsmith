@@ -44,7 +44,12 @@ echo checked`, nil)
 	add(lerr == nil || strings.Contains(tools, "has-image"), "The NIOS-X image is on Proxmox or on this machine",
 		"Download the NIOS-X On-Prem qcow2 from the Infoblox Portal to "+d.Cfg.Image)
 	reach := err == nil && strings.Contains(tools, "checked")
-	add(reach, "Proxmox answers over SSH without a password", "Set up an SSH key for "+d.Cfg.PVE)
+	if d.Cfg.sudo() == nil {
+		add(reach, "Proxmox answers over SSH without a password", "Set up an SSH key for "+d.Cfg.PVE)
+	} else {
+		add(reach, "Proxmox answers over SSH, and sudo runs without a password",
+			"Set up an SSH key for "+d.Cfg.PVE+", and let that login run sudo without a password; see the Demo server docs")
+	}
 	if reach {
 		add(!strings.Contains(tools, "missing"), "Proxmox has qm, genisoimage, dig and flock", "On Proxmox: apt install genisoimage dnsutils")
 		add(!strings.Contains(tools, "bridge"), "The demo bridge "+d.Cfg.Bridge+" is up with "+d.Cfg.Gateway, "Add the bridge with NAT on Proxmox; see the Demo server docs")

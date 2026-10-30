@@ -17,7 +17,7 @@ const primary = { background: COLORS.accent, color: COLORS.onAccent }
 const danger = { background: COLORS.crit, color: COLORS.onCrit }
 
 const FIELDS = [
-  ['pve', 'Proxmox SSH login', 'root@10.0.0.2'],
+  ['pve', 'Proxmox SSH login', 'jsmith@10.0.0.2'],
   ['pveName', 'Proxmox host name (answered in the demo zone)', 'pve1'],
   ['pveIp', 'Proxmox host address', '10.0.0.2'],
   ['pool', 'Proxmox storage for the disk', 'local-zfs'],
