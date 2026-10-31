@@ -62,7 +62,7 @@ var (
 func (c Config) Problems() []string {
 	var p []string
 	if !reSSH.MatchString(c.PVE) {
-		p = append(p, "Proxmox SSH login should look like root@192.168.100.2")
+		p = append(p, "Proxmox SSH login should look like jsmith@10.0.0.2")
 	}
 	if !reLabel.MatchString(c.PVEName) {
 		p = append(p, "Proxmox host name should be a short name like lab")

@@ -505,3 +505,38 @@ func TestPreflightDoesNotTrustAnEmptyStateFile(t *testing.T) {
 	}
 	t.Fatal("an empty state file hid an existing bloxsmith-demo space")
 }
+
+func TestALoginOtherThanRootRunsEveryProxmoxCommandThroughSudo(t *testing.T) {
+	for login, wantSudo := range map[string]bool{"jsmith@pve1": true, "root@pve1": false} {
+		run := &fakeRun{rules: []rule{
+			{match: "output -raw ip", out: []string{"10.99.0.2"}},
+			{match: "output -raw", out: []string{"id/1"}},
+			{match: "last_vmid", out: []string{"VMID=211"}},
+			{match: "qemu-img info", err: errors.New("no image yet")},
+			{match: "qm create", err: errors.New("stop here")},
+		}}
+		api := &fakeAPI{get: func(string, map[string]string) (any, int, error) { return map[string]any{}, 200, nil }}
+		d := newDemo(t, run, api)
+		d.Cfg.PVE = login
+		_, _ = d.Build(context.Background(), func(Event) {})
+		var sshes, rsyncs int
+		for _, s := range run.seen {
+			cmd, _, _ := strings.Cut(s, "\n")
+			switch {
+			case strings.HasPrefix(cmd, "ssh "):
+				sshes++
+				if strings.HasSuffix(cmd, login+" sudo -n bash -s") != wantSudo || !strings.HasSuffix(cmd, " bash -s") {
+					t.Errorf("%s: ssh command %q", login, cmd)
+				}
+			case strings.HasPrefix(cmd, "rsync "):
+				rsyncs++
+				if strings.Contains(cmd, "--rsync-path=sudo -n rsync") != wantSudo {
+					t.Errorf("%s: rsync command %q", login, cmd)
+				}
+			}
+		}
+		if sshes < 3 || rsyncs != 1 {
+			t.Fatalf("%s: expected the VMID, image check and copy to run, saw %d ssh and %d rsync", login, sshes, rsyncs)
+		}
+	}
+}

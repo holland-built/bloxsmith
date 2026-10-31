@@ -255,7 +255,7 @@ The **Demo server** page builds a NIOS-X server on Proxmox while a customer watc
 | Your computer | Bloxsmith installed with Homebrew or an installer script (see **Other ways to install** above). The Docker version from the quick start cannot run the demo, because its container has no OpenTofu and no SSH |
 | Your computer | OpenTofu or Terraform. On macOS, `brew install opentofu` installs OpenTofu |
 | Your computer | An SSH key that logs in to Proxmox without asking for a password, and `rsync` for the first copy of the image to Proxmox |
-| Proxmox | A login that can run `qm`. Bloxsmith runs it without sudo, so today this has to be `root` |
+| Proxmox | Your own login with passwordless `sudo` for `bash` and `rsync` (next section), or `root` |
 | Proxmox | `genisoimage` and `dig`, and a private bridge for the demo network (next section) |
 | Infoblox | An API key that can create IP spaces, subnets and DNS zones, a join token, and the NIOS-X On-Prem QCOW2 image from the Portal's downloads |
 
@@ -264,7 +264,36 @@ The **Demo server** page builds a NIOS-X server on Proxmox while a customer watc
 <details>
 <summary><b>Set up Proxmox once (about 5 minutes)</b></summary>
 
-Run these as `root` on the Proxmox host, from its web console (**Shell**) so a network mistake cannot lock you out. They add a private bridge, `vmbr9`, with the network `10.99.0.0/24`. Servers on it reach the internet through `vmbr0`. Pick another bridge name or network if those are taken, and use the same values in Bloxsmith's Settings.
+Run these as `root` on the Proxmox host, from its web console (**Shell**) so a network mistake cannot lock you out. Replace `jsmith` with your own login.
+
+```bash
+# install sudo; a fresh Proxmox host does not have it
+apt install -y sudo
+```
+
+```bash
+# make your own login, if you do not have one on this host yet
+adduser jsmith
+```
+
+```bash
+# write a rule letting jsmith run bash and rsync as root without a password, to a scratch file first
+echo 'jsmith ALL=(root) NOPASSWD: /usr/bin/bash, /usr/bin/rsync' > /root/bloxsmith-demo.sudo
+```
+
+```bash
+# check the rule before it takes effect; this should print "parsed OK"
+visudo -cf /root/bloxsmith-demo.sudo
+```
+
+```bash
+# set the permissions sudo expects and move the rule into place; -n leaves an existing file alone
+chmod 440 /root/bloxsmith-demo.sudo && mv -n /root/bloxsmith-demo.sudo /etc/sudoers.d/bloxsmith-demo
+```
+
+Bloxsmith sends each Proxmox step as a script to `sudo bash`, so this rule gives `jsmith` full root access without a password. Keep the SSH key for that login on your own computer only. To use `root` instead, skip these five commands.
+
+The next commands add a private bridge, `vmbr9`, with the network `10.99.0.0/24`. Servers on it reach the internet through `vmbr0`. Pick another bridge name or network if those are taken, and use the same values in Bloxsmith's Settings.
 
 ```bash
 # check that Proxmox reads extra network files; this should print a "source" line
@@ -296,11 +325,16 @@ ifup vmbr9
 apt install -y genisoimage dnsutils
 ```
 
-To undo it later, after tearing down every demo run:
+To undo it later, after tearing down every demo run, remove the files this setup made. Skip any that were already there before you started:
 
 ```bash
 # take the demo bridge down and delete its settings file
 ifdown vmbr9 && rm /etc/network/interfaces.d/bloxsmith-demo
+```
+
+```bash
+# remove the sudo rule
+rm /etc/sudoers.d/bloxsmith-demo
 ```
 
 </details>
@@ -320,7 +354,7 @@ Every run gets an ID like `c-20261030-150000`. The ID is tagged on the address, 
 | Check that failed | Fix |
 |---|---|
 | OpenTofu or Terraform is installed | `brew install opentofu`, then press **Preview** again |
-| Proxmox answers over SSH without a password | Copy your key with `ssh-copy-id root@<proxmox-host>`. Then `ssh root@<proxmox-host> true` should return with no password prompt |
+| Proxmox answers over SSH (and sudo runs) without a password | Copy your key with `ssh-copy-id jsmith@<proxmox-host>`. Then `ssh jsmith@<proxmox-host> sudo -n bash -c true` should return with no prompt |
 | Proxmox has qm, genisoimage, dig and flock | On Proxmox: `apt install -y genisoimage dnsutils` |
 | The demo bridge is up | Do **Set up Proxmox once** above, with the bridge and gateway from your Settings |
 | The bloxsmith-demo IP space is free to create | Another copy of Bloxsmith made it. Delete it in the Infoblox Portal when no demo is running |
