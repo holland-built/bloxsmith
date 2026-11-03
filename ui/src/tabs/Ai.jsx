@@ -128,7 +128,7 @@ function AnswerText({ text }) {
         </List>
       )
     }
-    if (b.type === 'hr') return null
+    if (b.type === 'hr') return <hr key={i} className="border-0 border-t border-border my-1.5" />
     // Paragraphs, and headings or quotes the model was told not to write,
     // all show as a plain line.
     return <p key={i} className="my-0.5"><AnswerInline text={b.text} /></p>
