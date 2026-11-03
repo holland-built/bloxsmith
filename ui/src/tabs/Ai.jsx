@@ -5,6 +5,8 @@ import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 import { dossierHasVerdict } from '../lib/dossierVerdict.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { parseInline } from '../lib/markdown.js'
+import { answerBlocks } from '../lib/aiAnswer.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
@@ -42,11 +44,11 @@ function Message({ item, onRetry }) {
   }
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-copy whitespace-pre-wrap">
+      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-copy">
         {/* Said on every answer, so model prose is never read as a measured
             figure. The facts under it are the server's, and say so. */}
         <p className="text-note text-muted mb-1">AI-generated</p>
-        {item.text}
+        <AnswerText text={item.text} />
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {item.suggestions.map((sg, i) => (
@@ -75,6 +77,62 @@ function Message({ item, onRetry }) {
       </div>
     </div>
   )
+}
+
+// Bold, code and links in the answer. A link shows as its words only, never
+// as a clickable link: the answer can carry text planted in the tenant's own
+// data (see rule 9 in go/internal/ai/schema.go), so it must not be able to put
+// a working link in front of the reader.
+function AnswerInline({ text }) {
+  return parseInline(text).map((tok, i) => {
+    if (tok.type === 'strong') return <strong key={i} className="font-semibold">{tok.text}</strong>
+    if (tok.type === 'em') return <em key={i}>{tok.text}</em>
+    if (tok.type === 'code') return <code key={i} className="font-mono text-note">{tok.text}</code>
+    return <span key={i}>{tok.text}</span>
+  })
+}
+
+// The answer as markdown (lib/aiAnswer.js). React escapes every string here,
+// so nothing in the answer can become markup.
+function AnswerText({ text }) {
+  return answerBlocks(text).map((b, i) => {
+    if (b.type === 'table') {
+      return (
+        <div key={i} className="overflow-x-auto my-1.5">
+          <table className="border-collapse text-copy">
+            <thead>
+              <tr>
+                {b.head.map((h, n) => (
+                  <th key={n} className="text-left text-note font-medium text-muted border-b border-border pr-4 py-1"><AnswerInline text={h} /></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {b.body.map((row, n) => (
+                <tr key={n}>
+                  {row.map((c, m) => (
+                    <td key={m} className="align-top border-b border-border pr-4 py-1"><AnswerInline text={c} /></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (b.type === 'ul' || b.type === 'ol') {
+      const List = b.type === 'ul' ? 'ul' : 'ol'
+      return (
+        <List key={i} className={`${b.type === 'ul' ? 'list-disc' : 'list-decimal'} pl-5 my-1`}>
+          {b.items.map((it, n) => <li key={n}><AnswerInline text={it} /></li>)}
+        </List>
+      )
+    }
+    if (b.type === 'hr') return <hr key={i} className="border-0 border-t border-border my-1.5" />
+    // Paragraphs, and headings or quotes the model was told not to write,
+    // all show as a plain line.
+    return <p key={i} className="my-0.5"><AnswerInline text={b.text} /></p>
+  })
 }
 
 function RetryButton({ onClick }) {
