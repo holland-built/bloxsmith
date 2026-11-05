@@ -369,11 +369,6 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         <div className="shrink-0 flex items-center px-5 py-3 border-b border-line-2">
           <h2 id="tm-title" className="text-copy font-semibold">Settings</h2>
           <span className="flex-1" />
-          {onOpenSetup && (
-            <button type="button" onClick={onOpenSetup} className="mr-2 text-note font-medium text-link underline underline-offset-2">
-              Setup checklist
-            </button>
-          )}
           <button className="w-8 h-8 text-muted text-copy hover:text-txt" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
@@ -409,6 +404,12 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
           <div className="flex-1 min-w-0 overflow-y-auto p-5">
             <section className={section === 'connections' ? '' : 'hidden'} aria-label="Connections">
             <h3 className="text-copy font-semibold mb-3">Connections</h3>
+            {onOpenSetup && (
+              <p className="text-note text-muted mb-3">
+                AI answers, the demo server, your logo and templates are on one list:{' '}
+                <button type="button" onClick={onOpenSetup} className="text-link underline underline-offset-2">Setup checklist</button>
+              </p>
+            )}
               {add.open ? (
             <div>
               <h3 className="text-note font-semibold mb-2">Add a connection</h3>

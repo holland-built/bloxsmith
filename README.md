@@ -94,7 +94,7 @@ Every page is under the **All pages** menu at the top. Pages that change Infoblo
    ```
 4. Go to <http://localhost:8080> and pick a passphrase. It unlocks your saved keys.
 5. Make an API key at <https://csp.infoblox.com> (your name, top right > **User API Keys** > **Create**) and paste it into Bloxsmith.
-6. The dashboard opens with a short **Finish setting up** checklist: AI answers, the demo server, your logo and name, and site templates. Each one is optional; skip any of them and open the list again from **Settings** > **Setup checklist**.
+6. The dashboard opens with a short **Finish setting up** checklist: AI answers, the demo server, your logo and name, and site templates. Each one is optional; skip any of them and open the list again from **Setup checklist** in **Settings**.
 
 You only add the key once. It is kept encrypted and survives restarts and updates.
 

@@ -20,7 +20,7 @@ After the first Infoblox key is saved, the dashboard opens with a **Finish setti
 | Logo and company name | Opens the logo and name window, the same one the logo at the top left opens. |
 | Site templates | Read-only: which site templates are installed. They come with each release. |
 
-Each item shows whether it is already set. **Do this later** closes an item, and **Finish** closes the list with items left. **Settings** > **Setup checklist** opens it again any time.
+Each item shows whether it is already set. **Do this later** closes an item, and **Finish** closes the list with items left. **Setup checklist** at the top of **Settings** > **Connections** opens it again any time.
 
 ## The write flow
 

@@ -85,7 +85,7 @@ export default function SetupChecklist({ onClose, onOpenBrand, brandOpen }) {
         </div>
         <p className="text-note text-muted mb-3">
           The dashboard works already. Everything here is optional; skip what you do not need, and
-          open this again any time from Settings &gt; Setup checklist.
+          open this again any time from Settings, under Connections.
         </p>
 
         <ul>
