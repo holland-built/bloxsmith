@@ -118,6 +118,9 @@ var tenantWritePrefixes = []string{
 //	                     it cannot write here. Its real exposure is tenant text
 //	                     reaching a model and tenant data leaving the machine,
 //	                     which is a different control and not this one
+//	/api/desk/plan       turns a sentence into Automate job answers with one
+//	                     AI call and no tools. It never calls Infoblox; the
+//	                     person still presses Build, which is gated.
 var nonTenantWritePaths = map[string]bool{
 	"/api/views":              true,
 	"/api/views/import":       true,
@@ -129,6 +132,7 @@ var nonTenantWritePaths = map[string]bool{
 	"/api/templates/validate": true,
 	"/api/drift/check":        true,
 	"/api/query":              true,
+	"/api/desk/plan":          true,
 }
 
 var nonTenantWritePrefixes = []string{

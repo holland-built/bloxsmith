@@ -47,6 +47,11 @@ type Demo struct {
 	Now     func() time.Time
 	Sleep   func(time.Duration)
 	Timeout time.Duration // how long to wait for the join and for DNS answers
+
+	// Started, when set, is called once the run record is saved and before
+	// anything is built, so a caller can record the change ID first. An error
+	// stops the build, because a run the caller cannot find cannot be removed.
+	Started func(*Run) error
 }
 
 var busy sync.Mutex // one build or teardown at a time on this machine
@@ -183,6 +188,13 @@ func (d *Demo) Build(ctx context.Context, emit func(Event)) (*Run, error) {
 		Subnet: d.Cfg.Subnet, Gateway: d.Cfg.Gateway}
 	if err := d.Store.Save(r); err != nil {
 		return nil, err
+	}
+	if d.Started != nil {
+		if err := d.Started(r); err != nil {
+			r.Status, r.Error = "failed", "could not record this run before building: "+err.Error()
+			_ = d.Store.Save(r)
+			return r, err
+		}
 	}
 	fail := func(step string, err error) (*Run, error) {
 		r.Status, r.Error = "failed", step+": "+d.secrets().clean(err.Error())

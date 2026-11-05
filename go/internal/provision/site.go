@@ -983,6 +983,9 @@ func (p *SiteProvisioner) Provision() (M, error) {
 			p.noteUnknownID(result, "dns_zone", p.cfg.DNSZone())
 		}
 		result["dns_zone_id"] = zid
+		// Whether this run made the zone, so a caller that removes the site
+		// later (the Automate desk) never deletes a zone that was already there.
+		result["dns_zone_created"] = p.zoneCreated
 		zfqdn := pyStr(zone["fqdn"])
 		if zfqdn == "" {
 			zfqdn = p.cfg.DNSZone()

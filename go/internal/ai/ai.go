@@ -851,3 +851,28 @@ func traceArgs(args map[string]any) map[string]any {
 	}
 	return out
 }
+
+// Complete is one model call with no tools: a system prompt, one user
+// message, and the model's text back. The Automate page uses it to turn a
+// sentence into job answers. Its tokens count toward the same daily total as
+// every other call here.
+func (s *Service) Complete(system, user string, maxTokens int) (string, error) {
+	key, base, model := s.creds.LLM()
+	if key == "" {
+		return "", errors.New(noKeyMsg)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	resp, err := s.chatWith(ctx, key, base, model, []any{
+		map[string]any{"role": "system", "content": system},
+		map[string]any{"role": "user", "content": user},
+	}, maxTokens, false)
+	if err != nil {
+		return "", err
+	}
+	s.budget.AddTokens(resp.Usage.TotalTokens)
+	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].content) == "" {
+		return "", errors.New("the AI returned no answer")
+	}
+	return resp.Choices[0].content, nil
+}

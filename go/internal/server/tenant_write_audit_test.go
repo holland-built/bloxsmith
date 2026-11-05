@@ -95,8 +95,8 @@ var tenantWriteAuditEvents = map[string][]string{
 	// --- DNS and IPAM edits --------------------------------------------------
 	"POST /api/selfservice/allocate": {"selfservice-allocate", "selfservice-allocate-orphaned", "selfservice-allocate-record-unreadable"},
 	"POST /api/dns/records":          {"dns-record-create", "dns-record-create-unreadable"},
-	"POST /api/desk/run":             {"desk-build"},
-	"POST /api/desk/remove":          {"desk-remove"},
+	"POST /api/desk/run":             {"desk-build", "demo-build", "demo-build-error"},
+	"POST /api/desk/remove":          {"desk-remove", "demo-remove", "demo-remove-error"},
 	"PATCH /api/dns/records":         {"dns-record-update", "dns-record-update-unreadable"},
 	"DELETE /api/dns/records/":       {"dns-record-delete", "dns-record-delete-error"},
 	"DELETE /api/ipam/addresses/":    {"ipam-address-delete", "ipam-address-delete-error"},
