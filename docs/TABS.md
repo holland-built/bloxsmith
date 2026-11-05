@@ -216,8 +216,16 @@ The quick way to make a change. Pick a job on the left, answer its questions, an
 | Job | What it asks | What it makes |
 |---|---|---|
 | Get an IP address | An IP space, a network, and what the address is for | Reserves the next free address in that network |
+| Add a DNS name | A zone, the name, the kind of record (A, AAAA, CNAME or TXT) and what it points to | One DNS record |
+| Make a new network | An IP space, an address block, a size and a name | The next free network of that size in the block |
+
+**Find** at the top looks up an address, network or name across IPAM, DNS and the logs, and opens the search page. It changes nothing.
+
+**IP space suggestions.** The three buttons above the IP space list are the best places to build. Spaces you have built in before come first, then spaces named for the person signed in, then the spaces with the most free addresses. Each button says why it is suggested. You can still pick any space from the list.
 
 **Your recent changes** lists everything built on this page, newest first. **Remove** first lists what is still there, then **Delete these** deletes exactly those items and nothing else. Bloxsmith keeps the exact Infoblox ID of everything it builds here, so Remove never touches anything it did not make. If an item cannot be deleted, the change says so, and Remove again retries only what is left.
+
+Deleting a network in Infoblox also deletes everything inside it. So Remove keeps a network that now holds addresses or DHCP ranges this change did not make, and says so. Release those first, then press Remove again.
 
 Changes made on the Provision, Self-Service and Demo server pages are not listed here and cannot be removed from here.
 

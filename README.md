@@ -42,7 +42,7 @@ Every page is under the **All pages** menu at the top. Pages that change Infoblo
 |---|---|---|
 | Check the network first thing in the morning | **Overview**, then **Daily** | Look for subnets running out of addresses, DNS errors and new security hits |
 | Find a device | **Assets** | Type part of its name, or pick a type |
-| Make a quick change you can undo later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
+| Get an IP address, a DNS name or a new network, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
 | Give someone an address or a DNS record | **Self-Service** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
 | See who changed what today | **Changes** | Changes from the last 24 hours, grouped by what was touched. **Audit** goes further back |
 | Show a customer what automation looks like | **Demo server** | Builds a NIOS-X server on Proxmox, then removes it. See [Demo server](#demo-server) below |

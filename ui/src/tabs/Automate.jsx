@@ -4,7 +4,7 @@
 //
 // The older pages (Provision, Self-Service, Demo server) stay as they are.
 // Changes made there are not recorded here and cannot be removed from here.
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -15,6 +15,18 @@ import FilterSelect from '../components/FilterSelect.jsx'
 
 const JOBS = [
   { id: 'ip', title: 'Get an IP address', says: 'The next free address in a network you pick' },
+  { id: 'dns', title: 'Add a DNS name', says: 'A name that points at an address or another name' },
+  { id: 'network', title: 'Make a new network', says: 'The next free network of the size you pick' },
+]
+
+// Network sizes the Make a new network job offers, in plain words.
+const SIZES = [24, 25, 26, 27, 28, 29].map((c) => ({ value: String(c), label: `/${c}, ${2 ** (32 - c)} addresses` }))
+
+const DNS_TYPES = [
+  { value: 'A', label: 'A: points at an IPv4 address', hint: '10.1.2.3' },
+  { value: 'AAAA', label: 'AAAA: points at an IPv6 address', hint: '2001:db8::10' },
+  { value: 'CNAME', label: 'CNAME: points at another name', hint: 'web.example.com' },
+  { value: 'TXT', label: 'TXT: holds a line of text', hint: 'v=spf1 -all' },
 ]
 
 const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? `, ${s.name}` : '')
@@ -31,12 +43,12 @@ function useDeskFlow(job, onBuilt) {
   // so a slow Preview cannot show results for answers that are no longer there.
   const gen = useRef(0)
 
-  const reset = () => {
+  const reset = useCallback(() => {
     gen.current++
     setStatus('idle')
     setPreview(null)
     setMessage(null)
-  }
+  }, [])
 
   async function post(input, dry) {
     const mine = ++gen.current
@@ -84,31 +96,66 @@ function Field({ label, children }) {
   )
 }
 
+// The IP space question, shared by the jobs that need one. The server orders
+// the spaces (yours first, then the most room) and gives each a reason; the
+// top three are offered as one-click suggestions above the full list.
+function SpacePicker({ value, onChange }) {
+  const api = useApi('/api/desk/spaces')
+  const spaces = api.data?.spaces ?? []
+  const picked = useRef(false)
+  // Start on the first of your spaces, once, so the common case is one click
+  // fewer. Never overrides a choice already made.
+  useEffect(() => {
+    if (!picked.current && !value && spaces[0]?.yours) {
+      picked.current = true
+      onChange(spaces[0].id)
+    }
+  }, [spaces, value, onChange])
+  const suggested = spaces.slice(0, 3)
+  return (
+    <Field label="IP space">
+      {suggested.length > 0 && (
+        <div data-space-suggestions="" className="flex flex-wrap gap-2">
+          {suggested.map((s) => (
+            <button key={s.id} type="button" onClick={() => { picked.current = true; onChange(s.id) }}
+              aria-pressed={s.id === value}
+              className="text-left px-3 py-1.5 rounded-control border"
+              style={s.id === value ? { borderColor: COLORS.accent, boxShadow: `inset 3px 0 0 ${COLORS.accent}` } : undefined}>
+              <span className="block text-copy text-txt">{s.name || s.id}</span>
+              <span className="block text-note text-muted">{s.reason || 'IP space'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <FilterSelect
+        label="IP space"
+        value={value}
+        onChange={(v) => { picked.current = true; onChange(v) }}
+        options={spaces.map((s) => ({ value: s.id, label: s.reason ? `${s.name || s.id} (${s.reason})` : (s.name || s.id) }))}
+        placeholder={api.loading ? 'Loading IP spaces…' : 'Or pick any IP space'}
+      />
+      <FetchError error={api.error} stale={spaces.length > 0} />
+    </Field>
+  )
+}
+
 function IpJob({ onBuilt, ro }) {
-  const spacesApi = useApi('/api/ipam/spaces')
   const [space, setSpace] = useState('')
   const subnetsApi = useApi(space ? `/api/ipam/subnets?space=${encodeURIComponent(space)}` : null)
   const [subnetId, setSubnetId] = useState('')
   const [name, setName] = useState('')
   const flow = useDeskFlow('ip', onBuilt)
 
-  const spaces = spacesApi.data?.spaces ?? []
   const subnets = subnetsApi.data?.subnets ?? []
   const subnet = subnets.find((s) => s.id === subnetId)
-  const input = () => ({ subnet_id: subnetId, name: name.trim() })
+  const input = () => ({ space, subnet_id: subnetId, name: name.trim() })
+  const { reset } = flow
+  const pickSpace = useCallback((v) => { setSpace(v); setSubnetId(''); reset() }, [reset])
   const next = flow.preview?.addresses?.[0]?.address
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="IP space">
-        <FilterSelect
-          label="IP space"
-          value={space}
-          onChange={(v) => { setSpace(v); setSubnetId(''); flow.reset() }}
-          options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
-          placeholder="Pick an IP space"
-        />
-      </Field>
+      <SpacePicker value={space} onChange={pickSpace} />
       <Field label="Network">
         <FilterSelect
           label="Network"
@@ -139,16 +186,158 @@ function IpJob({ onBuilt, ro }) {
         message={flow.message}
       >
         {flow.status === 'previewed' && (
-          <div data-desk-preview="" className="rounded-control border border-border bg-field px-3 py-2 text-copy">
-            <p className="font-medium" style={{ color: COLORS.ok }}>Ready to build. Nothing has been taken yet.</p>
+          <PreviewBox>
             {next
               ? <p>This will reserve <strong>{next}</strong>{subnet ? ` in ${subnetLabel(subnet)}` : ''}{name.trim() ? `, for ${name.trim()}` : ''}.</p>
               : <p>Infoblox found no free address in this network.</p>}
-          </div>
+          </PreviewBox>
         )}
       </PreviewApply>
-      <FetchError error={spacesApi.error} stale={spaces.length > 0} />
       <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+    </div>
+  )
+}
+
+// The box a preview sits in, the same for every job.
+function PreviewBox({ children }) {
+  return (
+    <div data-desk-preview="" className="rounded-control border border-border bg-field px-3 py-2 text-copy">
+      <p className="font-medium" style={{ color: COLORS.ok }}>Ready to build. Nothing has been made yet.</p>
+      {children}
+    </div>
+  )
+}
+
+function DnsJob({ onBuilt, ro }) {
+  const zonesApi = useApi('/api/dns/zones')
+  const [zoneId, setZoneId] = useState('')
+  const [nameInZone, setNameInZone] = useState('')
+  const [type, setType] = useState('A')
+  const [value, setValue] = useState('')
+  const flow = useDeskFlow('dns', onBuilt)
+  const views = Object.fromEntries((zonesApi.data?.views ?? []).map((v) => [v.id, v.name]))
+  const zones = zonesApi.data?.zones ?? []
+  const zone = zones.find((z) => z.id === zoneId)
+  const zoneName = (zone?.fqdn || '').replace(/\.$/, '')
+  const full = nameInZone.trim() === '@' ? zoneName : `${nameInZone.trim()}${zoneName ? `.${zoneName}` : ''}`
+  const input = () => ({ zone_id: zoneId, zone_name: zone?.fqdn || '', name_in_zone: nameInZone.trim(), type, value: value.trim() })
+  const change = (set) => (v) => { set(v); flow.reset() }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Field label="Zone">
+        <FilterSelect
+          label="Zone"
+          value={zoneId}
+          onChange={change(setZoneId)}
+          options={zones.map((z) => ({ value: z.id, label: `${(z.fqdn || z.id).replace(/\.$/, '')}${views[z.view] ? ` (${views[z.view]})` : ''}` }))}
+          placeholder={zonesApi.loading ? 'Loading zones…' : 'Pick a zone'}
+        />
+      </Field>
+      <label className="flex flex-col gap-1 text-note text-muted">
+        Name (@ for the zone itself)
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={nameInZone} placeholder="www"
+          onChange={(e) => change(setNameInZone)(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-note text-muted">
+        Kind of record
+        <select className={FIELD_CLS} value={type} onChange={(e) => change(setType)(e.target.value)}>
+          {DNS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-note text-muted">
+        Points to
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={value}
+          placeholder={DNS_TYPES.find((t) => t.value === type)?.hint}
+          onChange={(e) => change(setValue)(e.target.value)} />
+      </label>
+      <PreviewApply
+        status={flow.status}
+        disabled={!zoneId || !nameInZone.trim() || !value.trim()}
+        applyDisabled={ro}
+        applyNote="This account is read-only, so Build is off."
+        onPreview={() => flow.runPreview(input())}
+        onApply={() => flow.runBuild(input(), () => `Done. ${full} now points to ${value.trim()}. Remove it any time from Your recent changes.`)}
+        applyLabel="Build it"
+        error={flow.error}
+        message={flow.message}
+      >
+        {flow.status === 'previewed' && (
+          <PreviewBox>
+            <p>This will add <strong>{full}</strong>, {type.startsWith('A') ? 'an' : 'a'} {type} record pointing to <strong>{value.trim()}</strong>.</p>
+          </PreviewBox>
+        )}
+      </PreviewApply>
+      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+    </div>
+  )
+}
+
+const blockLabel = (b) => (b.address || '') + (b.cidr ? `/${b.cidr}` : '') + (b.name ? `, ${b.name}` : '')
+
+function NetworkJob({ onBuilt, ro }) {
+  const [space, setSpace] = useState('')
+  const blocksApi = useApi(space ? `/api/ipam/blocks?space=${encodeURIComponent(space)}` : null)
+  const [blockId, setBlockId] = useState('')
+  const [cidr, setCidr] = useState('28')
+  const [name, setName] = useState('')
+  const flow = useDeskFlow('network', onBuilt)
+  const blocks = blocksApi.data?.blocks ?? []
+  const block = blocks.find((b) => b.id === blockId)
+  const input = () => ({ space, block_id: blockId, cidr: Number(cidr), name: name.trim() })
+  const { reset } = flow
+  const pickSpace = useCallback((v) => { setSpace(v); setBlockId(''); reset() }, [reset])
+  const would = flow.preview?.would_create
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SpacePicker value={space} onChange={pickSpace} />
+      <Field label="Address block">
+        <FilterSelect
+          label="Address block"
+          value={blockId}
+          onChange={(v) => { setBlockId(v); flow.reset() }}
+          options={blocks.map((b) => ({ value: b.id, label: blockLabel(b) }))}
+          placeholder={space ? 'Pick the block to take it from' : 'Pick an IP space first'}
+          disabled={!space}
+        />
+      </Field>
+      <label className="flex flex-col gap-1 text-note text-muted">
+        Size
+        <select className={FIELD_CLS} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.reset() }}>
+          {SIZES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-note text-muted">
+        Name (optional)
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="demo-lab"
+          onChange={(e) => { setName(e.target.value); flow.reset() }} />
+      </label>
+      <PreviewApply
+        status={flow.status}
+        disabled={!blockId}
+        applyDisabled={ro}
+        applyNote="This account is read-only, so Build is off."
+        onPreview={() => flow.runPreview(input())}
+        onApply={() => flow.runBuild(input(), (j) => {
+          const got = j.run?.objects?.find((o) => o.kind === 'subnet')?.label
+          return got ? `Done. ${got} is made. Remove it any time from Your recent changes.` : 'Done.'
+        })}
+        applyLabel="Build it"
+        error={flow.error}
+        message={flow.message}
+      >
+        {flow.status === 'previewed' && (
+          <PreviewBox>
+            {would?.address && would.address_preview == null
+              ? <p>This will make <strong>{would.address}/{cidr}</strong> ({2 ** (32 - Number(cidr))} addresses){block ? ` in ${blockLabel(block)}` : ''}{name.trim() ? `, named ${name.trim()}` : ''}.</p>
+              : would?.address_preview === 'none-available'
+                ? <p>This block has no free network of that size. Pick a smaller size or another block.</p>
+                : <p>Infoblox could not say which network it would make{would?.reason ? ` (${would.reason})` : ''}. Try Preview again.</p>}
+          </PreviewBox>
+        )}
+      </PreviewApply>
+      <FetchError error={blocksApi.error} stale={blocks.length > 0} />
     </div>
   )
 }
@@ -225,7 +414,12 @@ function RunRow({ run, onChanged, ro }) {
             : <>
                 <p className="text-note text-txt">This will delete:</p>
                 <ul className="text-note list-disc pl-5">
-                  {plan.map((o) => <li key={o.id}>{o.label}{o.exists ? '' : o.gone ? ' (already gone)' : ` (could not check it, HTTP ${o.status})`}</li>)}
+                  {plan.map((o) => (
+                    <li key={o.id}>
+                      {o.label}{o.exists ? '' : o.gone ? ' (already gone)' : ` (could not check it, HTTP ${o.status})`}
+                      {o.blocked && <span className="block" style={{ color: COLORS.warn }}>Will be kept: {o.blocked}</span>}
+                    </li>
+                  ))}
                 </ul>
               </>}
           <div className="flex gap-2">
@@ -259,6 +453,21 @@ function RecentChanges({ api, ro }) {
   )
 }
 
+// Find: anything typed opens the existing search page, which looks it up in
+// IPAM, DNS and the logs at once. Read-only.
+function FindBox() {
+  const [q, setQ] = useState('')
+  return (
+    <form role="search" aria-label="Find" className="flex gap-2"
+      onSubmit={(e) => { e.preventDefault(); if (q.trim()) window.location.hash = `dossier?q=${encodeURIComponent(q.trim())}` }}>
+      <input {...MACHINE_TEXT} aria-label="Find an address, network or name" className={`${FIELD_CLS} flex-1`}
+        value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an address, network or name, like 10.2.1.7 or printer-02" />
+      <button type="submit" disabled={!q.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
+        style={{ background: COLORS.accent, color: COLORS.onAccent }}>Find</button>
+    </form>
+  )
+}
+
 export default function Automate() {
   const ro = useReadOnly()
   const [job, setJob] = useState('ip')
@@ -276,20 +485,24 @@ export default function Automate() {
             still under All pages.
           </TabIntro>
         </div>
+        <FindBox />
         <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Build and Remove are off." />
         <div className="grid gap-4 md:grid-cols-[minmax(220px,1fr)_2fr]">
           <nav aria-label="Jobs to automate" className="flex flex-col rounded-control border border-border bg-card self-start">
             <h2 className="text-copy font-semibold px-3 pt-3 pb-2">What do you want to do?</h2>
             {JOBS.map((j) => (
               <button key={j.id} type="button" onClick={() => setJob(j.id)} aria-pressed={j.id === job}
-                className={`text-left px-3 py-2 border-t border-border ${j.id === job ? 'bg-line-2' : 'hover:bg-line-2'}`}>
-                <span className="block text-copy font-medium text-txt">{j.title}</span>
+                className="text-left px-3 py-2 border-t border-border hover:bg-line-2"
+                style={j.id === job ? { boxShadow: `inset 4px 0 0 ${COLORS.accent}` } : undefined}>
+                <span className="block text-copy font-medium" style={{ color: j.id === job ? COLORS.accent : undefined }}>{j.title}</span>
                 <span className="block text-note text-muted">{j.says}</span>
               </button>
             ))}
           </nav>
           <Card panelId="automate-job" panelName="The job you picked" title={current.title} span={6}>
             {job === 'ip' && <IpJob ro={ro.readOnly} onBuilt={runsApi.refetch} />}
+            {job === 'dns' && <DnsJob ro={ro.readOnly} onBuilt={runsApi.refetch} />}
+            {job === 'network' && <NetworkJob ro={ro.readOnly} onBuilt={runsApi.refetch} />}
           </Card>
         </div>
         <RecentChanges api={runsApi} ro={ro.readOnly} />
