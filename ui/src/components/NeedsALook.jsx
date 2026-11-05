@@ -2,7 +2,7 @@ import { useApi } from '../lib/api.js'
 import { plainMessage } from '../lib/plainWords.js'
 import { FOCUS_RING } from './ui.jsx'
 
-// One line at the top of Overview, "Needs a look: 6, 2 urgent", that opens to
+// One line at the top of Overview, "Needs a look 6 to check · 2 urgent", that opens to
 // the list: what needs a look, worst first, each with the page that fixes it.
 // It is folded so the graphs lead, because a NOC screen has to show the graphs
 // without a click. A feed that could not be read is said outside the fold. Built from the

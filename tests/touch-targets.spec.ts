@@ -39,6 +39,9 @@ import { installBaselineWorld } from './page-fixtures';
 //     against hard-coded padding constants and Card publishes its width from
 //     getComputedStyle; growing a sort button would desync the measurer from
 //     the thing it measures. Codex raised this as finding 6 on the plan.
+//   - Anything marked data-inline-control: a link inside a sentence, like a
+//     tab intro's "Docs". WCAG 2.5.8 exempts targets in a sentence, and a 44px
+//     floor there made that one line twice as tall as the rest on a phone.
 //   - Anything inside <svg>. A pointer rule has no business resizing chart
 //     geometry.
 
@@ -91,7 +94,7 @@ async function survey(page: import('@playwright/test').Page, width: number, tab:
       const coarse = window.matchMedia('(pointer: coarse)').matches;
       const els = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
       const subject = els.filter((el) => {
-        if (el.closest('table') || el.closest('svg')) return false;
+        if (el.closest('table') || el.closest('svg') || el.closest('[data-inline-control]')) return false;
         const b = el.getBoundingClientRect();
         return b.width > 0 && b.height > 0; // skip hidden controls
       });

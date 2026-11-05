@@ -26,7 +26,7 @@ import { test, expect } from './fixtures';
 const VIEW = '__layout_overview';
 // The sentence on Overview that teaches arranging. `.` for the apostrophe, which
 // is a typographic one in the source.
-const LESSON = /open a panel.s ⋯ menu to move it/i;
+const LESSON = /Drag a panel.s right edge to resize it/i;
 const SUMMARY = /Your network at a glance/i;
 
 test.beforeEach(async ({ request }) => {

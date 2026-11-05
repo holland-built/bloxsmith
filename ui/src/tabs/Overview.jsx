@@ -122,7 +122,7 @@ export default function Overview() {
           grid with no handles, no resize edge and nothing to persist. Telling
           those tabs' readers they can rearrange would be describing a feature
           they do not have.
-          "…saves automatically" is the whole answer to "how do I save my
+          "…changes save by themselves" is the whole answer to "how do I save my
           layout", and it is written out because the honest answer is that
           there is nothing to press: every drop and every resize commit writes
           the view by itself. A reader hunting a Save button finds none and
