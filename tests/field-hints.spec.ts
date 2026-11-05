@@ -78,12 +78,11 @@ test('unlocking the vault: the passphrase box tells a password manager it is the
   await expect(page.locator('#vu-pass')).toHaveAttribute('autocomplete', 'current-password');
 });
 
-test('adding the first connection: both key boxes ask a password manager to stay out', async ({ page }) => {
+test('adding the first connection: the key box asks a password manager to stay out', async ({ page }) => {
   await vaultStatus(page, {});
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Add your first connection' })).toBeVisible({ timeout: 20_000 });
   await staysOut(page.locator('#vat-key'));
-  await staysOut(page.locator('#vat-groq'));
 });
 
 test('in Settings, the add and change key boxes, the integration key and the dashboard token all ask a password manager to stay out', async ({ page }) => {

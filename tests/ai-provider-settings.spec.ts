@@ -2,7 +2,7 @@ import { test, expect, type Route } from '@playwright/test';
 import { installBaselineWorld } from './page-fixtures';
 
 // Settings > Integrations > AI provider: the AI tab's address, model and key.
-// "Use Claude" fills Claude's OpenAI-style address; Test and Save send what
+// The "Claude" provider button fills Claude's OpenAI-style address; Test and Save send what
 // was typed, and the key is never prefilled.
 
 const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
   }));
 });
 
-test('Use Claude, Test, then Save send the typed provider, model and key', async ({ page }) => {
+test('the Claude button, Test, then Save send the typed provider, model and key', async ({ page }) => {
   const sent: Record<string, any> = {};
   await page.route('**/api/vault/llm-test', async (route) => { sent.test = route.request().postDataJSON(); return json(route, { ok: true, model: 'claude-sonnet-5-5' }); });
   await page.route('**/api/vault/llm', async (route) => { sent.save = route.request().postDataJSON(); return json(route, { ok: true }); });
@@ -32,7 +32,7 @@ test('Use Claude, Test, then Save send the typed provider, model and key', async
   await expect(sheet.getByLabel('API key', { exact: true })).toHaveValue('');
   await expect(sheet.getByRole('button', { name: 'Save AI provider' })).toBeDisabled();
 
-  await sheet.getByRole('button', { name: 'Use Claude' }).click();
+  await sheet.getByRole('button', { name: 'Claude', exact: true }).click();
   await expect(sheet.getByLabel('Provider address')).toHaveValue('https://api.anthropic.com/v1');
   await expect(sheet.getByLabel('Model')).toHaveValue('claude-sonnet-5-5');
   await sheet.getByLabel('API key', { exact: true }).fill('test-key-not-real');
