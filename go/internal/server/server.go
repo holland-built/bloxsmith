@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 
 	"bloxsmith/internal/account"
 	"bloxsmith/internal/ai"
@@ -25,6 +26,7 @@ import (
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
+	"bloxsmith/internal/runs"
 	"bloxsmith/internal/store"
 	"bloxsmith/internal/vault"
 )
@@ -47,6 +49,10 @@ type Deps struct {
 	Provision *provision.Engine  // provisioning engines + templates (Phase 1g)
 	AI        *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
 	Account   *account.Manager   // multi-account switching (Phase 1i)
+	// Runs is the job desk's record of what each Build made (internal/runs).
+	// Opened from StateDir on first use when nil; see Deps.ledger.
+	Runs     *runs.Ledger
+	runsOnce sync.Once
 	// UnlockThrottle rate limits POST /api/vault/unlock — the one route that
 	// spends a 128 MiB scrypt derive for an unauthenticated caller. main.go
 	// builds it; New() supplies one when this is nil, so the route can never
@@ -147,6 +153,7 @@ func (d *Deps) registerAll(mux router) {
 	d.registerDataRoutes(mux)
 	d.registerCSPRoutes(mux)
 	d.registerEditRoutes(mux)
+	d.registerDeskRoutes(mux)
 	d.registerProvisionRoutes(mux)
 	d.registerAIRoutes(mux)
 	d.registerAccountRoutes(mux)

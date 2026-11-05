@@ -100,12 +100,12 @@ test('the box looks up an address, and sends a question to the AI typed in but n
   expect(asked).toBe(0);
 });
 
-test('the rail holds the four everyday jobs and marks where you are', async ({ page }) => {
+test('the rail holds the five everyday jobs and marks where you are', async ({ page }) => {
   await feeds(page, {});
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#selfservice');
   const rail = page.locator('[data-job-rail]');
-  await expect(rail.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Daily report', 'Charts']);
+  await expect(rail.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts']);
   await expect(rail.getByRole('link', { name: 'Get an address' })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('header').getByRole('link', { name: /Provision/ })).toHaveCount(0);
 });
@@ -116,10 +116,10 @@ test('on a phone the jobs are a bar along the bottom, and All pages reaches ever
   await page.goto('/');
   const bar = page.locator('[data-job-bar]');
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Daily report', 'Charts']);
+  await expect(bar.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts']);
   await expect(page.locator('[data-job-rail]')).toBeHidden();
   await page.getByRole('button', { name: 'All pages' }).click();
-  await expect(page.getByRole('menuitem')).toHaveCount(17);
+  await expect(page.getByRole('menuitem')).toHaveCount(18);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });

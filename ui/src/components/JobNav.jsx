@@ -5,6 +5,7 @@ import { FOCUS_RING } from './ui.jsx'
 const JOBS = [
   { id: 'overview', label: 'Overview', match: ['overview'] },
   { id: 'selfservice', label: 'Get an address', match: ['selfservice'] },
+  { id: 'automate', label: 'Automate', match: ['automate'] },
   { id: 'daily', label: 'Daily report', match: ['daily'] },
   { id: 'chart', label: 'Charts', match: ['chart'] },
 ]
@@ -31,7 +32,7 @@ export function JobBar({ tab }) {
     <nav
       aria-label="Jobs"
       data-job-bar=""
-      className="md:hidden fixed z-40 bottom-0 inset-x-0 grid grid-cols-4 border-t border-border bg-card"
+      className="md:hidden fixed z-40 bottom-0 inset-x-0 grid grid-cols-5 border-t border-border bg-card"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {JOBS.map((j) => {

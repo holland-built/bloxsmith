@@ -27,6 +27,7 @@ const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
 const Ai = lazy(() => import('./tabs/Ai.jsx'))
 const ChartBuilder = lazy(() => import('./tabs/ChartBuilder.jsx'))
 const DemoServer = lazy(() => import('./tabs/DemoServer.jsx'))
+const Automate = lazy(() => import('./tabs/Automate.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
 import { FOCUS_RING, Skeleton } from './components/ui.jsx'
 import { PageBar } from './components/kit.jsx'
@@ -68,6 +69,7 @@ const TABS = [
   // hours and grouped by what was touched — so it sits next to its source, not
   // with the write-capable tabs whose name it shares.
   { id: 'changes', label: 'Changes', el: Changes },
+  { id: 'automate', label: 'Automate', el: Automate },
   { id: 'provision', label: 'Provision', el: Provision },
   { id: 'selfservice', label: 'Self-Service', el: SelfService },
   { id: 'editor', label: 'Editor', el: Editor },
@@ -113,7 +115,7 @@ const GROUPS = [
   { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
-  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['provision', 'selfservice', 'editor', 'drift', 'demo'] },
+  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'demo'] },
   { id: 'ask', label: 'Ask', question: '', tabIds: ['ai', 'chart'] },
 ]
 

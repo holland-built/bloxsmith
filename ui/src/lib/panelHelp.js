@@ -376,6 +376,14 @@ export const PANEL_HELP = {
   },
 
   // ---- SelfService ----
+  'automate-job': {
+    what: 'The questions for the job picked on the left, and a plain list of what it will make.',
+    look: 'Preview checks with Infoblox and changes nothing. Build it then makes the change at once, and records exactly what it made so it can be removed later.',
+  },
+  'automate-recent': {
+    what: 'Everything built on this page, newest first, with what became of each item.',
+    look: 'Remove lists what is still there first. Delete these then deletes exactly those items, and nothing Bloxsmith did not make here. If something cannot be deleted, Remove again retries only that.',
+  },
   'selfservice-allocate': {
     what: 'Takes free addresses out of a subnet you choose and reserves them, optionally under a name you give.',
     look: 'Preview only asks the server to check the request — nothing is taken. Allocate then commits it immediately; nobody approves it. Changing a field cancels the preview.',
