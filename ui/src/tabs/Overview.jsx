@@ -116,6 +116,7 @@ export default function Overview() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-3">Overview</h1>
+      <NeedsALook />
       {/* The layout sentence lives HERE and on no other tab, because Overview
           is the only grid with a layoutKey — every other tab renders a plain
           grid with no handles, no resize edge and nothing to persist. Telling
@@ -149,7 +150,6 @@ export default function Overview() {
           </>
         )}
       </TabIntro>
-      <NeedsALook />
       {totals.degraded && (
         <div className="text-note text-dim mb-2">
           some whole-network counts could not be fetched this cycle — figures below marked as provisional
