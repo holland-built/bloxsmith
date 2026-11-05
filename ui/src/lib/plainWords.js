@@ -75,6 +75,8 @@ const EVENT = {
   'dns-record-delete': 'DNS record deleted',
   'ipam-address-delete': 'Address released',
   'selfservice-allocate': 'Address taken',
+  'desk-build': 'Built on Automate',
+  'desk-remove': 'Removed on Automate',
   'retag-block': 'Block tags changed',
   'iq-action-resolve': 'Insight resolved',
   'stream-aborted': 'Run stopped early',

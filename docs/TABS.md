@@ -209,6 +209,18 @@ It shows at most the 500 latest events from the last 24 hours. The Portal return
 
 ---
 
+## Automate
+
+The quick way to make a change. Pick a job on the left, answer its questions, and press **Preview** to see what will be made. Nothing is created until you press **Build it**.
+
+| Job | What it asks | What it makes |
+|---|---|---|
+| Get an IP address | An IP space, a network, and what the address is for | Reserves the next free address in that network |
+
+**Your recent changes** lists everything built on this page, newest first. **Remove** first lists what is still there, then **Delete these** deletes exactly those items and nothing else. Bloxsmith keeps the exact Infoblox ID of everything it builds here, so Remove never touches anything it did not make. If an item cannot be deleted, the change says so, and Remove again retries only what is left.
+
+Changes made on the Provision, Self-Service and Demo server pages are not listed here and cannot be removed from here.
+
 ## Provision
 
 **Writes to Infoblox.** Builds real objects. Uses the [Preview and Apply flow](#the-write-flow), and shows progress line by line as the plan runs.
@@ -468,6 +480,8 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Seed demo: Teardown progress | the Infoblox API | No | it is a live log, not a chart |
 | Provision | Seed demo: Teardown log | the Infoblox API | No | it is a live log, not a chart |
 | Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
+| Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
+| Automate | Your recent changes | the app's own run records | No | it is a list, not a chart |
 | Self-Service | Allocate Address | the Infoblox API | No | it is a form, not a chart |
 | Self-Service | Create DNS Record | the Infoblox API | No | it is a form, not a chart |
 | Self-Service | Manage Records | the Infoblox API | No | it is a form, not a chart |

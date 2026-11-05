@@ -720,6 +720,24 @@
     "why": "it reports what a change did, not a chart"
   },
   {
+    "id": "automate-job",
+    "page": "Automate",
+    "name": "The job you picked",
+    "kind": "rest",
+    "source": "the Infoblox API",
+    "builder": "no",
+    "why": "it is a form, not a chart"
+  },
+  {
+    "id": "automate-recent",
+    "page": "Automate",
+    "name": "Your recent changes",
+    "kind": "local",
+    "source": "the app's own run records",
+    "builder": "no",
+    "why": "it is a list, not a chart"
+  },
+  {
     "id": "selfservice-allocate",
     "page": "Self-Service",
     "name": "Allocate Address",

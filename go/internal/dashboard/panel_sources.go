@@ -174,6 +174,10 @@ var panelSources = []PanelSource{
 	restPanel("provision-seed-teardown-log", "Provision", "Seed demo: Teardown log", srcAPI, whyLog),
 	restPanel("provision-seed-teardown-summary", "Provision", "Seed demo: Teardown summary", srcAPI, whyResult),
 
+	// ---- Automate ----
+	restPanel("automate-job", "Automate", "The job you picked", srcAPI, whyForm),
+	{ID: "automate-recent", Page: "Automate", Name: "Your recent changes", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
+
 	// ---- Self-Service ----
 	restPanel("selfservice-allocate", "Self-Service", "Allocate Address", srcAPI, whyForm),
 	restPanel("selfservice-create-record", "Self-Service", "Create DNS Record", srcAPI, whyForm),
