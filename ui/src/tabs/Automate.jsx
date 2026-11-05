@@ -4,7 +4,7 @@
 //
 // The older pages (Provision, Self-Service, Demo server) stay as they are.
 // Changes made there are not recorded here and cannot be removed from here.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -101,7 +101,7 @@ function Field({ label, children }) {
 // top three are offered as one-click suggestions above the full list.
 function SpacePicker({ value, onChange }) {
   const api = useApi('/api/desk/spaces')
-  const spaces = api.data?.spaces ?? []
+  const spaces = useMemo(() => api.data?.spaces ?? [], [api.data])
   const picked = useRef(false)
   // Start on the first of your spaces, once, so the common case is one click
   // fewer. Never overrides a choice already made.
