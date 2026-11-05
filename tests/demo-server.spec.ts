@@ -74,8 +74,12 @@ test('Tear down lists what it removes and sends nothing live until confirmed', a
   await expect.poll(() => calls).toEqual(['dry', 'dry', 'live']);
 });
 
-test('the join token box is empty and says a token is stored', async ({ page }) => {
+test('saved settings fold away, and the join token box opens empty saying a token is stored', async ({ page }) => {
   await page.goto('/#demo');
+  const folded = page.locator('[data-settings-folded]');
+  await expect(folded).toContainText('Saved and ready');
+  await expect(page.getByLabel('NIOS-X join token')).toHaveCount(0);
+  await folded.getByRole('button', { name: 'Change settings' }).click();
   const box = page.getByLabel('NIOS-X join token');
   await expect(box).toHaveValue('');
   await expect(box).toHaveAttribute('placeholder', /Stored/);

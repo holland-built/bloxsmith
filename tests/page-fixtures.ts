@@ -214,6 +214,9 @@ const SHELL: Handler[] = [
 const CSP_AUDIT = { status: 'ok', truncated: true, count: CSP_AUDIT_ROWS.length, rows: CSP_AUDIT_ROWS };
 
 const SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space' }] };
+// The ranked list the Automate page and the older pages' space pickers read.
+// Not "yours", so no page picks a space by itself in the baseline.
+const DESK_SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space', yours: false, reason: '250 of 256 addresses free' }] };
 // The picker's zone shape, which is NOT /api/data's zone shape — that one carries
 // dnssec_status, records, ttl and issues. Two different reads of the same object.
 const DNS_ZONES_PICKER = { zones: [{ id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', name: 'baseline.example.' }] };
@@ -567,10 +570,12 @@ const PER_PAGE: Record<string, Handler[]> = {
   ],
   selfservice: [
     { method: 'GET', path: '/api/ipam/spaces', body: SPACES, required: true },
+    { method: 'GET', path: '/api/desk/spaces', body: DESK_SPACES, required: true },
     { method: 'GET', path: '/api/dns/zones', body: DNS_ZONES_PICKER, required: true },
   ],
   provision: [
     { method: 'GET', path: '/api/ipam/spaces', body: SPACES, required: true },
+    { method: 'GET', path: '/api/desk/spaces', body: DESK_SPACES, required: true },
     // Fetched only once a space is chosen, so not required on page load. Shape
     // read from the live server: { blocks: [...] }.
     { method: 'GET', path: '/api/ipam/blocks', body: { blocks: [{ id: 'ipam/address_block/baseline-1', address: '10.10.0.0', cidr: 16, name: 'baseline-block' }] } },

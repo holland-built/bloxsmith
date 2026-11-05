@@ -61,6 +61,9 @@ export default function DemoServer() {
   const [token, setToken] = useState('')
   const [saveMsg, setSaveMsg] = useState(null)
   const [saving, setSaving] = useState(false)
+  // Settings fold away once they are saved and complete; "Change settings"
+  // opens them again.
+  const [editing, setEditing] = useState(false)
 
   const [busy, setBusy] = useState(false)
   const [plan, setPlan] = useState(null) // dry-run frame: checks, ready, code
@@ -152,7 +155,14 @@ export default function DemoServer() {
 
         <CardGrid layoutKey="demo">
           <Card panelId="demo-settings" span={3} title="Settings" note="saved in the vault; the join token is never shown again">
-            {status.loading && !form ? <Empty>Loading…</Empty> : (
+            {status.loading && !form ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
+              <div data-settings-folded="" className="flex flex-col gap-2 text-note">
+                <FetchError error={status.error} stale={!!st} />
+                <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the stored join token.</p>
+                <button type="button" className="self-start text-note font-medium underline underline-offset-2" style={{ color: COLORS.accent }}
+                  onClick={() => setEditing(true)}>Change settings</button>
+              </div>
+            ) : (
               <div className="flex flex-col gap-3">
                 <FetchError error={status.error} stale={!!st} />
                 {FIELDS.map(([k, label, ph]) => (

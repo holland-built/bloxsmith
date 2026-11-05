@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 // falls back to its placeholder and Apply sits disabled with no reason given.
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+import { sizeWords, useSpaceOptions } from '../lib/spaceOptions.js'
 import { PageRail } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { authFetch, withToken } from '../lib/authFetch.js'
@@ -389,9 +390,11 @@ function runOutcome(result) {
 // ---------- subnet mode ----------
 
 function SubnetMode() {
-  const spacesApi = useApi('/api/ipam/spaces')
-  const spaces = spacesApi.data?.spaces ?? []
+  const spaceOpts = useSpaceOptions()
+  const spaces = spaceOpts.options
   const [space, setSpace] = useState('')
+  // Start on your space when the ranked list names one, never over a choice.
+  useEffect(() => { if (!space && spaceOpts.top) setSpace(spaceOpts.top) }, [space, spaceOpts.top])
   const blocksApi = useApi(space ? `/api/ipam/blocks?space=${encodeURIComponent(space)}` : null)
   const blocks = blocksApi.data?.blocks ?? []
   const [block, setBlock] = useState('')
@@ -424,8 +427,8 @@ function SubnetMode() {
               label="Space"
               value={space}
               onChange={(v) => { setSpace(v); setBlock(''); flow.markStale() }}
-              placeholder={spacesApi.loading ? 'Loading spaces…' : 'Select a space'}
-              options={spaces.map((sp) => ({ value: sp.id, label: sp.name }))}
+              placeholder={spaceOpts.loading ? 'Loading spaces…' : 'Select a space'}
+              options={spaces}
             />
           </Field>
           <Field group label="Block">
@@ -448,6 +451,7 @@ function SubnetMode() {
           <Field label="Size (prefix: 24 = 256 addresses)">
             <input {...MACHINE_TEXT} type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
           </Field>
+          {sizeWords(cidr) && <p data-size-words="" aria-live="polite" className="text-note text-muted -mt-2">/{cidr} is {sizeWords(cidr)}</p>}
           <Field label="Name">
             <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
           </Field>
@@ -457,9 +461,9 @@ function SubnetMode() {
           <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
 
           <div>
-            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+            <FetchError error={spaceOpts.error} stale={spaces.length > 0} />
             <FetchError error={blocksApi.error} stale={blocks.length > 0} />
-            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            {!spaceOpts.loading && !spaceOpts.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>no address blocks</Empty>}
           </div>
 
@@ -499,6 +503,17 @@ function SubnetMode() {
 }
 
 // ---------- site mode ----------
+
+// A template is a site template unless the server says otherwise. Older
+// servers sent no type, and every file they listed was a site.
+const isSiteTemplate = (t) => !t.type || t.type === 'site'
+const REGION_WORDS = { Americas: 'Americas', EMEA: 'Europe', APAC: 'Asia Pacific' }
+// "Americas lab (amer-lab)": region and kind first, the site name after.
+function templateTitle(t) {
+  const where = REGION_WORDS[t.region] || t.region || ''
+  const what = [where, t.environment].filter(Boolean).join(' ')
+  return what ? `${what} (${t.site || t.name})` : (t.site || t.name)
+}
 
 function SiteMode({ isAdmin }) {
   const spacesApi = useApi('/api/ipam/spaces')
@@ -547,13 +562,20 @@ function SiteMode({ isAdmin }) {
           <Field label="Template">
             <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
               <option value="">{templatesApi.loading ? 'Loading templates…' : 'Select a template'}</option>
-              {templates.map((t) => (
+              {templates.filter(isSiteTemplate).map((t) => (
                 <option key={t.name} value={t.name} disabled={t.valid === false}>
-                  {t.name} — {t.region || ''}/{t.environment || ''}{t.valid === false ? ' (invalid)' : ''}
+                  {templateTitle(t)}{t.valid === false ? ' (invalid)' : ''}
                 </option>
               ))}
             </select>
+            {siteTemplate && <span data-template-file="" className="text-note text-muted">File: {siteTemplate}</span>}
           </Field>
+          {templates.some((t) => !isSiteTemplate(t)) && (
+            <div data-other-templates="" className="text-note text-muted">
+              Other template files, not sites, so not offered here:{' '}
+              {templates.filter((t) => !isSiteTemplate(t)).map((t) => t.name).join(', ')}
+            </div>
+          )}
 
           {/* "(invalid)" in the dropdown cannot tell a typo in the YAML from a
               permission bit, and those need completely different fixes. These
@@ -693,7 +715,16 @@ function SiteMode({ isAdmin }) {
 
 // ---------- seed demo mode ----------
 
+const SEED_REGIONS = { amer: 'Americas', emea: 'Europe', apac: 'Asia Pacific' }
+// "Americas: sites amer-hq, amer-lab", from the templates the seed runs.
+function seedRegionLabel(r, templates) {
+  const sites = (Array.isArray(templates) ? templates : [])
+    .filter((t) => t.name.startsWith(`${r}/`) && isSiteTemplate(t)).map((t) => t.site).filter(Boolean)
+  return sites.length ? `${SEED_REGIONS[r]} (${r.toUpperCase()}): sites ${sites.join(', ')}` : `${SEED_REGIONS[r]} (${r.toUpperCase()})`
+}
+
 function SeedMode({ isAdmin }) {
+  const seedTemplates = useApi('/api/templates')
   const spacesApi = useApi('/api/ipam/spaces')
   const spaces = spacesApi.data?.spaces ?? []
 
@@ -735,7 +766,7 @@ function SeedMode({ isAdmin }) {
               key={r}
               checked={!!regions[r]}
               onChange={(v) => { setRegions((prev) => ({ ...prev, [r]: v })); touch() }}
-              label={r.toUpperCase()}
+              label={seedRegionLabel(r, seedTemplates.data)}
             />
           ))}
           <Field group label="IP space (override)">
@@ -798,8 +829,12 @@ function SeedMode({ isAdmin }) {
 
       <Card key="provision-seed-teardown" title="Tear down demo" note={`permanently deletes every seed-created object in ${seedSpace || 'the default space'}`} panelId="provision-seed-teardown" span={6}>
         <div data-form-cols="" className="flex flex-col gap-3">
+          <p data-teardown-says="" className="text-note text-txt">
+            Deletes the demo sites for the regions ticked above, found by site name in {seedSpace || 'the default space'}:
+            each site's DNS zone, DHCP ranges, reverse zones, networks and hosts. Nothing else is touched.
+          </p>
           {isAdmin ? (
-            <Field label="Type DELETE to confirm">
+            <Field label="Type DELETE to remove those sites">
               <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
             </Field>
           ) : (

@@ -25,7 +25,7 @@
     - status
     - combobox "IP Space":
       - option "Select space…" [selected]
-      - option "Baseline Space"
+      - option /Baseline Space \(\d+ of \d+ addresses free\)/
   - text: Block
   - combobox "Block" [disabled]:
     - option "Any block" [selected]
@@ -54,20 +54,14 @@
     - option "A" [selected]
     - option "AAAA"
     - option "CNAME"
-    - option "MX"
     - option "TXT"
-    - option "SRV"
-    - option "PTR"
-    - option "NS"
-    - option "CAA"
   - text: Name
   - textbox "Name":
     - /placeholder: host or @
-  - text: TTL (optional)
-  - spinbutton "TTL (optional)"
   - text: Value
   - textbox "Value":
     - /placeholder: 192.0.2.10
+  - group: More options
   - button "Preview" [disabled]
   - heading "Manage Records" [level=2]
   - text: edit or delete existing DNS records

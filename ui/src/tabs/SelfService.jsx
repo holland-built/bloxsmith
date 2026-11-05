@@ -8,8 +8,9 @@
 // attribution itself: this file is minified into go/web/, so nothing here reaches
 // a user. NOTICE.md ships inside the release archive and the container image, and
 // that is what carries the notice.
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
@@ -19,6 +20,8 @@ import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
+// The four most people need, listed first; the rest sit under "More types".
+const COMMON_RTYPES = ['A', 'AAAA', 'CNAME', 'TXT']
 const EDITABLE_RTYPES = ['A', 'AAAA', 'CNAME', 'PTR', 'NS', 'DNAME', 'TXT', 'MX', 'SRV', 'CAA']
 
 // A search box plus its dropdown is two controls, so that field is a named
@@ -122,6 +125,7 @@ function allocateSentence(preview, subnet, name) {
 
 function AllocatePanel({ panelId }) {
   const spacesApi = useApi('/api/ipam/spaces')
+  const spaceOpts = useSpaceOptions()
   const [space, setSpace] = useState('')
   const blocksApi = useApi(space ? `/api/ipam/blocks?space=${encodeURIComponent(space)}` : null)
   const [block, setBlock] = useState('')
@@ -163,7 +167,15 @@ function AllocatePanel({ panelId }) {
     if (id) setSubnetId(id)
   }, [subnetsApi.data, space, subnetId, block])
 
-  const body = () => ({ subnet_id: subnetId, count: Number(count) || 1, name })
+  // "Any network with room": left unpicked, the subnet with the most free
+  // addresses in the chosen space (and block) is used. Preview pins it, so a
+  // refreshed list cannot move Allocate to a network the preview did not name.
+  const want = Number(count) || 1
+  const roomiest = useMemo(() => [...(subnetsApi.data?.subnets ?? [])]
+    .filter((s) => Number(s.utilization?.free) >= want)
+    .sort((a, b) => Number(b.utilization?.free) - Number(a.utilization?.free))[0], [subnetsApi.data, want])
+  const target = subnetId || roomiest?.id || ''
+  const body = () => ({ subnet_id: target, count: Number(count) || 1, name })
 
   return (
     <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
@@ -173,7 +185,7 @@ function AllocatePanel({ panelId }) {
             label="IP Space"
             value={space}
             onChange={(v) => { setSpace(v); setBlock(''); setSubnetId(''); flow.markStale() }}
-            options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
+            options={spaceOpts.options.length ? spaceOpts.options : spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
             placeholder="Select space…"
           />
         </Field>
@@ -194,7 +206,7 @@ function AllocatePanel({ panelId }) {
             value={subnetId}
             onChange={(v) => { setSubnetId(v); flow.markStale() }}
             options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
-            placeholder="Select subnet…"
+            placeholder={roomiest ? `Any network with room (now ${subnetLabel(roomiest)})` : 'Select subnet…'}
             disabled={!space}
           />
         </Field>
@@ -220,9 +232,9 @@ function AllocatePanel({ panelId }) {
       <PreviewApply
         status={flow.status}
         stale={flow.stale}
-        disabled={!subnetId}
-        onPreview={() => flow.runPreview(body(), 'Allocate')}
-        onApply={() => flow.runApply(body(), () => { saveLast(tenant, space, subnetId); return 'Address allocated.' })}
+        disabled={!target}
+        onPreview={() => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') }}
+        onApply={() => flow.runApply(body(), () => { saveLast(tenant, space, target); return 'Address allocated.' })}
         applyLabel="Allocate"
         error={flow.error}
         message={flow.message}
@@ -230,7 +242,7 @@ function AllocatePanel({ panelId }) {
         <PreviewBox
           data={flow.preview}
           note="preview — no address has been taken yet"
-          summary={allocateSentence(flow.preview, subnets.find((s) => s.id === subnetId), name)}
+          summary={allocateSentence(flow.preview, subnets.find((s) => s.id === target), name)}
         />
       </PreviewApply>
 
@@ -273,19 +285,27 @@ function DnsPanel({ panelId }) {
         </Field>
         <Field label="Type">
           <select className={inputCls} value={type} onChange={(e) => { setType(e.target.value); flow.markStale() }}>
-            {RTYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            {COMMON_RTYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            <optgroup label="More types">
+              {RTYPES.filter((t) => !COMMON_RTYPES.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
+            </optgroup>
           </select>
         </Field>
         <Field label="Name">
           <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="host or @" />
         </Field>
-        <Field label="TTL (optional)">
-          <input {...MACHINE_TEXT} className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); flow.markStale() }} />
-        </Field>
         <Field label="Value">
           <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); flow.markStale() }} placeholder="192.0.2.10" />
         </Field>
       </div>
+      <details className="mb-3 text-note text-muted" open={ttl !== ''}>
+        <summary className="cursor-pointer">More options</summary>
+        <div className="grid grid-cols-2 gap-3 mt-2">
+          <Field label="TTL (optional)">
+            <input {...MACHINE_TEXT} className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); flow.markStale() }} />
+          </Field>
+        </div>
+      </details>
 
       <PreviewApply
         status={flow.status}

@@ -12,6 +12,8 @@ function json(route: import('@playwright/test').Route, body: unknown) {
 
 test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
+  // These tests are about the plain space list, so the ranked list is turned off.
+  await page.route('**/api/desk/spaces*', (route) => route.fulfill({ status: 404, body: '{}' }));
   await page.route('**/api/ipam/spaces*', (route) => json(route, { spaces: [
     { id: 'ipam/ip_space/a', name: 'Amsterdam Lab' },
     { id: 'ipam/ip_space/b', name: 'Berlin Office' },
