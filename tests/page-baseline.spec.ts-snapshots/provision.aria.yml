@@ -11,7 +11,7 @@
   - paragraph:
     - text: Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo network. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent and needs admin.
     - button "Docs →"
-  - button "Subnet"
+  - button "Subnet" [pressed]
   - button "Full site"
   - button "Seed demo"
   - button "Arrange panels"
@@ -24,15 +24,16 @@
     - status
     - combobox "Space":
       - option "Select a space" [selected]
-      - option "Baseline Space"
+      - option /Baseline Space \(\d+ of \d+ addresses free\)/
   - group "Block":
     - text: ""
     - searchbox "Search Block" [disabled]
     - status
     - combobox "Block" [disabled]:
       - option "Pick a space first" [selected]
-  - text: "Size (prefix: 24 = 256 addresses)"
-  - 'spinbutton "Size (prefix: 24 = 256 addresses)"': /\d+/
+  - text: "/Size \\(prefix: \\d+ = \\d+ addresses\\)/"
+  - 'spinbutton /Size \(prefix: \d+ = \d+ addresses\)/'
+  - paragraph: /\/\d+ is \d+ addresses/
   - text: Name
   - textbox "Name":
     - /placeholder: subnet name

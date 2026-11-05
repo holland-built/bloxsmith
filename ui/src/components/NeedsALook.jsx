@@ -2,9 +2,10 @@ import { useApi } from '../lib/api.js'
 import { plainMessage } from '../lib/plainWords.js'
 import { FOCUS_RING } from './ui.jsx'
 
-// A short strip at the top of Overview: what needs a look, worst first, each
-// with the page that fixes it. It sits above the graphs, never instead of them,
-// because a NOC screen has to show the graphs without a click. Built from the
+// One line at the top of Overview, "Needs a look: 6, 2 urgent", that opens to
+// the list: what needs a look, worst first, each with the page that fixes it.
+// It is folded so the graphs lead, because a NOC screen has to show the graphs
+// without a click. A feed that could not be read is said outside the fold. Built from the
 // same feeds as Overview's headline numbers, so the two never disagree.
 // Incidents arrive already grouped, one row per kind.
 
@@ -73,44 +74,49 @@ export default function NeedsALook() {
     !sec.loading && !secOk && 'security events',
   ].filter(Boolean)
 
+  const urgent = rows.filter((r) => r.sev === 'crit').length
   return (
-    <section aria-labelledby="needs-a-look" data-needs-a-look="" className="mb-4">
-      <h2 id="needs-a-look" className="text-copy font-semibold">
-        Needs a look
-        <span className="ml-2 font-normal text-muted" role="status">
-          {loading
-            ? 'Checking…'
-            : rows.length
-              ? `${rows.length}, worst first`
-              : failed.length
-                ? 'nothing found in the feeds that answered'
-                : 'nothing right now'}
-        </span>
-      </h2>
+    <div data-needs-a-look="" className="mb-4">
+      <details>
+        <summary className={`cursor-pointer w-fit ${FOCUS_RING}`}>
+          <h2 id="needs-a-look" className="inline text-copy font-semibold">
+            Needs a look
+            <span className="ml-2 font-normal text-muted" role="status">
+              {loading
+                ? 'Checking…'
+                : rows.length
+                  ? `${rows.length}${urgent ? `, ${urgent} urgent` : ''}`
+                  : failed.length
+                    ? 'nothing found in the feeds that answered'
+                    : 'nothing right now'}
+            </span>
+          </h2>
+        </summary>
+        {rows.length > 0 && (
+          <ul className="mt-2 border-t border-border" aria-label="Needs a look">
+            {rows.map((r) => (
+              <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 border-b border-border">
+                <span role="img" aria-label={r.sev === 'crit' ? 'Critical' : 'Warning'} className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.sev === 'crit' ? 'bg-crit' : 'bg-warn'}`} />
+                {/* inline-flex: an inline box ignores the touch 44px min-height in
+                    index.css. The sentence is the link. A column of identical buttons sat far
+                    from the words it belonged to and drew the eye before them. */}
+                <span className="flex-1 min-w-[12rem] text-copy">
+                  <a href={r.href} className={`inline-flex items-center font-semibold text-txt no-underline hover:underline hover:text-link ${FOCUS_RING}`}>{r.title}</a>
+                  {r.sub && <span className="text-muted"> · {r.sub}</span>}
+                  {r.ask && (
+                    <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-3 inline-flex items-center text-note text-link underline ${FOCUS_RING}`}>Ask why</a>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
       {failed.length > 0 && !loading && (
         <p className="text-copy text-warn mt-1">
           Couldn't check {failed.join(', ')}. <button type="button" onClick={() => location.reload()} className={`text-link underline ${FOCUS_RING}`}>Try again</button>
         </p>
       )}
-      {rows.length > 0 && (
-        <ul className="mt-2 border-t border-border" aria-label="Needs a look">
-          {rows.map((r) => (
-            <li key={r.key} data-inbox-row={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 border-b border-border">
-              <span role="img" aria-label={r.sev === 'crit' ? 'Critical' : 'Warning'} className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.sev === 'crit' ? 'bg-crit' : 'bg-warn'}`} />
-              {/* inline-flex: an inline box ignores the touch 44px min-height in
-                  index.css. The sentence is the link. A column of identical buttons sat far
-                  from the words it belonged to and drew the eye before them. */}
-              <span className="flex-1 min-w-[12rem] text-copy">
-                <a href={r.href} className={`inline-flex items-center font-semibold text-txt no-underline hover:underline hover:text-link ${FOCUS_RING}`}>{r.title}</a>
-                {r.sub && <span className="text-muted"> · {r.sub}</span>}
-                {r.ask && (
-                  <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-3 inline-flex items-center text-note text-link underline ${FOCUS_RING}`}>Ask why</a>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    </div>
   )
 }

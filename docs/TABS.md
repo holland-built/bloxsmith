@@ -83,7 +83,7 @@ Asking for an address ("give me an address in Dublin") opens Get an address, and
 
 Your network at a glance, and the page the app opens on. Refreshes every 30 seconds.
 
-- **Needs a look**: a short list above the graphs of what needs attention, worst first. It covers hosts that are not online, critical and high security events, and the incidents Infoblox reports, one row per kind. Each row's text is a link to the page where you fix it, and **Ask why** opens the AI with a question about it. If a feed can't be read, the list says which one, so an empty list always means nothing was found.
+- **Needs a look**: one line above the graphs that counts what needs attention and how much of it is urgent. Click it to open the list, worst first. It covers hosts that are not online, critical and high security events, and the incidents Infoblox reports, one row per kind. Each row's text is a link to the page where you fix it, and **Ask why** opens the AI with a question about it. If a feed can't be read, the list says which one, so an empty list always means nothing was found.
 - **Headline numbers**: a row of tiles across the top. They show DNS queries per second, hosts, hosts not online, subnets at 90% or more, active leases, and critical or high security events. A tile that counts something bad turns red or amber when there is any, and stays plain when there is none. A count that couldn't be read shows a dash with no colour and the word "unavailable". Click a tile to jump to its panel, or to the tab with the detail.
 - **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown.
 - **Top Consumers**: the 12 subnets with the most addresses *in use*. They are ranked by count, not percentage, because a list of tiny /32 links at 100% tells you nothing.
@@ -247,8 +247,8 @@ Your role is shown at the top right (`VIEWER`, `OPERATOR` or `ADMIN`). Live tear
 
 Make one subnet inside an address block you already have.
 
-1. Pick an **IP space**, then a **block** inside it.
-2. Set the **Size** (the prefix, such as `24` for 256 addresses), a **name**, and a comment if you want one.
+1. Pick an **IP space**, then a **block** inside it. Spaces you built in before, or named for you, are listed first, and the top one is picked for you.
+2. Set the **Size** (the prefix, such as `24` for 256 addresses; the size in addresses is shown under it), a **name**, and a comment if you want one.
 3. Tick **Create matching DNS zone** if you want one.
 4. Press **Preview** to see the plan without writing anything. Then press **Provision**.
 
@@ -258,7 +258,7 @@ When it works you get the new subnet's ID and address.
 
 Build a whole site from a template in your template library in one run: address block, DNS zone, subnets, DHCP ranges and hosts.
 
-1. Pick a **template**. You can choose a different **IP space** from the one the template uses.
+1. Pick a **template**. Only site templates are listed, by a plain name such as "Americas lab"; the file name is shown under the list. You can choose a different **IP space** from the one the template uses.
 2. Press **Preview**, read the plan, then press **Provision site**.
 3. If the site already exists, the run says *skipped* and why, instead of making a second copy.
 
@@ -268,11 +268,11 @@ If the template list is empty, no templates are installed. Run `scripts/fetch_te
 
 ### Seed demo
 
-Builds a full demo network in the regions you tick (AMER, EMEA, APAC) from the template library, all at once. Made for demos and lab tenants.
+Builds a full demo network in the regions you tick (AMER, EMEA, APAC) from the template library, all at once. Each region lists the sites it will build. Made for demos and lab tenants.
 
 Progress for each template adds up as `done/total`, and each failure is listed. The last message says what happened, not just that the run ended. A clean run says "Seed complete". A mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed". A run where nothing worked says "Seed failed — 0 of *N* template(s) succeeded".
 
-**Tear down demo** deletes every object the seed made in the chosen space. The live run needs admin and `DELETE` typed in to confirm.
+**Tear down demo** deletes the demo sites for the ticked regions in the chosen space: each site's DNS zone, DHCP ranges, reverse zones, networks and hosts. Nothing else is touched. The live run needs admin and `DELETE` typed in to confirm.
 
 > Do not point Seed demo at a production tenant. It writes many objects quickly, and teardown is the only way back.
 
@@ -284,7 +284,7 @@ Progress for each template adds up as `done/total`, and each failure is listed. 
 
 Take the next free address, or several, from a subnet.
 
-1. Pick **IP space**, then **block** (optional), then **subnet**.
+1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
 3. **Preview** shows which addresses it would take. **Allocate** takes them.
 
@@ -292,8 +292,8 @@ Take the next free address, or several, from a subnet.
 
 Add a record to a zone you already have.
 
-1. Pick the **zone** and record **type** (A, AAAA, CNAME, MX, TXT, SRV, PTR, NS, CAA).
-2. Fill in the **name** (`@` for the zone itself), the **value**, and a TTL if you want one.
+1. Pick the **zone** and record **type**. The common types (A, AAAA, CNAME, TXT) come first; MX, SRV, PTR, NS and CAA are under **More types**.
+2. Fill in the **name** (`@` for the zone itself) and the **value**. A TTL is under **More options** if you want one.
 3. **Preview** sends it to the server to check and shows the record it would write. **Create** writes it.
 
 The preview shows the record the way the *server* read it, which is often not how you typed it. For example, an SRV value of `10 5 5060 sip.example.com` comes back split into priority, weight, port and target. It is worth a look.
@@ -352,7 +352,7 @@ Drift never fixes anything. To close a gap, provision the site again (missing), 
 
 Before the first run, Proxmox needs a private bridge for the demo network, and this computer needs OpenTofu and an SSH key for Proxmox. The Docker version of Bloxsmith can't run the demo. The [README's Demo server section](../README.md#demo-server) has the setup, step by step.
 
-1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image (only needed on this computer if Proxmox doesn't have it yet), and a join token. The token is kept in the vault and never shown again.
+1. Fill in **Settings** once: the Proxmox login, a demo bridge and network on it, the NIOS-X image (only needed on this computer if Proxmox doesn't have it yet), and a join token. The token is kept in the vault and never shown again. Once the settings are saved and complete they fold away; press **Change settings** to open them.
 2. Press **Preview**. It checks the settings, the API key, OpenTofu (or Terraform), the image, SSH to Proxmox and the bridge, and shows the code. Nothing is created.
 3. Press **Build it**. The steps run in order. It makes sure the demo network exists, reserves the next free address, builds the VM, and waits for it to join the Portal. Then it starts DNS on it with a name server group and a demo zone, and looks up a name from the Proxmox host to prove it answers.
 

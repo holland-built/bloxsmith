@@ -33,6 +33,11 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   await expect(page.locator('[data-panel-id]').first()).toBeVisible();
   const rows = page.locator('[data-inbox-row]');
   await expect(rows).toHaveCount(3);
+  // Folded to one line that counts them, so the graphs lead; a click opens it.
+  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toContainText('3, 2 urgent');
+  await expect(rows.first()).toBeHidden();
+  await page.getByRole('heading', { name: /^Needs a look/ }).click();
+  await expect(rows.first()).toBeVisible();
   await expect(rows.nth(0)).toContainText('1 of 2 hosts is not online');
   await expect(rows.nth(1)).toContainText('1,746 subnets are filling up');
   await expect(rows.nth(1)).toContainText('3 are 90% full or more');

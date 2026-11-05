@@ -30,6 +30,8 @@ import { installBaselineWorld } from './page-fixtures';
 
 test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
+  // These tests are about the plain space list, so the ranked list is turned off.
+  await page.route('**/api/desk/spaces*', (route) => route.fulfill({ status: 404, body: '{}' }));
 });
 
 // The server-sent-event body shape the driver parses: one JSON object per
