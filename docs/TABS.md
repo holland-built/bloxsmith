@@ -218,14 +218,22 @@ The quick way to make a change. Pick a job on the left, answer its questions, an
 | Get an IP address | An IP space, a network, and what the address is for | Reserves the next free address in that network |
 | Add a DNS name | A zone, the name, the kind of record (A, AAAA, CNAME or TXT) and what it points to | One DNS record |
 | Make a new network | An IP space, an address block, a size and a name | The next free network of that size in the block |
+| Set up a branch office | A site template, a site name and an IP space | The template's networks, DHCP ranges, DNS zone and hosts |
+| Get a demo ready | An IP space, the customer or call name, a region, and whether to include a demo server | A site from the region's lab template, five sample DNS names (www, mail, app, vpn, files) and, if picked, a demo DNS server |
+
+**Run it from Ansible.** After Preview, Get an IP address, Add a DNS name and Make a new network show **Run this from Ansible instead**. It holds the same change as a playbook for Infoblox's `infoblox.universal_ddi` collection, with a button to copy it. Install the collection with `ansible-galaxy collection install infoblox.universal_ddi` and set `INFOBLOX_PORTAL_KEY` before running it. A change made from the playbook is not listed in Your recent changes. The branch office and demo jobs have no playbook, because they are many steps and a demo server uses Terraform.
+
+**Demo servers.** Get a demo ready builds the demo server with the settings saved on the Demo server page, including its join token. It takes about 15 minutes and keeps going if you close the page; Your recent changes shows how far it got. If the server never joins the Infoblox Portal, the join token may have expired: paste a new one on the Demo server page, then remove the demo and build it again. Demo servers made on the Demo server page are listed under Your recent changes too, and are removed only when you press Remove.
 
 **Find** at the top looks up an address, network or name across IPAM, DNS and the logs, and opens the search page. It changes nothing.
+
+**Plan it** takes one sentence, such as "set up a lab in Austin and a demo for acme-bank". Bloxsmith's AI suggests which jobs match and fills in the answers it can find in the sentence. It never builds anything: press **Open this job** on each one, check the answers, then Preview and Build as usual. IP spaces, networks and zones are never taken from the sentence; you pick those in the form. Anything the AI could not match is listed under "Not planned". It uses the same AI key and daily token count as the AI page.
 
 **IP space suggestions.** The three buttons above the IP space list are the best places to build. Spaces you have built in before come first, then spaces named for the person signed in, then the spaces with the most free addresses. Each button says why it is suggested. You can still pick any space from the list.
 
 **Your recent changes** lists everything built on this page, newest first. **Remove** first lists what is still there, then **Delete these** deletes exactly those items and nothing else. Bloxsmith keeps the exact Infoblox ID of everything it builds here, so Remove never touches anything it did not make. If an item cannot be deleted, the change says so, and Remove again retries only what is left.
 
-Deleting a network in Infoblox also deletes everything inside it. So Remove keeps a network that now holds addresses or DHCP ranges this change did not make, and says so. Release those first, then press Remove again.
+Deleting a network or a DNS zone in Infoblox also deletes everything inside it. So Remove keeps a network that now holds addresses or DHCP ranges this change did not make, and a zone that holds records this change did not make, and says so. Remove those first, then press Remove again. A DNS zone that was already there before a branch office or demo was built is never removed.
 
 Changes made on the Provision, Self-Service and Demo server pages are not listed here and cannot be removed from here.
 

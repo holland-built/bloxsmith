@@ -540,3 +540,23 @@ func TestALoginOtherThanRootRunsEveryProxmoxCommandThroughSudo(t *testing.T) {
 		}
 	}
 }
+
+// Started runs once the run is saved and before anything is built; if it
+// cannot record the run, nothing is built.
+func TestStartedRunsBeforeTheBuildAndCanStopIt(t *testing.T) {
+	run := &fakeRun{}
+	api := &fakeAPI{get: func(string, map[string]string) (any, int, error) { return map[string]any{}, 200, nil }}
+	d := newDemo(t, run, api)
+	var got string
+	d.Started = func(r *Run) error { got = r.Change; return errors.New("disk full") }
+	r, err := d.Build(context.Background(), func(Event) {})
+	if err == nil || r == nil || got != r.Change {
+		t.Fatalf("Build = %v, %v; Started saw %q", r, err, got)
+	}
+	if len(run.seen) != 0 {
+		t.Fatalf("commands ran after Started failed: %v", run.seen)
+	}
+	if saved, _ := d.Store.Load(r.Change); saved.Status != "failed" {
+		t.Fatalf("run = %+v, want failed", saved)
+	}
+}

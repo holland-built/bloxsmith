@@ -24,6 +24,7 @@ import (
 func (d *Deps) registerDeskRoutes(mux router) {
 	mux.HandleFunc("GET /api/desk/runs", d.deskRuns)
 	mux.HandleFunc("GET /api/desk/spaces", d.deskSpaces)
+	mux.HandleFunc("POST /api/desk/plan", d.body(d.deskPlan))
 	mux.HandleFunc("POST /api/desk/run", d.body(d.deskRun))
 	mux.HandleFunc("POST /api/desk/remove", d.body(d.deskRemove))
 }
@@ -51,14 +52,15 @@ func (d *Deps) deskRuns(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 500, map[string]any{"error": "could not read the list of changes: " + err.Error()})
 		return
 	}
-	d.json(w, r, 200, map[string]any{"runs": rs})
+	demos, older := d.deskDemoRuns(rs)
+	d.json(w, r, 200, map[string]any{"runs": rs, "demo": demos, "older_demos": older})
 }
 
 // deskJob turns one job's plain answers into a call on an existing builder.
 // build runs the builder (dry or live); collect reads the IDs a live result
 // proves were made; title names the run in Your recent changes.
 type deskJob struct {
-	build   func(c *edit.Client, in map[string]any, dry bool) (map[string]any, int)
+	build   func(d *Deps, r *http.Request, in map[string]any, dry bool) (map[string]any, int)
 	collect func(res map[string]any, in map[string]any) ([]runs.Object, string)
 	title   func(in map[string]any) string
 }
@@ -69,10 +71,12 @@ var dnsTypes = map[string]bool{"A": true, "AAAA": true, "CNAME": true, "TXT": tr
 
 // deskJobs are the jobs this route builds. Each check returns the message for
 // a missing or wrong answer, or "".
-var deskJobs = map[string]struct {
+type deskJobDef struct {
 	check func(in map[string]any) string
 	deskJob
-}{
+}
+
+var deskJobs = map[string]deskJobDef{
 	"ip": {
 		check: func(in map[string]any) string {
 			if inStr(in, "subnet_id") == "" {
@@ -81,8 +85,8 @@ var deskJobs = map[string]struct {
 			return ""
 		},
 		deskJob: deskJob{
-			build: func(c *edit.Client, in map[string]any, dry bool) (map[string]any, int) {
-				return c.SelfserviceAllocate(map[string]any{"subnet_id": inStr(in, "subnet_id"), "count": 1,
+			build: func(d *Deps, r *http.Request, in map[string]any, dry bool) (map[string]any, int) {
+				return d.editFor(r).SelfserviceAllocate(map[string]any{"subnet_id": inStr(in, "subnet_id"), "count": 1,
 					"name": inStr(in, "name"), "dry": dry})
 			},
 			collect: func(res, _ map[string]any) ([]runs.Object, string) { return allocatedObjects(res) },
@@ -109,8 +113,8 @@ var deskJobs = map[string]struct {
 			return ""
 		},
 		deskJob: deskJob{
-			build: func(c *edit.Client, in map[string]any, dry bool) (map[string]any, int) {
-				return c.DNSRecordCreate(map[string]any{"zone_id": inStr(in, "zone_id"),
+			build: func(d *Deps, r *http.Request, in map[string]any, dry bool) (map[string]any, int) {
+				return d.editFor(r).DNSRecordCreate(map[string]any{"zone_id": inStr(in, "zone_id"),
 					"name_in_zone": inStr(in, "name_in_zone"), "type": strings.ToUpper(inStr(in, "type")),
 					"value": inStr(in, "value"), "dry": dry})
 			},
@@ -129,8 +133,8 @@ var deskJobs = map[string]struct {
 			return ""
 		},
 		deskJob: deskJob{
-			build: func(c *edit.Client, in map[string]any, dry bool) (map[string]any, int) {
-				return c.SubnetCreate(map[string]any{"block_id": inStr(in, "block_id"),
+			build: func(d *Deps, r *http.Request, in map[string]any, dry bool) (map[string]any, int) {
+				return d.editFor(r).SubnetCreate(map[string]any{"block_id": inStr(in, "block_id"),
 					"cidr": in["cidr"], "name": inStr(in, "name"), "dry": dry})
 			},
 			collect: subnetObjects,
@@ -167,7 +171,7 @@ func (d *Deps) deskRun(w http.ResponseWriter, r *http.Request, b map[string]any)
 
 	// Preview: the builder's own dry run. Nothing is recorded.
 	if dry, ok := b["dry"].(bool); !ok || dry {
-		res, status := job.build(d.editFor(r), in, true)
+		res, status := job.build(d, r, in, true)
 		d.json(w, r, status, res)
 		return
 	}
@@ -185,7 +189,7 @@ func (d *Deps) deskRun(w http.ResponseWriter, r *http.Request, b map[string]any)
 		return
 	}
 
-	res, status := job.build(d.editFor(r), in, false)
+	res, status := job.build(d, r, in, false)
 	objs, note := job.collect(res, in)
 	ok := resultOK(res)
 	saveErr := l.Change(run.ID, func(x *runs.Run) error {
@@ -215,6 +219,12 @@ func (d *Deps) deskRun(w http.ResponseWriter, r *http.Request, b map[string]any)
 		d.json(w, r, 500, map[string]any{"ok": false, "result": res,
 			"error": "The change was made (" + strings.Join(labels, ", ") + ") but Bloxsmith could not save its record, so it cannot be removed from here: " + saveErr.Error()})
 		return
+	}
+	if ok && jobID == "demo" && in["include_server"] == true {
+		d.startKitServer(r, l, run.ID)
+		if x, found, _ := l.Get(run.ID); found {
+			run = x
+		}
 	}
 	d.json(w, r, status, map[string]any{"ok": ok, "run": run, "result": res, "error": res["error"]})
 }
@@ -306,11 +316,14 @@ func allocatedObjects(res map[string]any) ([]runs.Object, string) {
 	return objs, strings.Join(notes, " ")
 }
 
-// removeOrder deletes records before the addresses they point at, and
-// addresses before the network that holds them.
-var removeOrder = []string{"dns_record", "address", "subnet"}
+// removeOrder: the demo server first, then hosts and records before the
+// addresses they point at, ranges and zones next, networks last, so each
+// network and zone is checked for leftovers only after this run's own
+// contents are gone.
+var removeOrder = []string{"demo_server", "host", "dns_record", "address", "dhcp_range", "dns_zone", "subnet"}
 
-var removeKinds = map[string]string{"dns_record": "dns/record", "address": "ipam/address", "subnet": "ipam/subnet"}
+var removeKinds = map[string]string{"dns_record": "dns/record", "address": "ipam/address", "subnet": "ipam/subnet",
+	"host": "ipam/host", "dhcp_range": "ipam/range", "dns_zone": "dns/auth_zone"}
 
 // deskRemove previews (dry) or deletes everything a run made that is still
 // there. Running it again retries only what is left.
@@ -323,6 +336,10 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 	l := d.ledger()
 	if l == nil {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "run not found"})
+		return
+	}
+	if ch := anyStr(b["demo_change"]); ch != "" {
+		d.removeOlderDemo(w, r, ch, b)
 		return
 	}
 	id := anyStr(b["run"])
@@ -343,6 +360,10 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			if o.State != runs.Created && o.State != runs.Error {
 				continue
 			}
+			if o.Kind == "demo_server" {
+				would = append(would, d.demoServerPlan(r, o))
+				continue
+			}
 			p, perr := edit.ObjectPath(removeKinds[o.Kind], o.ID)
 			if perr != nil {
 				continue
@@ -352,8 +373,8 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// check, which is not the same thing.
 			row := map[string]any{"id": o.ID, "kind": o.Kind, "label": o.Label,
 				"exists": st == 200, "gone": st == 404, "status": st}
-			if o.Kind == "subnet" && st == 200 {
-				if why := subnetBlocker(cli, o.ID); why != "" {
+			if st == 200 {
+				if why := blocker(cli, o); why != "" {
 					row["blocked"] = why
 				}
 			}
@@ -386,6 +407,15 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			if o.Kind != kind || (o.State != runs.Created && o.State != runs.Error) {
 				continue
 			}
+			if o.Kind == "demo_server" {
+				if why := d.removeDemoServer(r, o.ID); why != "" {
+					o.State, o.Error = runs.Error, why
+					failed++
+				} else {
+					o.State, o.Error = runs.Deleted, ""
+				}
+				continue
+			}
 			p, perr := edit.ObjectPath(removeKinds[o.Kind], o.ID)
 			if perr != nil {
 				o.State, o.Error = runs.Error, "not a valid Infoblox ID"
@@ -396,12 +426,10 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// put something in the network since the preview. A small gap
 			// remains between this check and the DELETE; Infoblox offers no
 			// "delete only if empty".
-			if o.Kind == "subnet" {
-				if why := subnetBlocker(cli, o.ID); why != "" {
-					o.State, o.Error = runs.Error, why
-					failed++
-					continue
-				}
+			if why := blocker(cli, *o); why != "" {
+				o.State, o.Error = runs.Error, why
+				failed++
+				continue
 			}
 			res, _ := cli.Delete(p)
 			switch {
@@ -469,6 +497,18 @@ func inStr(in map[string]any, k string) string { return strings.TrimSpace(anyStr
 func asList(v any) []any {
 	l, _ := v.([]any)
 	return l
+}
+
+// blocker is the leftover check for the kinds whose delete takes their
+// contents with them: networks and zones. "" means safe to delete.
+func blocker(cli *edit.Client, o runs.Object) string {
+	switch o.Kind {
+	case "subnet":
+		return subnetBlocker(cli, o.ID)
+	case "dns_zone":
+		return zoneBlocker(cli, o.ID)
+	}
+	return ""
 }
 
 // subnetBlocker says why a network must not be deleted, or "" when it is safe.

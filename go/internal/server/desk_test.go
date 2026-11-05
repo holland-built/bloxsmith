@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"bloxsmith/internal/demo"
 	"bloxsmith/internal/runs"
 )
 
@@ -26,6 +27,7 @@ type fakeTenant struct {
 	refusePatch  bool          // the tag PATCH after a new network fails
 	inSubnet     []string      // addresses listed inside the new network
 	ranges       int           // DHCP ranges listed inside the new network
+	zoneRecords  []string      // record types listed in a zone
 }
 
 func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +57,13 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 		rows := []map[string]string{{"address": "10.9.0.0"}, {"address": "10.9.0.7"}}
 		for _, a := range f.inSubnet {
 			rows = append(rows, map[string]string{"address": a})
+		}
+		json.NewEncoder(w).Encode(map[string]any{"results": rows})
+	case r.Method == "GET" && p == "/api/ddi/v1/dns/record":
+		rows := []map[string]string{{"type": "SOA", "name_in_zone": ""}, {"type": "NS", "name_in_zone": ""}}
+		for _, t := range f.zoneRecords {
+			typ, name, _ := strings.Cut(t, " ")
+			rows = append(rows, map[string]string{"type": typ, "name_in_zone": name})
 		}
 		json.NewEncoder(w).Encode(map[string]any{"results": rows})
 	case r.Method == "GET" && p == "/api/ddi/v1/ipam/range":
@@ -396,5 +405,155 @@ func TestRankSpaces_YoursFirstThenRoom(t *testing.T) {
 	// A login too short to mean anything matches nothing.
 	if r := rankSpaces(spaces, nil, free, "jd"); r[0].Yours {
 		t.Fatalf("a 2-letter login matched %+v", r[0])
+	}
+}
+
+// siteResult is what the site provisioner returns for a built branch office.
+func siteResult(zoneCreated bool) map[string]any {
+	return map[string]any{"ok": true,
+		"subnets":          []any{map[string]any{"id": "ipam/subnet/s-9", "address": "10.9.0.0/29", "name": "bench"}},
+		"dhcp_ranges":      []any{map[string]any{"id": "ipam/range/g-1", "start": "10.9.0.2", "end": "10.9.0.5"}},
+		"dns_zone_id":      "dns/auth_zone/z-1",
+		"dns_zone_fqdn":    "acme.lab.example.com.",
+		"dns_zone_created": zoneCreated,
+		"reverse_zones":    []any{map[string]any{"id": "dns/auth_zone/rz-1", "fqdn": "0.9.10.in-addr.arpa.", "created": false}},
+		"hosts":            []any{map[string]any{"id": "ipam/host/h-1", "fqdn": "jump01.acme.lab.example.com"}, map[string]any{"id": "(dry-run)"}},
+		"unknown_ids":      []any{},
+	}
+}
+
+func objectKinds(objs []runs.Object) string {
+	var out []string
+	for _, o := range objs {
+		out = append(out, o.Kind+":"+o.ID)
+	}
+	return strings.Join(out, " ")
+}
+
+func TestSiteObjects_RecordsOnlyWhatThisRunMade(t *testing.T) {
+	objs, _ := siteObjects(siteResult(true))
+	want := "host:ipam/host/h-1 dns_zone:dns/auth_zone/z-1 dhcp_range:ipam/range/g-1 subnet:ipam/subnet/s-9"
+	if got := objectKinds(objs); got != want {
+		t.Fatalf("objects = %s\nwant      %s", got, want)
+	}
+	// A zone that was already there, and a reverse zone not marked created,
+	// are never recorded, so Remove can never delete them.
+	objs, _ = siteObjects(siteResult(false))
+	if strings.Contains(objectKinds(objs), "auth_zone") {
+		t.Fatalf("a zone this run did not create was recorded: %s", objectKinds(objs))
+	}
+}
+
+func TestSiteObjects_FailedBuildRecordsWhatRollbackLeft(t *testing.T) {
+	res := map[string]any{"ok": false, "rollback": map[string]any{"outcome": "partial", "residual": []any{
+		map[string]any{"kind": "subnet", "id": "ipam/subnet/s-9", "label": "10.9.0.0/29"},
+		map[string]any{"kind": "reverse_zone", "id": "dns/auth_zone/rz-1", "label": "0.9.10.in-addr.arpa"},
+	}}}
+	objs, _ := siteObjects(res)
+	if got := objectKinds(objs); got != "subnet:ipam/subnet/s-9 dns_zone:dns/auth_zone/rz-1" {
+		t.Fatalf("objects = %s", got)
+	}
+}
+
+// A branch office is removed hosts first and the network last, and a zone that
+// now holds someone else's record is kept.
+func TestDeskRemove_BranchOfficeOrderAndZoneCheck(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	objs, _ := siteObjects(siteResult(true))
+	for _, o := range objs {
+		f.exists[o.ID] = true
+	}
+	run := runs.Run{ID: "r-branch", Job: "branch", Status: runs.Built, Created: "2026-11-05T00:00:00Z", Objects: objs}
+	if err := d.ledger().Add(run); err != nil {
+		t.Fatal(err)
+	}
+	f.zoneRecords = []string{"NS sub"} // a delegation someone added
+	_, body := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"r-branch","dry":true}`)
+	blocked := 0
+	for _, x := range body["would_remove"].([]any) {
+		if x.(map[string]any)["blocked"] != nil {
+			blocked++
+		}
+	}
+	if blocked != 1 {
+		t.Fatalf("preview = %v, want only the zone flagged", body)
+	}
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"r-branch","dry":false}`)
+	if got := strings.Join(f.deletes, " "); got != "ipam/host/h-1 ipam/range/g-1 ipam/subnet/s-9" {
+		t.Fatalf("deletes = %s, want host, range, network and the zone kept", got)
+	}
+	if got := onlyRun(t, d); got.Status != runs.RemoveFailed {
+		t.Fatalf("run = %+v, want remove-failed while the zone is kept", got)
+	}
+
+	f.zoneRecords, f.deletes = nil, nil
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"r-branch","dry":false}`)
+	if got := strings.Join(f.deletes, " "); got != "dns/auth_zone/z-1" {
+		t.Fatalf("retry deletes = %s, want only the now-empty zone", got)
+	}
+	if got := onlyRun(t, d); got.Status != runs.Removed {
+		t.Fatalf("run = %+v, want removed", got)
+	}
+}
+
+func TestDeskRun_SiteAndKitNamesAreChecked(t *testing.T) {
+	d, _, _ := newDeskDeps(t)
+	for _, body := range []string{
+		`{"job":"branch","input":{"template":"amer/lab/site-amer-lab.yaml","site":"Bad Name"},"dry":true}`,
+		`{"job":"demo","input":{"customer":"acme","region":"mars"},"dry":true}`,
+		`{"job":"demo","input":{"customer":"-acme","region":"amer"},"dry":true}`,
+	} {
+		if code, _ := deskPost(t, d, d.deskRun, "/api/desk/run", body); code != 400 {
+			t.Fatalf("%s = %d, want 400", body, code)
+		}
+	}
+}
+
+func TestSampleNames(t *testing.T) {
+	res := map[string]any{"subnets": []any{map[string]any{"address": "10.9.0.0/25"}}, "dns_zone_fqdn": "acme.lab.example.com."}
+	base := firstSubnetBase(res)
+	if got := sampleLabel("www", res, base, 0); got != "www.acme.lab.example.com A 10.9.0.10" {
+		t.Fatalf("label = %q", got)
+	}
+	if got := sampleIP(base, 4); got != "10.9.0.14" {
+		t.Fatalf("ip = %q", got)
+	}
+	// A network too small for .10 to .14 gets no sample names.
+	small := map[string]any{"subnets": []any{map[string]any{"address": "10.9.0.0/29"}}}
+	if firstSubnetBase(small).IsValid() {
+		t.Fatal("a /29 was offered for sample names")
+	}
+}
+
+// Demo servers built on the Demo server page are listed for removal but never
+// removed by themselves, and one still building cannot be removed.
+func TestDeskRuns_ListsOlderDemoServersAndGuardsBuildingOnes(t *testing.T) {
+	d, _, _ := newDeskDeps(t)
+	st := d.demoStore()
+	for _, r := range []*demo.Run{
+		{Change: "c-20261101-100000", Status: "ready", IP: "10.99.0.5"},
+		{Change: "c-20261101-110000", Status: "building"},
+		{Change: "c-20261101-090000", Status: "removed"},
+	} {
+		if err := st.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rr := httptest.NewRecorder()
+	d.deskRuns(rr, httptest.NewRequest("GET", "/api/desk/runs", nil))
+	body := decodeBody(t, rr)
+	if older, _ := body["older_demos"].([]any); len(older) != 2 {
+		t.Fatalf("older_demos = %v, want the two not removed", body["older_demos"])
+	}
+	_, plan := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"demo_change":"c-20261101-110000","dry":true}`)
+	row := plan["would_remove"].([]any)[0].(map[string]any)
+	if !strings.Contains(anyStr(row["blocked"]), "still being built") {
+		t.Fatalf("plan = %v, want a building server flagged", plan)
+	}
+	if code, _ := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"demo_change":"c-20261101-110000","dry":false}`); code != 502 {
+		t.Fatalf("removing a building demo server = %d, want 502", code)
+	}
+	if got, _ := st.Load("c-20261101-110000"); got.Status != "building" {
+		t.Fatalf("run = %+v, want it left alone", got)
 	}
 }

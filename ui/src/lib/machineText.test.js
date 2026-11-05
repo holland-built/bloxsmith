@@ -69,6 +69,7 @@ const PROSE = [
   ['tabs/ChartBuilder.jsx', 'chart-save-title', 'a name the operator gives a saved chart'],
   ['tabs/ChartBuilder.jsx', 'chart-replace-title', 'a name the operator gives a replacing chart'],
   ['components/OneBox.jsx', 'data-onebox', 'a lookup or a question to the assistant, in sentences'],
+  ['tabs/Automate.jsx', 'aria-label="Or describe it in one sentence"', 'a request to Plan it, in a sentence'],
 ]
 
 const all = jsxFiles(SRC).flatMap((f) => {
