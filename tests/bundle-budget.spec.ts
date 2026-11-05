@@ -40,7 +40,13 @@ import { test, expect } from './fixtures';
 // and Provision +51 B. vendor-react (218,840) and the runtime did not move, and
 // no charts chunk is on the route, which is the regression this budget exists
 // to stop. The old ceiling had 1,431 B of headroom left before this change.
-const BUDGET_BYTES = 384 * 1024; // 393,216 B
+//
+// RAISED 384 -> 388 KB on 2026-11-05, with the chunks that grew identified. The
+// simpler Provision page took #provision from about 392,281 B to 394,351 B:
+// Provision +1,290 B (plain template names, seed region site lists), the new
+// spaceOptions chunk +740 B (yours-first IP spaces), the entry chunk +40 B.
+// vendor-react did not move and no charts chunk is on the route.
+const BUDGET_BYTES = 388 * 1024; // 397,312 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();

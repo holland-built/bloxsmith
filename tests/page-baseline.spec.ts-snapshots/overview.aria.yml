@@ -1,5 +1,8 @@
 - main "Overview tab":
   - heading "Overview" [level=1]
+  - paragraph:
+    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
+    - button "Docs →"
   - region "Needs a look3, worst first":
     - heading "Needs a look" [level=2]:
       - text: ""
@@ -23,9 +26,6 @@
         - img "Warning"
         - link "2 subnets close to full":
           - /url: "#incidents"
-  - paragraph:
-    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
-    - button "Docs →"
   - list "Headline numbers":
     - listitem:
       - button /DNS queries \d+ per sec/
