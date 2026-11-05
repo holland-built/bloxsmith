@@ -48,7 +48,7 @@ const (
 // Object is one thing a run made.
 type Object struct {
 	ID    string `json:"id"`
-	Kind  string `json:"kind"`  // "address" or "dns_record"
+	Kind  string `json:"kind"`  // "address", "dns_record" or "subnet"
 	Label string `json:"label"` // what a person recognises: the IP, or the name
 	State string `json:"state"`
 	Error string `json:"error,omitempty"`
@@ -60,6 +60,7 @@ type Run struct {
 	Job     string   `json:"job"`
 	Title   string   `json:"title"`
 	Created string   `json:"created"`
+	Space   string   `json:"space,omitempty"` // the IP space it was built in, for "Yours" on the desk
 	Status  string   `json:"status"`
 	Error   string   `json:"error,omitempty"`
 	Note    string   `json:"note,omitempty"`

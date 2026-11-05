@@ -23,6 +23,9 @@ type fakeTenant struct {
 	deletes      []string
 	refuseDelete bool
 	slowDelete   chan struct{} // when set, each DELETE waits for a value
+	refusePatch  bool          // the tag PATCH after a new network fails
+	inSubnet     []string      // addresses listed inside the new network
+	ranges       int           // DHCP ranges listed inside the new network
 }
 
 func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
@@ -36,9 +39,30 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "POST" && strings.HasSuffix(p, "/nextavailableip"):
 		f.exists["ipam/address/a-1111"] = true
 		io.WriteString(w, `{"results":[{"id":"ipam/address/a-1111","address":"10.7.0.4"}]}`)
-	case r.Method == "GET" && strings.Contains(p, "/ipam/address/"):
+	case r.Method == "POST" && p == "/api/ddi/v1/dns/record":
+		f.exists["dns/record/r-1"] = true
+		io.WriteString(w, `{"result":{"id":"dns/record/r-1"}}`)
+	case r.Method == "POST" && strings.HasSuffix(p, "/nextavailablesubnet"):
+		f.exists["ipam/subnet/s-9"] = true
+		io.WriteString(w, `{"results":[{"id":"ipam/subnet/s-9","address":"10.9.0.0","cidr":29}]}`)
+	case r.Method == "PATCH":
+		if f.refusePatch {
+			w.WriteHeader(500)
+			return
+		}
+		io.WriteString(w, `{"result":{"id":"ipam/subnet/s-9","address":"10.9.0.0","cidr":29}}`)
+	case r.Method == "GET" && p == "/api/ddi/v1/ipam/address":
+		rows := []map[string]string{{"address": "10.9.0.0"}, {"address": "10.9.0.7"}}
+		for _, a := range f.inSubnet {
+			rows = append(rows, map[string]string{"address": a})
+		}
+		json.NewEncoder(w).Encode(map[string]any{"results": rows})
+	case r.Method == "GET" && p == "/api/ddi/v1/ipam/range":
+		rows := make([]map[string]string, f.ranges)
+		json.NewEncoder(w).Encode(map[string]any{"results": rows})
+	case r.Method == "GET" && strings.Count(strings.TrimPrefix(p, "/api/ddi/v1/"), "/") == 2:
 		if f.exists[strings.TrimPrefix(p, "/api/ddi/v1/")] {
-			io.WriteString(w, `{"result":{}}`)
+			io.WriteString(w, `{"result":{"address":"10.9.0.0","cidr":29}}`)
 		} else {
 			w.WriteHeader(404)
 		}
@@ -240,5 +264,137 @@ func TestLedger_BuildingRunIsMarkedFailedOnRestart(t *testing.T) {
 	got, _, _ := runs.Open(dir).Get("r-1")
 	if got.Status != runs.Failed || got.Error == "" {
 		t.Fatalf("run = %+v, want failed with a reason", got)
+	}
+}
+
+func TestDeskRun_DNSNameBuildsAndRemovesTheRecord(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	in := `{"zone_id":"dns/auth_zone/z-1","zone_name":"lab.example.","name_in_zone":"www","type":"a","value":"10.1.2.3"}`
+	if code, body := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"dns","input":`+in+`,"dry":true}`); code != 200 || body["dry_run"] != true {
+		t.Fatalf("preview = %d %v", code, body)
+	}
+	if rs, _ := d.ledger().List(); len(rs) != 0 {
+		t.Fatalf("a preview recorded %d runs", len(rs))
+	}
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"dns","input":`+in+`,"dry":false}`)
+	run := onlyRun(t, d)
+	if run.Status != runs.Built || len(run.Objects) != 1 || run.Objects[0].ID != "dns/record/r-1" || run.Objects[0].Label != "www.lab.example A 10.1.2.3" {
+		t.Fatalf("run = %+v", run)
+	}
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":false}`)
+	if len(f.deletes) != 1 || f.deletes[0] != "dns/record/r-1" {
+		t.Fatalf("deletes = %v, want only dns/record/r-1", f.deletes)
+	}
+}
+
+func TestDeskRun_DNSNameRefusesOtherTypes(t *testing.T) {
+	d, _, _ := newDeskDeps(t)
+	code, _ := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"dns","input":{"zone_id":"dns/auth_zone/z-1","name_in_zone":"x","type":"NS","value":"ns1."},"dry":false}`)
+	if code != 400 {
+		t.Fatalf("NS record = %d, want 400", code)
+	}
+}
+
+const networkInput = `{"space":"ipam/ip_space/sp-1","block_id":"ipam/address_block/b-1","cidr":29,"name":"demo-net"}`
+
+func TestDeskRun_NetworkRecordsItsSpaceAndID(t *testing.T) {
+	d, _, _ := newDeskDeps(t)
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+networkInput+`,"dry":false}`)
+	run := onlyRun(t, d)
+	if run.Status != runs.Built || run.Space != "ipam/ip_space/sp-1" || len(run.Objects) != 1 ||
+		run.Objects[0].ID != "ipam/subnet/s-9" || run.Objects[0].Label != "10.9.0.0/29, demo-net" {
+		t.Fatalf("run = %+v", run)
+	}
+}
+
+// A network whose tags failed still exists, so it is recorded and removable.
+func TestDeskRun_NetworkWithFailedTagsIsStillRecorded(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	f.refusePatch = true
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+networkInput+`,"dry":false}`)
+	run := onlyRun(t, d)
+	if run.Status != runs.Failed || len(run.Objects) != 1 || run.Objects[0].ID != "ipam/subnet/s-9" {
+		t.Fatalf("run = %+v, want failed but holding ipam/subnet/s-9", run)
+	}
+}
+
+// A Build that made nothing does not make its space "yours".
+func TestBuiltSpaces_CountsOnlyRunsThatMadeSomething(t *testing.T) {
+	d, _, _ := newDeskDeps(t)
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+networkInput+`,"dry":false}`)
+	d.ledger().Add(runs.Run{ID: "r-empty", Space: "ipam/ip_space/other", Status: runs.Failed, Created: "2026-11-05T00:00:00Z"})
+	got := d.builtSpaces()
+	if got["ipam/ip_space/sp-1"] == "" || got["ipam/ip_space/other"] != "" {
+		t.Fatalf("built spaces = %v, want only sp-1", got)
+	}
+}
+
+// Deleting a network takes everything in it, so Remove refuses while it holds
+// anything this run did not make, and deletes it once it is empty again.
+func TestDeskRemove_NetworkIsKeptWhileItHoldsOtherThings(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+networkInput+`,"dry":false}`)
+	run := onlyRun(t, d)
+
+	f.inSubnet = []string{"10.9.0.3"}
+	_, body := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":true}`)
+	would, _ := body["would_remove"].([]any)
+	if len(would) != 1 || !strings.Contains(anyStr(would[0].(map[string]any)["blocked"]), "1 address") {
+		t.Fatalf("preview = %v, want the network flagged as holding 1 address", body)
+	}
+	code, _ := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":false}`)
+	if got := onlyRun(t, d); code != 502 || got.Status != runs.RemoveFailed || len(f.deletes) != 0 {
+		t.Fatalf("remove with an address inside = %d %+v, deletes %v", code, got, f.deletes)
+	}
+
+	f.inSubnet, f.ranges = nil, 1
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":false}`)
+	if len(f.deletes) != 0 {
+		t.Fatalf("a network holding a DHCP range was deleted: %v", f.deletes)
+	}
+
+	f.ranges = 0
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":false}`)
+	if got := onlyRun(t, d); got.Status != runs.Removed || len(f.deletes) != 1 || f.deletes[0] != "ipam/subnet/s-9" {
+		t.Fatalf("empty network remove = %+v, deletes %v", got, f.deletes)
+	}
+}
+
+func TestSubnetOwnAddresses(t *testing.T) {
+	got := subnetOwnAddresses("10.9.0.0/29")
+	if len(got) != 2 || !got["10.9.0.0"] || !got["10.9.0.7"] {
+		t.Fatalf("own = %v", got)
+	}
+	if len(subnetOwnAddresses("2001:db8::/64")) != 0 {
+		t.Fatal("IPv6 should skip nothing")
+	}
+}
+
+func TestRankSpaces_YoursFirstThenRoom(t *testing.T) {
+	spaces := []any{
+		map[string]any{"id": "a", "name": "Big Lab"},
+		map[string]any{"id": "b", "name": "jdoe-demo"},
+		map[string]any{"id": "c", "name": "Small Lab"},
+		map[string]any{"id": "d", "name": "Old Build"},
+		map[string]any{"id": "e", "name": "Unknown"},
+	}
+	free := map[string][2]int{"a": {5000, 6000}, "b": {10, 256}, "c": {20, 256}, "d": {1, 256}}
+	got := rankSpaces(spaces, map[string]string{"d": "2026-11-01T10:00:00Z"}, free, "JDoe")
+	order := []string{}
+	for _, r := range got {
+		order = append(order, r.ID)
+		if strings.Contains(strings.ToLower(r.Reason), "jdoe") {
+			t.Fatalf("the login leaked into a reason: %q", r.Reason)
+		}
+	}
+	if strings.Join(order, ",") != "d,b,a,c,e" {
+		t.Fatalf("order = %v, want d,b,a,c,e", order)
+	}
+	if !got[0].Yours || !got[1].Yours || got[2].Yours || got[2].Reason != "5,000 of 6,000 addresses free" || got[1].Reason != "Named for you" {
+		t.Fatalf("rows = %+v", got)
+	}
+	// A login too short to mean anything matches nothing.
+	if r := rankSpaces(spaces, nil, free, "jd"); r[0].Yours {
+		t.Fatalf("a 2-letter login matched %+v", r[0])
 	}
 }
