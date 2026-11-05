@@ -626,6 +626,19 @@ html[data-theme="light"] { color-scheme: light; }
     min-height: 44px;
   }
 
+  /* Needs a look's one-line toggle: padding rather than min-height, so the
+     words stay centred in the 44px it gives a finger. */
+  summary {
+    padding-block: 12px;
+  }
+
+  /* A link inside a sentence, like the intro's "Docs", keeps the sentence's
+     line height: WCAG 2.5.8 exempts targets in a sentence, and the 44px floor
+     made that one line twice as tall as the others on a phone. */
+  [data-inline-control] {
+    min-height: 0;
+  }
+
   /* An inline box ignores both, so the role has to carry a box first.
      max-width keeps that box from becoming an unbreakable atom: an inline-block
      sizes to max-content by default, so a long panel title would stop wrapping

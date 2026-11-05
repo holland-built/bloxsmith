@@ -3,9 +3,9 @@
   - group:
     - heading "Needs a look" [level=2]:
       - text: ""
-      - status: 3, 2 urgent
+      - status: 3 to check · 2 urgent
   - paragraph:
-    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. On this tab you can open a panel’s ⋯ menu to move it, or drag its right edge to resize, and your arrangement saves automatically.
+    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. Drag a panel’s right edge to resize it, or use Arrange panels to move panels; changes save by themselves.
     - button "Docs →"
   - list "Headline numbers":
     - listitem:

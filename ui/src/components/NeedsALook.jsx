@@ -78,14 +78,14 @@ export default function NeedsALook() {
   return (
     <div data-needs-a-look="" className="mb-4">
       <details>
-        <summary className={`cursor-pointer w-fit ${FOCUS_RING}`}>
+        <summary className={`cursor-pointer ${FOCUS_RING}`}>
           <h2 id="needs-a-look" className="inline text-copy font-semibold">
             Needs a look
             <span className="ml-2 font-normal text-muted" role="status">
               {loading
                 ? 'Checking…'
                 : rows.length
-                  ? `${rows.length}${urgent ? `, ${urgent} urgent` : ''}`
+                  ? <>{rows.length} to check{urgent > 0 && <> · <span className="text-crit">{urgent} urgent</span></>}</>
                   : failed.length
                     ? 'nothing found in the feeds that answered'
                     : 'nothing right now'}

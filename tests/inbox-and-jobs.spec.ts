@@ -34,7 +34,7 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   const rows = page.locator('[data-inbox-row]');
   await expect(rows).toHaveCount(3);
   // Folded to one line that counts them, so the graphs lead; a click opens it.
-  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toContainText('3, 2 urgent');
+  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toContainText('3 to check · 2 urgent');
   await expect(rows.first()).toBeHidden();
   await page.getByRole('heading', { name: /^Needs a look/ }).click();
   await expect(rows.first()).toBeVisible();

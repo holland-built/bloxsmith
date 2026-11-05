@@ -145,8 +145,8 @@ export default function Overview() {
         Your network at a glance — DNS load, address use, subnet fullness and host health.
         {!arrangedOnce && (
           <>
-            {' '}On this tab you can open a panel’s ⋯ menu to move it, or drag its right
-            edge to resize, and your arrangement saves automatically.
+            {' '}Drag a panel’s right edge to resize it, or use Arrange panels to move
+            panels; changes save by themselves.
           </>
         )}
       </TabIntro>
