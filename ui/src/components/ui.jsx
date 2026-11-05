@@ -2886,6 +2886,7 @@ export function TabIntro({ anchor, children }) {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        data-inline-control=""
         className="text-link underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-note"
       >
         Docs →

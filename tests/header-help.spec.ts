@@ -182,7 +182,8 @@ test('Overview says how to rearrange it, and that nothing needs saving', async (
   // on the tab that has one.
   // The tab intro, not Needs a look above it, which can also hold a line.
   const intro = page.locator('main p').filter({ hasText: 'Your network at a glance' });
-  await expect(intro).toContainText('drag');
+  await expect(intro).toContainText('Drag');
   await expect(intro).toContainText('resize');
-  await expect(intro).toContainText('saves automatically');
+  await expect(intro).toContainText('Arrange panels');
+  await expect(intro).toContainText('save by themselves');
 });

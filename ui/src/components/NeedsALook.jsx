@@ -2,7 +2,7 @@ import { useApi } from '../lib/api.js'
 import { plainMessage } from '../lib/plainWords.js'
 import { FOCUS_RING } from './ui.jsx'
 
-// One line at the top of Overview, "Needs a look: 6, 2 urgent", that opens to
+// One line at the top of Overview, "Needs a look 6 to check · 2 urgent", that opens to
 // the list: what needs a look, worst first, each with the page that fixes it.
 // It is folded so the graphs lead, because a NOC screen has to show the graphs
 // without a click. A feed that could not be read is said outside the fold. Built from the
@@ -78,14 +78,14 @@ export default function NeedsALook() {
   return (
     <div data-needs-a-look="" className="mb-4">
       <details>
-        <summary className={`cursor-pointer w-fit ${FOCUS_RING}`}>
+        <summary className={`cursor-pointer ${FOCUS_RING}`}>
           <h2 id="needs-a-look" className="inline text-copy font-semibold">
             Needs a look
             <span className="ml-2 font-normal text-muted" role="status">
               {loading
                 ? 'Checking…'
                 : rows.length
-                  ? `${rows.length}${urgent ? `, ${urgent} urgent` : ''}`
+                  ? <>{rows.length} to check{urgent > 0 && <> · <span className="text-crit">{urgent} urgent</span></>}</>
                   : failed.length
                     ? 'nothing found in the feeds that answered'
                     : 'nothing right now'}

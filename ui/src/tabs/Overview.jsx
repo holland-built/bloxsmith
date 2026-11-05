@@ -122,7 +122,7 @@ export default function Overview() {
           grid with no handles, no resize edge and nothing to persist. Telling
           those tabs' readers they can rearrange would be describing a feature
           they do not have.
-          "…saves automatically" is the whole answer to "how do I save my
+          "…changes save by themselves" is the whole answer to "how do I save my
           layout", and it is written out because the honest answer is that
           there is nothing to press: every drop and every resize commit writes
           the view by itself. A reader hunting a Save button finds none and
@@ -145,8 +145,8 @@ export default function Overview() {
         Your network at a glance — DNS load, address use, subnet fullness and host health.
         {!arrangedOnce && (
           <>
-            {' '}On this tab you can open a panel’s ⋯ menu to move it, or drag its right
-            edge to resize, and your arrangement saves automatically.
+            {' '}Drag a panel’s right edge to resize it, or use Arrange panels to move
+            panels; changes save by themselves.
           </>
         )}
       </TabIntro>
