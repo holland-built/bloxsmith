@@ -158,13 +158,15 @@ test('each passphrase box has the kind its screen needs: new to create and confi
   assert.equal(kindOf('vu-pass'), 'current')
 })
 
-test('the app has three passphrase boxes and nine key boxes', () => {
+test('the app has three passphrase boxes and eight key boxes', () => {
   const secrets = all.filter(isSecret)
   assert.equal(secrets.filter(passphraseKind).length, 3)
-  // The eighth: Settings > Integrations > AI provider key (TenantManager.jsx).
-  // The ninth: Demo server > Settings > NIOS-X join token (DemoServer.jsx).
-  assert.equal(secrets.filter(isKeyBox).length, 9)
-  assert.equal(secrets.length, 12, 'a new secret box was added: say which kind it is, then update these counts')
+  // The first-key screen's Groq box went on 2026-11-05: the setup checklist's
+  // AI step replaced it. The AI provider key is now components/AiProviderForm.jsx
+  // and the NIOS-X join token components/DemoSettingsForm.jsx, each shared by
+  // its page and the setup checklist.
+  assert.equal(secrets.filter(isKeyBox).length, 8)
+  assert.equal(secrets.length, 11, 'a new secret box was added: say which kind it is, then update these counts')
 })
 
 test('a key box does not also set autoComplete by hand, because the later one wins', () => {

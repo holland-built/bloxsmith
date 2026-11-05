@@ -1,32 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { PageRail } from '../components/kit.jsx'
-import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, FetchError, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
-import { authFetch, withToken } from '../lib/authFetch.js'
-import { MACHINE_TEXT } from '../lib/machineText.js'
-import { API_KEY_BOX } from '../lib/secretBox.js'
+import { withToken } from '../lib/authFetch.js'
+import DemoSettingsForm from '../components/DemoSettingsForm.jsx'
 
 // The Demo server page: build a NIOS-X VM on Proxmox with the next free IP,
 // give it DNS, prove it answers, then tear down exactly what the run made.
 // The server does the work (go/internal/demo); this page fills the settings,
 // shows the plan first, and streams each step as it happens.
 
-const inputCls = `${FIELD_CLS} w-full`
 const btnCls = 'px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 const primary = { background: COLORS.accent, color: COLORS.onAccent }
 const danger = { background: COLORS.crit, color: COLORS.onCrit }
 
-const FIELDS = [
-  ['pve', 'Proxmox SSH login', 'jsmith@10.0.0.2'],
-  ['pveName', 'Proxmox host name (answered in the demo zone)', 'pve1'],
-  ['pveIp', 'Proxmox host address', '10.0.0.2'],
-  ['pool', 'Proxmox storage for the disk', 'local-zfs'],
-  ['bridge', 'Demo bridge on Proxmox', 'vmbr9'],
-  ['subnet', 'Demo network', '10.99.0.0/24'],
-  ['gateway', 'Demo network gateway', '10.99.0.1'],
-  ['image', 'NIOS-X image on this computer (.qcow2)', '/path/to/NIOS-X_OnPrem.qcow2'],
-  ['owner', 'VM name prefix', 'jsmith'],
-]
 
 // stream opens one server-sent-event run and hands each frame to onFrame.
 // It resolves with the last frame (done or error).
@@ -57,10 +44,6 @@ function Mark({ state }) {
 export default function DemoServer() {
   const status = useApi('/api/demo/status')
   const st = status.data
-  const [form, setForm] = useState(null)
-  const [token, setToken] = useState('')
-  const [saveMsg, setSaveMsg] = useState(null)
-  const [saving, setSaving] = useState(false)
   // Settings fold away once they are saved and complete; "Change settings"
   // opens them again.
   const [editing, setEditing] = useState(false)
@@ -75,30 +58,7 @@ export default function DemoServer() {
   const [removing, setRemoving] = useState(null) // {change, removes, phase}
   const logRef = useRef(null)
 
-  useEffect(() => {
-    if (st?.settings && form === null) setForm({ ...st.settings })
-  }, [st, form])
   useEffect(() => { logRef.current?.scrollTo?.(0, logRef.current.scrollHeight) }, [notes])
-
-  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setPlan(null) }
-
-  async function save() {
-    setSaving(true); setSaveMsg(null)
-    try {
-      const r = await authFetch('/api/vault/demo', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, joinToken: token }),
-      })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j.ok === false) setSaveMsg({ bad: true, text: j.error === 'locked' ? 'Unlock the vault first.' : (j.error || `HTTP ${r.status}`) })
-      else {
-        setToken('')
-        setSaveMsg(j.problems?.length ? { bad: true, text: `Saved. Still to fix: ${j.problems.join('; ')}` } : { text: 'Saved.' })
-        status.refetch()
-      }
-    } catch (e) { setSaveMsg({ bad: true, text: String(e?.message || e) }) }
-    setSaving(false)
-  }
 
   function onEvent(ev) {
     if (!ev) return
@@ -155,7 +115,7 @@ export default function DemoServer() {
 
         <CardGrid layoutKey="demo">
           <Card panelId="demo-settings" span={3} title="Settings" note="saved in the vault; the join token is never shown again">
-            {status.loading && !form ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
+            {status.loading && !st ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
               <div data-settings-folded="" className="flex flex-col gap-2 text-note">
                 <FetchError error={status.error} stale={!!st} />
                 <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the stored join token.</p>
@@ -165,35 +125,7 @@ export default function DemoServer() {
             ) : (
               <div className="flex flex-col gap-3">
                 <FetchError error={status.error} stale={!!st} />
-                {FIELDS.map(([k, label, ph]) => (
-                  <label key={k} className="text-note text-muted flex flex-col gap-1">
-                    {label}
-                    <input className={inputCls} value={form?.[k] ?? ''} placeholder={ph} onChange={(e) => set(k, e.target.value)} {...MACHINE_TEXT} />
-                  </label>
-                ))}
-                <label className="text-note text-muted flex flex-col gap-1">
-                  NIOS-X join token
-                  <input type="password" className={inputCls} value={token} {...API_KEY_BOX}
-                    placeholder={st?.settings?.hasJoinToken ? 'Stored. Leave blank to keep it.' : 'Paste the join token from the Infoblox Portal'}
-                    onChange={(e) => setToken(e.target.value)} />
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[['ram', 'RAM (MB)'], ['cores', 'Cores'], ['disk', 'Disk']].map(([k, label]) => (
-                    <label key={k} className="text-note text-muted flex flex-col gap-1">
-                      {label}
-                      <input className={inputCls} value={form?.[k] ?? ''} onChange={(e) => set(k, e.target.value)} {...MACHINE_TEXT} />
-                    </label>
-                  ))}
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <button className={btnCls} style={primary} disabled={saving || !form} onClick={save}>{saving ? 'Saving…' : 'Save settings'}</button>
-                  {saveMsg && <span className="text-note" style={{ color: saveMsg.bad ? COLORS.crit : COLORS.ok }} role="status">{saveMsg.text}</span>}
-                </div>
-                {problems.length > 0 && !saveMsg && (
-                  <ul className="text-note list-disc pl-5" style={{ color: COLORS.warn }}>
-                    {problems.map((p) => <li key={p}>{p}</li>)}
-                  </ul>
-                )}
+                <DemoSettingsForm st={st} onSaved={status.refetch} onChange={() => setPlan(null)} />
               </div>
             )}
           </Card>

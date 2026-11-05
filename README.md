@@ -94,6 +94,7 @@ Every page is under the **All pages** menu at the top. Pages that change Infoblo
    ```
 4. Go to <http://localhost:8080> and pick a passphrase. It unlocks your saved keys.
 5. Make an API key at <https://csp.infoblox.com> (your name, top right > **User API Keys** > **Create**) and paste it into Bloxsmith.
+6. The dashboard opens with a short **Finish setting up** checklist: AI answers, the demo server, your logo and name, and site templates. Each one is optional; skip any of them and open the list again from **Settings** > **Setup checklist**.
 
 You only add the key once. It is kept encrypted and survives restarts and updates.
 
@@ -227,9 +228,9 @@ See **Code signing** below.
 
 The query box needs an AI model that can call tools. Everything else works without it. The
 default is Groq, which has a free tier: get a key at <https://console.groq.com>, then add it in
-the dashboard (**Settings** > **Connections**: the **Groq API key** box appears when you add a connection) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
-works, including Google Gemini, OpenAI and a local Ollama. The Settings box takes only a Groq
-key. For any other provider, set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL`:
+the dashboard (the **AI answers** step of the setup checklist, or **Settings** > **Integrations** > **AI provider**) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
+works. Buttons there fill in the address and model for Groq, Claude, Gemini, OpenAI and a local
+Ollama. You can set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` instead:
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider) has the values for each.
 
 | Provider | Free limit (example, check your own account) | What it receives |

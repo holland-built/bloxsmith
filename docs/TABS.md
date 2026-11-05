@@ -9,6 +9,19 @@ Tabs fall into two groups:
 
 Almost every panel follows one rule: a feed that failed to load never looks like a feed that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
 
+## Finish setting up
+
+After the first Infoblox key is saved, the dashboard opens with a **Finish setting up** checklist on top. The dashboard already works; everything on the list is optional.
+
+| Item | What it sets up |
+|---|---|
+| AI answers | The provider for the AI tab. Buttons fill in the address and model for Groq, Claude, Gemini, OpenAI or Ollama on this computer; paste a key, press **Test**, then **Save**. |
+| Demo server | The Demo server page's settings: the Proxmox login, demo network, NIOS-X image and join token. The Docker version of Bloxsmith cannot run the demo server, so there it says so instead. |
+| Logo and company name | Opens the logo and name window, the same one the logo at the top left opens. |
+| Site templates | Read-only: which site templates are installed. They come with each release. |
+
+Each item shows whether it is already set. **Do this later** closes an item, and **Finish** closes the list with items left. **Settings** > **Setup checklist** opens it again any time.
+
 ## The write flow
 
 Every page that writes to Infoblox uses the same two buttons, in the same order:

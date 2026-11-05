@@ -207,7 +207,22 @@ func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
 	if d.UpdateStatus != nil {
 		upd = d.UpdateStatus()
 	}
-	d.json(w, r, http.StatusOK, d.Vault.Status(d.Version, d.Cfg.VaultMode, upd))
+	st := d.Vault.Status(d.Version, d.Cfg.VaultMode, upd)
+	// The setup checklist says the demo server needs the desktop app when this
+	// runs in a container, and the Ollama preset reaches the host from there.
+	st["inContainer"] = inContainer("/.dockerenv", "/run/.containerenv")
+	d.json(w, r, http.StatusOK, st)
+}
+
+// inContainer reports whether any of the marker files Docker (/.dockerenv) and
+// Podman (/run/.containerenv) put in a container exists.
+func inContainer(markers ...string) bool {
+	for _, m := range markers {
+		if _, err := os.Stat(m); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // --- GET /healthz ------------------------------------------------------------

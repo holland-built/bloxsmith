@@ -142,7 +142,6 @@ function Unlock({ onDone }) {
 function FirstTenant({ onDone }) {
   const [key, setKey] = useState('')
   const [label, setLabel] = useState('')
-  const [groq, setGroq] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [test, setTest] = useState('')
@@ -151,7 +150,7 @@ function FirstTenant({ onDone }) {
     if (!key) return
     setErr('')
     setBusy(true)
-    const { ok, data } = await vpost('/api/vault/tenant', { label, key, groqKey: groq || undefined })
+    const { ok, data } = await vpost('/api/vault/tenant', { label, key })
     setBusy(false)
     if (ok && data.ok) onDone()
     else setErr(data.error || 'Could not add connection.')
@@ -197,17 +196,6 @@ function FirstTenant({ onDone }) {
         onKeyDown={(e) => e.key === 'Enter' && go()}
         placeholder="leave blank to use the CSP account name"
       />
-      <label className="block text-note text-dim mt-3 mb-1" htmlFor="vat-groq">Groq API key (optional — for AI query box)</label>
-      <input
-        id="vat-groq"
-        className={inCls}
-        type="password"
-        {...API_KEY_BOX}
-        value={groq}
-        onChange={(e) => setGroq(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && go()}
-        placeholder="gsk_… (can add later)"
-      />
       {test && (
         <div
           role="status"
@@ -236,6 +224,15 @@ export default function VaultGate({ children }) {
   const [st, setSt] = useState(null)
   const [statusError, setStatusError] = useState(false)
   const alive = useRef(true)
+  // Set when the first key is saved, so the dashboard opens with the setup
+  // checklist on top, once (App listens for bx:open-setup).
+  const firstKey = useRef(false)
+  useEffect(() => {
+    if (st?.ready && firstKey.current) {
+      firstKey.current = false
+      window.dispatchEvent(new Event('bx:open-setup'))
+    }
+  }, [st])
 
   const refresh = useCallback(() => {
     fetch('/api/vault/status', { cache: 'no-store' })
@@ -283,5 +280,5 @@ export default function VaultGate({ children }) {
   if (!st.vaultMode || st.ready) return children
   if (!st.exists) return <Setup onDone={refresh} />
   if (!st.unlocked) return <Unlock onDone={refresh} />
-  return <FirstTenant onDone={refresh} />
+  return <FirstTenant onDone={() => { firstKey.current = true; refresh() }} />
 }

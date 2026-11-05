@@ -40,6 +40,7 @@ import VaultGate from './components/VaultGate.jsx'
 // first paint needs, and with it in the entry file #provision went over the
 // budget tests/bundle-budget.spec.ts holds it to.
 const TenantManager = lazy(() => import('./components/TenantManager.jsx'))
+const SetupChecklist = lazy(() => import('./components/SetupChecklist.jsx'))
 // Puts the saved spacing on <html> before the first paint. This module used to
 // arrive through the Settings sheet's own imports; now that the sheet loads
 // late, it has to be asked for here or a saved Compact would wait for Settings
@@ -290,6 +291,14 @@ export default function App() {
   const [showAccounts, setShowAccounts] = useState(false)
   const [showHeaderHelp, setShowHeaderHelp] = useState(false)
   const [showBrand, setShowBrand] = useState(false)
+  // The setup checklist: VaultGate sends bx:open-setup once, right after the
+  // first key is saved; Settings opens it after that.
+  const [showSetup, setShowSetup] = useState(false)
+  useEffect(() => {
+    const open = () => setShowSetup(true)
+    window.addEventListener('bx:open-setup', open)
+    return () => window.removeEventListener('bx:open-setup', open)
+  }, [])
   const [brandDomain, setBrandDomain] = useState(() => localStorage.getItem('orgDomain') || '')
   const [logoBust, setLogoBust] = useState(0)
   const { info: updateInfo, phase: updatePhase } = useUpdate()
@@ -646,7 +655,7 @@ export default function App() {
                 </div>
               }
             >
-              <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+              <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} onOpenSetup={() => { setShowAccounts(false); setShowSetup(true) }} />
             </Suspense>
           </SettingsBoundary>
         )}
@@ -655,6 +664,11 @@ export default function App() {
             rendered inside it would be unreachable by the pointer, the Tab key
             and a screen reader alike. */}
         {showHeaderHelp && <HeaderHelp onClose={() => setShowHeaderHelp(false)} />}
+        {showSetup && (
+          <Suspense fallback={null}>
+            <SetupChecklist onClose={() => setShowSetup(false)} onOpenBrand={() => setShowBrand(true)} brandOpen={showBrand} />
+          </Suspense>
+        )}
         {showBrand && (
           <BrandEdit
             onClose={() => setShowBrand(false)}
