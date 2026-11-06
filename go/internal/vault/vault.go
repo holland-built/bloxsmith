@@ -82,9 +82,12 @@ type payload struct {
 	// Demo is the Demo server settings (Proxmox target, demo network, NIOS-X
 	// join token) as one JSON object the demo package reads. Held here because
 	// the join token is a secret. Absent in older vaults, which decodes to "".
-	Demo         string   `json:"demo,omitempty"`
-	LLMBase      string   `json:"llm_base"`
-	LLMModel     string   `json:"llm_model"`
+	Demo     string `json:"demo,omitempty"`
+	LLMBase  string `json:"llm_base"`
+	LLMModel string `json:"llm_model"`
+	// LLMEffort is the reasoning effort sent with each AI request, or "" to
+	// send none and let the provider decide. Absent in older vaults.
+	LLMEffort    string   `json:"llm_effort,omitempty"`
 	WriteAllowed []string `json:"write_allowed,omitempty"`
 }
 
@@ -120,16 +123,17 @@ type Vault struct {
 	// consumers must read it through the lock-guarded accessors (LLMCreds,
 	// ActiveKey, ActiveLabel, IsUnlocked, Snapshot) so a lock/unlock/set mutation
 	// can't race a read (data-race fix).
-	unlocked bool
-	tenants  []Tenant
-	active   *string
-	groq     string
-	axur     string
-	demo     string
-	llmBase  string
-	llmModel string
-	key      *fernet.Key // derived Fernet key
-	salt     string      // std-b64 salt (as stored)
+	unlocked  bool
+	tenants   []Tenant
+	active    *string
+	groq      string
+	axur      string
+	demo      string
+	llmBase   string
+	llmModel  string
+	llmEffort string
+	key       *fernet.Key // derived Fernet key
+	salt      string      // std-b64 salt (as stored)
 	// ver is the vault-file version v.key was derived under, and therefore the
 	// only correct value for the next save()'s envelope. It travels WITH the key
 	// — every site that assigns one assigns the other in the same statement, and
@@ -196,6 +200,7 @@ type vaultSnap struct {
 	demo         string
 	llmBase      string
 	llmModel     string
+	llmEffort    string
 	writeAllowed []string
 }
 
@@ -210,7 +215,7 @@ func (v *Vault) snapshot() vaultSnap {
 	}
 	w := make([]string, len(v.writeAllowed))
 	copy(w, v.writeAllowed)
-	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, demo: v.demo, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
+	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, demo: v.demo, llmBase: v.llmBase, llmModel: v.llmModel, llmEffort: v.llmEffort, writeAllowed: w}
 }
 
 // restore rolls the mutable state back to a snapshot (caller holds v.mu).
@@ -222,6 +227,7 @@ func (v *Vault) restore(s vaultSnap) {
 	v.demo = s.demo
 	v.llmBase = s.llmBase
 	v.llmModel = s.llmModel
+	v.llmEffort = s.llmEffort
 	v.writeAllowed = s.writeAllowed
 }
 
@@ -233,6 +239,13 @@ func (v *Vault) LLMCreds() (groq, base, model string) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.groq, v.llmBase, v.llmModel
+}
+
+// LLMEffort returns the stored reasoning effort, "" when none is set.
+func (v *Vault) LLMEffort() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.llmEffort
 }
 
 // AxurKey returns the stored Axur credential, lock-guarded for the same reason
@@ -370,7 +383,7 @@ func (v *Vault) Init(passphrase string) error {
 	v.unlocked = true
 	v.tenants = nil
 	v.active = nil
-	v.groq, v.axur, v.demo, v.llmBase, v.llmModel = "", "", "", "", ""
+	v.groq, v.axur, v.demo, v.llmBase, v.llmModel, v.llmEffort = "", "", "", "", "", ""
 	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	if err := v.save(); err != nil {
@@ -447,6 +460,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.demo = p.Demo
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
+	v.llmEffort = p.LLMEffort
 	v.writeAllowed = p.WriteAllowed
 	v.key, v.ver = key, env.V
 	v.salt = env.Salt
@@ -521,6 +535,7 @@ func (v *Vault) save() error {
 		Demo:         v.demo,
 		LLMBase:      v.llmBase,
 		LLMModel:     v.llmModel,
+		LLMEffort:    v.llmEffort,
 		WriteAllowed: v.writeAllowed,
 	}
 	plain, err := json.Marshal(p)
@@ -701,7 +716,7 @@ func (v *Vault) Reset() error {
 	// describes the salt/key pair that no longer exists, and a leftover value
 	// would be the one thing about the deleted vault that survived into the next
 	// one. Init sets both again from scratch.
-	v.llmBase, v.llmModel = "", ""
+	v.llmBase, v.llmModel, v.llmEffort = "", "", ""
 	v.salt = ""
 	v.ver = 0
 	return removeErr

@@ -230,7 +230,9 @@ The query box needs an AI model that can call tools. Everything else works witho
 default is Groq, which has a free tier: get a key at <https://console.groq.com>, then add it in
 the dashboard (the **AI answers** step of the setup checklist, or **Settings** > **Integrations** > **AI provider**) or set `GROQ_API_KEY`. Any OpenAI-compatible provider
 works. Buttons there fill in the address and model for Groq, Claude, Gemini, OpenAI and a local
-Ollama. You can set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` instead:
+Ollama. **Find models** lists the models your key can use, and **Effort** sets how long a
+reasoning model thinks before it answers (Claude ignores it; Test shows whether a model takes the
+level you picked). You can set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` instead:
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider) has the values for each.
 
 | Provider | Free limit (example, check your own account) | What it receives |

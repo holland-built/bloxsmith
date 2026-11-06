@@ -733,6 +733,14 @@ func (s *Service) chatWith(ctx context.Context, key, base, model string, message
 		reqBody["tools"] = aiTools
 		reqBody["tool_choice"] = "auto"
 	}
+	// The reasoning effort chosen in Settings, sent only when one was picked,
+	// so a provider that does not know the field never sees it. It is an
+	// optional method so Creds and its test fakes stay as they are.
+	if e, ok := s.creds.(interface{ LLMEffort() string }); ok {
+		if effort := e.LLMEffort(); effort != "" {
+			reqBody["reasoning_effort"] = effort
+		}
+	}
 	raw, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err

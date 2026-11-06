@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -476,6 +478,19 @@ func (v *Vault) ResetR() map[string]any {
 // SetLLM is vault_set_llm (server.py:2966): backs both /api/vault/groq (key
 // only) and /api/vault/llm (key + base_url + model). nil pointers = unchanged.
 func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
+	return v.SetLLMEffort(key, baseURL, model, nil)
+}
+
+// llmEfforts are the reasoning_effort values the AI provider form offers. ""
+// sends none, so the provider uses its own default.
+var llmEfforts = map[string]bool{"": true, "none": true, "minimal": true, "low": true, "medium": true, "high": true, "xhigh": true}
+
+// SetLLMEffort is SetLLM plus the reasoning effort, saved in the same write.
+// A nil effort leaves the stored one unchanged.
+func (v *Vault) SetLLMEffort(key string, baseURL, model, effort *string) map[string]any {
+	if effort != nil && !llmEfforts[strings.TrimSpace(*effort)] {
+		return fail("unknown effort")
+	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.unlocked {
@@ -493,6 +508,9 @@ func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
 	}
 	if model != nil {
 		v.llmModel = strings.TrimSpace(*model)
+	}
+	if effort != nil {
+		v.llmEffort = strings.TrimSpace(*effort)
 	}
 	if err := v.save(); err != nil {
 		v.restore(snap)
@@ -720,24 +738,21 @@ func llmHost(raw string) string {
 // caller is testing their OWN credential against their OWN endpoint, so any
 // https, non-internal base_url is fine — nothing of the operator's is at risk.
 func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel, defaultBase string) map[string]any {
+	return v.LLMTestEffort(key, baseURL, model, "", defaultModel, defaultBase)
+}
+
+// LLMTestEffort is LLMTest with a reasoning effort sent along, so Test fails
+// when the provider or model refuses that value.
+func (v *Vault) LLMTestEffort(key string, baseURL, model *string, effort, defaultModel, defaultBase string) map[string]any {
+	effort = strings.TrimSpace(effort)
+	if !llmEfforts[effort] {
+		return fail("unknown effort")
+	}
+	k, base, client, errMsg := v.llmTarget(key, baseURL, defaultBase)
+	if errMsg != "" {
+		return fail(errMsg)
+	}
 	v.mu.Lock()
-	k := strings.TrimSpace(key)
-	usingStoredKey := k == ""
-	if usingStoredKey {
-		k = v.groq
-	}
-	base := v.llmBase
-	baseSupplied := baseURL != nil && strings.TrimSpace(*baseURL) != ""
-	if baseSupplied {
-		base = strings.TrimSpace(*baseURL)
-	}
-	allowedHosts := map[string]bool{llmHost(defaultGroqBase): true}
-	if h := llmHost(v.llmBase); h != "" {
-		allowedHosts[h] = true
-	}
-	if h := llmHost(defaultBase); h != "" {
-		allowedHosts[h] = true
-	}
 	mdl := ""
 	if model != nil {
 		mdl = *model
@@ -749,8 +764,109 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel, defaul
 		mdl = defaultModel
 	}
 	v.mu.Unlock()
+	body := map[string]any{
+		"model":      mdl,
+		"max_tokens": 4,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+	}
+	if effort != "" {
+		body["reasoning_effort"] = effort
+	}
+	reqBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", strings.TrimRight(base, "/")+"/chat/completions", strings.NewReader(string(reqBody)))
+	req.Header.Set("Authorization", "Bearer "+k)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fail("LLM test failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fail("LLM test failed")
+	}
+	return map[string]any{"ok": true, "model": mdl}
+}
+
+// LLMModels lists the model names the provider offers, for the AI provider
+// form's model picker. It reaches the provider under the same rules as
+// LLMTest. Claude's address is its own API, which wants its key in x-api-key
+// and pages its list, so it asks for the largest page (1,000). Only the names
+// go back; the list is capped at 500.
+func (v *Vault) LLMModels(key string, baseURL *string, defaultBase string) map[string]any {
+	k, base, client, errMsg := v.llmTarget(key, baseURL, defaultBase)
+	if errMsg != "" {
+		return fail(errMsg)
+	}
+	u := strings.TrimRight(base, "/") + "/models"
+	claude := strings.EqualFold(llmHost(base), "api.anthropic.com")
+	if claude {
+		u += "?limit=1000"
+	}
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return fail("invalid base_url")
+	}
+	req.Header.Set("Authorization", "Bearer "+k)
+	if claude {
+		req.Header.Set("x-api-key", k)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fail("could not list models")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fail("could not list models")
+	}
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list); err != nil {
+		return fail("could not list models")
+	}
+	ids := []string{}
+	for _, m := range list.Data {
+		// Gemini names its models "models/gemini-…"; the preset and its chat
+		// address use the short name, so the list does too.
+		if id := strings.TrimPrefix(strings.TrimSpace(m.ID), "models/"); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > 500 {
+		ids = ids[:500]
+	}
+	return map[string]any{"ok": true, "models": ids}
+}
+
+// llmTarget picks the key, address and HTTP client for a provider call made
+// on this request's behalf (the key test and the model list), and applies the
+// rules LLMTest documents above. errMsg is "" when the call may go ahead.
+func (v *Vault) llmTarget(key string, baseURL *string, defaultBase string) (k, base string, client *http.Client, errMsg string) {
+	v.mu.Lock()
+	k = strings.TrimSpace(key)
+	usingStoredKey := k == ""
+	if usingStoredKey {
+		k = v.groq
+	}
+	base = v.llmBase
+	baseSupplied := baseURL != nil && strings.TrimSpace(*baseURL) != ""
+	if baseSupplied {
+		base = strings.TrimSpace(*baseURL)
+	}
+	allowedHosts := map[string]bool{llmHost(defaultGroqBase): true}
+	if h := llmHost(v.llmBase); h != "" {
+		allowedHosts[h] = true
+	}
+	if h := llmHost(defaultBase); h != "" {
+		allowedHosts[h] = true
+	}
+	v.mu.Unlock()
 	if k == "" {
-		return fail("API key required")
+		return "", "", nil, "API key required"
 	}
 	if base == "" {
 		base = defaultGroqBase
@@ -765,33 +881,17 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel, defaul
 	// to the stricter bar.
 	if baseSupplied {
 		if err := validateLLMBase(base); err != nil {
-			return fail(err.Error())
+			return "", "", nil, err.Error()
 		}
 		if usingStoredKey && !allowedHosts[llmHost(base)] {
-			return fail("base_url not allowed with the stored credential — supply an explicit key to test a custom endpoint")
+			return "", "", nil, "base_url not allowed with the stored credential — supply an explicit key to test a custom endpoint"
 		}
 	}
-	reqBody, _ := json.Marshal(map[string]any{
-		"model":      mdl,
-		"max_tokens": 4,
-		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-	})
-	req, _ := http.NewRequest("POST", strings.TrimRight(base, "/")+"/chat/completions", strings.NewReader(string(reqBody)))
-	req.Header.Set("Authorization", "Bearer "+k)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 20 * time.Second}
+	client = &http.Client{Timeout: 20 * time.Second}
 	if baseSupplied {
 		client = guardedLLMClient()
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fail("LLM test failed")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fail("LLM test failed")
-	}
-	return map[string]any{"ok": true, "model": mdl}
+	return k, base, client, ""
 }
 
 // RefreshNames is vault_refresh_names (server.py:3024): re-resolve the CSP name
@@ -900,6 +1000,7 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 			"hasKey":   v.groq != "",
 			"base_url": v.llmBase,
 			"model":    v.llmModel,
+			"effort":   v.llmEffort,
 		},
 		"update": update,
 	}
