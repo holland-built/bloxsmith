@@ -23,7 +23,7 @@ test('at desktop width Threat lookup sits beside Ask AI, open, not below it', as
   expect(await lookup.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 });
 
-test('every answer is marked AI-generated and keeps its tool facts; an error is not marked', async ({ page }) => {
+test('an answer keeps its tool facts and has no AI-generated label; an error shows plainly', async ({ page }) => {
   let n = 0;
   await page.route('**/api/query', (route) => {
     n += 1;
@@ -38,13 +38,12 @@ test('every answer is marked AI-generated and keeps its tool facts; an error is 
   await box.press('Enter');
   const log = page.getByRole('log');
   await expect(log.getByText('Two hosts are offline.')).toBeVisible();
-  await expect(log.getByText('AI-generated', { exact: true })).toHaveCount(1);
-  await expect(log.getByText('↳ 2 rows')).toBeVisible();
+  await expect(log.getByText('AI-generated', { exact: true })).toHaveCount(0);
+  await expect(log.getByText('Counted by Bloxsmith: 2 rows.')).toBeVisible();
 
   await box.fill('And now?');
   await box.press('Enter');
   await expect(log.getByText('provider refused')).toBeVisible();
-  await expect(log.getByText('AI-generated', { exact: true })).toHaveCount(1);
 });
 
 test('suggestions are square-cornered buttons, not pills', async ({ page }) => {

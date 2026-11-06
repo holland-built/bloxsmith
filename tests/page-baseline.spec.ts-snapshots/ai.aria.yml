@@ -13,7 +13,7 @@
   - textbox "Ask about your network":
     - /placeholder: Ask about your network…
   - button "Ask" [disabled]
-  - paragraph: Enter to send, Shift+Enter for a new line. Answers are AI-generated; check the lookups.
+  - paragraph: Enter to send, Shift+Enter for a new line.
   - button "Which subnets are nearly full?"
   - button "Which domains are on threat feeds?"
   - button "Any lookalike domains of my brand?"
