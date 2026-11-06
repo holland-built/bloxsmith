@@ -315,7 +315,7 @@ The preview shows the record the way the *server* read it, which is often not ho
 
 Edit or delete a record that is already in a zone.
 
-Pick a **zone**, then press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
+Pick a **zone**. The list shows the first 200 records; type in **Find a record** to search by name or value, or press **Show 200 more**. Press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
 
 **Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record as it is right now. If the record can't be re-checked, or someone else already removed it, the button doesn't arm and says why. If you don't click again within four seconds, it goes back to normal.
 
@@ -323,7 +323,7 @@ Pick a **zone**, then press **Edit** on any row you can change. Record types tha
 
 Give an address back so it can be used again.
 
-Pick an **IP space**, then a **subnet**, to list its addresses. **Release** works like Delete in Manage Records. One click shows "Click again to release `<address>`", the second click releases it, and after four seconds it goes back to normal.
+Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its full IP address or by a word in its comment, or press **Show 200 more**. **Release** works like Delete in Manage Records. One click shows "Click again to release `<address>`", the second click releases it, and after four seconds it goes back to normal.
 
 ## Editor
 

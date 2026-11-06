@@ -348,14 +348,90 @@ function truncNote(data, rows) {
   return null
 }
 
+// A list that starts with the first 200 rows and can load the next 200 on
+// request, so nothing past the first page is out of reach.
+function usePagedList(url) {
+  const api = useApi(url)
+  const [more, setMore] = useState({ url: null, rows: [], data: null, busy: false, error: null })
+  // Rows loaded by "Show more" belong to the list they were loaded for.
+  const extra = more.url === url ? more : { rows: [], data: null, busy: false, error: null }
+  return { api, extra, setMore, url }
+}
+
+function pagedRows(list, key) {
+  // After a delete the first page moves up by one, so a row can arrive on both
+  // pages; show it once.
+  const seen = new Set()
+  return [...(list.api.data?.[key] ?? []), ...list.extra.rows].filter((x) => !seen.has(x.id) && seen.add(x.id))
+}
+
+function pagedHasMore(list, shown) {
+  const last = list.extra.data ?? list.api.data
+  if (!last) return false
+  if (last.total != null) return shown < last.total
+  return last.truncated === true
+}
+
+function showMore(list, key, shown) {
+  const { url, setMore } = list
+  setMore((m) => ({ ...(m.url === url ? m : { rows: [], data: null }), url, busy: true, error: null }))
+  fetch(`${url}&_offset=${shown}`, { cache: 'no-store' })
+    .then(async (r) => {
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      setMore((m) => (m.url === url ? { ...m, rows: [...m.rows, ...(j[key] ?? [])], data: j, busy: false } : m))
+    })
+    .catch((e) => setMore((m) => (m.url === url ? { ...m, busy: false, error: String(e?.message || e) } : m)))
+}
+
+// Keep rows loaded by "Show more" in step with a write: drop a deleted row,
+// or update an edited one in place, so the list doesn't show old details.
+function patchMore(list, id, fields) {
+  list.setMore((m) => ({
+    ...m,
+    rows: fields ? m.rows.map((x) => (x.id === id ? { ...x, ...fields } : x)) : m.rows.filter((x) => x.id !== id),
+  }))
+}
+
+function ShowMore({ list }) {
+  if (!list.canMore && !list.extra.error) return null
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      {list.canMore && (
+        <button type="button" className="text-note px-2 py-1 rounded-control border border-border hover:border-border-hover disabled:opacity-40" onClick={list.more} disabled={list.extra.busy}>
+          {list.extra.busy ? 'Loading…' : 'Show 200 more'}
+        </button>
+      )}
+      {list.extra.error && <span className="text-note" style={{ color: 'var(--color-crit)' }}>Couldn't load more: {list.extra.error}</span>}
+    </div>
+  )
+}
+
+// The search box over a managed list. It waits a moment after typing stops,
+// so each key press doesn't send a request.
+function useSearchTerm() {
+  const [text, setText] = useState('')
+  const [term, setTerm] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setTerm(text.trim()), 300)
+    return () => clearTimeout(id)
+  }, [text])
+  return { text, setText, term }
+}
+
 function ManageRecordsPanel({ panelId, span }) {
   const zonesApi = useApi('/api/dns/zones')
   const [zoneId, setZoneId] = useState('')
-  const recordsApi = useApi(zoneId ? `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200` : null)
+  const search = useSearchTerm()
+  const listUrl = zoneId ? `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200${search.term ? `&q=${encodeURIComponent(search.term)}` : ''}` : null
+  const paged = usePagedList(listUrl)
+  const recordsApi = paged.api
 
   const zones = zonesApi.data?.zones ?? []
-  const records = recordsApi.data?.records ?? []
-  const recordsUrl = `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200`
+  const records = pagedRows(paged, 'records')
+  const list = { ...paged, canMore: pagedHasMore(paged, records.length), more: () => showMore(paged, 'records', records.length) }
+  // Re-read one record by its exact name and type, wherever it sits in the list.
+  const rereadUrl = (row) => `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200&name=${encodeURIComponent(row.name_in_zone ?? '')}&type=${encodeURIComponent(row.type ?? '')}`
 
   // edit state — one row editable at a time
   const [editingId, setEditingId] = useState(null)
@@ -440,8 +516,10 @@ function ManageRecordsPanel({ panelId, span }) {
   // silently committing against a record that moved under us.
   function runApply() {
     if (!held) return
+    const editing = records.find((r) => r.id === editingId)
+    if (!editing) return
     setStatus('busy'); setError(null)
-    fetch(recordsUrl, { cache: 'no-store' })
+    fetch(rereadUrl(editing), { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -473,6 +551,12 @@ function ManageRecordsPanel({ panelId, span }) {
           setPreview(null); setStale(false); setStatus('applied')
           setEditingId(null)
           setPanelMessage('DNS record updated.')
+          const b = buildBody(held)
+          patchMore(paged, editingId, {
+            ...(b.value !== undefined && { dns_rdata: b.value }),
+            ...(b.ttl !== undefined && { ttl: b.ttl === '' ? null : b.ttl }),
+            ...(b.comment !== undefined && { comment: b.comment }),
+          })
           recordsApi.refetch()
         })
       })
@@ -495,14 +579,14 @@ function ManageRecordsPanel({ panelId, span }) {
       setPanelMessage(null)
       // Arm only on a fresh read that still finds the row, so the confirm
       // label never shows details that may have changed.
-      fetch(recordsUrl, { cache: 'no-store' })
+      fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
           const fresh = j && (j.records || []).find((x) => x.id === row.id)
           if (!fresh) {
             setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : "Couldn't re-check that record, so it wasn't deleted. Try again.")
-            if (j) recordsApi.refetch()
+            if (j) { patchMore(paged, row.id); recordsApi.refetch() }
             return
           }
           const nm = fresh.name_in_zone || '@'
@@ -524,12 +608,13 @@ function ManageRecordsPanel({ panelId, span }) {
           return
         }
         setPanelMessage(deletedMsg(j, 'DNS record'))
+        patchMore(paged, row.id)
         recordsApi.refetch()
       })
       .catch((e) => setDeleteError(String(e?.message || e) || 'delete failed, record still exists'))
   }
 
-  const note = truncNote(recordsApi.data, records)
+  const note = truncNote(paged.extra.data ?? recordsApi.data, records)
 
   return (
     <Card panelId={panelId} span={span} title="Manage Records" note="edit or delete existing DNS records">
@@ -554,8 +639,17 @@ function ManageRecordsPanel({ panelId, span }) {
           <FetchError error={recordsApi.error} stale={records.length > 0} />
           {deleteError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
           {!deleteError && panelMessage && <div className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
+          <input
+            {...MACHINE_TEXT}
+            type="search"
+            className={`${inputCls} w-full mb-2`}
+            aria-label="Find a record"
+            placeholder="Find a record by name or value"
+            value={search.text}
+            onChange={(e) => search.setText(e.target.value)}
+          />
           {note && <div className="text-note text-dim mb-2">{note}</div>}
-          {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>no records in this zone</Empty>}
+          {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>{search.term ? 'no records match that search' : 'no records in this zone'}</Empty>}
           {records.length > 0 && (
             <div className="flex flex-col gap-1.5">
               {records.map((row) => {
@@ -625,6 +719,7 @@ function ManageRecordsPanel({ panelId, span }) {
               })}
             </div>
           )}
+          <ShowMore list={list} />
         </>
       )}
     </Card>
@@ -638,12 +733,17 @@ function ManageAddressesPanel({ panelId }) {
   const [space, setSpace] = useState('')
   const subnetsApi = useApi(space ? `/api/ipam/subnets?space=${encodeURIComponent(space)}` : null)
   const [subnetId, setSubnetId] = useState('')
-  const addressesApi = useApi(subnetId ? `/api/ipam/addresses?subnet=${encodeURIComponent(subnetId)}&_limit=200` : null)
+  const search = useSearchTerm()
+  const listUrl = subnetId ? `/api/ipam/addresses?subnet=${encodeURIComponent(subnetId)}&_limit=200${search.term ? `&q=${encodeURIComponent(search.term)}` : ''}` : null
+  const paged = usePagedList(listUrl)
+  const addressesApi = paged.api
 
   const spaces = spacesApi.data?.spaces ?? []
   const subnets = subnetsApi.data?.subnets ?? []
-  const addresses = addressesApi.data?.addresses ?? []
-  const addressesUrl = `/api/ipam/addresses?subnet=${encodeURIComponent(subnetId)}&_limit=200`
+  const addresses = pagedRows(paged, 'addresses')
+  const list = { ...paged, canMore: pagedHasMore(paged, addresses.length), more: () => showMore(paged, 'addresses', addresses.length) }
+  // Re-read one address by its exact IP, wherever it sits in the list.
+  const rereadUrl = (row) => `/api/ipam/addresses?subnet=${encodeURIComponent(subnetId)}&_limit=200&q=${encodeURIComponent(row.address ?? '')}`
 
   const [armedId, setArmedId] = useState(null)
   const [armLabel, setArmLabel] = useState('')
@@ -654,14 +754,14 @@ function ManageAddressesPanel({ panelId }) {
   function handleRelease(row) {
     if (armedId !== row.id) {
       setReleaseError(null)
-      fetch(addressesUrl, { cache: 'no-store' })
+      fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
           const fresh = j && (j.addresses || []).find((x) => x.id === row.id)
           if (!fresh) {
             setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : "Couldn't re-check that address, so it wasn't released. Try again.")
-            if (j) addressesApi.refetch()
+            if (j) { patchMore(paged, row.id); addressesApi.refetch() }
             return
           }
           setArmLabel(`Click again to release ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
@@ -681,12 +781,13 @@ function ManageAddressesPanel({ panelId }) {
           setReleaseError(j.error || `HTTP ${r.status} — release failed, address still allocated`)
           return
         }
+        patchMore(paged, row.id)
         addressesApi.refetch()
       })
       .catch((e) => setReleaseError(String(e?.message || e) || 'release failed, address still allocated'))
   }
 
-  const note = truncNote(addressesApi.data, addresses)
+  const note = truncNote(paged.extra.data ?? addressesApi.data, addresses)
 
   return (
     <Card panelId={panelId} span={3} title="Manage Addresses" note="release an allocated address">
@@ -722,8 +823,17 @@ function ManageAddressesPanel({ panelId }) {
         <>
           <FetchError error={addressesApi.error} stale={addresses.length > 0} />
           {releaseError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
+          <input
+            {...MACHINE_TEXT}
+            type="search"
+            className={`${inputCls} w-full mb-2`}
+            aria-label="Find an address"
+            placeholder="Find by full IP address or comment"
+            value={search.text}
+            onChange={(e) => search.setText(e.target.value)}
+          />
           {note && <div className="text-note text-dim mb-2">{note}</div>}
-          {!addressesApi.loading && !addressesApi.error && addresses.length === 0 && <Empty>no addresses in this subnet</Empty>}
+          {!addressesApi.loading && !addressesApi.error && addresses.length === 0 && <Empty>{search.term ? 'no addresses match that search' : 'no addresses in this subnet'}</Empty>}
           {addresses.length > 0 && (
             <div className="flex flex-col gap-1.5">
               {addresses.map((row) => {
@@ -751,6 +861,7 @@ function ManageAddressesPanel({ panelId }) {
               })}
             </div>
           )}
+          <ShowMore list={list} />
         </>
       )}
     </Card>

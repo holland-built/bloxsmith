@@ -5,6 +5,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -112,6 +114,32 @@ func (d *Deps) parseListLimit(w http.ResponseWriter, r *http.Request) (limit int
 		return 0, false
 	}
 	return n, true
+}
+
+// parseListOffset reads the optional `_offset` used by "Show more" on the
+// paged lists. Absent -> 0.
+func (d *Deps) parseListOffset(w http.ResponseWriter, r *http.Request) (int, bool) {
+	raw := r.URL.Query().Get("_offset")
+	if raw == "" {
+		return 0, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 || n > 1000000 {
+		d.json(w, r, 400, map[string]any{"error": "_offset must be a whole number"})
+		return 0, false
+	}
+	return n, true
+}
+
+// searchTerm keeps the characters a person searches by: letters, digits,
+// space and . - _ : (names, IPs, IPv6, MACs). CSP's ~ operator is a regular
+// expression, so anything else could change the meaning or make it answer 500
+// (checked live on 2026-11-06: "(" does). A dot stays a wildcard, which only
+// widens a search.
+var searchKeep = regexp.MustCompile(`[^A-Za-z0-9 ._:-]`)
+
+func searchTerm(q string) string {
+	return strings.TrimSpace(searchKeep.ReplaceAllString(q, ""))
 }
 
 // numFromAny coerces a decoded JSON number (float64) or json.Number to an int,
@@ -332,16 +360,29 @@ func (d *Deps) dnsRecordsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		filt = append(filt, `type=="`+esc+`"`)
 	}
-	if n := q.Get("name"); n != "" {
-		esc, err := rest.CSPQ(n)
+	// Present but empty means the zone apex (@), which Update and Delete
+	// re-read by name too.
+	if q.Has("name") {
+		esc, err := rest.CSPQ(q.Get("name"))
 		if err != nil {
 			d.json(w, r, 400, map[string]any{"error": err.Error()})
 			return
 		}
 		filt = append(filt, `name_in_zone=="`+esc+`"`)
 	}
-	records, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/dns/record",
-		map[string]string{"_filter": strings.Join(filt, " and ")}, limit)
+	// Search by name or value, so a record past the first page can be found.
+	if t := searchTerm(q.Get("q")); t != "" {
+		filt = append(filt, `(name_in_zone~"`+t+`" or dns_rdata~"`+t+`")`)
+	}
+	offset, ok := d.parseListOffset(w, r)
+	if !ok {
+		return
+	}
+	params := map[string]string{"_filter": strings.Join(filt, " and ")}
+	if offset > 0 {
+		params["_offset"] = strconv.Itoa(offset)
+	}
+	records, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/dns/record", params, limit)
 	if !ok {
 		return
 	}
@@ -370,8 +411,25 @@ func (d *Deps) ipamAddressesGet(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": err.Error()})
 		return
 	}
-	addrs, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/ipam/address",
-		map[string]string{"_filter": `parent=="` + esc + `"`}, limit)
+	filt := `parent=="` + esc + `"`
+	// CSP refuses a partial match on address (500, checked live), so a full
+	// IP is matched exactly and anything else searches the comment.
+	if t := searchTerm(r.URL.Query().Get("q")); t != "" {
+		if ip, err := netip.ParseAddr(t); err == nil {
+			filt += ` and address=="` + ip.String() + `"`
+		} else {
+			filt += ` and comment~"` + t + `"`
+		}
+	}
+	offset, ok := d.parseListOffset(w, r)
+	if !ok {
+		return
+	}
+	params := map[string]string{"_filter": filt}
+	if offset > 0 {
+		params["_offset"] = strconv.Itoa(offset)
+	}
+	addrs, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/ipam/address", params, limit)
 	if !ok {
 		return
 	}

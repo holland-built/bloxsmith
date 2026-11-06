@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -1292,5 +1293,77 @@ func TestIPAMAddressesGet_TotalSmallerThanRowsIsRejected(t *testing.T) {
 	}
 	if body["truncated"] != true {
 		t.Fatalf("truncated = %v, want true", body["truncated"])
+	}
+}
+
+// --- search and Show more ----------------------------------------------------
+
+// upstreamQuery runs one list request and returns the query the fake CSP saw.
+func upstreamQuery(t *testing.T, handler func(*Deps) func(http.ResponseWriter, *http.Request), url string) (int, map[string]string) {
+	t.Helper()
+	got := map[string]string{}
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		for k := range r.URL.Query() {
+			got[k] = r.URL.Query().Get(k)
+		}
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+	rr := httptest.NewRecorder()
+	handler(d)(rr, httptest.NewRequest("GET", url, nil))
+	return rr.Code, got
+}
+
+func records(d *Deps) func(http.ResponseWriter, *http.Request)   { return d.dnsRecordsGet }
+func addresses(d *Deps) func(http.ResponseWriter, *http.Request) { return d.ipamAddressesGet }
+
+func TestDNSRecordsGet_SearchMatchesNameOrValue(t *testing.T) {
+	code, q := upstreamQuery(t, records, "/api/dns/records?zone=z1&q=web")
+	if code != 200 {
+		t.Fatalf("status = %d", code)
+	}
+	if !strings.Contains(q["_filter"], `(name_in_zone~"web" or dns_rdata~"web")`) {
+		t.Fatalf("_filter = %q, want a name-or-value search", q["_filter"])
+	}
+}
+
+// CSP's ~ is a regular expression and answers 500 to "(" (checked live), so
+// anything outside the plain search characters is dropped before it is sent.
+func TestDNSRecordsGet_SearchDropsRegexCharacters(t *testing.T) {
+	_, q := upstreamQuery(t, records, `/api/dns/records?zone=z1&q=`+url.QueryEscape(`we(b)"* srv`))
+	if !strings.Contains(q["_filter"], `name_in_zone~"web srv"`) {
+		t.Fatalf("_filter = %q, want the term reduced to \"web srv\"", q["_filter"])
+	}
+}
+
+func TestDNSRecordsGet_ShowMorePassesTheOffset(t *testing.T) {
+	_, q := upstreamQuery(t, records, "/api/dns/records?zone=z1&_offset=200")
+	if q["_offset"] != "200" {
+		t.Fatalf("upstream _offset = %q, want 200", q["_offset"])
+	}
+	if code, _ := upstreamQuery(t, records, "/api/dns/records?zone=z1&_offset=-1"); code != 400 {
+		t.Fatalf("a negative offset got %d, want 400", code)
+	}
+}
+
+// A partial match on address answers 500 upstream (checked live), so a full
+// IP matches exactly and anything else searches the comment.
+func TestIPAMAddressesGet_SearchByIPOrComment(t *testing.T) {
+	_, q := upstreamQuery(t, addresses, "/api/ipam/addresses?subnet=s1&q=10.1.2.37")
+	if !strings.Contains(q["_filter"], `address=="10.1.2.37"`) {
+		t.Fatalf("_filter = %q, want an exact address match", q["_filter"])
+	}
+	_, q = upstreamQuery(t, addresses, "/api/ipam/addresses?subnet=s1&q=printer")
+	if !strings.Contains(q["_filter"], `comment~"printer"`) || strings.Contains(q["_filter"], "address") {
+		t.Fatalf("_filter = %q, want a comment search only", q["_filter"])
+	}
+}
+
+// The apex record has an empty name; re-reading it by name must still filter
+// on that name, or a later-page apex record can't be re-checked.
+func TestDNSRecordsGet_EmptyNameMeansTheApex(t *testing.T) {
+	_, q := upstreamQuery(t, records, "/api/dns/records?zone=z1&name=&type=MX")
+	if !strings.Contains(q["_filter"], `name_in_zone==""`) {
+		t.Fatalf("_filter = %q, want name_in_zone==\"\"", q["_filter"])
 	}
 }
