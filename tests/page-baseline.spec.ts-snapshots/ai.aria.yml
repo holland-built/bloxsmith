@@ -8,16 +8,18 @@
   - heading "Ask AI" [level=2]
   - 'button "About: Ask AI"': "About: ⓘ"
   - 'button "Options: Ask AI"'
-  - log: Ask a question or pick a suggestion below
+  - paragraph: What do you want to know about your network?
+  - paragraph: Ask in plain words. Each answer shows the lookups behind it.
+  - textbox "Ask about your network":
+    - /placeholder: Ask about your network…
+  - button "Ask" [disabled]
+  - paragraph: Enter to send, Shift+Enter for a new line. Answers are AI-generated; check the lookups.
   - button "Which subnets are nearly full?"
   - button "Which domains are on threat feeds?"
   - button "Any lookalike domains of my brand?"
   - button "Are any of my DNS zones misconfigured?"
   - button "Which hosts are offline?"
   - button /What changed in the last \d+ hours\?/
-  - textbox "Ask about your network":
-    - /placeholder: Ask about your network…
-  - button "Ask" [disabled]
   - heading "Threat lookup" [level=2]
   - 'button "About: Threat lookup"': "About: ⓘ"
   - 'button "Options: Threat lookup"'

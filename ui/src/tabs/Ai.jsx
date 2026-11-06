@@ -26,7 +26,7 @@ function Message({ item, onRetry }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] px-3 py-2 rounded-control bg-line-2 text-txt text-copy">{item.text}</div>
+        <div className="max-w-[85%] px-4 py-2.5 rounded-surface bg-line-2 text-txt text-copy whitespace-pre-wrap">{item.text}</div>
       </div>
     )
   }
@@ -43,9 +43,11 @@ function Message({ item, onRetry }) {
       </div>
     )
   }
+  // The answer reads as plain text on the page, the way Claude and ChatGPT
+  // show it, rather than as a boxed card.
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-copy">
+      <div className="w-full text-field-txt text-copy leading-relaxed">
         {/* Said on every answer, so model prose is never read as a measured
             figure. The facts under it are the server's, and say so. */}
         <p className="text-note text-muted mb-1">AI-generated</p>
@@ -59,10 +61,14 @@ function Message({ item, onRetry }) {
         )}
         {item.ranOut && onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
         {!!(item.trace && item.trace.length) && (
-          <div className="mt-2 pt-2 border-t border-border font-mono text-note text-muted space-y-0.5">
+          <div className="mt-3 pt-2 border-t border-border font-mono text-note text-muted space-y-0.5">
             {item.trace.map((t, i) => (
               <div key={i}>
-                <span>{t.tool}</span> <span className="opacity-70">{JSON.stringify(t.args)}</span>
+                {/* The raw lookup folds away; the counted fact below stays in view. */}
+                <details>
+                  <summary className="cursor-pointer">{t.tool}</summary>
+                  <span className="opacity-70 break-all">{JSON.stringify(t.args)}</span>
+                </details>
                 {/* `fact` is counted by the server from the rows themselves, not
                     written by the model. Text inside the tenant's own data can
                     steer the prose above (demonstrated: a hostname carrying an
@@ -156,7 +162,7 @@ function Working() {
   }, [])
   return (
     <div className="flex justify-start">
-      <div className="px-3 py-2 rounded-control border border-border bg-field text-note text-muted">
+      <div className="py-1 text-note text-muted">
         Looking this up in your Infoblox account… <span className="tabular-nums">{secs} s</span>
         {secs >= 20 ? <div>Questions that need several lookups can take up to a minute.</div> : null}
       </div>
@@ -208,6 +214,12 @@ function ChatCard({ panelId }) {
   }, [items])
   const [budget, setBudget] = useState(null)
   const inRef = useRef(null)
+  const logRef = useRef(null)
+  // Keep the newest message in view, as a chat does.
+  useEffect(() => {
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [items, busy])
   // The input is disabled while a question runs, which drops focus to the page.
   // Put it back when the answer lands.
   const wasBusy = useRef(false)
@@ -226,6 +238,10 @@ function ChatCard({ panelId }) {
     if (busy) { if (qArg != null) setInput(q); return }
     setItems((list) => [...list, { role: 'user', text: q }])
     setInput('')
+    if (inRef.current) inRef.current.style.height = 'auto'
+    // The first question swaps the empty view for the chat, which remounts
+    // the box; put the cursor back in it.
+    requestAnimationFrame(() => inRef.current?.focus())
     setBusy(true)
     fetch('/api/query', {
       method: 'POST',
@@ -292,40 +308,31 @@ function ChatCard({ panelId }) {
     return () => window.removeEventListener('hashchange', take)
   }, [])
 
-  return (
-    <Card panelId={panelId} title="Ask AI" span={4}>
-      <div role="log" aria-live="polite" className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
-        {items.length === 0 ? (
-          <Empty>Ask a question or pick a suggestion below</Empty>
-        ) : (
-          items.map((it, i) => <Message key={i} item={it} onRetry={busy ? null : submit} />)
-        )}
-        {busy ? <Working /> : null}
-      </div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {SUGGESTIONS.map((sg, i) => (
-          <button
-            key={i}
-            className="text-note px-2 py-1 rounded-control border border-border text-muted hover:text-field-txt hover:border-border-hover"
-            onClick={() => ask(sg)}
-          >
-            {sg}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input
+  const composer = (
+    <div className="mx-auto w-full max-w-[760px]">
+      <div className="flex items-end gap-2 rounded-surface border border-field-border bg-field px-3 py-2 focus-within:border-border-hover">
+        <textarea
           ref={inRef}
-          className={`${inputCls} flex-1 text-copy`}
+          rows={1}
+          className="flex-1 resize-none bg-transparent text-field-txt text-copy py-1.5 outline-none max-h-40"
           aria-label="Ask about your network"
           placeholder="Ask about your network…"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
-          disabled={busy}
+          onChange={(e) => {
+            setInput(e.target.value)
+            // Grow with the text, up to the max height, like a chat box.
+            e.target.style.height = 'auto'
+            e.target.style.height = `${e.target.scrollHeight}px`
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              submit()
+            }
+          }}
         />
         <button
-          className="px-3 py-1.5 rounded-control text-copy font-medium text-on-accent disabled:opacity-40"
+          className="shrink-0 px-3 py-1.5 rounded-control text-copy font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={() => submit()}
           disabled={busy || !input.trim()}
@@ -333,6 +340,52 @@ function ChatCard({ panelId }) {
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>
+      <p className="text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line. Answers are AI-generated; check the lookups.</p>
+    </div>
+  )
+
+  return (
+    <Card panelId={panelId} title="Ask AI" span={4}>
+      {items.length === 0 ? (
+        // A new chat: the question, the box, then ideas, as ChatGPT and Claude open.
+        <div className="flex flex-col items-center text-center px-2 py-3 sm:py-14">
+          <p className="text-figure font-semibold text-txt mb-2">What do you want to know about your network?</p>
+          <p className="text-copy text-muted mb-5">Ask in plain words. Each answer shows the lookups behind it.</p>
+          <div className="w-full text-left">{composer}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[760px] mt-5">
+            {SUGGESTIONS.map((sg, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`text-left text-copy px-3 py-2.5 rounded-surface border border-border text-field-txt hover:bg-line-2 ${i >= 4 ? 'hidden sm:block' : ''}`}
+                onClick={() => ask(sg)}
+              >
+                {sg}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col h-[60vh] min-h-[420px]">
+          <div className="flex justify-end -mt-1 mb-1">
+            <button
+              type="button"
+              className="text-note text-muted hover:text-field-txt underline-offset-2 hover:underline disabled:opacity-40"
+              onClick={() => { setItems([]); setInput('') }}
+              disabled={busy}
+            >
+              New chat
+            </button>
+          </div>
+          <div role="log" aria-live="polite" aria-label="Conversation" tabIndex={0} ref={logRef} className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[760px] flex flex-col gap-5 py-2">
+              {items.map((it, i) => <Message key={i} item={it} onRetry={busy ? null : submit} />)}
+              {busy ? <Working /> : null}
+            </div>
+          </div>
+          <div className="pt-3">{composer}</div>
+        </div>
+      )}
       <BudgetLine budget={budget} />
     </Card>
   )
