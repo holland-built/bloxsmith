@@ -55,7 +55,7 @@
   },
   {
     "name": "infoblox-portal_make_get_request",
-    "description": "Execute a GET request to retrieve information and store it for later SQL querying.\n\nThe response data will be stored in a session-specific directory and can be queried\nusing the `query_stored_data` tool with SQL.\n\nFiltering Strategy:\n1. Server-side filtering: Use the _filter parameter in query_params for simple\n    top-level field filtering. Example: {\"_filter\": \"name == 'John'\"}. IMPORTANT: The _filter\n    parameter only supports basic expressions on top-level fields and does not handle nested fields.\n    For example: {\"_filter\": \"name == 'John' and age > 30\"} is supported,\n    but {\"_filter\": \"user.name == 'John'\"} is not supported.\n\n2. Client-side SQL queries: After calling this tool, use `query_stored_data` to run\n    SQL queries against the stored data for:\n    - Filtering on nested fields\n    - Complex conditions (AND/OR)\n    - Joins across multiple GET requests\n    - Aggregations (COUNT, AVG, SUM, etc.)\n    - Analysis of results\n\nReturns:\n    The API response data and the table name for SQL querying.",
+    "description": "Execute a GET request to retrieve information and store it for later SQL querying.\n\nThe response data will be stored in a session-specific directory and can be queried\nusing the `query_stored_data` tool with SQL.\n\nFiltering Strategy:\n1. Server-side filtering: Use the _filter parameter in query_params for simple\n    top-level field filtering. Example: {\"_filter\": \"name == 'John'\"}. IMPORTANT: The _filter\n    parameter only supports basic expressions on top-level fields and does not handle nested fields.\n    For example: {\"_filter\": \"name == 'John' and age > 30\"} is supported,\n    but {\"_filter\": \"user.name == 'John'\"} is not supported.\n\n2. Client-side SQL queries: After calling this tool, use `query_stored_data` to run\n    SQL queries against the stored data for:\n    - Filtering on nested fields\n    - Complex conditions (AND/OR)\n    - Joins across multiple GET requests\n    - Aggregations (COUNT, AVG, SUM, etc.)\n    - Analysis of results",
     "params": [
       "task_description*:string",
       "service_name*:string",
@@ -210,11 +210,33 @@
     ]
   },
   {
+    "name": "infoblox-portal_get_approval_form",
+    "description": "Return the A2UI form-group payload for a pending approval.",
+    "params": [
+      "instance_id*:string"
+    ],
+    "required": [
+      "instance_id"
+    ]
+  },
+  {
     "name": "infoblox-portal_show_table",
-    "description": "This tool is used to present query results with zero transcription risk and with human-friendly rendering.\nThe assistant is responsible for preparing the dataset before calling this tool so the displayed table is\nconcise and readable.\n\nHard requirements (MUST)\n* User-ready table: The table shown must be ready for end-user consumption: clear column names,\n    human-readable values, and no internal identifiers unless explicitly requested.\n* Column limits: Prefer \u2264 5 columns. If more than 5 columns are relevant, the assistant MUST either:\n    split into multiple tables, or summarize and show only the most important columns.\n* No internal identifiers: Do not include id, uuid, ophid, opaque keys, or similar identifier columns unless the\n    user explicitly asks.\n* Dates: Display timestamps in YYYY-MM-DD HH:MM:SS UTC (UTC-0) where applicable.\n* Numeric formatting: Round floats to 2 decimals unless higher precision is required by the user's question.\n    Use consistent units.\n* Flattening: Nested objects must be flattened into columns. Lists should be joined into a single string with\n    a delimiter (e.g., \", \"), or summarized (e.g., \"3 items\") when very long.\n* Semantic Value Humanization (required): Raw categorical/enum/boolean values MUST be rendered in a\n    human-friendly form. The assistant MUST apply the following generic rules across all domains\n    (DNS, DHCP, IPAM, security, assets, etc.):\n    - Normalize first: trim whitespace, lowercase for matching, and treat _/- as word separators.\n        Treat boolean-like values (true/false, yes/no, on/off, enabled/disabled, 1/0) as booleans.\n    - Detect \u201csemantic columns\u201d: A column is semantic if either:\n        + the column name suggests a semantic category (examples: status, state, health, severity, result,\n            outcome, action, enabled, disabled, mode, presence, compliance, risk, priority), or\n        + the column has low cardinality (e.g., \u2264 12 distinct values in the displayed set) and values resemble\n            enums/booleans.\n    - Render with indicator + label: For semantic columns, display values as:\n        \"<indicator> <Title Case Label>\"\n        Use a consistent indicator scheme (only when meaning is clear):\n\n            online|good|healthy|allowed|success|active|enabled|present \u2192 \ud83d\udfe2\n            caution|warning|degraded|partial|throttled \u2192 \ud83d\udfe1\n            bad|error|failed|critical|blocked|denied|unhealthy \u2192 \ud83d\udd34\n            inactive|offline|down|disabled|absent \u2192 \u26ab\n            unknown|pending|unrecognized|null|empty \u2192 \u26aa\n\n    - Fallback safely: If semantics cannot be inferred without guessing, Title Case the raw value without an\n        icon (or use \u26aa Unknown for null/empty). The assistant MUST NOT invent meanings.\n\nHumanized column names: Column headers MUST be Title Case with spaces (e.g. maintenance_mode \u2192 Maintenance Mode)\n\nStrong preferences (SHOULD)\n* Prefer ordering by relevance (e.g., highest severity first, most recent first, top N by count).\n* For repeated long strings (FQDNs, record names), consider truncation only if it improves readability and\n    still answers the question.\n\nIMPORTANT: show_table renders exactly what is in the provided stored table; it does not automatically\n    humanize values. The assistant must apply styling and humanization before calling this tool.",
+    "description": "This tool is used to present query results with zero transcription risk and with human-friendly rendering.\nThe assistant is responsible for preparing the dataset before calling this tool so the displayed table is\nconcise and readable.\n\nHard requirements (MUST)\n* User-ready table: The table shown must be ready for end-user consumption: clear column names,\n    human-readable values, and no internal identifiers unless explicitly requested.\n* Column limits: Prefer \u2264 5 columns. If more than 5 columns are relevant, the assistant MUST either:\n    split into multiple tables, or summarize and show only the most important columns.\n* No internal identifiers: Do not include id, uuid, ophid, opaque keys, or similar identifier columns unless the\n    user explicitly asks.\n* Dates: Display timestamps in YYYY-MM-DD HH:MM:SS UTC (UTC-0) where applicable.\n* Numeric formatting: Round floats to 2 decimals unless higher precision is required by the user's question.\n    Use consistent units.\n* Flattening: Nested objects must be flattened into columns. Lists should be joined into a single string with\n    a delimiter (e.g., \", \"), or summarized (e.g., \"3 items\") when very long.\n* Semantic Value Humanization (required): Raw categorical/enum/boolean values MUST be rendered in a\n    human-friendly form. The assistant MUST apply the following generic rules across all domains\n    (DNS, DHCP, IPAM, security, assets, etc.):\n    - Normalize first: trim whitespace, lowercase for matching, and treat _/- as word separators.\n        Treat boolean-like values (true/false, yes/no, on/off, enabled/disabled, 1/0) as booleans.\n    - Detect \u201csemantic columns\u201d: A column is semantic if either:\n        + the column name suggests a semantic category (examples: status, state, health, severity, result,\n            outcome, action, enabled, disabled, mode, presence, compliance, risk, priority), or\n        + the column has low cardinality (e.g., \u2264 12 distinct values in the displayed set) and values resemble\n            enums/booleans.\n    - Render with indicator + label: For semantic columns, display values as:\n        \"<indicator> <Title Case Label>\"\n        Use a consistent indicator scheme (only when meaning is clear):\n\n            online|good|healthy|allowed|success|active|enabled|present \u2192 \ud83d\udfe2\n            caution|warning|degraded|partial|throttled \u2192 \ud83d\udfe1\n            bad|error|failed|critical|blocked|denied|unhealthy \u2192 \ud83d\udd34\n            inactive|offline|down|disabled|absent \u2192 \u26ab\n            unknown|pending|unrecognized|null|empty \u2192 \u26aa\n\n    - Fallback safely: If semantics cannot be inferred without guessing, Title Case the raw value without an\n        icon (or use \u26aa Unknown for null/empty). The assistant MUST NOT invent meanings.\n\nHumanized column names: Column headers MUST be Title Case with spaces (e.g. maintenance_mode \u2192 Maintenance Mode)\n\nStrong preferences (SHOULD)\n* Prefer ordering by relevance (e.g., highest severity first, most recent first, top N by count).\n* For repeated long strings (FQDNs, record names), consider truncation only if it improves readability and\n    still answers the question.",
     "params": [
       "table_hrid*:string",
       "title:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "table_hrid"
+    ]
+  },
+  {
+    "name": "infoblox-portal_get_table_page",
+    "description": "Fetch one page of a stored table's data (app-only; see show_table).",
+    "params": [
+      "table_hrid*:string",
+      "page:integer",
+      "page_size:integer"
     ],
     "required": [
       "table_hrid"
@@ -229,6 +251,50 @@
     ],
     "required": [
       "name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_get_dashboard",
+    "description": "Re-read a dashboard's surface, or report that it has not changed (app-only).",
+    "params": [
+      "dashboard_hrid*:string",
+      "since:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "dashboard_hrid"
+    ]
+  },
+  {
+    "name": "infoblox-portal_submit_approval",
+    "description": "Submit field values to approve a pending action.",
+    "params": [
+      "instance_id*:string",
+      "field_values:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "instance_id"
+    ]
+  },
+  {
+    "name": "infoblox-portal_deny_approval",
+    "description": "Deny a pending approval request.",
+    "params": [
+      "instance_id*:string",
+      "reason:string"
+    ],
+    "required": [
+      "instance_id"
+    ]
+  },
+  {
+    "name": "infoblox-portal_always_allow_approval",
+    "description": "Approve and grant always-allow delegation for this action.",
+    "params": [
+      "instance_id*:string",
+      "field_values:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "instance_id"
     ]
   },
   {
