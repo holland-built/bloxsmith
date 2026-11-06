@@ -401,7 +401,7 @@ func (d *Deps) registerVaultRoutes(mux router) {
 	}))
 	// 8. llm — key + base_url + model
 	mux.HandleFunc("POST /api/vault/llm", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
-		d.json(w, r, 200, d.Vault.SetLLM(str(b, "key"), optStr(b, "base_url"), optStr(b, "model")))
+		d.json(w, r, 200, d.Vault.SetLLMEffort(str(b, "key"), optStr(b, "base_url"), optStr(b, "model"), optStr(b, "effort")))
 	}))
 	// 8a. axur — set, or with an empty key clear, the Axur credential.
 	//
@@ -429,7 +429,11 @@ func (d *Deps) registerVaultRoutes(mux router) {
 	}))
 	// 11. llm-test
 	mux.HandleFunc("POST /api/vault/llm-test", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
-		d.json(w, r, 200, d.Vault.LLMTest(str(b, "key"), optStr(b, "base_url"), optStr(b, "model"), d.Cfg.LLMModel, d.Cfg.LLMBaseURL))
+		d.json(w, r, 200, d.Vault.LLMTestEffort(str(b, "key"), optStr(b, "base_url"), optStr(b, "model"), str(b, "effort"), d.Cfg.LLMModel, d.Cfg.LLMBaseURL))
+	}))
+	// 11a. llm-models — the model names the provider offers, for the picker.
+	mux.HandleFunc("POST /api/vault/llm-models", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
+		d.json(w, r, 200, d.Vault.LLMModels(str(b, "key"), optStr(b, "base_url"), d.Cfg.LLMBaseURL))
 	}))
 	// 12. refresh-names
 	mux.HandleFunc("POST /api/vault/refresh-names", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {

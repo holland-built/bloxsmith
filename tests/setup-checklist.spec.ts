@@ -108,7 +108,7 @@ test('5. a provider button fills in the address and model, and Test sends exactl
   await page.locator('#setup-ai-key').fill('k');
   await item(page, 'ai').getByRole('button', { name: 'Test' }).click();
   await expect(item(page, 'ai').getByRole('status')).toContainText('It answered');
-  expect(sent).toEqual({ key: 'k', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.5-flash-lite' });
+  expect(sent).toEqual({ key: 'k', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.5-flash-lite', effort: '' });
 });
 
 test('5b. the Ollama button points at the host when the app runs in a container', async ({ page }) => {

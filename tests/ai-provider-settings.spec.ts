@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
   await page.route('**/api/vault/status*', (route) => json(route, {
     active: 'sales', exists: true, ready: true, unlocked: true, vaultMode: true, hasGroq: true, hasAxur: false,
-    llm: { base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', hasKey: true, model: 'gemini-x' },
+    llm: { base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', hasKey: true, model: 'gemini-x', effort: 'low' },
     tenants: [{ id: 'sales', label: 'Example Sales' }], version: 'v3.104.0', writeAllowed: [],
   }));
 });
@@ -38,12 +38,13 @@ test('the Claude button, Test, then Save send the typed provider, model and key'
   await sheet.getByLabel('API key', { exact: true }).fill('test-key-not-real');
 
   await sheet.getByRole('button', { name: 'Test' }).click();
-  await expect(sheet.getByText('It answered (model claude-sonnet-5-5). Save to use it.')).toBeVisible();
-  expect(sent.test).toEqual({ key: 'test-key-not-real', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5' });
+  // The stored effort (Low) goes along, and Claude's note says it has no effect there.
+  await expect(sheet.getByText('It answered (model claude-sonnet-5-5). Claude ignores the effort setting. Save to use it.')).toBeVisible();
+  expect(sent.test).toEqual({ key: 'test-key-not-real', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', effort: 'low' });
 
   await sheet.getByRole('button', { name: 'Save AI provider' }).click();
   await expect(sheet.getByText('Saved. The AI tab uses it from the next question.')).toBeVisible();
-  expect(sent.save).toEqual({ key: 'test-key-not-real', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5' });
+  expect(sent.save).toEqual({ key: 'test-key-not-real', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', effort: 'low' });
   await expect(sheet.getByLabel('API key', { exact: true })).toHaveValue('');
 });
 
@@ -56,4 +57,61 @@ test('a failed test says what to check', async ({ page }) => {
   await sheet.getByLabel('API key', { exact: true }).fill('bad');
   await sheet.getByRole('button', { name: 'Test' }).click();
   await expect(sheet.getByRole('alert')).toHaveText('No answer. Check the key, the address and the model name.');
+});
+
+test('Find models lists the models the provider offers, and the chosen effort is tested and saved', async ({ page }) => {
+  const sent: Record<string, any> = {};
+  await page.route('**/api/vault/llm-models', async (route) => { sent.list = route.request().postDataJSON(); return json(route, { ok: true, models: ['gemini-a', 'gemini-b'] }); });
+  await page.route('**/api/vault/llm-test', async (route) => { sent.test = route.request().postDataJSON(); return json(route, { ok: true, model: 'gemini-b' }); });
+  await page.route('**/api/vault/llm', async (route) => { sent.save = route.request().postDataJSON(); return json(route, { ok: true }); });
+
+  await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+
+  // The stored effort shows. A key is saved, so Find models works before one is typed.
+  await expect(sheet.getByLabel('Effort')).toHaveValue('low');
+  await expect(sheet.getByRole('button', { name: 'Find models' })).toBeEnabled();
+  await sheet.getByLabel('API key', { exact: true }).fill('test-key-not-real');
+  await sheet.getByRole('button', { name: 'Find models' }).click();
+  expect(sent.list).toEqual({ key: 'test-key-not-real', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai' });
+  await expect(sheet.getByText('Found 2 models. Pick one from the list.')).toBeVisible();
+
+  await sheet.getByLabel('Models this provider offers').selectOption('gemini-b');
+  await expect(sheet.getByLabel('Model', { exact: true })).toHaveValue('gemini-b');
+  await sheet.getByLabel('Effort').selectOption('high');
+
+  await sheet.getByRole('button', { name: 'Test' }).click();
+  await expect(sheet.getByText('It answered (model gemini-b). Save to use it.')).toBeVisible();
+  expect(sent.test).toEqual({ key: 'test-key-not-real', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-b', effort: 'high' });
+  await sheet.getByRole('button', { name: 'Save AI provider' }).click();
+  await expect(sheet.getByText('Saved. The AI tab uses it from the next question.')).toBeVisible();
+  expect(sent.save).toEqual({ key: 'test-key-not-real', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-b', effort: 'high' });
+});
+
+test('a failed model list says to type the name instead', async ({ page }) => {
+  await page.route('**/api/vault/llm-models', (route) => json(route, { ok: false, error: 'could not list models' }));
+  await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await sheet.getByLabel('API key', { exact: true }).fill('bad');
+  await sheet.getByRole('button', { name: 'Find models' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText('Could not get the list. Check the key and the address, or type the model name.');
+});
+
+test('with no key saved or typed, Find models stays off', async ({ page }) => {
+  await page.route('**/api/vault/status*', (route) => json(route, {
+    active: 'sales', exists: true, ready: true, unlocked: true, vaultMode: true, hasGroq: false, hasAxur: false,
+    llm: { base_url: '', hasKey: false, model: '' },
+    tenants: [{ id: 'sales', label: 'Example Sales' }], version: 'v3.104.0', writeAllowed: [],
+  }));
+  await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Find models' })).toBeDisabled();
+  await sheet.getByLabel('API key', { exact: true }).fill('k');
+  await expect(sheet.getByRole('button', { name: 'Find models' })).toBeEnabled();
 });

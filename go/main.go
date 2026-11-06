@@ -809,6 +809,14 @@ type llmCreds struct {
 	v   *vault.Vault
 }
 
+// LLMEffort is the reasoning effort saved in Settings, "" for none.
+func (c llmCreds) LLMEffort() string {
+	if c.v == nil {
+		return ""
+	}
+	return c.v.LLMEffort()
+}
+
 func (c llmCreds) LLM() (key, base, model string) {
 	key, base, model = c.cfg.LLMAPIKey, c.cfg.LLMBaseURL, c.cfg.LLMModel
 	if c.v != nil {
