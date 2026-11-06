@@ -124,3 +124,58 @@ func TestLLMModelsProviderErrorIsAFailure(t *testing.T) {
 		t.Fatalf("a 401 was reported as a list: %v", res)
 	}
 }
+
+// Saving with the key box empty keeps the saved key, so changing the model
+// or effort does not need the key pasted again.
+func TestSaveWithEmptyKeyKeepsTheSavedKey(t *testing.T) {
+	v := New(filepath.Join(t.TempDir(), "vault.json"))
+	if err := v.Init("effort-test-pass"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	v.SetLLMEffort("claude-key", strp("https://api.anthropic.com/v1"), strp("claude-a"), strp(""))
+	if res := v.SetLLMEffort("", strp("https://api.anthropic.com/v1"), strp("claude-b"), strp("medium")); res["ok"] != true {
+		t.Fatalf("save with the saved key: %v", res)
+	}
+	if g, b, m := v.LLMCreds(); g != "claude-key" || b != "https://api.anthropic.com/v1" || m != "claude-b" || v.LLMEffort() != "medium" {
+		t.Fatalf("after save: key=%q base=%q model=%q effort=%q", g, b, m, v.LLMEffort())
+	}
+}
+
+// The saved key never moves to a new address without being typed, so a save
+// can never send it to another provider.
+func TestSaveWithEmptyKeyRefusesANewAddress(t *testing.T) {
+	v := New(filepath.Join(t.TempDir(), "vault.json"))
+	if err := v.Init("effort-test-pass"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	v.SetLLMEffort("claude-key", strp("https://api.anthropic.com/v1"), strp("claude-a"), nil)
+	for _, base := range []string{"https://attacker.example/v1", "", "https://api.groq.com/openai/v1"} {
+		if res := v.SetLLMEffort("", strp(base), strp("m"), nil); res["ok"] == true {
+			t.Fatalf("saved key moved to %q: %v", base, res)
+		}
+	}
+	if _, b, m := v.LLMCreds(); b != "https://api.anthropic.com/v1" || m != "claude-a" {
+		t.Fatalf("a refused save changed settings: base=%q model=%q", b, m)
+	}
+	// With nothing saved, an empty key is still refused.
+	w := New(filepath.Join(t.TempDir(), "vault.json"))
+	w.Init("effort-test-pass")
+	if res := w.SetLLMEffort("", nil, strp("m"), nil); res["ok"] == true {
+		t.Fatalf("saved with no key at all: %v", res)
+	}
+}
+
+// Test with the key box empty uses the saved key only at the saved address:
+// a saved Claude key is never sent to Groq or anywhere else.
+func TestTestWithSavedKeyStaysAtTheSavedAddress(t *testing.T) {
+	v := New(filepath.Join(t.TempDir(), "vault.json"))
+	v.groq, v.llmBase = "claude-key", "https://api.anthropic.com/v1"
+	for _, base := range []string{"https://api.groq.com/openai/v1", "https://attacker.example/v1"} {
+		if res := v.LLMTestEffort("", strp(base), strp("m"), "", "m", ""); res["ok"] == true || res["error"] == "LLM test failed" {
+			t.Fatalf("saved key was sent to %q: %v", base, res)
+		}
+		if res := v.LLMModels("", strp(base), ""); res["ok"] == true || res["error"] == "could not list models" {
+			t.Fatalf("saved key was sent to %q for the model list: %v", base, res)
+		}
+	}
+}

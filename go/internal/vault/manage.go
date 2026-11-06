@@ -501,8 +501,22 @@ func (v *Vault) SetLLMEffort(key string, baseURL, model, effort *string) map[str
 	// old one — this process would then send LLM requests with a key no future
 	// process has ever seen, and the next successful save of ANY other mutation
 	// would persist it silently (finding C-F5).
+	// An empty key keeps the saved one, so changing the model or effort does not
+	// mean pasting the key again. The saved key then stays at its own address:
+	// a new address needs its own key, so a save can never send the saved key
+	// somewhere new.
+	k := strings.TrimSpace(key)
+	if k == "" {
+		if v.groq == "" {
+			return fail("API key required")
+		}
+		if baseURL != nil && llmEffectiveHost(*baseURL) != llmEffectiveHost(v.llmBase) {
+			return fail("new address needs its key")
+		}
+		k = v.groq
+	}
 	snap := v.snapshot()
-	v.groq = strings.TrimSpace(key)
+	v.groq = k
 	if baseURL != nil {
 		v.llmBase = strings.TrimSpace(*baseURL)
 	}
@@ -709,6 +723,15 @@ func validateLLMBase(raw string) error {
 	return nil
 }
 
+// llmEffectiveHost is the host AI requests go to for a saved address; an
+// empty address means Groq.
+func llmEffectiveHost(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return llmHost(defaultGroqBase)
+	}
+	return strings.ToLower(llmHost(strings.TrimSpace(raw)))
+}
+
 // llmHost extracts the hostname from a base URL, else "".
 func llmHost(raw string) string {
 	if raw == "" {
@@ -857,13 +880,14 @@ func (v *Vault) llmTarget(key string, baseURL *string, defaultBase string) (k, b
 	if baseSupplied {
 		base = strings.TrimSpace(*baseURL)
 	}
-	allowedHosts := map[string]bool{llmHost(defaultGroqBase): true}
-	if h := llmHost(v.llmBase); h != "" {
-		allowedHosts[h] = true
+	// The saved key may only go to the address it is used with: the saved
+	// address, else the configured default, else Groq. Groq used to be allowed
+	// whatever was saved, which would send a saved Claude key to Groq.
+	savedBase := v.llmBase
+	if savedBase == "" {
+		savedBase = defaultBase
 	}
-	if h := llmHost(defaultBase); h != "" {
-		allowedHosts[h] = true
-	}
+	allowedHosts := map[string]bool{llmEffectiveHost(savedBase): true}
 	v.mu.Unlock()
 	if k == "" {
 		return "", "", nil, "API key required"
@@ -883,7 +907,7 @@ func (v *Vault) llmTarget(key string, baseURL *string, defaultBase string) (k, b
 		if err := validateLLMBase(base); err != nil {
 			return "", "", nil, err.Error()
 		}
-		if usingStoredKey && !allowedHosts[llmHost(base)] {
+		if usingStoredKey && !allowedHosts[llmEffectiveHost(base)] {
 			return "", "", nil, "base_url not allowed with the stored credential — supply an explicit key to test a custom endpoint"
 		}
 	}
