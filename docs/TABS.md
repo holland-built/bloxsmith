@@ -118,6 +118,24 @@ The morning check. Also refreshes every 30 seconds.
 - **Hosts Needing Attention**: every host that isn't healthy.
 - **DNS Zone Issues**: zones with a setup problem.
 
+## Best practices
+
+Checks your Infoblox design against best practices and lists what to fix. It only reads, and changes nothing.
+
+Each check shows one of three results:
+
+- **A problem**, with how serious it is (High, Medium or Low). Open it to see why it matters and which items it affects.
+- **Passed**: the whole list was read and nothing was wrong.
+- **Couldn't tell**: a list couldn't be read, or came back cut short, or the data can't prove the answer either way. A check never says passed when it couldn't see everything.
+
+The checks:
+
+- **On-prem hosts offline or in error**, from the host list. Infoblox-managed hosts aren't in that list, so they aren't checked.
+- **Grid Masters with no HA and no candidate.** Losing such a Grid Master leaves the grid unmanaged until it's rebuilt from backup. A grid is only judged when all of its members are visible in the Portal, because otherwise a candidate could exist that the Portal doesn't show. Those grids are counted under the check instead.
+- **DHCP HA groups in Advanced Active/Passive mode.** That mode is deprecated and doesn't support DHCPv6.
+
+The rules come from a colleague's Infoblox CSP tool for Claude, used with his permission.
+
 ## Network
 
 IP addresses and DHCP in detail.
@@ -521,6 +539,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Drift | Check drift | your templates and the Infoblox API | No | it is a form, not a chart |
 | Drift | Error | your templates and the Infoblox API | No | it reports what a change did, not a chart |
 | Drift | Result | your templates and the Infoblox API | No | it compares your templates with what is there, worked out in the app |
+| Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
 | Demo server | Settings | the app's own vault | No | it is a form, not a chart |
 | Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |
 | Demo server | The Infoblox code | the app's own files | No | it is code, not a chart |
