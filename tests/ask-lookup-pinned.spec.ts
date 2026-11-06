@@ -29,7 +29,7 @@ async function fillChat(page) {
   for (let i = 0; i < 4; i++) {
     await box.fill(`Question ${i}`);
     await box.press('Enter');
-    await expect(page.getByRole('log').getByText('AI-generated', { exact: true })).toHaveCount(i + 1);
+    await expect(page.getByRole('log').getByText(long.trim(), { exact: true })).toHaveCount(i + 1);
   }
 }
 

@@ -22,7 +22,7 @@ const SUGGESTIONS = [
 
 // ---------- chat ----------
 
-function Message({ item, onRetry }) {
+function Message({ item, onRetry, onAsk }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -43,25 +43,34 @@ function Message({ item, onRetry }) {
       </div>
     )
   }
-  // The answer reads as plain text on the page, the way Claude and ChatGPT
-  // show it, rather than as a boxed card.
+  // A calm centred column, the way the Claude chat reads: the answer is the one
+  // loud thing, its proof sits right under it, and what to ask next comes after
+  // a rule.
+  const suggestions = (item.suggestions || []).slice(0, 3)
   return (
-    <div className="flex justify-start">
-      <div className="w-full text-field-txt text-copy leading-relaxed">
-        {/* Said on every answer, so model prose is never read as a measured
-            figure. The facts under it are the server's, and say so. */}
-        <p className="text-note text-muted mb-1">AI-generated</p>
-        <AnswerText text={item.text} />
-        {!!(item.suggestions && item.suggestions.length) && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {item.suggestions.slice(0, 3).map((sg, i) => (
-              <span key={i} className="text-note px-2 py-0.5 rounded-control border border-border text-muted">{sg}</span>
+    <div className="max-w-[560px] mx-auto w-full text-field-txt text-copy leading-relaxed">
+      <AnswerText text={item.text} />
+      {!!(item.trace && item.trace.length) && <Lookups trace={item.trace} />}
+      {item.ranOut && onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
+      {suggestions.length > 0 && (
+        <div className="mt-9 pt-4 border-t border-line">
+          <p className="text-note text-muted mb-1">Ask next</p>
+          <ul aria-label="Ask next">
+            {suggestions.map((sg, i) => (
+              <li key={i} className="border-b border-line last:border-b-0">
+                <button
+                  type="button"
+                  disabled={!onAsk}
+                  onClick={() => onAsk(sg)}
+                  className="w-full text-left py-2.5 px-0.5 text-txt hover:bg-line disabled:opacity-60"
+                >
+                  {sg}
+                </button>
+              </li>
             ))}
-          </div>
-        )}
-        {item.ranOut && onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
-        {!!(item.trace && item.trace.length) && <Lookups trace={item.trace} />}
-      </div>
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
@@ -79,13 +88,11 @@ function Lookups({ trace }) {
   // list." keeps its count. Only that clause goes; any other part stays.
   const short = facts.map((f) => f.replace(/;?\s*the \d+ below (are|is) a sample, not the full list\.?/i, '').trim())
   return (
-    <div className="mt-3 text-note text-muted">
-      {short.length > 0 && (
-        <p title={facts.join('\n')}>Counted by Bloxsmith: {short.join(' · ')}</p>
-      )}
-      <details className="mt-0.5">
-        <summary className="cursor-pointer">How I got this ({trace.length} {trace.length === 1 ? 'lookup' : 'lookups'})</summary>
-        <div className="mt-1 font-mono space-y-1">
+    <div className="mt-2.5 text-note text-muted text-center">
+      {short.length > 0 && <span title={facts.join('\n')}>Counted by Bloxsmith: {short.join(' · ')}. </span>}
+      <details className="inline">
+        <summary className="inline cursor-pointer underline underline-offset-2">How I got this</summary>
+        <div className="mt-2 font-mono space-y-1 text-left">
           {trace.map((t, i) => (
             <div key={i}>
               <div>{t.tool} <span className="opacity-70 break-all">{JSON.stringify(t.args)}</span></div>
@@ -115,6 +122,10 @@ function AnswerInline({ text }) {
 // so nothing in the answer can become markup.
 function AnswerText({ text }) {
   return answerBlocks(text).map((b, i) => {
+    // The answer's first line is the answer: large, bold, centred.
+    if (i === 0 && b.type === 'para') {
+      return <p key={i} className="mt-8 text-center text-figure font-bold leading-snug [&_strong]:font-bold"><AnswerInline text={b.text} /></p>
+    }
     if (b.type === 'table') {
       return (
         <div key={i} className="overflow-x-auto my-1.5">
@@ -352,7 +363,7 @@ function ChatCard({ panelId }) {
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>
-      <p className="text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line. Answers are AI-generated; check the lookups.</p>
+      <p className="text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line.</p>
     </div>
   )
 
@@ -391,7 +402,7 @@ function ChatCard({ panelId }) {
           </div>
           <div role="log" aria-live="polite" aria-label="Conversation" tabIndex={0} ref={logRef} className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[760px] flex flex-col gap-5 py-2">
-              {items.map((it, i) => <Message key={i} item={it} onRetry={busy ? null : submit} />)}
+              {items.map((it, i) => <Message key={i} item={it} onRetry={busy ? null : submit} onAsk={busy ? null : submit} />)}
               {busy ? <Working /> : null}
             </div>
           </div>
