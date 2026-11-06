@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The AI answer box printed the model's text as-is, so bold showed as ** and a
 // table as rows of | characters. The model is now told to answer with a bold

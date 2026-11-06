@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
@@ -153,7 +153,8 @@ export default function Incidents() {
 
   return (
     <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-3">Incidents</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Incidents</h1>
+      <TabIntro>Incidents to triage, by category and severity, refreshed every 20 seconds.</TabIntro>
       <CardGrid layoutKey="incidents">
         <CategoryChips panelId="incidents-categories" categories={categories} signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         <IncidentsTable

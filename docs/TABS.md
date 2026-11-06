@@ -226,6 +226,8 @@ It shows at most the 500 latest events from the last 24 hours. The Portal return
 
 The quick way to make a change. Pick a job on the left, answer its questions, and press **Preview** to see what will be made. Nothing is created until you press **Build it**.
 
+Everything built here can be removed from **Your recent changes**. The full Provision, Self-Service and Demo server pages are still under **All pages**.
+
 | Job | What it asks | What it makes |
 |---|---|---|
 | Get an IP address | An IP space, a network, and what the address is for | Reserves the next free address in that network |

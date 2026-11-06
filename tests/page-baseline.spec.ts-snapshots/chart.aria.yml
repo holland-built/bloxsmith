@@ -1,9 +1,7 @@
 - main "Build a chart tab":
   - heading "Build a chart" [level=1]
   - switch "Show cube names"
-  - paragraph:
-    - text: Pick what to count and how to slice it. The app writes the query from a fixed list, runs it on your Infoblox account and draws what comes back. No AI is involved, so every number is Infoblox's own.
-    - button "Docs →"
+  - paragraph: Pick what to count and how to slice it. Every number comes straight from Infoblox.
   - button "Arrange panels"
   - heading "Choose" [level=2]
   - 'button "About: Choose"': "About: ⓘ"

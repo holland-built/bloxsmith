@@ -1,8 +1,6 @@
 - main "Drift tab":
   - heading "Drift" [level=1]
-  - paragraph:
-    - text: Compares a site template against what actually exists in Infoblox and lists what is missing, changed, or extra. Read-only — it reports gaps, it never closes them.
-    - button "Docs →"
+  - paragraph: Lists the gaps between a site template and what is in Infoblox, without changing anything.
   - heading "Check drift" [level=2]
   - text: compare a site template against live Infoblox state
   - 'button "About: Check drift"': "About: ⓘ"

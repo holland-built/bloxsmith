@@ -8,9 +8,7 @@
         - button "Live log"
   - heading "Provision" [level=1]
   - text: ADMIN
-  - paragraph:
-    - text: Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo network. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent and needs admin.
-    - button "Docs →"
+  - paragraph: "Creates real objects in Infoblox: one subnet, a whole site, or a multi-region demo network."
   - button "Subnet" [pressed]
   - button "Full site"
   - button "Seed demo"

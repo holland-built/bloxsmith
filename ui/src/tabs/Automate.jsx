@@ -792,11 +792,7 @@ export default function Automate() {
       <div className="w-full px-6 py-5 flex flex-col gap-4">
         <div>
           <h1 className="text-copy font-semibold tracking-tight mb-1">Automate</h1>
-          <TabIntro anchor="automate">
-            Pick a job, answer a few questions, and check what will be made before you build it. Everything built
-            here can be removed from Your recent changes. The full Provision, Self-Service and Demo server pages are
-            still under All pages.
-          </TabIntro>
+          <TabIntro>Pick a job, answer a few questions, and check what will be made before you build it.</TabIntro>
         </div>
         <FindBox />
         <PlanBox onOpen={(j) => pick(j.job, j.answers)} />

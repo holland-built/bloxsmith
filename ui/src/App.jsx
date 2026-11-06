@@ -29,7 +29,7 @@ const ChartBuilder = lazy(() => import('./tabs/ChartBuilder.jsx'))
 const DemoServer = lazy(() => import('./tabs/DemoServer.jsx'))
 const Automate = lazy(() => import('./tabs/Automate.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
-import { FOCUS_RING, Skeleton } from './components/ui.jsx'
+import { FOCUS_RING, PageHelp, Skeleton } from './components/ui.jsx'
 import { PageBar } from './components/kit.jsx'
 import Palette, { OPEN_SEARCH } from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
@@ -620,6 +620,8 @@ export default function App() {
               the groups (a dossier) have no group and so no bar. */}
           {groupOf(tab) && (
             <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
+              {/* Every tab's label is a "## " heading in docs/TABS.md. */}
+              <PageHelp key={tab} anchor={activeLabel} />
               {/* The header's box is hidden on a phone; this opens the same search. */}
               <button
                 type="button"

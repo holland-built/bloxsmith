@@ -116,10 +116,7 @@ export default function Assets() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Assets</h1>
-      <TabIntro anchor="assets">
-        Every asset discovery found, searchable by name and filterable by type. Click a row for the
-        fields too sparse to keep in the table.
-      </TabIntro>
+      <TabIntro>Every asset discovery found: search by name, filter by type, or click a row for more.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(filters)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a

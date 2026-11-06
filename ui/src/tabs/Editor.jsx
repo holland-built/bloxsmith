@@ -357,11 +357,7 @@ export default function Editor() {
     <PageRail>
     <div className="max-w-[820px] p-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
-      <TabIntro anchor="editor">
-        Make, change or delete one DNS or DHCP item at a time. To change or delete one, find it by name, address
-        or comment and pick it; the form fills with what it has now. Leave that empty to make a new one. Preview first, then Apply. Editor-created subnets and
-        address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
-      </TabIntro>
+      <TabIntro>Make, change or delete one DNS or DHCP item at a time.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply and Delete are off." />
 
       <div className="flex flex-wrap gap-1.5 mb-4">

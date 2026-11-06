@@ -879,10 +879,7 @@ export default function SelfService() {
     <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Self-Service</h1>
-      <TabIntro anchor="self-service">
-        The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a
-        record to an existing DNS zone. Preview checks the request against the server; Apply commits it.
-      </TabIntro>
+      <TabIntro>Take the next free address from a subnet, or add a record to a DNS zone.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply is off." />
       {/* The two flex rows these panels used to sit in are one CardGrid now, and
           the div around each panel is gone rather than kept: a div wrapping a

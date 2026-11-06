@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The UX audit of 2026-10-26 found three dead ends: search only on Cmd+K, a
 // search page that never named the subnet a free address sits in, and an AI

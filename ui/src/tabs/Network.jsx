@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sortRows } from '../lib/sortCompare.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
@@ -73,7 +73,8 @@ export default function Network() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-3">Network</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Network</h1>
+      <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId,
           because CardGrid reads the saved order off `props.panelId` of its own

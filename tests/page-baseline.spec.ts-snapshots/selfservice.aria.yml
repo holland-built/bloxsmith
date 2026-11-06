@@ -11,9 +11,7 @@
       - listitem:
         - button "Manage Addresses"
   - heading "Self-Service" [level=1]
-  - paragraph:
-    - text: "The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a record to an existing DNS zone. Preview checks the request against the server; Apply commits it."
-    - button "Docs →"
+  - paragraph: Take the next free address from a subnet, or add a record to a DNS zone.
   - button "Arrange panels"
   - heading "Allocate Address" [level=2]
   - text: pick space → block → subnet

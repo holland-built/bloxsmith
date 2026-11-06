@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -70,7 +70,7 @@ export default function Infra() {
 
   return (
     <div className="w-full px-6 py-5">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-1">
         <h1 className="text-copy font-semibold tracking-tight">Infrastructure</h1>
         {/* Only when maintenance is ON. With it off this used to be a green
             "Operational" pill, and all it knew was that maintenance was off:
@@ -85,6 +85,7 @@ export default function Infra() {
           </span>
         )}
       </div>
+      <TabIntro>Host and service health: hosts, jobs and DNS forwarding proxies.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(hosts, totalHosts, hostsStatus)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a

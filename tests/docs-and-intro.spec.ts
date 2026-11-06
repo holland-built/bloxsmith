@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 
-// The tab intro line and the "Docs →" button beside it.
+// The tab intro line, and the page's help. Help is now the "Help" button in
+// the page bar (2026-11-06); it was a "Docs →" button beside the intro.
 //
 // TWO CHANGES ARE PINNED HERE, both from 2026-08-10.
 //
@@ -37,17 +38,17 @@ test.afterEach(async ({ request }) => {
   await request.delete(`/api/views/${VIEW}`);
 });
 
-test('Docs opens the tab section in the app, and never navigates to GitHub', async ({ page }) => {
+test('Help opens the tab section in the app, and never navigates to GitHub', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('main h1')).toHaveText('Overview');
 
   // If this ever becomes an <a href> again, the click below leaves the app and
   // the dialog assertion fails — but say so directly too, because "the dialog
   // did not appear" is a confusing way to report "it opened GitHub".
-  const docs = page.getByRole('button', { name: 'Docs →' });
+  const docs = page.getByRole('button', { name: 'Help for this page' });
   await expect(
     docs,
-    'the Docs control is not a button — it has gone back to being a link out to GitHub',
+    'the Help control is not a button — it has gone back to being a link out to GitHub',
   ).toBeVisible();
 
   await docs.click();
@@ -55,7 +56,7 @@ test('Docs opens the tab section in the app, and never navigates to GitHub', asy
   await expect(dialog).toBeVisible();
 
   // The panel shows THIS tab's section, titled from the document's own heading.
-  await expect(page.locator('#docs-title')).toHaveText('Docs — Overview');
+  await expect(page.locator('#docs-title')).toHaveText('Help: Overview');
   // Content from the Overview section of docs/TABS.md, not from another tab.
   await expect(dialog).toContainText('Your network at a glance');
   await expect(dialog).toContainText('Top Consumers');
@@ -71,7 +72,7 @@ test('the docs panel closes on Escape and hands focus back to the button', async
   await page.goto('/#overview');
   await expect(page.locator('main h1')).toHaveText('Overview');
 
-  await page.getByRole('button', { name: 'Docs →' }).click();
+  await page.getByRole('button', { name: 'Help for this page' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
 
   await page.keyboard.press('Escape');
@@ -79,8 +80,7 @@ test('the docs panel closes on Escape and hands focus back to the button', async
 
   // Focus must not be left on <body>: a keyboard reader who opens the panel and
   // closes it would otherwise be tabbing from the top of the document again.
-  const focused = await page.evaluate(() => document.activeElement?.textContent?.trim());
-  expect(focused, 'focus was not returned to the Docs button').toBe('Docs →');
+  await expect(page.getByRole('button', { name: 'Help for this page' }), 'focus was not returned to the Help button').toBeFocused();
 });
 
 test('the arranging lesson shows to a new reader and retires once a layout saves', async ({ page }) => {
