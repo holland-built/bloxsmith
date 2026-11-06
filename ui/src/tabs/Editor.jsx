@@ -140,13 +140,15 @@ function FindExisting({ type, label, picked, busy, onPick, onClear }) {
   // Results for an older search are hidden until the current one answers, so
   // a click cannot pick an item the box no longer asks for.
   const fresh = state.items && state.q === text.trim()
+  // "DNS Zone" reads "DNS zone": lower case except acronyms.
+  const noun = label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
   const seen = {}
   ;(fresh ? state.items : []).forEach((it) => { seen[it.label] = (seen[it.label] || 0) + 1 })
 
   return (
     <div className="flex flex-col gap-1">
       <label className="text-note text-muted flex flex-col gap-1">
-        <span>Change or delete an existing {label.toLowerCase()}</span>
+        <span>Change or delete an existing {noun}</span>
         <input
           {...MACHINE_TEXT}
           type="search"
@@ -159,7 +161,7 @@ function FindExisting({ type, label, picked, busy, onPick, onClear }) {
       {state.error && <div className="text-note" style={{ color: COLORS.crit }}>Couldn't search: {state.error}</div>}
       {fresh && state.items.length === 0 && <div className="text-note text-muted">Nothing matches “{state.q}”.</div>}
       {fresh && state.items.length > 0 && (
-        <ul aria-label={`Matching ${label.toLowerCase()} items`} className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+        <ul aria-label={`Matching ${noun} items`} className="flex flex-col gap-1 max-h-56 overflow-y-auto">
           {state.items.map((it) => (
             <li key={it.id}>
               <button
