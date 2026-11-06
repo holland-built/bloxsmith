@@ -305,10 +305,10 @@ func (s *Service) apiGet(args map[string]any) string {
 	}
 	rows, body, err := s.Rest.GetPageStrict(path, params)
 	if err != nil {
-		if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == http.StatusBadRequest && (filter != "" || fields != "") {
+		if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == http.StatusBadRequest && (filter != "" || fields != "") && !featureOffRE.MatchString(ue.Snippet) {
 			return fmt.Sprintf(apiGetWrongField, path)
 		}
-		return aiLookupFailed("records from "+path, aiUpstreamDetail(err))
+		return aiReadFailed("records from "+path, err)
 	}
 	maps := make([]map[string]any, 0, len(rows))
 	allEmpty := true
