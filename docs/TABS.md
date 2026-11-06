@@ -331,10 +331,10 @@ Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its 
 
 It handles six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, and Tags (set the site tags on an address block).
 
-**The box at the top, ID of an existing one, decides what the form does:**
+**To change or delete one, find it first.** Type part of its name, address or comment in **Change or delete an existing…** and pick it from the list. The form fills with what it has now, and a Delete button appears. **Update** sends only the fields you changed, so it never overwrites someone else's newer edit to a field you left alone. Address blocks can only be deleted here, so picking one only fills in its ID.
 
-- Leave it blank and the form **creates** a new object.
-- Paste in an object's ID and the form **updates** that object, and a Delete button appears.
+- Leave the search and the ID box empty and the form **creates** a new object.
+- You can still paste an object's ID into the ID box instead.
 
 **Then:** press **Preview** to see the exact request it will send. If it is right, press **Create** (or **Update**). See [the write flow](#the-write-flow).
 

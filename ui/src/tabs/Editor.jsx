@@ -70,6 +70,20 @@ const EDITOR_TYPES = [
 ]
 
 const EDIT_UPDATE_TYPES = ['dns_zone', 'subnet', 'dhcp_range', 'host']
+
+// Fields Infoblox won't change on an existing item through this form (the
+// server's update ignores them), so they are read-only while updating.
+const UPDATE_FIXED = { dns_zone: ['fqdn', 'view'], subnet: ['block_id', 'cidr'], dhcp_range: ['space'] }
+
+// What each type's search actually matches; Infoblox refuses a partial match
+// on subnet and range addresses, so those take a full IP.
+const FIND_HINT = {
+  dns_zone: 'Find by zone name or comment',
+  subnet: 'Find by name, comment or full network address',
+  address_block: 'Find by address or comment',
+  dhcp_range: 'Find by comment, or a full start or end IP',
+  host: 'Find by name or comment',
+}
 const EDIT_DELETE_TYPES = ['dns_zone', 'subnet', 'dhcp_range', 'host', 'address_block']
 
 function hashParams() {
@@ -89,6 +103,70 @@ function parseTags(str) {
   return out
 }
 
+// Find an existing item by name, address or comment, instead of pasting its ID.
+function FindExisting({ type, label, picked, busy, onPick, onClear }) {
+  const [text, setText] = useState('')
+  const [state, setState] = useState({ q: '', items: null, error: null })
+  useEffect(() => {
+    const q = text.trim()
+    if (!q) { setState({ q: '', items: null, error: null }); return }
+    let live = true
+    const id = setTimeout(() => {
+      fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}`)
+        .then(async (r) => {
+          const j = await r.json().catch(() => ({}))
+          if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+          if (live) setState({ q, items: j.items ?? [], error: null })
+        })
+        .catch((e) => { if (live) setState({ q, items: null, error: String(e?.message || e) }) })
+    }, 300)
+    return () => { live = false; clearTimeout(id) }
+  }, [text, type])
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-note text-muted flex flex-col gap-1">
+        <span>Change or delete an existing {label.toLowerCase()}</span>
+        <input
+          {...MACHINE_TEXT}
+          type="search"
+          className={inputCls}
+          value={text}
+          placeholder={FIND_HINT[type]}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </label>
+      {state.error && <div className="text-note" style={{ color: COLORS.crit }}>Couldn't search: {state.error}</div>}
+      {state.items && state.items.length === 0 && <div className="text-note text-muted">Nothing matches “{state.q}”.</div>}
+      {state.items && state.items.length > 0 && (
+        <ul aria-label={`Matching ${label.toLowerCase()} items`} className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+          {state.items.map((it) => (
+            <li key={it.id}>
+              <button
+                type="button"
+                aria-pressed={picked === it.id}
+                // Not while a Preview or Apply is running: its answer belongs
+                // to the item that was picked when it was sent.
+                disabled={busy}
+                onClick={() => onPick(it)}
+                className="w-full text-left text-copy px-2.5 py-1.5 rounded-control border border-border hover:border-border-hover"
+                style={picked === it.id ? { borderColor: COLORS.accent } : undefined}
+              >
+                {it.label || it.id}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {picked && (
+        <button type="button" onClick={onClear} disabled={busy} className="self-start text-note text-link underline disabled:opacity-40">
+          Make a new one instead
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function Editor() {
   const ro = useReadOnly()
   const params = hashParams()
@@ -96,6 +174,10 @@ export default function Editor() {
 
   const [type, setType] = useState(initialType)
   const [editId, setEditId] = useState(params.id || '')
+  // The values an item had when it was picked from Find. Update then sends
+  // only what was changed, so it never overwrites someone else's newer edit
+  // to a field this person didn't touch.
+  const [loaded, setLoaded] = useState(null)
   const [fields, setFields] = useState({})
   const [status, setStatus] = useState('idle') // idle | busy | previewed | applied
   const [stale, setStale] = useState(false)
@@ -137,7 +219,11 @@ export default function Editor() {
     const body = {}
     spec.fields.forEach((f) => {
       const raw = fields[f.key]
-      if (raw == null || raw === '') return
+      if (isUpdate && loaded) {
+        if (String(raw ?? '') === String(loaded[f.key] ?? '')) return
+        // A field emptied on purpose is sent empty, which clears it.
+        if (raw == null || raw === '') { body[f.key] = f.key === 'tags' ? {} : ''; return }
+      } else if (raw == null || raw === '') return
       if (f.key === 'tags') body.tags = parseTags(raw)
       else if (f.key === 'addresses') body.addresses = String(raw).split(',').map((s) => s.trim()).filter(Boolean).map((a) => ({ address: a }))
       else if (f.kind === 'number') body[f.key] = Number(raw)
@@ -201,6 +287,11 @@ export default function Editor() {
   const [delArmed, setDelArmed] = useState(false)
   const delArmTimerRef = useRef(null)
   useEffect(() => () => clearTimeout(delArmTimerRef.current), [])
+  // A Delete armed for one item must never fire on another.
+  function disarmDelete() {
+    clearTimeout(delArmTimerRef.current)
+    setDelArmed(false)
+  }
   function del() {
     if (!spec || !editId.trim() || status === 'busy') return
     if (!delArmed) {
@@ -225,6 +316,7 @@ export default function Editor() {
         }
         setResult({ ok: true, msg: deletedMsg(j, spec.label) })
         setEditId('')
+        setLoaded(null)
         setFields({})
         setPreview(null)
         setStale(false)
@@ -239,8 +331,8 @@ export default function Editor() {
     <div className="max-w-[820px] p-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
       <TabIntro anchor="editor">
-        Make, change or delete one DNS or DHCP item at a time. Leave the ID box empty to make a new one; paste
-        an existing item's ID to change it, which also shows Delete. Preview first, then Apply. Editor-created subnets and
+        Make, change or delete one DNS or DHCP item at a time. To change or delete one, find it by name, address
+        or comment and pick it; the form fills with what it has now. Leave that empty to make a new one. Preview first, then Apply. Editor-created subnets and
         address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
       </TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply and Delete are off." />
@@ -249,8 +341,10 @@ export default function Editor() {
         {EDITOR_TYPES.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setType(t.key); setEditId('') }}
-            className="px-2.5 py-1.5 rounded-control border text-copy"
+            onClick={() => { setType(t.key); setEditId(''); setLoaded(null) }}
+            // Not mid-request: the answer would land on the new type's form.
+            disabled={status === 'busy'}
+            className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
             style={type === t.key
               ? { borderColor: COLORS.accent, background: 'var(--color-line-2)', color: 'var(--color-txt)' }
               : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
@@ -263,16 +357,43 @@ export default function Editor() {
       <CardGrid layoutKey="editor">
         <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
         <div data-form-cols="" className="flex flex-col gap-3">
+          {EDIT_DELETE_TYPES.includes(type) && (
+            <FindExisting
+              key={type}
+              type={type}
+              label={spec.label}
+              picked={editId}
+              busy={status === 'busy'}
+              onPick={(item) => {
+                disarmDelete()
+                setPreview(null); setStale(false); setStatus('idle'); setResult(null)
+                // Delete-only types (address blocks) just need the ID; filling
+                // the form would only set up an accidental second Create.
+                if (!EDIT_UPDATE_TYPES.includes(type)) { setEditId(item.id); setLoaded(null); return }
+                const f = Object.fromEntries(Object.entries(item.fields).map(([k, v]) => [k, v == null ? '' : String(v)]))
+                setEditId(item.id)
+                setFields(f)
+                setLoaded(f)
+              }}
+              onClear={() => {
+                disarmDelete()
+                setEditId(''); setFields({}); setLoaded(null)
+                setPreview(null); setStale(false); setStatus('idle'); setResult(null)
+              }}
+            />
+          )}
           <label data-field="" className="text-note text-muted flex flex-col gap-1">
             <span>ID of an existing one (leave blank to make a new one)</span>
-            <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { setEditId(e.target.value); markStale() }} />
+            <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { disarmDelete(); setEditId(e.target.value); setLoaded(null); markStale() }} />
           </label>
 
           {spec.fields.map((f) => (
             <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">
               <span>{f.label}{f.required ? ' *' : ''}</span>
               <input {...(f.key === 'comment' ? null : MACHINE_TEXT)}
-                className={inputCls}
+                className={`${inputCls} disabled:opacity-60`}
+                disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
+                title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined}
                 type={f.kind === 'number' ? 'number' : 'text'}
                 value={fields[f.key] || ''}
                 placeholder={f.placeholder || ''}
