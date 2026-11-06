@@ -4,9 +4,7 @@
     - heading "Needs a look" [level=2]:
       - text: ""
       - status: 3 to check · 2 urgent
-  - paragraph:
-    - text: Your network at a glance — DNS load, address use, subnet fullness and host health. Drag a panel’s right edge to resize it, or use Arrange panels to move panels; changes save by themselves.
-    - button "Docs →"
+  - paragraph: "Your network at a glance: DNS load, address use, subnet fullness and host health. Drag a panel’s right edge to resize it, or use Arrange panels to move panels; changes save by themselves."
   - list "Headline numbers":
     - listitem:
       - button /DNS queries \d+ per sec/

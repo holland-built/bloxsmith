@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"sync"
@@ -211,7 +212,27 @@ func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
 	// The setup checklist says the demo server needs the desktop app when this
 	// runs in a container, and the Ollama preset reaches the host from there.
 	st["inContainer"] = inContainer("/.dockerenv", "/run/.containerenv")
+	st["llmSendsTo"] = llmSendsTo(st, d.Cfg.LLMBaseURL)
 	d.json(w, r, http.StatusOK, st)
+}
+
+// llmSendsTo is the host AI questions go to, for the AI page's privacy notice.
+// The vault's base URL wins over LLM_BASE_URL, as in main.go's llmCreds, and
+// with neither set the AI client uses api.groq.com (ai.chatURL).
+func llmSendsTo(st map[string]any, envBase string) string {
+	base := envBase
+	if llm, ok := st["llm"].(map[string]any); ok {
+		if b, _ := llm["base_url"].(string); b != "" {
+			base = b
+		}
+	}
+	if base == "" {
+		return "api.groq.com"
+	}
+	if u, err := url.Parse(base); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return base
 }
 
 // inContainer reports whether any of the marker files Docker (/.dockerenv) and

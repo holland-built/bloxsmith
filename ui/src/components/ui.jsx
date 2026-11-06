@@ -2867,7 +2867,15 @@ function HiddenPanelsRow({ groupKey, label, n }) {
 // time, so there is no second copy to drift.
 const DocsPanel = lazy(() => import('./DocsPanel.jsx'))
 
-export function TabIntro({ anchor, children }) {
+// One plain sentence under the page title. The rest of the page's help is
+// behind PageHelp, in the same place on every page.
+export function TabIntro({ children }) {
+  return <p className="text-copy text-muted mb-4 max-w-[80ch]">{children}</p>
+}
+
+// The Help button in the page bar: the page's section of docs/TABS.md in the
+// side panel. On a phone only the mark shows, so the breadcrumb keeps its room.
+export function PageHelp({ anchor }) {
   const [open, setOpen] = useState(false)
   // Focus goes back to the control that opened the panel, which the panel
   // cannot do itself — it is unmounted by the time the focus has to land. Same
@@ -2878,18 +2886,22 @@ export function TabIntro({ anchor, children }) {
     btnRef.current?.focus()
   }
   return (
-    <p className="text-note text-muted mb-3 max-w-[80ch]">
-      {children}{' '}
+    <>
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        data-inline-control=""
-        className="text-link underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-note"
+        aria-label="Help for this page"
+        className="inline-flex items-center gap-1.5 px-1.5 py-1 rounded-control text-copy text-txt hover:bg-line"
       >
-        Docs →
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" />
+          <path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.2-.8.6-.8 1.1v.4" strokeLinecap="round" />
+          <circle cx="8" cy="11.6" r=".5" fill="currentColor" stroke="none" />
+        </svg>
+        <span className="hidden sm:inline">Help</span>
       </button>
       {open && (
         // No fallback element: the panel is the only thing on screen that would
@@ -2899,7 +2911,7 @@ export function TabIntro({ anchor, children }) {
           <DocsPanel anchor={anchor} onClose={close} />
         </Suspense>
       )}
-    </p>
+    </>
   )
 }
 

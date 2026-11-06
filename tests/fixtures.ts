@@ -224,11 +224,19 @@ async function attachDiagnostics(
   });
 }
 
+export const EGRESS_OK_KEY = 'bx:ai-egress-ok';
+
 export const test = base.extend({
   page: async ({ page, baseURL }, use, testInfo) => {
     const t0 = Date.now();
     const windowStartIso = new Date(t0 - 1000).toISOString();
     const diag = installDiagnostics(page, t0);
+    // The AI page asks once per provider host before a question is sent. Tests
+    // start with that understood for the default host, so a test about asking
+    // is not about the notice. Tests about the notice remove EGRESS_OK_KEY.
+    await page.addInitScript((key) => {
+      try { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(['api.groq.com'])); } catch { /* no storage */ }
+    }, EGRESS_OK_KEY);
     const originalGoto = page.goto.bind(page);
     page.goto = (async (url: Parameters<Page['goto']>[0], options?: Parameters<Page['goto']>[1]) => {
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {

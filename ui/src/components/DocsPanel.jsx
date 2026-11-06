@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { parseInline, sectionFor, parseBlocks } from '../lib/markdown.js'
+import { parseInline, sectionFor, parseBlocks, slugify } from '../lib/markdown.js'
 
 // The tab documentation, read inside the app instead of on GitHub.
 //
@@ -158,7 +158,8 @@ export default function DocsPanel({ anchor, onClose }) {
   // to an error: an anchor stops matching when the docs are REORGANISED, which
   // is not something the reader did or can fix, and the thing they wanted is
   // still in there.
-  const section = doc ? sectionFor(doc, anchor) : null
+  // anchor is the page's label; slugified here so the markdown code stays out of the entry chunk.
+  const section = doc ? sectionFor(doc, slugify(anchor)) : null
   const blocks = doc ? (section ?? parseBlocks(doc)) : []
   const showingWholeDoc = !!doc && section === null
   // The title comes from the document's own heading, not from a prop the caller
@@ -178,7 +179,7 @@ export default function DocsPanel({ anchor, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-3">
-          <h2 id="docs-title" className="text-copy font-semibold">{title ? `Docs — ${title}` : 'Docs'}</h2>
+          <h2 id="docs-title" className="text-copy font-semibold">{title ? `Help: ${title}` : 'Help'}</h2>
           <span className="flex-1" />
           <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>

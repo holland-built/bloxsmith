@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
@@ -73,7 +73,8 @@ export default function Dns() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-3">DNS</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">DNS</h1>
+      <TabIntro>Query load, DNS services, signed zones and policy zones, refreshed every 30 seconds.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(qps, services, zones, zonesStatus, !!data.error)} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading

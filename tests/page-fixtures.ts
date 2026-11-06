@@ -183,6 +183,7 @@ const SHELL: Handler[] = [
       vaultMode: false,
       hasGroq: false,
       llm: { base_url: '', hasKey: false, model: '' },
+      llmSendsTo: 'api.groq.com',
       tenants: [{ id: 'baseline-tenant', label: 'Baseline Tenant' }],
       update: { available: false, checkDisabled: false, current: 'v0.0.0-baseline', latest: 'v0.0.0-baseline', selfUpdate: false, url: '' },
       version: 'v0.0.0-baseline',

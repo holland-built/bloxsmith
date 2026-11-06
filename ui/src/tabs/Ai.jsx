@@ -236,6 +236,13 @@ function ChatCard({ panelId }) {
     try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(items.slice(-40))) } catch { /* storage full or off */ }
   }, [items])
   const [budget, setBudget] = useState(null)
+  const [egress, setEgress] = useState({ loaded: false, host: '', key: null })
+  // Understood also holds for this visit when the browser will not store it.
+  const [acceptedHere, setAcceptedHere] = useState(null)
+  useEffect(() => { readEgress().then(setEgress) }, [])
+  // An unknown host can never be accepted: nothing is sent until the user knows where it goes.
+  const accepted = (e) => !!e.key && (egressAccepted(e.key) || acceptedHere === e.key)
+  const checking = useRef(false)
   const inRef = useRef(null)
   const logRef = useRef(null)
   // Keep the newest message in view, as a chat does.
@@ -254,11 +261,24 @@ function ChatCard({ panelId }) {
     wasBusy.current = busy
   }, [busy])
 
+  // Every question passes here: typed, a suggestion, or #ai?q= from the header
+  // box. Until the notice is understood for the provider host, it waits in the
+  // box instead of being sent.
   const submit = (qArg) => {
     const q = String(qArg != null ? qArg : input).trim()
     if (!q) return
     // One question at a time. One that arrives mid-answer waits in the box.
-    if (busy) { if (qArg != null) setInput(q); return }
+    if (busy || checking.current) { if (qArg != null) setInput(q); return }
+    checking.current = true
+    readEgress().then((e) => {
+      checking.current = false
+      setEgress(e)
+      if (!accepted(e)) { setInput(q); return }
+      send(q)
+    })
+  }
+
+  const send = (q) => {
     setItems((list) => [...list, { role: 'user', text: q }])
     setInput('')
     if (inRef.current) inRef.current.style.height = 'auto'
@@ -358,12 +378,21 @@ function ChatCard({ panelId }) {
           className="shrink-0 px-3 py-1.5 rounded-control text-copy font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={() => submit()}
-          disabled={busy || !input.trim()}
+          disabled={busy || !input.trim() || !accepted(egress)}
         >
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>
       <p className="text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line.</p>
+      <EgressNotice
+        egress={egress}
+        accepted={accepted(egress)}
+        onAccept={() => {
+          acceptEgress(egress.key)
+          setAcceptedHere(egress.key)
+          inRef.current?.focus()
+        }}
+      />
     </div>
   )
 
@@ -666,8 +695,9 @@ function LookupCard({ panelId }) {
   )
 }
 
-// EgressNotice states, before the box is used, that asking a question sends live
-// tenant data off this machine and to where.
+// The egress notice states, before the first question, that asking sends live
+// tenant data off this machine and to where. Asking stays off until the reader
+// has pressed Understood, once per provider host: a new host asks again.
 //
 // NOTHING SAID SO. Not this tab, not the README, not DEPLOYMENT.md. Measured
 // against a capture server standing in for the provider, one question ("which
@@ -677,35 +707,72 @@ function LookupCard({ panelId }) {
 // names, and audit log entries with the user identity and role attached.
 //
 // That egress is not a bug — the feature cannot work without it. Not telling the
-// operator was. The destination is read from the configured LLM base URL rather
-// than hardcoded, so a self-hosted or proxied endpoint reports itself honestly
+// operator was. The destination is the server's llmSendsTo (the vault's base URL, else
+// LLM_BASE_URL, else api.groq.com) rather than hardcoded, so a self-hosted or proxied endpoint reports itself honestly
 // instead of being described as Groq.
-function EgressNotice() {
-  const [host, setHost] = useState(null)
-  const [unknown, setUnknown] = useState(false)
+const EGRESS_KEY = 'bx:ai-egress-ok'
 
-  useEffect(() => {
-    fetch('/api/vault/status', { cache: 'no-store' })
-      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
-      .then((d) => {
-        const base = (d && d.llm && d.llm.base_url) || ''
-        if (!base) { setHost('api.groq.com'); return }
-        try { setHost(new URL(base).host || base) } catch { setHost(base) }
-      })
-      // A failed read must not render as "nothing leaves" — say we don't know.
-      .catch(() => setUnknown(true))
-  }, [])
+// Read fresh before every question: the provider can change in Settings while
+// this page stays open. key is null when the host is unknown.
+async function readEgress() {
+  try {
+    const r = await fetch('/api/vault/status', { cache: 'no-store' })
+    if (!r.ok) throw new Error(String(r.status))
+    const d = await r.json()
+    const host = (d && d.llmSendsTo) || ''
+    return { loaded: true, host, key: host || null }
+  } catch {
+    return { loaded: true, host: '', key: null }
+  }
+}
 
+function egressAccepted(key) {
+  if (!key) return false
+  try { return JSON.parse(localStorage.getItem(EGRESS_KEY) || '[]').includes(key) } catch { return false }
+}
+
+function acceptEgress(key) {
+  if (!key) return
+  try {
+    const list = JSON.parse(localStorage.getItem(EGRESS_KEY) || '[]')
+    if (!list.includes(key)) localStorage.setItem(EGRESS_KEY, JSON.stringify([...list, key].slice(-20)))
+  } catch { /* storage off: asked again next visit */ }
+}
+
+function EgressNotice({ egress, accepted, onAccept }) {
+  const [open, setOpen] = useState(false)
+  const { host, loaded } = egress
+  if (accepted && !open) {
+    return (
+      <p className="text-note text-muted mt-1 text-center">
+        Questions send tenant data to {host || 'your AI provider'}.{' '}
+        <button type="button" className="underline underline-offset-2" onClick={() => setOpen(true)}>Details</button>
+      </p>
+    )
+  }
+  const text = !loaded
+    ? 'Checking where questions are sent…'
+    : host
+      ? `Asking a question sends live data from this tenant, such as hostnames, IP addresses, DNS names and audit entries, to ${host}. Nothing is sent until you ask.`
+      : 'Asking a question sends live data from this tenant to your configured AI provider. Its address could not be read, so asking is off until it can be. Reload the page to try again.'
   return (
-    <div
-      className="text-note rounded-control border px-3 py-2 mb-3"
-      style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}
-    >
-      {unknown
-        ? 'Asking a question sends live data from this tenant to your configured AI provider. The provider address could not be read just now.'
-        : host === null
-          ? 'Checking where questions are sent…'
-          : `Asking a question sends live data from this tenant — hostnames, IP addresses, DNS names, audit entries — to ${host}. Nothing is sent until you ask.`}
+    <div role="note" className="mt-3 text-note text-left rounded-control border px-3 py-2.5" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
+      {text}
+      <div className="mt-2 flex justify-end">
+        {accepted ? (
+          <button type="button" className="underline underline-offset-2" onClick={() => setOpen(false)}>Hide</button>
+        ) : (
+          <button
+            type="button"
+            disabled={!host}
+            onClick={onAccept}
+            className="px-3 py-1 rounded-control font-semibold disabled:opacity-40"
+            style={{ background: 'var(--color-warn)', color: 'var(--color-bg)' }}
+          >
+            Understood
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -719,12 +786,7 @@ export default function Ai() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">AI Assistant</h1>
-      <TabIntro anchor="ai">
-        Ask questions about your own network in plain language — answers show the tools used, so you can check
-        where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier.
-        Chat needs an LLM key; Block domain needs a dashboard token.
-      </TabIntro>
-      <EgressNotice />
+      <TabIntro>Ask about your network in plain words, or look up a domain, IP or host.</TabIntro>
       {/* panelId sits on the wrapper component, not only on the Card inside it:
           CardGrid reads it off its own direct children to work out the saved
           order, and a literal buried on the inner <Card> is invisible to that. */}

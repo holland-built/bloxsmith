@@ -141,8 +141,8 @@ export default function Overview() {
           "Changes here save right away — there is no Save button" — so the
           answer to "how do I save my layout" is still one click away from this
           page forever. The Docs button beside this line has it too. */}
-      <TabIntro anchor="overview">
-        Your network at a glance — DNS load, address use, subnet fullness and host health.
+      <TabIntro>
+        Your network at a glance: DNS load, address use, subnet fullness and host health.
         {!arrangedOnce && (
           <>
             {' '}Drag a panel’s right edge to resize it, or use Arrange panels to move

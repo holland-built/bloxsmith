@@ -516,10 +516,7 @@ export default function ChartBuilder() {
         <h1 className="text-copy font-semibold tracking-tight">Build a chart</h1>
         <Switch checked={cube} onChange={setCubeNames} label="Show cube names" />
       </div>
-      <TabIntro anchor="build-a-chart">
-        Pick what to count and how to slice it. The app writes the query from a fixed list, runs it on your
-        Infoblox account and draws what comes back. No AI is involved, so every number is Infoblox&apos;s own.
-      </TabIntro>
+      <TabIntro>Pick what to count and how to slice it. Every number comes straight from Infoblox.</TabIntro>
       {options.loading ? <Skeleton h={220} /> : options.error || !options.data?.combos ? (
         <FeedUnavailable label="The chart menus could not be loaded" />
       ) : (

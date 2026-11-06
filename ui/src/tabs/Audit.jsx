@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { eventWord } from '../lib/plainWords.js'
@@ -115,7 +115,8 @@ export default function Audit() {
 
   return (
     <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-3">Audit</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Audit</h1>
+      <TabIntro>Who changed what, in Bloxsmith and in the Infoblox Portal.</TabIntro>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to

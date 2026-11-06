@@ -168,11 +168,7 @@ export default function Provision() {
         </span>
       </div>
 
-      <TabIntro anchor="provision">
-        Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo
-        network. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent
-        and needs admin.
-      </TabIntro>
+      <TabIntro>Creates real objects in Infoblox: one subnet, a whole site, or a multi-region demo network.</TabIntro>
 
       <WriteAccessBanner isAdmin={isAdmin} />
 

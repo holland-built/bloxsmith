@@ -1,8 +1,6 @@
 - main "Assets tab":
   - heading "Assets" [level=1]
-  - paragraph:
-    - text: Every asset discovery found, searchable by name and filterable by type. Click a row for the fields too sparse to keep in the table.
-    - button "Docs →"
+  - paragraph: "Every asset discovery found: search by name, filter by type, or click a row for more."
   - button "Arrange panels"
   - heading "Asset Inventory" [level=2]
   - text: CSP discovery

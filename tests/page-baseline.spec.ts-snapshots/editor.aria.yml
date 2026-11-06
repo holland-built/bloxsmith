@@ -5,9 +5,7 @@
       - listitem:
         - button "DNS Zone — Create"
   - heading "Editor" [level=1]
-  - paragraph:
-    - text: Make, change or delete one DNS or DHCP item at a time. To change or delete one, find it by name, address or comment and pick it; the form fills with what it has now. Leave that empty to make a new one. Preview first, then Apply. Editor-created subnets and address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
-    - button "Docs →"
+  - paragraph: Make, change or delete one DNS or DHCP item at a time.
   - button "DNS Zone"
   - button "Subnet"
   - button "Address Block"

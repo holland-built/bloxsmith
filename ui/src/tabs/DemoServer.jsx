@@ -107,11 +107,7 @@ export default function DemoServer() {
     <PageRail>
       <div className="w-full px-6 py-5">
         <h1 className="text-copy font-semibold tracking-tight mb-1">Demo server</h1>
-        <TabIntro anchor="demo-server">
-          Builds a NIOS-X server on Proxmox with the next free address from Infoblox, gives it DNS, and proves it
-          answers. The Infoblox parts run as {st?.terraform || 'OpenTofu'} code you can read below. Every run gets its
-          own ID, and Tear down removes only what that run made.
-        </TabIntro>
+        <TabIntro>Builds a NIOS-X server on Proxmox, gives it DNS, and proves it answers.</TabIntro>
 
         <CardGrid layoutKey="demo">
           <Card panelId="demo-settings" span={3} title="Settings" note="saved in the vault; the join token is never shown again">

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The flow redesign of 2026-10-29, corrected on 2026-10-30: the app opens on
 // Overview's graphs, with a short "Needs a look" strip above them (a NOC screen

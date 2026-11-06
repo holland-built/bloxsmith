@@ -79,10 +79,7 @@ export default function Drift() {
     <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Drift</h1>
-      <TabIntro anchor="drift">
-        Compares a site template against what actually exists in Infoblox and lists what is missing, changed, or
-        extra. Read-only — it reports gaps, it never closes them.
-      </TabIntro>
+      <TabIntro>Lists the gaps between a site template and what is in Infoblox, without changing anything.</TabIntro>
 
       {/* The 720px cap that used to live on a plain <div> around these two cards
           is now on the cards themselves. A div wrapping a Card hides that Card's
