@@ -379,7 +379,7 @@ Every run gets an ID like `c-20261030-150000`. The ID is tagged on the address, 
 
 ### Ask AI
 
-Ask questions about your own data in plain words, such as "which subnets are nearly full?" or "what changed in the last 24 hours?". Suggested questions take one click. The AI sees your last three questions and answers, so a follow-up like "which of those is fullest?" works. The chat stays put when you visit another page and clears when you close the browser tab.
+Ask questions about your own data in plain words, such as "which subnets are nearly full?" or "what changed in the last 24 hours?". It works like the chat boxes in Claude or ChatGPT: type in the box at the bottom, press Enter to send, and Shift+Enter for a new line. Suggested questions take one click. **New chat** clears the conversation. The AI sees your last three questions and answers, so a follow-up like "which of those is fullest?" works. The chat stays put when you visit another page and clears when you close the browser tab.
 
 Each answer is marked **AI-generated** and lists the lookups the AI made underneath, so you can check where a number came from. It needs a key for an AI model that can use tools. See the AI query box section in the [README](../README.md). Without one, this panel shows an error and the rest of the dashboard still works.
 

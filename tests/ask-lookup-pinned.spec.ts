@@ -62,7 +62,9 @@ test('the lookup stays in view beside the chat when the page scrolls', async ({ 
   // the panel spacing tightened on 2026-10-03, and at 760 it scrolled 196px:
   // under the 200 this test asks for before it will believe its own result.
   // The guard is kept as it was and the window is made shorter instead.
-  const TALL = 700;
+  // Shorter again on 2026-11-06: the chat now scrolls inside its own box, as
+  // chat apps do, so a long conversation no longer makes the page taller.
+  const TALL = 560;
   await page.setViewportSize({ width: 1440, height: TALL });
   await page.goto('/#ai');
   await fillChat(page);
