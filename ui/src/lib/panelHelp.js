@@ -420,6 +420,12 @@ export const PANEL_HELP = {
     look: 'A red count is how many differences were found, green means none. Six per group are shown, worst group first; "+N more" opens the rest.',
   },
 
+  // ---- Best practices ----
+  'bp-checks': {
+    what: 'Design rules checked against this account: hosts down, Grid Masters with no backup, and DHCP HA groups in a deprecated mode.',
+    look: 'Problems come first, worst first; open one to see what it affects. "Couldn\'t tell" means the data could not prove the answer, and is never counted as passed.',
+  },
+
   // ---- Demo server ----
   'demo-settings': {
     what: 'The Proxmox host, demo network, NIOS-X image and join token, set once and kept in the encrypted vault.',

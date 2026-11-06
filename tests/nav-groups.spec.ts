@@ -14,6 +14,7 @@ import { test, expect } from './fixtures';
 const TAB_HEADINGS: [string, string][] = [
   ['overview', 'Overview'],
   ['daily', 'Daily Briefing'],
+  ['best-practices', 'Best practices'],
   ['network', 'Network'],
   ['dns', 'DNS'],
   ['security', 'Security'],
@@ -37,7 +38,7 @@ const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 // Which group owns which tab. Duplicated from App.jsx on purpose: a test that
 // imports the thing it checks would pass on any regrouping, including a wrong one.
 const GROUP_TABS: Record<string, string[]> = {
-  Status: ['Overview', 'Daily'],
+  Status: ['Overview', 'Daily', 'Best practices'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Automate', 'Provision', 'Self-Service', 'Editor', 'Drift', 'Demo server'],

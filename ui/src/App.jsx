@@ -23,6 +23,7 @@ const Changes = lazy(() => import('./tabs/Changes.jsx'))
 const Provision = lazy(() => import('./tabs/Provision.jsx'))
 const Editor = lazy(() => import('./tabs/Editor.jsx'))
 const Drift = lazy(() => import('./tabs/Drift.jsx'))
+const BestPractices = lazy(() => import('./tabs/BestPractices.jsx'))
 const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
 const Ai = lazy(() => import('./tabs/Ai.jsx'))
 const ChartBuilder = lazy(() => import('./tabs/ChartBuilder.jsx'))
@@ -55,6 +56,7 @@ import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
   { id: 'daily', label: 'Daily', el: Daily },
+  { id: 'best-practices', label: 'Best practices', el: BestPractices },
   { id: 'network', label: 'Network', el: Network },
   { id: 'dns', label: 'DNS', el: Dns },
   { id: 'security', label: 'Security', el: Security },
@@ -113,7 +115,7 @@ function hashTab() {
 // behaving exactly as before, it is only the way a tab is *reached by mouse*
 // that changed.
 const GROUPS = [
-  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily'] },
+  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily', 'best-practices'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
   { id: 'change', label: 'Change', question: 'Change something', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'demo'] },

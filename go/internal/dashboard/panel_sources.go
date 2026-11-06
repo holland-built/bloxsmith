@@ -192,6 +192,9 @@ var panelSources = []PanelSource{
 	restPanel("drift-error", "Drift", "Error", "your templates and the Infoblox API", whyResult),
 	restPanel("drift-result", "Drift", "Result", "your templates and the Infoblox API", "it compares your templates with what is there, worked out in the app"),
 
+	// ---- Best practices ----
+	restPanel("bp-checks", "Best practices", "Checks", "the Infoblox API", "it checks design rules against what is there, worked out in the app"),
+
 	// ---- Demo server ----
 	{ID: "demo-settings", Page: "Demo server", Name: "Settings", Kind: "local", Source: "the app's own vault", Builder: "no", Why: whyForm},
 	restPanel("demo-build", "Demo server", "Build", "Proxmox and the Infoblox API", whyLog),

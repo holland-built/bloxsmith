@@ -810,6 +810,15 @@
     "why": "it compares your templates with what is there, worked out in the app"
   },
   {
+    "id": "bp-checks",
+    "page": "Best practices",
+    "name": "Checks",
+    "kind": "rest",
+    "source": "the Infoblox API",
+    "builder": "no",
+    "why": "it checks design rules against what is there, worked out in the app"
+  },
+  {
     "id": "demo-settings",
     "page": "Demo server",
     "name": "Settings",

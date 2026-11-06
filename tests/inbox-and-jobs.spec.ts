@@ -129,7 +129,7 @@ test('on a phone the jobs are a bar along the bottom, and All pages reaches ever
   await expect(bar.getByRole('link')).toHaveText(['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts']);
   await expect(page.locator('[data-job-rail]')).toBeHidden();
   await page.getByRole('button', { name: 'All pages' }).click();
-  await expect(page.getByRole('menuitem')).toHaveCount(18);
+  await expect(page.getByRole('menuitem')).toHaveCount(19);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });
