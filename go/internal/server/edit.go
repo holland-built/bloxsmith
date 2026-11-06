@@ -26,6 +26,7 @@ func (d *Deps) registerEditRoutes(mux router) {
 	mux.HandleFunc("POST /api/edit/", d.body(d.editCreate))
 	mux.HandleFunc("PATCH /api/edit/", d.body(d.editUpdate))
 	mux.HandleFunc("DELETE /api/edit/", d.editDelete)
+	mux.HandleFunc("GET /api/edit/{type}/find", d.editFind)
 }
 
 // roleGate is _role_at_least (server.py:4993): resolve the caller's role and, if
