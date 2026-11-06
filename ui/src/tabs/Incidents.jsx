@@ -154,7 +154,7 @@ export default function Incidents() {
   return (
     <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Incidents</h1>
-      <TabIntro>The SOC queue, by category and severity, refreshed every 20 seconds.</TabIntro>
+      <TabIntro>Incidents to triage, by category and severity, refreshed every 20 seconds.</TabIntro>
       <CardGrid layoutKey="incidents">
         <CategoryChips panelId="incidents-categories" categories={categories} signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         <IncidentsTable
