@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
@@ -175,12 +176,12 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		viewsD, viewsErr := s.Rest.GetStrict("/api/ddi/v1/dns/view",
 			map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
 		if viewsErr != nil {
-			return aiLookupFailed("DNS views", aiUpstreamDetail(viewsErr))
+			return aiReadFailed("DNS views", viewsErr)
 		}
 		zonesD, zonesErr := s.Rest.GetStrict("/api/ddi/v1/dns/auth_zone",
 			map[string]string{"_fields": "fqdn,view,zone_authority", "_limit": "5000"})
 		if zonesErr != nil {
-			return aiLookupFailed("DNS zones", aiUpstreamDetail(zonesErr))
+			return aiReadFailed("DNS zones", zonesErr)
 		}
 		vm := map[string]string{}
 		for _, v := range viewsD {
@@ -196,7 +197,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		rows, err := s.Rest.GetStrict("/api/ddi/v1/dhcp/lease",
 			map[string]string{"_fields": "address,hostname,state", "_limit": "5000"})
 		if err != nil {
-			return aiLookupFailed("DHCP leases", aiUpstreamDetail(err))
+			return aiReadFailed("DHCP leases", err)
 		}
 		data := normLeases(rows)
 		noun := "DHCP leases"
@@ -223,7 +224,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		rows, err := s.Rest.GetStrict("/api/atcfw/v1/named_lists",
 			map[string]string{"_fields": "name,threat_level,item_count", "_limit": "200"})
 		if err != nil {
-			return aiLookupFailed("threat feeds", aiUpstreamDetail(err))
+			return aiReadFailed("threat feeds", err)
 		}
 		data := normFeeds(rows)
 		if len(data) == 0 {
@@ -236,7 +237,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		rows, err := s.Rest.GetStrict("/api/auditlog/v1/logs",
 			map[string]string{"_limit": strconv.Itoa(limit), "_order_by": "created_at desc"})
 		if err != nil {
-			return aiLookupFailed("audit log entries", aiUpstreamDetail(err))
+			return aiReadFailed("audit log entries", err)
 		}
 		data := normAudit(rows)
 		if len(data) == 0 {
@@ -383,6 +384,26 @@ func aiLookupFailed(noun, detail string) string {
 		"Could not reach Infoblox to look up %s (%s). This is a lookup failure, not a report that there are no %s — do not tell the user they have none.",
 		noun, detail, noun,
 	)
+}
+
+// featureOffRE matches Infoblox's answer for a feature the account doesn't
+// have, e.g. "Stub zone feature is not enabled for this account" (seen live
+// 2026-11-06). Matched only; the upstream text is never passed on.
+var featureOffRE = regexp.MustCompile(`(?i)feature is not enabled for this account`)
+
+// aiReadFailed is aiLookupFailed for a GetStrict/GetPageStrict error, except
+// that a feature the account doesn't have is an answer, not a failed lookup.
+func aiReadFailed(noun string, err error) string {
+	if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == http.StatusBadRequest && featureOffRE.MatchString(ue.Snippet) {
+		return aiFeatureOff(noun)
+	}
+	return aiLookupFailed(noun, aiUpstreamDetail(err))
+}
+
+func aiFeatureOff(noun string) string {
+	return fmt.Sprintf(
+		"The feature behind %s is not turned on for this Infoblox account, so Bloxsmith can't list them. Say so plainly in one sentence; this is not a lookup failure. Do not suggest more questions about it.",
+		noun)
 }
 
 // aiUpstreamDetail renders the sanitized detail clause for a GetStrict/
