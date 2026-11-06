@@ -26,13 +26,13 @@ func findReq(t *testing.T, typ, q, reply string) (int, map[string]any, string) {
 }
 
 func TestEditFind_HostCarriesTheFormValues(t *testing.T) {
-	_, body, filter := findReq(t, "host", "web", `{"results":[{"id":"ipam/host/1","name":"web1","comment":"rack 4","addresses":[{"address":"10.0.0.5"},{"address":"10.0.0.6"}]}]}`)
+	_, body, filter := findReq(t, "host", "web", `{"results":[{"id":"ipam/host/1","name":"web1","comment":"rack 4","addresses":[{"address":"10.0.0.5","space":"ipam/ip_space/9"},{"address":"10.0.0.6","space":"ipam/ip_space/4"}]}]}`)
 	if filter != `name~"web" or comment~"web"` {
 		t.Fatalf("_filter = %q", filter)
 	}
 	item := body["items"].([]any)[0].(map[string]any)
 	f := item["fields"].(map[string]any)
-	if item["id"] != "ipam/host/1" || f["addresses"] != "10.0.0.5, 10.0.0.6" || f["comment"] != "rack 4" {
+	if item["id"] != "ipam/host/1" || f["addresses"] != "10.0.0.5, 10.0.0.6" || f["comment"] != "rack 4" || f["spaces"] != "10.0.0.5=ipam/ip_space/9, 10.0.0.6=ipam/ip_space/4" {
 		t.Fatalf("item = %v", item)
 	}
 }

@@ -56,15 +56,22 @@ var editFindSpecs = map[string]editFindSpec{
 		path: "/api/ddi/v1/ipam/host", text: []string{"name", "comment"},
 		label: func(m map[string]any) string { return str(m, "name") },
 		fields: func(m map[string]any) map[string]any {
-			var addrs []string
+			var addrs, spaces []string
 			if list, ok := m["addresses"].([]any); ok {
 				for _, a := range list {
-					if s := str(getMap(a), "address"); s != "" {
-						addrs = append(addrs, s)
+					ip, sp := str(getMap(a), "address"), str(getMap(a), "space")
+					if ip != "" {
+						addrs = append(addrs, ip)
+					}
+					if ip != "" && sp != "" {
+						spaces = append(spaces, ip+"="+sp)
 					}
 				}
 			}
-			return map[string]any{"name": str(m, "name"), "addresses": strings.Join(addrs, ", "), "comment": str(m, "comment")}
+			// spaces ("ip=space, ...") is not a form field. Editor sends each
+			// address with its own space, as the host update expects
+			// {address, space}; a host's addresses can sit in different spaces.
+			return map[string]any{"name": str(m, "name"), "addresses": strings.Join(addrs, ", "), "comment": str(m, "comment"), "spaces": strings.Join(spaces, ", ")}
 		},
 	},
 }

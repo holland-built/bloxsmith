@@ -103,6 +103,21 @@ function parseTags(str) {
   return out
 }
 
+// A picked host carries each address's IP space ("ip=space, ..."), which the
+// host update expects with every address. A kept address is sent once per
+// space it had, so one IP held in two spaces keeps both. An address the host
+// did not have gets the host's space when all its addresses share one.
+function hostAddresses(raw, spaces) {
+  const known = String(spaces || '').split(',').map((p) => p.trim().split('=')).filter(([a, sp]) => a && sp)
+  const all = [...new Set(known.map(([, sp]) => sp))]
+  const typed = [...new Set(String(raw).split(',').map((s) => s.trim()).filter(Boolean))]
+  return typed.flatMap((a) => {
+    const had = known.filter(([ip]) => ip === a).map(([, space]) => ({ address: a, space }))
+    if (had.length) return had
+    return all.length === 1 ? [{ address: a, space: all[0] }] : [{ address: a }]
+  })
+}
+
 // Find an existing item by name, address or comment, instead of pasting its ID.
 function FindExisting({ type, label, picked, busy, onPick, onClear }) {
   const [text, setText] = useState('')
@@ -122,6 +137,11 @@ function FindExisting({ type, label, picked, busy, onPick, onClear }) {
     }, 300)
     return () => { live = false; clearTimeout(id) }
   }, [text, type])
+  // Results for an older search are hidden until the current one answers, so
+  // a click cannot pick an item the box no longer asks for.
+  const fresh = state.items && state.q === text.trim()
+  const seen = {}
+  ;(fresh ? state.items : []).forEach((it) => { seen[it.label] = (seen[it.label] || 0) + 1 })
 
   return (
     <div className="flex flex-col gap-1">
@@ -137,8 +157,8 @@ function FindExisting({ type, label, picked, busy, onPick, onClear }) {
         />
       </label>
       {state.error && <div className="text-note" style={{ color: COLORS.crit }}>Couldn't search: {state.error}</div>}
-      {state.items && state.items.length === 0 && <div className="text-note text-muted">Nothing matches “{state.q}”.</div>}
-      {state.items && state.items.length > 0 && (
+      {fresh && state.items.length === 0 && <div className="text-note text-muted">Nothing matches “{state.q}”.</div>}
+      {fresh && state.items.length > 0 && (
         <ul aria-label={`Matching ${label.toLowerCase()} items`} className="flex flex-col gap-1 max-h-56 overflow-y-auto">
           {state.items.map((it) => (
             <li key={it.id}>
@@ -152,7 +172,8 @@ function FindExisting({ type, label, picked, busy, onPick, onClear }) {
                 className="w-full text-left text-copy px-2.5 py-1.5 rounded-control border border-border hover:border-border-hover"
                 style={picked === it.id ? { borderColor: COLORS.accent } : undefined}
               >
-                {it.label || it.id}
+                {/* Two items with the same label (one subnet in two IP spaces) get their ID too. */}
+                {seen[it.label] > 1 || !it.label ? `${it.label || ''} ${it.id}`.trim() : it.label}
               </button>
             </li>
           ))}
@@ -225,7 +246,7 @@ export default function Editor() {
         if (raw == null || raw === '') { body[f.key] = f.key === 'tags' ? {} : ''; return }
       } else if (raw == null || raw === '') return
       if (f.key === 'tags') body.tags = parseTags(raw)
-      else if (f.key === 'addresses') body.addresses = String(raw).split(',').map((s) => s.trim()).filter(Boolean).map((a) => ({ address: a }))
+      else if (f.key === 'addresses') body.addresses = hostAddresses(raw, fields.spaces)
       else if (f.kind === 'number') body[f.key] = Number(raw)
       else body[f.key] = raw
     })
@@ -252,6 +273,7 @@ export default function Editor() {
       }
     }
     const body = buildBody()
+    const sent = fields
     body.dry = dry
     const method = isUpdate ? 'PATCH' : 'POST'
     const url = isUpdate ? `${spec.endpoint}/${encodeURIComponent(editId.trim())}` : spec.endpoint
@@ -279,6 +301,9 @@ export default function Editor() {
         setStatus('applied')
         setResult({ ok: true, msg: j.message || `${spec.label} ${isUpdate ? 'updated' : 'created'}.` })
         if (!isUpdate) setFields({})
+        // The item now holds what was sent, so the next Update sends only
+        // what changes after this one.
+        else if (loaded) setLoaded(sent)
       }
     })
   }
