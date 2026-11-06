@@ -39,7 +39,7 @@ test('every answer is marked AI-generated and keeps its tool facts; an error is 
   const log = page.getByRole('log');
   await expect(log.getByText('Two hosts are offline.')).toBeVisible();
   await expect(log.getByText('AI-generated', { exact: true })).toHaveCount(1);
-  await expect(log.getByText('↳ 2 rows')).toBeVisible();
+  await expect(log.getByText('Counted by Bloxsmith: 2 rows')).toBeVisible();
 
   await box.fill('And now?');
   await box.press('Enter');

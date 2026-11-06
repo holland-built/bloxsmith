@@ -54,34 +54,46 @@ function Message({ item, onRetry }) {
         <AnswerText text={item.text} />
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {item.suggestions.map((sg, i) => (
+            {item.suggestions.slice(0, 3).map((sg, i) => (
               <span key={i} className="text-note px-2 py-0.5 rounded-control border border-border text-muted">{sg}</span>
             ))}
           </div>
         )}
         {item.ranOut && onRetry && item.question ? <RetryButton onClick={() => onRetry(item.question)} /> : null}
-        {!!(item.trace && item.trace.length) && (
-          <div className="mt-3 pt-2 border-t border-border font-mono text-note text-muted space-y-0.5">
-            {item.trace.map((t, i) => (
-              <div key={i}>
-                {/* The raw lookup folds away; the counted fact below stays in view. */}
-                <details>
-                  <summary className="cursor-pointer">{t.tool}</summary>
-                  <span className="opacity-70 break-all">{JSON.stringify(t.args)}</span>
-                </details>
-                {/* `fact` is counted by the server from the rows themselves, not
-                    written by the model. Text inside the tenant's own data can
-                    steer the prose above (demonstrated: a hostname carrying an
-                    injected instruction made the model report "all hosts are
-                    online" while holding data showing one offline). It cannot
-                    change this line, so an answer that contradicts it is visibly
-                    contradicted. */}
-                {t.fact ? <div className="opacity-90 not-italic">↳ {t.fact}</div> : null}
-              </div>
-            ))}
-          </div>
-        )}
+        {!!(item.trace && item.trace.length) && <Lookups trace={item.trace} />}
       </div>
+    </div>
+  )
+}
+
+// How the answer was found, folded away. The facts stay in view on one line:
+// `fact` is counted by the server from the rows themselves, not written by the
+// model. Text inside the tenant's own data can steer the prose above
+// (demonstrated: a hostname carrying an injected instruction made the model
+// report "all hosts are online" while holding data showing one offline). It
+// cannot change these facts, so an answer that contradicts them is visibly
+// contradicted.
+function Lookups({ trace }) {
+  const facts = trace.map((t) => t.fact).filter(Boolean)
+  // "72535 subnets exist in total; the 25 below are a sample, not the full
+  // list." keeps its count. Only that clause goes; any other part stays.
+  const short = facts.map((f) => f.replace(/;?\s*the \d+ below (are|is) a sample, not the full list\.?/i, '').trim())
+  return (
+    <div className="mt-3 text-note text-muted">
+      {short.length > 0 && (
+        <p title={facts.join('\n')}>Counted by Bloxsmith: {short.join(' · ')}</p>
+      )}
+      <details className="mt-0.5">
+        <summary className="cursor-pointer">How I got this ({trace.length} {trace.length === 1 ? 'lookup' : 'lookups'})</summary>
+        <div className="mt-1 font-mono space-y-1">
+          {trace.map((t, i) => (
+            <div key={i}>
+              <div>{t.tool} <span className="opacity-70 break-all">{JSON.stringify(t.args)}</span></div>
+              {t.fact ? <div className="opacity-90">↳ {t.fact}</div> : null}
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   )
 }
