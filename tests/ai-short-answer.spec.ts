@@ -24,7 +24,7 @@ test('an answer is short: three suggestions, one fact line, lookups folded', asy
   await box.press('Enter');
   const log = page.getByRole('log');
   await expect(log).toContainText('You have 620 /32 subnets.');
-  await expect(log.getByText('Counted by Bloxsmith: 72535 subnets exist in total · 620 records exist in total.')).toBeVisible();
+  await expect(log.getByText('Counted by Bloxsmith: 72,535 subnets exist in total · 620 records exist in total.')).toBeVisible();
   for (const sg of ['How many /30s?', 'How many /24s?', 'Which are full?']) await expect(log.getByText(sg, { exact: true })).toBeVisible();
   await expect(log.getByText('Show /31s', { exact: true })).toHaveCount(0);
   await expect(log.getByText('get_subnets')).toBeHidden();

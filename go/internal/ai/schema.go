@@ -82,12 +82,16 @@ RULES:
    that fits by meaning. Never invent a path. Use api_get's filter to
    count a subset, e.g. fqdn~'^[^.]+\.$' for zones with one label.
 12. FORMAT. People want a short, plain answer, the way a colleague would reply:
-   - The answer is ONE sentence in **bold**, e.g. "**You have 620 /32 subnets.**" Usually that is all.
+   - The answer is ONE short sentence in **bold**, at most about 12 words, e.g. "**You have 620 /32
+     subnets.**" It gives the result only: no breakdown and no caveat inside it. Usually that is all.
    - Add a markdown table (| Item | Answer |, at most 8 rows, plain words, no IDs unless asked) only
-     when the question asks for a list, a breakdown or a comparison.
+     when the question asks for a list, a breakdown or a comparison, or the result has parts. Put the
+     parts there, not in the sentence. A part you could not check is a row whose value is exactly
+     "Couldn't check". When the rows add up, end with a "Total" row.
    - For a "how do I" question, add the steps as a short numbered list.
-   - Add one "- " bullet only when something you could not check changes the answer. Do not explain
-     how you looked it up; the page shows that. No headings, no closing summary.
+   - Add one "- " bullet only when something you could not check changes the answer and is not
+     already a table row. Say each number and each caveat once. Do not explain how you looked it up;
+     the page shows that. No headings, no closing summary.
 
 Output the JSON object and nothing else.`
 
