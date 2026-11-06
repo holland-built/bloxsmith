@@ -215,12 +215,28 @@ class TabErrorBoundary extends Component {
     return props.tab === state.tab ? null : { failed: false, tab: props.tab }
   }
 
+  // After an update the old page files are gone, so a tab left open can't load
+  // the next page. Reload once by itself to pick up the new files; the
+  // timestamp stops a loop if the reload doesn't help.
+  componentDidCatch(error) {
+    if (!/dynamically imported module|Importing a module script failed/i.test(String(error?.message))) return
+    try {
+      const last = Number(sessionStorage.getItem('bx:chunk-reload')) || 0
+      if (Date.now() - last < 60000) return
+      sessionStorage.setItem('bx:chunk-reload', String(Date.now()))
+    } catch {
+      return
+    }
+    location.reload()
+  }
+
   render() {
     if (!this.state.failed) return this.props.children
     return (
       <div className="p-5">
-        <div role="alert" className="border border-border bg-card p-4 text-copy text-txt">
-          This tab could not load. Reload the page.
+        <div className="flex flex-wrap items-center gap-3 border border-border bg-card p-4 text-copy text-txt">
+          <span role="alert" className="flex-1">This tab could not load. The app may have just been updated.</span>
+          <button type="button" onClick={() => location.reload()} className={SHEET_BTN}>Reload the page</button>
         </div>
       </div>
     )

@@ -1,5 +1,6 @@
 import { questionFromHash } from '../lib/oneBox.js'
 import { useEffect, useRef, useState } from 'react'
+import { chatContext } from '../lib/aiContext.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
@@ -192,21 +193,19 @@ function BudgetLine({ budget }) {
   )
 }
 
+const CHAT_KEY = 'bx:ai-chat'
+
 function ChatCard({ panelId }) {
   const { COLORS } = useChartTheme()
-  // A question typed in the header's box arrives as #ai?q=…, typed in, not sent.
-  const [input, setInput] = useState(() => questionFromHash(location.hash))
-  // A second question from the header box while already here changes only the hash.
-  useEffect(() => {
-    const onHash = () => {
-      const q = questionFromHash(location.hash)
-      if (q) setInput(q)
-    }
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [])
+  const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [items, setItems] = useState([])
+  // Kept for this browser tab, so going to another page and back keeps the chat.
+  const [items, setItems] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(CHAT_KEY) || '[]') } catch { return [] }
+  })
+  useEffect(() => {
+    try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(items.slice(-40))) } catch { /* storage full or off */ }
+  }, [items])
   const [budget, setBudget] = useState(null)
   const inRef = useRef(null)
   // The input is disabled while a question runs, which drops focus to the page.
@@ -222,14 +221,16 @@ function ChatCard({ panelId }) {
 
   const submit = (qArg) => {
     const q = String(qArg != null ? qArg : input).trim()
-    if (!q || busy) return
+    if (!q) return
+    // One question at a time. One that arrives mid-answer waits in the box.
+    if (busy) { if (qArg != null) setInput(q); return }
     setItems((list) => [...list, { role: 'user', text: q }])
     setInput('')
     setBusy(true)
     fetch('/api/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q }),
+      body: JSON.stringify({ question: q, context: chatContext(items) }),
     })
       .then(async (r) => {
         const j = await r.json().catch(() => null)
@@ -273,6 +274,23 @@ function ChatCard({ panelId }) {
   }
 
   const ask = (sg) => submit(sg)
+
+  // A question from the header box or an "Ask why" link arrives as #ai?q=…
+  // and is asked straight away. The q is then taken off the address, so a
+  // reload or Back doesn't ask (and spend tokens) a second time.
+  const submitRef = useRef(submit)
+  submitRef.current = submit
+  useEffect(() => {
+    const take = () => {
+      const q = questionFromHash(location.hash)
+      if (!q) return
+      history.replaceState(null, '', location.pathname + location.search + '#ai')
+      submitRef.current(q)
+    }
+    take()
+    window.addEventListener('hashchange', take)
+    return () => window.removeEventListener('hashchange', take)
+  }, [])
 
   return (
     <Card panelId={panelId} title="Ask AI" span={4}>

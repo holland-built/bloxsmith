@@ -52,12 +52,17 @@ function useWriteFlow(url) {
   const [preview, setPreview] = useState(null)
   const [message, setMessage] = useState(null)
   const [error, setError] = useState(null)
+  // An edit made while Preview is still loading must leave that preview stale,
+  // or Apply would send fields the preview never checked.
+  const editedWhileBusy = useRef(false)
 
   function markStale() {
     if (status === 'previewed') setStale(true)
+    if (status === 'busy') editedWhileBusy.current = true
   }
 
   function post(body, dry) {
+    editedWhileBusy.current = false
     setStatus('busy')
     setError(null)
     setMessage(null)
@@ -88,7 +93,7 @@ function useWriteFlow(url) {
     post(body, true).then((j) => {
       if (!j) return
       setPreview(j.record || j.addresses || j)
-      setStale(false)
+      setStale(editedWhileBusy.current)
       setStatus('previewed')
       setMessage(`Preview only — nothing has been committed. Review it, then ${applyVerb}.`)
     })
@@ -108,6 +113,14 @@ function useWriteFlow(url) {
 }
 
 // ---------- allocate ----------
+
+// Name the address the server actually reserved; it can differ from the preview.
+function allocatedMsg(j) {
+  const got = (j?.addresses || []).map((a) => a?.address).filter(Boolean)
+  if (got.length === 1) return `Done. ${got[0]} is yours.`
+  if (got.length > 1) return `Done. These ${got.length} addresses are yours: ${got.join(', ')}.`
+  return 'Address allocated.'
+}
 
 const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? ` — ${s.name}` : '')
 
@@ -179,7 +192,7 @@ function AllocatePanel({ panelId }) {
 
   return (
     <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="IP Space" group>
           <FilterSelect
             label="IP Space"
@@ -234,7 +247,7 @@ function AllocatePanel({ panelId }) {
         stale={flow.stale}
         disabled={!target}
         onPreview={() => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') }}
-        onApply={() => flow.runApply(body(), () => { saveLast(tenant, space, target); return 'Address allocated.' })}
+        onApply={() => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j) })}
         applyLabel="Allocate"
         error={flow.error}
         message={flow.message}
@@ -276,7 +289,7 @@ function DnsPanel({ panelId }) {
 
   return (
     <Card panelId={panelId} span={3} title="Create DNS Record" note="preview is validated by the server">
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="Zone">
           <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
             <option value="">Select zone…</option>
@@ -300,7 +313,7 @@ function DnsPanel({ panelId }) {
       </div>
       <details className="mb-3 text-note text-muted" open={ttl !== ''}>
         <summary className="cursor-pointer">More options</summary>
-        <div className="grid grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <Field label="TTL (optional)">
             <input {...MACHINE_TEXT} className={inputCls} type="number" min="0" value={ttl} onChange={(e) => { setTtl(e.target.value); flow.markStale() }} />
           </Field>
@@ -360,9 +373,11 @@ function ManageRecordsPanel({ panelId, span }) {
   // it lives in (Edit closes / Delete removes the row in the same tick), so a
   // successful apply/delete needs its own state that survives that unmount.
   const [panelMessage, setPanelMessage] = useState(null)
+  const editedWhileBusy = useRef(false)
 
   function markStale() {
     if (status === 'previewed') setStale(true)
+    if (status === 'busy') editedWhileBusy.current = true
   }
 
   function startEdit(row) {
@@ -396,6 +411,7 @@ function ManageRecordsPanel({ panelId, span }) {
     if (!row) return
     const snapshot = { value: row.dns_rdata, ttl: row.ttl, comment: row.comment }
     setHeld(snapshot)
+    editedWhileBusy.current = false
     setStatus('busy'); setError(null); setMessage(null)
     fetch('/api/dns/records', {
       method: 'PATCH',
@@ -410,7 +426,7 @@ function ManageRecordsPanel({ panelId, span }) {
           return
         }
         setPreview(j.would_update || j)
-        setStale(false)
+        setStale(editedWhileBusy.current)
         setStatus('previewed')
         setMessage('Preview only — nothing has been committed. Review it, then Update.')
       })
@@ -477,11 +493,18 @@ function ManageRecordsPanel({ panelId, span }) {
     if (armedId !== row.id) {
       setDeleteError(null)
       setPanelMessage(null)
+      // Arm only on a fresh read that still finds the row, so the confirm
+      // label never shows details that may have changed.
       fetch(recordsUrl, { cache: 'no-store' })
-        .then((r) => r.json())
-        .catch(() => ({}))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
         .then((j) => {
-          const fresh = (j.records || []).find((x) => x.id === row.id) || row
+          const fresh = j && (j.records || []).find((x) => x.id === row.id)
+          if (!fresh) {
+            setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : "Couldn't re-check that record, so it wasn't deleted. Try again.")
+            if (j) recordsApi.refetch()
+            return
+          }
           const nm = fresh.name_in_zone || '@'
           setArmLabel(`Click again to delete ${fresh.type} ${nm} -> ${fresh.dns_rdata}`)
           setArmedId(row.id)
@@ -573,7 +596,7 @@ function ManageRecordsPanel({ panelId, span }) {
                     )}
                     {isEditing && (
                       <div className="mt-2 flex flex-col gap-2">
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <Field label="Value">
                             <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); markStale() }} />
                           </Field>
@@ -632,10 +655,15 @@ function ManageAddressesPanel({ panelId }) {
     if (armedId !== row.id) {
       setReleaseError(null)
       fetch(addressesUrl, { cache: 'no-store' })
-        .then((r) => r.json())
-        .catch(() => ({}))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
         .then((j) => {
-          const fresh = (j.addresses || []).find((x) => x.id === row.id) || row
+          const fresh = j && (j.addresses || []).find((x) => x.id === row.id)
+          if (!fresh) {
+            setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : "Couldn't re-check that address, so it wasn't released. Try again.")
+            if (j) addressesApi.refetch()
+            return
+          }
           setArmLabel(`Click again to release ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
           setArmedId(row.id)
           clearTimeout(armTimerRef.current)
@@ -662,7 +690,7 @@ function ManageAddressesPanel({ panelId }) {
 
   return (
     <Card panelId={panelId} span={3} title="Manage Addresses" note="release an allocated address">
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="IP Space">
           <select
             className={inputCls}

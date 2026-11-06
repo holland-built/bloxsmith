@@ -177,7 +177,7 @@ export default function Drift() {
                 {sortedCats.length === 0 ? (
                   <Empty>no drift items</Empty>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {sortedCats.map(([cat, items]) => {
                       const open = openCats.has(cat)
                       const shown = open ? items : items.slice(0, 6)

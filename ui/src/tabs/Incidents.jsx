@@ -58,6 +58,25 @@ function SeverityPill({ severity }) {
 // problem, not the one already dismissed (old app: incAckKey)
 const ackKey = (s) => `${s.category}|${s.entity_id}|${Math.floor(Number(s.detected_at) || 0)}`
 
+// Acks are kept in this browser so a reload or a tab switch doesn't undo them.
+// Each one is dropped after 14 days, so the list can't grow forever.
+const ACKS_KEY = 'bx:incident-acks'
+const ACK_DAYS = 14
+function loadAcks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACKS_KEY) || '{}')
+    const cutoff = Date.now() - ACK_DAYS * 86400000
+    const out = {}
+    for (const [k, at] of Object.entries(saved)) if (Number(at) > cutoff) out[k] = Number(at)
+    return out
+  } catch {
+    return {}
+  }
+}
+function saveAcks(acks) {
+  try { localStorage.setItem(ACKS_KEY, JSON.stringify(acks)) } catch { /* storage off: acks last for this visit */ }
+}
+
 // ---------- main ----------
 
 // Only the IQ action trend needs recharts, so only it waits for it.
@@ -67,7 +86,7 @@ export default function Incidents() {
   const incApi = useApi('/api/incidents', { poll: 20000 })
   const actionsApi = useApi('/api/actions', { poll: 30000 })
 
-  const [acks, setAcks] = useState({})
+  const [acks, setAcks] = useState(loadAcks)
   const [category, setCategory] = useState('')
   const [openActionId, setOpenActionId] = useState(null)
   // per-action-id pending/error state for the resolve/reopen control (rows are independent)
@@ -99,7 +118,8 @@ export default function Incidents() {
     setAcks((p) => {
       const n = { ...p }
       if (n[k]) delete n[k]
-      else n[k] = true
+      else n[k] = Date.now()
+      saveAcks(n)
       return n
     })
   }
@@ -149,7 +169,7 @@ export default function Incidents() {
           onCategory={setCategory}
           acks={acks}
           onToggleAck={toggleAck}
-          onClearAcks={() => setAcks({})}
+          onClearAcks={() => { setAcks({}); saveAcks({}) }}
         />
         {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
             different Card on its error branch, and both are the same panel — one
