@@ -6,32 +6,32 @@
   "summary": "List DNS Forwarding Proxy services."
  },
  {
-  "path": "/api/atcep/v1/roaming_device/os_versions",
-  "base": "/api/atcep/v1",
+  "path": "/api/endpoints/atcep/v1/roaming_device/os_versions",
+  "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
   "summary": "The RPC method used to get distinct OS versions of active endpoints."
  },
  {
-  "path": "/api/atcep/v1/roaming_device/status",
-  "base": "/api/atcep/v1",
+  "path": "/api/endpoints/atcep/v1/roaming_device/status",
+  "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
   "summary": "Read roaming device status counts for account."
  },
  {
-  "path": "/api/atcep/v1/roaming_device/vpn_vendor_count",
-  "base": "/api/atcep/v1",
+  "path": "/api/endpoints/atcep/v1/roaming_device/vpn_vendor_count",
+  "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
   "summary": "/roaming_device/vpn_vendor_count"
  },
  {
-  "path": "/api/atcep/v1/roaming_device_groups",
-  "base": "/api/atcep/v1",
+  "path": "/api/endpoints/atcep/v1/roaming_device_groups",
+  "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
   "summary": "List Roaming Device Groups."
  },
  {
-  "path": "/api/atcep/v1/roaming_devices",
-  "base": "/api/atcep/v1",
+  "path": "/api/endpoints/atcep/v1/roaming_devices",
+  "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
   "summary": "List Roaming Devices."
  },
