@@ -527,7 +527,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 			[]string{"SecurityActionAssets.uniqueDevices"}, map[string]any{
 				"time_dimensions": []map[string]any{{
 					"dimension": "SecurityActionAssets.createdAt",
-					"dateRange": "30 days", "granularity": "day"}},
+					"dateRange": "last 30 days", "granularity": "day"}},
 				"filters": canonicalOnly(),
 			})
 	}

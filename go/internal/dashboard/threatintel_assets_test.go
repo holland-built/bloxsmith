@@ -38,6 +38,27 @@ func TestFetchAssets_EveryQueryIsCanonicalOnly(t *testing.T) {
 	}
 }
 
+// Cube.js answers "unable to process query (bad request)" to a dateRange of
+// "30 days" and accepts "last 30 days" (checked live on 2026-11-06). The trend
+// query used the first, so the whole Assets feed read "the query failed".
+func TestFetchAssets_TrendAsksForTheLast30Days(t *testing.T) {
+	s, queries := assetsCubeService(t, `[]`)
+	s.FetchAssets(context.Background())
+	found := false
+	for _, q := range *queries {
+		tds, _ := q["time_dimensions"].([]any)
+		for _, td := range tds {
+			found = true
+			if r := td.(map[string]any)["dateRange"]; r != "last 30 days" {
+				t.Errorf("trend dateRange = %v, want \"last 30 days\"", r)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no query carried a time range")
+	}
+}
+
 // assetsCubeService fakes the MCP endpoint FetchAssets talks to. Every cube
 // query is answered with replyText and its arguments are recorded, in order.
 func assetsCubeService(t *testing.T, replyText string) (*Service, *[]map[string]any) {
