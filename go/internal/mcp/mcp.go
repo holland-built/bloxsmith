@@ -1193,6 +1193,24 @@ func (c *Client) QueryCubeErr(ctx context.Context, cube string, measures []strin
 	return c.queryCubeMCP(ctx, cube, measures, opts)
 }
 
+// QueryCubeDirectOnly is QueryCube without the MCP fallback, for a query the
+// MCP would answer differently. Its query_cube tool cuts any time range to the
+// last 30 days with only a notice in the text (seen 2026-11-06 on
+// SecurityActionAssetsV1), so a 400-day question would get a 30-day answer.
+// A nil slice means the query failed.
+func (c *Client) QueryCubeDirectOnly(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+	rows, fallback, err := c.queryCubeDirect(ctx, measures, opts)
+	if err != nil {
+		log.Printf("mcp: QueryCubeDirectOnly %s: %v", cube, err)
+		return nil
+	}
+	if fallback != "" {
+		log.Printf("mcp: QueryCubeDirectOnly %s: %s", cube, fallback)
+		return nil
+	}
+	return rows
+}
+
 // queryCubeMCP is the MCP route: column names use "__" which is converted back
 // to "." for caller consistency.
 func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []string, opts map[string]any) ([]map[string]any, error) {

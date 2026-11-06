@@ -23,8 +23,8 @@ test('chart bars carry their numbers, and a short top 10 says why it is short', 
       endpoint: '/api/cubejs/v1/query',
       query: {},
       rows: [
-        { 'NetworkNstarDnsActivity.device_name': 'ws-1', 'NetworkNstarDnsActivity.device_ip': '10.10.0.21', 'NetworkNstarDnsActivity.total_query_count': '48211' },
-        { 'NetworkNstarDnsActivity.device_name': 'ws-2', 'NetworkNstarDnsActivity.device_ip': '10.10.0.22', 'NetworkNstarDnsActivity.total_query_count': '9120' },
+        { 'DnsActivityV1.device_name': 'ws-1', 'DnsActivityV1.device_ip': '10.10.0.21', 'DnsActivityV1.total_query_count': '48211' },
+        { 'DnsActivityV1.device_name': 'ws-2', 'DnsActivityV1.device_ip': '10.10.0.22', 'DnsActivityV1.total_query_count': '9120' },
       ],
     })),
   );

@@ -162,7 +162,7 @@ const toolsJSON = `[
   }},
   {"type": "function", "function": {
     "name": "asset_insights",
-    "description": "Security-action asset inventory (devices seen in security actions in the last 30 days).",
+    "description": "Security-action asset inventory: devices detected in security actions in the last 400 days (the longest period Infoblox allows), an OS rollup, and a 30-day trend. The result's period field says what it covers; quote it.",
     "parameters": {"type": "object", "properties": {}}
   }},
   {"type": "function", "function": {

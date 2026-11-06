@@ -14,7 +14,7 @@ import (
 // This file ports the three deferred threat-intel fetchers (server.py
 // fetch_assets 4371, fetch_dossier 4463, fetch_lookalikes 4526) plus their
 // norm_* shapers. dossier + lookalikes are direct REST (TIDE / TDLAD); assets
-// is an MCP cube (SecurityActionAssets) via the same client the AI tools use.
+// is a cube (SecurityActionAssetsV1) read through the MCP client's direct route.
 // Each degrades to an {"...":[], "unavailable": "..."} shape on 403/error and
 // never fabricates data, exactly as Python does.
 
@@ -455,7 +455,22 @@ func normLookalikes(domainsRaw, targetsRaw any) map[string]any {
 
 // --- Assets (server.py fetch_assets 4371 / _fetch_assets_async 4349) ---------
 
-// canonicalOnly keeps an account-wide SecurityActionAssets query to canonical
+// assetCube is the security-action assets cube. SecurityActionAssetsV1
+// replaced SecurityActionAssets, which Infoblox dropped from its cube list in
+// 2026-11. Same fields, but every V1 query must carry a time range of at most
+// 400 days (checked live on 2026-11-06).
+const assetCube = "SecurityActionAssetsV1"
+
+// assetWindow is the inventory and rollup range: the longest Cube.js accepts
+// for assetCube ("last 401 days" is refused). It filters on lastDetected, so a
+// device whose record is older still counts if it was seen in the window.
+const assetWindow = "last 400 days"
+
+// assetPeriod tells the reader what the FetchAssets payload covers.
+const assetPeriod = "Devices detected in security actions in the last 400 days, the longest " +
+	"period Infoblox allows. The trend covers the last 30 days."
+
+// canonicalOnly keeps an account-wide assetCube query to canonical
 // security actions. Since 2026-09 the cube spans every security action, and
 // Infoblox's own description says to ALWAYS filter isCanonical = true when
 // aggregating account-wide, or similar/non-canonical group members are mixed
@@ -463,7 +478,12 @@ func normLookalikes(domainsRaw, targetsRaw any) map[string]any {
 // returns a fresh slice each call, because FetchAssets runs concurrently.
 func canonicalOnly() []map[string]any {
 	return []map[string]any{{
-		"member": "SecurityActionAssets.isCanonical", "operator": "equals", "values": []string{"true"}}}
+		"member": assetCube + ".isCanonical", "operator": "equals", "values": []string{"true"}}}
+}
+
+// inAssetWindow is the inventory and rollup time range, fresh each call.
+func inAssetWindow() []map[string]any {
+	return []map[string]any{{"dimension": assetCube + ".lastDetected", "dateRange": assetWindow}}
 }
 
 // assetInsightLimit is the inventory's row limit. The cube applies it before
@@ -481,13 +501,14 @@ const assetRollupLimit = 50
 // security action to the next (lastDetected, isVerified) are left out, or they
 // would split a device back into one row per security action.
 var assetInsightDims = []string{
-	"SecurityActionAssets.assetCqid", "SecurityActionAssets.deviceName",
-	"SecurityActionAssets.os", "SecurityActionAssets.ipAddresses",
-	"SecurityActionAssets.vendor", "SecurityActionAssets.isRisky",
+	assetCube + ".assetCqid", assetCube + ".deviceName",
+	assetCube + ".os", assetCube + ".ipAddresses",
+	assetCube + ".vendor", assetCube + ".isRisky",
 }
 
-// FetchAssets is fetch_assets: three SecurityActionAssets cube queries
-// (inventory + rollup + trend) via the MCP client, each canonical-only. It
+// FetchAssets is fetch_assets: three assetCube queries (inventory + rollup +
+// trend), each canonical-only. They go to Cube.js directly and never through
+// the MCP, which would quietly cut assetWindow to 30 days. It
 // backs /api/assets and the AI chat's asset_insights tool; the Assets tab
 // reads AssetDetails_ch_agg instead (assets.go). No count is of (security
 // action, device) pairs. Rollup and trend use uniqueDevices, which counts
@@ -503,30 +524,32 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	var invD, rollupD, trendD []map[string]any
 	mcpOK := s.Mcp != nil
 	if mcpOK {
-		invD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.uniqueSecurityActions"}, map[string]any{
+		invD = s.Mcp.QueryCubeDirectOnly(ctx, assetCube,
+			[]string{assetCube + ".uniqueSecurityActions"}, map[string]any{
 				"dimensions": assetInsightDims,
-				"order":      map[string]any{"SecurityActionAssets.uniqueSecurityActions": "desc"}, "limit": assetInsightLimit,
-				"filters": canonicalOnly(),
+				"order":      map[string]any{assetCube + ".uniqueSecurityActions": "desc"}, "limit": assetInsightLimit,
+				"filters":         canonicalOnly(),
+				"time_dimensions": inAssetWindow(),
 			})
-		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.uniqueDevices"},
+		rollupD = s.Mcp.QueryCubeDirectOnly(ctx, assetCube,
+			[]string{assetCube + ".uniqueDevices"},
 			map[string]any{
 				// os only: isVerified differs between a device's security
 				// actions, so grouping by it would count a device in two groups.
 				// os is a device property; a device whose records disagree on
 				// it would still land in two groups, so do not sum the groups.
-				"dimensions": []string{"SecurityActionAssets.os"},
-				"order":      map[string]any{"SecurityActionAssets.uniqueDevices": "desc"}, "limit": assetRollupLimit,
-				"filters": canonicalOnly(),
+				"dimensions": []string{assetCube + ".os"},
+				"order":      map[string]any{assetCube + ".uniqueDevices": "desc"}, "limit": assetRollupLimit,
+				"filters":         canonicalOnly(),
+				"time_dimensions": inAssetWindow(),
 			})
 		// Per day of createdAt: distinct device names on asset records stored
 		// that day. A device on several days counts on each; this is not a
 		// count of newly discovered devices.
-		trendD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
-			[]string{"SecurityActionAssets.uniqueDevices"}, map[string]any{
+		trendD = s.Mcp.QueryCubeDirectOnly(ctx, assetCube,
+			[]string{assetCube + ".uniqueDevices"}, map[string]any{
 				"time_dimensions": []map[string]any{{
-					"dimension": "SecurityActionAssets.createdAt",
+					"dimension": assetCube + ".createdAt",
 					"dateRange": "last 30 days", "granularity": "day"}},
 				"filters": canonicalOnly(),
 			})
@@ -536,7 +559,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	return result
 }
 
-// assembleAssetsResult shapes the three raw SecurityActionAssets cube
+// assembleAssetsResult shapes the three raw assetCube
 // results into the FetchAssets payload. QueryCube returns a nil slice on any
 // transport, HTTP, or parse failure and a non-nil slice on success (see
 // internal/mcp.Client.QueryCube and assetcounts.go's scalarCubeTotal, which
@@ -560,12 +583,12 @@ func assembleAssetsResult(mcpOK bool, invD, rollupD, trendD []map[string]any) ma
 	trend := flattenCubeRows(trendD)
 	if len(assets) == 0 && len(rollup) == 0 && len(trend) == 0 {
 		return map[string]any{"assets": []any{}, "rollup": []any{}, "trend": []any{},
-			"unavailable": nil,
-			"note":        "No security-action assets in the last 30 days for this tenant."}
+			"unavailable": nil, "period": assetPeriod,
+			"note": "No security-action assets detected in the last 400 days for this tenant."}
 	}
 	invFull, rollupFull := len(invD) >= assetInsightLimit, len(rollupD) >= assetRollupLimit
 	result := map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil,
-		"truncated": invFull || rollupFull}
+		"period": assetPeriod, "truncated": invFull || rollupFull}
 	var notes []string
 	if invFull {
 		notes = append(notes, fmt.Sprintf("The inventory stopped at the %d-row limit: some devices are "+

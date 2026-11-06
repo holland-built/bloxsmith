@@ -2971,13 +2971,13 @@
   ],
   "counts": [
     {
-      "cube": "NetworkNstarDnsActivity",
+      "cube": "DnsActivityV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "dns",
-      "measure": "NetworkNstarDnsActivity.total_query_count",
+      "measure": "DnsActivityV1.total_query_count",
       "name": "DNS queries",
-      "time": "NetworkNstarDnsActivity.timestamp"
+      "time": "DnsActivityV1.timestamp"
     },
     {
       "cube": "PortunusAggThreat_ch",
@@ -3046,6 +3046,14 @@
     "AssetDetails_ch_agg.taxonomy_super_category_label": "Category",
     "AssetDetails_ch_agg.taxonomy_type_label": "Asset type",
     "AssetDetails_ch_agg.vendor": "Vendor",
+    "DnsActivityV1": "DNS activity",
+    "DnsActivityV1.device_ip": "Device address",
+    "DnsActivityV1.device_name": "Device",
+    "DnsActivityV1.qname": "Domain",
+    "DnsActivityV1.query_type": "Record type",
+    "DnsActivityV1.rcode": "Answer",
+    "DnsActivityV1.timestamp": "Time",
+    "DnsActivityV1.total_query_count": "DNS queries",
     "HostMetrics": "DNS server metrics",
     "HostMetrics.avg_value": "Queries per second",
     "HostMetrics.metric_name": "Metric",
@@ -3054,14 +3062,6 @@
     "NetworkNstarDhcpLeaseActivity.lease_op": "What changed",
     "NetworkNstarDhcpLeaseActivity.timestamp": "Time",
     "NetworkNstarDhcpLeaseActivity.total_count": "Lease changes recorded",
-    "NetworkNstarDnsActivity": "DNS activity",
-    "NetworkNstarDnsActivity.device_ip": "Device address",
-    "NetworkNstarDnsActivity.device_name": "Device",
-    "NetworkNstarDnsActivity.qname": "Domain",
-    "NetworkNstarDnsActivity.query_type": "Record type",
-    "NetworkNstarDnsActivity.rcode": "Answer",
-    "NetworkNstarDnsActivity.timestamp": "Time",
-    "NetworkNstarDnsActivity.total_query_count": "DNS queries",
     "PortunusAggThreat_ch": "Security hits",
     "PortunusAggThreat_ch.action": "What happened",
     "PortunusAggThreat_ch.policy_name": "Policy",
@@ -3071,7 +3071,7 @@
     "PortunusAggThreat_ch.timestamp": "Time"
   },
   "otherValues": {
-    "NetworkNstarDnsActivity.rcode": "Answer code %s"
+    "DnsActivityV1.rcode": "Answer code %s"
   },
   "overs": [
     {
@@ -3253,8 +3253,8 @@
     {
       "buckets": null,
       "fields": [
-        "NetworkNstarDnsActivity.device_name",
-        "NetworkNstarDnsActivity.device_ip"
+        "DnsActivityV1.device_name",
+        "DnsActivityV1.device_ip"
       ],
       "id": "device",
       "name": "Device",
@@ -3264,7 +3264,7 @@
     {
       "buckets": null,
       "fields": [
-        "NetworkNstarDnsActivity.query_type"
+        "DnsActivityV1.query_type"
       ],
       "id": "qtype",
       "name": "Record type",
@@ -3274,7 +3274,7 @@
     {
       "buckets": null,
       "fields": [
-        "NetworkNstarDnsActivity.qname"
+        "DnsActivityV1.qname"
       ],
       "id": "domain",
       "name": "Domain",
@@ -3284,7 +3284,7 @@
     {
       "buckets": null,
       "fields": [
-        "NetworkNstarDnsActivity.rcode"
+        "DnsActivityV1.rcode"
       ],
       "id": "rcode",
       "name": "Answer",
@@ -3497,13 +3497,13 @@
     "AssetDetails_ch_agg.vendor": {
       "": "Not reported"
     },
-    "HostMetrics.metric_name": {
-      "dns_qps_iq": "DNS queries per second"
-    },
-    "NetworkNstarDnsActivity.rcode": {
+    "DnsActivityV1.rcode": {
       "0": "Answered",
       "2": "Server failed",
       "3": "No such name"
+    },
+    "HostMetrics.metric_name": {
+      "dns_qps_iq": "DNS queries per second"
     },
     "PortunusAggThreat_ch.action": {
       "Allow": "Allowed",

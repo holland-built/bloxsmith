@@ -20,7 +20,7 @@ func TestBuildChartQuery_OneFilterExactly(t *testing.T) {
 		{ChartPicks{Count: "threats", Split: "policy", Window: "7d", Over: "none", Top: 10, Only: "action", Is: "is", Value: "Block"},
 			`[{"member":"PortunusAggThreat_ch.action","operator":"equals","values":["Block"]}]`},
 		{ChartPicks{Count: "dns", Split: "domain", Window: "24h", Over: "none", Top: 10, Only: "device", Is: "not", Value: "ws-014.lab"},
-			`[{"member":"NetworkNstarDnsActivity.device_name","operator":"notEquals","values":["ws-014.lab"]}]`},
+			`[{"member":"DnsActivityV1.device_name","operator":"notEquals","values":["ws-014.lab"]}]`},
 		// A field holding several values per asset: contains, the value quoted.
 		{ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10, Only: "missing", Is: "is", Value: "DNS Forward Record"},
 			`[{"member":"AssetDetails_ch_agg.insight_indicators_label","operator":"contains","values":["\"DNS Forward Record\""]}]`},
@@ -28,7 +28,7 @@ func TestBuildChartQuery_OneFilterExactly(t *testing.T) {
 			`[{"member":"AssetDetails_ch_agg.insight_classifications_label","operator":"notContains","values":["\"Zombie\""]}]`},
 		// A filter on a chart over time.
 		{ChartPicks{Count: "dns", Split: "none", Window: "7d", Over: "day", Only: "qtype", Is: "is", Value: "AAAA"},
-			`[{"member":"NetworkNstarDnsActivity.query_type","operator":"equals","values":["AAAA"]}]`},
+			`[{"member":"DnsActivityV1.query_type","operator":"equals","values":["AAAA"]}]`},
 	} {
 		q, _, err := BuildChartQuery(c.p)
 		if err != nil {

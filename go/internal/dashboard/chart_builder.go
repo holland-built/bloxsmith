@@ -94,7 +94,7 @@ type chartChoice struct {
 }
 
 const (
-	cubeDNS     = "NetworkNstarDnsActivity"
+	cubeDNS     = "DnsActivityV1"
 	cubeThreats = "PortunusAggThreat_ch"
 	cubeHost    = "HostMetrics"
 	cubeDHCP    = "NetworkNstarDhcpLeaseActivity"

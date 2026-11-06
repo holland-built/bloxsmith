@@ -226,14 +226,14 @@ func TestRunAITool_GetDNSAnalytics_UsesCubejsREST(t *testing.T) {
 			t.Fatalf("query param not valid JSON: %v", err)
 		}
 		measures, _ := parsed["measures"].([]any)
-		if len(measures) != 1 || measures[0] != "NetworkNstarDnsActivity.total_query_count" {
+		if len(measures) != 1 || measures[0] != "DnsActivityV1.total_query_count" {
 			t.Fatalf("unexpected measures: %v", parsed["measures"])
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"result": map[string]any{
 				"data": []map[string]any{
-					{"NetworkNstarDnsActivity.device_name": "dev1", "NetworkNstarDnsActivity.total_query_count": "270196"},
+					{"DnsActivityV1.device_name": "dev1", "DnsActivityV1.total_query_count": "270196"},
 				},
 			},
 		})

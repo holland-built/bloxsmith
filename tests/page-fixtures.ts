@@ -550,15 +550,15 @@ const CHART_RESULT = {
   status: 'ok',
   endpoint: '/api/cubejs/v1/query',
   query: {
-    measures: ['NetworkNstarDnsActivity.total_query_count'],
-    dimensions: ['NetworkNstarDnsActivity.device_name', 'NetworkNstarDnsActivity.device_ip'],
-    timeDimensions: [{ dimension: 'NetworkNstarDnsActivity.timestamp', dateRange: 'last 7 days' }],
-    order: { 'NetworkNstarDnsActivity.total_query_count': 'desc' },
+    measures: ['DnsActivityV1.total_query_count'],
+    dimensions: ['DnsActivityV1.device_name', 'DnsActivityV1.device_ip'],
+    timeDimensions: [{ dimension: 'DnsActivityV1.timestamp', dateRange: 'last 7 days' }],
+    order: { 'DnsActivityV1.total_query_count': 'desc' },
     limit: 10,
   },
   rows: [
-    { 'NetworkNstarDnsActivity.device_name': 'baseline-ws-1', 'NetworkNstarDnsActivity.device_ip': '10.10.0.21', 'NetworkNstarDnsActivity.total_query_count': '48211' },
-    { 'NetworkNstarDnsActivity.device_name': 'baseline-ws-2', 'NetworkNstarDnsActivity.device_ip': '10.10.0.22', 'NetworkNstarDnsActivity.total_query_count': '9120' },
+    { 'DnsActivityV1.device_name': 'baseline-ws-1', 'DnsActivityV1.device_ip': '10.10.0.21', 'DnsActivityV1.total_query_count': '48211' },
+    { 'DnsActivityV1.device_name': 'baseline-ws-2', 'DnsActivityV1.device_ip': '10.10.0.22', 'DnsActivityV1.total_query_count': '9120' },
   ],
 };
 

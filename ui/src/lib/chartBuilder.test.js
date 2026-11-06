@@ -110,7 +110,7 @@ test('every top N sentence uses a real plural', () => {
 test('with cube names on, the sentence uses the real names', () => {
   assert.equal(
     sentence(OPTIONS, picks('dns', 'device', '7d', 'none', 10), true),
-    'NetworkNstarDnsActivity.total_query_count by NetworkNstarDnsActivity.device_name, NetworkNstarDnsActivity.device_ip, last 7 days, limit 10',
+    'DnsActivityV1.total_query_count by DnsActivityV1.device_name, DnsActivityV1.device_ip, last 7 days, limit 10',
   )
   assert.equal(
     sentence(OPTIONS, picks('qps', 'none', 'today', 'hour'), true),
@@ -120,7 +120,7 @@ test('with cube names on, the sentence uses the real names', () => {
 
 test('menu names swap with the switch', () => {
   assert.equal(choiceName(OPTIONS, 'count', 'dns', false), 'DNS queries')
-  assert.equal(choiceName(OPTIONS, 'count', 'dns', true), 'NetworkNstarDnsActivity.total_query_count')
+  assert.equal(choiceName(OPTIONS, 'count', 'dns', true), 'DnsActivityV1.total_query_count')
   assert.equal(choiceName(OPTIONS, 'split', 'action', false), 'What happened')
   assert.equal(choiceName(OPTIONS, 'split', 'action', true), 'PortunusAggThreat_ch.action')
   assert.equal(choiceName(OPTIONS, 'window', '7d', true), 'last 7 days')
@@ -130,16 +130,16 @@ test('menu names swap with the switch', () => {
 })
 
 test('field names swap with the switch, time suffixes included', () => {
-  assert.equal(fieldName(OPTIONS, 'NetworkNstarDnsActivity.device_ip', false), 'Device address')
-  assert.equal(fieldName(OPTIONS, 'NetworkNstarDnsActivity.device_ip', true), 'NetworkNstarDnsActivity.device_ip')
+  assert.equal(fieldName(OPTIONS, 'DnsActivityV1.device_ip', false), 'Device address')
+  assert.equal(fieldName(OPTIONS, 'DnsActivityV1.device_ip', true), 'DnsActivityV1.device_ip')
   assert.equal(fieldName(OPTIONS, 'PortunusAggThreat_ch.timestamp.day', false), 'Time')
   assert.equal(fieldName(OPTIONS, 'PortunusAggThreat_ch.timestamp.day', true), 'PortunusAggThreat_ch.timestamp.day')
 })
 
 test('top devices become bars named by device, counts as numbers', () => {
   const rows = [
-    { 'NetworkNstarDnsActivity.device_name': 'ws-1', 'NetworkNstarDnsActivity.device_ip': '10.0.0.1', 'NetworkNstarDnsActivity.total_query_count': '48211' },
-    { 'NetworkNstarDnsActivity.device_name': '', 'NetworkNstarDnsActivity.device_ip': '10.0.0.2', 'NetworkNstarDnsActivity.total_query_count': '9' },
+    { 'DnsActivityV1.device_name': 'ws-1', 'DnsActivityV1.device_ip': '10.0.0.1', 'DnsActivityV1.total_query_count': '48211' },
+    { 'DnsActivityV1.device_name': '', 'DnsActivityV1.device_ip': '10.0.0.2', 'DnsActivityV1.total_query_count': '9' },
   ]
   assert.deepEqual(chartData(OPTIONS, picks('dns', 'device', '7d', 'none', 10), rows, false), [
     { name: 'ws-1', value: 48211 },
@@ -162,9 +162,9 @@ test('blocked and allowed read as words, or as the raw values with cube names on
 
 test('two devices with one name are told apart by address', () => {
   const rows = [
-    { 'NetworkNstarDnsActivity.device_name': 'demo-www', 'NetworkNstarDnsActivity.device_ip': '172.16.138.201', 'NetworkNstarDnsActivity.total_query_count': '8513' },
-    { 'NetworkNstarDnsActivity.device_name': 'www-east', 'NetworkNstarDnsActivity.device_ip': '172.16.0.67', 'NetworkNstarDnsActivity.total_query_count': '1017' },
-    { 'NetworkNstarDnsActivity.device_name': 'demo-www', 'NetworkNstarDnsActivity.device_ip': '172.16.136.201', 'NetworkNstarDnsActivity.total_query_count': '225' },
+    { 'DnsActivityV1.device_name': 'demo-www', 'DnsActivityV1.device_ip': '172.16.138.201', 'DnsActivityV1.total_query_count': '8513' },
+    { 'DnsActivityV1.device_name': 'www-east', 'DnsActivityV1.device_ip': '172.16.0.67', 'DnsActivityV1.total_query_count': '1017' },
+    { 'DnsActivityV1.device_name': 'demo-www', 'DnsActivityV1.device_ip': '172.16.136.201', 'DnsActivityV1.total_query_count': '225' },
   ]
   assert.deepEqual(chartData(OPTIONS, picks('dns', 'device', '7d', 'none', 10), rows, false).map((d) => d.name), [
     'demo-www (172.16.138.201)', 'www-east', 'demo-www (172.16.136.201)',
@@ -173,8 +173,8 @@ test('two devices with one name are told apart by address', () => {
 
 test('over time becomes a line in time order, labelled the way people say it', () => {
   const rows = [
-    { 'NetworkNstarDnsActivity.timestamp.hour': '2026-10-21T14:00:00.000', 'NetworkNstarDnsActivity.total_query_count': '20' },
-    { 'NetworkNstarDnsActivity.timestamp.hour': '2026-10-21T13:00:00.000', 'NetworkNstarDnsActivity.total_query_count': '10' },
+    { 'DnsActivityV1.timestamp.hour': '2026-10-21T14:00:00.000', 'DnsActivityV1.total_query_count': '20' },
+    { 'DnsActivityV1.timestamp.hour': '2026-10-21T13:00:00.000', 'DnsActivityV1.total_query_count': '10' },
   ]
   assert.deepEqual(chartData(OPTIONS, picks('dns', 'none', 'today', 'hour'), rows, false), [
     { label: '13:00', value: 10 },
@@ -198,8 +198,8 @@ test('security by day stacks blocked over everything else, nothing dropped', () 
 
 test('record types become donut slices', () => {
   const rows = [
-    { 'NetworkNstarDnsActivity.query_type': 'A', 'NetworkNstarDnsActivity.total_query_count': '90' },
-    { 'NetworkNstarDnsActivity.query_type': 'AAAA', 'NetworkNstarDnsActivity.total_query_count': '10' },
+    { 'DnsActivityV1.query_type': 'A', 'DnsActivityV1.total_query_count': '90' },
+    { 'DnsActivityV1.query_type': 'AAAA', 'DnsActivityV1.total_query_count': '10' },
   ]
   assert.deepEqual(chartData(OPTIONS, picks('dns', 'qtype', '7d', 'none', 10), rows, false), [
     { name: 'A', value: 90 },
@@ -250,19 +250,19 @@ test('with cube names on, the lines use the real names', () => {
     { label: 'Only counting', text: 'HostMetrics.metric_name equals dns_qps_iq' },
   ])
   assert.deepEqual(describePicks(OPTIONS, picks('dns', 'domain', '7d', 'none', 25), true), [
-    { label: 'Counted', text: 'NetworkNstarDnsActivity.total_query_count' },
-    { label: 'Split by', text: 'NetworkNstarDnsActivity.qname' },
+    { label: 'Counted', text: 'DnsActivityV1.total_query_count' },
+    { label: 'Split by', text: 'DnsActivityV1.qname' },
     { label: 'When', text: 'last 7 days' },
-    { label: 'Showing', text: 'limit 25, NetworkNstarDnsActivity.total_query_count desc' },
+    { label: 'Showing', text: 'limit 25, DnsActivityV1.total_query_count desc' },
   ])
 })
 
 test('answer codes read as words, and an unknown code still shows', () => {
   const rows = [
-    { 'NetworkNstarDnsActivity.rcode': '0', 'NetworkNstarDnsActivity.total_query_count': '102600000' },
-    { 'NetworkNstarDnsActivity.rcode': 3, 'NetworkNstarDnsActivity.total_query_count': '55300000' },
-    { 'NetworkNstarDnsActivity.rcode': '2', 'NetworkNstarDnsActivity.total_query_count': '2500000' },
-    { 'NetworkNstarDnsActivity.rcode': '5', 'NetworkNstarDnsActivity.total_query_count': '12' },
+    { 'DnsActivityV1.rcode': '0', 'DnsActivityV1.total_query_count': '102600000' },
+    { 'DnsActivityV1.rcode': 3, 'DnsActivityV1.total_query_count': '55300000' },
+    { 'DnsActivityV1.rcode': '2', 'DnsActivityV1.total_query_count': '2500000' },
+    { 'DnsActivityV1.rcode': '5', 'DnsActivityV1.total_query_count': '12' },
   ]
   const p = picks('dns', 'rcode', '7d', 'none', 5)
   assert.deepEqual(chartData(OPTIONS, p, rows, false).map((d) => d.name), ['Answered', 'No such name', 'Server failed', 'Answer code 5'])
@@ -345,7 +345,7 @@ test('a link with picks that do not fit snaps to ones that do', () => {
 test('no split and no over-time is one total, drawn as a number', () => {
   const p = picks('dns', 'none', '7d', 'none')
   assert.equal(chartKind(p), 'number')
-  assert.deepEqual(chartData(OPTIONS, p, [{ 'NetworkNstarDnsActivity.total_query_count': '41208' }], false), [{ name: 'DNS queries', value: 41208 }])
+  assert.deepEqual(chartData(OPTIONS, p, [{ 'DnsActivityV1.total_query_count': '41208' }], false), [{ name: 'DNS queries', value: 41208 }])
   assert.deepEqual(chartData(OPTIONS, p, [], false), [{ name: 'DNS queries', value: 0 }])
   assert.equal(sentence(OPTIONS, p, false), 'DNS queries, last 7 days')
 })

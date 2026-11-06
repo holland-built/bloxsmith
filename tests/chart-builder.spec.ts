@@ -10,7 +10,7 @@ import { installFixtures } from './page-fixtures';
 
 const ROWS: Record<string, unknown[]> = {
   dns: [
-    { 'NetworkNstarDnsActivity.device_name': 'ws-014.lab', 'NetworkNstarDnsActivity.device_ip': '10.20.0.24', 'NetworkNstarDnsActivity.total_query_count': '48211' },
+    { 'DnsActivityV1.device_name': 'ws-014.lab', 'DnsActivityV1.device_ip': '10.20.0.24', 'DnsActivityV1.total_query_count': '48211' },
   ],
   threats: [
     { 'PortunusAggThreat_ch.timestamp.day': '2026-10-20T00:00:00.000', 'PortunusAggThreat_ch.action': 'Block', 'PortunusAggThreat_ch.requests': '41' },
@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
       json: {
         status: 'ok',
         endpoint: q.get('count') === 'threats' ? '/api/cubejs-security/v1/query' : '/api/cubejs/v1/query',
-        query: { measures: ['NetworkNstarDnsActivity.total_query_count'] },
+        query: { measures: ['DnsActivityV1.total_query_count'] },
         rows: ROWS[q.get('count') ?? ''] ?? [],
       },
     });
@@ -102,7 +102,7 @@ test('how the chart was made is short labelled lines, the query folded away', as
   await expect(fold).not.toHaveAttribute('open', /.*/);
   await expect(how.locator('pre')).toBeHidden();
   await fold.locator('summary').click();
-  await expect(how.locator('pre')).toContainText('NetworkNstarDnsActivity.total_query_count');
+  await expect(how.locator('pre')).toContainText('DnsActivityV1.total_query_count');
   await expect(how.locator('table')).toBeVisible();
 });
 
@@ -126,16 +126,16 @@ test('the switch swaps the labels for cube names and is kept on reload', async (
 
   await sw.click();
   await expect(sw).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('NetworkNstarDnsActivity.total_query_count');
+  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DnsActivityV1.total_query_count');
   await expect(heading(page)).toHaveText(
-    'NetworkNstarDnsActivity.total_query_count by NetworkNstarDnsActivity.device_name, NetworkNstarDnsActivity.device_ip, last 7 days, limit 10',
+    'DnsActivityV1.total_query_count by DnsActivityV1.device_name, DnsActivityV1.device_ip, last 7 days, limit 10',
   );
-  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('NetworkNstarDnsActivity.device_name');
+  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('DnsActivityV1.device_name');
   await expect(page.getByText('The question, in plain words')).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByRole('switch', { name: 'Show cube names' })).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('NetworkNstarDnsActivity.total_query_count');
+  await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DnsActivityV1.total_query_count');
 });
 
 test('an upstream failure says so, and is not shown as no activity', async ({ page }) => {
@@ -163,7 +163,7 @@ test('names too long to sit under a bar lie sideways, each on a row of its own',
         status: 'ok',
         endpoint: '/api/cubejs/v1/query',
         query: {},
-        rows: [{ 'NetworkNstarDnsActivity.qname': long, 'NetworkNstarDnsActivity.total_query_count': '900' }],
+        rows: [{ 'DnsActivityV1.qname': long, 'DnsActivityV1.total_query_count': '900' }],
       },
     }),
   );

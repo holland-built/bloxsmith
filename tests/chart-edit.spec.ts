@@ -29,8 +29,8 @@ test.beforeEach(async ({ page, request }) => {
   await page.route('**/api/chart?*', (route) =>
     route.fulfill({
       json: {
-        status: 'ok', endpoint: '/api/cubejs/v1/query', query: { measures: ['NetworkNstarDnsActivity.total_query_count'] },
-        rows: [{ 'NetworkNstarDnsActivity.timestamp.day': '2026-10-20T00:00:00.000', 'NetworkNstarDnsActivity.total_query_count': '900' }],
+        status: 'ok', endpoint: '/api/cubejs/v1/query', query: { measures: ['DnsActivityV1.total_query_count'] },
+        rows: [{ 'DnsActivityV1.timestamp.day': '2026-10-20T00:00:00.000', 'DnsActivityV1.total_query_count': '900' }],
       },
     }),
   );

@@ -469,11 +469,12 @@ func (s *Service) cubeQuery(query map[string]any) []map[string]any {
 	return out
 }
 
-// FetchDNSAnalytics is fetch_dns_analytics: three NetworkNstarDnsActivity cube
+// FetchDNSAnalytics is fetch_dns_analytics: three DnsActivityV1 cube
 // queries (7-day volume trend, top clients, query-type mix) over direct REST.
-// NetworkNstarDnsActivity replaced NstarDnsActivity, which Infoblox deprecated
-// with removal set for 2027-07-16. Same fields, and the same counts measured for
-// 2026-09-16..22; the named successor OnPremDnsActivityV1 counts ~0.06% lower.
+// DnsActivityV1 replaced NetworkNstarDnsActivity, which Infoblox dropped from
+// its cube list in 2026-11; that had replaced NstarDnsActivity (removal set for
+// 2027-07-16). Same fields, and the same 7-day total, top 50 clients and query
+// types measured on 2026-11-06. OnPremDnsActivityV1 counts ~0.06% lower.
 // — the MCP parquet path (query_stored_data) cannot be read back at all.
 //
 // cubeQuery returns a nil slice on upstream failure and a non-nil (possibly
@@ -485,31 +486,31 @@ func (s *Service) cubeQuery(query map[string]any) []map[string]any {
 // the same failure-vs-empty problem on the attack-surface feeds.
 func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 	volRows := s.cubeQuery(map[string]any{
-		"measures": []string{"NetworkNstarDnsActivity.total_query_count"},
+		"measures": []string{"DnsActivityV1.total_query_count"},
 		"timeDimensions": []map[string]any{{
-			"dimension": "NetworkNstarDnsActivity.timestamp",
+			"dimension": "DnsActivityV1.timestamp",
 			"dateRange": "last 7 days", "granularity": "day"}},
 	})
 	clientRows := s.cubeQuery(map[string]any{
-		"measures":   []string{"NetworkNstarDnsActivity.total_query_count"},
-		"dimensions": []string{"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
+		"measures":   []string{"DnsActivityV1.total_query_count"},
+		"dimensions": []string{"DnsActivityV1.device_name", "DnsActivityV1.device_ip"},
 		"timeDimensions": []map[string]any{{
-			"dimension": "NetworkNstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
-		"order": map[string]any{"NetworkNstarDnsActivity.total_query_count": "desc"}, "limit": 50,
+			"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
+		"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 50,
 	})
 	typeRows := s.cubeQuery(map[string]any{
-		"measures":   []string{"NetworkNstarDnsActivity.total_query_count"},
-		"dimensions": []string{"NetworkNstarDnsActivity.query_type"},
+		"measures":   []string{"DnsActivityV1.total_query_count"},
+		"dimensions": []string{"DnsActivityV1.query_type"},
 		"timeDimensions": []map[string]any{{
-			"dimension": "NetworkNstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
-		"order": map[string]any{"NetworkNstarDnsActivity.total_query_count": "desc"}, "limit": 10,
+			"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
+		"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 10,
 	})
 	if volRows == nil || clientRows == nil || typeRows == nil {
-		log.Printf("dashboard: DNS analytics cube query failed (NetworkNstarDnsActivity unavailable)")
+		log.Printf("dashboard: DNS analytics cube query failed (DnsActivityV1 unavailable)")
 		return map[string]any{
 			"volume": []any{}, "top_clients": []any{}, "query_types": []any{},
 			"availability": "error",
-			"reason":       "DNS analytics (NetworkNstarDnsActivity) unavailable (upstream error).",
+			"reason":       "DNS analytics (DnsActivityV1) unavailable (upstream error).",
 		}
 	}
 	return map[string]any{
