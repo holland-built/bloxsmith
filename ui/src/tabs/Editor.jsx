@@ -121,8 +121,11 @@ export default function Editor() {
 
   // Any input edit invalidates a preview taken before it — Apply must never
   // submit a body the user has not seen.
+  // Edits made while Preview is loading count too.
+  const editedWhileBusy = useRef(false)
   function markStale() {
     if (status === 'previewed') setStale(true)
+    if (status === 'busy') editedWhileBusy.current = true
   }
 
   function setField(k, v) {
@@ -167,6 +170,7 @@ export default function Editor() {
     const method = isUpdate ? 'PATCH' : 'POST'
     const url = isUpdate ? `${spec.endpoint}/${encodeURIComponent(editId.trim())}` : spec.endpoint
 
+    editedWhileBusy.current = false
     setStatus('busy')
     setResult(null)
 
@@ -180,7 +184,7 @@ export default function Editor() {
       }
       if (dry) {
         setPreview(j)
-        setStale(false)
+        setStale(editedWhileBusy.current)
         setStatus('previewed')
         setResult({ ok: true, msg: `Preview only — nothing has been ${isUpdate ? 'changed' : 'created'}. Review it, then ${isUpdate ? 'Update' : 'Create'}.` })
       } else {

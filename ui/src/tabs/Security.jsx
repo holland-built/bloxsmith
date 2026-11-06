@@ -945,7 +945,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
       {loading ? <Skeleton h={260} /> : bothDead ? (
         <FeedUnavailable reason={hPayload.reason || iPayload.reason} label="Exposed surface feeds unavailable" />
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <div className="text-note text-muted mb-1">
               {hDead ? 'Hostnames' : `Showing ${Math.min(SAMPLE, hRows.length).toLocaleString()} of ${countLabel(hCount, hAvail)}`}

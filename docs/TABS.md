@@ -88,7 +88,7 @@ The app opens on **Overview**. The everyday jobs, **Overview**, **Get an address
 The box at the top takes two kinds of input:
 
 - **Something to look up**: an IP address, a subnet like `10.0.0.0/24`, or a host name. Press Enter to see what Infoblox knows about it.
-- **A question**: anything else. Enter opens the AI with your question filled in. Nothing is sent until you press Ask there.
+- **A question**: anything else. Enter opens the AI and asks it straight away. The **Ask why** links on Overview do the same.
 
 Asking for an address ("give me an address in Dublin") opens Get an address, and asking for a chart opens Build a chart. Before you press Enter, the box tells you where Enter will take you. Cmd+K (Ctrl+K on Windows) opens the same search from anywhere.
 
@@ -194,7 +194,7 @@ A panel that says **unavailable** couldn't be read, and it names the reason. A l
 The SOC queue. Refreshes every 20 seconds.
 
 - **Categories**: click a category to show only its incidents in the list.
-- **Triage**: the incident list. Click a row for the detail.
+- **Triage**: the incident list. Click a row for the detail. Tick **Ack** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
 - **Severity Counts**: how many of the loaded incidents are critical, high, medium and low.
 - **SOC Queue**: Infoblox IQ Actions, with the detail of each one.
 - **Action Volume**: actions per day.
@@ -299,7 +299,7 @@ Take the next free address, or several, from a subnet.
 
 1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
-3. **Preview** shows which addresses it would take. **Allocate** takes them.
+3. **Preview** shows which addresses it would take. **Allocate** takes them and names the address you got.
 
 ### Create DNS Record
 
@@ -317,7 +317,7 @@ Edit or delete a record that is already in a zone.
 
 Pick a **zone**, then press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
 
-**Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record. If you don't click again within four seconds, it goes back to normal.
+**Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record as it is right now. If the record can't be re-checked, or someone else already removed it, the button doesn't arm and says why. If you don't click again within four seconds, it goes back to normal.
 
 ### Manage Addresses
 
@@ -379,7 +379,7 @@ Every run gets an ID like `c-20261030-150000`. The ID is tagged on the address, 
 
 ### Ask AI
 
-Ask questions about your own data in plain words, such as "which subnets are nearly full?" or "what changed in the last 24 hours?". Suggested questions take one click.
+Ask questions about your own data in plain words, such as "which subnets are nearly full?" or "what changed in the last 24 hours?". Suggested questions take one click. The AI sees your last three questions and answers, so a follow-up like "which of those is fullest?" works. The chat stays put when you visit another page and clears when you close the browser tab.
 
 Each answer is marked **AI-generated** and lists the lookups the AI made underneath, so you can check where a number came from. It needs a key for an AI model that can use tools. See the AI query box section in the [README](../README.md). Without one, this panel shows an error and the rest of the dashboard still works.
 

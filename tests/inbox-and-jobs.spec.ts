@@ -86,7 +86,7 @@ test('a feed that fails is named, never read as nothing wrong', async ({ page })
   await expect(page.locator('[data-needs-a-look]')).not.toContainText('nothing right now');
 });
 
-test('the box looks up an address, and sends a question to the AI typed in but not sent', async ({ page }) => {
+test('the box looks up an address, and asks the AI a question once', async ({ page }) => {
   await feeds(page, {});
   let asked = 0;
   await page.route('**/api/query', (r) => { asked++; return r.fulfill(json({ answer: 'x' })); });
@@ -100,9 +100,13 @@ test('the box looks up an address, and sends a question to the AI typed in but n
   await page.goto('/#overview');
   await page.locator('[data-onebox]').fill('Which hosts are offline?');
   await page.locator('[data-onebox]').press('Enter');
-  await expect(page).toHaveURL(/#ai\?q=/);
-  await expect(page.getByPlaceholder('Ask about your network…')).toHaveValue('Which hosts are offline?');
-  expect(asked).toBe(0);
+  // Asked straight away, then the q leaves the address so a reload doesn't ask again.
+  await expect(page.getByRole('log')).toContainText('Which hosts are offline?');
+  await expect.poll(() => asked).toBe(1);
+  await expect(page).toHaveURL(/#ai$/);
+  await page.reload();
+  await page.waitForTimeout(500);
+  expect(asked).toBe(1);
 });
 
 test('the rail holds the five everyday jobs and marks where you are', async ({ page }) => {
@@ -153,14 +157,15 @@ test('while security events are still loading, Needs a look does not say nothing
   await expect(strip).toContainText('nothing right now');
 });
 
-test('a second question from the header box replaces the first in the AI box', async ({ page }) => {
+test('a second question from the header box while on the AI page is asked too', async ({ page }) => {
   await feeds(page, {});
+  const asked: string[] = [];
+  await page.route('**/api/query', (r) => { asked.push(r.request().postDataJSON().question); return r.fulfill(json({ answer: 'x' })); });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/#ai?q=' + encodeURIComponent('Which hosts are offline?'));
-  const ask = page.getByRole('textbox', { name: 'Ask about your network' });
-  await expect(ask).toHaveValue('Which hosts are offline?');
+  await expect.poll(() => asked).toEqual(['Which hosts are offline?']);
   const box = page.locator('header [data-onebox]');
   await box.fill('why are my subnets full?');
   await box.press('Enter');
-  await expect(ask).toHaveValue('why are my subnets full?');
+  await expect.poll(() => asked).toEqual(['Which hosts are offline?', 'why are my subnets full?']);
 });
