@@ -37,7 +37,7 @@ func TestChartRoute_RunsAnAllowedPick(t *testing.T) {
 	mux := chartMux(t, func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"result":{"data":[{"NetworkNstarDnsActivity.device_name":"ws-1","NetworkNstarDnsActivity.device_ip":"10.0.0.1","NetworkNstarDnsActivity.total_query_count":"7"}]}}`))
+		_, _ = w.Write([]byte(`{"result":{"data":[{"DnsActivityV1.device_name":"ws-1","DnsActivityV1.device_ip":"10.0.0.1","DnsActivityV1.total_query_count":"7"}]}}`))
 	})
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/chart?count=dns&split=device&window=7d&over=none&top=10", nil))

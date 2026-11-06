@@ -33,14 +33,14 @@ func roundTrip(t *testing.T, v any) map[string]any {
 // fails a test instead of being copied into it.
 func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 	measures := map[string]string{
-		"dns":       "NetworkNstarDnsActivity.total_query_count",
+		"dns":       "DnsActivityV1.total_query_count",
 		"threats":   "PortunusAggThreat_ch.requests",
 		"qps":       "HostMetrics.avg_value",
 		"dhcp":      "NetworkNstarDhcpLeaseActivity.total_count",
 		"assets":    "AssetDetails_ch_agg.assetsCount",
 		"newassets": "AssetDetails_ch_agg.assetsCount",
 	}
-	times := map[string]string{"dns": "NetworkNstarDnsActivity.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
+	times := map[string]string{"dns": "DnsActivityV1.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
 		"qps": "HostMetrics.timestamp", "dhcp": "NetworkNstarDhcpLeaseActivity.timestamp",
 		"newassets": "AssetDetails_ch_agg.first_seen"}
 	endpoints := map[string]string{
@@ -52,10 +52,10 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"newassets": "/api/cubejs/v1/query",
 	}
 	dims := map[string][]any{
-		"device":   {"NetworkNstarDnsActivity.device_name", "NetworkNstarDnsActivity.device_ip"},
-		"qtype":    {"NetworkNstarDnsActivity.query_type"},
-		"domain":   {"NetworkNstarDnsActivity.qname"},
-		"rcode":    {"NetworkNstarDnsActivity.rcode"},
+		"device":   {"DnsActivityV1.device_name", "DnsActivityV1.device_ip"},
+		"qtype":    {"DnsActivityV1.query_type"},
+		"domain":   {"DnsActivityV1.qname"},
+		"rcode":    {"DnsActivityV1.rcode"},
 		"action":   {"PortunusAggThreat_ch.action"},
 		"tclass":   {"PortunusAggThreat_ch.tclass"},
 		"policy":   {"PortunusAggThreat_ch.policy_name"},
@@ -157,9 +157,9 @@ func TestBuildChartQuery_NewPicksExactly(t *testing.T) {
 		endpoint string
 	}{
 		{ChartPicks{Count: "dns", Split: "domain", Window: "7d", Over: "none", Top: 10},
-			top("NetworkNstarDnsActivity", "total_query_count", "qname", "last 7 days", 10), dns},
+			top("DnsActivityV1", "total_query_count", "qname", "last 7 days", 10), dns},
 		{ChartPicks{Count: "dns", Split: "rcode", Window: "30d", Over: "none", Top: 5},
-			top("NetworkNstarDnsActivity", "total_query_count", "rcode", "last 30 days", 5), dns},
+			top("DnsActivityV1", "total_query_count", "rcode", "last 30 days", 5), dns},
 		{ChartPicks{Count: "threats", Split: "tclass", Window: "7d", Over: "none", Top: 5},
 			top("PortunusAggThreat_ch", "requests", "tclass", "last 7 days", 5), sec},
 		{ChartPicks{Count: "threats", Split: "policy", Window: "today", Over: "none", Top: 5},
@@ -176,8 +176,8 @@ func TestBuildChartQuery_NewPicksExactly(t *testing.T) {
 			}, dhcp},
 		{ChartPicks{Count: "dns", Split: "none", Window: "24h", Over: "hour"},
 			map[string]any{
-				"measures": []any{"NetworkNstarDnsActivity.total_query_count"},
-				"timeDimensions": []any{map[string]any{"dimension": "NetworkNstarDnsActivity.timestamp",
+				"measures": []any{"DnsActivityV1.total_query_count"},
+				"timeDimensions": []any{map[string]any{"dimension": "DnsActivityV1.timestamp",
 					"dateRange": "last 24 hours", "granularity": "hour"}},
 			}, dns},
 	} {
@@ -466,11 +466,11 @@ func TestChartOptions_EveryFieldHasAPlainName(t *testing.T) {
 	}
 	vals = asMap(opts["values"])
 	// rcode is a number on the wire; the three seen on the tenant have words.
-	rc := asMap(vals["NetworkNstarDnsActivity.rcode"])
+	rc := asMap(vals["DnsActivityV1.rcode"])
 	if rc["0"] != "Answered" || rc["2"] != "Server failed" || rc["3"] != "No such name" {
 		t.Errorf("rcode values = %v", rc)
 	}
-	if asMap(opts["otherValues"])["NetworkNstarDnsActivity.rcode"] != "Answer code %s" {
+	if asMap(opts["otherValues"])["DnsActivityV1.rcode"] != "Answer code %s" {
 		t.Errorf("an unknown rcode must read as \"Answer code N\", got %v", opts["otherValues"])
 	}
 	// About 2.55M security hits have no severity; they are shown, not dropped.

@@ -2,7 +2,7 @@
 // Assets tab.
 //
 // WHY A NEW FILE RATHER THAN MORE OF threatintel.go. threatintel.go's
-// FetchAssets reads the SecurityActionAssets cube — assets that a security
+// FetchAssets reads the SecurityActionAssetsV1 cube — assets that a security
 // ACTION touched. That is a different population from "every asset discovery
 // found", it is capped at 500 rows in one shot, and it has no paging, no
 // search and no filter. Nothing there is reusable for an inventory; only the

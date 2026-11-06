@@ -693,7 +693,7 @@ const CLAIMS = [
     file: GO_ANALYTICS,
     proofs: [
       {
-        re: /"NetworkNstarDnsActivity\.timestamp",[\s\S]{0,40}?"dateRange": "last 7 days", "granularity": "day"/,
+        re: /"DnsActivityV1\.timestamp",[\s\S]{0,40}?"dateRange": "last 7 days", "granularity": "day"/,
         expect: 'the volume cube query asks for a 7-day range at day granularity',
       },
     ],
