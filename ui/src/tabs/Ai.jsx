@@ -25,7 +25,7 @@ const SUGGESTIONS = [
 function Message({ item, onRetry, onAsk }) {
   if (item.role === 'user') {
     return (
-      <div className="flex justify-end">
+      <div data-role="user" className="flex justify-end">
         <div className="max-w-[85%] px-4 py-2.5 rounded-surface bg-line-2 text-txt text-copy whitespace-pre-wrap">{item.text}</div>
       </div>
     )
@@ -245,10 +245,14 @@ function ChatCard({ panelId }) {
   const checking = useRef(false)
   const inRef = useRef(null)
   const logRef = useRef(null)
-  // Keep the newest message in view, as a chat does.
+  // Put the latest question at the top of the box, so its answer reads from
+  // the start. Scrolling to the very end hid the bold answer above the fold.
   useEffect(() => {
     const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    const q = el?.querySelectorAll('[data-role="user"]')
+    const last = q?.[q.length - 1]
+    if (!last) return
+    el.scrollTop += last.getBoundingClientRect().top - el.getBoundingClientRect().top
   }, [items, busy])
   // The input is disabled while a question runs, which drops focus to the page.
   // Put it back when the answer lands.
@@ -418,7 +422,8 @@ function ChatCard({ panelId }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col h-[60vh] min-h-[420px]">
+        // Fills the window below the page title, so a long answer shows more of itself.
+        <div className="flex flex-col h-[calc(100dvh-304px)] min-h-[420px]">
           <div className="flex justify-end -mt-1 mb-1">
             <button
               type="button"
