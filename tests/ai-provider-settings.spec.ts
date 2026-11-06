@@ -30,7 +30,8 @@ test('the Claude button, Test, then Save send the typed provider, model and key'
   await expect(sheet.getByLabel('Provider address')).toHaveValue('https://generativelanguage.googleapis.com/v1beta/openai');
   await expect(sheet.getByLabel('Model')).toHaveValue('gemini-x');
   await expect(sheet.getByLabel('API key', { exact: true })).toHaveValue('');
-  await expect(sheet.getByRole('button', { name: 'Save AI provider' })).toBeDisabled();
+  // A key is saved, so Save works without typing it again.
+  await expect(sheet.getByRole('button', { name: 'Save AI provider' })).toBeEnabled();
 
   await sheet.getByRole('button', { name: 'Claude', exact: true }).click();
   await expect(sheet.getByLabel('Provider address')).toHaveValue('https://api.anthropic.com/v1');
@@ -112,6 +113,32 @@ test('with no key saved or typed, Find models stays off', async ({ page }) => {
   const sheet = page.getByRole('dialog', { name: 'Settings' });
   await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
   await expect(sheet.getByRole('button', { name: 'Find models' })).toBeDisabled();
+  await expect(sheet.getByRole('button', { name: 'Save AI provider' })).toBeDisabled();
+  await expect(sheet.getByRole('button', { name: 'Test' })).toBeDisabled();
   await sheet.getByLabel('API key', { exact: true }).fill('k');
   await expect(sheet.getByRole('button', { name: 'Find models' })).toBeEnabled();
+});
+
+test('with a key saved, changing the effort saves without typing the key again', async ({ page }) => {
+  let saved: any = null;
+  await page.route('**/api/vault/llm', async (route) => { saved = route.request().postDataJSON(); return json(route, { ok: true }); });
+  await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await sheet.getByLabel('Effort').selectOption('medium');
+  await sheet.getByRole('button', { name: 'Save AI provider' }).click();
+  await expect(sheet.getByText('Saved. The AI tab uses it from the next question.')).toBeVisible();
+  expect(saved).toEqual({ key: '', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-x', effort: 'medium' });
+});
+
+test('switching provider with the key box empty asks for that provider key', async ({ page }) => {
+  await page.route('**/api/vault/llm', (route) => json(route, { ok: false, error: 'new address needs its key' }));
+  await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Claude', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Save AI provider' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText('This is a different provider than the saved one. Paste its API key to save.');
 });
