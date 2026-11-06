@@ -85,8 +85,13 @@ function Message({ item, onRetry, onAsk }) {
 function Lookups({ trace }) {
   const facts = trace.map((t) => t.fact).filter(Boolean)
   // "72535 subnets exist in total; the 25 below are a sample, not the full
-  // list." keeps its count. Only that clause goes; any other part stays.
-  const short = facts.map((f) => f.replace(/;?\s*the \d+ below (are|is) a sample, not the full list\.?/i, '').trim())
+  // list." keeps its count. Only that clause goes; any other part stays. One
+  // fact can hold two sentences (get_dns sends views and zones together), so
+  // every sample clause goes, and each sentence becomes its own item.
+  const short = facts
+    .flatMap((f) => f.replace(/;?\s*the \d+ below (are|is) a sample, not the full list\.?/gi, '|').split(/\||\.\s+/))
+    .map((f) => f.trim().replace(/\.$/, '').replace(/(^|[\s(])(\d{4,})(?=\s+[A-Za-z])/g, (_, pre, n) => pre + Number(n).toLocaleString('en-US')))
+    .filter(Boolean)
   return (
     <div className="mt-2.5 text-note text-muted text-center">
       {short.length > 0 && <span title={facts.join('\n')}>Counted by Bloxsmith: {short.join(' · ')}. </span>}
@@ -120,6 +125,11 @@ function AnswerInline({ text }) {
 
 // The answer as markdown (lib/aiAnswer.js). React escapes every string here,
 // so nothing in the answer can become markup.
+// A table cell that is a number ("1,447", "1,607+", "82%"), and one that says
+// a part could not be counted.
+const NUMBER = /^[<>~≈]?\s*-?[\d,.]+\s*[%+]?$/
+const MISSING = /^(couldn't check|could not check|not checked)$/i
+
 function AnswerText({ text }) {
   return answerBlocks(text).map((b, i) => {
     // The answer's first line is the answer: large, bold, centred.
@@ -127,21 +137,35 @@ function AnswerText({ text }) {
       return <p key={i} className="mt-8 text-center text-figure font-bold leading-snug [&_strong]:font-bold"><AnswerInline text={b.text} /></p>
     }
     if (b.type === 'table') {
+      // Centred under the answer. A column of numbers lines up on the right, a
+      // Total row is bold, and a part that could not be checked is in amber,
+      // so the table carries the caveat and nothing else has to repeat it.
+      const plain = (c) => String(c).replace(/\*\*/g, '').trim()
+      const numCol = b.head.map((_, m) => {
+        const cells = b.body.map((r) => plain(r[m] ?? '')).filter((c) => c && !MISSING.test(c))
+        return cells.length > 0 && cells.every((c) => NUMBER.test(c))
+      })
       return (
-        <div key={i} className="overflow-x-auto my-1.5">
+        <div key={i} className="overflow-x-auto my-3 w-fit max-w-full mx-auto">
           <table className="border-collapse text-copy">
             <thead>
               <tr>
                 {b.head.map((h, n) => (
-                  <th key={n} className="text-left text-note font-medium text-muted border-b border-border pr-4 py-1"><AnswerInline text={h} /></th>
+                  <th key={n} className={`${numCol[n] ? 'text-right' : 'text-left'} text-note font-medium text-muted border-b border-border px-2 py-1`}><AnswerInline text={h} /></th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {b.body.map((row, n) => (
-                <tr key={n}>
+                <tr key={n} className={/^total\b/i.test(plain(row[0] ?? '')) ? 'font-semibold' : undefined}>
                   {row.map((c, m) => (
-                    <td key={m} className="align-top border-b border-border pr-4 py-1"><AnswerInline text={c} /></td>
+                    <td
+                      key={m}
+                      className={`align-top border-b border-border px-2 py-1 ${numCol[m] ? 'text-right tabular-nums' : 'text-left'}`}
+                      style={MISSING.test(plain(c)) ? { color: 'var(--color-warn)' } : undefined}
+                    >
+                      <AnswerInline text={c} />
+                    </td>
                   ))}
                 </tr>
               ))}
