@@ -498,14 +498,18 @@ const DNSSEC_CAP = 150
 function DnssecHealth({ panelId, dnssec }) {
   const { COLORS } = useChartTheme()
   const rows = dnssec.data?.rows ?? []
-  const total = dnssec.data?.count ?? rows.length
   // CSPDnssec returns status:"error" at HTTP 200 on an upstream failure — the
   // fetch itself never errors, so `dnssec.error` alone never catches this.
   const status = dnssec.data?.status
 
-  const signedCount = rows.filter((r) => r.dnssec_status === 'SIGNED').length
-  const unsignedCount = rows.filter((r) => r.dnssec_status === 'UNSIGNED').length
-  const signedShare = rows.length ? (signedCount / rows.length) * 100 : null
+  // Only zones with public names (ending in a real TLD such as .com) need
+  // signing; reverse zones and names like .local or .lab do not (owner,
+  // 2026-11-09). public_name comes from the server (publicname.go).
+  const publicRows = rows.filter((r) => r.public_name)
+  const signedCount = publicRows.filter((r) => r.dnssec_status === 'SIGNED').length
+  const unsignedCount = publicRows.filter((r) => r.dnssec_status === 'UNSIGNED').length
+  const internalCount = rows.length - publicRows.length
+  const signedShare = publicRows.length ? (signedCount / publicRows.length) * 100 : null
 
   // This panel used to say "worst 150" over `unsigned.slice(0, DNSSEC_CAP)` of
   // whatever order the upstream happened to return. Checked the live payload on
@@ -517,7 +521,7 @@ function DnssecHealth({ panelId, dnssec }) {
   // 150 you see the same 150 every time, and the header now says which 150 they
   // are. If the upstream ever adds a real severity field, sort by that instead
   // and the header should say so.
-  const unsigned = rows
+  const unsigned = publicRows
     .filter((r) => r.dnssec_status === 'UNSIGNED')
     .sort((a, b) => String(a.fqdn ?? '').localeCompare(String(b.fqdn ?? '')))
   const shown = unsigned.slice(0, DNSSEC_CAP)
@@ -559,18 +563,24 @@ function DnssecHealth({ panelId, dnssec }) {
               <div className="text-note text-muted">signed</div>
             </div>
             <div>
-              <div className="text-figure font-semibold tracking-tight" style={{ color: unsignedCount > 0 ? COLORS.crit : COLORS.ok }}>{unsignedCount.toLocaleString()}</div>
-              <div className="text-note text-muted">unsigned</div>
+              <div className="text-figure font-semibold tracking-tight" style={{ color: unsignedCount > 0 ? COLORS.warn : COLORS.ok }}>{unsignedCount.toLocaleString()}</div>
+              <div className="text-note text-muted">public names unsigned</div>
             </div>
             {signedShare != null && (
               <div>
                 <div className="text-figure font-semibold tracking-tight">{signedShare.toFixed(1)}%</div>
-                <div className="text-note text-muted">signed share (of {total.toLocaleString()})</div>
+                <div className="text-note text-muted">signed share (of {publicRows.length.toLocaleString()} public)</div>
               </div>
             )}
+            <div>
+              <div className="text-figure font-semibold tracking-tight text-muted">{internalCount.toLocaleString()}</div>
+              <div className="text-note text-muted">internal, no signing needed</div>
+            </div>
           </div>
-          {unsigned.length === 0 ? (
-            <Empty>all zones signed</Empty>
+          {publicRows.length === 0 ? (
+            <Empty>no zones with public names</Empty>
+          ) : unsigned.length === 0 ? (
+            <Empty>all zones with public names are signed</Empty>
           ) : (
             <DataTable rows={tableRows} columns={columns} maxHeight={260} rowCap={DNSSEC_CAP} rowKey={(r) => r._k} />
           )}

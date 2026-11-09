@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { inboxRows } from '../lib/inboxRows.js'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
@@ -27,7 +27,7 @@ const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
 const DAY_S = 86400
 const n0 = (v) => (typeof v === 'number' ? v.toLocaleString() : '—')
 const seenDay = (t) => new Date(t * 1000).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
-const TONE_WORD = { crit: 'Critical', warn: 'Warning', ok: 'Healthy', neutral: 'Unknown' }
+const TONE_WORD = { crit: 'Critical', warn: 'Warning', note: 'Note', ok: 'Healthy', neutral: 'Unknown' }
 // Only crit and warn are operational states. A service whose state could not
 // be read is Unknown, not a warning about it.
 const svcTone = (s) => (s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'ok' ? 'ok' : 'neutral')
@@ -162,7 +162,7 @@ function useBoard(dns) {
 // ---------- the board ----------
 
 function SevMark({ sev, standing }) {
-  const c = sev === 'crit' ? 'var(--color-crit)' : 'var(--color-warn)'
+  const c = sev === 'crit' ? 'var(--color-crit)' : sev === 'warn' ? 'var(--color-warn)' : 'var(--color-muted)'
   return <span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={standing ? { boxShadow: `inset 0 0 0 2px ${c}` } : { background: c }} />
 }
 
@@ -173,15 +173,18 @@ function SevMark({ sev, standing }) {
 function Issue({ r }) {
   const standing = !r.fresh
   return (
-    <li data-inbox-row={r.key} className="flex items-start gap-2 py-0.5">
+    <li data-inbox-row={r.key} className="group flex items-start gap-2 py-0.5">
       <SevMark sev={r.sev} standing={standing} />
       <span className="min-w-0">
-        <span className={standing ? 'text-muted' : r.sev === 'crit' ? 'text-crit' : 'text-warn'}>{TONE_WORD[r.sev]}{r.fresh ? ', new' : ''}: </span>
+        <span className={standing || r.sev === 'note' ? 'text-muted' : r.sev === 'crit' ? 'text-crit' : 'text-warn'}>{TONE_WORD[r.sev]}{r.fresh ? ', new' : ''}: </span>
         <a href={r.href} className={`text-txt hover:underline ${FOCUS_RING}`}>{r.title}</a>
         {r.sub && <span className="text-muted"> — {r.sub}</span>}
         <span className="text-muted"> · {r.seen ? `open since ${seenDay(r.seen)}` : 'first seen not tracked'}</span>
+        {/* One "Ask why" on every line read as clutter (owner, 2026-11-09).
+            It now shows on the line under the pointer, and on keyboard focus
+            it is always visible, so nobody loses it. */}
         {r.ask && (
-          <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-2 text-link underline ${FOCUS_RING}`}>Ask why</a>
+          <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-2 text-link underline opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${FOCUS_RING}`}>Ask why</a>
         )}
       </span>
     </li>
@@ -220,11 +223,54 @@ function IssueList({ b, checked, none }) {
 // One table. The owner does not use Overview on a phone (2026-11-09), so a
 // narrow screen scrolls the table inside its own box rather than getting a
 // second layout.
+//
+// The board can be folded to one line of counts, so the charts below come up
+// to the top (owner, 2026-11-09). The choice is kept in this browser only.
+const BOARD_KEY = 'bloxsmith.overview.boardHidden'
+
+function readHidden() {
+  try {
+    return localStorage.getItem(BOARD_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+// "DNS 1 warning, 1 note · IPAM 1 critical", or "no open issues".
+function boardSummary(rows) {
+  const parts = rows
+    .map((b) => {
+      const n = (sev) => b.issues.filter((r) => r.sev === sev).length
+      const words = [['crit', 'critical'], ['warn', 'warning'], ['note', 'note']]
+        .filter(([sev]) => n(sev))
+        .map(([sev, w]) => `${n(sev)} ${w}${n(sev) > 1 && sev !== 'crit' ? 's' : ''}`)
+      return words.length ? `${b.name} ${words.join(', ')}` : null
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'no open issues'
+}
+
 function ServiceBoard({ board }) {
+  const [hidden, setHidden] = useState(readHidden)
+  const toggle = () => {
+    const next = !hidden
+    setHidden(next)
+    try {
+      localStorage.setItem(BOARD_KEY, next ? '1' : '0')
+    } catch {
+      // Storage off: the choice lasts until the page reloads.
+    }
+  }
   return (
     <section aria-labelledby="ov-board">
-      <h2 id="ov-board" className="sr-only">Services</h2>
-      <div role="region" aria-label="Service board" tabIndex={0} className={`overflow-x-auto ${FOCUS_RING}`}>
+      <div className="flex items-baseline gap-3 mb-1">
+        <h2 id="ov-board" className="text-copy font-semibold">Services</h2>
+        <button type="button" onClick={toggle} aria-expanded={!hidden} aria-controls="ov-board-table" className={`text-copy text-link underline ${FOCUS_RING}`}>
+          {hidden ? 'Show' : 'Hide'}
+        </button>
+        {hidden && <span className="text-copy text-muted min-w-0" data-board-summary="">{boardSummary(board.board)}</span>}
+      </div>
+      <div id="ov-board-table" hidden={hidden} role="region" aria-label="Service board" tabIndex={0} className={`overflow-x-auto ${FOCUS_RING}`}>
       <table className="w-full min-w-[760px] text-copy border-t border-line" data-board="">
         <thead className="text-muted text-left">
           <tr>

@@ -52,7 +52,7 @@ export function plainMessage(text) {
   s = s.replace(/^(\d+) dhcp expired lease$/, (_, n) => `${n} expired address ${n === '1' ? 'lease' : 'leases'}`)
   s = s.replace(/^(\d+) dnssec unsigned$/, (_, n) => `${n} DNS ${n === '1' ? 'zone' : 'zones'} not signed`)
   s = s.replace(/ at (\d+)% utilization$/, ' is $1% full')
-  s = s.replace(/ DNS zones unsigned \(DNSSEC\)$/, ' DNS zones not signed (DNSSEC)')
+  s = s.replace(/ DNS zones( with public names)? unsigned \(DNSSEC\)$/, (_, pub) => ` DNS zones${pub || ''} not signed (DNSSEC)`)
   return s
 }
 

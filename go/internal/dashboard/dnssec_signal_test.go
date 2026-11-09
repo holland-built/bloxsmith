@@ -37,12 +37,12 @@ func TestBuildSignals_DNSSEC_AllUnsigned(t *testing.T) {
 		t.Fatalf("expected exactly 1 dnssec signal, got %d", len(got))
 	}
 	sig := got[0]
-	// warn, not crit: signing that was never turned on is a coverage gap, and
-	// as crit it outranked real outages at the top of Overview (2026-10-30).
-	if sig["severity"] != "warn" {
-		t.Errorf("expected warn severity when all known zones unsigned, got %v", sig["severity"])
+	// info: unsigned zones are a minor gap (owner, 2026-11-09). As crit, and
+	// later as warn, it outranked real problems at the top of Overview.
+	if sig["severity"] != "info" {
+		t.Errorf("expected info severity when all known zones unsigned, got %v", sig["severity"])
 	}
-	want := "3 of 3 DNS zones unsigned (DNSSEC)"
+	want := "3 of 3 DNS zones with public names unsigned (DNSSEC)"
 	if sig["message"] != want {
 		t.Errorf("message = %q, want %q", sig["message"], want)
 	}
@@ -67,10 +67,10 @@ func TestBuildSignals_DNSSEC_Mixed(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected exactly 1 dnssec signal, got %d", len(got))
 	}
-	if got[0]["severity"] != "warn" {
-		t.Errorf("expected warn severity for mixed fleet, got %v", got[0]["severity"])
+	if got[0]["severity"] != "info" {
+		t.Errorf("expected info severity for mixed fleet, got %v", got[0]["severity"])
 	}
-	want := "2 of 3 DNS zones unsigned (DNSSEC)"
+	want := "2 of 3 DNS zones with public names unsigned (DNSSEC)"
 	if got[0]["message"] != want {
 		t.Errorf("message = %q, want %q", got[0]["message"], want)
 	}
@@ -102,12 +102,12 @@ func TestBuildSignals_DNSSEC_UnknownStatusExcluded(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected exactly 1 dnssec signal, got %d", len(got))
 	}
-	want := "1 of 1 DNS zones unsigned (DNSSEC)"
+	want := "1 of 1 DNS zones with public names unsigned (DNSSEC)"
 	if got[0]["message"] != want {
 		t.Errorf("message = %q, want %q (unknown-status zones must be excluded)", got[0]["message"], want)
 	}
-	if got[0]["severity"] != "warn" {
-		t.Errorf("severity = %v, want warn (an unsigned zone is a coverage gap, never crit)", got[0]["severity"])
+	if got[0]["severity"] != "info" {
+		t.Errorf("severity = %v, want info (an unsigned zone is a minor gap)", got[0]["severity"])
 	}
 }
 
@@ -143,11 +143,51 @@ func TestBuildSignals_DNSSEC_CapRegression(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected exactly 1 dnssec signal for %d zones, got %d", total, len(got))
 	}
-	want := "1532 of 1533 DNS zones unsigned (DNSSEC)"
+	want := "1532 of 1533 DNS zones with public names unsigned (DNSSEC)"
 	if got[0]["message"] != want {
 		t.Errorf("message = %q, want %q", got[0]["message"], want)
 	}
-	if got[0]["severity"] != "warn" {
-		t.Errorf("severity = %v, want warn (not every known zone is unsigned)", got[0]["severity"])
+	if got[0]["severity"] != "info" {
+		t.Errorf("severity = %v, want info", got[0]["severity"])
+	}
+}
+
+// TestBuildSignals_DNSSEC_InternalZonesNotCounted: only zones with public
+// names need signing (owner, 2026-11-09). Reverse zones and private names
+// must not appear in either count, and an estate of only internal zones,
+// all unsigned, says nothing at all.
+func TestBuildSignals_DNSSEC_InternalZonesNotCounted(t *testing.T) {
+	zone := func(fqdn, status string) map[string]any {
+		return map[string]any{"id": fqdn, "fqdn": fqdn, "dnssec_status": status}
+	}
+	internal := []any{
+		zone("10.in-addr.arpa.", "UNSIGNED"),
+		zone("corp.local.", "UNSIGNED"),
+		zone("lab.internal.", "UNSIGNED"),
+		zone("site.private.", "UNSIGNED"),
+	}
+	if got := dnssecSignalsOf(t, BuildSignals(map[string]any{"zones": internal})); len(got) != 0 {
+		t.Fatalf("internal-only estate: want no dnssec signal, got %+v", got)
+	}
+	mixed := append(internal, zone("example.com.", "UNSIGNED"), zone("shop.example.co.uk.", "SIGNED"))
+	got := dnssecSignalsOf(t, BuildSignals(map[string]any{"zones": mixed}))
+	if len(got) != 1 {
+		t.Fatalf("want 1 dnssec signal, got %d", len(got))
+	}
+	if want := "1 of 2 DNS zones with public names unsigned (DNSSEC)"; got[0]["message"] != want {
+		t.Errorf("message = %q, want %q", got[0]["message"], want)
+	}
+}
+
+func TestPublicName(t *testing.T) {
+	for fqdn, want := range map[string]bool{
+		"example.com.": true, "shop.example.co.uk": true, "Example.NET.": true,
+		"corp.local.": false, "lab.internal.": false, "x.test.": false, "home.lab.": false,
+		"10.in-addr.arpa.": false, "8.b.d.0.1.0.0.2.ip6.arpa.": false,
+		"com.": false, "co.uk": false, "": false,
+	} {
+		if got := publicName(fqdn); got != want {
+			t.Errorf("publicName(%q) = %v, want %v", fqdn, got, want)
+		}
 	}
 }

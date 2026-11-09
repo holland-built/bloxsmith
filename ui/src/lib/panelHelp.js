@@ -124,8 +124,8 @@ export const PANEL_HELP = {
     look: 'Rows with a problem are tinted red. A dash under TTL means the zone publishes none, and "not checked" means the checks never ran — not that the zone is clean.',
   },
   'dns-dnssec-health': {
-    what: 'How many of your zones are signed against tampering, how many are not, and the share that is signed.',
-    look: 'The table below lists only the unsigned zones, 150 at most. When every zone is signed it says so there instead of leaving the space blank.',
+    what: 'How many zones with public names, such as .com, are signed against tampering, and the share signed. Internal zones (reverse, .local) are counted apart.',
+    look: 'The table lists only the unsigned zones with public names, 150 at most. A .com name can still be internal; the name alone cannot tell.',
   },
   'dns-rpz': {
     what: 'The policy zones that block or rewrite DNS answers, each with its severity, what it overrides, its type, and whether it is switched on.',

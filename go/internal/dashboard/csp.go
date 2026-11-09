@@ -504,6 +504,7 @@ func normDNSSEC(raw []any) ([]map[string]any, map[string]int) {
 			"view":                  getStr(z["view"]),
 			"dnssec_status":         status,
 			"dnssec_signing_policy": getStr(z["dnssec_signing_policy"]),
+			"public_name":           publicName(getStr(z["fqdn"])),
 		})
 		summary[status]++
 	}

@@ -20,7 +20,7 @@ const FIX = {
   'subnet-utilization': { href: '#network?minUtil=70&focus=subnets', ask: 'Which subnets are nearly full?' },
   'dns-ttl-anomaly': { href: '#dns', ask: 'Are any of my DNS zones misconfigured?' },
   'dhcp-expired-lease': { href: '#network?focus=leases', ask: 'Which DHCP leases have expired?' },
-  'dnssec-unsigned': { href: '#dns', ask: 'Which DNS zones are not signed?' },
+  'dnssec-unsigned': { href: '#dns', ask: 'Which DNS zones with public names are not signed?' },
 }
 
 const fmt = (n) => Number(n).toLocaleString()
@@ -43,7 +43,10 @@ export function inboxRows({ hosts, incidents, signals, sec }) {
     // The server's group message starts with its count ("11 dns ttl anomaly");
     // one that does not still gets it, so the row never loses the number.
     if (text !== own[0]?.message && !/^\d/.test(text)) text = `${i.count} ${text}`
-    rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
+    rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : i.severity === 'info' ? 'note' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
   }
-  return rows.sort((a, b) => (a.sev === 'crit' ? 0 : 1) - (b.sev === 'crit' ? 0 : 1))
+  // Critical first, then warnings, then notes (minor items such as unsigned
+  // public zones, which the owner rates as low priority).
+  const rank = { crit: 0, warn: 1, note: 2 }
+  return rows.sort((a, b) => rank[a.sev] - rank[b.sev])
 }
