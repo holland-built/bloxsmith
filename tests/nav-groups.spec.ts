@@ -387,3 +387,11 @@ test('widening the window past phone size closes an open All pages menu and keep
   await expect(page.locator('header [role="menu"]')).toHaveCount(0);
   await expect(page.locator('main')).toBeFocused();
 });
+
+test('widening the window with focus on the All pages button moves focus to the page', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 1000 });
+  await page.goto('/#overview');
+  await page.locator(MENU).focus();
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect(page.locator('main')).toBeFocused();
+});

@@ -397,8 +397,11 @@ export default function App() {
     const mq = window.matchMedia('(min-width: 768px)')
     const onChange = (e) => {
       if (!e.matches) return
-      // menuRef is only set while the menu is open.
-      if (menuRef.current?.contains(document.activeElement)) mainRef.current?.focus()
+      // The whole All pages area hides from md up: its button as well as its
+      // open menu. Chrome drops focus from a hidden button to <body> before
+      // this event arrives, so focus that was just dropped counts too.
+      const a = document.activeElement
+      if (!a || a === document.body || a.closest('nav[aria-label="All pages"]')) mainRef.current?.focus({ preventScroll: true })
       setOpenGroup((g) => (g === 'menu' ? null : g))
     }
     mq.addEventListener('change', onChange)
