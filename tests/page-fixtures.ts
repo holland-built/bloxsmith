@@ -347,11 +347,13 @@ const IPAM_UTIL = {
 const DNS_SERVICES = { status: 'ok', count: 1, rows: [{ comment: 'baseline', id: 'dns/service/baseline-1', name: 'baseline-dns-service', pool_id: 'pool/baseline-1' }] };
 const DNSSEC = {
   status: 'ok',
-  count: 2,
-  summary: { SIGNED: 1, UNSIGNED: 1 },
+  count: 3,
+  summary: { SIGNED: 1, UNSIGNED: 2 },
   rows: [
-    { dnssec_signing_policy: 'default', dnssec_status: 'SIGNED', fqdn: 'baseline.example.', id: 'dns/auth_zone/baseline-1', view: 'baseline-view' },
-    { dnssec_signing_policy: '', dnssec_status: 'UNSIGNED', fqdn: 'other.example.', id: 'dns/auth_zone/baseline-2', view: 'baseline-view' },
+    { dnssec_signing_policy: 'default', dnssec_status: 'SIGNED', fqdn: 'baseline.example.', id: 'dns/auth_zone/baseline-1', view: 'baseline-view', public_name: true },
+    { dnssec_signing_policy: '', dnssec_status: 'UNSIGNED', fqdn: 'other.example.', id: 'dns/auth_zone/baseline-2', view: 'baseline-view', public_name: true },
+    // An internal zone: counted apart, never listed as unsigned.
+    { dnssec_signing_policy: '', dnssec_status: 'UNSIGNED', fqdn: '10.in-addr.arpa.', id: 'dns/auth_zone/baseline-3', view: 'baseline-view', public_name: false },
   ],
 };
 const DTC_LBDN = { status: 'ok', count: 1, rows: [{ comment: 'baseline', disabled: false, dtc_policy: 'baseline-policy', name: 'baseline-lbdn', precedence: 10, ttl: 300, view: 'baseline-view' }] };

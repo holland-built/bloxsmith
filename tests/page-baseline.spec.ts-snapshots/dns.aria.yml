@@ -61,7 +61,7 @@
   - text: 1 unsigned
   - 'button "About: DNSSEC Health"': "About: ⓘ"
   - 'button "Options: DNSSEC Health"'
-  - text: /1 signed 1 unsigned \d+\.\d+% signed share \(of 2\)/
+  - text: /1 signed 1 public names unsigned \d+\.\d+% signed share \(of 2 public\) 1 internal, no signing needed/
   - table:
     - rowgroup:
       - row "Zone View":

@@ -8,8 +8,12 @@ import { test, expect } from '@playwright/test';
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 test('a panel still waiting for its data says Loading, not a blank grey box', async ({ page }) => {
-  // Hold the dashboard read so the Overview stays in its first paint.
+  // Hold the dashboard read so the Overview stays in its first paint. Since the
+  // service board (#393) the only placeholder panel left on Overview is the DNS
+  // chart, which reads dns-qps, not /api/data: hold that too, or an earlier test
+  // in the same CI shard that already fetched it lets the chart skip Loading.
   await page.route('**/api/data*', () => new Promise(() => {}));
+  await page.route('**/api/csp/dns-qps*', () => new Promise(() => {}));
   await page.goto('/#overview');
   await expect(page.getByRole('status').filter({ hasText: 'Loading…' }).first()).toBeVisible();
   await expect(page.locator('[data-board] [data-board-row="Hosts"]')).toContainText('Loading…');

@@ -384,7 +384,7 @@ const CLAIMS = [
   },
   {
     panel: 'dns-dnssec-health',
-    says: /lists only the unsigned zones, 150 at most/,
+    says: /lists only the unsigned zones with public names, 150 at most/,
     file: DNS,
     proofs: [
       { re: /const DNSSEC_CAP = 150/, expect: 'DNSSEC_CAP = 150' },

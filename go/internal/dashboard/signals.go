@@ -14,7 +14,7 @@ import (
 // the snooze store is store.ActiveSnoozes.
 
 // SeverityOrder is _SEVERITY_ORDER (server.py:2480).
-var SeverityOrder = map[string]int{"ok": 0, "warn": 1, "crit": 2}
+var SeverityOrder = map[string]int{"ok": 0, "info": 1, "warn": 2, "crit": 3}
 
 // SampleCap is _SAMPLE_CAP (server.py:2481); SignalsCap is _SIGNALS_CAP (2487).
 const (
@@ -120,10 +120,15 @@ func BuildSignals(data map[string]any) []map[string]any {
 	// dnssec_status is UNKNOWN, not unsigned — excluded from both the
 	// numerator and denominator so we never manufacture a worse number than
 	// the data supports.
+	//
+	// Only zones with public names count. Internal zones (reverse, .local,
+	// .lab and the like) are not expected to be signed, and the owner rates
+	// even unsigned public zones as minor (2026-11-09), so this is "info": it
+	// shows as a muted note, below every warning.
 	unsignedCount, knownCount := 0, 0
 	for _, zone := range rowsOf(data["zones"]) {
 		status := getStr(zone["dnssec_status"])
-		if status == "" {
+		if status == "" || !publicName(getStr(zone["fqdn"])) {
 			continue
 		}
 		knownCount++
@@ -132,17 +137,13 @@ func BuildSignals(data map[string]any) []map[string]any {
 		}
 	}
 	if unsignedCount > 0 {
-		// Always warn. Unsigned zones are a coverage gap, not an outage: when
-		// every zone was unsigned this used to be crit, and it then outranked
-		// offline hosts at the top of Overview (UI/UX review, 2026-10-30).
-		severity := "warn"
 		signals = append(signals, map[string]any{
 			"source":      "dns",
 			"entity_type": "posture",
 			"entity_id":   "dnssec-posture",
 			"category":    "dnssec-unsigned",
-			"severity":    severity,
-			"message":     fmt.Sprintf("%d of %d DNS zones unsigned (DNSSEC)", unsignedCount, knownCount),
+			"severity":    "info",
+			"message":     fmt.Sprintf("%d of %d DNS zones with public names unsigned (DNSSEC)", unsignedCount, knownCount),
 			"detected_at": now,
 		})
 	}

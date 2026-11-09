@@ -154,7 +154,7 @@ Everything about DNS. Refreshes every 30 seconds.
 
 - **DNS Query Rate — 24h** and **Query Volume — 7d**.
 - **DNS Services**: each DNS service and its state.
-- **DNSSEC Health**: which zones are signed.
+- **DNSSEC Health**: which zones with public names (such as .com) are signed. Internal zones, like reverse zones or .local names, are counted apart and not flagged.
 - **RPZ Policy Zones**: how many response policy zones there are, and their state.
 - **DTC Load-Balanced Names**: names that DNS Traffic Control shares out across servers.
 

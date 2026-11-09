@@ -76,6 +76,44 @@ test('an incident made of one finding says the finding itself, not "1 ×"', asyn
   await expect(full).not.toContainText('0 are 90% full');
 });
 
+test('unsigned public zones are a grey Note below warnings, "Ask why" shows on hover, and the board folds to one line', async ({ page }) => {
+  await feeds(page, {
+    incidents: [
+      { key: 'dnssec-unsigned', category: 'dnssec-unsigned', count: 1, severity: 'info', message: '1 dnssec unsigned' },
+      { key: 'dns-ttl-anomaly', category: 'dns-ttl-anomaly', count: 64, severity: 'warn' },
+    ],
+    signals: [{ category: 'dnssec-unsigned', message: '3 of 4 DNS zones with public names unsigned (DNSSEC)', severity: 'info' }],
+    hosts: [{ name: 'b', status: 'online' }],
+  });
+  await page.goto('/');
+  const dns = page.locator('[data-board] [data-board-row="DNS"] [data-inbox-row]');
+  await expect(dns).toHaveCount(2, { timeout: 20_000 });
+  // Owner, 2026-11-09: only public zones need signing, and even that is minor.
+  await expect(dns.nth(0)).toContainText('Warning');
+  await expect(dns.nth(1)).toContainText('Note: 3 of 4 DNS zones with public names not signed (DNSSEC)');
+
+  // "Ask why" is not printed on every line: hidden until the line is hovered.
+  const ask = dns.nth(1).getByRole('link', { name: /^Ask the AI:/ });
+  await expect(ask).toHaveCSS('opacity', '0');
+  await dns.nth(1).hover();
+  await expect(ask).toHaveCSS('opacity', '1');
+  // Keyboard: focusing the issue's own link shows its "Ask why" too.
+  await page.mouse.move(0, 0);
+  await dns.nth(0).getByRole('link').first().focus();
+  await expect(dns.nth(0).getByRole('link', { name: /^Ask the AI:/ })).toHaveCSS('opacity', '1');
+
+  // The board folds to a one-line count, and stays folded after a reload.
+  const toggle = page.getByRole('button', { name: 'Hide' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
+  await expect(page.locator('[data-board]')).toBeHidden();
+  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note');
+  await page.reload();
+  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Show' }).click();
+  await expect(page.locator('[data-board]')).toBeVisible();
+});
+
 test('a quiet day says "none open" on every service row', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   await page.goto('/');
