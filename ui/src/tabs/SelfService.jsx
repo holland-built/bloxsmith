@@ -50,6 +50,8 @@ function useWriteFlow(url) {
   const [status, setStatus] = useState('idle')
   const [stale, setStale] = useState(false)
   const [preview, setPreview] = useState(null)
+  // The whole preview answer, for notes the preview body does not carry.
+  const [previewReply, setPreviewReply] = useState(null)
   const [message, setMessage] = useState(null)
   const [error, setError] = useState(null)
   // An edit made while Preview is still loading must leave that preview stale,
@@ -92,7 +94,10 @@ function useWriteFlow(url) {
   function runPreview(body, applyVerb) {
     post(body, true).then((j) => {
       if (!j) return
-      setPreview(j.record || j.addresses || j)
+      // Allocate answers with addresses (and, with a DNS name, the record it
+      // would make); the addresses are what it takes, so they lead.
+      setPreview(j.addresses || j.record || j)
+      setPreviewReply(j)
       setStale(editedWhileBusy.current)
       setStatus('previewed')
       setMessage(`Preview only — nothing has been committed. Review it, then ${applyVerb}.`)
@@ -109,14 +114,15 @@ function useWriteFlow(url) {
     })
   }
 
-  return { status, stale, preview, message, error, markStale, runPreview, runApply }
+  return { status, stale, preview, previewReply, message, error, markStale, runPreview, runApply }
 }
 
 // ---------- allocate ----------
 
 // Name the address the server actually reserved; it can differ from the preview.
-function allocatedMsg(j) {
+function allocatedMsg(j, dnsName) {
   const got = (j?.addresses || []).map((a) => a?.address).filter(Boolean)
+  if (got.length === 1 && dnsName && j?.record?.ok) return `Done. ${got[0]} is yours, and ${dnsName} now points to it.`
   if (got.length === 1) return `Done. ${got[0]} is yours.`
   if (got.length > 1) return `Done. These ${got.length} addresses are yours: ${got.join(', ')}.`
   return 'Address allocated.'
@@ -126,14 +132,15 @@ const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s
 
 // The preview said what it would do as raw JSON. Say it as a sentence; the
 // JSON stays under Details for anyone checking the ids.
-function allocateSentence(preview, subnet, name) {
+function allocateSentence(preview, subnet, name, dnsName, ptr) {
   const rows = Array.isArray(preview) ? preview : null
   const addrs = rows?.map((r) => r?.address).filter(Boolean) ?? []
   if (!addrs.length) return null
   const list = addrs.length === 1 ? addrs[0] : `${addrs.length} addresses (${addrs.join(', ')})`
   const where = subnet ? ` in subnet ${subnetLabel(subnet)}` : ''
   const called = name.trim() ? `, named ${name.trim()}` : ''
-  return `This will take ${list}${where}${called}.`
+  const dns = dnsName ? ` It will also point ${dnsName} to it${ptr ? ', with a reverse record' : ''}.` : ''
+  return `This will take ${list}${where}${called}.${dns}`
 }
 
 function AllocatePanel({ panelId }) {
@@ -148,6 +155,13 @@ function AllocatePanel({ panelId }) {
   const [subnetId, setSubnetId] = useState('')
   const [count, setCount] = useState(1)
   const [name, setName] = useState('')
+  // "Also give it a DNS name": the server reserves the address and makes the
+  // record in one step, and hands the address back if the record fails.
+  const [dnsOn, setDnsOn] = useState(false)
+  const [zoneId, setZoneId] = useState('')
+  const [ptr, setPtr] = useState(false)
+  const zonesApi = useApi(dnsOn ? '/api/dns/zones' : null)
+  const zones = zonesApi.data?.zones ?? []
 
   const flow = useWriteFlow('/api/selfservice/allocate')
 
@@ -188,7 +202,18 @@ function AllocatePanel({ panelId }) {
     .filter((s) => Number(s.utilization?.free) >= want)
     .sort((a, b) => Number(b.utilization?.free) - Number(a.utilization?.free))[0], [subnetsApi.data, want])
   const target = subnetId || roomiest?.id || ''
-  const body = () => ({ subnet_id: target, count: Number(count) || 1, name })
+  const targetSubnet = subnets.find((s) => s.id === target)
+  // One address gets one name; the server names only the first.
+  const single = (Number(count) || 1) === 1
+  const zone = zones.find((z) => z.id === zoneId)
+  const dnsName = dnsOn && single && zone && name.trim() ? `${name.trim()}.${String(zone.fqdn || zone.name || '').replace(/\.$/, '')}` : ''
+  const dnsIncomplete = dnsOn && single && !dnsName
+  const body = () => ({
+    subnet_id: target,
+    count: Number(count) || 1,
+    name,
+    ...(dnsName ? { dns: { zone_id: zoneId, name: name.trim(), type: String(targetSubnet?.address || '').includes(':') ? 'AAAA' : 'A', create_ptr: ptr } } : {}),
+  })
 
   return (
     <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
@@ -242,12 +267,38 @@ function AllocatePanel({ panelId }) {
         </Field>
       </div>
 
+      <div className="flex flex-col gap-2 mb-3 text-copy">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={dnsOn} disabled={!single} onChange={(e) => { setDnsOn(e.target.checked); flow.markStale() }} />
+          Also give it a DNS name
+          {!single && <span className="text-note text-muted">(one address at a time)</span>}
+        </label>
+        {dnsOn && single && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+            <Field label="Zone">
+              <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
+                <option value="">Select zone…</option>
+                {zones.map((z) => <option key={z.id} value={z.id}>{z.fqdn || z.name || z.id}</option>)}
+              </select>
+            </Field>
+            <p className="text-note text-muted self-end">
+              {dnsName ? `It will be ${dnsName}.` : name.trim() ? 'Pick the zone the name goes in.' : 'Type a Name above; it becomes the DNS name.'}
+            </p>
+            <label className="flex items-center gap-2 sm:col-span-2">
+              <input type="checkbox" checked={ptr} onChange={(e) => { setPtr(e.target.checked); flow.markStale() }} />
+              Also create the reverse (PTR) record
+            </label>
+            <FetchError error={zonesApi.error} stale={zones.length > 0} />
+          </div>
+        )}
+      </div>
+
       <PreviewApply
         status={flow.status}
         stale={flow.stale}
-        disabled={!target}
+        disabled={!target || dnsIncomplete}
         onPreview={() => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') }}
-        onApply={() => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j) })}
+        onApply={() => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) })}
         applyLabel="Allocate"
         error={flow.error}
         message={flow.message}
@@ -255,7 +306,7 @@ function AllocatePanel({ panelId }) {
         <PreviewBox
           data={flow.preview}
           note="preview — no address has been taken yet"
-          summary={allocateSentence(flow.preview, subnets.find((s) => s.id === target), name)}
+          summary={allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
         />
       </PreviewApply>
 
@@ -276,16 +327,29 @@ function DnsPanel({ panelId }) {
   const [type, setType] = useState('A')
   const [value, setValue] = useState('')
   const [ttl, setTtl] = useState('')
+  const [ptr, setPtr] = useState(false)
 
   const flow = useWriteFlow('/api/dns/records')
 
   const zones = zonesApi.data?.zones ?? []
+  // A reverse record exists only for an address, so the box is offered for A and AAAA.
+  const canPtr = type === 'A' || type === 'AAAA'
 
   function body() {
     const b = { zone_id: zoneId, name_in_zone: name, type, value }
     if (ttl !== '') b.ttl = Number(ttl)
+    if (canPtr && ptr) b.create_ptr = true
     return b
   }
+
+  // The preview as a sentence; the record itself stays under Details.
+  const zone = zones.find((z) => z.id === zoneId)
+  const fqdn = zone ? String(zone.fqdn || zone.name || '').replace(/\.$/, '') : ''
+  const owner = !name.trim() || name.trim() === '@' ? fqdn : `${name.trim()}.${fqdn}`
+  const sentence = flow.preview
+    ? `This will create ${type} ${owner} → ${value.trim()}${canPtr && ptr ? ', with a reverse record' : ''}.` +
+      (flow.previewReply?.duplicate_check === 'unavailable' ? " It could not check whether this record already exists." : ' No identical record exists.')
+    : null
 
   return (
     <Card panelId={panelId} span={3} title="Create DNS Record" note="preview is validated by the server">
@@ -319,18 +383,24 @@ function DnsPanel({ panelId }) {
           </Field>
         </div>
       </details>
+      {canPtr && (
+        <label className="flex items-center gap-2 mb-3 text-copy">
+          <input type="checkbox" checked={ptr} onChange={(e) => { setPtr(e.target.checked); flow.markStale() }} />
+          Also create the reverse (PTR) record
+        </label>
+      )}
 
       <PreviewApply
         status={flow.status}
         stale={flow.stale}
         disabled={!zoneId || !value}
         onPreview={() => flow.runPreview(body(), 'Create')}
-        onApply={() => flow.runApply(body(), () => 'DNS record created.')}
+        onApply={() => flow.runApply(body(), () => `Done. ${owner} now points to ${value.trim()}${canPtr && ptr ? ', and its reverse record is made' : ''}.`)}
         applyLabel="Create"
         error={flow.error}
         message={flow.message}
       >
-        <PreviewBox data={flow.preview} note="preview — the record has not been created yet" />
+        <PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />
       </PreviewApply>
 
       <FetchError error={zonesApi.error} stale={zones.length > 0} />
