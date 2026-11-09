@@ -74,7 +74,7 @@ const TABS = [
   { id: 'changes', label: 'Changes', el: Changes },
   { id: 'automate', label: 'Automate', el: Automate },
   { id: 'provision', label: 'Provision', el: Provision },
-  { id: 'selfservice', label: 'Self-Service', el: SelfService },
+  { id: 'selfservice', label: 'Get an address', el: SelfService },
   { id: 'editor', label: 'Editor', el: Editor },
   { id: 'drift', label: 'Drift', el: Drift },
   { id: 'demo', label: 'Demo server', el: DemoServer },

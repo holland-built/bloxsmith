@@ -31,7 +31,7 @@ test('Incidents: Resolve and Reopen are off on a read-only tenant, and the panel
   await expect(panel).toContainText('Lab is read-only');
 });
 
-for (const [tab, name] of [['selfservice', 'Self-Service'], ['editor', 'Editor']] as const) {
+for (const [tab, name] of [['selfservice', 'Get an address'], ['editor', 'Editor']] as const) {
   test(`${name}: says the tenant is read-only and that Preview still works`, async ({ page }) => {
     await page.goto(`/#${tab}`);
     const note = page.locator('[data-read-only-note]');

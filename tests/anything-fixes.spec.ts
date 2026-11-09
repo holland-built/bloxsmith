@@ -27,7 +27,7 @@ test('an edit made while Preview is loading leaves no Create button for the old 
   });
   await page.goto('/#selfservice');
   const card = page.locator('[data-panel-id="selfservice-create-record"]');
-  await card.getByLabel('Zone').selectOption(ZONE.id);
+  await card.getByRole('combobox', { name: 'Zone' }).selectOption(ZONE.id);
   await card.getByLabel('Value').fill('192.0.2.10');
   await card.getByRole('button', { name: 'Preview' }).click();
   await card.getByLabel('Value').fill('192.0.2.99');

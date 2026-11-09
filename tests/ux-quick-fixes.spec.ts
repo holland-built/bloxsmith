@@ -49,7 +49,7 @@ test('a subnet is found by typing, and the preview is a sentence', async ({ page
     r.fulfill(json({ addresses: [{ address: '10.0.42.1', id: 'ipam/address/00000000-0000-0000-0000-000000000001' }] })),
   );
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Allocate Address' }).first();
+  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Get an address' }).first();
   await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('searchbox', { name: 'Search Subnet' }).fill('site-42');
   await panel.getByRole('button', { name: '10.0.42.0/24 — site-42', exact: true }).click();

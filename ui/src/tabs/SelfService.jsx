@@ -128,6 +128,13 @@ function allocatedMsg(j, dnsName) {
   return 'Address allocated.'
 }
 
+// Forward and reverse zones together made one list too long to search
+// (owner, 2026-11-09). Reverse zones end in in-addr.arpa or ip6.arpa and hold
+// PTR records; every other record type lives in a forward zone.
+const zoneName = (z) => String(z.fqdn || z.name || z.id || '')
+const isReverseZone = (z) => /(^|\.)(in-addr|ip6)\.arpa\.?$/i.test(zoneName(z))
+const zoneOptions = (zones, reverse) => zones.filter((z) => isReverseZone(z) === reverse).map((z) => ({ value: z.id, label: zoneName(z) }))
+
 const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? ` — ${s.name}` : '')
 
 // The preview said what it would do as raw JSON. Say it as a sentence; the
@@ -216,7 +223,7 @@ function AllocatePanel({ panelId }) {
   })
 
   return (
-    <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
+    <Card panelId={panelId} span={3} title="Get an address" note="pick space → block → subnet">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="IP Space" group>
           <FilterSelect
@@ -227,16 +234,15 @@ function AllocatePanel({ panelId }) {
             placeholder="Select space…"
           />
         </Field>
-        <Field label="Block">
-          <select
-            className={inputCls}
+        <Field label="Block" group>
+          <FilterSelect
+            label="Block"
             value={block}
-            onChange={(e) => { setBlock(e.target.value); setSubnetId(''); flow.markStale() }}
+            onChange={(v) => { setBlock(v); setSubnetId(''); flow.markStale() }}
+            options={blocks.map((b) => ({ value: b.id, label: b.address ? `${b.address}${b.cidr ? `/${b.cidr}` : ''}${b.name ? ` — ${b.name}` : ''}` : b.name || b.id }))}
+            placeholder="Any block"
             disabled={!space}
-          >
-            <option value="">Any block</option>
-            {blocks.map((b) => <option key={b.id} value={b.id}>{b.address || b.name || b.id}</option>)}
-          </select>
+          />
         </Field>
         <Field label="Subnet" group>
           <FilterSelect
@@ -275,11 +281,14 @@ function AllocatePanel({ panelId }) {
         </label>
         {dnsOn && single && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
-            <Field label="Zone">
-              <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
-                <option value="">Select zone…</option>
-                {zones.map((z) => <option key={z.id} value={z.id}>{z.fqdn || z.name || z.id}</option>)}
-              </select>
+            <Field label="Zone" group>
+              <FilterSelect
+                label="Zone"
+                value={zoneId}
+                onChange={(v) => { setZoneId(v); flow.markStale() }}
+                options={zoneOptions(zones, false)}
+                placeholder="Select zone…"
+              />
             </Field>
             <p className="text-note text-muted self-end">
               {dnsName ? `It will be ${dnsName}.` : name.trim() ? 'Pick the zone the name goes in.' : 'Type a Name above; it becomes the DNS name.'}
@@ -355,14 +364,22 @@ function DnsPanel({ panelId }) {
   return (
     <Card panelId={panelId} span={3} title="Create DNS Record" note="preview is validated by the server">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <Field label="Zone">
-          <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
-            <option value="">Select zone…</option>
-            {zones.map((z) => <option key={z.id} value={z.id}>{z.fqdn || z.name || z.id}</option>)}
-          </select>
+        <Field label={type === 'PTR' ? 'Zone (reverse zones)' : 'Zone'} group>
+          <FilterSelect
+            label="Zone"
+            value={zoneId}
+            onChange={(v) => { setZoneId(v); flow.markStale() }}
+            options={zoneOptions(zones, type === 'PTR')}
+            placeholder="Select zone…"
+          />
         </Field>
         <Field label="Type">
-          <select className={inputCls} value={type} onChange={(e) => { setType(e.target.value); flow.markStale() }}>
+          <select className={inputCls} value={type} onChange={(e) => {
+            // PTR lives in reverse zones and everything else in forward ones, so
+            // crossing that line drops a zone the new list no longer holds.
+            if ((e.target.value === 'PTR') !== (type === 'PTR')) setZoneId('')
+            setType(e.target.value); flow.markStale()
+          }}>
             {COMMON_RTYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             <optgroup label="More types">
               {RTYPES.filter((t) => !COMMON_RTYPES.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
@@ -493,6 +510,7 @@ function useSearchTerm() {
 function ManageRecordsPanel({ panelId, span }) {
   const zonesApi = useApi('/api/dns/zones')
   const [zoneId, setZoneId] = useState('')
+  const [reverse, setReverse] = useState(false)
   const search = useSearchTerm()
   const listUrl = zoneId ? `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200${search.term ? `&q=${encodeURIComponent(search.term)}` : ''}` : null
   const paged = usePagedList(listUrl)
@@ -690,15 +708,23 @@ function ManageRecordsPanel({ panelId, span }) {
   return (
     <Card panelId={panelId} span={span} title="Manage Records" note="edit or delete existing DNS records">
       <div className="mb-3">
-        <Field label="Zone">
-          <select
-            className={inputCls}
+        <fieldset className="flex gap-4 mb-2 text-copy">
+          <legend className="sr-only">Which zones to list</legend>
+          {[[false, 'Forward zones'], [true, 'Reverse zones']].map(([rev, text]) => (
+            <label key={text} className="flex items-center gap-2">
+              <input type="radio" name={`${panelId}-zone-kind`} checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }} />
+              {text}
+            </label>
+          ))}
+        </fieldset>
+        <Field label="Zone" group>
+          <FilterSelect
+            label="Zone"
             value={zoneId}
-            onChange={(e) => { setZoneId(e.target.value); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }}
-          >
-            <option value="">Select zone…</option>
-            {zones.map((z) => <option key={z.id} value={z.id}>{z.fqdn || z.name || z.id}</option>)}
-          </select>
+            onChange={(v) => { setZoneId(v); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }}
+            options={zoneOptions(zones, reverse)}
+            placeholder="Select zone…"
+          />
         </Field>
       </div>
 
@@ -863,26 +889,24 @@ function ManageAddressesPanel({ panelId }) {
   return (
     <Card panelId={panelId} span={3} title="Manage Addresses" note="release an allocated address">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <Field label="IP Space">
-          <select
-            className={inputCls}
+        <Field label="IP Space" group>
+          <FilterSelect
+            label="IP Space"
             value={space}
-            onChange={(e) => { setSpace(e.target.value); setSubnetId(''); setArmedId(null); setReleaseError(null) }}
-          >
-            <option value="">Select space…</option>
-            {spaces.map((s) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
-          </select>
+            onChange={(v) => { setSpace(v); setSubnetId(''); setArmedId(null); setReleaseError(null) }}
+            options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
+            placeholder="Select space…"
+          />
         </Field>
-        <Field label="Subnet">
-          <select
-            className={inputCls}
+        <Field label="Subnet" group>
+          <FilterSelect
+            label="Subnet"
             value={subnetId}
-            onChange={(e) => { setSubnetId(e.target.value); setArmedId(null); setReleaseError(null) }}
+            onChange={(v) => { setSubnetId(v); setArmedId(null); setReleaseError(null) }}
+            options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
+            placeholder="Select subnet…"
             disabled={!space}
-          >
-            <option value="">Select subnet…</option>
-            {subnets.map((s) => <option key={s.id} value={s.id}>{(s.address || '') + (s.cidr ? `/${s.cidr}` : '')}{s.name ? ` — ${s.name}` : ''}</option>)}
-          </select>
+          />
         </Field>
       </div>
 
@@ -949,7 +973,7 @@ export default function SelfService() {
   return (
     <PageRail>
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Self-Service</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Get an address</h1>
       <TabIntro>Take the next free address from a subnet, or add a record to a DNS zone.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply is off." />
       {/* The two flex rows these panels used to sit in are one CardGrid now, and

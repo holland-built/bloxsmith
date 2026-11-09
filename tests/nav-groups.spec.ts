@@ -26,7 +26,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['changes', 'What changed'],
   ['automate', 'Automate'],
   ['provision', 'Provision'],
-  ['selfservice', 'Self-Service'],
+  ['selfservice', 'Get an address'],
   ['editor', 'Editor'],
   ['drift', 'Drift'],
   ['demo', 'Demo server'],
@@ -42,7 +42,7 @@ const GROUP_TABS: Record<string, string[]> = {
   Status: ['Overview', 'Daily', 'Best practices'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
-  Change: ['Automate', 'Provision', 'Self-Service', 'Editor', 'Drift', 'Demo server'],
+  Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Demo server'],
   Ask: ['AI', 'Build a chart'],
 };
 
@@ -337,7 +337,7 @@ test('the settings sheet is a real modal dialog: focus, trap, Escape, return', a
 // by themselves for the page you are on. A job is not listed twice.
 // ---------------------------------------------------------------------------
 const JOBS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts'];
-const JOB_TAB_LABELS = new Set(['Overview', 'Self-Service', 'Automate', 'Daily', 'Build a chart']);
+const JOB_TAB_LABELS = new Set(['Overview', 'Get an address', 'Automate', 'Daily', 'Build a chart']);
 
 test('the page menu reaches every page, and lists each once', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

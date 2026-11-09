@@ -3,14 +3,13 @@ import { useMemo, useState } from 'react'
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
 // collapse into the same empty list a tenant that owns nothing produces.
 import { PageRail } from '../components/kit.jsx'
-import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
+import FilterSelect from '../components/FilterSelect.jsx'
+import { Card, CardGrid, COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
 // lives in lib/ so npm test can reach it — inside this file it was a
 // cross-language prose contract nothing checked. See driftStatus.test.js.
 import { driftItemKind } from '../lib/driftStatus.js'
-
-const inputCls = `${FIELD_CLS} w-full`
 
 // Colours stay here, with the component that paints them. Keeping them next to
 // the classifier is what put the classifier inside a .jsx file and out of reach
@@ -95,30 +94,30 @@ export default function Drift() {
           note="compare a site template against live Infoblox state"
         >
           <div className="flex flex-col gap-3">
-            <label className="text-note text-muted flex flex-col gap-1">
+            <div role="group" aria-label="Template" className="text-note text-muted flex flex-col gap-1">
               Template
               {templatesApi.loading ? (
                 <Skeleton h={38} />
               ) : (
-                <select value={template} onChange={(e) => setTemplate(e.target.value)} className={inputCls}>
-                  <option value="">Select a template</option>
-                  {templates.map((t) => (
-                    <option key={t.name} value={t.name}>
-                      {t.name} — {t.region || ''}/{t.environment || ''}
-                    </option>
-                  ))}
-                </select>
+                <FilterSelect
+                  label="Template"
+                  value={template}
+                  onChange={setTemplate}
+                  options={templates.map((t) => ({ value: t.name, label: `${t.name} — ${t.region || ''}/${t.environment || ''}` }))}
+                  placeholder="Select a template"
+                />
               )}
-            </label>
-            <label className="text-note text-muted flex flex-col gap-1">
+            </div>
+            <div role="group" aria-label="IP space (override)" className="text-note text-muted flex flex-col gap-1">
               IP space (override)
-              <select value={ipSpace} onChange={(e) => setIpSpace(e.target.value)} className={inputCls}>
-                <option value="">— template default —</option>
-                {spaces.map((sp) => (
-                  <option key={sp.id} value={sp.name}>{sp.name}</option>
-                ))}
-              </select>
-            </label>
+              <FilterSelect
+                label="IP space (override)"
+                value={ipSpace}
+                onChange={setIpSpace}
+                options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
+                placeholder="— template default —"
+              />
+            </div>
             <div>
               <FetchError error={templatesApi.error} stale={templates.length > 0} />
               <FetchError error={spacesApi.error} stale={spaces.length > 0} />

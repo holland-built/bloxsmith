@@ -19,7 +19,7 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     await page.goto('/#selfservice');
 
-    const allocateCard = page.locator('h2', { hasText: 'Allocate Address' }).locator(CARD_XPATH);
+    const allocateCard = page.locator('h2', { hasText: 'Get an address' }).locator(CARD_XPATH);
     await expect(allocateCard.getByText(/could not load current data/i)).toBeVisible();
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
 
@@ -34,7 +34,7 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     await page.goto('/#selfservice');
 
-    const allocateCard = page.locator('h2', { hasText: 'Allocate Address' }).locator(CARD_XPATH);
+    const allocateCard = page.locator('h2', { hasText: 'Get an address' }).locator(CARD_XPATH);
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toBeVisible();
     await expect(allocateCard.getByText(/could not load current data/i)).toHaveCount(0);
 

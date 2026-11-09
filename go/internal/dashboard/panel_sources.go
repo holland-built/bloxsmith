@@ -173,11 +173,11 @@ var panelSources = []PanelSource{
 	restPanel("automate-job", "Automate", "The job you picked", srcAPI, whyForm),
 	{ID: "automate-recent", Page: "Automate", Name: "Your recent changes", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
 
-	// ---- Self-Service ----
-	restPanel("selfservice-allocate", "Self-Service", "Allocate Address", srcAPI, whyForm),
-	restPanel("selfservice-create-record", "Self-Service", "Create DNS Record", srcAPI, whyForm),
-	restPanel("selfservice-manage-records", "Self-Service", "Manage Records", srcAPI, whyForm),
-	restPanel("selfservice-manage-addresses", "Self-Service", "Manage Addresses", srcAPI, whyForm),
+	// ---- Get an address ----
+	restPanel("selfservice-allocate", "Get an address", "Get an address", srcAPI, whyForm),
+	restPanel("selfservice-create-record", "Get an address", "Create DNS Record", srcAPI, whyForm),
+	restPanel("selfservice-manage-records", "Get an address", "Manage Records", srcAPI, whyForm),
+	restPanel("selfservice-manage-addresses", "Get an address", "Manage Addresses", srcAPI, whyForm),
 
 	// ---- Editor ----
 	restPanel("editor-object-form", "Editor", "Create or edit an object", srcAPI, whyForm),

@@ -694,8 +694,8 @@
   },
   {
     "id": "selfservice-allocate",
-    "page": "Self-Service",
-    "name": "Allocate Address",
+    "page": "Get an address",
+    "name": "Get an address",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -703,7 +703,7 @@
   },
   {
     "id": "selfservice-create-record",
-    "page": "Self-Service",
+    "page": "Get an address",
     "name": "Create DNS Record",
     "kind": "rest",
     "source": "the Infoblox API",
@@ -712,7 +712,7 @@
   },
   {
     "id": "selfservice-manage-records",
-    "page": "Self-Service",
+    "page": "Get an address",
     "name": "Manage Records",
     "kind": "rest",
     "source": "the Infoblox API",
@@ -721,7 +721,7 @@
   },
   {
     "id": "selfservice-manage-addresses",
-    "page": "Self-Service",
+    "page": "Get an address",
     "name": "Manage Addresses",
     "kind": "rest",
     "source": "the Infoblox API",
