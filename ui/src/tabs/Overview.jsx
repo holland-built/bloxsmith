@@ -250,7 +250,7 @@ function boardSummary(rows, checked) {
     })
     .filter(Boolean)
   const states = rows.map((b) => checked[b.name])
-  const tail = states.includes('loading') ? 'still checking' : states.some((c) => !c) ? 'some feeds not checked' : null
+  const tail = states.some((c) => !c) ? 'some feeds not checked' : states.includes('loading') ? 'still checking' : null
   if (!parts.length) return tail ? `none found yet, ${tail}` : 'no open issues'
   return tail ? `${parts.join(' · ')} · ${tail}` : parts.join(' · ')
 }
