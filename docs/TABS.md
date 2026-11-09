@@ -5,7 +5,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 Tabs fall into two groups:
 
 - **Read-only**: Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section.
-- **Can make changes**: Provision, Self-Service, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
+- **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
 
 Almost every panel follows one rule: a feed that failed to load never looks like a feed that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
 
@@ -37,11 +37,11 @@ The flow enforces three rules, so you don't have to remember them:
 
 If a preview looks wrong, it is wrong. Fix the input and preview again.
 
-One limit: Provision streams its plan from the server, and the server plans again when you press Apply. Provision promises that your inputs are the same between preview and apply, not that the plan is byte for byte the same. Self-Service and Editor send exactly the request you reviewed.
+One limit: Provision streams its plan from the server, and the server plans again when you press Apply. Provision promises that your inputs are the same between preview and apply, not that the plan is byte for byte the same. Get an address and Editor send exactly the request you reviewed.
 
 Actions that delete things have extra safeguards. Teardown needs an admin token and a typed confirmation. Editor's Delete is a separate button you click twice, and it never goes through preview.
 
-If the tenant you are using is read-only, the buttons that would write are greyed out and the panel says why. Preview still works on Self-Service and Editor.
+If the tenant you are using is read-only, the buttons that would write are greyed out and the panel says why. Preview still works on Get an address and Editor.
 
 | Tab | Writes? | Purpose |
 |---|---|---|
@@ -56,7 +56,7 @@ If the tenant you are using is read-only, the buttons that would write are greye
 | [Audit](#audit) | no | Who changed what |
 | [Changes](#changes) | no | What changed in the last 24 hours |
 | [Provision](#provision) | **yes** | Build subnets, sites and demo networks |
-| [Self-Service](#self-service) | **yes** | Take an address, add a DNS record, edit or remove either |
+| [Get an address](#get-an-address) | **yes** | Take an address, add a DNS record, edit or remove either |
 | [Editor](#editor) | **yes** | Create, update or delete one object directly |
 | [Drift](#drift) | no | Your template compared with what is really there |
 | [Demo server](#demo-server) | **yes** | Build a NIOS-X server on Proxmox for a demo, then remove it |
@@ -75,7 +75,7 @@ You can rearrange every tab, and each tab remembers its own layout. Moving a pan
 
 Two tabs have fewer controls on purpose. **Editor** has one panel and always will. **Drift** has one until you run a check, and a second one appears with the result. A single panel has nowhere to move, so those tabs show no ⠿ handle and no **Arrange panels** button until a second panel appears. A control that can't do anything would only mislead. Resize and ✕ still work on a single panel, and if you take that panel off the page, the **Arrange panels** button appears so you can bring it straight back.
 
-On wide screens, Provision, Self-Service, Editor and Drift also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Seed demo.
+On wide screens, Provision, Get an address, Editor and Drift also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Seed demo.
 
 You can't add or delete panels. Each tab has a fixed set that comes with the app, and **Take off the page** only hides one. If a panel is missing and you didn't hide it, the service behind it wasn't found on this tenant. The tab says so, in a row that offers to show the panel anyway.
 
@@ -245,7 +245,7 @@ It shows at most the 500 latest events from the last 24 hours. The Portal return
 
 The quick way to make a change. Pick a job on the left, answer its questions, and press **Preview** to see what will be made. Nothing is created until you press **Build it**.
 
-Everything built here can be removed from **Your recent changes**. The full Provision, Self-Service and Demo server pages are still in the page menu, under **Change**.
+Everything built here can be removed from **Your recent changes**. The full Provision, Get an address and Demo server pages are still in the page menu, under **Change**.
 
 | Job | What it asks | What it makes |
 |---|---|---|
@@ -269,7 +269,7 @@ Everything built here can be removed from **Your recent changes**. The full Prov
 
 Deleting a network or a DNS zone in Infoblox also deletes everything inside it. So Remove keeps a network that now holds addresses or DHCP ranges this change did not make, and a zone that holds records this change did not make, and says so. Remove those first, then press Remove again. A DNS zone that was already there before a branch office or demo was built is never removed.
 
-Changes made on the Provision, Self-Service and Demo server pages are not listed here and cannot be removed from here.
+Changes made on the Provision, Get an address and Demo server pages are not listed here and cannot be removed from here.
 
 ## Provision
 
@@ -310,24 +310,24 @@ Progress for each template adds up as `done/total`, and each failure is listed. 
 
 > Do not point Seed demo at a production tenant. It writes many objects quickly, and teardown is the only way back.
 
-## Self-Service
+## Get an address
 
 **Writes to Infoblox.** Two short forms for everyday requests, so people don't need the full Editor, and two panels for changing what already exists. The forms use the [Preview and Apply flow](#the-write-flow). Manage Records and Manage Addresses have a simpler edit and delete flow, described below.
 
-### Allocate Address
+### Get an address
 
 Take the next free address, or several, from a subnet.
 
-1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Leave the subnet on **Any network with room** to use the one with the most free addresses.
+1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Every list has a search box above it; type part of a name or address to narrow it. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
-3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
+3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
 4. **Preview** shows which addresses it would take, in a sentence. **Allocate** takes them and names the address you got.
 
 ### Create DNS Record
 
 Add a record to a zone you already have.
 
-1. Pick the **zone** and record **type**. The common types (A, AAAA, CNAME, TXT) come first; MX, SRV, PTR, NS and CAA are under **More types**.
+1. Pick the **zone** and record **type**. The common types (A, AAAA, CNAME, TXT) come first; MX, SRV, PTR, NS and CAA are under **More types**. The zone list shows forward zones, or only reverse zones when the type is PTR. Type in the search box above it to find a zone.
 2. Fill in the **name** (`@` for the zone itself) and the **value**. A TTL is under **More options** if you want one.
 3. For an A or AAAA record, tick **Also create the reverse (PTR) record** to make the matching reverse entry too. Infoblox makes it only if the reverse zone exists.
 4. **Preview** sends it to the server to check and says in a sentence what it would make. If the same record (same name, type and value) is already there, it says so and nothing is created. **Create** writes it.
@@ -338,7 +338,7 @@ The preview shows the record the way the *server* read it, which is often not ho
 
 Edit or delete a record that is already in a zone.
 
-Pick a **zone**. The list shows the first 200 records; type in **Find a record** to search by name or value, or press **Show 200 more**. Press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
+Choose **Forward zones** or **Reverse zones**, then pick a **zone** (the search box above the list finds one by name). The list shows the first 200 records; type in **Find a record** to search by name or value, or press **Show 200 more**. Press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
 
 **Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record as it is right now. If the record can't be re-checked, or someone else already removed it, the button doesn't arm and says why. If you don't click again within four seconds, it goes back to normal.
 
@@ -350,7 +350,7 @@ Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its 
 
 ## Editor
 
-**Writes to Infoblox.** Create, update and delete single objects directly. It is the blunt tool, so use Provision or Self-Service when they can do the job.
+**Writes to Infoblox.** Create, update and delete single objects directly. It is the blunt tool, so use Provision or Get an address when they can do the job.
 
 It handles six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, and Tags (set the site tags on an address block).
 
@@ -529,10 +529,10 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
 | Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
 | Automate | Your recent changes | the app's own run records | No | it is a list, not a chart |
-| Self-Service | Allocate Address | the Infoblox API | No | it is a form, not a chart |
-| Self-Service | Create DNS Record | the Infoblox API | No | it is a form, not a chart |
-| Self-Service | Manage Records | the Infoblox API | No | it is a form, not a chart |
-| Self-Service | Manage Addresses | the Infoblox API | No | it is a form, not a chart |
+| Get an address | Get an address | the Infoblox API | No | it is a form, not a chart |
+| Get an address | Create DNS Record | the Infoblox API | No | it is a form, not a chart |
+| Get an address | Manage Records | the Infoblox API | No | it is a form, not a chart |
+| Get an address | Manage Addresses | the Infoblox API | No | it is a form, not a chart |
 | Editor | Create or edit an object | the Infoblox API | No | it is a form, not a chart |
 | Drift | Check drift | your templates and the Infoblox API | No | it is a form, not a chart |
 | Drift | Error | your templates and the Infoblox API | No | it reports what a change did, not a chart |

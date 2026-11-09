@@ -11,7 +11,7 @@ const TABS = readFileSync(new URL('../../../docs/TABS.md', import.meta.url), 'ut
 // Every anchor a `Docs →` link can be written with today. If a tab is added,
 // add it here — a missing section is silently rendered as the whole document,
 // which is a fine fallback for a reader and a terrible one for a test.
-const ANCHORS = ['overview', 'provision', 'ai', 'self-service', 'drift', 'assets', 'editor']
+const ANCHORS = ['overview', 'provision', 'ai', 'get-an-address', 'drift', 'assets', 'editor']
 
 test('slugify matches the anchors the docs links are already written against', () => {
   assert.equal(slugify('Overview'), 'overview')
