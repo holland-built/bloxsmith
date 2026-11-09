@@ -45,6 +45,11 @@ type recordsFake struct {
 	srv   *httptest.Server
 	mu    sync.Mutex
 	calls []recordsCall
+	// existing answers the duplicate lookup (GET /api/ddi/v1/dns/record);
+	// empty means the zone holds no matching record. lookupStatus, when set,
+	// makes that lookup fail with this status instead.
+	existing     []any
+	lookupStatus int
 }
 
 // recordsServer starts the fake. status/resp are what the record-create POST is
@@ -69,9 +74,28 @@ func recordsServer(t *testing.T, status int, resp any) *recordsFake {
 			if resp != nil {
 				_ = json.NewEncoder(w).Encode(resp)
 			}
+		case http.MethodGet:
+			// The duplicate lookup. The only read the create path may make.
+			if r.URL.Path != "/api/ddi/v1/dns/record" {
+				t.Errorf("GET to unexpected path %q", r.URL.Path)
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			f.mu.Lock()
+			rows, failWith := f.existing, f.lookupStatus
+			f.mu.Unlock()
+			if failWith != 0 {
+				w.WriteHeader(failWith)
+				return
+			}
+			if rows == nil {
+				rows = []any{}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(M{"results": rows})
 		default:
-			// DNSRecordCreate must never issue anything but the one POST.
-			t.Errorf("unexpected %s %s — the create path should only POST", r.Method, r.URL.Path)
+			// Besides the lookup, the create path makes the one POST and nothing else.
+			t.Errorf("unexpected %s %s — the create path should only GET the lookup and POST", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
@@ -101,14 +125,34 @@ func (f *recordsFake) Calls() []recordsCall {
 	return append([]recordsCall{}, f.calls...)
 }
 
-// recordsOnlyCall asserts exactly one request was made and returns it.
+// Writes is every captured request except the duplicate lookup's GETs.
+func (f *recordsFake) Writes() []recordsCall {
+	out := []recordsCall{}
+	for _, c := range f.Calls() {
+		if c.Method != http.MethodGet {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// recordsOnlyCall asserts exactly one WRITE was made and returns it. The
+// duplicate lookup (a GET) runs before every create and is not counted here.
 func recordsOnlyCall(t *testing.T, f *recordsFake) recordsCall {
 	t.Helper()
-	calls := f.Calls()
+	calls := f.Writes()
 	if len(calls) != 1 {
-		t.Fatalf("want exactly 1 upstream call, got %d: %+v", len(calls), calls)
+		t.Fatalf("want exactly 1 upstream write, got %d: %+v", len(calls), calls)
 	}
 	return calls[0]
+}
+
+// recordsNoWrites asserts nothing was written, reads allowed.
+func recordsNoWrites(t *testing.T, f *recordsFake) {
+	t.Helper()
+	if calls := f.Writes(); len(calls) != 0 {
+		t.Fatalf("want zero upstream writes, got %d: %+v", len(calls), calls)
+	}
 }
 
 // recordsNoCalls asserts nothing at all reached the tenant.
@@ -236,7 +280,11 @@ func TestDNSRecordCreate_DryTrueSendsNothing(t *testing.T) {
 	if status != 200 || !resultOK(res) || res["dry_run"] != true {
 		t.Fatalf("want a 200 preview, got status=%d res=%+v", status, res)
 	}
-	recordsNoCalls(t, f)
+	// A preview writes nothing; it only looks for a duplicate.
+	recordsNoWrites(t, f)
+	if n := len(f.Calls()); n != 1 {
+		t.Fatalf("want exactly the duplicate lookup, got %d calls", n)
+	}
 	// The preview must be the exact body the live run would send, or the
 	// preview is not a preview of anything.
 	want := M{
@@ -301,7 +349,7 @@ func TestDNSRecordCreate_DryMustBeExplicitBoolean(t *testing.T) {
 	if status != 200 || res["dry_run"] != true {
 		t.Fatalf("dry:true must preview, got status=%d res=%+v", status, res)
 	}
-	recordsNoCalls(t, f)
+	recordsNoWrites(t, f) // the duplicate lookup reads; nothing is written
 
 	f2 := recordsServer(t, 201, M{"result": M{"id": "x"}})
 	c2 := newTestClient(f2.srv)
@@ -742,4 +790,87 @@ func TestFields_MaxsplitPreservesTail(t *testing.T) {
 	if !reflect.DeepEqual(got, M{"preference": 10, "exchange": "mail.example.com. trailing"}) {
 		t.Fatalf("MX tail: %#v", got)
 	}
+}
+
+// --- duplicate check and reverse record (2026-11-09) ---------------------------
+
+func TestDNSRecordCreate_AnExistingIdenticalRecordIsRefusedInPreviewAndLive(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		f := recordsServer(t, 201, M{"result": M{"id": "x"}})
+		f.existing = []any{
+			M{"id": "dns/record/other", "rdata": M{"address": "10.0.0.9"}},
+			M{"id": "dns/record/same", "rdata": M{"address": "10.0.0.5"}},
+		}
+		c := newTestClient(f.srv)
+		res, status := c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+			"type": "A", "value": "10.0.0.5", "dry": dry})
+		if status != 409 || res["ok"] != false || res["duplicate"] != true {
+			t.Fatalf("dry=%v: want 409 duplicate, got status=%d res=%+v", dry, status, res)
+		}
+		if want := "That A record already exists: host1 10.0.0.5. Nothing was created."; res["error"] != want {
+			t.Errorf("error = %q, want %q", res["error"], want)
+		}
+		recordsNoWrites(t, f)
+		q := f.Calls()[0].Query.Get("_filter")
+		if q != `zone=="dns/auth_zone/z1" and name_in_zone=="host1" and type=="A"` {
+			t.Errorf("lookup filter = %q", q)
+		}
+	}
+}
+
+func TestDNSRecordCreate_SameNameDifferentDataIsNotADuplicate(t *testing.T) {
+	f := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	f.existing = []any{M{"id": "dns/record/other", "rdata": M{"preference": float64(20), "exchange": "MAIL.example.com"}}}
+	c := newTestClient(f.srv)
+	// Same exchange (case and trailing dot aside) but another preference: a second MX, allowed.
+	res, status := c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "@",
+		"type": "MX", "value": "10 mail.example.com.", "dry": false})
+	if status != 201 || !resultOK(res) {
+		t.Fatalf("want 201, got %d %+v", status, res)
+	}
+	recordsOnlyCall(t, f)
+	// And the same preference too is a duplicate, whatever the case or trailing dot.
+	f2 := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	f2.existing = []any{M{"rdata": M{"preference": float64(10), "exchange": "MAIL.example.com"}}}
+	if _, st := newTestClient(f2.srv).DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "@",
+		"type": "MX", "value": "10 mail.example.com.", "dry": true}); st != 409 {
+		t.Fatalf("want 409 for the same MX, got %d", st)
+	}
+}
+
+func TestDNSRecordCreate_AFailedLookupBlocksNothingAndThePreviewSaysSo(t *testing.T) {
+	f := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	f.lookupStatus = 500
+	c := newTestClient(f.srv)
+	res, status := c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+		"type": "A", "value": "10.0.0.5", "dry": true})
+	if status != 200 || res["duplicate_check"] != "unavailable" {
+		t.Fatalf("want a 200 preview marked unchecked, got %d %+v", status, res)
+	}
+	res, status = c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+		"type": "A", "value": "10.0.0.5", "dry": false})
+	if status != 201 || !resultOK(res) {
+		t.Fatalf("live create should go ahead, got %d %+v", status, res)
+	}
+}
+
+func TestDNSRecordCreate_ReverseRecordOptionReachesTheWire(t *testing.T) {
+	f := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	c := newTestClient(f.srv)
+	if _, st := c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+		"type": "A", "value": "10.0.0.5", "create_ptr": true, "dry": false}); st != 201 {
+		t.Fatalf("want 201, got %d", st)
+	}
+	got := recordsOnlyCall(t, f).Body["options"]
+	if !reflect.DeepEqual(got, map[string]any{"create_ptr": true, "check_rmz": true}) {
+		t.Fatalf("options on the wire = %#v", got)
+	}
+	// Only A and AAAA records can have one.
+	f2 := recordsServer(t, 201, nil)
+	res, st := newTestClient(f2.srv).DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "www",
+		"type": "CNAME", "value": "host1.example.com.", "create_ptr": true, "dry": true})
+	if st != 400 || res["ok"] != false {
+		t.Fatalf("want 400 for a CNAME with a reverse record, got %d %+v", st, res)
+	}
+	recordsNoCalls(t, f2)
 }
