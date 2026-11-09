@@ -19,9 +19,9 @@
       - option "baseline-site — baseline-region/test"
   - group "IP space (override)":
     - text: ""
-    - searchbox "Search IP space"
+    - searchbox "Search IP space (override)"
     - status
-    - combobox "IP space":
+    - combobox "IP space (override)":
       - option "— template default —" [selected]
       - option "Baseline Space"
   - button "Check drift" [disabled]

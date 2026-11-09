@@ -111,7 +111,7 @@ export default function Drift() {
             <div role="group" aria-label="IP space (override)" className="text-note text-muted flex flex-col gap-1">
               IP space (override)
               <FilterSelect
-                label="IP space"
+                label="IP space (override)"
                 value={ipSpace}
                 onChange={setIpSpace}
                 options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
