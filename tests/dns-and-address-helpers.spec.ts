@@ -47,6 +47,11 @@ test('the DNS form offers the reverse record for A and AAAA only, and sends it',
   await panel.getByRole('button', { name: 'Preview' }).click();
   await expect(panel.getByText('This will create A host1.example.com → 10.0.0.5, with a reverse record. No identical record exists.')).toBeVisible();
   expect(sent.at(-1)).toMatchObject({ create_ptr: true, dry: true, type: 'A' });
+
+  // An edit after Preview: the sentence must not vouch for a record nobody checked.
+  await panel.getByPlaceholder('host or @').fill('host2');
+  await expect(panel.getByText(/No identical record exists/)).toHaveCount(0);
+  await expect(panel.getByText(/host2\.example\.com/)).toHaveCount(0);
 });
 
 test('Get an address can give the address its DNS name in the same step', async ({ page }) => {

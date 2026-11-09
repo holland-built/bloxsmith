@@ -10,6 +10,7 @@ package edit
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -633,7 +634,7 @@ func (c *Client) sameRecordExists(zoneID, nameInZone, rtype string, rdata M) (fo
 		return false, false
 	}
 	for _, r := range rows {
-		if sameRdata(rtype, rdata, asMap(asMap(r)["rdata"])) {
+		if sameRdata(rdata, asMap(asMap(r)["rdata"])) {
 			return true, true
 		}
 	}
@@ -643,22 +644,30 @@ func (c *Client) sameRecordExists(zoneID, nameInZone, rtype string, rdata M) (fo
 // sameRdata compares every field of the record being made with an existing
 // record's. Names compare without case or a trailing dot, numbers by value.
 // TXT text keeps its case, because there it is data.
-func sameRdata(rtype string, want, got M) bool {
+func sameRdata(want, got M) bool {
 	if len(want) == 0 || got == nil {
 		return false
 	}
-	norm := func(v any) string {
+	// Only host names are case-blind and may end in a dot. Addresses are
+	// compared as addresses, so 2001:db8::1 matches its long form. Text such
+	// as TXT strings and CAA values is compared exactly.
+	norm := func(k string, v any) string {
 		if f, ok := v.(float64); ok && f == float64(int64(f)) {
 			return strconv.FormatInt(int64(f), 10)
 		}
-		s := strings.TrimSuffix(strings.TrimSpace(fmt.Sprint(v)), ".")
-		if rtype != "TXT" {
-			s = strings.ToLower(s)
+		s := strings.TrimSpace(fmt.Sprint(v))
+		switch k {
+		case "address":
+			if a, err := netip.ParseAddr(s); err == nil {
+				return a.String()
+			}
+		case "cname", "dname", "exchange", "target":
+			return strings.ToLower(strings.TrimSuffix(s, "."))
 		}
 		return s
 	}
 	for k, v := range want {
-		if norm(v) != norm(got[k]) {
+		if norm(k, v) != norm(k, got[k]) {
 			return false
 		}
 	}

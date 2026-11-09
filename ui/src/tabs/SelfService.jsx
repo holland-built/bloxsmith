@@ -306,7 +306,7 @@ function AllocatePanel({ panelId }) {
         <PreviewBox
           data={flow.preview}
           note="preview — no address has been taken yet"
-          summary={allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
+          summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
         />
       </PreviewApply>
 
@@ -346,7 +346,8 @@ function DnsPanel({ panelId }) {
   const zone = zones.find((z) => z.id === zoneId)
   const fqdn = zone ? String(zone.fqdn || zone.name || '').replace(/\.$/, '') : ''
   const owner = !name.trim() || name.trim() === '@' ? fqdn : `${name.trim()}.${fqdn}`
-  const sentence = flow.preview
+  // After an edit the old preview no longer matches the form, so it says nothing.
+  const sentence = flow.preview && !flow.stale
     ? `This will create ${type} ${owner} → ${value.trim()}${canPtr && ptr ? ', with a reverse record' : ''}.` +
       (flow.previewReply?.duplicate_check === 'unavailable' ? " It could not check whether this record already exists." : ' No identical record exists.')
     : null
