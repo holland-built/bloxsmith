@@ -38,6 +38,5 @@ test('vault not in use: tabs visible', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/');
 
-  await page.locator('header button[data-menu]').click();
-  await expect(page.locator('header a[role="menuitem"][href="#overview"]')).toBeVisible();
+  await expect(page.locator('nav[aria-label="Pages"] a[href="#overview"]')).toBeVisible();
 });

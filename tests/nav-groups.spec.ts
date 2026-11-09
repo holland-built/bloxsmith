@@ -82,7 +82,7 @@ test('P6b: a wide screen has no All pages menu; the page menu down the left hold
   await expect(page.locator(MENU)).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'All pages' })).toHaveCount(0);
   for (const label of GROUP_LABELS) {
-    await expect(page.locator('nav[aria-label="Pages"]').getByRole('button', { name: label })).toBeVisible();
+    await expect(page.locator('nav[aria-label="Pages"]').getByRole('button', { name: `${label} pages` })).toBeVisible();
   }
 });
 
@@ -344,7 +344,7 @@ test('the page menu reaches every page, and lists each once', async ({ page }) =
   await page.goto('/#overview');
   const nav = page.locator('nav[aria-label="Pages"]');
   for (const label of GROUP_LABELS) {
-    const btn = nav.getByRole('button', { name: label });
+    const btn = nav.getByRole('button', { name: `${label} pages` });
     if ((await btn.getAttribute('aria-expanded')) === 'false') await btn.click();
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
   }
@@ -359,18 +359,18 @@ test('a group folds, stays as you left it after a reload, and opens itself for t
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#overview');
   const nav = page.locator('nav[aria-label="Pages"]');
-  const risk = nav.getByRole('button', { name: 'Risk' });
+  const risk = nav.getByRole('button', { name: 'Risk pages' });
   await expect(risk).toHaveAttribute('aria-expanded', 'false');
   await risk.click();
   await expect(risk).toHaveAttribute('aria-expanded', 'true');
   await expect(nav.getByRole('link', { name: 'Audit' })).toBeVisible();
   await page.reload();
-  await expect(nav.getByRole('button', { name: 'Risk' })).toHaveAttribute('aria-expanded', 'true');
-  await nav.getByRole('button', { name: 'Risk' }).click();
+  await expect(nav.getByRole('button', { name: 'Risk pages' })).toHaveAttribute('aria-expanded', 'true');
+  await nav.getByRole('button', { name: 'Risk pages' }).click();
   await expect(nav.getByRole('link', { name: 'Audit' })).toHaveCount(0);
 
   // Reached without the menu (a link or the search box), the page's group opens.
-  const inv = nav.getByRole('button', { name: 'Inventory' });
+  const inv = nav.getByRole('button', { name: 'Inventory pages' });
   await expect(inv).toHaveAttribute('aria-expanded', 'false');
   await page.goto('/#dns');
   await expect(inv).toHaveAttribute('aria-expanded', 'true');

@@ -87,7 +87,9 @@ export function JobRail({ tab, groups, tabs }) {
               onClick={() => toggle(g.id)}
               className={`flex items-center justify-between px-4 py-1.5 text-copy font-semibold text-txt text-left cursor-pointer hover:bg-line ${FOCUS_RING}`}
             >
-              {g.label}
+              {/* "Ask pages", not "Ask": the AI page's send button is already
+                  called Ask, and two controls with one name cannot be told apart. */}
+              <span>{g.label}<span className="sr-only"> pages</span></span>
               <span aria-hidden="true" className="text-muted">{isOpen ? '−' : '+'}</span>
             </button>
             {isOpen && (
