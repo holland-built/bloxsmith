@@ -36,7 +36,7 @@ security data.
 
 ## What people use it for
 
-Every page is under the **All pages** menu at the top. Pages that change Infoblox show you a preview first and change nothing until you press **Apply** or **Build it**.
+Every page is in the menu down the left side: the everyday ones on top, the rest in groups you can open and close. Pages that change Infoblox show you a preview first and change nothing until you press **Apply** or **Build it**.
 
 | You want to | Open | Then |
 |---|---|---|
@@ -346,7 +346,7 @@ rm /etc/sudoers.d/bloxsmith-demo
 <details>
 <summary><b>Run the demo, step by step</b></summary>
 
-1. Open **All pages** > **Change** > **Demo server**.
+1. In the menu on the left, open **Change** and click **Demo server**.
 2. Fill in **Settings** and press **Save settings**. You do this once. The join token is kept encrypted and is never shown again.
 3. Press **Preview**. It checks your settings, the API key, OpenTofu, the image, SSH to Proxmox and the bridge. Nothing is created yet. Fix anything marked as failed, then press **Preview** again.
 4. Show the customer **The Infoblox code** panel. Its tabs (**Network**, **Next free IP**, **DNS**) hold the Terraform each step will run. The panel clears when the build finishes, so show it now or press **Preview** again afterwards.

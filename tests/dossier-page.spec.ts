@@ -135,7 +135,7 @@ const row = (page: import('@playwright/test').Page, s: string) => page.locator(`
 async function openPalette(page: import('@playwright/test').Page) {
   // The nav is rendered by the same component tree that owns the listener, so
   // its presence is the closest available proxy for "the effect has run".
-  await page.locator('nav[aria-label="All pages"]').waitFor();
+  await page.locator('nav[aria-label="Pages"]').waitFor();
   const dialog = page.getByRole('dialog', { name: 'Command palette' });
   await expect(async () => {
     await page.keyboard.press('ControlOrMeta+k');
