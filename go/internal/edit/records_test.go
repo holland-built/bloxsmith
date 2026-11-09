@@ -884,6 +884,7 @@ func TestSameRdataComparesEachFieldByItsKind(t *testing.T) {
 		{"short and long IPv6 are one address", M{"address": "2001:db8::1"}, M{"address": "2001:0db8:0000:0000:0000:0000:0000:0001"}, true},
 		{"host names ignore case and the final dot", M{"cname": "WWW.example.com"}, M{"cname": "www.example.com."}, true},
 		{"TXT keeps its final dot", M{"text": "hello."}, M{"text": "hello"}, false},
+		{"TXT keeps its spaces", M{"text": " hello"}, M{"text": "hello"}, false},
 		{"TXT keeps its case", M{"text": "Hello"}, M{"text": "hello"}, false},
 		{"CAA value keeps its case", M{"flags": float64(0), "tag": "iodef", "value": "mailto:A@example.com"}, M{"flags": float64(0), "tag": "iodef", "value": "mailto:a@example.com"}, false},
 		{"numbers match whole-number floats", M{"preference": 10, "exchange": "mx.example.com"}, M{"preference": float64(10), "exchange": "mx.example.com."}, true},

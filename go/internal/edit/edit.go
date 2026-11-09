@@ -655,14 +655,14 @@ func sameRdata(want, got M) bool {
 		if f, ok := v.(float64); ok && f == float64(int64(f)) {
 			return strconv.FormatInt(int64(f), 10)
 		}
-		s := strings.TrimSpace(fmt.Sprint(v))
+		s := fmt.Sprint(v)
 		switch k {
 		case "address":
-			if a, err := netip.ParseAddr(s); err == nil {
+			if a, err := netip.ParseAddr(strings.TrimSpace(s)); err == nil {
 				return a.String()
 			}
 		case "cname", "dname", "exchange", "target":
-			return strings.ToLower(strings.TrimSuffix(s, "."))
+			return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), "."))
 		}
 		return s
 	}
