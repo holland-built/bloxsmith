@@ -8,22 +8,22 @@ is written.
 | Port | What it is | What it serves |
 |---|---|---|
 | `:8090` | `scripts/dev-serve.sh`, rebuilds on save | The working tree |
-| `:8080` | The installed binary at `~/.local/bin/bloxsmith` | Assets compiled into it by `//go:embed all:web` |
+| `:9090` | The installed binary at `~/.local/bin/bloxsmith` | Assets compiled into it by `//go:embed all:web` |
 
 `cd ui && npm run build && cp -R dist/* ../go/web/` updates the repo and changes **nothing**
-about what `:8080` serves until the binary is rebuilt and reinstalled, or the app self-updates
+about what `:9090` serves until the binary is rebuilt and reinstalled, or the app self-updates
 from a published release.
 
-Measuring a UI change against `:8080` therefore reports the OLD build as though it were the
+Measuring a UI change against `:9090` therefore reports the OLD build as though it were the
 new one. On 2026-08-10 that produced about an hour of "the optimisation had no effect"
-readings for a change that had a large effect. The tell was the chunk filename: `:8080` was
+readings for a change that had a large effect. The tell was the chunk filename: the installed app (then on `:8080`) was
 serving `Infra-OHkYDyaP.js` while the fresh build had produced `Infra-_S4iqo_A.js`.
 
-Measure UI changes on `:8090`. Use `:8080` only to check the *published* build, and check
+Measure UI changes on `:8090`. Use `:9090` only to check the *published* build, and check
 which version that is first:
 
 ```bash
-curl -s "http://localhost:8080/api/update/check?force=1"
+curl -s "http://localhost:9090/api/update/check?force=1"
 ```
 
 ## The dev server is the owner's, and it is watching
