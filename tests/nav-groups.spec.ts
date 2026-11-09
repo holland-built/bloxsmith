@@ -1,11 +1,12 @@
 import { test, expect } from './fixtures';
 
-// Every page stays reachable now that the header carries one "All pages" menu
-// (2026-10-29 flow redesign) instead of five group buttons. The everyday jobs
-// also sit in a rail; tests/inbox-and-jobs.spec.ts covers that.
+// Every page stays reachable. Since 2026-11-09 the page menu down the left
+// side holds every page from md up (the everyday jobs on top, then five groups
+// that fold open), and the header's "All pages" menu is for phones only. The
+// All pages tests below therefore run at phone width.
 //
 //   (a) every hash id still renders its own tab, unchanged
-//   (b) the header carries one All pages menu at every width
+//   (b) a phone has the All pages menu; a wide screen has the page menu instead
 //   (c) the header does not overflow horizontally at 1920 OR at 390
 
 // id -> the h1 that tab and only that tab renders (read from ui/src/tabs/*.jsx).
@@ -64,17 +65,26 @@ for (const [id, heading] of TAB_HEADINGS) {
 // ---------------------------------------------------------------------------
 // P6 (b) — one All pages menu, and no group buttons, at 1920 and at 390
 // ---------------------------------------------------------------------------
-for (const w of [1920, 390]) {
-  test(`P6b: the header has one All pages menu and no group buttons at ${w}px`, async ({ page }) => {
-    await page.setViewportSize({ width: w, height: 900 });
-    await page.goto('/#overview');
-    const menu = page.locator(MENU);
-    await expect(menu).toBeVisible();
-    await expect(menu).toHaveText(/^All pages/);
-    await expect(menu).toHaveAttribute('aria-haspopup', 'menu');
-    await expect(page.locator('header button[data-group]')).toHaveCount(0);
-  });
-}
+test('P6b: a phone has one All pages menu and no group buttons', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/#overview');
+  const menu = page.locator(MENU);
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveText(/^All pages/);
+  await expect(menu).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(page.locator('header button[data-group]')).toHaveCount(0);
+});
+
+test('P6b: a wide screen has no All pages menu; the page menu down the left holds the groups', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await page.goto('/#overview');
+  await expect(page.locator('nav[aria-label="Pages"]')).toBeVisible();
+  await expect(page.locator(MENU)).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'All pages' })).toHaveCount(0);
+  for (const label of GROUP_LABELS) {
+    await expect(page.locator('nav[aria-label="Pages"]').getByRole('button', { name: label })).toBeVisible();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // P6 (c) — the header never scrolls sideways, at either width
@@ -119,7 +129,7 @@ for (const [w, h] of [
 // P6a only proves the hashes work; these prove a user can REACH every page.
 // ---------------------------------------------------------------------------
 test('All pages lists every tab under its own group, and Escape returns focus', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   const btn = page.locator(MENU);
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
@@ -137,7 +147,7 @@ test('All pages lists every tab under its own group, and Escape returns focus', 
 });
 
 test('the current page is marked in the menu in words, not colour alone', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 390, height: 844 });
   for (const id of ['audit', 'ai', 'overview']) {
     await page.goto(`/#${id}`);
     await page.locator(MENU).click();
@@ -150,7 +160,7 @@ test('the current page is marked in the menu in words, not colour alone', async 
 });
 
 test('a menu item navigates to its tab and the menu closes', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await page.locator(MENU).click();
   await page.locator('header a[role="menuitem"]', { hasText: /^Incidents$/ }).click();
@@ -159,12 +169,13 @@ test('a menu item navigates to its tab and the menu closes', async ({ page }) =>
 });
 
 test('clicking outside closes the menu', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 760, height: 1000 });
   await page.goto('/#overview');
   const btn = page.locator(MENU);
   await btn.click();
   await expect(page.locator('header [role="menu"]')).toHaveCount(1);
-  await page.locator('h1').first().click();
+  // The menu opens at the left, so the right of the page is outside it.
+  await page.mouse.click(700, 600);
   await expect(page.locator('header [role="menu"]')).toHaveCount(0);
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
 });
@@ -205,7 +216,7 @@ test('at 390px the theme switch is not on the bar and still works from Settings'
 // A `role="menu"` that announces as a menu and does not move focus is worse
 // than no role at all: a screen reader in menu mode gets nothing to steer.
 test('the open menu owns focus, and arrow keys move within it instead of scrolling', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 760, height: 1000 });
   await page.goto('/#overview');
 
   const focusedHref = () =>
@@ -244,7 +255,7 @@ test('no header control shares the name of the AI send button', async ({ page })
 // Activating a menu item left focus on BODY and announced nothing, so every
 // tab change restarted a keyboard user at the top of the document.
 test('activating a menu item moves focus into the new tab and announces it', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await page.locator(MENU).click();
   await page.locator('header a[role="menuitem"][href="#incidents"]').click();
@@ -318,4 +329,61 @@ test('the settings sheet is a real modal dialog: focus, trap, Escape, return', a
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(trigger).toBeFocused();
+});
+
+// ---------------------------------------------------------------------------
+// The page menu down the left (2026-11-09, the owner's pick of three): the
+// everyday jobs on top, then the groups, which fold, are remembered, and open
+// by themselves for the page you are on. A job is not listed twice.
+// ---------------------------------------------------------------------------
+const JOBS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts'];
+const JOB_TAB_LABELS = new Set(['Overview', 'Self-Service', 'Automate', 'Daily', 'Build a chart']);
+
+test('the page menu reaches every page, and lists each once', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#overview');
+  const nav = page.locator('nav[aria-label="Pages"]');
+  for (const label of GROUP_LABELS) {
+    const btn = nav.getByRole('button', { name: label });
+    if ((await btn.getAttribute('aria-expanded')) === 'false') await btn.click();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  }
+  const links = await nav.getByRole('link').allTextContents();
+  const groupPages = Object.values(GROUP_TABS).flat().filter((t) => !JOB_TAB_LABELS.has(t));
+  expect(links.slice(0, JOBS.length)).toEqual(JOBS);
+  expect(links.slice(JOBS.length).sort()).toEqual([...groupPages].sort());
+  expect(new Set(links).size).toBe(links.length);
+});
+
+test('a group folds, stays as you left it after a reload, and opens itself for the page you are on', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#overview');
+  const nav = page.locator('nav[aria-label="Pages"]');
+  const risk = nav.getByRole('button', { name: 'Risk' });
+  await expect(risk).toHaveAttribute('aria-expanded', 'false');
+  await risk.click();
+  await expect(risk).toHaveAttribute('aria-expanded', 'true');
+  await expect(nav.getByRole('link', { name: 'Audit' })).toBeVisible();
+  await page.reload();
+  await expect(nav.getByRole('button', { name: 'Risk' })).toHaveAttribute('aria-expanded', 'true');
+  await nav.getByRole('button', { name: 'Risk' }).click();
+  await expect(nav.getByRole('link', { name: 'Audit' })).toHaveCount(0);
+
+  // Reached without the menu (a link or the search box), the page's group opens.
+  const inv = nav.getByRole('button', { name: 'Inventory' });
+  await expect(inv).toHaveAttribute('aria-expanded', 'false');
+  await page.goto('/#dns');
+  await expect(inv).toHaveAttribute('aria-expanded', 'true');
+  await expect(nav.getByRole('link', { name: 'DNS' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('widening the window past phone size closes an open All pages menu and keeps focus visible', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 1000 });
+  await page.goto('/#overview');
+  await page.locator(MENU).click();
+  await expect(page.locator('header [role="menu"]')).toHaveCount(1);
+  await page.keyboard.press('ArrowDown');
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await expect(page.locator('header [role="menu"]')).toHaveCount(0);
+  await expect(page.locator('main')).toBeFocused();
 });

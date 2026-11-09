@@ -107,8 +107,9 @@ function hashTab() {
 // 14 tabs used to render as one flat strip fitted by ~165 lines of
 // measure-then-render machinery (hidden probes, a ResizeObserver, a
 // callback-ref mount detector) whose entire job was squeezing 14 items into
-// one row. The groups now live in one "All pages" menu, and the everyday jobs
-// in the rail (components/JobNav.jsx), so nothing is measured at all.
+// one row. From md up the groups now fold open in the page menu on the left
+// (components/JobNav.jsx), under the everyday jobs; on a phone they are in the
+// header's "All pages" menu. Nothing is measured at all.
 //
 // This is a presentation layer OVER `TABS`. Tab ids, their order in `TABS`,
 // `hashTab()` and the Palette are all untouched — every `#id` URL keeps
@@ -389,6 +390,20 @@ export default function App() {
   const btnRefs = useRef({})
   const menuRef = useRef(null)
   const mainRef = useRef(null)
+  // All pages exists below md only. Widening the window past md while it is
+  // open would hide the menu with focus still inside it, so close it then and
+  // hand focus to the page.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = (e) => {
+      if (!e.matches) return
+      // menuRef is only set while the menu is open.
+      if (menuRef.current?.contains(document.activeElement)) mainRef.current?.focus()
+      setOpenGroup((g) => (g === 'menu' ? null : g))
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   const settingsBtnRef = useRef(null)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
   // WCAG 2.4.2. The tabs are a hash router, so the title is the only thing the
@@ -549,10 +564,10 @@ export default function App() {
             {/* The wordmark folds below `lg`. The logo button above does NOT fold:
                 it is 20px, and it is the only way into brand editing. */}
             <strong className="tracking-tight shrink-0 hidden lg:inline">Bloxsmith</strong>
-            {/* One "All pages" menu at every width, holding the five groups.
-                It is shrink-0; the search box beside it is the part that gives. */}
-            <nav aria-label="All pages" className="shrink-0 flex items-center gap-2 sm:gap-3">
-              {/* Every page, grouped. The everyday jobs are also in the rail. */}
+            {/* The "All pages" menu, on a phone only: from md up every page is
+                in the page menu on the left (owner, 2026-11-09). It is
+                shrink-0; the search box beside it is the part that gives. */}
+            <nav aria-label="All pages" className="shrink-0 flex items-center gap-2 sm:gap-3 md:hidden">
               <div className="relative flex shrink-0">
                 <button
                   ref={(el) => { btnRefs.current.menu = el }}
@@ -640,7 +655,7 @@ export default function App() {
               lands here is told which tab it landed on. tabIndex -1 makes it a
               focus target without putting it in the Tab order. */}
           <div className="flex">
-            <JobRail tab={tab} />
+            <JobRail tab={tab} groups={GROUPS} tabs={TABS} />
             <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="outline-none flex-1 min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
               <TabErrorBoundary tab={tab}>
                 <Suspense fallback={<TabLoading />}>

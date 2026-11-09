@@ -40,7 +40,7 @@
 export const CONTROL_HELP = {
   'all-pages': {
     label: 'All pages',
-    what: 'Every page in the app, in five groups. The everyday ones, Overview, Get an address, Daily report and Charts, are also down the left side.',
+    what: 'On a phone, every page in the app, in five groups. On a wider screen every page is in the menu down the left side instead, with the everyday ones on top.',
   },
   'search-box': {
     label: 'Search or ask',

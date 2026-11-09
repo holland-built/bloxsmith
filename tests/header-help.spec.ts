@@ -98,11 +98,12 @@ test('the density entry answers the question that was actually asked', async ({ 
   await expect(dialog).toContainText('Comfortable gives everything more space');
 });
 
-test('the dialog names the everyday pages kept down the left side', async ({ page }) => {
-  // The five section buttons and their number keys are gone; All pages and the
-  // left-side list replaced them, so this is where a reader learns that.
+test('the dialog says where every page is: the menu down the left side', async ({ page }) => {
+  // The five section buttons and their number keys are gone; the page menu
+  // down the left (All pages on a phone) replaced them, so this is where a
+  // reader learns that.
   const dialog = await openDialog(page);
-  await expect(dialog).toContainText('Overview, Get an address, Daily report and Charts');
+  await expect(dialog).toContainText('every page is in the menu down the left side');
   await expect(dialog).not.toContainText('Press the keys 1 to 5');
 });
 

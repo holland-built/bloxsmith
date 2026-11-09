@@ -83,7 +83,7 @@ You can't add or delete panels. Each tab has a fixed set that comes with the app
 
 ## Moving around
 
-The app opens on **Overview**. The everyday jobs, **Overview**, **Get an address**, **Daily report** and **Charts**, sit down the left side. On a phone they are a bar along the bottom. Every other page is under **All pages** at the top left.
+The app opens on **Overview**. Every page is in the menu down the left side. The everyday jobs, **Overview**, **Get an address**, **Automate**, **Daily report** and **Charts**, are on top. Below them, the other pages sit in five groups: **Status**, **Inventory**, **Risk**, **Change** and **Ask**. Click a group's name to open or close it, and the app remembers which ones you left open. On a phone the everyday jobs are a bar along the bottom, and every other page is under **All pages** at the top left.
 
 The box at the top takes two kinds of input:
 
@@ -245,7 +245,7 @@ It shows at most the 500 latest events from the last 24 hours. The Portal return
 
 The quick way to make a change. Pick a job on the left, answer its questions, and press **Preview** to see what will be made. Nothing is created until you press **Build it**.
 
-Everything built here can be removed from **Your recent changes**. The full Provision, Self-Service and Demo server pages are still under **All pages**.
+Everything built here can be removed from **Your recent changes**. The full Provision, Self-Service and Demo server pages are still in the page menu, under **Change**.
 
 | Job | What it asks | What it makes |
 |---|---|---|
