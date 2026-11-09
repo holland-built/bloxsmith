@@ -97,6 +97,6 @@ test('every chart on every page is given a label', () => {
       if (!/\blabel="[^"]+"/.test(tagFrom(src, m.index))) missing.push(`${f}: <${m[1]}>`)
     }
   }
-  assert.equal(seen, 11, 'the number of charts in ui/src/tabs changed; check each new one has a label')
+  assert.equal(seen, 9, 'the number of charts in ui/src/tabs changed; check each new one has a label')
   assert.deepEqual(missing, [])
 })

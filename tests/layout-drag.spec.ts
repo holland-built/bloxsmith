@@ -67,15 +67,12 @@ test.beforeEach(async ({ page }, testInfo) => {
 const VIEW = '__layout_overview';
 
 // The declared JSX order in Overview.jsx's <CardGrid layoutKey="overview">.
-const DECLARED_ORDER = [
-  'dns-hero',
-  'host-status',
-  'top-consumers',
-  'subnet-heatmap',
-  'services-incidents',
-  'subnet-table',
-  'license-inventory',
-];
+// Two since the service board (2026-11-09). At 1920 each fills its own row:
+// license-inventory needs more than the two tracks dns-hero (span 4) leaves, so
+// the flush-rows rule hands dns-hero those two and it renders span 6 with no
+// user override. Tests below compare against the span a panel had before the
+// gesture rather than asserting an empty inline span.
+const DECLARED_ORDER = ['dns-hero', 'license-inventory'];
 
 type Page = import('@playwright/test').Page;
 
@@ -104,50 +101,49 @@ test('P9b: dragging a card right edge steps its span by whole integers only', as
   const { track, gap, trackCount } = await geometry(page);
   expect(trackCount).toBe(6); // xl:grid-cols-6 at 1920
 
-  // host-status is the clean subject: it declares span 2, does not measure
-  // itself, and therefore carries no inline span at all before this gesture
-  // (asserted in tests/layout-persist.spec.ts).
+  // dns-hero is the subject: a chart, so it never measures itself, and any
+  // inline span it carries before this gesture is the row fill's, not a user's.
   const before = await inlineSpans(page);
-  expect(before['host-status']).toBe('');
+  expect(before['dns-hero']).not.toBe('span 4 / span 4');
 
-  await expect(page.locator('[data-panel-id="host-status"] [data-layout-resize]')).toHaveCount(1);
+  await expect(page.locator('[data-panel-id="dns-hero"] [data-layout-resize]')).toHaveCount(1);
 
   // Aim at the exact right edge a 4-track item would have. The geometry is the
   // pointer's target; the expected answer is the literal 4.
-  const g1 = await grabRightEdge(page, 'host-status');
+  const g1 = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g1.box.left + 4 * track + 3 * gap, g1.y, { steps: 12 });
   // While the pointer is down the indicator exists and the REAL card has not
   // moved: live preview is a line, not a reflow.
   await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(1);
-  expect((await cardBox(page, 'host-status')).width).toBeCloseTo(g1.box.width, 0);
+  expect((await cardBox(page, 'dns-hero')).width).toBeCloseTo(g1.box.width, 0);
   // P9's "at all times" clause, checked while the pointer is still down.
   expectEverySpanWellFormed(await inlineSpans(page));
   expect(await strayDragStyles(page)).toEqual([]);
   await page.mouse.up();
   await page.waitForTimeout(600);
 
-  expect((await inlineSpans(page))['host-status']).toBe('span 4 / span 4');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 4 / span 4');
   await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(0);
 
   // Whole integers only: 30px past the span-3 edge is nowhere near the span-4
   // boundary, so it must land on exactly 3 and never on 3-point-anything.
-  const g2 = await grabRightEdge(page, 'host-status');
+  const g2 = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g2.box.left + 3 * track + 2 * gap + 30, g2.y, { steps: 12 });
   await page.mouse.up();
   await page.waitForTimeout(600);
-  expect((await inlineSpans(page))['host-status']).toBe('span 3 / span 3');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 3 / span 3');
 
   // ...and down to the floor.
-  const g3 = await grabRightEdge(page, 'host-status');
+  const g3 = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g3.box.left + track, g3.y, { steps: 12 });
   await page.mouse.up();
   await page.waitForTimeout(600);
-  expect((await inlineSpans(page))['host-status']).toBe('span 1 / span 1');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 1 / span 1');
 
   expectEverySpanWellFormed(await inlineSpans(page));
 
   const blob = await savedBlob(request);
-  expect(blob.layout.spans['host-status']).toBe(1);
+  expect(blob.layout.spans['dns-hero']).toBe(1);
   expectPersistedBlobIsValid(blob);
 });
 
@@ -156,7 +152,7 @@ test('P9: a resized span survives a reload, and no table overflows afterwards', 
   await gotoOverview(page);
   const { track, gap } = await geometry(page);
 
-  const g = await grabRightEdge(page, 'host-status');
+  const g = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g.box.left + 5 * track + 4 * gap, g.y, { steps: 12 });
   await page.mouse.up();
   await page.waitForTimeout(600);
@@ -165,12 +161,12 @@ test('P9: a resized span survives a reload, and no table overflows afterwards', 
   expect(await strayDragStyles(page)).toEqual([]);
 
   const blob = await savedBlob(request);
-  expect(blob.layout.spans['host-status']).toBe(5);
+  expect(blob.layout.spans['dns-hero']).toBe(5);
   expectPersistedBlobIsValid(blob);
 
   // Reload: read back from the server, not from anything the page still held.
   await gotoOverview(page);
-  expect((await inlineSpans(page))['host-status']).toBe('span 5 / span 5');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 5 / span 5');
   expect(await domOrder(page)).toEqual(DECLARED_ORDER); // resize moves nothing
   expect(await tableOverflow(page)).toEqual([]);
 });
@@ -189,15 +185,7 @@ test('P9a: dragging card A past card B persists the new order and it survives a 
   // dns-hero is first; drop it on the right half of the card in slot 1.
   await dragOntoRightHalfOf(page, 'dns-hero', 1);
 
-  const AFTER_DRAG = [
-    'host-status',
-    'dns-hero',
-    'top-consumers',
-    'subnet-heatmap',
-    'services-incidents',
-    'subnet-table',
-    'license-inventory',
-  ];
+  const AFTER_DRAG = ['license-inventory', 'dns-hero'];
   expect(await domOrder(page)).toEqual(AFTER_DRAG);
 
   const blob = await savedBlob(request);
@@ -219,31 +207,15 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
   test.setTimeout(120_000);
   await gotoOverview(page, 1920, 2400);
 
-  await dragOntoRightHalfOf(page, 'license-inventory', 0);
-  expect(await domOrder(page)).toEqual([
-    'dns-hero',
-    'license-inventory',
-    'host-status',
-    'top-consumers',
-    'subnet-heatmap',
-    'services-incidents',
-    'subnet-table',
-  ]);
+  // Two panels, so two drags is a round trip: dns-hero goes after
+  // license-inventory, then license-inventory goes back after it.
+  await dragOntoRightHalfOf(page, 'dns-hero', 1);
+  expect(await domOrder(page)).toEqual(['license-inventory', 'dns-hero']);
 
-  // Dropped on the RIGHT half of the card in slot 1, so it lands in slot 2 —
-  // after that card, not before it. (This literal was written wrong first
-  // time round and the run caught it, which is the point of writing it by
-  // hand instead of asking moveItem what it thinks.)
-  await dragOntoRightHalfOf(page, 'subnet-table', 1);
-  expect(await domOrder(page)).toEqual([
-    'dns-hero',
-    'license-inventory',
-    'subnet-table',
-    'host-status',
-    'top-consumers',
-    'subnet-heatmap',
-    'services-incidents',
-  ]);
+  // Dropped on the RIGHT half of the card in slot 1, so it lands after that
+  // card, not before it.
+  await dragOntoRightHalfOf(page, 'license-inventory', 1);
+  expect(await domOrder(page)).toEqual(['dns-hero', 'license-inventory']);
 
   // Visual order is read off the rendered boxes (top, then left) and must be
   // the same list. This is the assertion a CSS-`order` implementation fails.
@@ -309,10 +281,10 @@ test('pressing Escape while dragging a panel edge keeps the width it had, and sa
   test.setTimeout(120_000);
   await gotoOverview(page);
   const { track, gap } = await geometry(page);
-  expect((await inlineSpans(page))['host-status']).toBe('');
+  const spanBefore = (await inlineSpans(page))['dns-hero'];
 
-  // The same aim P9b uses to take host-status from 2 tracks to 4.
-  const g = await grabRightEdge(page, 'host-status');
+  // The same aim P9b uses to take dns-hero to 4 tracks.
+  const g = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g.box.left + 4 * track + 3 * gap, g.y, { steps: 12 });
   await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(1);
 
@@ -321,8 +293,8 @@ test('pressing Escape while dragging a panel edge keeps the width it had, and sa
 
   await page.mouse.up();
   await page.waitForTimeout(600);
-  expect((await inlineSpans(page))['host-status']).toBe('');
-  expect((await cardBox(page, 'host-status')).width).toBeCloseTo(g.box.width, 0);
+  expect((await inlineSpans(page))['dns-hero']).toBe(spanBefore);
+  expect((await cardBox(page, 'dns-hero')).width).toBeCloseTo(g.box.width, 0);
   expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
 });
 
@@ -331,14 +303,14 @@ test('Escape on a press that has not become a drag still shuts the menu', async 
   // Escape there shuts the menu, as it does on every other row in it, and a
   // later move of the mouse must not start a drag from a menu that is gone.
   await gotoOverview(page);
-  await openPanelMenu(page, 'host-status');
-  const hb = (await page.locator('[data-panel-id="host-status"] [data-layout-handle]').boundingBox())!;
+  await openPanelMenu(page, 'dns-hero');
+  const hb = (await page.locator('[data-panel-id="dns-hero"] [data-layout-handle]').boundingBox())!;
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
   await page.mouse.down();
   await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
 
   await page.keyboard.press('Escape');
-  await expect(panelMenuList(page, 'host-status')).toBeHidden();
+  await expect(panelMenuList(page, 'dns-hero')).toBeHidden();
   await page.mouse.move(hb.x + 60, hb.y + 60, { steps: 5 });
   await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
   await page.mouse.up();
@@ -354,7 +326,7 @@ test('Escape on a press that has not become a drag still shuts the menu', async 
 // ---------------------------------------------------------------------------
 
 // activeHandlePanel, liveText and tabToHandle are in ./layout-helpers.ts.
-test('P9c: a keyboard-only run moves a card two positions, changes its span, and both persist', async ({ page, request }) => {
+test('P9c: a keyboard-only run moves a card a position, changes its span, and both persist', async ({ page, request }) => {
     // NEEDS A REAL TENANT, and this replaces a WRONG diagnosis. These were
     // marked test.fixme on 2026-08-13 and described in a commit as a real
     // accessibility defect — "the keyboard span change is announced but no
@@ -397,33 +369,24 @@ test('P9c: a keyboard-only run moves a card two positions, changes its span, and
   await page.keyboard.press('Enter');
   expect(await activeHandlePanel(page)).toBe('dns-hero');
   await expect(page.locator('[data-panel-id="dns-hero"] [data-layout-handle]')).toHaveAttribute('aria-pressed', 'true');
-  expect(await liveText(page)).toContain('Position 1 of 7');
+  expect(await liveText(page)).toContain('Position 1 of 2');
 
-  // Two positions right. dns-hero starts at index 0, so it lands third.
+  // One position right: Overview has two panels, so dns-hero lands last.
   await page.keyboard.press('ArrowRight');
-  expect(await liveText(page)).toBe('Moved to position 2 of 7');
-  await page.keyboard.press('ArrowRight');
-  expect(await liveText(page)).toBe('Moved to position 3 of 7');
+  expect(await liveText(page)).toBe('Moved to position 2 of 2');
 
-  const AFTER_MOVE = [
-    'host-status',
-    'top-consumers',
-    'dns-hero',
-    'subnet-heatmap',
-    'services-incidents',
-    'subnet-table',
-    'license-inventory',
-  ];
+  const AFTER_MOVE = ['license-inventory', 'dns-hero'];
   expect(await domOrder(page)).toEqual(AFTER_MOVE);
   // Focus survived two re-sorts of the real DOM children.
   expect(await activeHandlePanel(page)).toBe('dns-hero');
 
-  // dns-hero declares span={4} (Overview.jsx), so two Arrow Ups take it to 6.
-  await page.keyboard.press('ArrowUp');
+  // dns-hero sits alone in its row and renders 6 tracks (declared 4 plus the
+  // row fill); the keyboard steps from what renders, so two Arrow Downs take it to 4.
+  await page.keyboard.press('ArrowDown');
   expect(await liveText(page)).toBe('Width 5 of 6 columns');
-  await page.keyboard.press('ArrowUp');
-  expect(await liveText(page)).toBe('Width 6 of 6 columns');
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 6 / span 6');
+  await page.keyboard.press('ArrowDown');
+  expect(await liveText(page)).toBe('Width 4 of 6 columns');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 4 / span 4');
   expect(await activeHandlePanel(page)).toBe('dns-hero');
 
   // Nothing has been written yet — Enter is what saves.
@@ -436,13 +399,13 @@ test('P9c: a keyboard-only run moves a card two positions, changes its span, and
 
   const blob = await savedBlob(request);
   expect(blob.order).toEqual(AFTER_MOVE);
-  expect(blob.layout.spans['dns-hero']).toBe(6);
+  expect(blob.layout.spans['dns-hero']).toBe(4);
   expectPersistedBlobIsValid(blob);
 
   // Both halves come back from the server.
   await gotoOverview(page);
   expect(await domOrder(page)).toEqual(AFTER_MOVE);
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 6 / span 6');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 4 / span 4');
   expectEverySpanWellFormed(await inlineSpans(page));
   expect(await strayDragStyles(page)).toEqual([]);
   expect(await tableOverflow(page)).toEqual([]);
@@ -473,21 +436,22 @@ test('Escape restores both the pre-move order and the pre-move span, and saves n
     test.skip(!!process.env.E2E_SKIP_LIVE, 'asserts rendered grid geometry, which synthetic fixture data does not reproduce — passes against a real tenant');
   test.setTimeout(180_000);
   await gotoOverview(page);
+  const spanBefore = (await inlineSpans(page))['dns-hero'];
 
   await tabToHandle(page, 'dns-hero');
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowDown'); // span 4 -> 3
-  expect(await liveText(page)).toBe('Width 3 of 6 columns');
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 3 / span 3');
+  await page.keyboard.press('ArrowDown'); // renders 6 (declared 4 + row fill) -> 5
+  expect(await liveText(page)).toBe('Width 5 of 6 columns');
+  expect((await inlineSpans(page))['dns-hero']).toBe('span 5 / span 5');
   expect(await domOrder(page)).not.toEqual(DECLARED_ORDER);
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   expect(await liveText(page)).toContain('back where it started');
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
-  // The span override is gone too, so the declared SPAN_CLASS is back in charge.
-  expect((await inlineSpans(page))['dns-hero']).toBe('');
+  // The span override is gone too: dns-hero is back to the span the row fill gave it.
+  expect((await inlineSpans(page))['dns-hero']).toBe(spanBefore);
   expect(await activeHandlePanel(page)).toBe('dns-hero');
 
   // A cancelled move writes nothing at all.
@@ -498,6 +462,7 @@ test('Escape restores both the pre-move order and the pre-move span, and saves n
 test('arrow keys do nothing until move mode is entered', async ({ page, request }) => {
   test.setTimeout(120_000);
   await gotoOverview(page);
+  const spanBefore = (await inlineSpans(page))['dns-hero'];
   await tabToHandle(page, 'dns-hero');
 
   // Focused, but not in move mode: arrows must not move anything.
@@ -505,7 +470,7 @@ test('arrow keys do nothing until move mode is entered', async ({ page, request 
   await page.keyboard.press('ArrowUp');
   await page.waitForTimeout(400);
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
-  expect((await inlineSpans(page))['dns-hero']).toBe('');
+  expect((await inlineSpans(page))['dns-hero']).toBe(spanBefore);
   expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
 });
 
@@ -513,8 +478,6 @@ test('arrow keys do nothing until move mode is entered', async ({ page, request 
 // Step 4 — the three defects the 2026-08-07 correctness review found.
 // ---------------------------------------------------------------------------
 
-const focusedLabel = (page: Page) =>
-  page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('aria-label') ?? null);
 
 // Observed live before the fix: focus was parked in "Filter subnets", the 30s
 // poll re-rendered CardGrid, and the focus-restore effect — which had no
@@ -533,16 +496,18 @@ test('move mode ends when focus leaves the handle, and the data poll never takes
   const handle = page.locator('[data-panel-id="dns-hero"] [data-layout-handle]');
   await expect(handle).toHaveAttribute('aria-pressed', 'true');
 
-  // The operator gives up on the move and goes back to work.
-  const filter = page.getByLabel('Filter subnets');
-  await filter.click();
-  await filter.fill('10.');
+  // The operator gives up on the move and goes back to work. Overview has no
+  // text box of its own since the service board replaced the subnet table, so
+  // this is the header's search box, which every page has.
+  const box = page.locator('[data-onebox]');
+  await box.click();
+  await box.fill('10.');
   await page.waitForTimeout(400);
 
   // A blur that is NOT the component's own re-render ends move mode.
   await expect(handle).toHaveAttribute('aria-pressed', 'false');
   expect(await activeHandlePanel(page)).toBeNull();
-  expect(await focusedLabel(page)).toBe('Filter subnets');
+  await expect(box).toBeFocused();
 
   // Now the poll. Counting the requests so the wait is proven to have covered
   // a real re-render rather than merely a timeout.
@@ -553,7 +518,7 @@ test('move mode ends when focus leaves the handle, and the data poll never takes
   await page.waitForTimeout(35_000);
   expect(polls, 'the 30s poll never fired, so this proves nothing').toBeGreaterThan(0);
 
-  expect(await focusedLabel(page)).toBe('Filter subnets');
+  await expect(box).toBeFocused();
   expect(await activeHandlePanel(page)).toBeNull();
 
   // The very next arrow key is a caret move inside the input, not a reorder.
@@ -571,10 +536,15 @@ test('move mode ends when focus leaves the handle, and the data poll never takes
 // clamp, so a card kept the `span 4 / span 4` written for six tracks while the
 // window was narrowed to two — implicit columns, and the page overflowed
 // sideways.
-test('a drag then a narrow window leaves no card wider than the tracks that exist', async ({ page }) => {
+// Run on #dns since 2026-11-09: Overview now has two full-width panels, so a
+// drag there leaves no card with a measured span to check.
+test('a drag then a narrow window leaves no card wider than the tracks that exist', async ({ page, request }) => {
   test.setTimeout(120_000);
-  await gotoOverview(page, 1920, 2400);
-  await dragOntoRightHalfOf(page, 'dns-hero', 1);
+  await request.delete('/api/views/__layout_dns');
+  try {
+  await gotoTab(page, 'dns', 8, 1920, 2400);
+  const ids = await domOrder(page);
+  await dragOntoRightHalfOf(page, ids[2]!, 1);
 
   // Narrowed straight away — deliberately inside the window before the 30s
   // poll re-renders the Cards and repairs the map by accident.
@@ -608,6 +578,9 @@ test('a drag then a narrow window leaves no card wider than the tracks that exis
   // phone-width table does not scroll, which is not what this test is about.
   const spanValues = Object.values(spans).filter(Boolean);
   expect(spanValues.length, 'no card carries a measured span, so this proves nothing').toBeGreaterThan(0);
+  } finally {
+    await request.delete('/api/views/__layout_dns');
+  }
 });
 
 // MAX_SPAN was announced where trackCount is what renders. Verified live at
@@ -716,7 +689,7 @@ test('a grid whose DOM holds a panel its children cannot name says so, loudly', 
 // counted in the browser on 2026-08-08 and written down by hand. `provision`
 // is the subnet mode, which is the one it opens on.
 const TAB_PANEL_COUNTS: Record<string, number> = {
-  overview: 7,
+  overview: 2,
   daily: 5,
   network: 4,
   dns: 8,

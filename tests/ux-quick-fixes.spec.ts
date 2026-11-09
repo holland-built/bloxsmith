@@ -12,8 +12,7 @@ test('a panel still waiting for its data says Loading, not a blank grey box', as
   await page.route('**/api/data*', () => new Promise(() => {}));
   await page.goto('/#overview');
   await expect(page.getByRole('status').filter({ hasText: 'Loading…' }).first()).toBeVisible();
-  const hosts = page.getByRole('list', { name: 'Headline numbers' }).getByRole('listitem').filter({ hasText: /^Hosts/ }).first();
-  await expect(hosts).toContainText('Loading…');
+  await expect(page.locator('[data-board] [data-board-row="Hosts"]')).toContainText('Loading…');
 });
 
 test('chart bars carry their numbers, and a short top 10 says why it is short', async ({ page }) => {

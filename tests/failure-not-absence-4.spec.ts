@@ -66,41 +66,22 @@ function kpi(page: import('@playwright/test').Page, label: string) {
 
 // ---------- 1. Overview ← /api/data (whole request dead) ----------
 
-test.describe('Overview → subnet/host panels + headline tiles (/api/data down)', () => {
-  test('a dead /api/data shows feed-unavailable panels, never a zeroed KPI', async ({ page }) => {
-    await page.route('**/api/data*', dead);
-    await page.goto('/#overview');
-
-    await expect(page.getByText('Subnets feed unavailable').first()).toBeVisible();
-    await expect(page.getByText('Hosts feed unavailable').first()).toBeVisible();
-
-    for (const label of ['Active Leases', 'Subnets ≥90% (loaded rows)']) {
-      const row = kpi(page, label);
-      await expect(row.getByText('unavailable', { exact: true })).toBeVisible();
-      await expect(row.getByText('0', { exact: true })).toHaveCount(0);
-    }
-
-    const table = card(page, 'Top Subnets by Utilization');
-    await expect(table.getByText('— loaded', { exact: true })).toBeVisible();
-    await expect(table.getByText('0 loaded', { exact: true })).toHaveCount(0);
-  });
-
-  test('a genuinely empty tenant still shows real zeros and no unavailable wording', async ({ page }) => {
+test.describe('Overview → service board (/api/data empty)', () => {
+  test('a genuinely empty tenant shows real zeros on the board and no unavailable wording', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
-      fulfillJson(route, dataPayload({ meta: { subnets: 'empty', hosts: 'empty', leases: 'empty' } })),
+      fulfillJson(route, dataPayload({
+        totals: { subnets: 0, subnetsCrit: 0, subnetsWarn: 0, hosts: 0 },
+        meta: { subnets: 'empty', hosts: 'empty', leases: 'empty' },
+      })),
     );
     await page.goto('/#overview');
-
-    for (const label of ['Active Leases', 'Subnets ≥90% (loaded rows)']) {
-      const row = kpi(page, label);
-      await expect(row.getByText('0', { exact: true })).toBeVisible();
-      await expect(row.getByText('unavailable', { exact: true })).toHaveCount(0);
-    }
-
-    const table = card(page, 'Top Subnets by Utilization');
-    await expect(table.getByText('0 loaded', { exact: true })).toBeVisible();
-    await expect(page.getByText('Subnets feed unavailable')).toHaveCount(0);
-    await expect(page.getByText('Hosts feed unavailable')).toHaveCount(0);
+    const row = (name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
+    await expect(row('DHCP')).toContainText('0 active leases', { timeout: 20_000 });
+    await expect(row('IPAM')).toContainText('0 of 0 subnets ≥90%');
+    await expect(row('Hosts')).toContainText('0 of 0 not online');
+    await expect(row('Hosts')).toContainText('none open');
+    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(row(name).locator('td').nth(1)).not.toContainText('unavailable');
+    await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });
 });
 

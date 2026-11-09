@@ -15,8 +15,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('a filter box is marked as machine text', async ({ page }) => {
-  await page.goto('/#overview');
-  const filter = page.getByLabel('Filter subnets');
+  await page.goto('/#network');
+  const filter = page.getByLabel('Filter networks');
   await expect(filter).toBeVisible({ timeout: 20_000 });
   await expect(filter).toHaveAttribute('spellcheck', 'false');
   await expect(filter).toHaveAttribute('autocomplete', 'off');

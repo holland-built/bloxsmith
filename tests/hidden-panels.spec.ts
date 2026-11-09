@@ -206,8 +206,10 @@ test.describe('blast radius', () => {
     await inventory(page, OWNS_NOTHING);
     await page.goto('/#overview');
 
-    await expect(page.getByText('Host Status')).toBeVisible();
-    await expect(page.getByText('Top Subnets by Utilization')).toBeVisible();
+    // The DNS chart is the sharp one: OWNS_NOTHING collapses its twin on #dns.
+    await expect(page.getByText('DNS Query Rate — 24h')).toBeVisible();
+    await expect(page.getByText('License Inventory')).toBeVisible();
+    await expect(page.locator('[data-board-row="DNS"]')).toBeVisible();
     await expect(hiddenRow(page)).toHaveCount(0);
     // Overview does not even ask: no tab on the critical path consumes the hook.
     expect(seen).toEqual([]);

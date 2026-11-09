@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { dataPayload, installBaselineWorld } from './page-fixtures';
+import { installBaselineWorld } from './page-fixtures';
 import type { Locator } from '@playwright/test';
 
 // Every /api/ response is faked from tests/page-fixtures.ts.
@@ -116,109 +116,6 @@ for (const tab of FILTER_TABS) {
     }
   });
 }
-
-test('overview: the subnet heatmap is one tab stop, arrows move, Enter drills', async ({ page }) => {
-  await page.goto('/#overview');
-  const cells = page.locator('rect[role="button"]');
-  await expect(cells.first()).toBeVisible({ timeout: 20_000 });
-
-  const total = await cells.count();
-  expect(total, 'the heatmap should render squares').toBeGreaterThan(1);
-
-  // ROVING TABINDEX: exactly one square is in the tab order, however many there
-  // are. 288 tab stops between this panel and the next would be its own defect,
-  // which is why this asserts the count and not merely "reachable".
-  const tabbable = await page.locator('rect[role="button"][tabindex="0"]').count();
-  expect(tabbable, 'exactly one heatmap square should carry tabIndex 0').toBe(1);
-
-  await cells.first().focus();
-  await expect(cells.first()).toBeFocused();
-
-  // The ring is a stroke, and it must be fully opaque whatever the square's own
-  // utilisation is. The rect used `opacity`, which applies to the stroke too, so
-  // the ring on a 10%-used subnet was painted at 15% — faintest on the calmest
-  // square. `fillOpacity` leaves the ring alone.
-  await expect(cells.first()).toHaveAttribute('stroke', /^(?!none$).+/);
-  const ringAlpha = await cells.first().evaluate((el) => getComputedStyle(el).opacity);
-  expect(Number(ringAlpha), 'the focused square must not dim its own ring').toBe(1);
-
-  // ArrowRight moves focus to the next square and takes the ring with it.
-  await page.keyboard.press('ArrowRight');
-  await expect(cells.nth(1)).toBeFocused();
-  await expect(cells.first()).toHaveAttribute('stroke', 'none');
-
-  // The keyboard reads the same value the mouse reads on hover.
-  await expect(page.locator('[data-heatmap-readout]')).toBeVisible();
-
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/#network\?subnet=/);
-});
-
-test('overview: the heatmap keeps focus on the SAME subnet across a re-sort', async ({ page }) => {
-  // `cells` is re-sorted by utilisation on every poll. A positional focus index
-  // silently moves the ring and the tab stop onto a different subnet while the
-  // operator is reading it, and an index-bearing React key remounts the rect so
-  // DOM focus is lost outright. Both are invisible in a single-frame test, which
-  // is why this one drives the reorder itself rather than waiting for a poll.
-  // A real 31s wait for the panel's own 30s poll. page.clock.install() is not
-  // available here: installBaselineWorld already calls page.clock.setFixedTime,
-  // and Playwright allows one clock setup per page. Driving the poll any other
-  // way would be testing a timer rather than the reorder.
-  test.setTimeout(90_000);
-  await page.goto('/#overview');
-  const cells = page.locator('rect[role="button"]');
-  await expect(cells.first()).toBeVisible({ timeout: 20_000 });
-
-  // The SUBNET, not the whole label: the utilisation in the label is the very
-  // thing being changed to force the re-sort, so comparing full labels would
-  // fail on a working fix.
-  const subnetOf = (label: string | null) => label?.split('—')[0].trim() ?? '';
-  // THE LAST SQUARE, AND THAT CHOICE IS THE TEST.
-  //
-  // The first draft focused cells.nth(1) and passed with positional focus fully
-  // reintroduced. With three fixture subnets at 10/85/98 percent, inverting them
-  // to 90/15/2 leaves the middle one middle: index 1 before and index 1 after.
-  // A positional index and an identity are indistinguishable there, so the check
-  // proved nothing.
-  //
-  // The least-used subnet is the one whose POSITION has to move — it sorts last
-  // now and first once the utilisations invert. Index 2 and index 0 cannot both
-  // be right, so only an identity-keyed focus survives this.
-  const count = await cells.count();
-  const first = subnetOf(await cells.first().getAttribute('aria-label'));
-  await cells.nth(count - 1).focus();
-  const held = subnetOf(await cells.nth(count - 1).getAttribute('aria-label'));
-  expect(held).toBeTruthy();
-  expect(held, 'the held square must not already be the first one').not.toBe(first);
-
-  // Invert the utilisations so the descending sort reverses on the next poll.
-  // Built from the fixture payload, NOT from route.fetch(): fetch() bypasses the
-  // fixture layer entirely and hits the e2e server, which has no tenant and
-  // answers with an empty estate — the heatmap then has no squares at all, which
-  // reads as "the reorder never happened".
-  //
-  // structuredClone IS LOAD-BEARING. dataPayload() is a shallow copy: its
-  // `subnets` is the module's own SUBNETS array, so mutating a row here rewrites
-  // the fixture for every test that runs afterwards in this worker. Measured:
-  // without the clone, tests/page-baseline.spec.ts's overview snapshot picked up
-  // 90/15/2 percent instead of 10/85/98 and went flaky.
-  const inverted = structuredClone(dataPayload());
-  for (const s of inverted.subnets) s.util = 100 - Number(s.util ?? 0);
-  await page.route('**/api/data', (route) => route.fulfill({ json: inverted }));
-
-  await expect
-    .poll(async () => subnetOf(await cells.first().getAttribute('aria-label')), { timeout: 45_000 })
-    .not.toBe(first);
-
-  // The tab stop is still on the subnet the operator was reading, wherever the
-  // re-sort moved it to.
-  const ringed = page.locator('rect[role="button"][tabindex="0"]');
-  await expect(ringed).toHaveCount(1);
-  expect(
-    subnetOf(await ringed.getAttribute('aria-label')),
-    'the re-sort moved the tab stop onto a different subnet',
-  ).toBe(held);
-});
 
 test('infra: the status-filter chip is a keyboard button and clears on Enter', async ({ page }) => {
   await page.goto('/#infra?status=offline');

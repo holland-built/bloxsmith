@@ -1,9 +1,9 @@
 import { type Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 
-// The flow redesign of 2026-10-29, corrected on 2026-10-30: the app opens on
-// Overview's graphs, with a short "Needs a look" strip above them (a NOC screen
-// has to show the graphs without a click), the everyday jobs sit in a rail (a bottom bar on a phone), and one box
+// The flow redesign of 2026-10-29, corrected on 2026-10-30, and Overview made a
+// service board on 2026-11-09: the app opens on the board, every open issue on
+// its service's row with the charts below, the everyday jobs sit in a rail (a bottom bar on a phone), and one box
 // takes both lookups and questions. Measured before: 2 clicks and 1,814 rows to
 // see what was wrong; the main button opened the admin subnet builder.
 
@@ -19,7 +19,7 @@ async function feeds(page: Page, { incidents, hosts, sec, signals }: { incidents
   );
 }
 
-test('with no page named, the app opens on Overview: the graphs, with Needs a look above them', async ({ page }) => {
+test('with no page named, the app opens on Overview: the service board, with the charts below it', async ({ page }) => {
   await feeds(page, {
     incidents: [
       { key: 'dns-ttl-anomaly', category: 'dns-ttl-anomaly', count: 64, severity: 'warn' },
@@ -29,25 +29,27 @@ test('with no page named, the app opens on Overview: the graphs, with Needs a lo
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Overview/);
-  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toBeVisible();
+  const board = page.locator('[data-board]');
+  await expect(board).toBeVisible();
   // The graphs are on the first screen, not behind a click.
   await expect(page.locator('[data-panel-id]').first()).toBeVisible();
-  const rows = page.locator('[data-inbox-row]');
-  await expect(rows).toHaveCount(3);
-  // Folded to one line that counts them, so the graphs lead; a click opens it.
-  await expect(page.getByRole('heading', { name: /^Needs a look/ })).toContainText('3 to check · 2 urgent');
-  await expect(rows.first()).toBeHidden();
-  await page.getByRole('heading', { name: /^Needs a look/ }).click();
-  await expect(rows.first()).toBeVisible();
-  await expect(rows.nth(0)).toContainText('1 of 2 hosts is not online');
-  await expect(rows.nth(1)).toContainText('1,746 subnets are filling up');
-  await expect(rows.nth(1)).toContainText('3 are 90% full or more');
-  await expect(rows.nth(2)).toContainText('64 zones have DNS timing problems');
-  await expect(page.locator('[data-needs-a-look]')).not.toContainText('×');
+  // Each issue sits open on its own service's row; nothing is folded.
+  await expect(page.locator('[data-inbox-row]')).toHaveCount(3);
+  const hosts = board.locator('[data-board-row="Hosts"] [data-inbox-row="hosts-offline"]');
+  const ipam = board.locator('[data-board-row="IPAM"] [data-inbox-row="subnet-utilization"]');
+  const dns = board.locator('[data-board-row="DNS"] [data-inbox-row="dns-ttl-anomaly"]');
+  await expect(hosts).toContainText('Critical');
+  await expect(hosts).toContainText('1 of 2 hosts is not online');
+  await expect(hosts.getByRole('link', { name: 'Ask the AI: Which hosts are not online?' })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
+  await expect(ipam).toContainText('Critical');
+  await expect(ipam).toContainText('1,746 subnets are filling up');
+  await expect(ipam).toContainText('3 are 90% full or more');
+  await expect(dns).toContainText('Warning');
+  await expect(dns).toContainText('64 zones have DNS timing problems');
+  await expect(board).not.toContainText('×');
   // The sentence is the link; there is no column of buttons.
-  await expect(rows.nth(1).getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
-  await expect(page.locator('[data-needs-a-look] a.bg-accent')).toHaveCount(0);
-  await expect(rows.nth(0).getByRole('link', { name: /Ask the AI: Which hosts are not online/ })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
+  await expect(ipam.getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
+  await expect(board.locator('a.bg-accent')).toHaveCount(0);
 });
 
 test('an incident made of one finding says the finding itself, not "1 ×"', async ({ page }) => {
@@ -66,25 +68,22 @@ test('an incident made of one finding says the finding itself, not "1 ×"', asyn
     r.fulfill(json({ _meta: { hosts: 'ok' }, _totals: { hosts: 1, subnets: 10, subnetsCrit: 0, subnetsWarn: 1 }, hosts: [{ name: 'b', status: 'online' }] })),
   );
   await page.goto('/');
-  const box = page.locator('[data-needs-a-look]');
-  await expect(box).toContainText('602 of 602 DNS zones not signed (DNSSEC)');
-  await expect(box).toContainText('Windows Wireless is 80% full');
-  await expect(box).toContainText('none at 90% yet');
-  await expect(box).not.toContainText('0 are 90% full');
+  const board = page.locator('[data-board]');
+  await expect(board.locator('[data-board-row="DNS"]')).toContainText('602 of 602 DNS zones not signed (DNSSEC)', { timeout: 20_000 });
+  const full = board.locator('[data-board-row="IPAM"] [data-inbox-row="subnet-utilization"]');
+  await expect(full).toContainText('Windows Wireless is 80% full');
+  await expect(full).toContainText('none at 90% yet');
+  await expect(full).not.toContainText('0 are 90% full');
 });
 
-test('a quiet day says so in one line', async ({ page }) => {
+test('a quiet day says "none open" on every service row', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   await page.goto('/');
-  await expect(page.locator('[data-needs-a-look]')).toContainText('nothing right now');
+  for (const name of ['DNS', 'DHCP', 'IPAM', 'Hosts', 'Security']) {
+    await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('none open', { timeout: 20_000 });
+  }
   await expect(page.locator('[data-inbox-row]')).toHaveCount(0);
-});
-
-test('a feed that fails is named, never read as nothing wrong', async ({ page }) => {
-  await feeds(page, { incidents: null, hosts: [{ name: 'b', status: 'online' }] });
-  await page.goto('/');
-  await expect(page.getByText(/Couldn't check incidents/)).toBeVisible();
-  await expect(page.locator('[data-needs-a-look]')).not.toContainText('nothing right now');
+  await expect(page.locator('[data-board] [data-board-row="Other"]')).toHaveCount(0);
 });
 
 test('the box looks up an address, and asks the AI a question once', async ({ page }) => {
@@ -140,7 +139,7 @@ test('See full subnets lands on the subnet table, not the charts above it', asyn
   await expect(page.locator('[data-panel-id="network-exhaustion"]')).toBeInViewport();
 });
 
-test('while security events are still loading, Needs a look does not say nothing', async ({ page }) => {
+test('while security events are still loading, the Security row does not say "none open"', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   let release!: () => void;
   const held = new Promise<void>((r) => { release = r; });
@@ -150,12 +149,12 @@ test('while security events are still loading, Needs a look does not say nothing
     await r.fulfill(json({ availability: 'ok', counts: { critical: 0, high: 0 } }));
   });
   await page.goto('/');
-  const strip = page.locator('[data-needs-a-look]');
-  await expect(strip).toContainText('Checking…');
+  const sec = page.locator('[data-board] [data-board-row="Security"]');
+  await expect(sec).toContainText('Checking…');
   await page.waitForTimeout(500);
-  await expect(strip).not.toContainText('nothing right now');
+  await expect(sec).not.toContainText('none open');
   release();
-  await expect(strip).toContainText('nothing right now');
+  await expect(sec).toContainText('none open');
 });
 
 test('a second question from the header box while on the AI page is asked too', async ({ page }) => {

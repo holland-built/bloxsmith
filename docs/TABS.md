@@ -94,19 +94,20 @@ Asking for an address ("give me an address in Dublin") opens Get an address, and
 
 ## Overview
 
-Your network at a glance, and the page the app opens on. Refreshes every 30 seconds.
+What is wrong right now, service by service, and the page the app opens on. Refreshes every 30 seconds.
 
-- **Needs a look**: one line above the graphs that counts what needs attention and how much of it is urgent. Click it to open the list, worst first. It covers hosts that are not online, critical and high security events, and the incidents Infoblox reports, one row per kind. Each row's text is a link to the page where you fix it, and **Ask why** opens the AI with a question about it. If a feed can't be read, the list says which one, so an empty list always means nothing was found.
-- **Headline numbers**: a row of tiles across the top. They show DNS queries per second, hosts, hosts not online, subnets at 90% or more, active leases, and critical or high security events. A tile that counts something bad turns red or amber when there is any, and stays plain when there is none. A count that couldn't be read shows a dash with no colour and the word "unavailable". Click a tile to jump to its panel, or to the tab with the detail.
+- **The line under the title** says how much of the network the page could read: when the inventory arrived, how many subnets and hosts loaded out of the total, and whether the service list was cut short.
+- **The service board**: one row each for DNS, DHCP, IPAM, Hosts and Security. Each row shows:
+  - **Open issues**, worst first. Each says Critical or Warning in words, what is wrong, and since when. An issue first seen in the last day says "new" and is drawn solid. One that has been open longer is drawn hollow and grey, so old problems don't look like a new outage. The text links to the page where you fix it, and **Ask why** opens the AI with a question about it. An issue that belongs to no service is listed under **Other**.
+  - **Measure**: the row's main number, with what it was counted over underneath, such as "of 334 leases loaded" or "in the latest 50 events".
+  - **Last 24h**: a small DNS query-rate line.
+  - **Service health**: the service's health from Infoblox (separate from how bad an open issue is), with how many of its machines are up.
+
+  "none open" means the feed answered and found nothing. A feed that could not be read says "not checked", never "none".
 - **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown.
-- **Top Consumers**: the 12 subnets with the most addresses *in use*. They are ranked by count, not percentage, because a list of tiny /32 links at 100% tells you nothing.
-- **Subnet Heatmap**: how full each subnet is, worst first, up to 288 squares. Small /29 to /32 links are left out.
-- **Host Status**: how many hosts are active, degraded or offline, with the ones that are not active named underneath, worst first.
-- **Services and incidents**: each Infoblox service with how many of its machines are online, then the open incidents, worst first, with links to the Incidents and Infra tabs. A feed that is down says so instead of showing an empty list.
-- **Top Subnets by Utilization**: a table you can sort, filter and save as CSV.
 - **License Inventory**: each licence's SKU, state, expiry date and time left. Under 30 days is red, under 90 is amber.
 
-If a count could only be read for part of the network, the panel says "loaded rows", so it doesn't look like it covers everything.
+Subnet and host detail lives on [Network](#network) and [Infra](#infra). The service names on the board link there.
 
 ## Daily
 
@@ -453,11 +454,6 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Page | Panel | Built from | Can Build a chart redraw it? | Why not |
 |---|---|---|---|---|
 | Overview | DNS Query Rate — 24h | Infoblox's DNS server metrics | As a copy | the latest-hour figure and the comparison beside it are worked out in the app |
-| Overview | Top Consumers | the subnet list | No | it ranks subnets by addresses in use, worked out in the app |
-| Overview | Subnet Heatmap | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
-| Overview | Host Status | the host list | No | the hosts are counted by status in the app |
-| Overview | Services and incidents | the service list and the app's incident checks | No | the incidents are worked out in the app |
-| Overview | Top Subnets by Utilization | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
 | Overview | License Inventory | the licence list and account alerts | No | it is a list, not a chart |
 | Daily | Open Issues | the subnet, host and zone lists | No | the issues are worked out in the app |
 | Daily | Security Today | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |

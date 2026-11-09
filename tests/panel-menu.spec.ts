@@ -26,7 +26,7 @@ import {
 // Every test here fails on v3.88.0, where there is no "…" button to find.
 
 const VIEW = '/api/views/__layout_overview';
-const PANELS = 7;
+const PANELS = 2;
 
 test.beforeEach(async ({ page, request }) => {
   await installBaselineWorld(page);
@@ -44,15 +44,15 @@ const hideBtn = (page: Page, id: string) => panel(page, id).locator('[data-layou
 test('a panel header shows the ⓘ and one "…"; Move and Take off the page wait inside it', async ({ page }) => {
   await gotoTab(page, 'overview', PANELS);
 
-  // Host Status has no controls of its own in its header, so what is left is
+  // License Inventory has no controls of its own in its header, so what is left is
   // exactly the chrome every managed panel gets.
-  const header = panel(page, 'host-status').locator('h2').locator('..');
+  const header = panel(page, 'license-inventory').locator('h2').locator('..');
   const buttons = header.getByRole('button');
   await expect(buttons).toHaveCount(2);
-  await expect(buttons.nth(0)).toHaveAccessibleName('About: Host Status');
-  await expect(buttons.nth(1)).toHaveAccessibleName('Options: Host Status');
+  await expect(buttons.nth(0)).toHaveAccessibleName('About: License Inventory');
+  await expect(buttons.nth(1)).toHaveAccessibleName('Options: License Inventory');
 
-  // One "…" per panel, on all seven, and neither of the two buttons it holds
+  // One "…" per panel, on both, and neither of the two buttons it holds
   // is on screen anywhere.
   await expect(page.locator('[data-panel-menu-toggle]')).toHaveCount(PANELS);
   for (const sel of ['[data-layout-handle]', '[data-layout-hide]']) {
@@ -64,7 +64,9 @@ test('a panel header shows the ⓘ and one "…"; Move and Take off the page wai
 
 test('the menu opens on a click and shuts on Escape, on a press elsewhere, and when focus moves on', async ({ page }) => {
   await gotoTab(page, 'overview', PANELS);
-  const id = 'host-status';
+  // The first panel: tabbing out of the last one leaves the page, and the
+  // browser reports no focus target to close on.
+  const id = 'dns-hero';
   const toggle = panelMenuToggle(page, id);
   const list = panelMenuList(page, id);
 
@@ -73,8 +75,8 @@ test('the menu opens on a click and shuts on Escape, on a press elsewhere, and w
   await expect(list).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   // Named by the words they show, then the panel.
-  await expect(hideBtn(page, id)).toHaveAccessibleName('Take off the page Host Status');
-  await expect(moveBtn(page, id)).toHaveAccessibleName('Move Host Status');
+  await expect(hideBtn(page, id)).toHaveAccessibleName(/^Take off the page DNS Query Rate/);
+  await expect(moveBtn(page, id)).toHaveAccessibleName(/^Move DNS Query Rate/);
   await expect(hideBtn(page, id)).toContainText('Take off the page');
   await expect(moveBtn(page, id)).toContainText('Move');
 
@@ -106,7 +108,7 @@ test('both rows are 24px targets, and the open menu stays inside the window at d
     await gotoTab(page, 'overview', PANELS, width, height);
     // The last column is where a box hung from the right edge could leave the
     // window; on a phone every panel is full width.
-    const id = 'host-status';
+    const id = 'license-inventory';
     await openPanelMenu(page, id);
     for (const row of [hideBtn(page, id), moveBtn(page, id)]) {
       const b = (await row.boundingBox())!;
@@ -123,7 +125,7 @@ test('both rows are 24px targets, and the open menu stays inside the window at d
 
 test('Take off the page hides the panel, and its menu is shut when the panel is put back', async ({ page }) => {
   await gotoTab(page, 'overview', PANELS);
-  const id = 'host-status';
+  const id = 'license-inventory';
   await openPanelMenu(page, id);
   await hideBtn(page, id).click();
   await expect(panel(page, id)).toHaveCount(0);
@@ -132,7 +134,7 @@ test('Take off the page hides the panel, and its menu is shut when the panel is 
   // The panel renders nothing while it is off the page but its component stays
   // mounted, so a menu left open at the click would still be open on return.
   await page.getByRole('button', { name: 'Arrange panels', exact: true }).click();
-  await page.getByRole('button', { name: 'Put back on the page: Host Status', exact: true }).click();
+  await page.getByRole('button', { name: 'Put back on the page: License Inventory', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(panel(page, id)).toHaveCount(1);
   await expect(panelMenuToggle(page, id)).toHaveAttribute('aria-expanded', 'false');

@@ -42,7 +42,7 @@ async function chartsInAccessibilityTree(page: Page) {
 
 // The charts the fixture world draws, page by page, by name.
 const PAGES: [string, string[]][] = [
-  ['overview', ['DNS Query Rate — 24h chart', 'Top Consumers chart', 'Host Status chart']],
+  ['overview', ['DNS Query Rate — 24h chart']],
   ['dns', ['DNS Query Rate — 24h chart', 'Query Volume — 7d chart']],
   ['network', ['Utilization Distribution chart']],
   ['security', ['Threat Events — by Severity chart', 'Threat Feed Activity chart']],
@@ -77,14 +77,6 @@ for (const [tab, names] of PAGES) {
 // one "ok", one degraded, one offline; seven days of 1000 + 250 per day.
 const descriptionOf = async (page: Page, name: string) =>
   (await chartsOnPage(page)).find((c) => c.label === name)?.desc;
-
-test('a few points are read out one by one: the subnets that use the most addresses', async ({ page }) => {
-  await page.goto('/#overview');
-  await expect(page.locator(CHART)).toHaveCount(3, { timeout: 20_000 });
-  expect(await descriptionOf(page, 'Top Consumers chart')).toBe(
-    'Addresses used: 10.30.0.0 249, 10.20.0.0 215, 10.10.0.0 25.',
-  );
-});
 
 test('a donut says each slice: the hosts by state', async ({ page }) => {
   // "ok" is not one of the states Infra names, so that host is drawn as Other.

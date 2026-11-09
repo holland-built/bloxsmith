@@ -60,7 +60,9 @@ test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
 });
 
-const TABS = ['overview', 'daily', 'network', 'dns', 'security', 'infra', 'incidents', 'audit'];
+// Overview left this list on 2026-11-09: its only DataTable is License
+// Inventory, which the test server leaves empty.
+const TABS = ['daily', 'network', 'dns', 'security', 'infra', 'incidents', 'audit'];
 
 // DataTable's own constants, READ OUT OF THE COMPONENT rather than copied.
 //

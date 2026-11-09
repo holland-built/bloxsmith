@@ -49,25 +49,13 @@ test.beforeEach(async ({ page }) => {
 const badge = (page: import('@playwright/test').Page, panel: string, addr: string) =>
   page.locator(`[data-panel-id="${panel}"] tbody tr`).filter({ hasText: addr }).locator('span.rounded-full');
 
-const tile = (page: import('@playwright/test').Page, label: RegExp) =>
-  page.getByRole('list', { name: 'Headline numbers' }).getByRole('link', { name: label })
-    .or(page.getByRole('list', { name: 'Headline numbers' }).getByRole('button', { name: label }));
-
-test('Status: the tile, the table and the legend grade a subnet the same way', async ({ page }) => {
+// Overview's table and heatmap legend went on 2026-11-09; its IPAM board row
+// is what still counts by the bands. Network's table below still grades rows.
+test('Status: the IPAM board row counts by the same bands', async ({ page }) => {
   await page.goto('/#overview');
-  await expect(tile(page, /^Subnets ≥90% 1/)).toBeVisible({ timeout: 20_000 });
-  await expect(tile(page, /^Subnets ≥90% 1/)).toContainText('2 at 70–89%');
-
-  // 91 is in the tile's count, so it is Critical in the table under it. It was
-  // Warning there until the table stopped using 92.
-  await expect(badge(page, 'subnet-table', '10.0.91.0')).toHaveText('Critical');
-  await expect(badge(page, 'subnet-table', '10.0.88.0')).toHaveText('Warning');
-  await expect(badge(page, 'subnet-table', '10.0.72.0')).toHaveText('Warning');
-  await expect(badge(page, 'subnet-table', '10.0.50.0')).toHaveText('Healthy');
-
-  const legend = page.locator('[data-panel-id="subnet-heatmap"]');
-  await expect(legend.getByText('≥70%', { exact: true })).toBeVisible();
-  await expect(legend.getByText('≥90%', { exact: true })).toBeVisible();
+  const ipam = page.locator('[data-board] [data-board-row="IPAM"]');
+  await expect(ipam).toContainText('1 of 4 subnets ≥90%', { timeout: 20_000 });
+  await expect(ipam).toContainText('2 more at 70–89%');
 });
 
 test('Network: the tiles, the chart labels and the table agree with Status', async ({ page }) => {

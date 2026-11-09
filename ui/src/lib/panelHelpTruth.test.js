@@ -190,27 +190,10 @@ const RULES = [
     needs: '<input> or <select> to type in or pick from',
   },
   {
-    name: 'the list can be taken away as a file',
-    claim: /\bexports?\b|spreadsheet|\bCSV\b/i,
-    evidence: /exportCsv|new Blob|\bdownload\b/,
-    needs: 'download path (exportCsv / new Blob / a.download)',
-  },
-  {
     name: 'the table can be re-sorted',
     claim: /\bsort(?:s|ed|ing)?\b/i,
     evidence: /onSort|sortable|sortRows|sortAccessor/,
     needs: 'sort handling (onSort / sortable / sortRows / sortAccessor)',
-  },
-  {
-    name: 'pointing at a square reads it out',
-    // Enter/Move only, and NOT onPointerDown. Measured: with `onPointerDown` in
-    // the pattern this rule stayed green after the heatmap's readout handlers
-    // were deleted, because Overview.jsx also holds `onPointerDownCapture` for
-    // the tap-then-drill hook — an unrelated feature standing in as evidence.
-    // "Point at" is answered by enter and move; a down is a press, not a point.
-    claim: /point at a square/i,
-    evidence: /onPointer(?:Enter|Move)\b/,
-    needs: 'pointer handler (onPointerEnter / onPointerMove)',
   },
 ]
 
@@ -236,7 +219,7 @@ test('scanner sanity: the files, the panel homes and the rules all found somethi
   assert.ok(FILES.length > 10, `expected to scan tabs and components, found ${FILES.length} files`)
   assert.ok(HOMES.size > 50, `expected to locate the app's panelIds, found ${HOMES.size}`)
   assert.ok(
-    FIRED.length >= 15,
+    FIRED.length >= 13,
     `only ${FIRED.length} claim/panel pairs matched — a rule has stopped firing, so it is ` +
       'no longer checking anything. Fix the rule rather than deleting it.',
   )

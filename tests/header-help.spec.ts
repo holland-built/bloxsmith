@@ -172,18 +172,13 @@ test('Overview says how to rearrange it, and that nothing needs saving', async (
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  // "How do I save my layout?" has no button as its answer — there is no save
-  // button and there never was; every drop and resize writes itself. Overview
-  // is checked here because it is the tab this intro copy lives on, NOT
-  // because it is the only rearrangeable one: since 2026-08-08 all 15 tabs
-  // carry a layoutKey, and each panel states the same thing for itself in its
-  // ⓘ help (the LAYOUT_HELP sentence in components/ui.jsx, rendered only when
-  // the grid is managed). This assertion is about the tab intro, so it stays
-  // on the tab that has one.
-  // The tab intro, not Needs a look above it, which can also hold a line.
-  const intro = page.locator('main p').filter({ hasText: 'Your network at a glance' });
-  await expect(intro).toContainText('Drag');
-  await expect(intro).toContainText('resize');
-  await expect(intro).toContainText('Arrange panels');
-  await expect(intro).toContainText('save by themselves');
+  // "How do I save my layout?" has no button as its answer — every drop and
+  // resize writes itself. Overview's intro line used to say so; it went with the
+  // panel wall (2026-11-09), and the Arrange window is now where it is said.
+  await page.locator('[data-layout-arrange]').first().click();
+  const dialog = page.locator('[data-arrange-dialog]');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('drag Move');
+  await expect(dialog).toContainText('right edge');
+  await expect(dialog).toContainText('there is no Save button');
 });

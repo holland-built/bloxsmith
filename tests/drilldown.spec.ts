@@ -15,9 +15,9 @@ test.beforeEach(async ({ page }) => {
 
 // Overview → deeper-tab drill-downs: the click must land on the SAME data, filtered.
 
-test('Subnets ≥90% KPI drills to Network with minUtil filter chip', async ({ page }) => {
+test("the board's IPAM row drills to Network with minUtil filter chip", async ({ page }) => {
   await page.goto('/#overview');
-  await page.getByText('Subnets ≥90%').click();
+  await page.locator('[data-board] [data-board-row="IPAM"]').getByRole('link', { name: 'IPAM', exact: true }).click();
   await expect(page).toHaveURL(/#network\?minUtil=90/);
   await expect(page.getByText(/util ≥ 90/)).toBeVisible();
   // dismiss chip clears the filter
@@ -25,7 +25,7 @@ test('Subnets ≥90% KPI drills to Network with minUtil filter chip', async ({ p
   await expect(page).toHaveURL(/#network(?!\?minUtil)/);
 });
 
-test('host status legend drills to Infra with status chip', async ({ page }) => {
+test("the board's Hosts issue drills to Infra with status chip", async ({ page }) => {
   await page.goto('/#overview');
 
   // Unlike the other two drill-downs in this file, this legend row does not
@@ -42,7 +42,7 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
   // any plain text on the page) removes the .first() guesswork, and waiting
   // on it explicitly before clicking mirrors write-lock's fix: wait for the
   // specific condition that makes the click meaningful, don't race the fetch.
-  const offlineRow = page.getByRole('button', { name: /^Not online/ });
+  const offlineRow = page.locator('[data-board] [data-board-row="Hosts"] [data-inbox-row="hosts-offline"]').getByRole('link').first();
   // THIS is the assertion that was actually failing, not the chip below.
   //
   // Reproduced on demand at last (2026-08-01): `curl :8090/api/cache-bust`
