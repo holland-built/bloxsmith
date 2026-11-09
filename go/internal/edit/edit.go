@@ -10,6 +10,7 @@ package edit
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -569,9 +570,36 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 	if !isFalsy(body["comment"]) {
 		recordBody["comment"] = pyStr(body["comment"])
 	}
+	// "Also create the reverse (PTR) record": Infoblox makes it in the matching
+	// reverse zone, and check_rmz makes it refuse rather than guess when that
+	// zone does not exist. The same two options the colleague's Infoblox CSP
+	// tool sends.
+	if truthy(body["create_ptr"], false) {
+		if rtype != "A" && rtype != "AAAA" {
+			return M{"ok": false, "error": "a reverse (PTR) record can only be made for an A or AAAA record"}, 400
+		}
+		recordBody["options"] = M{"create_ptr": true, "check_rmz": true}
+	}
+
+	// Refuse a second copy of a record that already exists, in the preview as
+	// well as on Create, so the operator hears it before pressing anything. A
+	// lookup that fails blocks nothing: the preview says it could not check.
+	dup, checked := c.sameRecordExists(zoneID, nameInZone, rtype, rdata)
+	if dup {
+		shown := nameInZone
+		if shown == "" {
+			shown = "@"
+		}
+		return M{"ok": false, "duplicate": true,
+			"error": fmt.Sprintf("That %s record already exists: %s %s. Nothing was created.", rtype, shown, value)}, 409
+	}
 
 	if dry {
-		return M{"ok": true, "dry_run": true, "record": recordBody}, 200
+		out := M{"ok": true, "dry_run": true, "record": recordBody}
+		if !checked {
+			out["duplicate_check"] = "unavailable"
+		}
+		return out, 200
 	}
 
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
@@ -585,6 +613,65 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "record": resultOrSelf(resp)}, status
+}
+
+// sameRecordExists reports whether the zone already holds a record with this
+// name, type and data. checked is false when the lookup could not be made, in
+// which case nothing is known either way.
+func (c *Client) sameRecordExists(zoneID, nameInZone, rtype string, rdata M) (found, checked bool) {
+	z, err1 := rest.CSPQ(zoneID)
+	n, err2 := rest.CSPQ(nameInZone)
+	t, err3 := rest.CSPQ(rtype)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return false, false
+	}
+	rows, err := c.Rest.GetStrict("/api/ddi/v1/dns/record", map[string]string{
+		"_filter": fmt.Sprintf(`zone=="%s" and name_in_zone=="%s" and type=="%s"`, z, n, t),
+		"_fields": "id,rdata",
+		"_limit":  "1000",
+	})
+	if err != nil {
+		return false, false
+	}
+	for _, r := range rows {
+		if sameRdata(rdata, asMap(asMap(r)["rdata"])) {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// sameRdata compares every field of the record being made with an existing
+// record's. Names compare without case or a trailing dot, numbers by value.
+// TXT text keeps its case, because there it is data.
+func sameRdata(want, got M) bool {
+	if len(want) == 0 || got == nil {
+		return false
+	}
+	// Only host names are case-blind and may end in a dot. Addresses are
+	// compared as addresses, so 2001:db8::1 matches its long form. Text such
+	// as TXT strings and CAA values is compared exactly.
+	norm := func(k string, v any) string {
+		if f, ok := v.(float64); ok && f == float64(int64(f)) {
+			return strconv.FormatInt(int64(f), 10)
+		}
+		s := fmt.Sprint(v)
+		switch k {
+		case "address":
+			if a, err := netip.ParseAddr(strings.TrimSpace(s)); err == nil {
+				return a.String()
+			}
+		case "cname", "dname", "exchange", "target":
+			return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), "."))
+		}
+		return s
+	}
+	for k, v := range want {
+		if norm(k, v) != norm(k, got[k]) {
+			return false
+		}
+	}
+	return true
 }
 
 // --- _dns_record_update (server.py:516) --------------------------------------
@@ -871,6 +958,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			rresp, rstatus = M{"error": err.Error()}, 400
 		} else {
 			recordBody := M{"name_in_zone": rname, "zone": zoneID, "type": rtype, "rdata": rdata}
+			if truthy(dns["create_ptr"], false) && (rtype == "A" || rtype == "AAAA") {
+				recordBody["options"] = M{"create_ptr": true, "check_rmz": true}
+			}
 			rresp, rstatus, _ = c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
 		}
 

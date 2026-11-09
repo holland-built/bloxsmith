@@ -320,7 +320,8 @@ Take the next free address, or several, from a subnet.
 
 1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
-3. **Preview** shows which addresses it would take. **Allocate** takes them and names the address you got.
+3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
+4. **Preview** shows which addresses it would take, in a sentence. **Allocate** takes them and names the address you got.
 
 ### Create DNS Record
 
@@ -328,7 +329,8 @@ Add a record to a zone you already have.
 
 1. Pick the **zone** and record **type**. The common types (A, AAAA, CNAME, TXT) come first; MX, SRV, PTR, NS and CAA are under **More types**.
 2. Fill in the **name** (`@` for the zone itself) and the **value**. A TTL is under **More options** if you want one.
-3. **Preview** sends it to the server to check and shows the record it would write. **Create** writes it.
+3. For an A or AAAA record, tick **Also create the reverse (PTR) record** to make the matching reverse entry too. Infoblox makes it only if the reverse zone exists.
+4. **Preview** sends it to the server to check and says in a sentence what it would make. If the same record (same name, type and value) is already there, it says so and nothing is created. **Create** writes it.
 
 The preview shows the record the way the *server* read it, which is often not how you typed it. For example, an SRV value of `10 5 5060 sip.example.com` comes back split into priority, weight, port and target. It is worth a look.
 
