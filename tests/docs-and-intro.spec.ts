@@ -37,7 +37,7 @@ test('Help opens the tab section in the app, and never navigates to GitHub', asy
   // The panel shows THIS tab's section, titled from the document's own heading.
   await expect(page.locator('#docs-title')).toHaveText('Help: Overview');
   // Content from the Overview section of docs/TABS.md, not from another tab.
-  await expect(dialog).toContainText('Your network at a glance');
+  await expect(dialog).toContainText('What is wrong right now, service by service');
   await expect(dialog).toContainText('License Inventory');
   // ...and not the next tab along, which would mean the section did not end.
   await expect(dialog).not.toContainText('Provision runs the two write flows');
