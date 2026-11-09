@@ -184,7 +184,7 @@ func TestPublicName(t *testing.T) {
 		"example.com.": true, "shop.example.co.uk": true, "Example.NET.": true,
 		"corp.local.": false, "lab.internal.": false, "x.test.": false, "home.lab.": false,
 		"10.in-addr.arpa.": false, "8.b.d.0.1.0.0.2.ip6.arpa.": false,
-		"com.": false, "co.uk": false, "": false,
+		"foo.github.io.": true, "com.": false, "": false,
 	} {
 		if got := publicName(fqdn); got != want {
 			t.Errorf("publicName(%q) = %v, want %v", fqdn, got, want)

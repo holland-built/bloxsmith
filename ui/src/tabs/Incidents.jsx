@@ -16,7 +16,8 @@ function sevMeta(s, COLORS) {
   if (v === 'crit' || v === 'critical') return { key: 'critical', label: 'Critical', color: COLORS.crit }
   if (v === 'high') return { key: 'high', label: 'High', color: COLORS.sevHigh }
   if (v === 'warn' || v === 'medium') return { key: 'medium', label: 'Medium', color: COLORS.warn }
-  if (v === 'low' || v === 'ok') return { key: 'low', label: 'Low', color: COLORS.accent }
+  // info: a minor item such as unsigned public zones (signals.go).
+  if (v === 'low' || v === 'info' || v === 'ok') return { key: 'low', label: 'Low', color: COLORS.accent }
   return { key: 'unknown', label: v || 'Unknown', color: COLORS.other }
 }
 

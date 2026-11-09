@@ -97,6 +97,10 @@ test('unsigned public zones are a grey Note below warnings, "Ask why" shows on h
   await expect(ask).toHaveCSS('opacity', '0');
   await dns.nth(1).hover();
   await expect(ask).toHaveCSS('opacity', '1');
+  // Keyboard: focusing the issue's own link shows its "Ask why" too.
+  await page.mouse.move(0, 0);
+  await dns.nth(0).getByRole('link').first().focus();
+  await expect(dns.nth(0).getByRole('link', { name: /^Ask the AI:/ })).toHaveCSS('opacity', '1');
 
   // The board folds to a one-line count, and stays folded after a reload.
   const toggle = page.getByRole('button', { name: 'Hide' });

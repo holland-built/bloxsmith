@@ -184,7 +184,7 @@ function Issue({ r }) {
             It now shows on the line under the pointer, and on keyboard focus
             it is always visible, so nobody loses it. */}
         {r.ask && (
-          <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-2 text-link underline opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${FOCUS_RING}`}>Ask why</a>
+          <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className={`ml-2 text-link underline opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${FOCUS_RING}`}>Ask why</a>
         )}
       </span>
     </li>
@@ -236,8 +236,10 @@ function readHidden() {
   }
 }
 
-// "DNS 1 warning, 1 note · IPAM 1 critical", or "no open issues".
-function boardSummary(rows) {
+// "DNS 1 warning, 1 note · IPAM 1 critical", or "no open issues". It never
+// claims "no open issues" while a feed is still loading or failed to load,
+// the same rule the open board follows.
+function boardSummary(rows, checked) {
   const parts = rows
     .map((b) => {
       const n = (sev) => b.issues.filter((r) => r.sev === sev).length
@@ -247,7 +249,10 @@ function boardSummary(rows) {
       return words.length ? `${b.name} ${words.join(', ')}` : null
     })
     .filter(Boolean)
-  return parts.length ? parts.join(' · ') : 'no open issues'
+  const states = rows.map((b) => checked[b.name])
+  const tail = states.includes('loading') ? 'still checking' : states.some((c) => !c) ? 'some feeds not checked' : null
+  if (!parts.length) return tail ? `none found yet, ${tail}` : 'no open issues'
+  return tail ? `${parts.join(' · ')} · ${tail}` : parts.join(' · ')
 }
 
 function ServiceBoard({ board }) {
@@ -268,7 +273,7 @@ function ServiceBoard({ board }) {
         <button type="button" onClick={toggle} aria-expanded={!hidden} aria-controls="ov-board-table" className={`text-copy text-link underline ${FOCUS_RING}`}>
           {hidden ? 'Show' : 'Hide'}
         </button>
-        {hidden && <span className="text-copy text-muted min-w-0" data-board-summary="">{boardSummary(board.board)}</span>}
+        {hidden && <span className="text-copy text-muted min-w-0" data-board-summary="">{boardSummary(board.board, board.issuesChecked)}</span>}
       </div>
       <div id="ov-board-table" hidden={hidden} role="region" aria-label="Service board" tabIndex={0} className={`overflow-x-auto ${FOCUS_RING}`}>
       <table className="w-full min-w-[760px] text-copy border-t border-line" data-board="">

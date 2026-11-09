@@ -19,6 +19,13 @@ func publicName(fqdn string) bool {
 	if name == "" || name == "arpa" || strings.HasSuffix(name, ".arpa") {
 		return false
 	}
-	suffix, icann := publicsuffix.PublicSuffix(name)
-	return icann && suffix != name
+	// Judge by the top-level label alone: PublicSuffix reports a private
+	// registry entry such as github.io as icann=false, which would wrongly
+	// call foo.github.io internal.
+	dot := strings.LastIndex(name, ".")
+	if dot < 0 {
+		return false // a bare top-level name such as "com" is not a zone of yours
+	}
+	_, icann := publicsuffix.PublicSuffix(name[dot+1:])
+	return icann
 }
