@@ -365,12 +365,6 @@ const SEV_COLOUR_PROOFS = [
 const CLAIMS = [
   // ---- caps and counts ----
   {
-    panel: 'top-consumers',
-    says: /The twelve subnets handing out the most addresses/,
-    file: OVERVIEW,
-    proofs: [{ re: /\.sort\(\(a, b\) => num\(b\.used\) - num\(a\.used\)\)\.slice\(0, 12\)/, expect: 'top 12 by addresses used' }],
-  },
-  {
     panel: 'network-ipam-spaces',
     says: /The twelve busiest address spaces among those read/,
     file: NETWORK,
@@ -478,21 +472,6 @@ const CLAIMS = [
   },
 
   // ---- thresholds ----
-  {
-    panel: 'subnet-heatmap',
-    says: /green is fine, amber from 70% full, red from 90%/,
-    file: UTIL_BANDS,
-    proofs: UTIL_BAND_PROOFS,
-  },
-  {
-    panel: 'subnet-heatmap',
-    says: /green is fine, amber from 70% full, red from 90%/,
-    file: OVERVIEW,
-    proofs: [
-      { re: /const band = utilBand\(util\)\n\s+const color = band === 'crit' \? COLORS\.crit/, expect: "a square is red (COLORS.crit) in utilBand()'s 'crit' band" },
-      { re: /: band === 'warn' \? COLORS\.warn : COLORS\.series/, expect: "amber (COLORS.warn) in the 'warn' band, green (COLORS.series) otherwise" },
-    ],
-  },
   {
     panel: 'license-inventory',
     says: /Time Left turns amber under 90 days and red under 30/,
@@ -1171,11 +1150,6 @@ const EXCLUDED = [
     panel: 'security-axur-incidents',
     phrase: 'Ordered by exposed credentials',
     why: 'The ordering is computed on the SERVER, in normAxurVendors (go/internal/dashboard/axur.go), and this file only greps UI sources — there is no sort in Security.jsx to bind a regex to. It is not unverified: TestAxurVendorsShapeAndOrder and TestAxurTieBreak assert the exact order, including both tie-breaks, against a fake Axur.',
-  },
-  {
-    panel: 'subnet-heatmap',
-    phrase: 'Only the fullest few hundred are drawn',
-    why: 'The code is `const CAP = 288 // 24 x 12`. 288 IS a few hundred, but "a few hundred" has no boundary a regex can bind — 150 and 450 would both satisfy an English reader. Checking it would mean asserting a number the copy deliberately does not state.',
   },
   {
     panel: 'assets-list',

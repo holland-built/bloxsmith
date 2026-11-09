@@ -68,11 +68,6 @@ var panelSources = []PanelSource{
 	// ---- Overview ----
 	{ID: "dns-hero", Page: "Overview", Name: "DNS Query Rate — 24h", Kind: "cube", Source: srcQps, Builder: "copy",
 		Why: "the latest-hour figure and the comparison beside it are worked out in the app", Picks: picksQps},
-	restPanel("top-consumers", "Overview", "Top Consumers", srcSubnets, "it ranks subnets by addresses in use, worked out in the app"),
-	restPanel("subnet-heatmap", "Overview", "Subnet Heatmap", srcSubnets, whyFullness),
-	restPanel("host-status", "Overview", "Host Status", srcHosts, "the hosts are counted by status in the app"),
-	restPanel("services-incidents", "Overview", "Services and incidents", "the service list and the app's incident checks", whyIncident),
-	restPanel("subnet-table", "Overview", "Top Subnets by Utilization", srcSubnets, whyFullness),
 	restPanel("license-inventory", "Overview", "License Inventory", "the licence list and account alerts", whyList),
 
 	// ---- Daily ----

@@ -31,7 +31,7 @@ test('a hidden tab stops polling, and coming back fetches at once', async ({ pag
   });
 
   await page.goto('/#overview');
-  await expect(page.locator('[data-panel-id="top-consumers"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-board-row="IPAM"]')).toContainText('subnets ≥90%', { timeout: 20_000 });
 
   // Proof the interval is live while visible: two minutes of fake time is four
   // 30-second polls (and two 60-second ones). Without this the hidden half below

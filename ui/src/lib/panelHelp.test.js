@@ -335,7 +335,7 @@ test('the built line says where the numbers come from and whether Build a chart 
     "Built from Infoblox's DNS server metrics. Build a chart can draw a copy of the chart, though the latest-hour figure and the comparison beside it are worked out in the app.",
   )
   assert.equal(
-    of('subnet-heatmap'),
+    of('network-exhaustion'),
     "Built from the subnet list. Build a chart can't redraw it: how full each subnet is, and its colour band, is worked out in the app.",
   )
   for (const p of PANEL_SOURCES) {

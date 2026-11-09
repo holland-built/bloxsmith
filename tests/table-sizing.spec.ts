@@ -40,7 +40,9 @@ test.beforeEach(async ({ page }) => {
 // Log panel got NARROWER (976px -> 817px) when the window was widened from 1024
 // to 1280, and started clipping. A single-width run cannot see that.
 
-const TABS = ['overview', 'daily', 'network', 'dns', 'security', 'infra', 'incidents', 'audit'];
+// Overview left this list on 2026-11-09: its only DataTable is License
+// Inventory, which the test server leaves empty.
+const TABS = ['daily', 'network', 'dns', 'security', 'infra', 'incidents', 'audit'];
 
 // The four widths the sizing model was measured against. 1024 is the md
 // breakpoint (4 tracks), the rest are xl (6 tracks) with very different track

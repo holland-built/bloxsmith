@@ -63,7 +63,7 @@ const TAB = 'overview';
 // Overview's declared panel count, matching tests/layout-drag.spec.ts. gotoTab
 // waits for exactly this many [data-panel-id] elements, so a wrong number here
 // is a 20s timeout rather than a quiet half-loaded page.
-const PANEL_COUNT = 7;
+const PANEL_COUNT = 2;
 
 // Read from :root at the moment of the assertion rather than written down here.
 // A literal would turn every token edit into a two-file change and would let

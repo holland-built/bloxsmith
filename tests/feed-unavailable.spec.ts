@@ -29,28 +29,33 @@ function dataPayload(overrides: { hosts?: unknown[]; subnets?: unknown[]; auditL
   };
 }
 
-test.describe('Overview → Host Status panel (hosts feed)', () => {
-  test('hosts feed error renders unavailable wording, not "no data"', async ({ page }) => {
+test.describe('Overview → Hosts row of the service board (hosts feed)', () => {
+  const hostsRow = (page: import('@playwright/test').Page) => page.locator('[data-board] [data-board-row="Hosts"]');
+
+  test('hosts feed error says unavailable and not checked, never "none open" or a zero', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'error' } })),
     );
     await page.goto('/#overview');
-    const card = page.locator('text=Host Status').locator('..').locator('..');
-    await expect(card.getByText(/hosts feed unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    const row = hostsRow(page);
+    await expect(row).toContainText('not checked: feed unavailable', { timeout: 20_000 });
+    await expect(row.locator('td').nth(1)).toContainText('unavailable');
+    await expect(row).not.toContainText('none open');
+    await expect(row).not.toContainText('0 of 0');
   });
 
-  test('hosts feed empty renders the normal empty state', async ({ page }) => {
+  test('hosts feed empty is a real zero and "none open", not unavailable', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'empty' } })),
     );
     await page.goto('/#overview');
-    const card = page.locator('text=Host Status').locator('..').locator('..');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
-    await expect(card.getByText(/hosts feed unavailable/i)).toHaveCount(0);
+    const row = hostsRow(page);
+    await expect(row.locator('td').nth(1)).toContainText('0 of 0 not online', { timeout: 20_000 });
+    await expect(row).toContainText('none');
+    await expect(row).not.toContainText('unavailable');
   });
 
-  test('hosts feed ok renders host rows', async ({ page }) => {
+  test('hosts feed ok counts the hosts and names the one not online', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
       fulfillJson(route, dataPayload({
         hosts: [{ name: 'host-a', status: 'online' }, { name: 'host-b', status: 'offline' }],
@@ -58,10 +63,10 @@ test.describe('Overview → Host Status panel (hosts feed)', () => {
       })),
     );
     await page.goto('/#overview');
-    const card = page.locator('text=Host Status').locator('..').locator('..');
-    await expect(card.getByText('Active')).toBeVisible();
-    await expect(card.getByText(/hosts feed unavailable/i)).toHaveCount(0);
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    const row = hostsRow(page);
+    await expect(row).toContainText('1 of 2 hosts is not online', { timeout: 20_000 });
+    await expect(row.locator('td').nth(1)).toContainText('1 of 2 not online');
+    await expect(row).not.toContainText('unavailable');
   });
 });
 

@@ -1,26 +1,92 @@
 - main "Overview tab":
   - heading "Overview" [level=1]
-  - group:
-    - heading "Needs a look" [level=2]:
-      - text: ""
-      - status: 3 to check · 2 urgent
-  - paragraph: "Your network at a glance: DNS load, address use, subnet fullness and host health. Drag a panel’s right edge to resize it, or use Arrange panels to move panels; changes save by themselves."
-  - list "Headline numbers":
-    - listitem:
-      - button /DNS queries \d+ per sec/
-    - listitem:
-      - button "Hosts 3"
-    - listitem:
-      - button "Hosts not online 1"
-    - listitem:
-      - link /Subnets ≥\d+% 1 0 at \d+–\d+%/:
-        - /url: "#network?minUtil=90"
-    - listitem:
-      - link "Active Leases 1":
-        - /url: "#network?focus=leases"
-    - listitem:
-      - link "Security events 3 critical or high":
-        - /url: "#security"
+  - paragraph: "/Inventory fetched \\d+:\\d+ [AP]M · subnets: 3 of 3 loaded · hosts: 3 of 3 loaded · services: partial list \\(\\d+-row limit\\)/"
+  - region "Services":
+    - heading "Services" [level=2]
+    - region "Service board":
+      - table:
+        - rowgroup:
+          - row /Service Open issues Measure Last \d+[hmsp]+ Service health/:
+            - columnheader "Service"
+            - columnheader "Open issues"
+            - columnheader "Measure"
+            - columnheader /Last \d+[hmsp]+/
+            - columnheader "Service health"
+        - rowgroup:
+          - 'row /DNS none open \d+ queries\/s hourly average, last hour Last \d+ hours: between \d+\.\d+ and \d+\.\d+ queries per second healthy 2\/2 online/':
+            - rowheader "DNS":
+              - link "DNS":
+                - /url: "#dns"
+            - cell "none open"
+            - cell /\d+ queries\/s hourly average, last hour/
+            - 'cell /Last \d+ hours: between \d+\.\d+ and \d+\.\d+ queries per second/':
+              - 'img /Last \d+ hours: between \d+\.\d+ and \d+\.\d+ queries per second/'
+            - cell "healthy 2/2 online"
+          - row "DHCP none open 1 active leases of 2 leases loaded — degraded 1 stopped · 1/2 up":
+            - rowheader "DHCP":
+              - link "DHCP":
+                - /url: "#network?focus=leases"
+            - cell "none open"
+            - cell "1 active leases of 2 leases loaded"
+            - cell "—"
+            - cell "degraded 1 stopped · 1/2 up"
+          - row /IPAM none open 1 of 3 subnets ≥\d+% 0 more at \d+–\d+% · all subnets — no service state/:
+            - rowheader "IPAM":
+              - link "IPAM":
+                - /url: "#network?minUtil=90"
+            - cell "none open"
+            - cell /1 of 3 subnets ≥\d+% 0 more at \d+–\d+% · all subnets/
+            - cell "—"
+            - cell "no service state"
+          - 'row "Hosts Critical: 1 of 3 hosts is not online · first seen not trackedAsk the AI: Which hosts are not online? 1 of 3 not online all hosts — no service state"':
+            - rowheader "Hosts":
+              - link "Hosts":
+                - /url: "#infra?status=offline"
+            - 'cell "Critical: 1 of 3 hosts is not online · first seen not trackedAsk the AI: Which hosts are not online?"':
+              - list:
+                - listitem:
+                  - text: "Critical:"
+                  - link "1 of 3 hosts is not online":
+                    - /url: "#infra?status=offline"
+                  - text: · first seen not tracked
+                  - 'link "Ask the AI: Which hosts are not online?"':
+                    - /url: "#ai?q=Which%20hosts%20are%20not%20online%3F"
+                    - text: Ask why
+            - cell "1 of 3 not online all hosts"
+            - cell "—"
+            - cell "no service state"
+          - 'row "Security Critical: 3 critical or high security events · first seen not trackedAsk the AI: Which domains are on threat feeds? 3 critical or high events whole window — not listed beyond the row cap"':
+            - rowheader "Security":
+              - link "Security":
+                - /url: "#security"
+            - 'cell "Critical: 3 critical or high security events · first seen not trackedAsk the AI: Which domains are on threat feeds?"':
+              - list:
+                - listitem:
+                  - text: "Critical:"
+                  - link "3 critical or high security events":
+                    - /url: "#security"
+                  - text: · first seen not tracked
+                  - 'link "Ask the AI: Which domains are on threat feeds?"':
+                    - /url: "#ai?q=Which%20domains%20are%20on%20threat%20feeds%3F"
+                    - text: Ask why
+            - cell "3 critical or high events whole window"
+            - cell "—"
+            - cell "not listed beyond the row cap"
+          - 'row "Other Warning, new: 2 subnets close to full · open since Thu, Jan 1 — no service state"':
+            - rowheader "Other":
+              - link "Other":
+                - /url: "#incidents"
+            - 'cell "Warning, new: 2 subnets close to full · open since Thu, Jan 1"':
+              - list:
+                - listitem:
+                  - text: "Warning, new:"
+                  - link "2 subnets close to full":
+                    - /url: "#incidents"
+                  - text: · open since Thu, Jan 1
+            - cell
+            - cell "—"
+            - cell "no service state"
+  - heading "Charts" [level=2]
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:
     - button /DNS Query Rate — \d+[hmsp]+/
@@ -29,95 +95,6 @@
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+ ▲ \d+\.\d+% vs first hour/
   - application /DNS Query Rate — \d+[hmsp]+ chart/: /\d+:\d+ AM \d+:\d+ AM/
-  - heading "Host Status" [level=2]
-  - 'button "About: Host Status"': "About: ⓘ"
-  - 'button "Options: Host Status"'
-  - application "Host Status chart"
-  - text: 3 hosts
-  - button /Degraded \d+%/
-  - button /Not online \d+%/
-  - button /Other \d+%/
-  - list:
-    - listitem: baseline-host-c Not online
-    - listitem: baseline-host-b Degraded
-    - listitem: baseline-host-a Other
-  - heading "Top Consumers" [level=2]
-  - text: /addresses used · top \d+ of 3 subnets/
-  - 'button "About: Top Consumers"': "About: ⓘ"
-  - 'button "Options: Top Consumers"'
-  - application "Top Consumers chart"
-  - heading "Subnet Heatmap" [level=2]
-  - text: util by subnet — 3 loaded of 3
-  - 'button "About: Subnet Heatmap"': "About: ⓘ"
-  - 'button "Options: Subnet Heatmap"'
-  - group "Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one.":
-    - button /\d+\.\d+\.0\.0 — \d+% used/
-    - button /\d+\.\d+\.0\.0 — \d+% used/
-    - button /\d+\.\d+\.0\.0 — \d+% used/
-  - text: /ok ≥\d+% ≥\d+%/
-  - heading "Services and incidents" [level=2]
-  - link "Incidents":
-    - /url: "#incidents"
-  - link "Service health":
-    - /url: "#infra"
-  - 'button "About: Services and incidents"': "About: ⓘ"
-  - 'button "Options: Services and incidents"'
-  - region "Services and incidents list":
-    - list:
-      - listitem: DNS 2/2 online healthy
-      - listitem: DHCP 1 stopped · 1/2 up degraded
-      - listitem: Security beyond the row cap not listed
-    - paragraph: "/partial: service inventory truncated at the \\d+-row limit — a service type absent here may exist but not be listed/"
-    - list:
-      - listitem: high subnets close to full
-  - heading "Top Subnets by Utilization" [level=2]
-  - text: /excl\. \/\d+–\/\d+ infra links showing 3 of 3/
-  - textbox "Filter subnets":
-    - /placeholder: Filter…
-  - combobox "Site":
-    - option "All sites" [selected]
-    - option "baseline-site"
-    - option "other-site"
-  - button "Export CSV"
-  - 'button "About: Top Subnets by Utilization"': "About: ⓘ"
-  - 'button "Options: Top Subnets by Utilization"'
-  - table:
-    - rowgroup:
-      - row "Network Site Utilization Status Free":
-        - columnheader "Network":
-          - button "Network"
-        - columnheader "Site":
-          - button "Site"
-        - columnheader "Utilization":
-          - button "Utilization"
-        - columnheader "Status"
-        - columnheader "Free":
-          - button "Free"
-    - rowgroup:
-      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 other-site \d+% Critical 5 free/:
-        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
-          - button /View details for \d+\.\d+\.0\.0/
-          - text: ""
-        - cell "other-site"
-        - cell /\d+%/
-        - cell "Critical"
-        - cell "5 free"
-      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 baseline-site \d+% Warning \d+ free/:
-        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
-          - button /View details for \d+\.\d+\.0\.0/
-          - text: ""
-        - cell "baseline-site"
-        - cell /\d+%/
-        - cell "Warning"
-        - cell /\d+ free/
-      - row /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0 baseline-site \d+% Healthy \d+ free/:
-        - cell /View details for \d+\.\d+\.0\.0 \d+\.\d+\.0\.0/:
-          - button /View details for \d+\.\d+\.0\.0/
-          - text: ""
-        - cell "baseline-site"
-        - cell /\d+%/
-        - cell "Healthy"
-        - cell /\d+ free/
   - heading "License Inventory" [level=2]
   - text: 0 licenses
   - 'button "About: License Inventory"': "About: ⓘ"

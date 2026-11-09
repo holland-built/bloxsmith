@@ -47,7 +47,7 @@ const CHART_READY_MS = 15_000;
 
 type Chart = { tab: string; panel: string; what: string };
 
-// All 10 recharts charts in the app, by the `panelId` their Card carries.
+// All 8 recharts charts in the app, by the `panelId` their Card carries.
 // Verified against the 10 `<Tooltip>` call sites: Overview.jsx:286/401/571,
 // Dns.jsx:122/287, Security.jsx:129/489, Infra.jsx:190, Incidents.jsx:555,
 // Network.jsx:148. If an 11th chart appears, it belongs here.
@@ -61,8 +61,6 @@ type Chart = { tab: string; panel: string; what: string };
 // because a panel with no recharts surface cannot be made to answer a hover.
 const CHARTS: Chart[] = [
   { tab: 'overview', panel: 'dns-hero', what: 'DNS Query Rate — 24h area' },
-  { tab: 'overview', panel: 'top-consumers', what: 'Top Consumers bars' },
-  { tab: 'overview', panel: 'host-status', what: 'Host Status donut' },
   { tab: 'network', panel: 'network-utilization-distribution', what: 'Utilization Distribution bars' },
   { tab: 'dns', panel: 'dns-query-rate', what: 'Query Rate area' },
   { tab: 'dns', panel: 'dns-query-volume-7d', what: 'Query Volume — 7d bars' },
@@ -72,7 +70,6 @@ const CHARTS: Chart[] = [
   { tab: 'incidents', panel: 'incidents-action-volume', what: 'Action Volume bars' },
 ];
 
-const HEATMAP = { tab: 'overview', panel: 'subnet-heatmap' };
 
 // A dotted quad is not a decimal. `10.11.1.0` and `10.61.30.0/24` both satisfy
 // /\d+\.\d{2,}/ while containing no fractional part at all, and this dashboard
@@ -219,205 +216,6 @@ for (const c of CHARTS) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// The heatmap. Not a recharts chart — hand-rolled <rect>s whose only readout is
-// a native <title>, which costs about a second of hover before the OS draws it,
-// cannot be styled to match anything else on the page, and does not exist at all
-// on a touchscreen. The replacement is an in-app readout carrying
-// [data-heatmap-readout], plus an aria-label per rect so a screen reader keeps
-// what <title> was genuinely good at.
-// ---------------------------------------------------------------------------
-
-test('heatmap: pointing at a square shows an in-app readout naming the subnet and its %', async ({ page }) => {
-  await page.goto(`/#${HEATMAP.tab}`);
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  const rect = page.locator(`[data-panel-id="${HEATMAP.panel}"] svg rect`).first();
-  await expect(rect, 'the heatmap never drew a square').toBeVisible({ timeout: CHART_READY_MS });
-
-  // MUST scroll first, for the reason already written out at chartBox() above:
-  // mouse.move() takes VIEWPORT coordinates and does not auto-scroll, while
-  // boundingBox() reports the box wherever it currently sits. Measured on
-  // 2026-08-09 at the default 1280x720: this square sat at y=696 and passed by
-  // 24px, and adding one 22px row of chrome above the grid (the Arrange panels
-  // strip) put it at y=731 — off the bottom of the window, where the sweep
-  // reported "no readout" for a panel that was working perfectly. The margin
-  // was luck, not a guarantee, so it is removed rather than restored.
-  await rect.scrollIntoViewIfNeeded();
-  const box = (await rect.boundingBox())!;
-  expect(box.y + box.height, 'the heatmap square is still below the fold after scrolling')
-    .toBeLessThanOrEqual(page.viewportSize()!.height);
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-
-  const readout = page.locator(`[data-panel-id="${HEATMAP.panel}"] [data-heatmap-readout]`);
-  await expect(
-    readout,
-    'pointing at a heatmap square must show an in-app readout, not a native <title> ' +
-      '(~1s OS delay, unstyleable, absent on touch)',
-  ).toBeVisible({ timeout: 2000 });
-
-  const text = (await readout.innerText()).replace(/\s+/g, ' ').trim();
-  expect(text, `heatmap readout must name the subnet: "${text}"`).toMatch(/\d+\.\d+\.\d+\.\d+/);
-  expect(text, `heatmap readout must give the utilisation as a %: "${text}"`).toMatch(/%/);
-  expect(violations(text), `heatmap readout reads: "${text}"`).toEqual([]);
-});
-
-test('heatmap: squares carry an aria-label and no native <title>', async ({ page }) => {
-  await page.goto(`/#${HEATMAP.tab}`);
-  await expect(page.locator('h1').first()).toBeVisible();
-  await expect(page.locator(`[data-panel-id="${HEATMAP.panel}"] svg rect`).first())
-    .toBeVisible({ timeout: CHART_READY_MS });
-
-  const seen = await page.evaluate((p) => {
-    const rects = Array.from(document.querySelectorAll(`[data-panel-id="${p}"] svg rect`));
-    return {
-      total: rects.length,
-      withTitle: rects.filter((r) => r.querySelector('title')).length,
-      withoutAria: rects.filter((r) => !r.getAttribute('aria-label')).length,
-    };
-  }, HEATMAP.panel);
-
-  expect(seen.total, 'no heatmap squares to inspect').toBeGreaterThan(0);
-  expect(
-    seen.withTitle,
-    `${seen.withTitle} of ${seen.total} heatmap squares still carry a native <title>; ` +
-      'keeping it alongside the in-app readout draws two tooltips on mouse',
-  ).toBe(0);
-  expect(
-    seen.withoutAria,
-    `${seen.withoutAria} of ${seen.total} heatmap squares have no aria-label, so a screen ` +
-      'reader loses what <title> was doing',
-  ).toBe(0);
-});
-
-// Green today. Here so that swapping <title> for a pointer readout cannot
-// quietly cost the click that the whole panel exists for.
-test('heatmap: clicking a square still opens that subnet on Network', async ({ page }) => {
-  await page.goto(`/#${HEATMAP.tab}`);
-  await expect(page.locator('h1').first()).toBeVisible();
-
-  const rect = page.locator(`[data-panel-id="${HEATMAP.panel}"] svg rect`).first();
-  await expect(rect).toBeVisible({ timeout: CHART_READY_MS });
-  await rect.click();
-  await expect(page).toHaveURL(/#network\?subnet=/);
-});
-
-// ---------------------------------------------------------------------------
-// Tap-then-drill (useTapThenDrill, ui/src/tabs/Overview.jsx).
-//
-// Two panels on Overview carry BOTH a hover readout and a drill-down click:
-// Top Consumers' bars and Host Status' slices. A mouse has two gestures for
-// that, a finger has one — so on touch the single tap used to fire onClick,
-// change the hash and unmount Overview before the tooltip could be read. The
-// hook orders the two: on touch, the first tap reveals and a second tap on the
-// SAME target navigates; on a mouse nothing changes.
-//
-// The touch sweep further down CANNOT prove this. It taps a grid of points and
-// stops at the first one that answers, so it stays green whether the tooltip
-// appeared on tap one or tap five, and it never taps the same target twice.
-// These four tests are the ones that hold the hook to its description: without
-// them, "the first tap only reveals" and "the second tap still navigates" are
-// both untested, and either could regress alone.
-// ---------------------------------------------------------------------------
-
-// Where to aim on the 130px donut. Its sectors' bounding boxes include the hole
-// in the middle, so the box centre lands on the SVG background and Playwright's
-// click is intercepted — the ring itself is a few pixels in from the top edge.
-const DONUT_RING_INSET = 10;
-
-test('mouse: the first click on a Top Consumers bar still drills through', async ({ page }) => {
-  await page.goto('/#overview');
-  const bar = page.locator('[data-panel-id="top-consumers"] .recharts-bar-rectangle path').first();
-  await expect(bar).toBeVisible({ timeout: CHART_READY_MS });
-  await bar.click();
-  await expect(
-    page,
-    'a mouse must never need two clicks — hover has already shown the value',
-  ).toHaveURL(/#network\?subnet=/);
-});
-
-test('mouse: the first click on a Host Status slice still drills through', async ({ page }) => {
-  await page.goto('/#overview');
-  const svg = page.locator('[data-panel-id="host-status"] .recharts-surface').first();
-  await expect(svg).toBeVisible({ timeout: CHART_READY_MS });
-  await svg.scrollIntoViewIfNeeded();
-  const box = (await svg.boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + DONUT_RING_INSET);
-  await expect(page).toHaveURL(/#infra\?status=/);
-});
-
-test.describe('tap-then-drill on a touchscreen', () => {
-  test.use({ hasTouch: true });
-
-  test('touch: tap one on a Top Consumers bar reveals, tap two on the same bar drills', async ({ page }) => {
-    await page.goto('/#overview');
-    const bar = page.locator('[data-panel-id="top-consumers"] .recharts-bar-rectangle path').first();
-    await expect(bar).toBeVisible({ timeout: CHART_READY_MS });
-    // MUST scroll before reading the box: touchscreen.tap takes viewport
-    // coordinates and does not auto-scroll. This panel sits near the fold at
-    // 1280x720, and without this the taps land off the bottom of the window and
-    // the test reports a silent chart that is in fact fine.
-    //
-    // Scroll the WRAPPER, not the bar. Scrolling the bar failed once in a full
-    // suite run with "Element is not attached to the DOM": /api/data polls every
-    // 30s and recharts replaces the whole <path> set on each new payload, so an
-    // individual bar is not a stable thing to wait on. The wrapper survives the
-    // re-render, and the bar's box is read in one call straight afterwards.
-    await page.locator('[data-panel-id="top-consumers"] .recharts-wrapper').first().scrollIntoViewIfNeeded();
-    const box = (await bar.boundingBox())!;
-    const x = box.x + box.width / 2;
-    const y = box.y + box.height / 2;
-
-    await page.touchscreen.tap(x, y);
-    await page.waitForTimeout(HOVER_SETTLE_MS * 2);
-    expect(
-      page.url(),
-      'the first tap drilled straight through — the value was never readable on a finger',
-    ).not.toMatch(/#network\?subnet=/);
-    expect(
-      await tooltipText(page, 'top-consumers'),
-      'the first tap navigated nowhere AND showed nothing, which is worse than either alone',
-    ).not.toBe('');
-
-    await page.touchscreen.tap(x, y);
-    await page.waitForTimeout(HOVER_SETTLE_MS * 4);
-    expect(
-      page.url(),
-      'the second tap on the same bar must still drill — navigation is one tap away, not gone',
-    ).toMatch(/#network\?subnet=/);
-  });
-
-  test('touch: tap one on a Host Status slice reveals, tap two on the same slice drills', async ({ page }) => {
-    await page.goto('/#overview');
-    const svg = page.locator('[data-panel-id="host-status"] .recharts-surface').first();
-    await expect(svg).toBeVisible({ timeout: CHART_READY_MS });
-    await svg.scrollIntoViewIfNeeded();
-    const box = (await svg.boundingBox())!;
-    const x = box.x + box.width / 2;
-    const y = box.y + DONUT_RING_INSET;
-
-    await page.touchscreen.tap(x, y);
-    await page.waitForTimeout(HOVER_SETTLE_MS * 2);
-    expect(page.url(), 'the first tap drilled straight through').not.toMatch(/#infra\?status=/);
-    expect(
-      await tooltipText(page, 'host-status'),
-      'the first tap showed no count, so the donut is unreadable on a finger',
-    ).not.toBe('');
-
-    await page.touchscreen.tap(x, y);
-    await page.waitForTimeout(HOVER_SETTLE_MS * 4);
-    expect(page.url(), 'the second tap on the same slice must still drill').toMatch(/#infra\?status=/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Touch. This dashboard gets glanced at from a tablet on a wall mount, where
-// hover does not exist — the same reasoning that made the per-panel help a
-// disclosure button rather than a title= tooltip (see ui/src/components/ui.jsx,
-// above TabIntro). A chart whose only readout needs a mouse has no readout on
-// those devices.
-// ---------------------------------------------------------------------------
-
 test.describe('with a touchscreen', () => {
   test.use({ hasTouch: true });
 
@@ -457,44 +255,4 @@ test.describe('with a touchscreen', () => {
       expect(violations(text), `tooltip on "${c.panel}" reads: ${text}`).toEqual([]);
     });
   }
-
-  test('touch: dragging a finger across the heatmap tracks the readout', async ({ page }) => {
-    await page.goto(`/#${HEATMAP.tab}`);
-    await expect(page.locator('h1').first()).toBeVisible();
-
-    const rect = page.locator(`[data-panel-id="${HEATMAP.panel}"] svg rect`).first();
-    await expect(rect).toBeVisible({ timeout: CHART_READY_MS });
-    const box = (await rect.boundingBox())!;
-
-    // Pointer events, not touch events: the readout is driven by
-    // onPointerEnter/Move, which is the one handler that answers mouse, pen and
-    // finger alike. Dispatched rather than tapped so this asserts the handler,
-    // not Playwright's tap emulation.
-    await page.evaluate(
-      ({ p, x, y }) => {
-        const el = document.querySelector(`[data-panel-id="${p}"] svg rect`);
-        if (!el) return;
-        for (const type of ['pointerenter', 'pointerdown', 'pointermove']) {
-          el.dispatchEvent(
-            new PointerEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              clientX: x,
-              clientY: y,
-              pointerType: 'touch',
-              isPrimary: true,
-            }),
-          );
-        }
-      },
-      { p: HEATMAP.panel, x: box.x + box.width / 2, y: box.y + box.height / 2 },
-    );
-
-    const readout = page.locator(`[data-panel-id="${HEATMAP.panel}"] [data-heatmap-readout]`);
-    await expect(
-      readout,
-      'a finger dragged across the heatmap must show the same readout a mouse gets',
-    ).toBeVisible({ timeout: 2000 });
-    await expect(readout).toContainText('%');
-  });
 });

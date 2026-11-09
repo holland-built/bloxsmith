@@ -1,7 +1,6 @@
 import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
-import { markArranged } from '../lib/arrangedOnce.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP, builtLine } from '../lib/panelHelp.js'
@@ -731,12 +730,6 @@ export function CardGrid({ className = '', layoutKey, children }) {
           const seq = ++saveSeqRef.current
           saveLayout(layoutKey, next)
             .then(() => {
-              // Set on the success arm and outside the sequence guard on
-              // purpose. The guard exists to stop a stale save writing a
-              // MESSAGE about the current screen; "this reader has rearranged
-              // something and it saved" is true whichever save proved it, and
-              // an older one proving it first is not a stale verdict.
-              markArranged()
               if (seq !== saveSeqRef.current) return
               sayVerdict('Layout saved')
               showSavePill(SAVE_PILL_OK_TEXT, 'ok')

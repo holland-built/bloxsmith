@@ -78,10 +78,10 @@ const NO_UNKNOWN_HOSTS = [
   { id: 'p1', name: 'pending-01', ip: '10.8.0.5', status: 'pending', type: 'bloxone' },
 ];
 
-test.describe('Overview → Host Status donut (hosts reported as "unknown")', () => {
+test.describe('Infra → Host Status donut (hosts reported as "unknown")', () => {
   test('unknown hosts get their own slice, and Other stops counting them', async ({ page }) => {
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload(MIXED_HOSTS)));
-    await page.goto('/#overview');
+    await page.goto('/#infra');
 
     const card = hostStatusCard(page);
     await expect(legendRow(page, 'Unknown')).toBeVisible();
@@ -106,34 +106,12 @@ test.describe('Overview → Host Status donut (hosts reported as "unknown")', ()
     await expect(card.locator('span.text-muted.flex-1')).toHaveText(['Active', 'Degraded', 'Not online', 'Unknown', 'Other']);
   });
 
-  test('the Unknown swatch is the same colour Infra paints it', async ({ page }) => {
-    // The point of the change is that an operator comparing the two screens
-    // sees ONE fact. A matching count in a different colour still reads as two
-    // different things, so the colour is compared across tabs rather than
-    // hard-coded here (which would only restate Overview to itself).
-    await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload(MIXED_HOSTS)));
-
-    const swatch = () => legendRow(page, 'Unknown').locator('i').first();
-    const colourOf = () => swatch().evaluate((el) => getComputedStyle(el).backgroundColor);
-
-    await page.goto('/#infra');
-    await expect(swatch()).toBeVisible();
-    const infraColour = await colourOf();
-
-    await page.goto('/#overview');
-    await expect(swatch()).toBeVisible();
-    expect(await colourOf()).toBe(infraColour);
-
-    // And the two screens agree on the number, not just the hue.
-    await expect(legendRow(page, 'Unknown').locator('b')).toHaveText('20%');
-  });
-
   test('an estate with no unknown hosts shows no Unknown slice at all', async ({ page }) => {
     // An empty bucket rendered as "Unknown 0%" would be a permanent row
     // claiming a measurement nobody took — the donut only ever shows buckets
     // that actually hold hosts.
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload(NO_UNKNOWN_HOSTS)));
-    await page.goto('/#overview');
+    await page.goto('/#infra');
 
     const card = hostStatusCard(page);
     await expect(card.getByText('Active', { exact: true })).toBeVisible();

@@ -61,7 +61,6 @@ test('a row whose first cell is only a count is named for what the row is about'
 
 test('no table row is itself a button, on any page that has rows to open', async ({ page }) => {
   for (const [tab, id] of [
-    ['overview', 'subnet-table'],
     ['daily', 'daily-top-capacity-risks'],
     ['daily', 'daily-hosts-attention'],
     ['daily', 'daily-dns-zone-issues'],

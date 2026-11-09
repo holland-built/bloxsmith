@@ -36,40 +36,20 @@ import { execSync } from 'node:child_process';
 const VIEW = '__layout_overview';
 
 // The declared JSX order in Overview.jsx's <CardGrid layoutKey="overview">.
-const DECLARED_ORDER = [
-  'dns-hero',
-  'host-status',
-  'top-consumers',
-  'subnet-heatmap',
-  'services-incidents',
-  'subnet-table',
-  'license-inventory',
-];
+const DECLARED_ORDER = ['dns-hero', 'license-inventory'];
 
-// A saved order that is nothing like the declared one, and which deliberately
-// OMITS 'top-consumers' — an omitted panel must keep its declared position, at
-// the end, rather than vanish or jump to the front.
-const SAVED_ORDER = [
-  'license-inventory',
-  'subnet-table',
-  'services-incidents',
-  'subnet-heatmap',
-  'host-status',
-  'dns-hero',
-];
+// A saved order naming only license-inventory. dns-hero, declared FIRST, is
+// deliberately OMITTED — an omitted panel must go to the end rather than vanish
+// or keep the front slot it was declared in.
+const SAVED_ORDER = ['license-inventory'];
 
 // license-inventory is the interesting one: it is a measuring DataTable panel,
 // so the fit system wants it wide. A saved span of 2 proves user > measured.
-const SAVED_SPANS = { 'dns-hero': 6, 'host-status': 4, 'license-inventory': 2 };
+const SAVED_SPANS = { 'dns-hero': 6, 'license-inventory': 2 };
 
 const EXPECTED_ORDER = [
   'license-inventory',
-  'subnet-table',
-  'services-incidents',
-  'subnet-heatmap',
-  'host-status',
-  'dns-hero',
-  'top-consumers', // omitted from the saved order -> keeps its place, at the end
+  'dns-hero', // omitted from the saved order -> goes to the end
 ];
 
 const SAVE_BODY = {
@@ -83,10 +63,11 @@ type Page = import('@playwright/test').Page;
 async function gotoOverview(page: Page, width = 1920) {
   await page.setViewportSize({ width, height: 1080 });
   await page.goto('/#overview');
-  // All seven panels mounted. The layout GET resolves on mount and the grid
+  // Both panels mounted. The layout GET resolves on mount and the grid
   // re-applies on a rAF, so wait for the count and then let that settle.
   await page.waitForFunction(
-    () => document.querySelectorAll('[data-panel-id]').length === 7,
+    (n) => document.querySelectorAll('[data-panel-id]').length === n,
+    DECLARED_ORDER.length,
     { timeout: 20_000 },
   );
   await page.waitForTimeout(1200);
@@ -155,9 +136,12 @@ test('with no saved layout the tab renders in its declared order, with no span w
 
   // Nothing carries a user override, so the only inline spans present are the
   // fit system's own — and the two non-measuring chart panels have none at all.
+  // dns-hero is a chart and never measures, so its span has one possible
+  // source: the row fill. license-inventory needs more than the two tracks
+  // dns-hero leaves, so dns-hero is alone in its row and is handed them.
   const { spans } = await page.evaluate(readSpans);
-  expect(spans['dns-hero']).toBeNull();
-  expect(spans['host-status']).toBeNull();
+  expect(spans['dns-hero']).toBe(6);
+  await expect(page.locator('[data-panel-id="dns-hero"]')).toHaveAttribute('data-grown', '2');
 });
 
 test('a real round-trip through the live endpoint drops nothing and rejects nothing', async ({ request }) => {
@@ -216,7 +200,6 @@ test('P8: the layout survives killing and restarting the Go binary', async ({ pa
   const { tracks, spans } = await page.evaluate(readSpans);
   expect(tracks).toBe(6); // xl:grid-cols-6 at 1920
   expect(spans['dns-hero']).toBe(6);
-  expect(spans['host-status']).toBe(4);
   // user > measured: the fit system would have sized this table panel itself.
   expect(spans['license-inventory']).toBe(2);
 });
@@ -234,10 +217,9 @@ test('P8 clamp: at 390px no managed card exceeds 2 tracks and the grid does not 
     if (span === null) continue;
     expect(span, `${id} asked for ${span} of ${tracks} tracks at 390px`).toBeLessThanOrEqual(2);
   }
-  // The saved spans are 6 / 4 / 2 and all three clamp to 2 — stored unclamped,
+  // The saved spans are 6 / 2 and both clamp to 2 — stored unclamped,
   // rendered clamped.
   expect(spans['dns-hero']).toBe(2);
-  expect(spans['host-status']).toBe(2);
   expect(spans['license-inventory']).toBe(2);
 
   expect(scrollWidth, `grid scrollWidth ${scrollWidth} > clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth);

@@ -235,6 +235,17 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
       await page.reload();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await page.waitForTimeout(SETTLE_MS);
+      // Nothing on these four tabs paints link text at rest since Overview's
+      // service board replaced the panel wall (its Incidents and Service health
+      // links were the only ones). An open About does: "Open in Build a chart",
+      // on the help box's own fill, which is the harder background.
+      if (tab === 'overview') {
+        const about = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
+        await about.click();
+        await expect(
+          page.locator(`#${await about.getAttribute('aria-controls')}`).getByRole('link', { name: 'Open in Build a chart' }),
+        ).toBeVisible();
+      }
 
       const res = await page.evaluate(() => {
         const lum = (c: number[]) => {

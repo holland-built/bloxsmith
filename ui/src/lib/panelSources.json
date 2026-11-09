@@ -16,51 +16,6 @@
     }
   },
   {
-    "id": "top-consumers",
-    "page": "Overview",
-    "name": "Top Consumers",
-    "kind": "rest",
-    "source": "the subnet list",
-    "builder": "no",
-    "why": "it ranks subnets by addresses in use, worked out in the app"
-  },
-  {
-    "id": "subnet-heatmap",
-    "page": "Overview",
-    "name": "Subnet Heatmap",
-    "kind": "rest",
-    "source": "the subnet list",
-    "builder": "no",
-    "why": "how full each subnet is, and its colour band, is worked out in the app"
-  },
-  {
-    "id": "host-status",
-    "page": "Overview",
-    "name": "Host Status",
-    "kind": "rest",
-    "source": "the host list",
-    "builder": "no",
-    "why": "the hosts are counted by status in the app"
-  },
-  {
-    "id": "services-incidents",
-    "page": "Overview",
-    "name": "Services and incidents",
-    "kind": "rest",
-    "source": "the service list and the app's incident checks",
-    "builder": "no",
-    "why": "the incidents are worked out in the app"
-  },
-  {
-    "id": "subnet-table",
-    "page": "Overview",
-    "name": "Top Subnets by Utilization",
-    "kind": "rest",
-    "source": "the subnet list",
-    "builder": "no",
-    "why": "how full each subnet is, and its colour band, is worked out in the app"
-  },
-  {
     "id": "license-inventory",
     "page": "Overview",
     "name": "License Inventory",

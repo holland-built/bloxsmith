@@ -33,7 +33,7 @@ import { test, expect } from './fixtures';
 // four busiest tabs instead, because a header is only at risk where the header
 // is already crowded.
 
-const HEATMAP_HELP = 'One square per subnet';
+const LICENSE_HELP = 'Every Infoblox licence on this tenant';
 // Verbatim out of LAYOUT_HELP_REST in ui/src/components/ui.jsx. Written out
 // here rather than imported so that rewording the string has to come past this
 // file — which is the point, since where these words appear is the whole
@@ -46,7 +46,7 @@ test('a panel header carries an ⓘ button named after its own panel', async ({ 
 
   // Named by reference to the panel's own <h2>, so a screen reader hears which
   // panel it is about — never seven identical "more info" buttons down a tab.
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
   // The visible label is the glyph, and the name is still the words. Both
@@ -71,7 +71,7 @@ test('clicking ⓘ reveals the help text and flips aria-expanded', async ({ page
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   const controls = await btn.getAttribute('aria-controls');
   expect(controls, 'the About button must point at the region it opens').toBeTruthy();
 
@@ -81,7 +81,7 @@ test('clicking ⓘ reveals the help text and flips aria-expanded', async ({ page
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
   await expect(region).toBeVisible();
-  await expect(region).toContainText(HEATMAP_HELP);
+  await expect(region).toContainText(LICENSE_HELP);
 
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
@@ -92,7 +92,7 @@ test('hovering About reveals the help, and moving the pointer away closes it', a
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeHidden();
 
@@ -100,7 +100,7 @@ test('hovering About reveals the help, and moving the pointer away closes it', a
   // affordance still needs one.
   await btn.hover();
   await expect(region).toBeVisible();
-  await expect(region).toContainText(HEATMAP_HELP);
+  await expect(region).toContainText(LICENSE_HELP);
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
 
   // Nothing pinned it, so leaving closes it. The corner of the viewport, not
@@ -114,7 +114,7 @@ test('keyboard focus alone reveals the help — no click, no pointer', async ({ 
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeHidden();
 
@@ -123,7 +123,7 @@ test('keyboard focus alone reveals the help — no click, no pointer', async ({ 
   // for free.
   await btn.focus();
   await expect(region).toBeVisible();
-  await expect(region).toContainText(HEATMAP_HELP);
+  await expect(region).toContainText(LICENSE_HELP);
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
 
   // Tab moves the focus on, and an unpinned preview goes with it.
@@ -136,7 +136,7 @@ test('a clicked-open panel stays open after the pointer and the focus both leave
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
 
   await btn.click();
@@ -150,7 +150,7 @@ test('a clicked-open panel stays open after the pointer and the focus both leave
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await expect(btn).not.toBeFocused();
   await expect(region).toBeVisible();
-  await expect(region).toContainText(HEATMAP_HELP);
+  await expect(region).toContainText(LICENSE_HELP);
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
 
   // And a second click still closes it, with the pointer sitting on the button
@@ -183,7 +183,7 @@ test('a closed panel keeps its help copy out of the document altogether', async 
           (el) => (el.textContent || '').length,
         ),
       }),
-      HEATMAP_HELP,
+      LICENSE_HELP,
     );
 
   const closed = await read();
@@ -193,7 +193,7 @@ test('a closed panel keeps its help copy out of the document altogether', async 
 
   // The same read finds it once it is open, so the assertion above is a real
   // measurement and not a phrase that never appears anywhere.
-  const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   await btn.click();
   await expect(page.locator(`#${await btn.getAttribute('aria-controls')}`)).toBeVisible();
   expect((await read()).inDocument).toBe(true);
@@ -209,7 +209,7 @@ test('the disclosure is operable with the keyboard alone', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Host Status', exact: true });
+  const btn = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
   // press() focuses the element and sends a real key event — no click is
   // synthesised by Playwright, so this fails if the affordance is
   // pointer-only.
@@ -232,12 +232,12 @@ test("an open panel's help is about that panel and nothing else", async ({ page 
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: Top Consumers', exact: true });
+  const btn = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
   await btn.click();
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeVisible();
   // Its own copy is still there — otherwise this passes on an empty box.
-  await expect(region).toContainText('The twelve subnets handing out the most addresses');
+  await expect(region).toContainText('The average number of DNS lookups a second');
   await expect(region).not.toContainText(LAYOUT_SENTENCE);
 });
 
@@ -418,8 +418,8 @@ test('an open About ends with how the panel is built and whether Build a chart c
   await expect(volumeBody.locator('[data-panel-built]')).toHaveText("Built from Infoblox's DNS activity records. Build a chart can redraw this.");
 
   await page.goto('/#overview');
-  const heatmap = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
-  await heatmap.click();
-  const heatmapBody = page.locator(`#${await heatmap.getAttribute('aria-controls')}`);
-  await expect(heatmapBody.locator('[data-panel-built]')).toHaveText(/^Built from the subnet list\. Build a chart can't redraw it: /);
+  const licences = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  await licences.click();
+  const licencesBody = page.locator(`#${await licences.getAttribute('aria-controls')}`);
+  await expect(licencesBody.locator('[data-panel-built]')).toHaveText("Built from the licence list and account alerts. Build a chart can't redraw it: it is a list, not a chart.");
 });

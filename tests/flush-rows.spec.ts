@@ -111,8 +111,9 @@ for (const tab of TABS) {
 }
 
 // Which panels share a row also changes with NO measurement: a tile taken off
-// the page, a panel dragged elsewhere. Host Status holds no table, so nothing
-// re-measures when it goes; the rows have to be refilled because the grid
+// the page, a panel dragged elsewhere. On #dns, Zone Counts holds no table, so
+// nothing re-measures when it goes (Overview's grid is down to two panels that
+// each fill their own row, so hiding one there would prove nothing); the rows have to be refilled because the grid
 // changed, not because a table reported in.
 //
 // This pins the behaviour. It does not single out the re-run in CardGrid's
@@ -120,20 +121,20 @@ for (const tab of TABS) {
 // hiding a panel changes the grid's height and the grid's ResizeObserver
 // re-runs the layout for that.
 test('taking a panel off the page refills the rows it leaves behind', async ({ page, request }) => {
-  const view = '/api/views/__layout_overview';
+  const view = '/api/views/__layout_dns';
   await request.delete(view);
   try {
     await page.setViewportSize({ width: 1920, height: 2400 });
-    await page.goto('/#overview');
-    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(7, { timeout: 20_000 });
+    await page.goto('/#dns');
+    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(8, { timeout: 20_000 });
     await page.waitForTimeout(1200);
     const shortRows = async () =>
       (await page.evaluate(readRows)).flatMap((g) => g.rows.filter((r) => r.shortBy > 1 || r.spans !== g.tracks).map((r) => r.panels.join(', ')));
     expect(await shortRows(), 'the page should start with every row flush').toEqual([]);
 
-    await openPanelMenu(page, 'host-status');
-    await page.locator('[data-panel-id="host-status"] [data-layout-hide]').click();
-    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(6);
+    await openPanelMenu(page, 'dns-zone-kpis');
+    await page.locator('[data-panel-id="dns-zone-kpis"] [data-layout-hide]').click();
+    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(7);
     await page.waitForTimeout(600);
     expect(await shortRows()).toEqual([]);
   } finally {
@@ -147,7 +148,7 @@ test('taking a panel off the page refills the rows it leaves behind', async ({ p
 // entry, so they sat in a four-column row at 1024 and a six-column row at 1920
 // with the rest of the row empty. The other four pages are here so the rule is
 // asserted for every tile row, not only the one that was broken.
-for (const tab of ['overview', 'network', 'dns', 'infra', 'assets']) {
+for (const tab of ['network', 'dns', 'infra', 'assets']) {
   test(`#${tab}: every row of number tiles is a full row`, async ({ page }) => {
     const short: string[] = [];
     for (const width of [390, 1024, 1920]) {

@@ -49,26 +49,6 @@ export const PANEL_HELP = {
     what: 'The average number of DNS lookups a second your servers answered, hour by hour across the last 24 hours.',
     look: 'The big figure is the latest hour, and the note beside it compares that hour with the first one on the chart. Click the heading to open the DNS tab.',
   },
-  'top-consumers': {
-    what: 'The twelve subnets handing out the most addresses right now.',
-    look: 'Ranked by addresses in use, not by how full they are, so tiny always-full links do not crowd out real capacity problems. Click a bar to open that subnet.',
-  },
-  'subnet-heatmap': {
-    what: 'One square per subnet, coloured by how full it is: green is fine, amber from 70% full, red from 90%.',
-    look: 'Only the fullest few hundred are drawn, worst first. Point at a square, or drag a finger across them, to read its name and figure. Click or tap one to open that subnet.',
-  },
-  'host-status': {
-    what: 'How your Infoblox machines split by state: running, struggling, offline, anything else, or a state nothing reported back.',
-    look: 'Click a slice or a label to see just those machines on the Infra tab. The list under the ring names the ones that are not active, worst first.',
-  },
-  'services-incidents': {
-    what: 'Whether each Infoblox service is healthy, and the problems the app has found across your network, worst first.',
-    look: 'A service shows how many of its machines are online. A problem with a single cause is written out; several of the same kind are counted. The links in the heading open the full lists.',
-  },
-  'subnet-table': {
-    what: 'The subnets that loaded, with how full each one is, how many addresses are still free, and which site it belongs to.',
-    look: 'Type in the box to filter, click a column heading to sort, or export the list as a spreadsheet. Click a row to open that subnet. "Unknown" means never measured, not empty.',
-  },
   'license-inventory': {
     what: 'Every Infoblox licence on this tenant, what it covers, when it runs out, and how many you hold.',
     look: 'Time Left turns amber under 90 days and red under 30. Sort by that column to see what expires soonest.',

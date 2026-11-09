@@ -52,8 +52,9 @@ test('one page load makes one /api/data request, not two', async ({ page }) => {
   // in the header and mounts with the shell; Overview mounts with the tab, and
   // it is the later of the two, so waiting for a panel that depends on the
   // payload waits for both.
-  await expect(page.locator('[data-panel-id="top-consumers"]')).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('[data-panel-id="host-status"] .w-\\[130px\\]')).toBeVisible({ timeout: 20_000 });
+  // The board's Hosts measure reads "N of M not online" only once /api/data has
+  // answered (it says "Loading…" before and "unavailable" on failure).
+  await expect(page.locator('[data-board-row="Hosts"]')).toContainText(/\d+ of \d+ not online/, { timeout: 20_000 });
   // A moment past the render, so a second request issued just after the first
   // one resolved is still caught rather than missed by measuring too early.
   await page.waitForTimeout(1000);
@@ -66,7 +67,7 @@ test('one page load makes one /api/data request, not two', async ({ page }) => {
   // the whole assertion.
   //
   // The Overview side: a panel that can only render from the payload.
-  await expect(page.locator('[data-panel-id="host-status"]')).toContainText(/hosts/);
+  await expect(page.locator('[data-coverage]')).toContainText(/hosts: \d+ of \d+ loaded/);
 
   // The ConnStatus side, read off the one thing on it that is data-dependent.
   // Its title is built from `lastFetchRef`, which is only ever set when
