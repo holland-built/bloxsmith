@@ -202,13 +202,6 @@ func (s *Store) Snooze(category string, minutes int) error {
 	return atomicWriteJSON(s.alertFile(), d)
 }
 
-// IsSnoozed ports is_snoozed (server.py:2664).
-func (s *Store) IsSnoozed(category string) bool {
-	s.alertMu.Lock()
-	defer s.alertMu.Unlock()
-	return s.alertLoad()[category] > now()
-}
-
 // ActiveSnoozes ports active_snoozes (server.py:2669): still-active entries.
 func (s *Store) ActiveSnoozes() map[string]float64 {
 	s.alertMu.Lock()
