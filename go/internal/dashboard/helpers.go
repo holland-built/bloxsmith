@@ -50,6 +50,13 @@ type Service struct {
 	// short-circuits discovery rather than seeding it, because an explicit
 	// answer outranks anything this code could infer.
 	AxurCustomer string
+	// KentikCreds returns the Kentik login (email, token) from the vault, read
+	// once per lookup. Nil or an empty token means not set up. See kentik.go.
+	KentikCreds func() (email, token string)
+	// KentikLocked tells "vault locked" apart from "not set up", as AxurLocked does.
+	KentikLocked func() bool
+	// KentikURL overrides the query endpoint; empty means KentikDefaultURL.
+	KentikURL string
 	// ent is the shared 403 entitlement backoff (entitlement.go). A pointer so
 	// With's shallow copy keeps one process-wide memory; nil (bare Service
 	// literals in tests) disables the backoff rather than panicking.

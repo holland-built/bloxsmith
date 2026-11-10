@@ -637,6 +637,10 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// Measured against a running server, not reasoned about.
 	dash.AxurLocked = func() bool { return v.Exists() && !v.IsUnlocked() }
 	dash.AxurCustomer = cfg.AxurCustomerKey
+	// Kentik's login lives only in the vault (Settings, under Kentik). Read per
+	// lookup, so saving it takes effect without a restart.
+	dash.KentikCreds = v.KentikCreds
+	dash.KentikLocked = func() bool { return v.Exists() && !v.IsUnlocked() }
 	if cfg.AxurAPIKey != "" {
 		log.Printf("axur: credential from AXUR_API_KEY (%s); a key saved in the vault overrides it", cfg.AxurBaseURL)
 	} else {

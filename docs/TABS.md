@@ -87,7 +87,7 @@ The app opens on **Overview**. Every page is in the menu down the left side. The
 
 The box at the top takes two kinds of input:
 
-- **Something to look up**: an IP address, a subnet like `10.0.0.0/24`, or a host name. Press Enter to see what Infoblox knows about it.
+- **Something to look up**: an IP address, a subnet like `10.0.0.0/24`, or a host name. Press Enter to see what Infoblox knows about it. For an IP address, the **Traffic (Kentik)** row also shows what Kentik saw it send and receive in the last hour: its total in and out, then its busiest conversations. That needs a Kentik login saved under ⋯ Settings, Integrations; without one the row says so, and never claims there was no traffic.
 - **A question**: anything else. Enter opens the AI and asks it straight away. The **Ask why** links on Overview do the same.
 
 Asking for an address ("give me an address in Dublin") opens Get an address, and asking for a chart opens Build a chart. Before you press Enter, the box tells you where Enter will take you. Cmd+K (Ctrl+K on Windows) opens the same search from anywhere.

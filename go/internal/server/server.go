@@ -419,6 +419,12 @@ func (d *Deps) registerVaultRoutes(mux router) {
 		res := d.Vault.SetAxur(str(b, "key"))
 		d.json(w, r, code(res, 400), res)
 	}))
+	// 8b. kentik — set the Kentik login (email and token together), or with
+	// both empty clear it. Its own route for the same reason as Axur's.
+	mux.HandleFunc("POST /api/vault/kentik", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
+		res := d.Vault.SetKentik(str(b, "email"), str(b, "token"))
+		d.json(w, r, code(res, 400), res)
+	}))
 	// 9. test-key
 	mux.HandleFunc("POST /api/vault/test-key", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		d.json(w, r, 200, d.Vault.TestKey(str(b, "key")))

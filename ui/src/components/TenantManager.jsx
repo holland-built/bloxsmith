@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
@@ -63,6 +64,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   // all the UI needs to choose between "paste token" and "type to replace it",
   // and it is the one fact about the key that is safe to hold in React state.
   const [axur, setAxur] = useState({ key: '', stored: false, busy: false, err: '', msg: '' })
+  const [kentik, setKentik] = useState({ email: '', token: '', stored: false, busy: false, err: '', msg: '' })
 
   const authHeaders = () => {
     const t = localStorage.getItem('dashToken')
@@ -81,6 +83,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         // the key itself. Merged rather than assigned so a reload cannot wipe a
         // secret the operator is part-way through typing.
         setAxur((a) => ({ ...a, stored: !!d.hasAxur }))
+        setKentik((k) => ({ ...k, stored: !!d.hasKentik }))
       })
       .catch(() => setStatusError(true))
     // Which tenant a write would land in, and whether it has been opted in.
@@ -261,6 +264,22 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   // Axur off, and `stored` coming back false is the only way to see which
   // happened. Promising "Axur disabled" here would be a guess.
   const clearAxur = () => putAxur('', 'Axur key removed from the vault.')
+
+  // Kentik's login is two values sent together; the server refuses half of one.
+  // Same rules as Axur above: the typed token is dropped once saved.
+  const putKentik = async (email, token, doneMsg) => {
+    setKentik((k) => ({ ...k, busy: true, err: '', msg: '' }))
+    const { ok, data } = await vpost('/api/vault/kentik', { email, token })
+    if (ok && data.ok) {
+      setKentik({ email: '', token: '', stored: !!data.stored, busy: false, err: '', msg: doneMsg })
+      return
+    }
+    const err =
+      data.error === 'locked'
+        ? 'The vault is locked — unlock it first, then save the login.'
+        : data.error || 'Could not save the Kentik login.'
+    setKentik((k) => ({ ...k, busy: false, err }))
+  }
 
   const testAddKey = async () => {
     if (!add.key) return
@@ -735,6 +754,54 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                       className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
                       onClick={clearAxur}
                       disabled={axur.busy}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-copy font-medium mb-2">Kentik (network traffic)</div>
+              <div className="mb-4 rounded-control border border-border bg-field p-3">
+                <label htmlFor="tm-kentik-email" className="block text-note text-dim mb-1">Kentik login email</label>
+                <input
+                  id="tm-kentik-email"
+                  className={inCls}
+                  type="email"
+                  {...MACHINE_TEXT}
+                  value={kentik.email}
+                  onChange={(e) => setKentik((k) => ({ ...k, email: e.target.value, msg: '', err: '' }))}
+                  placeholder={kentik.stored ? 'a login is saved — type to replace it' : 'you@example.com'}
+                />
+                <label htmlFor="tm-kentik-token" className="block text-note text-dim mb-1 mt-2">Kentik API token</label>
+                {/* Never prefilled, for the reason given on the Axur box above. */}
+                <input
+                  id="tm-kentik-token"
+                  className={inCls}
+                  type="password"
+                  {...API_KEY_BOX}
+                  value={kentik.token}
+                  onChange={(e) => setKentik((k) => ({ ...k, token: e.target.value, msg: '', err: '' }))}
+                  placeholder={kentik.stored ? 'a token is saved — type to replace it' : 'paste token'}
+                />
+                <div className="text-note text-dim mt-1.5">
+                  Encrypted in the vault. Used by search: look up an IP to see its traffic for the last hour.
+                </div>
+                {kentik.err && <div role="alert" className="mt-2 text-note text-crit">{kentik.err}</div>}
+                {kentik.msg && <div className="mt-2 text-note text-ok">{kentik.msg}</div>}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
+                    onClick={() => putKentik(kentik.email, kentik.token, 'Kentik login saved.')}
+                    disabled={kentik.busy || !kentik.email || !kentik.token}
+                  >
+                    {kentik.busy ? 'Saving…' : 'Save Kentik login'}
+                  </button>
+                  {kentik.stored && (
+                    <button
+                      className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
+                      onClick={() => putKentik('', '', 'Kentik login removed from the vault.')}
+                      disabled={kentik.busy}
                     >
                       Remove
                     </button>

@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
 // it does not depend on what the tenant happens to hold today. The live block
 // is what proves the five endpoints really answer for a real indicator.
 
-const SOURCES = ['assets', 'dns', 'ipam', 'threat', 'changes'] as const;
+const SOURCES = ['assets', 'dns', 'ipam', 'threat', 'changes', 'kentik'] as const;
 
 // The ribbon's five words, transcribed from SURFACE B of
 // .mockups/build-bloxsmith-ux/bloxsmith-ux-v11.html. They are asserted because
@@ -46,6 +46,7 @@ const RIBBON_LABELS: Record<(typeof SOURCES)[number], string> = {
   ipam: 'IPAM',
   threat: 'Threat',
   changes: 'Changes',
+  kentik: 'Traffic',
 };
 
 // A terminal state is anything that is not still loading. Named here once so a
@@ -67,6 +68,13 @@ async function delayThen(route: import('@playwright/test').Route, ms: number, bo
 //   /api/csp/assets?q=debug-vpcflow  -> {availability, rows:[{cqid, last_seen, name, provider, type, vendor}], ...}
 //   /api/csp-audit?q=…               -> {count, rows:[{action, id, resource, result, ts, user, who_kind, who_role}], status, truncated}
 const FAKE = {
+  kentik: {
+    availability: 'ok',
+    ip: '172.16.128.1',
+    bps_out: 1200,
+    bps_in: 800,
+    rows: [{ direction: 'out', peer: '10.4.0.53', protocol: 'UDP (17)', port: 53, bps: 1200 }],
+  },
   assets: {
     availability: 'ok',
     rows: [{ cqid: 'c1', last_seen: '2026-08-07T00:48:04.000', name: 'nios-demo-ns1', provider: 'AWS', type: 'Virtual Machine', vendor: 'AWS' }],
@@ -115,6 +123,7 @@ async function routeAll(
     ipam: '**/api/search/ipam?*',
     threat: '**/api/dossier?*',
     changes: '**/api/csp-audit?*',
+    kentik: '**/api/kentik/traffic?*',
   };
   for (const s of SOURCES) {
     const body = opts.bodies?.[s] ?? FAKE[s];
@@ -199,7 +208,7 @@ test.describe('palette: indicator search', () => {
 // ---------------------------------------------------------------------------
 
 test('all five sources are on screen while every fetch is still in flight', async ({ page }) => {
-  await routeAll(page, { delays: { assets: 9000, dns: 9000, ipam: 9000, threat: 9000, changes: 9000 } });
+  await routeAll(page, { delays: { assets: 9000, dns: 9000, ipam: 9000, threat: 9000, changes: 9000, kentik: 9000 } });
   await page.goto('/#dossier?q=172.16.128.1');
 
   // Four are in flight. "Recent changes" is the fifth row and is on screen with
@@ -577,7 +586,7 @@ test('the ribbon never paints Unavailable before a source has reported', async (
     // would have made this test pass against the broken page.
     new MutationObserver(snap).observe(document, { childList: true, subtree: true, attributes: true });
   });
-  await routeAll(page, { delays: { assets: 9000, dns: 9000, ipam: 9000, threat: 9000, changes: 9000 } });
+  await routeAll(page, { delays: { assets: 9000, dns: 9000, ipam: 9000, threat: 9000, changes: 9000, kentik: 9000 } });
   await page.goto('/#dossier?q=172.16.128.1');
   await expect(row(page, 'assets')).toHaveAttribute('data-dossier-state', 'loading');
 
