@@ -43,8 +43,8 @@ test('no link when part of the chart has no portal equivalent', () => {
 })
 
 test('each bar keeps its raw value, and the blank one gets no link', () => {
-  const f = 'AssetDetailsAggV1.vendor'
-  const m = 'AssetDetailsAggV1.assetsCount'
+  const f = 'AssetDetails_ch_agg.vendor'
+  const m = 'AssetDetails_ch_agg.assetsCount'
   const rows = [{ [f]: 'Apple', [m]: 3 }, { [f]: '', [m]: 1 }, { [f]: null, [m]: 2 }]
   const p = picks({ split: 'vendor' })
   const raws = rawByName(OPTIONS, p, rows, false)
@@ -57,8 +57,8 @@ test('each bar keeps its raw value, and the blank one gets no link', () => {
 test('a bar name two different raw values share gets no raw value', () => {
   // Onprem reads "On-premises"; were another raw value to read the same, the
   // bar could not say which to send.
-  const f = 'AssetDetailsAggV1.deploymentContext'
-  const m = 'AssetDetailsAggV1.assetsCount'
+  const f = 'AssetDetails_ch_agg.deploymentContext'
+  const m = 'AssetDetails_ch_agg.assetsCount'
   const opts = { ...OPTIONS, values: { ...OPTIONS.values, [f]: { Onprem: 'On-premises', OnPrem: 'On-premises' } } }
   const raws = rawByName(opts, picks({ split: 'where' }), [{ [f]: 'Onprem', [m]: 1 }, { [f]: 'OnPrem', [m]: 1 }], false)
   assert.equal(raws.has('On-premises'), false)

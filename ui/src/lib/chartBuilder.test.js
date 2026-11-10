@@ -375,14 +375,14 @@ test('assets are counted as they are now, by type or by problem', () => {
   assert.deepEqual(choicesFor(OPTIONS, picks('assets', 'atype', 'now')).over, ['none'])
   assert.equal(sentence(OPTIONS, picks('assets', 'atype', 'now', 'none', 10), false), 'Top 10 asset types by Assets, latest inventory')
   assert.equal(sentence(OPTIONS, picks('assets', 'missing', 'now', 'none'), false), 'Assets by missing record, latest inventory')
-  assert.equal(sentence(OPTIONS, picks('assets', 'none', 'now', 'none'), true), 'AssetDetailsAggV1.assetsCount, now')
+  assert.equal(sentence(OPTIONS, picks('assets', 'none', 'now', 'none'), true), 'AssetDetails_ch_agg.assetsCount, now')
   assert.equal(chartKind(picks('assets', 'where', 'now', 'none', 5)), 'donut')
 })
 
 test('problem bars use plain names and stay highest first', () => {
   const rows = [
-    { 'AssetDetailsAggV1.insight_indicators_label': 'IPAM', 'AssetDetailsAggV1.assetsCount': '49' },
-    { 'AssetDetailsAggV1.insight_indicators_label': 'DNS Forward Record', 'AssetDetailsAggV1.assetsCount': '383' },
+    { 'AssetDetails_ch_agg.insight_indicators_label': 'IPAM', 'AssetDetails_ch_agg.assetsCount': '49' },
+    { 'AssetDetails_ch_agg.insight_indicators_label': 'DNS Forward Record', 'AssetDetails_ch_agg.assetsCount': '383' },
   ]
   assert.deepEqual(chartData(OPTIONS, picks('assets', 'missing', 'now', 'none'), rows, false), [
     { name: 'DNS name (forward record)', value: 383 },
@@ -394,7 +394,7 @@ test('problem bars use plain names and stay highest first', () => {
 })
 
 test('a blank operating system reads as Not reported', () => {
-  const rows = [{ 'AssetDetailsAggV1.os_type': '', 'AssetDetailsAggV1.assetsCount': '1449' }]
+  const rows = [{ 'AssetDetails_ch_agg.os_type': '', 'AssetDetails_ch_agg.assetsCount': '1449' }]
   assert.deepEqual(chartData(OPTIONS, picks('assets', 'os', 'now', 'none', 10), rows, false), [{ name: 'Not reported', value: 1449 }])
 })
 
@@ -402,8 +402,8 @@ test('new assets run over first seen, by week', () => {
   const p = picks('newassets', 'none', '90d', 'week')
   assert.equal(chartKind(p), 'line')
   const rows = [
-    { 'AssetDetailsAggV1.first_seen.week': '2026-09-07T00:00:00.000', 'AssetDetailsAggV1.assetsCount': '37' },
-    { 'AssetDetailsAggV1.first_seen.week': '2026-08-31T00:00:00.000', 'AssetDetailsAggV1.assetsCount': '16' },
+    { 'AssetDetails_ch_agg.first_seen.week': '2026-09-07T00:00:00.000', 'AssetDetails_ch_agg.assetsCount': '37' },
+    { 'AssetDetails_ch_agg.first_seen.week': '2026-08-31T00:00:00.000', 'AssetDetails_ch_agg.assetsCount': '16' },
   ]
   assert.deepEqual(chartData(OPTIONS, p, rows, false).map((d) => d.value), [16, 37])
   assert.equal(sentence(OPTIONS, p, false), 'New assets still held by week, last 90 days')

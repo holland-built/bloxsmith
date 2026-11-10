@@ -75,9 +75,18 @@ func TestNormDtcLbdn(t *testing.T) {
 }
 
 // --- scalar-count status derivation (drives the real s.scalarCount against a
-// fake Cube.js endpoint, directCubeOnlyService, not a hand-copied stand-in) --
+// fake MCP endpoint, not a hand-copied stand-in) ----------------------------
+//
+// scalarCubeQueryText builds the wire body infoblox-portal_query_cube returns
+// on a successful inline scalar query (see internal/mcp.TestQueryCubeInlineScalar
+// for the real shape), carrying one row with the given measure value.
+func scalarCubeQueryText(measure, value string) string {
+	msg := "Query Result: [{'" + measure + "': '" + value + "'}]. If necessary, use query_stored_data tool for further analysis."
+	b, _ := json.Marshal(map[string]string{"message": msg})
+	return string(b)
+}
 
-// scalarCubeServer fakes an MCP endpoint: initialize
+// scalarCubeServer fakes the MCP endpoint scalarCount depends on: initialize
 // always succeeds, and infoblox-portal_query_cube either returns queryText
 // (queryOK) or fails the tool call outright with a transport-level error
 // (!queryOK, mirroring the nil-rows QueryCube returns on any transport/parse
@@ -131,8 +140,8 @@ func scalarCubeServer(t *testing.T, queryText string, queryOK bool) *mcp.Client 
 // TestScalarCount_RealTotal: the cube answers a genuine non-zero total ->
 // status "ok" and the total is carried through.
 func TestScalarCount_RealTotal(t *testing.T) {
-	s := directCubeOnlyService(t, `{"result":{"data":[{"AssetDiscoveryStatusV1.rowCount":"319397"}]}}`)
-	got := s.scalarCount(context.Background(), cubeDiscovery, cubeDiscovery+".rowCount", cubeDiscovery+".updated_at", "unavailable upstream")
+	s := &Service{Mcp: scalarCubeServer(t, scalarCubeQueryText("AssetDiscoveryStatus.count", "319397"), true)}
+	got := s.scalarCount(context.Background(), "AssetDiscoveryStatus", "AssetDiscoveryStatus.count", "unavailable upstream")
 	if got["status"] != "ok" {
 		t.Errorf("status = %v, want ok for a non-zero total", got["status"])
 	}
@@ -151,8 +160,8 @@ func TestScalarCount_RealTotal(t *testing.T) {
 // zero count -> status stays "empty", total 0. A genuine zero must remain
 // legitimate, not get swept into "error".
 func TestScalarCount_GenuineZero(t *testing.T) {
-	s := directCubeOnlyService(t, `{"result":{"data":[{"AssetDiscoveryStatusV1.rowCount":"0"}]}}`)
-	got := s.scalarCount(context.Background(), cubeDiscovery, cubeDiscovery+".rowCount", cubeDiscovery+".updated_at", "unavailable upstream")
+	s := &Service{Mcp: scalarCubeServer(t, scalarCubeQueryText("AssetDiscoveryStatus.count", "0"), true)}
+	got := s.scalarCount(context.Background(), "AssetDiscoveryStatus", "AssetDiscoveryStatus.count", "unavailable upstream")
 	if got["status"] != "empty" {
 		t.Errorf("status = %v, want empty for a genuine zero total", got["status"])
 	}
@@ -166,8 +175,8 @@ func TestScalarCount_GenuineZero(t *testing.T) {
 // returns nil), scalarCount must report "error", never "empty" — a dead
 // lookup is not the same fact as a tenant with zero assets.
 func TestScalarCount_QueryFailureIsNotEmpty(t *testing.T) {
-	s := directCubeOnlyService(t, `{"error":"Query for cube requires a bounded time range"}`)
-	got := s.scalarCount(context.Background(), cubeDiscovery, cubeDiscovery+".rowCount", cubeDiscovery+".updated_at", "unavailable upstream")
+	s := &Service{Mcp: scalarCubeServer(t, "", false)}
+	got := s.scalarCount(context.Background(), "AssetDiscoveryStatus", "AssetDiscoveryStatus.count", "unavailable upstream")
 	if got["status"] != "error" {
 		t.Errorf("status = %v, want error for a failed cube query", got["status"])
 	}
@@ -181,7 +190,7 @@ func TestScalarCount_QueryFailureIsNotEmpty(t *testing.T) {
 // before any query is attempted.
 func TestScalarCount_McpInitFailure(t *testing.T) {
 	s := &Service{}
-	got := s.scalarCount(context.Background(), cubeDiscovery, cubeDiscovery+".rowCount", cubeDiscovery+".updated_at", "unavailable upstream")
+	got := s.scalarCount(context.Background(), "AssetDiscoveryStatus", "AssetDiscoveryStatus.count", "unavailable upstream")
 	if got["status"] != "error" {
 		t.Errorf("status = %v, want error when Mcp is unset", got["status"])
 	}

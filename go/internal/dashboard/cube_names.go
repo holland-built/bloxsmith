@@ -31,56 +31,34 @@ package dashboard
 //	                                        title, severity, status, created_on,       on both. Monthly: 8 months, 219, every
 //	                                        resolved_on                                month equal. Recent: 229 rows identical,
 //	                                                                                   same order.
-//	AssetDetails_ch_agg                     assetsCount; name -> assetName; cqid,      SWITCHED, with two adaptations. V1
-//	  -> AssetDetailsAggV1 (2027-07-23)     taxonomy_type_label, providers_label,      refuses a query with no time range
-//	                                        vendor, last_seen, os, ip_addresses,       ("requires a bounded time range") or
-//	                                        mac_addresses, model, location,            one over 400 days. Every row carries
-//	                                        first_seen, and the chart fields           updated_at, the oldest on 10 Aug (92
-//	    days back), so snapshotWindow (updated_at, the last 365 days up to now) counts every asset: 2,200 on
-//	    both. Second, V1 breaks ties in a sort differently, so the same page held different assets that
-//	    shared a last_seen; the old cube was stable but arbitrary. Every sort now ends on a tie-breaker
-//	    (cqid for the list, the field itself for a top N), and with it on both cubes all 53 Assets-tab
-//	    queries (list pages at 3 offsets x 5 sorts x 2 directions, searches, type filters, the type
-//	    chips, 8 detail reads) and all 114 asset charts (50 "now", 64 "new assets" by first_seen, whose
-//	    own range is enough) returned identical rows.
-//	AssetDiscoveryStatus                    count -> rowCount                          SWITCHED. Needs a time range too;
-//	  -> AssetDiscoveryStatusV1 (2027-07-23)                                           updated_at all within 92 days,
-//	                                                                                   none blank. 16,505 on both.
-//	AssetInsight -> AssetInsightV1          count                                      SWITCHED. Needs a time range;
-//	  (2027-07-23)                                                                     evaluation_time (oldest 27 Oct) gives
-//	    2,954 on both. Not sync_time: on that field the old cube gave 1,975 and V1 2,954, so the field
-//	    means something different between them. Paired runs of both tiles matched 4 of 6 times; the two
-//	    misses were the old cube changing (16,508 and 2,942 once each), and 8 repeat reads of each were
-//	    then steady on both.
+//	AssetDetails_ch_agg                     assetsCount, cqid, name, taxonomy_type_    HOLD. V1 answers 400 to any query
+//	  -> AssetDetailsAggV1 (2027-07-23)     label, providers_label, vendor,            without a time range, and to any range
+//	                                        last_seen, os, ip_addresses, ...           over 400 days: ["2000-01-01",
+//	    "2100-01-01"], an inDateRange or afterDate filter in place of a timeDimension, and
+//	    ["2025-10-06","2026-11-10"] are all refused "exceeds the maximum time range of 400 days";
+//	    ["2025-10-07","2026-11-10"] is the widest accepted. So V1 cannot count a record whose time is
+//	    more than 400 days back, which the old cube counts, and any bound is a silent cutoff later. What
+//	    did match, for the record: with updated_at in "from 365 days ago to now", 2,200 assets on both;
+//	    name -> assetName equal on every row; 53 Assets-tab reads and 114 asset charts identical once
+//	    sorts end on a tie-breaker (V1 orders tied rows differently). Latency median of 4: old 317 ms,
+//	    V1 339 ms. Revisit if Infoblox lifts the 400-day cap or adds an unbounded current-state cube.
+//	AssetDiscoveryStatus                    count                                      HOLD, same 400-day cap. V1 has
+//	  -> AssetDiscoveryStatusV1 (2027-07-23)                                           rowCount for count; on updated_at,
+//	    last 365 days: 16,505 on both. Old 335 ms, V1 373 ms.
+//	AssetInsight -> AssetInsightV1          count                                      HOLD, same 400-day cap. On
+//	  (2027-07-23)                                                                     evaluation_time, last 365 days:
+//	    2,954 on both (sync_time differed: old 1,975, V1 2,954). Old 483 ms, V1 290 ms.
 //	PortunusAggThreat_ch (security service) requests, action, timestamp, tclass,       HOLD. No successor on the security
 //	  -> none there; ThreatAggV1 on the     policy_name, severity                      service. Retiring only on the main
 //	  main service                                                                     service (sunset 2028-09-25).
 //	TokenUtilProtoSrvIQMonthly              tokens, category, timestamp                NOT RETIRING. No change.
-//
-// The time-bounded V1 queries go only to the Cube.js endpoint
-// (QueryCubeDirectOnlyErr), never to the MCP fallback: its query_cube tool
-// cuts a range to 30 days (threatintel.go), which would quietly count fewer
-// assets.
 const (
-	cubeDHCP      = "DhcpLeaseActivityV1"
-	cubeHost      = "HostMetricsV1"
-	cubeActions   = "ActionsV1"
-	cubeAssets    = "AssetDetailsAggV1"
-	cubeDiscovery = "AssetDiscoveryStatusV1"
-	cubeInsight   = "AssetInsightV1"
+	cubeDHCP    = "DhcpLeaseActivityV1"
+	cubeHost    = "HostMetricsV1"
+	cubeActions = "ActionsV1"
+	// Held on the old name (see the table): one row per asset Infoblox holds now.
+	cubeAssets = "AssetDetails_ch_agg"
 )
-
-// snapshotRange is the time range a V1 snapshot cube must be given. It runs to
-// now, and 365 days stays under the 400-day cap while reaching far past the
-// oldest row seen (92 days).
-const snapshotRange = "from 365 days ago to now"
-
-// snapshotWindow is the time range for a snapshot read on field, fresh each
-// call. It is in the Mcp.QueryCube option shape (internal/mcp turns
-// time_dimensions into timeDimensions).
-func snapshotWindow(field string) []map[string]any {
-	return []map[string]any{{"dimension": field, "dateRange": snapshotRange}}
-}
 
 // hostTier is the filter that makes HostMetricsV1 read the stored rows of
 // step ("hour" or "day"), as the old cube did when asked for that step.

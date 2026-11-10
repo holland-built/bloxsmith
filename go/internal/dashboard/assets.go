@@ -69,7 +69,7 @@ import (
 )
 
 const (
-	assetsCube = cubeAssets
+	assetsCube = "AssetDetails_ch_agg"
 	// assetsMeasure counts ASSETS, not rows. Both were 2,620 on the probe, so
 	// they agree at the unfiltered top level; they are not the same thing once
 	// a filter narrows the set, and "how many assets match" is the question a
@@ -92,15 +92,11 @@ const (
 	assetQueryMax = 256
 )
 
-// assetsWindow is the time range every assetsCube read carries: V1 refuses a
-// query without one (cube_names.go).
-func assetsWindow() []map[string]any { return snapshotWindow(assetsCube + ".updated_at") }
-
 // assetListDims is EXACTLY six — the guardrail ceiling — and every slot is
 // spent on purpose:
 //
 //	cqid                  the grain. Without it rows collapse (see file doc).
-//	assetName             what an operator searches by (the old cube's name). 84.4% filled.
+//	name                  what an operator searches by. 84.4% filled.
 //	taxonomy_type_label   the filter facet. 100% filled.
 //	providers_label       where the asset was discovered. 100% filled.
 //	vendor                81.1% filled.
@@ -110,7 +106,7 @@ func assetsWindow() []map[string]any { return snapshotWindow(assetsCube + ".upda
 // worth showing goes in assetDetailDims.
 var assetListDims = []string{
 	assetsCube + ".cqid",
-	assetsCube + ".assetName",
+	assetsCube + ".name",
 	assetsCube + ".taxonomy_type_label",
 	assetsCube + ".providers_label",
 	assetsCube + ".vendor",
@@ -139,7 +135,7 @@ var assetDetailDims = []string{
 // The keys are the UI's column names, not the cube's dimension names, so the
 // wire contract does not leak the cube's schema into the browser.
 var assetSortDims = map[string]string{
-	"name":      assetsCube + ".assetName",
+	"name":      assetsCube + ".name",
 	"type":      assetsCube + ".taxonomy_type_label",
 	"provider":  assetsCube + ".providers_label",
 	"vendor":    assetsCube + ".vendor",
@@ -223,7 +219,7 @@ func assetFilters(aq AssetQuery) []map[string]any {
 		// nested `or` group that was never probed, so it is not guessed at
 		// here. Search means "by name" until an OR group is measured.
 		out = append(out, map[string]any{
-			"member": assetsCube + ".assetName", "operator": "contains", "values": []string{aq.Q},
+			"member": assetsCube + ".name", "operator": "contains", "values": []string{aq.Q},
 		})
 	}
 	if aq.Type != "" {
@@ -310,14 +306,11 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	}
 	filters := assetFilters(aq)
 
-	// cqid breaks ties, so assets that share a last_seen land on the same page
-	// every time (cube_names.go).
 	listOpts := map[string]any{
-		"dimensions":      assetListDims,
-		"order":           cubeOrder{{assetSortDims[aq.Sort], aq.Dir}, {assetsCube + ".cqid", "asc"}},
-		"limit":           assetsPageSize,
-		"offset":          aq.Page * assetsPageSize,
-		"time_dimensions": assetsWindow(),
+		"dimensions": assetListDims,
+		"order":      map[string]any{assetSortDims[aq.Sort]: aq.Dir},
+		"limit":      assetsPageSize,
+		"offset":     aq.Page * assetsPageSize,
 	}
 	if filters != nil {
 		listOpts["filters"] = filters
@@ -325,7 +318,7 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	// The total is a SEPARATE measures-only query, not a number derived from
 	// the page. A page can only ever tell you about its own 50 rows; the
 	// header says "N assets", which is a claim about the whole filtered set.
-	countOpts := map[string]any{"time_dimensions": assetsWindow()}
+	countOpts := map[string]any{}
 	if filters != nil {
 		countOpts["filters"] = filters
 	}
@@ -351,10 +344,8 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	var listRows, countRows []map[string]any
 	var listErr error
 	if fanOut(2,
-		func() {
-			listRows, listErr = s.Mcp.QueryCubeDirectOnlyErr(ctx, assetsCube, []string{assetsMeasure}, listOpts)
-		},
-		func() { countRows = s.Mcp.QueryCubeDirectOnly(ctx, assetsCube, []string{assetsMeasure}, countOpts) },
+		func() { listRows, listErr = s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, listOpts) },
+		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, countOpts) },
 	) > 0 {
 		return assetsUnavailable(aq, errTaskPanicked.Error())
 	}
@@ -576,7 +567,7 @@ func normAssetRows(rows []map[string]any) []any {
 		r := flattenCubeRow(raw)
 		out = append(out, map[string]any{
 			"cqid":      orStr(r["cqid"], ""),
-			"name":      orStr(r["assetName"], ""),
+			"name":      orStr(r["name"], ""),
 			"type":      orStr(r["taxonomy_type_label"], ""),
 			"provider":  cubeList(r["providers_label"]),
 			"vendor":    orStr(r["vendor"], ""),
@@ -633,17 +624,13 @@ func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
 	var typeErr error
 	if fanOut(2,
 		func() {
-			typeRows, typeErr = s.Mcp.QueryCubeDirectOnlyErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
-				"dimensions":      []string{assetsCube + ".taxonomy_type_label"},
-				"order":           cubeOrder{{assetsMeasure, "desc"}, {assetsCube + ".taxonomy_type_label", "asc"}},
-				"limit":           assetTypeLimit,
-				"time_dimensions": assetsWindow(),
+			typeRows, typeErr = s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
+				"dimensions": []string{assetsCube + ".taxonomy_type_label"},
+				"order":      map[string]any{assetsMeasure: "desc"},
+				"limit":      assetTypeLimit,
 			})
 		},
-		func() {
-			countRows = s.Mcp.QueryCubeDirectOnly(ctx, assetsCube, []string{assetsMeasure},
-				map[string]any{"time_dimensions": assetsWindow()})
-		},
+		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{}) },
 	) > 0 {
 		return assetFiltersUnavailable(errTaskPanicked.Error())
 	}
@@ -735,13 +722,12 @@ func (s *Service) assetDetailUncached(ctx context.Context, cqid string) map[stri
 	if s.Mcp == nil {
 		return assetDetailUnavailable("the MCP session to Infoblox could not be opened")
 	}
-	rows, err := s.Mcp.QueryCubeDirectOnlyErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
+	rows, err := s.Mcp.QueryCubeErr(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
 		"dimensions": assetDetailDims,
 		"filters": []map[string]any{{
 			"member": assetsCube + ".cqid", "operator": "equals", "values": []string{cqid},
 		}},
-		"limit":           1,
-		"time_dimensions": assetsWindow(),
+		"limit": 1,
 	})
 	if r := mcp.Reason(err); rows == nil && r != "" {
 		return assetDetailUnavailable(r)

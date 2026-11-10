@@ -1,10 +1,5 @@
 package dashboard
 
-import (
-	"bytes"
-	"encoding/json"
-)
-
 // cubeGet runs one Cube.js query against endpoint.
 //
 // A query for the security service (cubeSecurityEndpoint) that it refuses or
@@ -28,27 +23,4 @@ func (s *Service) cubeGet(endpoint string, qj []byte) (any, int, error) {
 		return body, st, err
 	}
 	return b2, st2, err2
-}
-
-// cubeOrder is a Cube.js "order" whose keys keep their order. A Go map would
-// be marshalled with its keys sorted, which can put a tie-breaker first; the
-// endpoint refuses the array form ("unable to process query", seen live on
-// 2026-11-10), so this writes the object form in the order given.
-type cubeOrder [][2]string
-
-func (o cubeOrder) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	b.WriteByte('{')
-	for i, kv := range o {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		k, _ := json.Marshal(kv[0])
-		v, _ := json.Marshal(kv[1])
-		b.Write(k)
-		b.WriteByte(':')
-		b.Write(v)
-	}
-	b.WriteByte('}')
-	return b.Bytes(), nil
 }

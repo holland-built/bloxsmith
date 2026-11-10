@@ -63,12 +63,6 @@ type chartCount struct {
 	// chart by hour or by day must read that step's stored rows (hostTier),
 	// or V1 averages other rows into different numbers (cube_names.go).
 	Tiered bool
-	// Bound: a snapshot cube that refuses a query without a time range; the
-	// field snapshotWindow bounds.
-	Bound string
-	// TieBreak: a top N ends its order on the split field, so values with the
-	// same count come back in one order (cube_names.go).
-	TieBreak bool
 	// Time is the time dimension windows and over-time apply to; "" is
 	// "timestamp", the activity cubes' event time.
 	Time string
@@ -141,12 +135,11 @@ var chartCatalog = struct {
 		{ID: "dhcp", Name: "DHCP lease changes", Cube: cubeDHCP, Measure: cubeDHCP + ".total_count",
 			Endpoint: cubeEndpoint, Splits: []string{"leaseop", "none"}},
 		{ID: "assets", Name: "Assets", Cube: cubeAssets, Measure: cubeAssets + ".assetsCount",
-			Endpoint: cubeEndpoint, Snapshot: true, Bound: "updated_at", TieBreak: true,
-			Splits: assetSplits("problem", "missing")},
+			Endpoint: cubeEndpoint, Snapshot: true, Splits: assetSplits("problem", "missing")},
 		// Counted by when each asset was first seen. Only assets Infoblox still
 		// holds are counted: one removed since is gone from the cube.
 		{ID: "newassets", Name: "New assets still held", Cube: cubeAssets, Measure: cubeAssets + ".assetsCount",
-			Endpoint: cubeEndpoint, Time: "first_seen", TieBreak: true, Splits: assetSplits()},
+			Endpoint: cubeEndpoint, Time: "first_seen", Splits: assetSplits()},
 	},
 	Splits: []chartChoice{
 		{ID: "device", Name: "Device", Plural: "devices", Fields: []string{cubeDNS + ".device_name", cubeDNS + ".device_ip"}},
@@ -242,7 +235,6 @@ var chartCatalog = struct {
 		cubeAssets:                                    "Assets",
 		cubeAssets + ".assetsCount":                   "Assets",
 		cubeAssets + ".first_seen":                    "First seen",
-		cubeAssets + ".updated_at":                    "Last updated",
 		cubeAssets + ".taxonomy_type_label":           "Asset type",
 		cubeAssets + ".taxonomy_super_category_label": "Category",
 		cubeAssets + ".os_type":                       "Operating system",
@@ -377,8 +369,6 @@ func BuildChartQuery(p ChartPicks) (map[string]any, string, error) {
 			td["granularity"] = over.Value
 		}
 		q["timeDimensions"] = []map[string]any{td}
-	} else if count.Bound != "" {
-		q["timeDimensions"] = snapshotWindow(count.Cube + "." + count.Bound)
 	}
 	// A bucket split adds a filter per bucket in RunChart, not a dimension.
 	if len(split.Fields) > 0 && len(split.Buckets) == 0 {
@@ -399,23 +389,10 @@ func BuildChartQuery(p ChartPicks) (map[string]any, string, error) {
 		q["filters"] = filters
 	}
 	if p.Top > 0 {
-		q["order"] = topOrder(*count, split.Fields)
+		q["order"] = map[string]any{count.Measure: "desc"}
 		q["limit"] = p.Top
 	}
 	return q, count.Endpoint, nil
-}
-
-// topOrder is a top N's order: the count, highest first, then for a TieBreak
-// count the split's fields, so equal counts are cut and listed the same way
-// every time.
-func topOrder(count chartCount, fields []string) cubeOrder {
-	o := cubeOrder{{count.Measure, "desc"}}
-	if count.TieBreak {
-		for _, f := range fields {
-			o = append(o, [2]string{f, "asc"})
-		}
-	}
-	return o
 }
 
 // onlyFilter is the "Only show" filter as a Cube filter, or why it can't be one.
@@ -469,13 +446,11 @@ func (s *Service) ChartValues(ctx context.Context, countID, only, windowID strin
 	q := map[string]any{
 		"measures":   []string{count.Measure},
 		"dimensions": field.Fields[:1],
-		"order":      topOrder(*count, field.Fields[:1]),
+		"order":      map[string]any{count.Measure: "desc"},
 		"limit":      chartValuesMax,
 	}
 	if !count.Snapshot {
 		q["timeDimensions"] = []map[string]any{{"dimension": count.timeField(), "dateRange": window.Value}}
-	} else if count.Bound != "" {
-		q["timeDimensions"] = snapshotWindow(count.Cube + "." + count.Bound)
 	}
 	if len(count.Filters) > 0 {
 		q["filters"] = count.Filters

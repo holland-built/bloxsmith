@@ -15,13 +15,11 @@ import (
 	"bloxsmith/internal/mcp"
 )
 
-// These pin the V1 queries cube_names.go records as matching the old cubes
-// live. Each one checks the part that made the numbers match, not only the
-// cube name.
+// These pin the cube decisions cube_names.go records from live checks: the V1
+// queries that matched, and the asset cubes held on their old names.
 
 // recordingCubeService answers every direct Cube.js query with body and keeps
-// the query text it was sent. It counts MCP calls, which must stay at zero:
-// the MCP would cut a time range to 30 days.
+// the query text it was sent. It also counts calls that reach the MCP.
 func recordingCubeService(t *testing.T, body string) (*Service, func() []string, *atomic.Int32) {
 	t.Helper()
 	var mu sync.Mutex
@@ -49,91 +47,46 @@ func recordingCubeService(t *testing.T, body string) (*Service, func() []string,
 	return s, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string{}, seen...) }, &mcpCalls
 }
 
-const assetsRange = `"timeDimensions":[{"dateRange":"from 365 days ago to now","dimension":"AssetDetailsAggV1.updated_at"}]`
-
-func TestAssetReads_AskV1WithARangeAndATieBreaker(t *testing.T) {
+// The three asset cubes stay on their old names with no time range: V1 caps a
+// range at 400 days, so any bound would quietly drop older records
+// (cube_names.go). These pin that no read slips a range or a V1 name back in.
+func TestAssetCubes_HeldUnboundedOnTheOldNames(t *testing.T) {
 	ctx := context.Background()
-
-	s, seen, mcpCalls := recordingCubeService(t, `{"result":{"data":[]}}`)
+	s, seen, _ := recordingCubeService(t, `{"result":{"data":[]}}`)
 	s.assetInventoryUncached(ctx, normalizeAssetQuery("vm", "", "", "", 1))
-	got := strings.Join(seen(), "\n")
-	for _, want := range []string{
-		// The list: assetName (V1's name), the last_seen sort then cqid, page 2.
-		`"dimensions":["AssetDetailsAggV1.cqid","AssetDetailsAggV1.assetName","AssetDetailsAggV1.taxonomy_type_label","AssetDetailsAggV1.providers_label","AssetDetailsAggV1.vendor","AssetDetailsAggV1.last_seen"]`,
-		`"order":{"AssetDetailsAggV1.last_seen":"desc","AssetDetailsAggV1.cqid":"asc"}`,
-		`"offset":50`,
-		`{"member":"AssetDetailsAggV1.assetName","operator":"contains","values":["vm"]}`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("list query lacks %s\nsent:\n%s", want, got)
-		}
-	}
-	if n := strings.Count(got, assetsRange); n != 2 {
-		t.Errorf("want the snapshot range on both the list and the count, found it %d times in:\n%s", n, got)
-	}
-
-	s, seen, _ = recordingCubeService(t, `{"result":{"data":[]}}`)
 	s.assetFiltersUncached(ctx)
-	got = strings.Join(seen(), "\n")
-	if !strings.Contains(got, `"order":{"AssetDetailsAggV1.assetsCount":"desc","AssetDetailsAggV1.taxonomy_type_label":"asc"}`) ||
-		strings.Count(got, assetsRange) != 2 {
-		t.Errorf("type chips: want count desc then label asc, and the range on both reads; sent:\n%s", got)
-	}
-
-	s, seen, _ = recordingCubeService(t, `{"result":{"data":[]}}`)
 	s.assetDetailUncached(ctx, "cq-1")
-	if got = strings.Join(seen(), "\n"); !strings.Contains(got, assetsRange) {
-		t.Errorf("detail read lacks the snapshot range; sent:\n%s", got)
+	s.CSPDiscoveryStatus(ctx)
+	s.CSPAssetInsights(ctx)
+	got := seen()
+	if len(got) != 7 {
+		t.Fatalf("want 7 reads (list, count, chips, count, detail, two tiles), got %d:\n%s", len(got), strings.Join(got, "\n"))
 	}
-
-	if mcpCalls.Load() != 0 {
-		t.Errorf("an asset read went to the MCP %d times", mcpCalls.Load())
+	for _, q := range got {
+		if strings.Contains(q, "timeDimensions") || strings.Contains(q, "V1.") {
+			t.Errorf("asset read carries a time range or a V1 cube: %s", q)
+		}
 	}
-}
-
-// A refused V1 query (no range, say) must not be retried on the MCP, whose
-// answer to a time-bounded query covers only 30 days.
-func TestAssetReads_DoNotFallBackToTheMCP(t *testing.T) {
-	s, _, mcpCalls := recordingCubeService(t, `{"error":"requires a bounded time range"}`)
-	got := s.assetInventoryUncached(context.Background(), defaultQuery())
-	if got["availability"] != "error" {
-		t.Errorf("availability = %v, want error", got["availability"])
-	}
-	if mcpCalls.Load() != 0 {
-		t.Errorf("fell back to the MCP %d times", mcpCalls.Load())
-	}
-}
-
-func TestAssetRows_ReadAssetName(t *testing.T) {
-	rows := normAssetRows([]map[string]any{{"AssetDetailsAggV1.cqid": "c1", "AssetDetailsAggV1.assetName": "host-a"}})
-	if n := rows[0].(map[string]any)["name"]; n != "host-a" {
-		t.Errorf("name = %v, want host-a from assetName", n)
-	}
-}
-
-func TestScalarTiles_AskV1WithTheirRange(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		call func(*Service) map[string]any
-		want string
-	}{
-		{"discovery status", func(s *Service) map[string]any { return s.CSPDiscoveryStatus(context.Background()) },
-			`{"measures":["AssetDiscoveryStatusV1.rowCount"],"timeDimensions":[{"dateRange":"from 365 days ago to now","dimension":"AssetDiscoveryStatusV1.updated_at"}]}`},
-		// evaluation_time, not sync_time: sync_time counted differently on V1.
-		{"asset insights", func(s *Service) map[string]any { return s.CSPAssetInsights(context.Background()) },
-			`{"measures":["AssetInsightV1.count"],"timeDimensions":[{"dateRange":"from 365 days ago to now","dimension":"AssetInsightV1.evaluation_time"}]}`},
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{
+		`"measures":["AssetDiscoveryStatus.count"]`,
+		`"measures":["AssetInsight.count"]`,
+		`"AssetDetails_ch_agg.name"`,
 	} {
-		s, seen, mcpCalls := recordingCubeService(t,
-			`{"result":{"data":[{"AssetDiscoveryStatusV1.rowCount":"16505","AssetInsightV1.count":"2954"}]}}`)
-		res := c.call(s)
-		if q := seen(); len(q) != 1 || q[0] != c.want {
-			t.Errorf("%s: sent %v\nwant %s", c.name, q, c.want)
+		if !strings.Contains(joined, want) {
+			t.Errorf("no read has %s:\n%s", want, joined)
 		}
-		if res["status"] != "ok" || (res["total"] != 16505 && res["total"] != 2954) {
-			t.Errorf("%s: got %v", c.name, res)
+	}
+	for _, p := range []ChartPicks{
+		{Count: "assets", Split: "vendor", Window: "now", Over: "none", Top: 10},
+		{Count: "assets", Split: "none", Window: "now", Over: "none"},
+	} {
+		q, _, err := BuildChartQuery(p)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if mcpCalls.Load() != 0 {
-			t.Errorf("%s: went to the MCP", c.name)
+		if b, _ := json.Marshal(q); strings.Contains(string(b), "timeDimensions") || !strings.Contains(string(b), `"AssetDetails_ch_agg.assetsCount"`) {
+			t.Errorf("%+v: %s", p, b)
 		}
 	}
 }
@@ -178,27 +131,5 @@ func TestBuildChartQuery_QPSReadsTheStoredStepItDraws(t *testing.T) {
 			(c.step != "" && !strings.Contains(string(b), tier)) {
 			t.Errorf("%s by %s: filters = %s, want step %q", c.window, c.over, b, c.step)
 		}
-	}
-}
-
-// New assets are windowed on first_seen, which V1 accepts on its own; the
-// snapshot range is only for "now".
-func TestBuildChartQuery_NewAssetsKeepTheirOwnRangeAndATieBreaker(t *testing.T) {
-	q, _, err := BuildChartQuery(ChartPicks{Count: "newassets", Split: "vendor", Window: "30d", Over: "none", Top: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := `{"dimensions":["AssetDetailsAggV1.vendor"],"limit":10,"measures":["AssetDetailsAggV1.assetsCount"],` +
-		`"order":{"AssetDetailsAggV1.assetsCount":"desc","AssetDetailsAggV1.vendor":"asc"},` +
-		`"timeDimensions":[{"dateRange":"last 30 days","dimension":"AssetDetailsAggV1.first_seen"}]}`
-	if b, _ := json.Marshal(q); string(b) != want {
-		t.Errorf("sent %s\nwant %s", b, want)
-	}
-}
-
-func TestCubeOrder_KeepsItsOrder(t *testing.T) {
-	b, _ := json.Marshal(cubeOrder{{"X.last_seen", "desc"}, {"X.cqid", "asc"}})
-	if string(b) != `{"X.last_seen":"desc","X.cqid":"asc"}` {
-		t.Errorf("got %s", b)
 	}
 }

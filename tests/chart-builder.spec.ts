@@ -191,8 +191,8 @@ test('assets count what Infoblox holds now, and problems are one bar each', asyn
         endpoint: '/api/cubejs/v1/query',
         query: [],
         rows: [
-          { 'AssetDetailsAggV1.insight_classifications_label': 'Noncompliant', 'AssetDetailsAggV1.assetsCount': '536' },
-          { 'AssetDetailsAggV1.insight_classifications_label': 'Zombie', 'AssetDetailsAggV1.assetsCount': '98' },
+          { 'AssetDetails_ch_agg.insight_classifications_label': 'Noncompliant', 'AssetDetails_ch_agg.assetsCount': '536' },
+          { 'AssetDetails_ch_agg.insight_classifications_label': 'Zombie', 'AssetDetails_ch_agg.assetsCount': '98' },
         ],
       },
     }),

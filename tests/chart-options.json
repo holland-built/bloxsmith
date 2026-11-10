@@ -3015,38 +3015,37 @@
       "time": "DhcpLeaseActivityV1.timestamp"
     },
     {
-      "cube": "AssetDetailsAggV1",
+      "cube": "AssetDetails_ch_agg",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "assets",
-      "measure": "AssetDetailsAggV1.assetsCount",
+      "measure": "AssetDetails_ch_agg.assetsCount",
       "name": "Assets",
-      "time": "AssetDetailsAggV1.timestamp"
+      "time": "AssetDetails_ch_agg.timestamp"
     },
     {
-      "cube": "AssetDetailsAggV1",
+      "cube": "AssetDetails_ch_agg",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "newassets",
-      "measure": "AssetDetailsAggV1.assetsCount",
+      "measure": "AssetDetails_ch_agg.assetsCount",
       "name": "New assets still held",
-      "time": "AssetDetailsAggV1.first_seen"
+      "time": "AssetDetails_ch_agg.first_seen"
     }
   ],
   "names": {
-    "AssetDetailsAggV1": "Assets",
-    "AssetDetailsAggV1.assetsCount": "Assets",
-    "AssetDetailsAggV1.deploymentContext": "Cloud or on-premises",
-    "AssetDetailsAggV1.first_seen": "First seen",
-    "AssetDetailsAggV1.insight_classifications_label": "Problem",
-    "AssetDetailsAggV1.insight_indicators_label": "Missing record",
-    "AssetDetailsAggV1.os_type": "Operating system",
-    "AssetDetailsAggV1.provider_label": "Found by",
-    "AssetDetailsAggV1.region_label": "Region",
-    "AssetDetailsAggV1.taxonomy_super_category_label": "Category",
-    "AssetDetailsAggV1.taxonomy_type_label": "Asset type",
-    "AssetDetailsAggV1.updated_at": "Last updated",
-    "AssetDetailsAggV1.vendor": "Vendor",
+    "AssetDetails_ch_agg": "Assets",
+    "AssetDetails_ch_agg.assetsCount": "Assets",
+    "AssetDetails_ch_agg.deploymentContext": "Cloud or on-premises",
+    "AssetDetails_ch_agg.first_seen": "First seen",
+    "AssetDetails_ch_agg.insight_classifications_label": "Problem",
+    "AssetDetails_ch_agg.insight_indicators_label": "Missing record",
+    "AssetDetails_ch_agg.os_type": "Operating system",
+    "AssetDetails_ch_agg.provider_label": "Found by",
+    "AssetDetails_ch_agg.region_label": "Region",
+    "AssetDetails_ch_agg.taxonomy_super_category_label": "Category",
+    "AssetDetails_ch_agg.taxonomy_type_label": "Asset type",
+    "AssetDetails_ch_agg.vendor": "Vendor",
     "DhcpLeaseActivityV1": "DHCP lease activity",
     "DhcpLeaseActivityV1.lease_op": "What changed",
     "DhcpLeaseActivityV1.timestamp": "Time",
@@ -3345,7 +3344,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.taxonomy_type_label"
+        "AssetDetails_ch_agg.taxonomy_type_label"
       ],
       "id": "atype",
       "name": "Asset type",
@@ -3359,7 +3358,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.taxonomy_super_category_label"
+        "AssetDetails_ch_agg.taxonomy_super_category_label"
       ],
       "id": "acat",
       "name": "Category",
@@ -3369,7 +3368,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.os_type"
+        "AssetDetails_ch_agg.os_type"
       ],
       "id": "os",
       "name": "Operating system",
@@ -3383,7 +3382,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.provider_label"
+        "AssetDetails_ch_agg.provider_label"
       ],
       "id": "source",
       "name": "Found by",
@@ -3397,7 +3396,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.deploymentContext"
+        "AssetDetails_ch_agg.deploymentContext"
       ],
       "id": "where",
       "name": "Cloud or on-premises",
@@ -3411,7 +3410,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.vendor"
+        "AssetDetails_ch_agg.vendor"
       ],
       "id": "vendor",
       "name": "Vendor",
@@ -3425,7 +3424,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetailsAggV1.region_label"
+        "AssetDetails_ch_agg.region_label"
       ],
       "id": "region",
       "name": "Region",
@@ -3440,7 +3439,7 @@
         "Lifecycle"
       ],
       "fields": [
-        "AssetDetailsAggV1.insight_classifications_label"
+        "AssetDetails_ch_agg.insight_classifications_label"
       ],
       "id": "problem",
       "name": "Problem",
@@ -3458,7 +3457,7 @@
         "IPAM"
       ],
       "fields": [
-        "AssetDetailsAggV1.insight_indicators_label"
+        "AssetDetails_ch_agg.insight_indicators_label"
       ],
       "id": "missing",
       "name": "Missing record",
@@ -3484,18 +3483,18 @@
     25
   ],
   "values": {
-    "AssetDetailsAggV1.deploymentContext": {
+    "AssetDetails_ch_agg.deploymentContext": {
       "Onprem": "On-premises"
     },
-    "AssetDetailsAggV1.insight_indicators_label": {
+    "AssetDetails_ch_agg.insight_indicators_label": {
       "DNS Forward Record": "DNS name (forward record)",
       "DNS Pointer Record": "Reverse DNS (pointer record)",
       "IPAM": "IPAM record"
     },
-    "AssetDetailsAggV1.os_type": {
+    "AssetDetails_ch_agg.os_type": {
       "": "Not reported"
     },
-    "AssetDetailsAggV1.vendor": {
+    "AssetDetails_ch_agg.vendor": {
       "": "Not reported"
     },
     "DnsActivityV1.rcode": {

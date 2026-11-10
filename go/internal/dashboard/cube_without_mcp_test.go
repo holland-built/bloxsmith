@@ -34,7 +34,7 @@ func TestCubePanelsDoNotNeedTheMCPSession(t *testing.T) {
 
 	t.Run("scalar count", func(t *testing.T) {
 		s := directCubeOnlyService(t, `{"result":{"data":[{"Assets.n":"7"}]}}`)
-		got := s.scalarCount(ctx, "Assets", "Assets.n", "Assets.t", "note")
+		got := s.scalarCount(ctx, "Assets", "Assets.n", "note")
 		if got["status"] != "ok" || got["total"] != 7 {
 			t.Errorf("want status ok and total 7, got %v", got)
 		}
