@@ -111,7 +111,8 @@ test.describe('Exposures panel — total vs sample caption', () => {
       }),
     );
     await page.goto('/#security');
-    const card = page.locator('text=Exposures').first().locator('..').locator('..');
+    // By panel id: the headline row above the grid also says "Exposures".
+    const card = page.locator('[data-panel-id="security-exposures"]');
     await expect(card.getByText('121,957 total')).toBeVisible();
     await expect(card.getByText(/of 121,957, upstream order/i)).toBeVisible();
     // caption must say NOT ranked by severity, never imply these rows are the worst
