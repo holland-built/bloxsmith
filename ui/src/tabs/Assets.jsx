@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
+import { UNCLASSIFIED, parseSeen, rankTypes, seenAgo, shareText, typeTotal, unclassifiedCount } from '../lib/assetTypes.js'
+import { setHashParams, useHashParams } from '../lib/hash.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import './Assets.css'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
 // discovery found. Until this existed, asset data appeared only as scalar
@@ -40,13 +43,13 @@ function buildUrl({ q, type, sort, dir, page }) {
   return `/api/csp/assets?${p.toString()}`
 }
 
-function fmtSeen(v) {
-  if (!v) return '—'
-  // Cube.js sends UTC with no zone ("2026-10-30T17:58:25.000"). new Date()
-  // reads a zoneless date-time as local time, which put Last seen hours ahead.
-  const s = String(v)
-  const d = new Date(/T\d\d:\d\d(:\d\d(\.\d+)?)?$/.test(s) ? `${s}Z` : s)
-  return isNaN(d) ? String(v) : d.toLocaleString()
+// Last seen as an age ("8h ago"), with the exact local time in its tip. The
+// full date-time was cut off in the column at most widths.
+function seenCell(v) {
+  if (!v) return <span>—</span>
+  const d = parseSeen(v)
+  if (!d) return <span>{String(v)}</span>
+  return <span className="whitespace-nowrap" title={d.toLocaleString()}>{seenAgo(v)}</span>
 }
 
 // A cell that shows the value it has and an em-dash where it has none. The
@@ -64,7 +67,12 @@ export default function Assets() {
   // matched nothing", which are different things to put on screen.
   const [input, setInput] = useState('')
   const [q, setQ] = useState('')
-  const [type, setType] = useState('')
+  // The type filter lives in the address (#assets?type=Unclassified), so the
+  // Unclassified tile at the top is a plain link to "show them", and a
+  // filtered view can be shared or bookmarked.
+  const hp = useHashParams()
+  const type = hp.type ?? ''
+  const setType = (t) => setHashParams('assets', { type: t })
   const [sort, setSort] = useState({ key: 'last_seen', dir: 'desc' })
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState(null)
@@ -117,7 +125,7 @@ export default function Assets() {
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Assets</h1>
       <TabIntro>Every asset discovery found: search by name, filter by type, or click a row for more.</TabIntro>
-      <HeadlineStrip label="Headline numbers" items={headlines(filters)} />
+      <HeadlineStrip label="Headline numbers" items={headlines(filters, type)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -166,34 +174,62 @@ export default function Assets() {
   )
 }
 
-// ---------- filter bar: total + type chips ----------
+// ---------- filter bar: search + the types, largest first ----------
 
 // The default view is deliberately NOT a blank table waiting for a search.
-// It is the real total and the type chips, so the first thing on screen tells
-// you the size and shape of the estate — and every chip is a one-click way to
-// ask a question, which a search box the operator has to guess at is not.
-// The counts across the top, from the filter feed: the whole inventory, not
-// the searched or filtered list, so both jump to the filter panel that prints
-// the same total. A feed that is down or loading is a dash, never zero.
-function headlines(filters) {
+// It is the types this tenant has, largest first with each one's share, so the
+// first thing on screen tells you the size and shape of what was found — and
+// every row is a one-click way to ask a question, which a search box the
+// operator has to guess at is not.
+//
+// The counts across the top come from the filter feed: the whole inventory,
+// not the searched or filtered list. A feed that is down or loading is a dash,
+// never zero. Unclassified is a tile of its own because it is the gap on this
+// page: assets discovery found and could not name (29% of them on the live
+// tenant in the 2026-11 review, shown then as one grey chip among 37). The
+// total is printed here only, not again in the panel below.
+function headlines(filters, type) {
   const d = filters.data
   const ok = !filters.loading && !filters.error && d?.availability !== 'error'
+  const total = ok ? typeTotal(d) : null
+  const unc = ok ? unclassifiedCount(d) : null
+  const share = unc != null ? shareText(unc, total) : ''
   return [
     { panelId: 'assets-filter-bar', label: 'Assets', value: ok && typeof d?.total === 'number' ? d.total.toLocaleString() : null },
+    {
+      panelId: 'assets-filter-bar',
+      label: 'Unclassified',
+      value: unc != null ? unc.toLocaleString() : null,
+      note: share ? `${share} of all` : undefined,
+      tone: unc > 0 ? 'warn' : undefined,
+      // A link that shows them, unless they are already shown (then the tile
+      // jumps to the list like the others).
+      href: unc > 0 && type !== UNCLASSIFIED ? `#assets?type=${encodeURIComponent(UNCLASSIFIED)}` : undefined,
+    },
     { panelId: 'assets-filter-bar', label: 'Asset types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null },
   ]
 }
 
+// How many types show before "+N more". Eight covered 90% of the live
+// tenant's assets in the 2026-11 review; the rest were a long tail of ones.
+const TOP_TYPES = 8
+
 function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, searched, onRefresh, busy, panelId }) {
   const { COLORS } = useChartTheme()
+  const [showAll, setShowAll] = useState(false)
   const d = filters.data
   // Two separate failure sources, and they must both land in the same state:
   // filters.error is the fetch itself dying (network, timeout, non-2xx), and
   // availability === 'error' is the server saying the upstream read failed.
-  // Checking only one of them leaves the other rendering as an empty chip row,
+  // Checking only one of them leaves the other rendering as an empty list,
   // which reads as "this tenant has no asset types".
   const unavailable = !!filters.error || d?.availability === 'error'
   const types = d?.types ?? []
+  const total = typeTotal(d)
+  const ranked = rankTypes(types, total, { top: TOP_TYPES, active: type })
+  const rows = showAll ? ranked.all : ranked.shown
+  const biggest = Math.max(0, ...ranked.all.map((t) => (typeof t.count === 'number' ? t.count : 0)))
+  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
 
   return (
     <Card
@@ -213,28 +249,20 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
             className={`${FIELD_CLS} min-w-0 w-full sm:w-[220px]`}
           />
+          {/* Search is the one filled button: the thing this row is for. */}
           <button
             type="button"
             onClick={onSearch}
-            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy"
+            className="px-2.5 py-1.5 rounded-control border border-accent bg-accent text-on-accent text-copy font-medium"
           >
             Search
           </button>
           {searched && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="px-2.5 py-1.5 rounded-control border border-border bg-field text-dim text-copy"
-            >
+            <button type="button" onClick={onClear} className={btn}>
               Clear
             </button>
           )}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={busy}
-            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy disabled:opacity-40"
-          >
+          <button type="button" onClick={onRefresh} disabled={busy} className={`${btn} disabled:opacity-40`}>
             {busy ? 'Loading…' : 'Refresh'}
           </button>
         </div>
@@ -245,56 +273,56 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       ) : unavailable ? (
         <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter feed unavailable" onRetry={() => filters.refetch()} />
       ) : (
-        <>
-          <div className="mb-2">
-            {/* total === null is a real state: the type query worked and the
-                count query did not. It renders as no number at all, never as
-                0 — see assets.go's assembleAssetFilters. */}
-            {typeof d?.total === 'number' ? (
-              <>
-                <span className="text-copy font-semibold">
-                  {d.total.toLocaleString()}
-                </span>
-                <span className="text-dim text-note ml-1.5">assets discovered</span>
-              </>
-            ) : (
-              <span className="text-note" style={{ color: COLORS.warn }}>
-                total unavailable — the count query failed, the list below did not
-              </span>
-            )}
-          </div>
+        <div className="as-look">
+          {/* total === null is a real state: the type query worked and the
+              count query did not. It is said here, never shown as 0 — see
+              assets.go's assembleAssetFilters. Shares then fall back to the
+              sum of the type counts. */}
+          {typeof d?.total !== 'number' && (
+            <div className="text-note mb-2" style={{ color: COLORS.warn }}>
+              total unavailable — the count query failed, the list below did not
+            </div>
+          )}
           {types.length === 0 ? (
             <div className="text-note text-dim">no asset types recorded for this tenant</div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {types.map((t) => {
-                const active = t.label === type
-                return (
-                  <button
-                    key={t.label}
-                    type="button"
-                    aria-pressed={active}
-                    // Clicking the active chip clears it. A filter you can turn
-                    // on and cannot turn off from the same control is the most
-                    // reliable way to strand someone in a filtered view.
-                    onClick={() => onType(active ? '' : t.label)}
-                    className={
-                      'px-2.5 py-1 rounded-full border text-note ' +
-                      (active
-                        ? 'border-accent bg-accent text-on-accent font-medium'
-                        : 'border-border bg-field text-muted hover:text-txt')
-                    }
-                  >
-                    {t.label}
-                    {typeof t.count === 'number' && (
-                      <span className={active ? 'ml-1.5 opacity-80' : 'ml-1.5 text-dim'}>{t.count.toLocaleString()}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="as-rank-head" aria-hidden="true"><span>Type</span><span>Assets</span></div>
+              <ul className="as-rank" aria-label="Asset types, largest first">
+                {rows.map((t) => {
+                  const active = t.label === type
+                  const share = shareText(t.count, total)
+                  return (
+                    <li key={t.label}>
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        // Clicking the active row clears it. A filter you can turn
+                        // on and cannot turn off from the same control is the most
+                        // reliable way to strand someone in a filtered view.
+                        onClick={() => onType(active ? '' : t.label)}
+                        title={active ? 'Show every type' : `Show only ${t.label}`}
+                        className={`as-row${t.label === UNCLASSIFIED ? ' gap' : ''}`}
+                      >
+                        <span className="as-name">{t.label}</span>{' '}
+                        {typeof t.count === 'number' && <span className="as-count">{t.count.toLocaleString()}</span>}{' '}
+                        <span className="as-share">{share}</span>
+                        <span className="as-bar" aria-hidden="true">
+                          <i style={{ width: biggest > 0 && typeof t.count === 'number' ? `${(t.count / biggest) * 100}%` : 0 }} />
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {ranked.hidden > 0 && (
+                <button type="button" className="as-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? 'Show fewer' : `+${ranked.hidden} more`}
+                </button>
+              )}
+            </>
           )}
-        </>
+        </div>
       )}
     </Card>
   )
@@ -347,10 +375,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
       label: 'Last seen',
       sortable: true,
       keep: true,
-      mono: true,
-      render: (v) => (
-        <span className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono text-note">{fmtSeen(v)}</span>
-      ),
+      render: seenCell,
     },
   ]
 
@@ -436,10 +461,10 @@ function Pager({ page, onPage, hasMore, total, loading }) {
         {pages != null ? ` of ${pages.toLocaleString()}` : ''}
       </span>
       <button type="button" className={btn} disabled={page === 0 || loading} onClick={() => onPage(page - 1)}>
-        ← Prev
+        Previous
       </button>
       <button type="button" className={btn} disabled={!next || loading} onClick={() => onPage(page + 1)}>
-        Next →
+        Next
       </button>
     </div>
   )
@@ -496,7 +521,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
           {fields.map(([label, value]) => (
             <div key={label}>
-              <dt className="text-note text-dim uppercase tracking-wide">{label}</dt>
+              <dt className="text-note text-muted">{label}</dt>
               {/* "not recorded", not a blank: these fields are sparse upstream
                   and the difference between "we know it has none" and "nobody
                   wrote one down" is worth the four extra words. */}

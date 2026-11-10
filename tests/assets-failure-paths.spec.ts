@@ -251,17 +251,22 @@ test.describe('Assets → filter bar total (unknown is not zero)', () => {
     // warning line would pass on a build that had lost the chips as well.
     await expect(bar.getByRole('button', { name: /Workstation/ })).toBeVisible();
 
-    await expect(bar.getByText('assets discovered')).toHaveCount(0);
     await expect(bar.getByText('0', { exact: true })).toHaveCount(0);
+    // The Assets tile is a dash, not a zero.
+    const tile = page.getByRole('list', { name: 'Headline numbers' }).getByRole('button', { name: /^Assets/ });
+    await expect(tile).toContainText('—');
+    await expect(tile).not.toContainText(/\b0\b/);
   });
 
-  test('a real total is printed as a number, with no unavailable wording', async ({ page }) => {
+  test('a real total is printed once, in the Assets tile, with no unavailable wording', async ({ page }) => {
     await routeAssets(page);
     await page.goto('/#assets');
 
     const bar = panel(page, 'assets-filter-bar');
-    await expect(bar.getByText('2,375', { exact: true })).toBeVisible();
-    await expect(bar.getByText('assets discovered')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Headline numbers' }).getByRole('button', { name: /^Assets 2,375$/ })).toBeVisible();
+    // The review found the total printed three times on one page; the panel
+    // no longer repeats the tile.
+    await expect(bar.getByText('2,375', { exact: true })).toHaveCount(0);
     await expect(bar.getByText(/total unavailable/)).toHaveCount(0);
   });
 });
@@ -289,7 +294,7 @@ test.describe('Assets → range label + pager (unknown is not zero)', () => {
     // has_more on its own must keep paging alive (L409-410). A build that
     // needed a total to offer Next would strand the operator on page 1 of a
     // list it just told them has more.
-    await expect(list.getByRole('button', { name: 'Next →' })).toBeEnabled();
+    await expect(list.getByRole('button', { name: 'Next' })).toBeEnabled();
 
     await expect(list.getByText(/of 0/)).toHaveCount(0);
     await expect(list.getByText(/1–50 of/)).toHaveCount(0);
