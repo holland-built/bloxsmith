@@ -7,11 +7,14 @@ import { installBaselineWorld } from './page-fixtures';
 // directly above Triage because they filter it, and Changes keeps Notability
 // first because it carries the 500-row cap warning, which must sit above the
 // list it qualifies. The lead table sits on the page under one rule, and the
-// tabs run square and dense.
+// tabs run square and dense. Incidents now puts its severity tiles first
+// (owner, 2026-11-10): the counts used to sit under the whole Triage table,
+// so the page's answer was the last thing on it. Triage is still the lead
+// table, with the chips that filter it directly above it.
 
 const CASES = [
   { tab: 'security', first: ['security-triage-inbox'], lead: 'security-triage-inbox' },
-  { tab: 'incidents', first: ['incidents-categories', 'incidents-triage'], lead: 'incidents-triage' },
+  { tab: 'incidents', first: ['incidents-severity', 'incidents-categories', 'incidents-triage'], lead: 'incidents-triage' },
   { tab: 'audit', first: ['audit-log'], lead: 'audit-log' },
   { tab: 'changes', first: ['changes-notability', 'changes-changed-objects'], lead: 'changes-changed-objects' },
 ];

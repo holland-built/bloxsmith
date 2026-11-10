@@ -1,8 +1,15 @@
 - main "Incidents tab":
   - heading "Incidents" [level=1]
+  - text: /Updated \d+:\d+ PM/
   - button "Arrange panels"
+  - button "About incidents-severity": ⓘ
+  - button "Options for Severity Counts": ⋯
+  - group "Incidents by severity":
+    - button "Critical 1 of 2"
+    - button "High 0 of 2" [disabled]
+    - button "Medium 1 of 2"
+    - button "Low 0 of 2" [disabled]
   - heading "Categories" [level=2]
-  - text: click to filter Triage
   - 'button "About: Categories"': "About: ⓘ"
   - 'button "Options: Categories"'
   - 'button "2 Capacity · worst: high"'
@@ -43,11 +50,8 @@
         - cell "Medium"
         - cell "other.example is unsigned"
         - cell /\d+[hmsp]+/
-  - button "About incidents-severity": ⓘ
-  - button "Options for Severity Counts": ⋯
-  - text: Critical 1 High 0 Medium 1 Low 0
   - heading "IQ Actions" [level=2]
-  - text: IQ for Threat Defense 2
+  - text: IQ for Threat Defense 1 open · 1 resolved
   - 'button "About: IQ Actions"': "About: ⓘ"
   - 'button "Options: IQ Actions"'
   - table:
@@ -58,17 +62,19 @@
         - columnheader "Action"
         - columnheader "Status"
     - rowgroup:
-      - row "High Baseline suspicious domain Resolve":
+      - row "High Baseline suspicious domain Open Resolve":
         - cell "High"
         - cell "Baseline suspicious domain":
           - button "Baseline suspicious domain"
-        - cell "Resolve":
+        - cell "Open Resolve":
+          - text: Open
           - button "Resolve"
-      - row "Low Baseline resolved lookup Reopen":
+      - row "Low Baseline resolved lookup Resolved Reopen":
         - cell "Low"
         - cell "Baseline resolved lookup":
           - button "Baseline resolved lookup"
-        - cell "Reopen":
+        - cell "Resolved Reopen":
+          - text: Resolved
           - button "Reopen"
   - heading "Action Volume" [level=2]
   - text: by day
