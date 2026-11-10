@@ -62,10 +62,14 @@ test('the panel header controls are 24x24 on a mouse, in both densities', async 
     // a page load each and changed nothing between visits of one density.
     await page.goto(`/#${TABS[0]}`);
     await expect(page.locator('h1').first()).toBeVisible();
+    // 'density' is the key ui/src/lib/density.js reads. This used to write
+    // 'noc.density', which nothing reads, so the compact pass measured the
+    // comfortable layout. The attribute check below makes a wrong key fail.
     await page.evaluate((d) => {
-      try { localStorage.setItem('noc.density', d); } catch {}
+      try { localStorage.setItem('density', d); } catch {}
     }, density);
     await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-density', density);
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       for (const tab of TABS) {
