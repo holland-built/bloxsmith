@@ -84,24 +84,27 @@ func TestDoTooOldWaitsForFresh(t *testing.T) {
 	}
 }
 
-// TestDoStaleRefreshFailureKeepsOldValue: a failed background refresh must not
-// drop the entry (the next caller still gets the old value and retries).
-func TestDoStaleRefreshFailureKeepsOldValue(t *testing.T) {
+// TestDoFailedRefreshIsNotHiddenByTheStaleValue: the stale value is served
+// once while the refresh runs, but once that refresh has failed the old healthy
+// value must not keep being served; the next caller fetches and gets the error.
+// An outage must never read as the last healthy answer.
+func TestDoFailedRefreshIsNotHiddenByTheStaleValue(t *testing.T) {
 	c := New()
 	c.Set("k", "old")
 	age(c, "k", TTL+time.Second)
 	var fetches atomic.Int64
 	fail := func() (any, error) { fetches.Add(1); return nil, errBoom }
-	if v, _ := c.Do("k", fail); v != "old" {
-		t.Fatalf("got %v, want old", v)
+	if v, err := c.Do("k", fail); v != "old" || err != nil {
+		t.Fatalf("first call: v=%v err=%v, want the stale value while the refresh runs", v, err)
 	}
 	waitFor(t, "the failed refresh to finish", func() bool {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		return c.inflight["k"] == nil && fetches.Load() == 1
 	})
-	if v, _ := c.Do("k", fail); v != "old" {
-		t.Fatalf("after a failed refresh got %v, want the old value still served", v)
+	v, err := c.Do("k", fail)
+	if !errors.Is(err, errBoom) || v != nil {
+		t.Fatalf("after a failed refresh: v=%v err=%v, want the failure, not the old value", v, err)
 	}
 }
 
@@ -119,6 +122,12 @@ func TestDoStaleRefreshPanicDoesNotCrash(t *testing.T) {
 		defer c.mu.Unlock()
 		return c.inflight["k"] == nil
 	})
+	c.mu.Lock()
+	_, kept := c.entries["k"]
+	c.mu.Unlock()
+	if kept {
+		t.Fatal("the stale value survived a panicked refresh")
+	}
 }
 
 // TestDoStaleRefreshFencedByRotate: a refresh that started for the old tenant

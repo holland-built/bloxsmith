@@ -219,9 +219,11 @@ func (c *Cache) InvalidatePrefix(prefix string) {
 //
 // Failure is NOT shared as success and is NOT cached: on a non-nil error the
 // value is left out of the cache and every waiter gets the same error, so the
-// next caller retries. A failed background refresh leaves the old entry in
-// place, so it keeps being served until it is StaleFor past its TTL. Callers
-// must keep rendering a failed read as "error", never as "empty".
+// next caller retries. A failed background refresh drops the old entry, so
+// the caller after it waits for a fetch of its own and gets the failure: an
+// outage never reads as the last healthy answer for longer than the one
+// refresh. Callers must keep rendering a failed read as "error", never as
+// "empty".
 //
 // The write is fenced by the generation captured before the fetch (see SetGen),
 // so a tenant switch mid-fetch still drops the result.
@@ -288,7 +290,8 @@ func (c *Cache) do(key string, ttl time.Duration, stale bool, fetch func() (any,
 
 // refresh is the background half of stale-while-revalidate. It runs in its own
 // goroutine, where no handler's recover can see it, so a panic is logged and
-// swallowed instead of taking the process down; the stale entry stays.
+// swallowed instead of taking the process down; like any failure, it drops
+// the stale entry (see land).
 func (c *Cache) refresh(key string, ttl time.Duration, gen uint64, f *flight, fetch func() (any, error)) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -301,8 +304,8 @@ func (c *Cache) refresh(key string, ttl time.Duration, gen uint64, f *flight, fe
 	c.land(key, ttl, gen, f)
 }
 
-// land caches a finished flight's value (if it succeeded) and releases its
-// waiters. The value is cached only while this flight is still the registered
+// land caches a finished flight's value if it succeeded, drops the key's entry
+// if it failed, and releases its waiters. The value is cached only while this flight is still the registered
 // one for its key and the generation has not moved: Rotate, Invalidate and
 // InvalidatePrefix all detach in-flight fetches, and a result that started
 // before any of them must not be cached after it. The identity check also stops
@@ -312,6 +315,11 @@ func (c *Cache) land(key string, ttl time.Duration, gen uint64, f *flight) {
 	if c.inflight[key] == f {
 		if f.err == nil && gen == c.gen {
 			c.store(key, f.val, ttl)
+		} else if f.err != nil {
+			// A failed fetch drops what was cached for the key, so an old
+			// healthy value is never served over a failure: the next caller
+			// fetches in line and sees the error, as before stale serving.
+			delete(c.entries, key)
 		}
 		delete(c.inflight, key)
 	}
