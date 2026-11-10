@@ -122,4 +122,6 @@
 .ov-tip-sub { display: block; color: #b9bfcc; font-size: 11.5px }
 /* Closed tips take no room, so a tip near the right edge cannot widen the page. */
 .ov-tipwrap:hover > .ov-tip, .ov-tipwrap:focus-visible > .ov-tip, .ov-tipwrap[data-open] > .ov-tip { display: block }
+/* Escape closes a tip even while hovered or keyboard-focused. */
+.ov-tipwrap[data-closed] > .ov-tip { display: none }
 .ov-detail-foot { margin-top: 0; padding-top: 0 }

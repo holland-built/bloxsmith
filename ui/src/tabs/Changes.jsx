@@ -158,16 +158,20 @@ export default function Changes() {
 // is the description.
 function Tip({ tip, children, className = '', as: Tag = 'span', ...rest }) {
   const id = useId()
-  const [open, setOpen] = useState(false)
+  // null follows hover and focus; true is opened by a tap; false is closed by
+  // Escape, which has to beat :focus-visible (a key press turns it on).
+  const [open, setOpen] = useState(null)
   if (!tip) return <Tag className={className} {...rest}>{children}</Tag>
   return (
     <Tag
       className={`ov-tipwrap ${className}`}
       tabIndex={0}
       aria-describedby={id}
-      data-open={open || undefined}
-      onClick={() => setOpen((o) => !o)}
-      onBlur={() => setOpen(false)}
+      data-open={open === true || undefined}
+      data-closed={open === false || undefined}
+      onClick={() => setOpen((o) => o !== true)}
+      onBlur={() => setOpen(null)}
+      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
       onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
       {...rest}
     >
