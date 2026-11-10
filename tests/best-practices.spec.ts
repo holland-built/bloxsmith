@@ -26,17 +26,34 @@ test('problems come first and open to show what is affected; the rest say passed
   const list = page.getByRole('list', { name: 'Best practice checks' });
   const rows = list.locator(':scope > li');
   await expect(rows).toHaveCount(3);
-  await expect(rows.nth(0)).toContainText('High2 on-prem hosts are offline or in error');
-  await expect(rows.nth(1)).toContainText("Couldn't tellGrid Masters with no HA and no candidate");
+  // The count leads the row, ahead of the sentence, and is said once.
+  await expect(rows.nth(0)).toContainText('2 on-prem hosts are offline or in error');
+  await expect(rows.nth(0).locator('.bp-count')).toHaveText('2');
+  await expect(rows.nth(0).locator('.bp-title')).toHaveText('on-prem hosts are offline or in error');
+  await expect(rows.nth(0)).toContainText('High');
+  await expect(rows.nth(1)).toContainText("Grid Masters with no HA and no candidateCouldn't tell");
   await expect(rows.nth(1)).toContainText('not all of their members are visible');
-  await expect(rows.nth(2)).toContainText('PassedNo DHCP HA group uses Advanced Active/Passive');
+  await expect(rows.nth(2)).toContainText('No DHCP HA group uses Advanced Active/PassivePassed');
 
   const affected = page.getByRole('list', { name: '2 on-prem hosts are offline or in error' });
   await expect(affected).toBeHidden();
-  await rows.nth(0).getByText('2 on-prem hosts are offline or in error').click();
+  await rows.nth(0).locator('summary').click();
   await expect(affected.getByRole('listitem')).toHaveText(['nios-x-dal-3offline', 'nios-x-lon-2error']);
   await expect(rows.nth(0).getByRole('link', { name: 'Open Infra' })).toHaveAttribute('href', '#infra');
-  await expect(page.getByText('1 of 3 need attention')).toBeVisible();
+});
+
+test('the headline numbers come first: to fix, couldn\'t tell and passed, each out of the checks run', async ({ page }) => {
+  await page.route('**/api/best-practices', (r) => r.fulfill(json({ checks })));
+  await page.goto('/#best-practices');
+  const glance = page.getByRole('region', { name: 'Checks at a glance' });
+  const num = (t: string) => glance.locator(`[data-tile="${t}"] .bp-num`);
+  await expect(num('fix')).toHaveText('1 of 3');
+  await expect(glance.locator('[data-tile="fix"]')).toContainText('1 high');
+  await expect(num('unknown')).toHaveText('1 of 3');
+  await expect(num('passed')).toHaveText('1 of 3');
+  // One cell per check, in list order; the one that couldn't tell is its own state.
+  await expect(glance.locator('.bp-cell')).toHaveCount(3);
+  await expect(glance.locator('.bp-cell').nth(1)).toHaveClass(/unknown/);
 });
 
 test('Help opens the section for this page', async ({ page }) => {
@@ -54,4 +71,7 @@ test('with the backend unreachable, no check claims to have passed', async ({ pa
   await expect(list.locator(':scope > li')).toHaveCount(4);
   await expect(list).not.toContainText('Passed');
   await expect(list.getByText("Couldn't tell")).toHaveCount(4);
+  const glance = page.getByRole('region', { name: 'Checks at a glance' });
+  await expect(glance.locator('[data-tile="passed"] .bp-num')).toHaveText('0 of 4');
+  await expect(glance.locator('[data-tile="unknown"] .bp-num')).toHaveText('4 of 4');
 });
