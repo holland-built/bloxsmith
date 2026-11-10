@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { tokenFetch } from './authFetch.js'
 
 // ONE ANSWER TO "IS THERE A NEWER VERSION, AND IS IT INSTALLING?", read by the
 // header's Update button and by the Settings sheet's Updates section.
@@ -18,7 +19,7 @@ import { useSyncExternalStore } from 'react'
 const fetchT = (url, opts, ms) => {
   const ac = new AbortController()
   const t = setTimeout(() => ac.abort(), ms || 8000)
-  return fetch(url, { ...(opts || {}), signal: ac.signal, cache: 'no-store' }).finally(() =>
+  return tokenFetch(url, { ...(opts || {}), signal: ac.signal, cache: 'no-store' }).finally(() =>
     clearTimeout(t)
   )
 }

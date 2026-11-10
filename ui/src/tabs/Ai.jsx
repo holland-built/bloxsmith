@@ -2,7 +2,7 @@ import { questionFromHash } from '../lib/oneBox.js'
 import { useEffect, useRef, useState } from 'react'
 import { chatContext } from '../lib/aiContext.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
-import { authFetch } from '../lib/authFetch.js'
+import { authFetch, tokenFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 import { dossierHasVerdict } from '../lib/dossierVerdict.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
@@ -314,7 +314,7 @@ function ChatCard({ panelId }) {
     // the box; put the cursor back in it.
     requestAnimationFrame(() => inRef.current?.focus())
     setBusy(true)
-    fetch('/api/query', {
+    tokenFetch('/api/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: q, context: chatContext(items) }),

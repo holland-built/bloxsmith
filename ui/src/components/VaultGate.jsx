@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
-
-// vpost — POST JSON, always resolves {ok,data}.
-const vpost = (url, body) =>
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
-    .catch(() => ({ ok: false, data: { error: 'network error' } }))
+import { vpost } from '../lib/authFetch.js'
 
 const inCls =
   `${FIELD_CLS} w-full`

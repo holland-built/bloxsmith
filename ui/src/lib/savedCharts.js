@@ -1,3 +1,4 @@
+import { tokenFetch } from './authFetch.js'
 import { loadLayout, saveLayout } from './layout.js'
 
 // Charts saved from Build a chart onto a page (savedCharts.test.js).
@@ -54,7 +55,7 @@ export function parseSavedChart(record) {
  * end. Any failure gives an empty list: a page with no saved charts is what
  * it was before this feature, and nothing on it should break.
  */
-export async function loadSavedCharts(tab, fetchImpl = fetch) {
+export async function loadSavedCharts(tab, fetchImpl = tokenFetch) {
   try {
     const listRes = await fetchImpl('/api/views')
     if (!listRes.ok) return []
@@ -79,7 +80,7 @@ export async function loadSavedCharts(tab, fetchImpl = fetch) {
 }
 
 /** One saved chart by id, or null when it is gone or unreadable. */
-export async function loadSavedChart(id, fetchImpl = fetch) {
+export async function loadSavedChart(id, fetchImpl = tokenFetch) {
   try {
     const res = await fetchImpl(`/api/views/${encodeURIComponent(chartViewName(id))}`)
     return res.ok ? parseSavedChart(await res.json()) : null
@@ -89,7 +90,7 @@ export async function loadSavedChart(id, fetchImpl = fetch) {
 }
 
 /** Saves one chart; throws with the server's reason when it is refused. */
-export async function saveChart(chart, fetchImpl = fetch) {
+export async function saveChart(chart, fetchImpl = tokenFetch) {
   const res = await fetchImpl('/api/views', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -102,7 +103,7 @@ export async function saveChart(chart, fetchImpl = fetch) {
 }
 
 /** Takes one saved chart off its page. */
-export async function removeChart(id, fetchImpl = fetch) {
+export async function removeChart(id, fetchImpl = tokenFetch) {
   const res = await fetchImpl(`/api/views/${encodeURIComponent(chartViewName(id))}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`the chart could not be removed (HTTP ${res.status})`)
 }
@@ -122,7 +123,7 @@ async function hidePanel(tab, panelId, fetchImpl) {
  * names the panel) and hides the original. Saved first, so a failure part
  * way leaves both on the page rather than neither.
  */
-export async function replacePanel(chart, fetchImpl = fetch) {
+export async function replacePanel(chart, fetchImpl = tokenFetch) {
   await saveChart(chart, fetchImpl)
   await hidePanel(chart.tab, chart.replaces, fetchImpl)
 }
