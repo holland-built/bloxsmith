@@ -12,6 +12,7 @@ import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import Tip from '../components/Tip.jsx'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
 import './Dns.css'
 
@@ -48,16 +49,6 @@ const fmtQps = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1))
 const clock = (h) => {
   const d = new Date(h)
   return isNaN(d) ? String(h) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-// Scroll to a panel and give it focus, as the old headline strip did.
-function jumpToPanel(panelId) {
-  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
-  if (!el) return
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-  el.focus({ preventScroll: true })
 }
 
 // The signing counts, read once so the headline and the DNSSEC panel cannot

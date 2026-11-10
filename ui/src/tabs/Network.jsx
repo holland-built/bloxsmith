@@ -8,6 +8,7 @@ import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 // The look the owner picked for dashboards (Overview's tokens and tiles), plus
 // this page's own few rules.
@@ -153,21 +154,6 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
       tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny /29–/32 links included.${loadedWord}` },
     { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), tip: 'Leases on record from DHCP, in every state.' },
   ]
-}
-
-// Scroll to a panel and move focus to it; a panel taken off the page has no
-// element, so focus goes to Arrange panels, where it can be put back. The same
-// steps as the shared headline strip's jump (components/kit.jsx).
-function jumpToPanel(panelId) {
-  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
-  if (!el) {
-    ;[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Arrange panels')?.focus()
-    return
-  }
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-  el.focus({ preventScroll: true })
 }
 
 // The numbers across the top in Overview's look: one card split by hairlines.
