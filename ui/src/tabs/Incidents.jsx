@@ -1,12 +1,14 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { categoryWord, plainMessage } from '../lib/plainWords.js'
+import './Overview.css'
+import './Incidents.css'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -89,6 +91,8 @@ export default function Incidents() {
 
   const [acks, setAcks] = useState(loadAcks)
   const [category, setCategory] = useState('')
+  // A severity tile filters Triage the way a category chip does.
+  const [severity, setSeverity] = useState('')
   const [openActionId, setOpenActionId] = useState(null)
   // per-action-id pending/error state for the resolve/reopen control (rows are independent)
   const [actionStatusState, setActionStatusState] = useState({})
@@ -154,9 +158,18 @@ export default function Incidents() {
 
   return (
     <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Incidents</h1>
-      <TabIntro>Incidents to triage, by category and severity, refreshed every 20 seconds.</TabIntro>
+      <div className="ov-look inc-head">
+        <div className="ov-head">
+          <h1>Incidents</h1>
+          <Updated api={incApi} />
+        </div>
+      </div>
       <CardGrid layoutKey="incidents">
+        {/* The severity counts lead (owner, 2026-11-10): they sat under the
+            whole Triage table, so the page's answer was the last thing on it.
+            panelId sits on the wrapper, not on the Card: SeverityKpis renders a
+            different Card on its error branch, and both are the same panel. */}
+        <SeverityKpis panelId="incidents-severity" signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} severity={severity} onSeverity={setSeverity} />
         <CategoryChips panelId="incidents-categories" categories={categories} signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         <IncidentsTable
           panelId="incidents-triage"
@@ -169,14 +182,12 @@ export default function Incidents() {
           meta={incidentsMeta}
           category={category}
           onCategory={setCategory}
+          severity={severity}
+          onSeverity={setSeverity}
           acks={acks}
           onToggleAck={toggleAck}
           onClearAcks={() => { setAcks({}); saveAcks({}) }}
         />
-        {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
-            different Card on its error branch, and both are the same panel — one
-            literal here keeps the id unique and both branches attributed. */}
-        <SeverityKpis panelId="incidents-severity" signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
         <SocQueue
           panelId="incidents-soc-queue"
           rows={actionsRows}
@@ -193,6 +204,44 @@ export default function Incidents() {
         <ActionTrendStrip panelId="incidents-action-volume" rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} reason={actionsReason} onRetry={retryActions} />
       </CardGrid>
     </div>
+  )
+}
+
+// ---------- the head: when the list was last read ----------
+
+// The same tip as Overview's: hover, keyboard focus or tap opens it, Escape
+// closes it. The visible text stays the name; the tip is the description.
+function Tip({ tip, children, className = '' }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  return (
+    <span
+      className={`ov-tipwrap ${className}`}
+      tabIndex={0}
+      aria-describedby={id}
+      data-open={open || undefined}
+      onClick={() => setOpen((o) => !o)}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+    >
+      {children}
+      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
+    </span>
+  )
+}
+
+// The time the incidents list arrived, not the time of this render. A failed
+// refresh says so, and the time stays on the last list that did arrive.
+function Updated({ api }) {
+  const at = useMemo(() => (api.data ? new Date() : null), [api.data])
+  const time = at ? at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  const dot = api.error ? 'down' : at ? '' : 'wait'
+  const text = api.error ? (time ? `Couldn't refresh · ${time}` : "Couldn't load") : time ? `Updated ${time}` : 'Loading…'
+  return (
+    <Tip className="ov-pill" tip="Incidents to triage, by category and severity. The list refreshes every 20 seconds.">
+      <span aria-hidden="true" className={`ov-live ${dot}`} />
+      {text}
+    </Tip>
   )
 }
 
@@ -226,7 +275,7 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
   const { COLORS } = useChartTheme()
   const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
-    <Card panelId={panelId} span={6} title="Categories" note="click to filter Triage">
+    <Card panelId={panelId} span={6} title="Categories">
       {loading ? (
         <Skeleton h={40} />
       ) : error ? (
@@ -253,14 +302,15 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
             return (
               <button
                 key={c.category}
+                type="button"
+                aria-pressed={on}
                 onClick={() => onCategory(on ? '' : c.category)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-note border-border bg-field"
-                style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
+                className="inc-chip"
               >
                 {/* Hidden from screen readers: the dot is the worst severity, and
                     read first it would say "Critical" ahead of the split. */}
                 <i aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
-                <span className="font-mono text-field-txt">{count.toLocaleString()}</span>
+                <b>{count.toLocaleString()}</b>
                 <span className="text-muted">{categoryWord(c.category)}</span>
                 <span className="text-muted">· {split ?? `worst: ${m.label.toLowerCase()}`}</span>
               </button>
@@ -272,21 +322,33 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
   )
 }
 
-// ---------- severity kpi row ----------
+// ---------- severity tiles ----------
 
-function SeverityKpis({ signals, truncated, loading, error, panelId }) {
+const SEV_TILES = [
+  { key: 'critical', label: 'Critical', tone: 'crit' },
+  { key: 'high', label: 'High', tone: 'high' },
+  { key: 'medium', label: 'Medium', tone: 'warn' },
+  { key: 'low', label: 'Low', tone: 'low' },
+]
+
+// The page's answer, first: how many incidents at each severity. Critical and
+// high are the loudest marks on the page when they are above zero; medium is
+// plain ink with an amber dot; low and every zero stay grey. A tile picks the
+// severity Triage shows, the way a category chip picks a category.
+function SeverityKpis({ signals, truncated, loading, error, panelId, severity, onSeverity }) {
   const { COLORS } = useChartTheme()
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const s of signals) {
     const m = sevMeta(s.severity, COLORS)
     if (counts[m.key] != null) counts[m.key]++
   }
-  const cells = [
-    { label: 'Critical', value: counts.critical, color: COLORS.crit },
-    { label: 'High', value: counts.high, color: COLORS.sevHigh },
-    { label: 'Medium', value: counts.medium, color: COLORS.warn },
-    { label: 'Low', value: counts.low, color: COLORS.accent },
-  ]
+  const total = counts.critical + counts.high + counts.medium + counts.low
+  const tiles = SEV_TILES.map((c) => {
+    const n = counts[c.key]
+    const on = severity === c.key
+    const tip = `${n.toLocaleString()} ${c.label.toLowerCase()} of ${total.toLocaleString()}${truncated ? ' shown' : ''}.${on ? ' Triage shows only these; select again to show all.' : n ? ' Select to show only these in Triage.' : ''}`
+    return { c, n, on, tone: n > 0 ? c.tone : 'none', tip }
+  })
 
   // A failed fetch leaves `signals` at [], so every count is 0. Printing those
   // zeros asserts "no critical incidents" on the strength of a dead backend —
@@ -294,18 +356,22 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
   // explicit failure banner.
   if (error) {
     return (
-      <Card panelId={panelId} span={6} panelName="Severity Counts" className="flex flex-col" note="counts unknown — fetch failed">
+      <Card panelId={panelId} span={6} panelName="Severity Counts" note="counts unknown — fetch failed">
         <FeedUnavailable
           label="Severity counts unavailable"
           reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
         />
-        <div className="flex flex-row items-stretch justify-between">
-          {cells.map((c, i) => (
-            <div key={c.label} className={`flex-1 py-1 px-3 ${i < cells.length - 1 ? 'border-r border-line-2' : ''}`}>
-              <div className="text-muted text-note">{c.label}</div>
-              <div className="text-figure font-semibold tracking-tight my-1 text-muted">—</div>
-            </div>
-          ))}
+        <div className="ov-look inc-look">
+          <div className="inc-kpis">
+            {SEV_TILES.map((c) => (
+              <div key={c.key} className="ov-kpi" style={{ cursor: 'default' }}>
+                <span className="ov-kpi-in">
+                  <span className="ov-kpi-top">{c.label}</span>
+                  <span className="ov-num inc-num none">—</span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </Card>
     )
@@ -316,23 +382,41 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
       panelId={panelId}
       span={6}
       // Both branches of this component are one panel and share the name: the
-      // four cells are their own labels, so there is no heading to read and the
+      // four tiles are their own labels, so there is no heading to read and the
       // popup used to list it as "incidents-severity".
       panelName="Severity Counts"
-      className="flex flex-row items-stretch justify-between"
       note={truncated ? 'of shown signals — list is capped' : undefined}
     >
       {loading ? (
-        <Skeleton h={60} />
+        <Skeleton h={88} />
       ) : (
-        cells.map((c, i) => (
-          <div key={c.label} className={`flex-1 py-1 px-3 ${i < cells.length - 1 ? 'border-r border-line-2' : ''}`}>
-            <div className="text-muted text-note">{c.label}</div>
-            <div className="text-figure font-semibold tracking-tight my-1" style={{ color: c.value > 0 ? c.color : undefined }}>
-              {c.value.toLocaleString()}
-            </div>
+        <div className="ov-look inc-look">
+          <div className="inc-kpis" role="group" aria-label="Incidents by severity">
+            {tiles.map(({ c, n, on, tone, tip }) => {
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  className="ov-kpi"
+                  aria-pressed={on}
+                  disabled={!n && !on}
+                  onClick={() => onSeverity(on ? '' : c.key)}
+                  title={tip}
+                  aria-describedby={`inc-sev-tip-${c.key}`}
+                >
+                  <span className="ov-kpi-in">
+                    <span className="ov-kpi-top inc-sev"><i aria-hidden="true" className={`ov-dot ${tone === 'none' ? '' : tone}`} />{c.label}</span>
+                    <span className={`ov-num inc-num ${tone}`}>{n.toLocaleString()}</span>
+                    <span className="ov-muted ov-small">of {total.toLocaleString()}</span>
+                  </span>
+                </button>
+              )
+            })}
           </div>
-        ))
+          {/* Outside the buttons, so each tile's name stays short, and hidden,
+              so it is read only as the tile's description, not again as text. */}
+          {tiles.map(({ c, tip }) => <span key={c.key} id={`inc-sev-tip-${c.key}`} hidden>{tip}</span>)}
+        </div>
       )}
     </Card>
   )
@@ -350,7 +434,7 @@ function subjectOf(s) {
   return s.entity_id || '—'
 }
 
-function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, acks, onToggleAck, onClearAcks, panelId }) {
+function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, severity, onSeverity, acks, onToggleAck, onClearAcks, panelId }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
   const failedFeeds = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
@@ -361,13 +445,15 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
     return signals
       .filter((s) => {
         if (category && s.category !== category) return false
+        if (severity && sevMeta(s.severity, COLORS).key !== severity) return false
         if (!q) return true
         return [s.category, s.entity_id, s.message].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
       })
       // Worst first, then newest: the one critical used to sit under eleven
       // identical mediums because the order was newest only.
       .sort((a, b) => sevRank(a.severity, COLORS) - sevRank(b.severity, COLORS) || (Number(b.detected_at) || 0) - (Number(a.detected_at) || 0))
-  }, [signals, category, filter, COLORS])
+  }, [signals, category, severity, filter, COLORS])
+  const filteredBy = [category && categoryWord(category), severity && SEV_TILES.find((t) => t.key === severity)?.label].filter(Boolean).join(' · ')
 
   const columns = [
     {
@@ -414,7 +500,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       panelId={panelId}
       span={4}
       title="Triage"
-      note={category ? `filtered · ${category}` : undefined}
+      note={filteredBy ? `only ${filteredBy}` : undefined}
       right={
         <div className="flex items-center gap-2">
           <input {...MACHINE_TEXT}
@@ -424,8 +510,8 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
             onChange={(e) => setFilter(e.target.value)}
             className={`${FIELD_CLS} w-[150px]`}
           />
-          {category && (
-            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
+          {filteredBy && (
+            <button onClick={() => { onCategory(''); onSeverity('') }} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
               Clear filter
             </button>
           )}
@@ -477,9 +563,33 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 
 // ---------- SOC action queue ----------
 
+// An IQ action is either active or resolved: those are the only two states
+// /api/actions/{id}/status accepts (dashboard.UpdateAction). The queue used to
+// show only the button, so a tenant whose actions were all resolved read as a
+// column of "Reopen". Each row now says its state, open rows first, and the
+// action fits it: Resolve on an open row, a quiet Reopen on a resolved one.
+// A status upstream sends that is neither is shown as it came, and is offered
+// Resolve, as before.
+function actionState(r) {
+  const raw = String(r?.status || '').toLowerCase()
+  if (raw === 'resolved') return { resolved: true, word: 'Resolved', cls: 'done' }
+  if (raw === 'active') return { resolved: false, word: 'Open', cls: 'open' }
+  return { resolved: false, word: raw || 'Unknown', cls: 'open' }
+}
+
 function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusState, onSetStatus, openActionId, onOpenAction, panelId }) {
   const ro = useReadOnly()
   const { COLORS } = useChartTheme()
+  // Open first, then worst first, so what still needs doing leads.
+  const ordered = useMemo(
+    () =>
+      rows
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) => Number(actionState(a.r).resolved) - Number(actionState(b.r).resolved) || sevRank(mcpSeverity(a.r), COLORS) - sevRank(mcpSeverity(b.r), COLORS) || a.i - b.i)
+        .map(({ r }) => r),
+    [rows, COLORS],
+  )
+  const open = rows.filter((r) => !actionState(r).resolved).length
   const columns = [
     {
       key: 'sev',
@@ -508,20 +618,23 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       label: 'Status',
       render: (_v, r) => {
         const st = statusState[r.id] || {}
-        const resolved = String(r.status || '').toLowerCase() === 'resolved'
-        const next = resolved ? 'active' : 'resolved'
-        const label = resolved ? 'Reopen' : 'Resolve'
+        const s = actionState(r)
+        const next = s.resolved ? 'active' : 'resolved'
         return (
           <div className="flex flex-col gap-0.5">
-            <button
-              type="button"
-              disabled={st.pending || ro.readOnly}
-              title={ro.readOnly ? 'Off: this tenant is read-only' : undefined}
-              onClick={() => onSetStatus(r.id, next)}
-              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-note disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {st.pending ? 'saving…' : label}
-            </button>
+            <div className="inc-status">
+              <span className={`inc-state ${s.cls}`}>{s.word}</span>
+              <button
+                type="button"
+                disabled={st.pending || ro.readOnly}
+                title={ro.readOnly ? 'Off: this tenant is read-only' : undefined}
+                onClick={() => onSetStatus(r.id, next)}
+                data-busy={st.pending || st.error ? '' : undefined}
+                className={s.resolved ? 'inc-quiet' : 'inc-act'}
+              >
+                {st.pending ? 'saving…' : s.resolved ? 'Reopen' : 'Resolve'}
+              </button>
+            </div>
             {st.error && <span className="text-note text-crit" style={{ color: COLORS.crit }}>{st.error}</span>}
           </div>
         )
@@ -529,7 +642,14 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
     },
   ]
 
-  const right = rows.length > 0 ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : undefined
+  // Open and resolved add up to the rows the queue and the Action Volume
+  // chart both count, so the three numbers agree.
+  const right =
+    rows.length > 0 ? (
+      <span className="text-note text-muted">
+        {open.toLocaleString()} open · {(rows.length - open).toLocaleString()} resolved
+      </span>
+    ) : undefined
 
   return (
     <Card panelId={panelId} span={2} title="IQ Actions" note="IQ for Threat Defense" right={right}>
@@ -544,7 +664,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       ) : (
         <>
           <ReadOnlyNote ro={ro} what="Resolve and Reopen are off." />
-          <DataTable rows={rows} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
+          <DataTable rows={ordered} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
           {openActionId != null && <ActionDetailDrawer actionId={openActionId} onClose={() => onOpenAction(null)} />}
         </>
       )}
