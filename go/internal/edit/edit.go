@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/pyconv"
 	"bloxsmith/internal/rest"
 )
 
@@ -47,47 +48,13 @@ func strOr(b M, k string) string {
 // has is Python `body.get(k) is not None`: the key is present and non-null.
 func has(b M, k string) bool { v, ok := b[k]; return ok && v != nil }
 
-// pyStr mirrors Python str() for the scalar types a JSON body yields.
-func pyStr(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case bool:
-		if t {
-			return "True"
-		}
-		return "False"
-	case float64:
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'g', -1, 64)
-	case nil:
-		return ""
-	default:
-		return fmt.Sprintf("%v", t)
-	}
-}
-
-// isFalsy mirrors Python truthiness for the value collapsing in strOr's `or ""`.
-func isFalsy(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return true
-	case string:
-		return t == ""
-	case bool:
-		return !t
-	case float64:
-		return t == 0
-	case []any:
-		return len(t) == 0
-	case M:
-		return len(t) == 0
-	default:
-		return false
-	}
-}
+// The Python-style coercions, shared with internal/provision (internal/pyconv).
+var (
+	pyStr     = pyconv.Str
+	isFalsy   = pyconv.IsFalsy
+	truthy    = pyconv.Truthy
+	intCoerce = pyconv.Int
+)
 
 // boolPy is Python bool(x): a real bool passes through; a non-empty string /
 // non-zero number / non-empty collection is truthy. Behaviour unchanged; it is
@@ -97,23 +64,6 @@ func isFalsy(v any) bool {
 // read `dry` with it now go through dryMustBeExplicitBool (see below), and every
 // other write builder uses truthyDry.
 func boolPy(v any) bool { return !isFalsy(v) }
-
-// truthy is _truthy (server.py:_truthy): nil -> default; real bool -> itself;
-// otherwise str(v).strip().lower() not in {"0","false","no",""}.
-func truthy(v any, def bool) bool {
-	if v == nil {
-		return def
-	}
-	if b, ok := v.(bool); ok {
-		return b
-	}
-	s := strings.ToLower(strings.TrimSpace(pyStr(v)))
-	switch s {
-	case "0", "false", "no", "":
-		return false
-	}
-	return true
-}
 
 // truthyDry is _truthy_dry: dry preview unless explicitly disabled (default true).
 func truthyDry(v any) bool { return truthy(v, true) }
@@ -160,26 +110,6 @@ func dryMustBeExplicitBool(body M) (dry bool, ok bool) {
 	}
 	b, isBool := v.(bool)
 	return b, isBool
-}
-
-// intCoerce is Python int(x) for JSON scalars: (n, ok). float64/int strings ok;
-// a fractional float truncates toward zero, matching int(3.9)==3 is NOT Python —
-// Python int(3.9)==3 (truncates) so this matches. A bad string -> ok=false.
-func intCoerce(v any) (int, bool) {
-	switch t := v.(type) {
-	case float64:
-		return int(t), true
-	case string:
-		if n, err := strconv.Atoi(strings.TrimSpace(t)); err == nil {
-			return n, true
-		}
-	case bool:
-		if t {
-			return 1, true
-		}
-		return 0, true
-	}
-	return 0, false
 }
 
 // segRe is the allowed shape of a single path segment (the final component of

@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 
+	"bloxsmith/internal/pyconv"
 	"bloxsmith/internal/rest"
 )
 
@@ -143,93 +143,13 @@ func asList(v any) []any {
 	return nil
 }
 
-// pyStr mirrors Python str() for scalars from YAML/JSON.
-func pyStr(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "True"
-		}
-		return "False"
-	case int:
-		return strconv.Itoa(t)
-	case int64:
-		return strconv.FormatInt(t, 10)
-	case float64:
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'g', -1, 64)
-	default:
-		return fmt.Sprintf("%v", t)
-	}
-}
-
-func isFalsy(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return true
-	case string:
-		return t == ""
-	case bool:
-		return !t
-	case int:
-		return t == 0
-	case int64:
-		return t == 0
-	case float64:
-		return t == 0
-	case []any:
-		return len(t) == 0
-	case M:
-		return len(t) == 0
-	default:
-		return false
-	}
-}
-
-// intCoerce is Python int(x): int/float truncates toward zero, numeric string
-// parses, else (0,false).
-func intCoerce(v any) (int, bool) {
-	switch t := v.(type) {
-	case int:
-		return t, true
-	case int64:
-		return int(t), true
-	case float64:
-		return int(t), true
-	case string:
-		if n, err := strconv.Atoi(strings.TrimSpace(t)); err == nil {
-			return n, true
-		}
-	case bool:
-		if t {
-			return 1, true
-		}
-		return 0, true
-	}
-	return 0, false
-}
-
-// truthy is _truthy (server.py:1342): nil->def; real bool->itself; else
-// str(v).strip().lower() not in {"0","false","no",""}.
-func truthy(v any, def bool) bool {
-	if v == nil {
-		return def
-	}
-	if b, ok := v.(bool); ok {
-		return b
-	}
-	switch strings.ToLower(strings.TrimSpace(pyStr(v))) {
-	case "0", "false", "no", "":
-		return false
-	}
-	return true
-}
+// The Python-style coercions, shared with internal/edit (internal/pyconv).
+var (
+	pyStr     = pyconv.Str
+	isFalsy   = pyconv.IsFalsy
+	truthy    = pyconv.Truthy
+	intCoerce = pyconv.Int
+)
 
 // TruthyDry is _truthy_dry (server.py:1355): preview unless explicitly disabled.
 //
