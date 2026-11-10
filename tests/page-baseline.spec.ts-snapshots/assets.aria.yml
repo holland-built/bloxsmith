@@ -10,9 +10,11 @@
   - button "Refresh"
   - 'button "About: Asset Inventory"': "About: ⓘ"
   - 'button "Options: Asset Inventory"'
-  - text: 2assets discovered
-  - button "Server1"
-  - button "Router1"
+  - list "Asset types, largest first":
+    - listitem:
+      - button "Router 1 50%"
+    - listitem:
+      - button "Server 1 50%"
   - heading "Assets" [level=2]
   - text: 1–1 of 1
   - 'button "About: Assets"': "About: ⓘ"
@@ -38,7 +40,7 @@
         - cell "Server"
         - cell "baseline-provider"
         - cell "baseline-vendor"
-        - cell /1\/1\/\d+, 7:\d+:\d+ AM/
+        - cell "5h ago"
   - text: Page 1 of 1
-  - button "← Prev" [disabled]
-  - button "Next →" [disabled]
+  - button "Previous" [disabled]
+  - button "Next" [disabled]

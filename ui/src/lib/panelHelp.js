@@ -220,8 +220,8 @@ export const PANEL_HELP = {
 
   // ---- Assets ----
   'assets-filter-bar': {
-    what: 'How many devices discovery has found in total, and one chip per type — the types this tenant actually has, not a catalogue of all of them.',
-    look: 'Click a chip to show only that type; click it again to clear. Nothing here refreshes on a timer — Refresh is how you ask the server again.',
+    what: 'The types of device discovery found, largest first, each with how many and its share of the total. Unclassified are the ones discovery could not name.',
+    look: 'Click a type to show only it; click again to clear. The button under the list opens the smaller types. Nothing refreshes on a timer — Refresh asks the server again.',
   },
   'assets-list': {
     what: 'One row per device, 50 to a page. Searching, sorting and paging all happen on the server, so a sort reorders every device, not this page.',

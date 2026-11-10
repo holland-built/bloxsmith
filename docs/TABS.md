@@ -198,8 +198,9 @@ You can link straight to a view: `#infra?status=offline`.
 
 The list behind the counts. Infra's **Asset Discovery** tile and Security's **Asset Insights** tile tell you how many assets there are. This tab tells you which ones.
 
-- **Asset Inventory**: the total, and a chip for each asset type with its count. Click a chip to show only that type, and click it again to clear it. The chips are only the types *your tenant has*, so a chip never filters down to nothing.
-- **Assets**: the list itself, with name, type, provider, vendor and last seen. Sort on any of the five columns. 50 rows to a page.
+- **Tiles** across the top: how many assets, how many are **Unclassified** (assets discovery found but could not name) with their share of the total, and how many types. Click Unclassified to show only those.
+- **Asset Inventory**: the asset types, largest first, each with its count, its share and a bar. The biggest show first; **more** opens the rest. Click a type to show only that type, and click it again to clear it. Only the types *your tenant has* are listed, so a type never filters down to nothing.
+- **Assets**: the list itself, with name, type, provider, vendor and last seen. Last seen shows how long ago ("8h ago"); point at it for the exact time. Sort on any of the five columns. 50 rows to a page.
 - **Row detail**: click a row to see the fields that are too often empty for their own column: OS, IP addresses, MAC addresses, model and location. Only about a quarter of assets have an OS recorded, so a column for it would be mostly blank, but on the asset you picked it is often the first thing you want.
 
 Search looks at the asset **name** and ignores upper and lower case. It searches every asset on the server, not just the page on screen. Searching from page 4 of 48 searches all 48 pages and takes you to page 1 of the results.
