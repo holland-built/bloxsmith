@@ -457,7 +457,7 @@ func (s *Service) ChartValues(ctx context.Context, countID, only, windowID strin
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	body, st, err := s.Rest.GetEx(count.Endpoint, map[string]string{"query": string(qj)})
+	body, st, err := s.cubeGet(count.Endpoint, qj)
 	if errored(st, err) {
 		return map[string]any{"status": "error", "values": []string{}}
 	}
@@ -499,7 +499,7 @@ func (s *Service) RunChart(ctx context.Context, p ChartPicks) map[string]any {
 		}
 		return result
 	}
-	body, st, err := s.Rest.GetEx(endpoint, map[string]string{"query": string(qj)})
+	body, st, err := s.cubeGet(endpoint, qj)
 	if errored(st, err) {
 		return map[string]any{
 			"query": q, "endpoint": endpoint, "rows": []map[string]any{},
@@ -547,7 +547,7 @@ func (s *Service) runBuckets(base map[string]any, endpoint string, split chartCh
 		go func() {
 			defer wg.Done()
 			qj, _ := json.Marshal(q)
-			body, st, err := s.Rest.GetEx(endpoint, map[string]string{"query": string(qj)})
+			body, st, err := s.cubeGet(endpoint, qj)
 			var n any = "0"
 			if errored(st, err) {
 				mu.Lock()
