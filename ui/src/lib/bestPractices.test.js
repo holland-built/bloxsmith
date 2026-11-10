@@ -21,3 +21,8 @@ test('pulls the count out of the front of a problem title only when it matches t
   assert.deepEqual(splitCount({ title: '3 things', items }), { n: 2, rest: '3 things' })
   assert.deepEqual(splitCount({ title: 'Something wrong', items: [] }), { n: null, rest: 'Something wrong' })
 })
+
+test('a problem with items but no title does not crash', () => {
+  assert.deepEqual(splitCount({ items: [{}] }), { n: 1, rest: '' })
+  assert.deepEqual(splitCount({ title: null, items: [{}] }), { n: 1, rest: '' })
+})

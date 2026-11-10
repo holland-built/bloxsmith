@@ -35,6 +35,7 @@ export function tally(checks) {
 export function splitCount(c) {
   const n = c.items?.length ?? 0
   const lead = `${n} `
-  if (n && c.title.startsWith(lead)) return { n, rest: c.title.slice(lead.length) }
-  return { n: n || null, rest: c.title }
+  const title = c.title ?? ''
+  if (n && title.startsWith(lead)) return { n, rest: title.slice(lead.length) }
+  return { n: n || null, rest: title }
 }
