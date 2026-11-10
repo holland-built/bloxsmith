@@ -88,3 +88,45 @@ test('a clear Security row over a truncated sample says it is only clear for tha
   await expect(row(page, 'Security')).toContainText('none in the latest 50 events', { timeout: 20_000 });
   await expect(row(page, 'Security')).not.toContainText('none open');
 });
+
+// The tiles above the board (owner's pick, 2026-11-10) say one word per
+// service. "Healthy" is only said when every feed that could have reported a
+// problem answered; a dead one is "Not checked", and no day is drawn green.
+const tile = (page: Page, name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
+
+test('with the incidents and health feeds dead, no tile or row says Healthy and no day is green', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/incidents*', down);
+  await page.route('**/api/hub/health*', down);
+  await page.goto('/#overview');
+  await expect(tile(page, 'DNS')).toContainText('Not checked', { timeout: 20_000 });
+  for (const name of ['DNS', 'DHCP', 'Security']) await expect(tile(page, name)).not.toContainText('Healthy');
+  await expect(page.locator('[data-board]')).not.toContainText('Healthy');
+  await expect(page.locator('[data-board] .ov-day.ok')).toHaveCount(0);
+});
+
+test('a service whose health check answers unknown is not Healthy', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/incidents*', (route) => json(route, { incidents: [] }));
+  await page.route('**/api/hub/health*', (route) => json(route, ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'unknown', meta: '' }))));
+  await page.goto('/#overview');
+  await expect(tile(page, 'DNS')).toContainText('Not checked', { timeout: 20_000 });
+  await expect(row(page, 'DNS')).not.toContainText('Healthy');
+});
+
+test('a past day with no issue on record is an outline, never green', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/incidents*', (route) => json(route, { incidents: [] }));
+  await page.goto('/#overview');
+  const days = row(page, 'DNS').locator('.ov-day');
+  await expect(days).toHaveCount(10, { timeout: 20_000 });
+  for (let i = 0; i < 9; i++) await expect(days.nth(i)).toHaveClass(/\bnone\b/);
+});
+
+test("a service whose own check says healthy still shows Act when a critical issue is open on it", async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/hub/health*', (route) => json(route, [{ name: 'Security', status: 'ok', statusLabel: 'healthy', meta: '' }]));
+  await page.goto('/#overview');
+  await expect(row(page, 'Security')).toContainText('3 critical or high security events', { timeout: 20_000 });
+  await expect(row(page, 'Security').locator('.ov-chip')).toHaveText('Act');
+});

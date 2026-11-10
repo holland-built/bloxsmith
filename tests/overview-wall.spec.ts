@@ -11,8 +11,8 @@ import { dataPayload, installBaselineWorld } from './page-fixtures';
 const fulfillJson = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 const row = (page: Page, name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
-// Cells after the row header: issues, measure, last 24h, state.
-const measure = (page: Page, name: string) => row(page, name).locator('td').nth(1);
+// Cells after the row header: measure, issues, last 10 days, state.
+const measure = (page: Page, name: string) => row(page, name).locator('td').nth(0);
 
 test('a row that counts something bad names it as an issue, with its severity and how much', async ({ page }) => {
   await installBaselineWorld(page);

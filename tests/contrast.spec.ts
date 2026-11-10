@@ -170,7 +170,9 @@ type Sample = {
   count?: number;
 };
 
-const QUIET_TEXT = '.text-dim, .text-muted, thead th';
+// Overview's top half has its own grey (Overview.css, 2026-11-10): .ov-muted,
+// the unit after each number, and the grey state words. Scanned like the rest.
+const QUIET_TEXT = '.text-dim, .text-muted, thead th, .ov-muted, .ov-look small, .ov-verdict, .ov-delta, .ov-chip';
 
 // Every panel on these four screens renders `Skeleton` (ui.jsx) while its own
 // fetch is in flight, so the number of skeletons still on the page is the app
