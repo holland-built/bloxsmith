@@ -73,5 +73,5 @@ test('with the backend unreachable, no check claims to have passed', async ({ pa
   await expect(list.getByText("Couldn't tell")).toHaveCount(4);
   const glance = page.getByRole('region', { name: 'Checks at a glance' });
   await expect(glance.locator('[data-tile="passed"] .bp-num')).toHaveText('0 of 4');
-  await expect(glance.locator('[data-tile="unknown"] .bp-num')).toHaveText('3 of 4');
+  await expect(glance.locator('[data-tile="unknown"] .bp-num')).toHaveText('4 of 4');
 });
