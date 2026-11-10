@@ -33,17 +33,17 @@ const DECLARED = [
   'security-triage-inbox',
   'security-response-summary',
   'security-threat-events',
-  'security-inventory',
+  'security-threat-feed-activity',
   'security-soc-insights',
   'security-lookalike-domains',
   'security-axur-incidents',
-  'security-ctem-exposure',
-  'security-asset-insights',
   'security-exposures',
   'security-asset-risk',
+  'security-ctem-exposure',
+  'security-asset-insights',
   'security-exposed-surface',
   'security-ctem-assets',
-  'security-threat-feed-activity',
+  'security-inventory',
 ];
 
 test.describe.configure({ mode: 'serial' });

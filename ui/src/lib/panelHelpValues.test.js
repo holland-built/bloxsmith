@@ -723,7 +723,7 @@ const CLAIMS = [
   },
   {
     panel: 'security-threat-feed-activity',
-    says: /the red part was blocked, the blue cap on top was let through/,
+    says: /the blue part was blocked, the grey cap on top was let through/,
     file: SECURITY,
     proofs: [
       // RE-POINTED 2026-08-10, and the copy is unchanged because the colours
@@ -734,13 +734,13 @@ const CLAIMS = [
       // where the proof belongs. Which series sits on TOP — the other half of
       // "the blue cap on top" — is proven in the entry immediately below, in
       // the module that now owns the stacking.
-      { re: /blockedColor=\{COLORS\.crit\}/, expect: 'the blocked series is COLORS.crit (red)' },
-      { re: /allowedColor=\{COLORS\.accent\}/, expect: 'the allowed series is COLORS.accent (blue)' },
+      { re: /blockedColor=\{COLORS\.accent\}/, expect: 'the blocked series is COLORS.accent (blue)' },
+      { re: /allowedColor=\{COLORS\.other\}/, expect: 'the allowed series is COLORS.other (grey)' },
     ],
   },
   {
     panel: 'security-threat-feed-activity',
-    says: /the red part was blocked, the blue cap on top was let through/,
+    says: /the blue part was blocked, the grey cap on top was let through/,
     file: CHART_STACKED,
     proofs: [
       { re: /dataKey="blocked" stackId="day" fill=\{blockedColor\}/, expect: 'blocked is the lower half of the stack' },
@@ -749,9 +749,9 @@ const CLAIMS = [
   },
   {
     panel: 'security-response-summary',
-    says: /The red figure counts critical events nobody has ticked off yet/,
+    says: /The first figure counts unticked critical events, red when there are any/,
     file: SECURITY,
-    proofs: [{ re: /label: 'Unacked Critical', value: unackedCrit, color: COLORS\.crit/, expect: 'the unacked-critical tile is COLORS.crit (red)' }],
+    proofs: [{ re: /label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 \? COLORS\.crit : undefined/, expect: 'the unacked-critical tile is COLORS.crit (red) only when above zero' }],
   },
   {
     panel: 'security-lookalike-domains',

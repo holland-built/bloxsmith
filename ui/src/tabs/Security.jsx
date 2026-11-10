@@ -3,7 +3,7 @@ import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable, TabIntro } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
@@ -11,6 +11,7 @@ import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampl
 import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import { SecurityHeadline } from './SecurityHeadline.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -75,14 +76,25 @@ export default function Security() {
 
   return (
     <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Security</h1>
-      <TabIntro>Threats and exposures, with the events waiting for you first.</TabIntro>
+      {/* The headline answers "am I under attack, and what needs action" in
+          five numbers, each read from a feed this page already loads and each
+          a jump to the panel it came from. Same look as Overview's tiles. */}
+      <div className="ov-look sec-top">
+        <div className="ov-head">
+          <h1>Security</h1>
+        </div>
+        <SecurityHeadline hub={hub} lookalikes={lookalikes} exposures={exposures} axur={axur} />
+      </div>
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A
           wrapper whose id only exists on the <Card> inside it is visible to the
           second and invisible to the first, and the panel jumps to the end on
-          reload. Each wrapper below forwards the id to its Card. */}
+          reload. Each wrapper below forwards the id to its Card.
+
+          The order reads top to bottom: what is happening now (events, the
+          threat feed, IQ), then outside threats (lookalikes, suppliers), then
+          what is exposed, and last what is configured. */}
       <CardGrid layoutKey="security">
         {/* All three read /api/hub/security -> dns_event, which the
             forwarding-proxy tier produces. Hidden as one group, and only when
@@ -97,17 +109,17 @@ export default function Security() {
             <SeverityHero key="security-threat-events" panelId="security-threat-events" hub={hub} events={events} />,
           ],
         })}
-        <SecurityInventory panelId="security-inventory" hub={hubDomains} />
+        <ThreatFeed panelId="security-threat-feed-activity" threats={threats} />
         <InsightsPanel panelId="security-soc-insights" insights={insights} />
         <LookalikeTable panelId="security-lookalike-domains" lookalikes={lookalikes} />
         <AxurPanel panelId="security-axur-incidents" axur={axur} />
-        <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
-        <AssetInsights panelId="security-asset-insights" assetInsights={assetInsights} />
         <ExposuresPanel panelId="security-exposures" exposures={exposures} />
         <AssetRiskPanel panelId="security-asset-risk" assetRisk={assetRisk} />
+        <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
+        <AssetInsights panelId="security-asset-insights" assetInsights={assetInsights} />
         <ExposedSurfacePanel panelId="security-exposed-surface" hostnames={exposedHostnames} ips={exposedIps} />
         <CtemAssetsPanel panelId="security-ctem-assets" ctemAssets={ctemAssets} />
-        <ThreatFeed panelId="security-threat-feed-activity" threats={threats} />
+        <SecurityInventory panelId="security-inventory" hub={hubDomains} />
         {savedCharts}
       </CardGrid>
     </div>
@@ -137,7 +149,6 @@ function SeverityHero({ panelId, hub, events }) {
     }
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
-  const scopeNote = sampleScopeNote(hub.data, 'events')
   const otherSev = events.length - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
 
   return (
@@ -187,11 +198,10 @@ function SeverityHero({ panelId, hub, events }) {
               />
             </Suspense>
           )}
-          {/* The severity legend above and the bars are both counted from
-              `events`, which is one capped page — so on a busy window they
-              describe the sample, not the window. The heading names the sample;
-              this names its scope, once, rather than four times in the legend. */}
-          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
+          {/* The severity legend and the bars are both counted from `events`,
+              one capped page. The heading's count names the sample ("50 events
+              shown, total unknown"), so the longer scope sentence is said once,
+              under the Triage Inbox, rather than again here. */}
         </>
       )}
     </Card>
@@ -218,9 +228,11 @@ function KpiStack({ panelId, hub, events, acks }) {
   const scopeNote = sampleScopeNote(d, 'events')
 
   const cells = [
-    { label: 'Unacked Critical', value: unackedCrit, color: COLORS.crit },
-    { label: 'Blocked', value: d.blocked ?? 0, color: COLORS.series },
-    { label: 'Logged', value: d.logged ?? 0, color: COLORS.other },
+    // Red only when there is something to act on; blocked and logged are
+    // counts, not problems, so they stay plain.
+    { label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined },
+    { label: 'Blocked', value: d.blocked ?? 0 },
+    { label: 'Logged', value: d.logged ?? 0 },
     { label: totalCell.label, value: totalCell.value },
   ]
 
@@ -252,7 +264,7 @@ function KpiStack({ panelId, hub, events, acks }) {
 
 // ---------- block action ----------
 
-function BlockCell({ domain, readOnly }) {
+function BlockCell({ domain, readOnly, urgent }) {
   const { COLORS } = useChartTheme()
   // idle | busy | verified | rejected | unverified | tokenRequired.
   // "verified" is the ONLY state that may show a green tick — it means a
@@ -330,8 +342,11 @@ function BlockCell({ domain, readOnly }) {
     )
   }
   return (
+    // Quiet on purpose: a plain text action at the end of the row, shown on
+    // critical and high rows and on the row under the pointer or focus, so
+    // the inbox is not a column of buttons. Touch screens always show it.
     <button onClick={() => run('block')} disabled={readOnly} title={readOnly ? 'Off: this tenant is read-only' : undefined}
-      className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted hover:text-field-txt disabled:opacity-50 disabled:cursor-not-allowed">Block</button>
+      className={`sec-block${urgent ? ' sec-urgent' : ''}`}>Block</button>
   )
 }
 
@@ -392,12 +407,6 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       ),
     },
     {
-      key: 'block',
-      label: 'Block',
-      keep: true,
-      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} />,
-    },
-    {
       key: 'severity',
       label: 'Severity',
       keep: true,
@@ -434,6 +443,12 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
         </span>
       ),
     },
+    {
+      key: 'block',
+      label: 'Block',
+      keep: true,
+      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} urgent={sevRank(r.severity) <= 1} />,
+    },
   ]
 
   return (
@@ -441,6 +456,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       panelId={panelId}
       span={6}
       title="Triage Inbox"
+      className="sec-triage"
       right={
         <div className="flex items-center gap-1.5">
           {['all', ...SEV_ORDER].map((s) => (
@@ -559,7 +575,6 @@ function LookalikeTable({ panelId, lookalikes }) {
 // Security tab with 14 panels instead of 13. Standing chrome, like every other
 // panel here: a reader who does not want it takes it off the page from its ⋯ menu.
 function AxurPanel({ panelId, axur }) {
-  const { COLORS } = useChartTheme()
   const d = axur.data ?? {}
   const rows = Array.isArray(d.vendors) ? d.vendors : []
 
@@ -572,7 +587,7 @@ function AxurPanel({ panelId, axur }) {
       sortable: true,
       // v can be missing. `v.toLocaleString()` on undefined threw, and a throw
       // in a cell takes the whole tab down with it.
-      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{typeof v === 'number' ? v.toLocaleString() : '—'}</span>,
+      render: (v) => <span>{typeof v === 'number' ? v.toLocaleString() : '—'}</span>,
     },
     {
       key: 'types_affected',
@@ -721,19 +736,19 @@ function ThreatFeed({ panelId, threats }) {
   return (
     <Card panelId={panelId} span={3} title="Threat Feed Activity">
       {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
-        <FeedUnavailable label="Threat feed activity unavailable" />
+        <FeedUnavailable reason={threats.error?.message || threats.data?.reason || undefined} label="Threat feed activity unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
         <>
           <div className="flex gap-5 mb-2">
-            <div><span className="text-figure font-semibold" style={{ color: COLORS.crit }}>{totals.block.toLocaleString()}</span><div className="text-note text-muted">Blocked</div></div>
+            <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="text-note text-muted">Blocked</div></div>
             <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="text-note text-muted">Allowed</div></div>
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
               label="Threat Feed Activity"
               data={chartData}
-              blockedColor={COLORS.crit}
-              allowedColor={COLORS.accent}
+              blockedColor={COLORS.accent}
+              allowedColor={COLORS.other}
               tickFormat={fmtShortDay}
               height={150}
             />

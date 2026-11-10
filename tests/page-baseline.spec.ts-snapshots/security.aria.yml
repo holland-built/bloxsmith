@@ -1,5 +1,11 @@
 - main "Security tab":
   - heading "Security" [level=1]
+  - region "Headline numbers":
+    - button /Critical or high \d+ events/
+    - button /Blocked \d+ events/
+    - button /Suspicious lookalikes of \d+ \d+/
+    - button "Exposures None reported"
+    - button /Credentials \d+ suppliers \d+ exposed/
   - button "Arrange panels"
   - heading "Triage Inbox" [level=2]
   - button "all"
@@ -12,9 +18,8 @@
   - 'button "Options: Triage Inbox"'
   - table:
     - rowgroup:
-      - row "Ack Block Severity Query Action Time":
+      - row "Ack Severity Query Action Time Block":
         - columnheader "Ack"
-        - columnheader "Block"
         - columnheader "Severity":
           - button "Severity"
         - columnheader "Query":
@@ -23,25 +28,26 @@
           - button "Action"
         - columnheader "Time":
           - button "Time"
+        - columnheader "Block"
     - rowgroup:
-      - row /Acknowledge bad\.baseline\.example Block HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM/:
+      - row /Acknowledge bad\.baseline\.example HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM Block/:
         - cell "Acknowledge bad.baseline.example":
           - checkbox "Acknowledge bad.baseline.example"
-        - cell "Block":
-          - button "Block"
         - cell "HIGH"
         - cell "bad.baseline.example"
         - cell "BLOCK"
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
-      - row /Acknowledge watch\.baseline\.example Block MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM/:
-        - cell "Acknowledge watch.baseline.example":
-          - checkbox "Acknowledge watch.baseline.example"
         - cell "Block":
           - button "Block"
+      - row /Acknowledge watch\.baseline\.example MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM Block/:
+        - cell "Acknowledge watch.baseline.example":
+          - checkbox "Acknowledge watch.baseline.example"
         - cell "MEDIUM"
         - cell "watch.baseline.example"
         - cell "LOG"
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+        - cell "Block":
+          - button "Block"
   - heading "Response Summary" [level=2]
   - 'button "About: Response Summary"': "About: ⓘ"
   - 'button "Options: Response Summary"'
@@ -52,11 +58,11 @@
   - 'button "Options: Threat Events — by Severity"'
   - text: critical 1 high 2 medium 3 low 4
   - application "Threat Events — by Severity chart": /\d+:\d+( \d+:\d+)+/
-  - heading "Security Inventory" [level=2]
-  - text: what is configured
-  - 'button "About: Security Inventory"': "About: ⓘ"
-  - 'button "Options: Security Inventory"'
-  - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
+  - heading "Threat Feed Activity" [level=2]
+  - 'button "About: Threat Feed Activity"': "About: ⓘ"
+  - 'button "Options: Threat Feed Activity"'
+  - text: /\d+ Blocked 0 Allowed/
+  - application "Threat Feed Activity chart": /Dec \d+ Dec \d+/
   - heading "IQ for Threat Defense" [level=2]
   - text: "1"
   - 'button "About: IQ for Threat Defense"': "About: ⓘ"
@@ -121,14 +127,6 @@
         - cell "baseline-supplier-b"
         - cell "2"
         - cell "1"
-  - heading "CTEM Exposure" [level=2]
-  - 'button "About: CTEM Exposure"': "About: ⓘ"
-  - 'button "Options: CTEM Exposure"'
-  - text: no data
-  - heading "Asset Insights" [level=2]
-  - 'button "About: Asset Insights"': "About: ⓘ"
-  - 'button "Options: Asset Insights"'
-  - text: /Total Findings \d+ baseline/
   - heading "Exposures" [level=2]
   - 'button "About: Exposures"': "About: ⓘ"
   - 'button "Options: Exposures"'
@@ -137,6 +135,14 @@
   - 'button "About: Asset Risk"': "About: ⓘ"
   - 'button "Options: Asset Risk"'
   - text: no asset risk data
+  - heading "CTEM Exposure" [level=2]
+  - 'button "About: CTEM Exposure"': "About: ⓘ"
+  - 'button "Options: CTEM Exposure"'
+  - text: no data
+  - heading "Asset Insights" [level=2]
+  - 'button "About: Asset Insights"': "About: ⓘ"
+  - 'button "Options: Asset Insights"'
+  - text: /Total Findings \d+ baseline/
   - heading "Exposed Surface" [level=2]
   - text: 0 hostnames · 0 IPs
   - 'button "About: Exposed Surface"': "About: ⓘ"
@@ -146,8 +152,8 @@
   - 'button "About: CTEM Assets"': "About: ⓘ"
   - 'button "Options: CTEM Assets"'
   - text: no CTEM asset data
-  - heading "Threat Feed Activity" [level=2]
-  - 'button "About: Threat Feed Activity"': "About: ⓘ"
-  - 'button "Options: Threat Feed Activity"'
-  - text: /\d+ Blocked 0 Allowed/
-  - application "Threat Feed Activity chart": /Dec \d+ Dec \d+/
+  - heading "Security Inventory" [level=2]
+  - text: what is configured
+  - 'button "About: Security Inventory"': "About: ⓘ"
+  - 'button "Options: Security Inventory"'
+  - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
