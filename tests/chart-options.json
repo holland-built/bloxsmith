@@ -3006,13 +3006,13 @@
       "time": "HostMetrics.timestamp"
     },
     {
-      "cube": "NetworkNstarDhcpLeaseActivity",
+      "cube": "DhcpLeaseActivityV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "dhcp",
-      "measure": "NetworkNstarDhcpLeaseActivity.total_count",
+      "measure": "DhcpLeaseActivityV1.total_count",
       "name": "DHCP lease changes",
-      "time": "NetworkNstarDhcpLeaseActivity.timestamp"
+      "time": "DhcpLeaseActivityV1.timestamp"
     },
     {
       "cube": "AssetDetails_ch_agg",
@@ -3046,6 +3046,10 @@
     "AssetDetails_ch_agg.taxonomy_super_category_label": "Category",
     "AssetDetails_ch_agg.taxonomy_type_label": "Asset type",
     "AssetDetails_ch_agg.vendor": "Vendor",
+    "DhcpLeaseActivityV1": "DHCP lease activity",
+    "DhcpLeaseActivityV1.lease_op": "What changed",
+    "DhcpLeaseActivityV1.timestamp": "Time",
+    "DhcpLeaseActivityV1.total_count": "Lease changes recorded",
     "DnsActivityV1": "DNS activity",
     "DnsActivityV1.device_ip": "Device address",
     "DnsActivityV1.device_name": "Device",
@@ -3058,10 +3062,6 @@
     "HostMetrics.avg_value": "Queries per second",
     "HostMetrics.metric_name": "Metric",
     "HostMetrics.timestamp": "Time",
-    "NetworkNstarDhcpLeaseActivity": "DHCP lease activity",
-    "NetworkNstarDhcpLeaseActivity.lease_op": "What changed",
-    "NetworkNstarDhcpLeaseActivity.timestamp": "Time",
-    "NetworkNstarDhcpLeaseActivity.total_count": "Lease changes recorded",
     "PortunusAggThreat_ch": "Security hits",
     "PortunusAggThreat_ch.action": "What happened",
     "PortunusAggThreat_ch.policy_name": "Policy",
@@ -3334,7 +3334,7 @@
     {
       "buckets": null,
       "fields": [
-        "NetworkNstarDhcpLeaseActivity.lease_op"
+        "DhcpLeaseActivityV1.lease_op"
       ],
       "id": "leaseop",
       "name": "What changed",
