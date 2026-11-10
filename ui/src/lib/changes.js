@@ -334,3 +334,46 @@ export function notability(rows, { truncated = false } = {}) {
     },
   ]
 }
+
+// ---------- short words for the restyled screen (2026-11-10) ----------
+
+/**
+ * A length of time in the words a person says: "under a minute", "49 min",
+ * "5 h", "5 h 12 min". The span bar and the window pill use it; the exact
+ * hh:mm:ss stays in their tips.
+ */
+export function formatSpanShort(ms) {
+  const mins = Math.floor(Math.max(0, Number(ms) || 0) / 60000)
+  if (mins < 1) return 'under a minute'
+  if (mins < 60) return `${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h} h ${m} min` : `${h} h`
+}
+
+/**
+ * The window this page can honestly claim. Uncapped, the server read the whole
+ * last 24 hours. Capped at ROW_CAP, it read only back to the oldest row it got,
+ * so the label names that real reach instead of "last 24 hours".
+ */
+export function windowLabel({ truncated = false, rows = [], nowMs } = {}) {
+  if (!truncated) return { capped: false, text: 'Last 24 hours', tip: `Every change in the last 24 hours, up to ${ROW_CAP}.` }
+  const span = dataSpan(rows)
+  if (span.earliestMs == null) return { capped: true, text: 'Window unknown', tip: capNotice({ truncated: true }).text }
+  return {
+    capped: true,
+    text: `Last ${formatSpanShort(nowMs - span.earliestMs)} only`,
+    tip: `Back to ${formatClock(span.earliestTs)}. ${capNotice({ truncated: true }).text}`,
+  }
+}
+
+/**
+ * Machine accounts arrive as 70-character ids. Long ones keep their start and
+ * their last few letters, which is where two of them differ; the full id goes
+ * in the cell's title.
+ */
+export function shortActor(user) {
+  const s = String(user ?? '').trim()
+  if (s.length <= 28) return s
+  return `${s.slice(0, 18)}…${s.slice(-6)}`
+}

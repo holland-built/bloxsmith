@@ -1,0 +1,35 @@
+/* What changed, in the dashboard look (2026-11-10). The tokens, the pill, the
+   tip, the verdict word and the chips come from Overview.css, so the two pages
+   read as one product; only what is particular to this page is here. */
+
+/* The page's two panels take the soft card of Overview's top half. */
+.chg [data-panel-id] { --radius-surface: 16px; border-color: var(--ov-line); box-shadow: var(--ov-shadow) }
+.chg [data-panel-id] h2 { font-size: 15px }
+
+.chg-pills { display: inline-flex; flex-wrap: wrap; gap: 8px }
+.chg-dim { color: var(--ov-muted) }
+
+/* Four tiles in one strip, divided by hairlines. Two across on a phone. */
+.chg-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--ov-line) }
+.chg-tile { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px; border-right: 1px solid var(--ov-line); min-width: 0; color: var(--ov-ink2) }
+.chg-tile:last-child { border-right: 0 }
+.chg-tile:hover { background: color-mix(in srgb, var(--ov-soft) 70%, transparent) }
+.chg-tile .ov-num { color: var(--ov-ink) }
+.chg-tile .ov-num.chg-alarm { color: var(--ov-crit) }
+.chg-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+@media (max-width: 760px) {
+  .chg-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .chg-tile:nth-child(2) { border-right: 0 }
+  .chg-tile:nth-child(-n + 2) { border-bottom: 1px solid var(--ov-line) }
+}
+
+/* The row limit: a grey note under the tiles, never a warning colour. */
+.chg-cap { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ov-ink2) }
+.chg-cap-i { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--ov-line2); font-size: 11px; font-style: italic; color: var(--ov-muted) }
+
+.chg-span { padding: 0 8px 8px; font-size: 13px; color: var(--ov-muted) }
+.chg-span b { color: var(--ov-ink); font-weight: 600 }
+
+.chg-colhead { color: var(--ov-muted) }
+.chg-group { background: var(--ov-soft) }
+.chg .ov-chip { text-transform: none; font-weight: 500; padding: 1px 8px; white-space: nowrap }

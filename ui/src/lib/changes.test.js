@@ -9,13 +9,16 @@ import {
   formatClock,
   formatDate,
   formatDuration,
+  formatSpanShort,
   groupByResource,
   isDeletion,
   isFailure,
   isOutOfHours,
   newActors,
   notability,
+  shortActor,
   sinceIso,
+  windowLabel,
   withinWindow,
 } from './changes.js'
 
@@ -477,4 +480,34 @@ test('when the feed was capped, a zero is Unknown and a count is a floor, never 
   const uncapped = notability(ACTOR_ROWS.map((r) => ({ ...r, action: 'DELETE', result: 'success' })), { truncated: false })
   assert.equal(uncapped.find((c) => c.key === 'failures').chip, 'None')
   assert.equal(uncapped.find((c) => c.key === 'deletions').atLeast, false)
+})
+
+// ---------- the restyled screen's short words (2026-11-10) ----------
+
+test('a span reads in everyday words, hand-checked', () => {
+  assert.equal(formatSpanShort(20 * 1000), 'under a minute')
+  assert.equal(formatSpanShort(49 * 60 * 1000 + 36 * 1000), '49 min')
+  assert.equal(formatSpanShort(5 * 3600 * 1000), '5 h')
+  assert.equal(formatSpanShort(5 * 3600 * 1000 + 12 * 60 * 1000), '5 h 12 min')
+})
+
+test('an uncapped feed claims the last 24 hours', () => {
+  assert.equal(windowLabel({ truncated: false, rows: [], nowMs: NOW }).text, 'Last 24 hours')
+})
+
+test('a capped feed names the window it really covers, never "last 24 hours"', () => {
+  // 500 rows reaching back 49 minutes: the review's live case of 2026-11-10.
+  const rows = [{ ts: new Date(NOW - 49 * 60 * 1000).toISOString() }, { ts: new Date(NOW - 60 * 1000).toISOString() }]
+  const w = windowLabel({ truncated: true, rows, nowMs: NOW })
+  assert.equal(w.capped, true)
+  assert.equal(w.text, 'Last 49 min only')
+  assert.doesNotMatch(w.text, /24 hours/)
+  assert.match(w.tip, /500/)
+})
+
+test('long machine account ids are shortened, short names are left alone', () => {
+  assert.equal(shortActor('actor-old'), 'actor-old')
+  const id = 'federation.host.jbeuiwrsmjsteobvhe3geolegjqtoobtmq2teyrugq4dmmzumu2tmytbgq3wizjweaqcaiba'
+  assert.equal(shortActor(id), 'federation.host.jb…qcaiba')
+  assert.equal(shortActor(null), '')
 })

@@ -429,7 +429,10 @@ for (const theme of ['dark', 'light'] as const) {
     const routes: Array<[route: string, floor: number]> = [
       ['#overview', 40],
       ['#assets', 20],
-      ['#changes', 40],
+      // 20, not 40, since the 2026-11-10 restyle moved the band's captions,
+      // the intro paragraph and the legend into tips: a loaded #changes on
+      // the page fixture now holds 38 quiet-text elements, by design.
+      ['#changes', 20],
       ['#dossier?q=172.16.128.1', 40],
     ];
     const failures: string[] = [];
