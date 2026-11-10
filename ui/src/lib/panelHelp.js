@@ -57,11 +57,11 @@ export const PANEL_HELP = {
   // ---- Daily ----
   'daily-open-issues': {
     what: 'Three counts: subnets 90% full or more (tiny /29 to /32 links included), machines offline or in error, and DNS zones with a problem recorded.',
-    look: 'Click any row to open the list behind it. A row reading "unavailable" in red means that one feed failed — the other two rows are still real.',
+    look: 'Click a count to open the list behind it, or hover or tap the number to see what is behind it. A count reading "unavailable" in red means that one feed failed — the other two counts are still real.',
   },
   'daily-security-today': {
     what: 'Threat events seen in the last hour, counted by how serious each one was, and how many were stopped rather than only written down.',
-    look: 'When the hour holds more events than were fetched, the title says so and a line under the figures says the figures were counted from that sample. A dash means the feed could not be read.',
+    look: 'When the hour holds more events than were fetched, the count by the title says so, and its tip says the figures were counted from that sample. A dash means the feed could not be read.',
   },
   'daily-top-capacity-risks': {
     what: 'A big network with only 40 addresses spare is a worse problem than a tiny one sitting at 99% full, so this ranks by addresses left, not by fullness.',
@@ -69,11 +69,11 @@ export const PANEL_HELP = {
   },
   'daily-hosts-attention': {
     what: 'Machines whose state is anything other than online or active, including the ones that never reported a state at all.',
-    look: 'Click a row to open the Infra tab already narrowed to these. The count in the header shows a dash, not 0, when the machines could not be read.',
+    look: 'Click a row to open the Infra tab already narrowed to these. Offline or in error comes first with a red dot, then degraded in amber, then the rest in grey.',
   },
   'daily-dns-zone-issues': {
     what: 'DNS zones with at least one configuration problem recorded against them, and what each of those problems is.',
-    look: 'The red number is how many problems that zone has. Click a row to open the DNS tab filtered to just these zones.',
+    look: 'The number is how many problems that zone has. Click a row to open the DNS tab filtered to just these zones.',
   },
 
   // ---- Network ----

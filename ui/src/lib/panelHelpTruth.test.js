@@ -178,8 +178,11 @@ const HOMES = panelHomes(FILES)
 // ---------------------------------------------------------------------------
 const RULES = [
   {
-    name: 'click a row/bar/square/slice',
-    claim: /\b(?:click|tap)(?:s|ing)?\b[^.]{0,45}?\b(?:rows?|bars?|squares?|slices?)\b/i,
+    // Counts and tiles too: Daily's Open Issues says "Click a count to open
+    // the list behind it" (2026-11-10), the same promise about a clickable
+    // number tile, and without these words it went unchecked.
+    name: 'click a row/bar/square/slice/count/tile',
+    claim: /\b(?:click|tap)(?:s|ing)?\b[^.]{0,45}?\b(?:rows?|bars?|squares?|slices?|counts?|tiles?)\b/i,
     evidence: /onClick|onRowClick/,
     needs: 'onClick or onRowClick handler',
   },

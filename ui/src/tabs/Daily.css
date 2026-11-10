@@ -1,0 +1,54 @@
+/* Daily report in the dashboard look the owner picked on 2026-11-09 (the
+   dashboard-design skill, as on Overview): a short title with an "Updated"
+   pill, the three counts as tiles in one card divided by hairlines, and the
+   words behind each number in a tip. Built on the app's own tokens, so light
+   and dark follow data-theme like every other card. */
+
+.dy-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px }
+.dy-head h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -.01em }
+.dy-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--color-card-border); background: var(--color-card); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--color-muted) }
+.dy-live { width: 7px; height: 7px; border-radius: 50%; background: var(--color-ok) }
+.dy-live.down { background: var(--color-crit) } .dy-live.wait { background: var(--color-muted) }
+
+.dy-muted { color: var(--color-muted) } .dy-small { font-size: 12.5px }
+.dy-act { color: var(--color-link); font-size: 13px; white-space: nowrap }
+.dy-act:hover { text-decoration: underline }
+
+/* Three tiles side by side, hairlines between; stacked when the card is narrow. */
+.dy-tiles-box { container-type: inline-size }
+.dy-tiles { display: grid; grid-template-columns: 1fr }
+.dy-tile { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; cursor: pointer; min-width: 0 }
+.dy-tile + .dy-tile { border-top: 1px solid var(--color-card-border) }
+.dy-tile:hover { background: color-mix(in srgb, var(--color-line) 70%, transparent) }
+@container (min-width: 520px) {
+  .dy-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+  .dy-tile + .dy-tile { border-top: 0; border-left: 1px solid var(--color-card-border) }
+}
+.dy-tile-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13.5px }
+.dy-name { color: var(--color-txt); font-weight: 500 }
+.dy-name:hover { text-decoration: underline }
+.dy-verdict { font-size: 12.5px; font-weight: 600 }
+.dy-verdict.ok { color: var(--color-muted) } .dy-verdict.warn { color: var(--color-warn) } .dy-verdict.crit { color: var(--color-crit) }
+.dy-num { font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; align-self: flex-start }
+.dy-num small { font-size: 13px; letter-spacing: 0; color: var(--color-muted); font-weight: 400 }
+.dy-num-word { font-size: 15px; font-weight: 600; line-height: 31px; align-self: flex-start }
+
+/* Security Today: six small figures, three to a row, hairlines between. */
+.dy-sec { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 }
+.dy-sec > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; min-width: 0 }
+.dy-sec > div:nth-child(n+4) { border-top: 1px solid var(--color-card-border) }
+.dy-sec > div:not(:nth-child(3n+1)) { border-left: 1px solid var(--color-card-border) }
+.dy-sec dt { color: var(--color-muted); font-size: 13px }
+.dy-sec dd { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums }
+
+/* One tip system, the same as Overview's: hover, focus, or tap. */
+.dy-tipwrap { position: relative; cursor: help }
+.dy-tipwrap:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px }
+.dy-tip { position: absolute; z-index: 30; left: 0; bottom: calc(100% + 8px); width: max-content; max-width: min(280px, 80vw);
+  background: #1f2530; color: #f3f3f5; border-radius: 9px; padding: 8px 11px; font-size: 12.5px; line-height: 1.4; font-weight: 400; letter-spacing: 0;
+  box-shadow: 0 12px 32px -8px rgb(0 0 0 / .4); pointer-events: none; text-align: left; white-space: normal; display: none }
+:root[data-theme="dark"] .dy-tip { background: #2a3548 }
+/* A tip by a card's right edge opens leftward, so it never widens the page. */
+.dy-tip-end .dy-tip { left: auto; right: 0 }
+.dy-tipwrap:hover > .dy-tip, .dy-tipwrap:focus-visible > .dy-tip, .dy-tipwrap[data-open] > .dy-tip { display: block }
+.dy-tipwrap[data-closed] > .dy-tip { display: none }

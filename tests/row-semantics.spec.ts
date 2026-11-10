@@ -104,7 +104,8 @@ test('Tab reaches a row, the whole row shows it, and Enter opens it', async ({ p
       rest: getComputedStyle(other).boxShadow,
     };
   });
-  expect(seen.label).toBe('View details for baseline-host-a');
+  // Offline hosts sort first on Daily (2026-11-10), so the first row is the offline one.
+  expect(seen.label).toBe('View details for baseline-host-c');
   expect(seen.ring, 'the focused row paints no ring').not.toBe('none');
   expect(seen.rest, 'a row that is not focused paints a ring').toBe('none');
 

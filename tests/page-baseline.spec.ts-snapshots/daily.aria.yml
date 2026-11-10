@@ -1,14 +1,19 @@
 - main "Daily tab":
-  - heading "Daily Briefing" [level=1]
-  - paragraph: /Open items as of .+, refreshed every \d+ seconds\./
+  - heading "Daily report" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
   - button "Arrange panels"
   - heading "Open Issues" [level=2]
-  - text: what needs you this morning
   - 'button "About: Open Issues"': "About: ⓘ"
   - 'button "Options: Open Issues"'
-  - button /1 Subnets ≥\d+% Util 1 without \/\d+–\/\d+ links\./
-  - button "1 Hosts Not Online 3 hosts loaded. 1 offline."
-  - 'button "1 DNS zones needing attention Most common: low ttl (1)."'
+  - link "Subnets":
+    - /url: "#network?minUtil=90&links=1"
+  - text: /Look 1 ≥\d+% full of \d+/
+  - link "Hosts":
+    - /url: "#infra?status=offline"
+  - text: Act 1 not online of 3
+  - link "DNS zones":
+    - /url: "#dns?issues=1"
+  - text: Look 1 with issues of 2
   - heading "Security Today" [level=2]
   - text: 2 events
   - 'button "About: Security Today"': "About: ⓘ"
@@ -26,7 +31,7 @@
   - term: logged
   - definition: "8"
   - heading "Top Capacity Risks" [level=2]
-  - text: /least free space, excl\. infra links top \d+/
+  - text: /least room left top \d+/
   - 'button "About: Top Capacity Risks"': "About: ⓘ"
   - 'button "Options: Top Capacity Risks"'
   - table:
@@ -63,7 +68,9 @@
         - cell /\d+ \/ \d+/
         - cell /\d+/
   - heading "Hosts Needing Attention" [level=2]
-  - text: 3 shown
+  - text: 3 listed
+  - link "Open Infra":
+    - /url: "#infra?status=not-online"
   - 'button "About: Hosts Needing Attention"': "About: ⓘ"
   - 'button "Options: Hosts Needing Attention"'
   - table:
@@ -72,23 +79,24 @@
         - columnheader "Hostname"
         - columnheader "Status"
     - rowgroup:
-      - row /View details for baseline-host-a/:
-        - cell /View details for baseline-host-a/:
-          - button "View details for baseline-host-a"
-          - text: "baseline-host-a"
-        - cell "ok"
-      - row /View details for baseline-host-b/:
-        - cell /View details for baseline-host-b/:
-          - button "View details for baseline-host-b"
-          - text: "baseline-host-b"
-        - cell "degraded"
       - row /View details for baseline-host-c/:
         - cell /View details for baseline-host-c/:
           - button "View details for baseline-host-c"
           - text: "baseline-host-c"
         - cell "offline"
+      - row /View details for baseline-host-b/:
+        - cell /View details for baseline-host-b/:
+          - button "View details for baseline-host-b"
+          - text: "baseline-host-b"
+        - cell "degraded"
+      - row /View details for baseline-host-a/:
+        - cell /View details for baseline-host-a/:
+          - button "View details for baseline-host-a"
+          - text: "baseline-host-a"
+        - cell "ok"
   - heading "DNS Zone Issues" [level=2]
-  - text: 1 zones
+  - link "Open DNS":
+    - /url: "#dns?issues=1"
   - 'button "About: DNS Zone Issues"': "About: ⓘ"
   - 'button "Options: DNS Zone Issues"'
   - table:

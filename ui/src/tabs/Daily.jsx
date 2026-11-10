@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useId, useMemo, useState } from 'react'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
@@ -7,6 +7,7 @@ import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCou
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 import { issueWord } from '../lib/plainWords.js'
+import './Daily.css'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -30,11 +31,11 @@ function feedStatus(api, name) {
 
 // ---------- main ----------
 
-// The briefing look: panels sit on the page itself, divided by a hairline rule
-// above each one, with no card box around them. Security Today is the one
-// filled panel, so the only box on the page is the one sample-based panel.
-const OPEN = 'bg-transparent! border-0! border-t! border-line! px-0! pt-4!'
-const FILLED = 'bg-line/40! border-0!'
+// The dashboard look the owner picked on 2026-11-09 (the dashboard-design
+// skill, as on Overview): a short title with an "Updated" pill, the three
+// counts as tiles in one card, and plain cards below. Each number is shown
+// once, in its tile; what is behind it is in a tip that opens on hover,
+// keyboard focus or tap, never a sentence under every number.
 
 export default function Daily() {
   const data = useApi('/api/data', { poll: 30000 })
@@ -61,17 +62,15 @@ export default function Daily() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-figure font-semibold tracking-tight mb-1">Daily Briefing</h1>
-      <p className="text-muted mb-4">
-        {asOf
-          ? `Open items as of ${asOf.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, refreshed every 30 seconds.`
-          : 'Loading open items.'}
-      </p>
+      <div className="dy-head">
+        <h1>Daily report</h1>
+        <Updated asOf={asOf} failed={!!data.error} />
+      </div>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
-      <CardGrid layoutKey="daily" className="gap-x-8! gap-y-6!">
+      <CardGrid layoutKey="daily">
         <IssueKpis panelId="daily-open-issues" subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
         <SecurityToday panelId="daily-security-today" sec={sec} />
         <TopCapacityRisks panelId="daily-top-capacity-risks" subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} stale={stale} />
@@ -82,9 +81,51 @@ export default function Daily() {
   )
 }
 
+// One tip for every number, the same behaviour as Overview's: hover, keyboard
+// focus or tap opens it, Escape closes it. The visible text stays the name;
+// the tip is its description.
+function Tip({ tip, children, className = '', ...rest }) {
+  const id = useId()
+  // null follows hover and focus; true is opened by a tap; false is closed by
+  // Escape, which has to beat :focus-visible (a key press turns it on).
+  const [open, setOpen] = useState(null)
+  if (!tip) return <span className={className} {...rest}>{children}</span>
+  return (
+    <span
+      className={`dy-tipwrap ${className}`}
+      tabIndex={0}
+      aria-describedby={id}
+      data-open={open === true || undefined}
+      data-closed={open === false || undefined}
+      onClick={() => setOpen((o) => o !== true)}
+      onBlur={() => setOpen(null)}
+      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
+      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+      {...rest}
+    >
+      {children}
+      <span role="tooltip" id={id} className="dy-tip">{tip}</span>
+    </span>
+  )
+}
+
+// When the inventory last arrived, and how often it refreshes (in the tip).
+// A failed refresh says so here once, in red, instead of a fresh-looking time.
+function Updated({ asOf, failed }) {
+  const time = asOf ? asOf.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  const label = failed ? 'Refresh failed' : time ? `Updated ${time}` : 'Checking…'
+  const tip = failed && time ? `Last good read ${time}. Tries again every 30 seconds.` : 'Refreshes every 30 seconds.'
+  return (
+    <Tip tip={tip} className="dy-pill">
+      <span className={`dy-live ${failed ? 'down' : time ? '' : 'wait'}`} aria-hidden="true" />
+      <span>{label}</span>
+    </Tip>
+  )
+}
+
 // ---------- KPI cards ----------
 
-function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
+function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId }) {
   const { COLORS } = useChartTheme()
   // `subnets` (data.subnets) is the union of the first-5,000 page and every
   // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
@@ -121,53 +162,69 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   const commonTypes = Object.entries(issueTypes).sort((a, b) => b[1] - a[1]).slice(0, 3)
 
   // Each KPI reads a DIFFERENT feed (subnets/hosts/zones) — one can be dead
-  // while the other two are fine, so the gate is per-row, not per-card.
+  // while the other two are fine, so the gate is per-tile, not per-card.
+  // `detail` is what is behind the number, from the same rows it counts; it
+  // is the number's tip. `of` is what the number is out of.
   const cells = [
     {
-      label: `Subnets ≥${UTIL_CRIT}% Util`, value: critSubnets.length, color: COLORS.crit, hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
+      key: 'subnets', name: 'Subnets', unit: `≥${UTIL_CRIT}% full`, value: critSubnets.length, sev: 'warn', hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
+      of: typeof totals?.subnets === 'number' ? totals.subnets : null,
       detail: `${critReal.length.toLocaleString()} without /29–/32 links.`,
     },
     {
-      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=offline', status: meta.hosts,
+      key: 'hosts', name: 'Hosts', unit: 'not online', value: badHosts.length, sev: 'crit', hash: 'infra?status=offline', status: meta.hosts,
+      of: hosts.length,
       detail: `${hosts.length.toLocaleString()} hosts loaded.` +
         (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
     },
     {
-      label: 'DNS zones needing attention', value: zonesWithIssues.length, color: COLORS.warn, hash: 'dns?issues=1', status: meta.zones,
+      key: 'zones', name: 'DNS zones', unit: 'with issues', value: zonesWithIssues.length, sev: 'warn', hash: 'dns?issues=1', status: meta.zones,
+      of: zones.length,
       detail: commonTypes.length ? `Most common: ${commonTypes.map(([t, n]) => `${issueWord(t)} (${n.toLocaleString()})`).join(', ')}.` : '',
     },
   ]
+  const tone = { crit: COLORS.crit, warn: COLORS.warn }
 
   return (
-    <Card span={4} panelId={panelId} title="Open Issues" note="what needs you this morning" className={OPEN}>
+    <Card span={4} panelId={panelId} title="Open Issues">
       {loading ? (
-        <Skeleton h={160} />
+        <Skeleton h={110} />
       ) : (
-        cells.map((c) => {
-          const unavailable = c.status === 'error'
-          // The label's parent is the row, and it holds the number too: the
-          // failure tests find a row by its label and look for the value beside it.
-          return (
-            <div
-              key={c.label}
-              role="button"
-              tabIndex={0}
-              onClick={() => { location.hash = c.hash }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-              className={`grid grid-cols-[6rem_1fr] items-baseline gap-x-4 py-3 border-b border-line last:border-b-0 cursor-pointer hover:bg-line/50 ${FOCUS_RING}`}
-            >
-              {unavailable ? (
-                <div className="row-span-2 text-note font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
-              ) : (
-                <div className="row-span-2 text-figure font-semibold tracking-tight tabular-nums text-right" style={{ color: c.value > 0 ? c.color : undefined }}>
-                  {c.value.toLocaleString()}
+        <div className="dy-tiles-box">
+        <div className="dy-tiles">
+          {cells.map((c) => {
+            const unavailable = c.status === 'error'
+            const bad = !unavailable && c.value > 0
+            const word = unavailable ? '' : bad ? (c.sev === 'crit' ? 'Act' : 'Look') : 'Healthy'
+            // A click anywhere on the tile opens the list behind it, except on
+            // the number, where a tap opens its tip. The name is the link a
+            // keyboard or screen reader uses.
+            return (
+              <div
+                key={c.key}
+                data-daily-tile={c.key}
+                className="dy-tile"
+                onClick={(e) => { if (!e.target.closest('.dy-tipwrap, a')) location.hash = c.hash }}
+              >
+                <div className="dy-tile-top">
+                  <a href={`#${c.hash}`} className="dy-name">{c.name}</a>
+                  {word && <span className={`dy-verdict ${bad ? c.sev : 'ok'}`}>{word}</span>}
                 </div>
-              )}
-              <div className="text-copy font-semibold">{c.label}</div>
-              <div className="col-start-2 text-note text-muted mt-0.5">{unavailable ? 'This feed did not answer.' : c.detail}</div>
-            </div>
-          )
-        })
+                {unavailable ? (
+                  <Tip tip="This feed did not answer." className="dy-num-word">
+                    <span style={{ color: COLORS.crit }}>unavailable</span>
+                  </Tip>
+                ) : (
+                  <Tip tip={c.detail || null} className="dy-num">
+                    <span style={{ color: bad ? tone[c.sev] : undefined }}>{c.value.toLocaleString()}</span> <small>{c.unit}</small>
+                  </Tip>
+                )}
+                <span className="dy-muted dy-small">{!unavailable && typeof c.of === 'number' ? `of ${c.of.toLocaleString()}` : '\u00a0'}</span>
+              </div>
+            )
+          })}
+        </div>
+        </div>
       )}
     </Card>
   )
@@ -186,9 +243,11 @@ function SecurityToday({ sec, panelId }) {
   const chips = [
     { label: 'critical', value: Number(counts.critical) || 0, color: COLORS.crit },
     { label: 'high', value: Number(counts.high) || 0, color: COLORS.warn },
-    { label: 'medium', value: Number(counts.medium) || 0, color: COLORS.other },
+    { label: 'medium', value: Number(counts.medium) || 0 },
     { label: 'low', value: Number(counts.low) || 0 },
-    { label: 'blocked', value: Number(sec.data?.blocked) || 0, color: COLORS.ok },
+    // Blocked is good news, so it stays plain: only what needs a look is
+    // coloured, and a green 33 would outshine a red 1.
+    { label: 'blocked', value: Number(sec.data?.blocked) || 0 },
     { label: 'logged', value: Number(sec.data?.logged) || 0 },
   ]
 
@@ -207,33 +266,34 @@ function SecurityToday({ sec, panelId }) {
   // moving window rather than a change in the day.
   const since = scopeNote ? sampleSince(sec.data) : null
 
+  // The count by the title is the sample it was counted from; its tip says
+  // so, and when the sample started, instead of two lines under the figures.
+  const scopeTip = [scopeNote, since && `The oldest is from ${since}.`].filter(Boolean).join(' ') || null
+
   return (
     <Card
       span={2}
       panelId={panelId}
       title="Security Today"
-      className={FILLED}
-      right={<span className="text-note text-muted">{sec.loading || secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
+      right={
+        <Tip tip={sec.loading || secDead ? null : scopeTip} className="dy-tip-end text-note text-muted">
+          <span>{sec.loading || secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>
+        </Tip>
+      }
     >
       {sec.loading ? (
         <Skeleton h={160} />
       ) : secDead ? (
         <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
       ) : (
-        <>
-          <dl className="divide-y divide-line">
-            {chips.map((c) => (
-              <div key={c.label} className="flex justify-between py-1.5">
-                <dt className="text-muted capitalize">{c.label}</dt>
-                <dd className="font-semibold tabular-nums" style={{ color: c.value > 0 ? c.color : undefined }}>
-                  {c.value.toLocaleString()}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
-          {since && <div className="text-note text-dim">The oldest is from {since}.</div>}
-        </>
+        <dl className="dy-sec">
+          {chips.map((c) => (
+            <div key={c.label}>
+              <dt className="capitalize">{c.label}</dt>
+              <dd style={{ color: c.value > 0 ? c.color : undefined }}>{c.value.toLocaleString()}</dd>
+            </div>
+          ))}
+        </dl>
       )}
     </Card>
   )
@@ -289,7 +349,13 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
   ]
 
   return (
-    <Card span={2} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-note text-muted">top 10</span>} className={OPEN}>
+    <Card
+      span={2}
+      panelId={panelId}
+      title="Top Capacity Risks"
+      note="least room left"
+      right={<Tip tip="The 10 with the fewest free addresses. /29–/32 links are left out." className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
+    >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
         <Skeleton h={220} />
@@ -313,8 +379,17 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
 
 function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
   const { COLORS } = useChartTheme()
-  const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
+  // Offline or in error first, then degraded, then the rest (pending,
+  // unknown). Only the first are what the Hosts tile counts, so only they get
+  // a red dot; degraded is amber and the rest grey.
+  const rank = { offline: 0, degraded: 1 }
+  const rows = hosts
+    .filter((h) => !/online|active/i.test(h.status || ''))
+    .map((h, i) => ({ h, i, r: rank[statusBucket(h.status)] ?? 2 }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map(({ h }) => h)
   const feedDead = hostsStatus === 'error' && hosts.length === 0
+  const dot = { offline: COLORS.crit, degraded: COLORS.warn }
 
   const columns = [
     {
@@ -323,7 +398,7 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
       keep: true,
       render: (v, h) => (
         <span className="flex items-center gap-2 min-w-0">
-          <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
+          <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: dot[statusBucket(h.status)] ?? COLORS.other }} />
           <span className="font-mono truncate" style={{ maxWidth: 180 }} title={h.name || h.ip || ''}>
             {h.name || h.ip || '—'}
           </span>
@@ -338,9 +413,16 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
       span={2}
       panelId={panelId}
       title="Hosts Needing Attention"
-      className={OPEN}
-      // "0 shown" off a dead feed reads as "nothing needs attention".
-      right={<span className="text-note text-muted">{loading || feedDead ? '—' : rows.length} shown</span>}
+      // Every host listed here (offline, degraded, pending, unknown), which is
+      // more than the Hosts tile counts, so it is its own number. A dash, never
+      // 0, while the hosts are loading or could not be read. The whole list is
+      // one click away, as on DNS Zone Issues, instead of "View all N" below.
+      right={
+        <span className="inline-flex items-baseline gap-3">
+          <span className="text-note text-muted">{loading || feedDead ? '—' : rows.length.toLocaleString()} listed</span>
+          <a href="#infra?status=not-online" className="dy-act">Open Infra</a>
+        </span>
+      }
     >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
@@ -354,7 +436,6 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
           rows={rows}
           columns={columns}
           limit={10}
-          viewAllHref="#infra?status=not-online"
           onRowClick={() => { location.hash = 'infra?status=not-online' }}
         />
       )}
@@ -379,7 +460,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
       keep: true,
       width: '2.5rem',
       render: (v) => (
-        <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
+        <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}>
           {v}
         </span>
       ),
@@ -393,9 +474,9 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
       span={2}
       panelId={panelId}
       title="DNS Zone Issues"
-      className={OPEN}
-      // "0 zones" off a dead feed reads as a clean estate.
-      right={<span className="text-note text-muted">{loading || feedDead ? '—' : rows.length} zones</span>}
+      // No count here: the DNS zones tile above is that number. The whole
+      // list is one click away instead.
+      right={<a href="#dns?issues=1" className="dy-act">Open DNS</a>}
     >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
@@ -409,7 +490,6 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
           rows={rows}
           columns={columns}
           limit={10}
-          viewAllHref="#dns?issues=1"
           onRowClick={() => { location.hash = 'dns?issues=1' }}
         />
       )}
