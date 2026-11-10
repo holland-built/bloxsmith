@@ -38,3 +38,9 @@
 .as-more { all: unset; box-sizing: border-box; cursor: pointer; margin-top: 4px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--as-accent) }
 .as-more:hover { text-decoration: underline }
 .as-more:focus-visible { outline: 2px solid var(--as-accent) }
+
+/* `all: unset` above also drops the app's 44px touch floor (index.css,
+   pointer: coarse), so these two put it back for a finger. */
+@media (pointer: coarse) {
+  .as-row, .as-more { min-height: 44px }
+}
