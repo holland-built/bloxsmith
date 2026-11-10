@@ -76,20 +76,7 @@ func (c *Client) ZoneUpdate(body M) (M, int) {
 	if has(body, "disabled") {
 		up["disabled"] = boolPy(body["disabled"])
 	}
-	if len(up) == 0 {
-		return M{"ok": false, "error": "no fields to update (comment/tags/disabled)"}, 400
-	}
-	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
-	}
-	resp, status, method := c.patchThenPut(objPath, up)
-	if updateFailed(status) {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
-	}
-	if updateUnreadable(resp, status) {
-		return updatedUnreadable("DNS zone", id, method, status), bodyStatus(status)
-	}
-	return M{"ok": true, "method": method, "zone": resultOrSelf(resp)}, 200
+	return c.applyUpdate(body, id, objPath, up, "comment/tags/disabled", "DNS zone", "zone")
 }
 
 // --- subnet ------------------------------------------------------------------
@@ -266,20 +253,7 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 	if has(body, "disabled") {
 		up["disabled"] = boolPy(body["disabled"])
 	}
-	if len(up) == 0 {
-		return M{"ok": false, "error": "no fields to update (name/comment/tags/disabled)"}, 400
-	}
-	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
-	}
-	resp, status, method := c.patchThenPut(objPath, up)
-	if updateFailed(status) {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
-	}
-	if updateUnreadable(resp, status) {
-		return updatedUnreadable("subnet", id, method, status), bodyStatus(status)
-	}
-	return M{"ok": true, "method": method, "subnet": resultOrSelf(resp)}, 200
+	return c.applyUpdate(body, id, objPath, up, "name/comment/tags/disabled", "subnet", "subnet")
 }
 
 // --- address_block (create only) ---------------------------------------------
@@ -370,20 +344,7 @@ func (c *Client) RangeUpdate(body M) (M, int) {
 	if has(body, "disabled") {
 		up["disabled"] = boolPy(body["disabled"])
 	}
-	if len(up) == 0 {
-		return M{"ok": false, "error": "no fields to update (start/end/comment/tags/disabled)"}, 400
-	}
-	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
-	}
-	resp, status, method := c.patchThenPut(objPath, up)
-	if updateFailed(status) {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
-	}
-	if updateUnreadable(resp, status) {
-		return updatedUnreadable("DHCP range", id, method, status), bodyStatus(status)
-	}
-	return M{"ok": true, "method": method, "range": resultOrSelf(resp)}, 200
+	return c.applyUpdate(body, id, objPath, up, "start/end/comment/tags/disabled", "DHCP range", "range")
 }
 
 // --- host --------------------------------------------------------------------
@@ -444,8 +405,17 @@ func (c *Client) HostUpdate(body M) (M, int) {
 	if has(body, "tags") {
 		up["tags"] = body["tags"]
 	}
+	return c.applyUpdate(body, id, objPath, up, "name/comment/addresses/tags", "host", "host")
+}
+
+// applyUpdate is the ending the resource update builders share: refuse an
+// empty update, preview a dry run, otherwise PATCH (or PUT) the object and
+// report. fields lists the updatable fields for the empty-update message, noun
+// names the object when the write landed but its reply could not be read, and
+// key is where the updated object goes in the result.
+func (c *Client) applyUpdate(body M, id, objPath string, up M, fields, noun, key string) (M, int) {
 	if len(up) == 0 {
-		return M{"ok": false, "error": "no fields to update (name/comment/addresses/tags)"}, 400
+		return M{"ok": false, "error": "no fields to update (" + fields + ")"}, 400
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
@@ -455,9 +425,9 @@ func (c *Client) HostUpdate(body M) (M, int) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	if updateUnreadable(resp, status) {
-		return updatedUnreadable("host", id, method, status), bodyStatus(status)
+		return updatedUnreadable(noun, id, method, status), bodyStatus(status)
 	}
-	return M{"ok": true, "method": method, "host": resultOrSelf(resp)}, 200
+	return M{"ok": true, "method": method, key: resultOrSelf(resp)}, 200
 }
 
 // --- dispatch (server.py:_EDIT_RESOURCES / _EDIT_RESULT_KEY) ------------------

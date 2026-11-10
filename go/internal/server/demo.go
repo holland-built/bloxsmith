@@ -122,49 +122,42 @@ func (d *Deps) demoSave(w http.ResponseWriter, r *http.Request, b map[string]any
 // step will run, and writes nothing. dry=0 builds.
 func (d *Deps) demoBuildStream(w http.ResponseWriter, r *http.Request) {
 	dry := provision.TruthyDry(queryM(r)["dry"])
-	if !d.roleGate(r, "operator") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
-	dm, why := d.demoFor(r)
-	send := func(e demo.Event) { emit(map[string]any{"event": e}) }
+	d.stream(w, r, "operator", func(emit sse.Emit) {
+		dm, why := d.demoFor(r)
+		send := func(e demo.Event) { emit(map[string]any{"event": e}) }
 
-	if dry {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		checks := dm.Preflight(ctx)
-		if why != "" {
-			checks = append(checks, demo.Check{OK: false, Says: "Ready to write to Infoblox", Fix: why})
+		if dry {
+			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+			defer cancel()
+			checks := dm.Preflight(ctx)
+			if why != "" {
+				checks = append(checks, demo.Check{OK: false, Says: "Ready to write to Infoblox", Fix: why})
+			}
+			code := map[string]any{"net": demo.Code("net"), "ip": demo.Code("ip"), "dns": demo.Code("dns")}
+			emit(map[string]any{"done": true, "dry": true, "checks": checks, "ready": demo.Ready(checks), "steps": demo.Steps, "code": code})
+			return
 		}
-		code := map[string]any{"net": demo.Code("net"), "ip": demo.Code("ip"), "dns": demo.Code("dns")}
-		emit(map[string]any{"done": true, "dry": true, "checks": checks, "ready": demo.Ready(checks), "steps": demo.Steps, "code": code})
-		return
-	}
-	if why != "" {
-		emit(map[string]any{"error": why})
-		return
-	}
-	// The build keeps going if the browser closes, so a half-built run is
-	// never abandoned midway; its record on disk shows where it got to.
-	ctx := context.WithoutCancel(r.Context())
-	run, err := dm.Build(ctx, send)
-	detail := map[string]any{}
-	if run != nil {
-		detail = map[string]any{"change": run.Change, "ip": run.IP, "vmid": run.VMID, "zone": run.Zone, "status": run.Status}
-	}
-	if err != nil {
-		detail["error"] = err.Error()
-		d.auditAppend("demo-build-error", httpx.Actor(r), detail)
-		emit(map[string]any{"error": err.Error(), "run": run})
-		return
-	}
-	d.auditAppend("demo-build", httpx.Actor(r), detail)
-	emit(map[string]any{"done": true, "run": run})
+		if why != "" {
+			emit(map[string]any{"error": why})
+			return
+		}
+		// The build keeps going if the browser closes, so a half-built run is
+		// never abandoned midway; its record on disk shows where it got to.
+		ctx := context.WithoutCancel(r.Context())
+		run, err := dm.Build(ctx, send)
+		detail := map[string]any{}
+		if run != nil {
+			detail = map[string]any{"change": run.Change, "ip": run.IP, "vmid": run.VMID, "zone": run.Zone, "status": run.Status}
+		}
+		if err != nil {
+			detail["error"] = err.Error()
+			d.auditAppend("demo-build-error", httpx.Actor(r), detail)
+			emit(map[string]any{"error": err.Error(), "run": run})
+			return
+		}
+		d.auditAppend("demo-build", httpx.Actor(r), detail)
+		emit(map[string]any{"done": true, "run": run})
+	})
 }
 
 // demoTeardownStream: dry=1 lists what the run would remove; dry=0 removes it.
@@ -172,38 +165,31 @@ func (d *Deps) demoTeardownStream(w http.ResponseWriter, r *http.Request) {
 	q := queryM(r)
 	dry := provision.TruthyDry(q["dry"])
 	change := strings.TrimSpace(provision.PyStr(q["change"]))
-	if !d.roleGate(r, "operator") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
-	dm, why := d.demoFor(r)
-	run, err := dm.Store.Load(change)
-	if err != nil {
-		emit(map[string]any{"error": "No demo run " + change})
-		return
-	}
-	if dry {
-		emit(map[string]any{"done": true, "dry": true, "run": run, "removes": demo.WouldRemove(run)})
-		return
-	}
-	if why != "" {
-		emit(map[string]any{"error": why})
-		return
-	}
-	ctx := context.WithoutCancel(r.Context())
-	run, err = dm.Teardown(ctx, change, func(e demo.Event) { emit(map[string]any{"event": e}) })
-	detail := map[string]any{"change": change}
-	if err != nil {
-		detail["error"] = err.Error()
-		d.auditAppend("demo-remove-error", httpx.Actor(r), detail)
-		emit(map[string]any{"error": err.Error(), "run": run})
-		return
-	}
-	d.auditAppend("demo-remove", httpx.Actor(r), detail)
-	emit(map[string]any{"done": true, "run": run})
+	d.stream(w, r, "operator", func(emit sse.Emit) {
+		dm, why := d.demoFor(r)
+		run, err := dm.Store.Load(change)
+		if err != nil {
+			emit(map[string]any{"error": "No demo run " + change})
+			return
+		}
+		if dry {
+			emit(map[string]any{"done": true, "dry": true, "run": run, "removes": demo.WouldRemove(run)})
+			return
+		}
+		if why != "" {
+			emit(map[string]any{"error": why})
+			return
+		}
+		ctx := context.WithoutCancel(r.Context())
+		run, err = dm.Teardown(ctx, change, func(e demo.Event) { emit(map[string]any{"event": e}) })
+		detail := map[string]any{"change": change}
+		if err != nil {
+			detail["error"] = err.Error()
+			d.auditAppend("demo-remove-error", httpx.Actor(r), detail)
+			emit(map[string]any{"error": err.Error(), "run": run})
+			return
+		}
+		d.auditAppend("demo-remove", httpx.Actor(r), detail)
+		emit(map[string]any{"done": true, "run": run})
+	})
 }

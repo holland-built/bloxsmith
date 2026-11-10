@@ -626,54 +626,19 @@ func (s *Service) FetchHubDomains() map[string]any {
 		"top_countries": countries.mostCommon(5),
 	}
 
-	anycastHA := make([]map[string]any, 0, len(anycast))
-	for _, item := range anycast {
-		a := asMap(item)
-		state := ""
-		if rt, ok := a["runtime_status"].(map[string]any); ok {
-			state = strings.ToLower(vToStr(orAny(rt["state"], rt)))
-		} else {
-			state = strings.ToLower(vToStr(a["runtime_status"]))
-		}
+	// The Sources page's rows, plus a severity.
+	anycastHA := normAnycast(anycast)
+	for _, row := range anycastHA {
+		a := row.(map[string]any)
+		state := a["state"].(string)
 		sev := "warn"
 		if strings.Contains(state, "up") || strings.Contains(state, "online") || strings.Contains(state, "healthy") {
 			sev = "ok"
 		}
-		anycastHA = append(anycastHA, map[string]any{
-			"name":     getStr(a["name"]),
-			"service":  getStr(a["service"]),
-			"ip":       getStr(a["anycast_ip_address"]),
-			"state":    orAny(state, "unknown"),
-			"severity": sev,
-		})
+		a["severity"] = sev
 	}
 
-	dfpHost := func(d map[string]any) string {
-		h := d["host"]
-		if lst, ok := h.([]any); ok {
-			if len(lst) > 0 {
-				if m, ok := lst[0].(map[string]any); ok {
-					return getStr(m["name"])
-				}
-			}
-			return ""
-		}
-		hs := vToStr(h)
-		if len(hs) > 40 {
-			hs = hs[:40]
-		}
-		return hs
-	}
-	dfpServices := make([]map[string]any, 0, len(dfp))
-	for _, item := range dfp {
-		d := asMap(item)
-		dfpServices = append(dfpServices, map[string]any{
-			"name":      getStr(d["name"]),
-			"mode":      orStr(d["forwarding_policy"], d["mode"], ""),
-			"host":      dfpHost(d),
-			"resolvers": len(asSlice(d["default_resolvers"])),
-		})
-	}
+	dfpServices := normSourceDFP(dfp)
 
 	qpsNum := func(h map[string]any) any {
 		q := h["qps"]

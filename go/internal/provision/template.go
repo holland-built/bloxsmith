@@ -264,8 +264,6 @@ func CidrToReverseZone(address string, prefixLen int) (string, error) {
 
 // --- validation (pure, no API calls) -----------------------------------------
 
-type vErr struct{ Field, Message string }
-
 type validator struct{ errors, warnings []M }
 
 func (v *validator) err(f, m string)  { v.errors = append(v.errors, M{"field": f, "message": m}) }

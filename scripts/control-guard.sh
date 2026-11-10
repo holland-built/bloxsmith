@@ -586,9 +586,9 @@ fi
 
 # =============================================================================
 # i. SSE panic guard -- go/internal/server/provision.go
-#    removes the `defer d.recoverStream(&emit, r)` line from
-#    teardownSeedDemoStream (identified by its unique next line, since the
-#    same defer also guards the other four streams). Without it, a panic
+#    removes the `defer d.recoverStream(&emit, r)` line from Deps.stream,
+#    the one opening every SSE handler shares (identified by its unique next
+#    line, `run(emit)`). Without it, a panic
 #    inside a teardown killed the whole server process mid-run, with a
 #    partially deleted tenant.
 #    stream_panic_test.go deliberately carries NO recover() of its own, so
@@ -605,8 +605,8 @@ verify_pristine "$REL"
 if apply_py "$ROOT/$REL" <<'PY'
 import sys
 path = sys.argv[1]
-OLD = '\tdefer d.recoverStream(&emit, r)\n\tif !dry && confirm != "DELETE" {'
-NEW = '\t// MUTATED by control-guard.sh: panic guard removed for the teardown/seed-demo stream\n\tif !dry && confirm != "DELETE" {'
+OLD = '\tdefer d.recoverStream(&emit, r)\n\trun(emit)\n'
+NEW = '\t// MUTATED by control-guard.sh: panic guard removed from the shared stream opening\n\trun(emit)\n'
 content = open(path, encoding="utf-8").read()
 n = content.count(OLD)
 if n != 1:
@@ -615,10 +615,10 @@ if n != 1:
 open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
 PY
 then
-  ok "i: mutation applied (recoverStream defer removed from teardown/seed-demo stream)"
+  ok "i: mutation applied (recoverStream defer removed from the shared stream opening)"
   finish_control "i" "$REL" "$GO" go test ./internal/server/ -run '^TestStreamPanicDoesNotKillTheServer$' -v
 else
-  bad "i: anchor not found (defer d.recoverStream(&emit, r) immediately followed by the confirm==DELETE check) — this guard is no longer testing anything"
+  bad "i: anchor not found (defer d.recoverStream(&emit, r) immediately followed by run(emit)) — this guard is no longer testing anything"
 fi
 
 # =============================================================================

@@ -873,22 +873,28 @@ func (p *SiteProvisioner) rollback(partial M) M {
 		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
 	}
 
-	// "not_needed" is the honest word for a rollback that ran and found nothing
-	// to undo (the run failed before creating anything). The old design wrote an
-	// empty residual list for that case, indistinguishable from a rollback that
-	// deleted everything successfully — and wrote it into an append-only, signed
-	// audit log that can never be amended.
-	// A non-empty residual is checked FIRST and outranks the counters.
-	//
-	// An undeletable object bumps neither `attempted` nor `deleted` — no DELETE
-	// was sent for it — so the counters cannot tell "deleted everything I
-	// attempted" apart from "deleted everything I attempted AND left something I
-	// could not attempt". MEASURED: with this case removed,
-	// TestSiteRollback_UnnameableForwardZoneBecomesResidual reports
-	// `outcome: "complete"` over a residual row naming a zone that is still up.
-	// `not_needed` is the other word the counters can produce here, when nothing
-	// else was recorded at all. Both are success words, and this goes into an
-	// append-only signed log that cannot be amended later.
+	return rollbackReport(attempted, deleted, residual)
+}
+
+// rollbackReport is the {outcome, attempted, deleted, residual} report both
+// provisioners' rollbacks return.
+//
+// "not_needed" is the honest word for a rollback that ran and found nothing to
+// undo (the run failed before creating anything, or every block already existed
+// and was skipped). The old design wrote an empty residual list for that case,
+// indistinguishable from a rollback that deleted everything successfully — and
+// wrote it into an append-only, signed audit log that can never be amended.
+//
+// A non-empty residual is checked FIRST and outranks the counters. An
+// undeletable object bumps neither `attempted` nor `deleted` — no DELETE was
+// sent for it — so the counters cannot tell "deleted everything I attempted"
+// apart from "deleted everything I attempted AND left something I could not
+// attempt", and both words they produce on their own, "not_needed" and
+// "complete", read as success. MEASURED: without this case,
+// TestSiteRollback_UnnameableForwardZoneBecomesResidual reported
+// `outcome: "complete"` over a zone that was still up, and a block rollback
+// reported `outcome: "not_needed"` over two live /16s.
+func rollbackReport(attempted, deleted int, residual []any) M {
 	outcome := "not_needed"
 	switch {
 	case len(residual) > 0:

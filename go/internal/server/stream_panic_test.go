@@ -23,8 +23,8 @@ import (
 // not a contrived panic: it is the exact one that killed the test binary while
 // the write lock's refusals were being proved load-bearing.
 //
-// Watched failing: with the `defer d.recoverStream(...)` lines removed from
-// provision.go, this test does not merely fail — the whole `go test` binary dies
+// Watched failing: with the `defer d.recoverStream(...)` line removed from
+// Deps.stream (provision.go), this test does not merely fail — the whole `go test` binary dies
 // with "panic: runtime error: invalid memory address", which is the point.
 func TestStreamPanicDoesNotKillTheServer(t *testing.T) {
 	dir := t.TempDir()

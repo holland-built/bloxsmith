@@ -217,11 +217,9 @@ func findTotal(body map[string]any, rowCount int) (int, bool) {
 // allowlisted summary. These keep the names this file already uses.
 func extractUpstreamMessage(snippet string) (string, bool) { return rest.UpstreamMessage(snippet) }
 
-// redactSnippet and logUpstreamError moved to internal/rest, beside the
-// UpstreamError they describe, when the dashboard needed the same safe logging
-// for its Axur probes. These stay as the names this file already uses.
-func redactSnippet(s string) string { return rest.RedactSnippet(s) }
-
+// logUpstreamError moved to internal/rest, beside the UpstreamError it
+// describes, when the dashboard needed the same safe logging for its Axur
+// probes. This stays as the name this file already uses.
 func logUpstreamError(ue *rest.UpstreamError) { rest.LogUpstreamError(ue) }
 
 // writeUpstreamError answers a failed upstream fetch with a 502 that carries

@@ -300,29 +300,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
 	}
 
-	// "not_needed" is the honest word for a rollback that ran and found nothing
-	// to undo (the run failed before creating anything, or every block already
-	// existed and was skipped). The old design recorded nothing at all for that
-	// case, which is indistinguishable from a rollback that deleted everything
-	// successfully.
-	// A non-empty residual outranks the counters, and is checked FIRST. An
-	// unnameable block sends no DELETE, so it moves neither counter — and both
-	// words the counters can produce on their own, "not_needed" and "complete",
-	// read as success over a list of blocks that are still up. MEASURED before
-	// this case existed: two live /16s and `outcome: "not_needed"`. Same rule and
-	// same reasoning as SiteProvisioner.rollback.
-	outcome := "not_needed"
-	switch {
-	case len(residual) > 0:
-		outcome = "incomplete"
-	case attempted == 0:
-		outcome = "not_needed"
-	case deleted == attempted:
-		outcome = "complete"
-	default:
-		outcome = "incomplete"
-	}
-	return M{"outcome": outcome, "attempted": attempted, "deleted": deleted, "residual": residual}
+	return rollbackReport(attempted, deleted, residual)
 }
 
 // Provision is BlockProvisioner.provision (server.py:1466). resilient=true skips
