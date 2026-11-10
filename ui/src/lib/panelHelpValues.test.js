@@ -486,7 +486,7 @@ const CLAIMS = [
     says: /Green is under 70% full, amber 70–89%, red 90% or more/,
     file: NETWORK,
     proofs: [
-      { re: /label: `<\$\{UTIL_WARN\}%`, test: \(u\) => utilBand\(u\) === 'ok', color: COLORS\.series/, expect: "the green bar is utilBand()'s 'ok' band, labelled from UTIL_WARN" },
+      { re: /label: `<\$\{UTIL_WARN\}%`, test: \(u\) => utilBand\(u\) === 'ok', color: paleOk\(COLORS\.ok\)/, expect: "the green bar is utilBand()'s 'ok' band, labelled from UTIL_WARN" },
       { re: /label: `\$\{UTIL_WARN\}–\$\{UTIL_CRIT - 1\}%`, test: \(u\) => utilBand\(u\) === 'warn', color: COLORS\.warn/, expect: "the amber bar is the 'warn' band, labelled 70–89%" },
       { re: /label: `≥\$\{UTIL_CRIT\}%`, test: \(u\) => utilBand\(u\) === 'crit', color: COLORS\.crit/, expect: "the red bar is the 'crit' band, labelled from UTIL_CRIT" },
     ],
