@@ -157,6 +157,8 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 
     const hosts = card(page, 'Hosts Needing Attention');
     await expect(hosts.getByText('Hosts feed unavailable')).toBeVisible();
+    await expect(hosts.getByText('— listed', { exact: true })).toBeVisible();
+    await expect(hosts.getByText('0 listed', { exact: true })).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
     await expect(zones.getByText('DNS zones feed unavailable')).toBeVisible();
@@ -179,6 +181,7 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 
     const hosts = card(page, 'Hosts Needing Attention');
     await expect(hosts.getByText('all hosts online')).toBeVisible();
+    await expect(hosts.getByText('0 listed', { exact: true })).toBeVisible();
     await expect(hosts.getByText('Hosts feed unavailable')).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
@@ -200,8 +203,10 @@ test.describe('Daily → loading, stale rows, and the Hosts drill-down', () => {
     await page.goto('/#daily');
 
     await expect(card(page, 'Security Today').getByText('— events', { exact: true })).toBeVisible();
+    await expect(card(page, 'Hosts Needing Attention').getByText('— listed', { exact: true })).toBeVisible();
     await expect(page.getByText('Checking…', { exact: true })).toBeVisible();
     await expect(page.getByText('0 events', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('0 listed', { exact: true })).toHaveCount(0);
     await expect(page.locator('[data-daily-tile]')).toHaveCount(0);
     await expect(page.getByText('Healthy', { exact: true })).toHaveCount(0);
   });

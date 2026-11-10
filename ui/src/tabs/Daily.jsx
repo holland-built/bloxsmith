@@ -413,6 +413,16 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
       span={2}
       panelId={panelId}
       title="Hosts Needing Attention"
+      // Every host listed here (offline, degraded, pending, unknown), which is
+      // more than the Hosts tile counts, so it is its own number. A dash, never
+      // 0, while the hosts are loading or could not be read. The whole list is
+      // one click away, as on DNS Zone Issues, instead of "View all N" below.
+      right={
+        <span className="inline-flex items-baseline gap-3">
+          <span className="text-note text-muted">{loading || feedDead ? '—' : rows.length.toLocaleString()} listed</span>
+          <a href="#infra?status=not-online" className="dy-act">Open Infra</a>
+        </span>
+      }
     >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (
@@ -426,7 +436,6 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
           rows={rows}
           columns={columns}
           limit={10}
-          viewAllHref="#infra?status=not-online"
           onRowClick={() => { location.hash = 'infra?status=not-online' }}
         />
       )}

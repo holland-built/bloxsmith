@@ -50,3 +50,17 @@ test('a click on the tile outside the number opens the list behind it', async ({
   await page.locator('[data-daily-tile="hosts"]').getByText('of 3', { exact: true }).click();
   await expect(page).toHaveURL(/#infra\?status=offline/);
 });
+
+test('Hosts Needing Attention says how many it lists, a number the Hosts tile does not repeat', async ({ page }) => {
+  const st = ['offline', 'error', 'degraded', 'degraded', 'degraded', 'pending'];
+  const hosts = st.map((status, i) => ({ id: `h${i}`, name: `host-${i}`, ip: `10.0.0.${i + 1}`, status, type: 'onprem' }));
+  await page.route('**/api/data*', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...dataPayload(), hosts }) }),
+  );
+  await page.goto('/#daily');
+  await expect(page.locator('[data-daily-tile="hosts"]').getByText('2', { exact: true })).toBeVisible();
+  const panel = page.locator('[data-panel-id="daily-hosts-attention"]');
+  await expect(panel.getByText('6 listed', { exact: true })).toBeVisible();
+  await expect(panel.locator('tbody tr')).toHaveCount(6);
+  await expect(panel.getByRole('link', { name: 'Open Infra' })).toHaveAttribute('href', '#infra?status=not-online');
+});
