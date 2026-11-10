@@ -251,7 +251,58 @@ const SOURCES = [
     naText:
       'The audit log is searched by who made a change and what kind of object it was — never by the name or address of the thing that changed — so there was nothing to ask it. The Audit tab searches it by user and by object kind.',
   },
+  // Kentik: what this address is doing on the network in the last hour, from a
+  // separate vendor (server: dashboard/kentik.go). The first row is the
+  // address's own totals; the rows under it are its busiest conversations.
+  // Not set up reads as `unsupported` with the server's reason naming Settings,
+  // so it can never pass for "no traffic". No tab to open: its login lives in
+  // Settings, which the reason names.
+  {
+    key: 'kentik',
+    label: 'Traffic (Kentik)',
+    short: 'Traffic',
+    applies: isIPQuery,
+    url: (q) => `/api/kentik/traffic?q=${encodeURIComponent(q)}`,
+    naText: 'Kentik is searched by IP address, and this query is not one — so there was nothing to ask it.',
+    noneText: 'Kentik saw no traffic to or from this address in the last hour',
+    unknownText: 'what this address is doing on the network',
+    unsupportedText: 'Kentik could not be asked. The reason is below.',
+    shape: (body) => [
+      {
+        id: 'kentik-total',
+        identity: fmt(body?.ip),
+        fields: [
+          ['Out', fmtBps(body?.bps_out)],
+          ['In', fmtBps(body?.bps_in)],
+          ['Window', 'last hour'],
+        ],
+      },
+      ...rowsOf(body).map((r, i) => ({
+        id: `kentik-${i}`,
+        identity: fmt(r.peer),
+        fields: [
+          ['Direction', r.direction === 'out' ? 'sent to' : 'received from'],
+          ['To port', [protoWord(r.protocol), r.port].filter((x) => x != null && x !== '').join(' ') || null],
+          ['Rate', fmtBps(r.bps)],
+        ],
+      })),
+    ],
+  },
 ]
+
+// Bits per second in the units a network engineer reads them in.
+function fmtBps(v) {
+  if (typeof v !== 'number' || !isFinite(v)) return null
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} Gb/s`
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} Mb/s`
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} kb/s`
+  return `${Math.round(v)} b/s`
+}
+
+// Kentik names protocols "UDP (17)"; the number adds nothing on screen.
+function protoWord(p) {
+  return typeof p === 'string' ? p.replace(/\s*\(\d+\)$/, '') : p
+}
 
 // The verdict guard, mirrored — NOT re-implemented and NOT edited.
 // DossierPanel.jsx:282-293 refuses to paint a verdict unless the body carries a
@@ -540,14 +591,14 @@ function Why({ src, q, state, reason }) {
             {reason ? <> Reported reason: <span className="font-mono text-note">{reason}</span></> : null}
           </span>
         </div>
-        <div className="mt-2 flex gap-2">
+        {src.tab && <div className="mt-2 flex gap-2">
           <a
             href={`#${src.tab}`}
             className="inline-flex items-center h-[23px] px-2 text-note no-underline border border-border bg-field text-field-txt hover:border-border-hover"
           >
             Open {src.tabLabel} tab
           </a>
-        </div>
+        </div>}
       </div>
     </div>
   )
@@ -612,7 +663,7 @@ function SourceSection({ src, q, onResult }) {
         {state === 'none' && <MessageCell tone="muted">{src.noneText}</MessageCell>}
         {state === 'na' && <MessageCell tone="muted">{src.naText}</MessageCell>}
         {state === 'noquery' && <MessageCell tone="muted">No query yet.</MessageCell>}
-        {state === 'unsupported' && <MessageCell>This tenant&rsquo;s API can&rsquo;t be asked for this.</MessageCell>}
+        {state === 'unsupported' && <MessageCell>{src.unsupportedText ?? <>This tenant&rsquo;s API can&rsquo;t be asked for this.</>}</MessageCell>}
         {state === 'error' && <MessageCell>This source could not be read.</MessageCell>}
       </div>
 

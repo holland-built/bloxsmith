@@ -13,6 +13,7 @@ func (d *Deps) registerThreatIntelRoutes(mux router) {
 	mux.HandleFunc("GET /api/lookalikes", d.lookalikes)
 	mux.HandleFunc("GET /api/assets", d.assets)
 	mux.HandleFunc("GET /api/axur", d.axur)
+	mux.HandleFunc("GET /api/kentik/traffic", d.kentikTraffic)
 }
 
 func (d *Deps) dossier(w http.ResponseWriter, r *http.Request) {
@@ -41,4 +42,12 @@ func (d *Deps) assets(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) axur(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/axur")
 	d.json(w, r, 200, d.dash(r).FetchAxurVendors())
+}
+
+// kentikTraffic serves what Kentik sees one IP doing in the last hour, for the
+// search result page. Always 200 with an availability body, like the search
+// routes, so the page can tell "not set up" and "failed" from "no traffic".
+func (d *Deps) kentikTraffic(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/kentik/traffic")
+	d.json(w, r, 200, d.dash(r).FetchKentikTraffic(r.URL.Query().Get("q")))
 }

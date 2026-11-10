@@ -672,6 +672,14 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/dossier', body: DOSSIER, required: true },
     { method: 'GET', path: '/api/search/dns', body: SEARCH_DNS, required: true },
     { method: 'GET', path: '/api/csp/assets', body: ASSETS, required: true },
+    // Not required: the baseline query is a hostname, so the Kentik row is not
+    // applicable and asks nothing. An IP query gets the e2e server's real
+    // answer for a vault with no Kentik login saved.
+    {
+      method: 'GET',
+      path: '/api/kentik/traffic',
+      body: { availability: 'unsupported', configured: false, rows: [], reason: 'Kentik is not set up. Add the Kentik login email and API token in Settings, under Integrations.' },
+    },
   ],
 };
 

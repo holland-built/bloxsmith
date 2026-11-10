@@ -578,6 +578,33 @@ func (v *Vault) SetAxur(key string) map[string]any {
 	return r
 }
 
+// SetKentik stores the Kentik login, or with both values empty clears it.
+// Half a login is refused rather than stored: an email without its token (or
+// the reverse) would send Kentik a request that can only fail, and the panel
+// would then report an outage for what is really a typo. Same snapshot and
+// no-rotateAuth rules as SetAxur above; dashboard.FetchKentikTraffic folds a
+// fingerprint of the login into its cache key.
+func (v *Vault) SetKentik(email, token string) map[string]any {
+	email, token = strings.TrimSpace(email), strings.TrimSpace(token)
+	if (email == "") != (token == "") {
+		return fail("both the email and the token are needed")
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.unlocked {
+		return fail("locked")
+	}
+	snap := v.snapshot()
+	v.kentikEmail, v.kentikToken = email, token
+	if err := v.save(); err != nil {
+		v.restore(snap)
+		return fail(err.Error())
+	}
+	r := ok()
+	r["stored"] = token != ""
+	return r
+}
+
 // SetDemo stores (or, with "", clears) the Demo server settings JSON.
 func (v *Vault) SetDemo(js string) map[string]any {
 	v.mu.Lock()
@@ -1020,6 +1047,8 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 		// must not read this as "no key exists", which is why the Settings
 		// section is only reachable with the vault open.
 		"hasAxur": v.axur != "",
+		// Same rule as hasAxur: whether a Kentik login is stored, never it.
+		"hasKentik": v.kentikToken != "",
 		"llm": map[string]any{
 			"hasKey":   v.groq != "",
 			"base_url": v.llmBase,

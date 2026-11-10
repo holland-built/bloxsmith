@@ -79,6 +79,10 @@ type payload struct {
 	// right answer for an older file, not a migration gap, exactly as the
 	// WriteAllowed comment above records for its own field.
 	Axur string `json:"axur"`
+	// Kentik is the network-traffic vendor's login: the account email and API
+	// token, sent as two headers. Absent in older vaults, which decodes to "".
+	KentikEmail string `json:"kentik_email"`
+	KentikToken string `json:"kentik_token"`
 	// Demo is the Demo server settings (Proxmox target, demo network, NIOS-X
 	// join token) as one JSON object the demo package reads. Held here because
 	// the join token is a secret. Absent in older vaults, which decodes to "".
@@ -123,17 +127,19 @@ type Vault struct {
 	// consumers must read it through the lock-guarded accessors (LLMCreds,
 	// ActiveKey, ActiveLabel, IsUnlocked, Snapshot) so a lock/unlock/set mutation
 	// can't race a read (data-race fix).
-	unlocked  bool
-	tenants   []Tenant
-	active    *string
-	groq      string
-	axur      string
-	demo      string
-	llmBase   string
-	llmModel  string
-	llmEffort string
-	key       *fernet.Key // derived Fernet key
-	salt      string      // std-b64 salt (as stored)
+	unlocked    bool
+	tenants     []Tenant
+	active      *string
+	groq        string
+	axur        string
+	kentikEmail string
+	kentikToken string
+	demo        string
+	llmBase     string
+	llmModel    string
+	llmEffort   string
+	key         *fernet.Key // derived Fernet key
+	salt        string      // std-b64 salt (as stored)
 	// ver is the vault-file version v.key was derived under, and therefore the
 	// only correct value for the next save()'s envelope. It travels WITH the key
 	// — every site that assigns one assigns the other in the same statement, and
@@ -197,6 +203,8 @@ type vaultSnap struct {
 	active       *string
 	groq         string
 	axur         string
+	kentikEmail  string
+	kentikToken  string
 	demo         string
 	llmBase      string
 	llmModel     string
@@ -215,7 +223,7 @@ func (v *Vault) snapshot() vaultSnap {
 	}
 	w := make([]string, len(v.writeAllowed))
 	copy(w, v.writeAllowed)
-	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, demo: v.demo, llmBase: v.llmBase, llmModel: v.llmModel, llmEffort: v.llmEffort, writeAllowed: w}
+	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, kentikEmail: v.kentikEmail, kentikToken: v.kentikToken, demo: v.demo, llmBase: v.llmBase, llmModel: v.llmModel, llmEffort: v.llmEffort, writeAllowed: w}
 }
 
 // restore rolls the mutable state back to a snapshot (caller holds v.mu).
@@ -224,6 +232,7 @@ func (v *Vault) restore(s vaultSnap) {
 	v.active = s.active
 	v.groq = s.groq
 	v.axur = s.axur
+	v.kentikEmail, v.kentikToken = s.kentikEmail, s.kentikToken
 	v.demo = s.demo
 	v.llmBase = s.llmBase
 	v.llmModel = s.llmModel
@@ -262,6 +271,14 @@ func (v *Vault) AxurKey() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.axur
+}
+
+// KentikCreds returns the stored Kentik email and token, lock-guarded like
+// AxurKey. Both or neither: SetKentik never stores half a login.
+func (v *Vault) KentikCreds() (email, token string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.kentikEmail, v.kentikToken
 }
 
 // DemoConfig returns the stored Demo server settings as JSON, or "" when none
@@ -384,6 +401,7 @@ func (v *Vault) Init(passphrase string) error {
 	v.tenants = nil
 	v.active = nil
 	v.groq, v.axur, v.demo, v.llmBase, v.llmModel, v.llmEffort = "", "", "", "", "", ""
+	v.kentikEmail, v.kentikToken = "", ""
 	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	if err := v.save(); err != nil {
@@ -457,6 +475,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.active = p.Active
 	v.groq = p.Groq
 	v.axur = p.Axur
+	v.kentikEmail, v.kentikToken = p.KentikEmail, p.KentikToken
 	v.demo = p.Demo
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
@@ -532,6 +551,8 @@ func (v *Vault) save() error {
 		Active:       v.active,
 		Groq:         v.groq,
 		Axur:         v.axur,
+		KentikEmail:  v.kentikEmail,
+		KentikToken:  v.kentikToken,
 		Demo:         v.demo,
 		LLMBase:      v.llmBase,
 		LLMModel:     v.llmModel,
@@ -678,6 +699,7 @@ func (v *Vault) lockLocked() {
 	// by asking the vault whether it is unlocked, so a lock reads as "locked",
 	// never as "you never set one".
 	v.axur = ""
+	v.kentikEmail, v.kentikToken = "", ""
 	v.demo = ""
 	// Cleared with the rest of the decrypted state: a locked vault must not be
 	// able to answer "is this tenant writable" from memory. WriteAllowed()
