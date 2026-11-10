@@ -611,14 +611,18 @@ test('the ribbon never paints Unavailable before a source has reported', async (
 // in this app turns into the unlock prompt.
 test.describe('network discipline', () => {
   test('a request that never answers is given up on, and says so', async ({ page }) => {
-    // The budget is 45s (see DOSSIER_TIMEOUT_MS), so this test has to outlive it.
+    // The budget is 45s (see DOSSIER_TIMEOUT_MS), so this test has to outlive
+    // it. The budget is the browser's own setTimeout (abortAfter in
+    // lib/api.js), so a fake clock can run past it without waiting it out.
     test.setTimeout(120_000);
     await routeAll(page);
     // Registered after routeAll so it wins: this handler never fulfills.
     await page.route('**/api/dossier?*', () => {});
+    await page.clock.install();
     await page.goto('/#dossier?q=172.16.128.1');
 
     await expect(row(page, 'threat')).toHaveAttribute('data-dossier-state', 'loading');
+    await page.clock.runFor(46_000);
     await expect(row(page, 'threat')).toHaveAttribute('data-dossier-state', 'error', { timeout: 90_000 });
     const why = page.locator('[data-dossier-why="threat"]');
     await expect(why).toContainText(/stopped waiting/i);

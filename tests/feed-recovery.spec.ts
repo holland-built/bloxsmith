@@ -47,6 +47,19 @@ const MAX_RETRY_WINDOW_MS = 15_000;
 // so any request landing in it is the bug.
 const OVERRUN_GUARD_MS = 12_000;
 
+// The retry waits are the browser's own setTimeout (useApi in lib/api.js), so
+// each test installs a fake clock and moves it forward instead of waiting the
+// seconds out. It moves a second at a time with a short real pause between, so
+// a request one step's timers start has reached the route handler (and been
+// answered) before the next step. One big jump would also run past useApi's
+// own 12s request budget while a request was still in flight.
+async function advance(page: import('@playwright/test').Page, ms: number) {
+  for (let done = 0; done < ms; done += 1000) {
+    await page.clock.runFor(Math.min(1000, ms - done));
+    await page.waitForTimeout(30);
+  }
+}
+
 // Same pin failure-not-absence-4.spec.ts uses, for the same reason: a transient
 // /api/vault/status failure swaps the whole dashboard for "Vault status
 // unavailable", and none of these specs grade the vault gate.
@@ -73,6 +86,7 @@ test.describe('Lookalike Domains (/api/lookalikes fails twice, then answers)', (
       return requests <= 2 ? dead(route) : fulfillJson(route, HEALTHY);
     });
 
+    await page.clock.install();
     await page.goto('/#security');
     const panel = card(page, 'Lookalike Domains');
     await expect(panel.getByText('Lookalike domain feed unavailable')).toBeVisible();
@@ -84,7 +98,12 @@ test.describe('Lookalike Domains (/api/lookalikes fails twice, then answers)', (
     // app reloads itself by any route a listener would miss.
     await page.evaluate(() => { (window as any).__feedRecoverySentinel = 'planted'; });
 
-    await expect(panel.getByText('paypa1-secure.example')).toBeVisible({ timeout: MAX_RETRY_WINDOW_MS + 15_000 });
+    // The same budget as before, now counted in the page's fake time.
+    for (let t = 0; t < MAX_RETRY_WINDOW_MS + 15_000; t += 1000) {
+      if (await panel.getByText('paypa1-secure.example').isVisible()) break;
+      await advance(page, 1000);
+    }
+    await expect(panel.getByText('paypa1-secure.example')).toBeVisible();
     await expect(panel.getByText('goog1e-mail.example')).toBeVisible();
     // The count re-reads as a measurement: "—  detected" means nothing was measured.
     await expect(panel.getByText('2 detected', { exact: true })).toBeVisible();
@@ -109,20 +128,19 @@ test.describe('Lookalike Domains (/api/lookalikes permanently dead)', () => {
       return healthy ? fulfillJson(route, HEALTHY) : dead(route);
     });
 
+    await page.clock.install();
     await page.goto('/#security');
     const panel = card(page, 'Lookalike Domains');
     await expect(panel.getByText('Lookalike domain feed unavailable')).toBeVisible();
 
-    await expect
-      .poll(() => requests, {
-        message: 'attempts made against a route that never answers',
-        timeout: MAX_RETRY_WINDOW_MS + 15_000,
-        intervals: [250],
-      })
-      .toBe(3);
+    // The same budget as before, now counted in the page's fake time.
+    for (let t = 0; t < MAX_RETRY_WINDOW_MS + 15_000 && requests < 3; t += 1000) {
+      await advance(page, 1000);
+    }
+    expect(requests, 'attempts made against a route that never answers').toBe(3);
 
     // The bound is the point: an unbounded retry would also reach 3.
-    await page.waitForTimeout(OVERRUN_GUARD_MS);
+    await advance(page, OVERRUN_GUARD_MS);
     expect(requests, 'the attempt budget is spent — nothing may be scheduled after it').toBe(3);
 
     // Terminal state has to leave the user somewhere to go. Keyboard-first,
@@ -154,13 +172,14 @@ test.describe('Lookalike Domains (/api/lookalikes answers 503 {locked:true})', (
       return locked(route);
     });
 
+    await page.clock.install();
     await page.goto('/#security');
     const panel = card(page, 'Lookalike Domains');
     await expect(panel).toBeVisible();
 
     // Long enough that both scheduled retries would have landed by now if the
     // vault-locked branch fell through to the error path.
-    await page.waitForTimeout(MAX_RETRY_WINDOW_MS + 5_000);
+    await advance(page, MAX_RETRY_WINDOW_MS + 5_000);
     expect(requests, 'locked is a final answer — asking again cannot change it').toBe(1);
 
     // It never reaches .catch at all, so `error` stays null and the panel never

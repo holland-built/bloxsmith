@@ -66,17 +66,25 @@ test('a cold Assets read that outlives the old budget still renders', async ({ p
   let heldList = false;
   let heldFilters = false;
 
+  // THE HOLD IS COUNTED IN THE PAGE'S TIME, NOT OURS. The budget under test is
+  // the browser's own setTimeout (abortAfter in lib/api.js), so the page runs
+  // on a fake clock: both first reads are held until that clock has been moved
+  // COLD_HOLD_MS forward, then answered. The browser sees exactly the 15s it
+  // used to wait in real time, and the test does not spend them.
+  let release!: () => void;
+  const released = new Promise<void>((r) => { release = r; });
+
   await page.route('**/api/csp/assets*', async (route) => {
     if (!heldList) {
       heldList = true;
-      await new Promise((r) => setTimeout(r, COLD_HOLD_MS));
+      await released;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: ASSETS_BODY });
   });
   await page.route('**/api/csp/asset-filters*', async (route) => {
     if (!heldFilters) {
       heldFilters = true;
-      await new Promise((r) => setTimeout(r, COLD_HOLD_MS));
+      await released;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: FILTERS_BODY });
   });
@@ -96,16 +104,30 @@ test('a cold Assets read that outlives the old budget still renders', async ({ p
   // assertion. The sampler watches for the failure copy for the whole load
   // rather than checking once at the end, because it is transient by nature.
   const failureSeen: string[] = [];
-  const watch = setInterval(async () => {
+  const sample = async () => {
     for (const phrase of ['Asset inventory unavailable', 'Asset filter feed unavailable']) {
       try {
         if (await page.getByText(phrase).count()) failureSeen.push(phrase);
       } catch { /* page mid-navigation */ }
     }
-  }, 250);
+  };
+  const watch = setInterval(sample, 250);
 
+  await page.clock.install();
   await page.goto('/#assets');
   await expect(page.locator('main h1')).toHaveText('Assets');
+
+  // Both reads are in flight and held. Move the page's clock through the hold
+  // half a second at a time, sampling the screen after each step: the failure
+  // copy, if it appears, lasts only until the retry ~1-3s later, and one jump
+  // would never let the page paint it.
+  await expect.poll(() => heldList && heldFilters, { timeout: 30_000 }).toBe(true);
+  for (let t = 0; t < COLD_HOLD_MS; t += 500) {
+    await page.clock.runFor(500);
+    await page.waitForTimeout(30);
+    await sample();
+  }
+  release();
 
   const table = page.locator('main table').first();
   await table.waitFor({ state: 'visible', timeout: 90000 });

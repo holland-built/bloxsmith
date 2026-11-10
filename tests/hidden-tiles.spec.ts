@@ -93,6 +93,13 @@ async function reloadTab(page: Page, panels: number) {
   await page.waitForTimeout(1200);
 }
 
+// Resolves when the layout save the next gesture triggers has been answered.
+// Every layout change POSTs /api/views at once (ui.jsx ctx.apply), so waiting
+// for that answer replaces the fixed 600ms that used to stand in for it. Start
+// it together with the gesture, so the answer cannot arrive before the wait.
+const nextSave = (page: Page) =>
+  page.waitForResponse((r) => r.url().endsWith('/api/views') && r.request().method() === 'POST');
+
 const strip = (page: Page) => page.getByTestId('hidden-tiles');
 const arrangeBtn = (page: Page) => page.getByRole('button', { name: 'Arrange panels', exact: true });
 const dialog = (page: Page) => page.locator('[data-arrange-dialog]');
@@ -173,8 +180,7 @@ test('hiding a tile takes it off the grid, and the window lists it under "Off th
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
 
   await openPanelMenu(page, SECURITY_TODAY.id);
-  await hideButton(page, SECURITY_TODAY.id).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), hideButton(page, SECURITY_TODAY.id).click()]);
 
   // Gone from the DOM entirely, not collapsed and not zero-height: anything
   // left behind would still be a grid item and would still take a track.
@@ -255,8 +261,7 @@ test('Move up in the window saves exactly the order a drag saves', async ({ page
   await expect(moveDown(page, OPEN_ISSUES.name)).toBeEnabled();
   await expect(moveDown(page, 'DNS Zone Issues')).toBeDisabled();
 
-  await moveUp(page, SECURITY_TODAY.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), moveUp(page, SECURITY_TODAY.name).click()]);
 
   // Same order, from the same starting point, by the other route.
   const popupSaved = (await savedBlob(request)).order;
@@ -284,15 +289,13 @@ test('a change made in the window survives a reload, both ways round', async ({ 
 
   // Take one off the page from inside the window.
   await openArrange(page);
-  await takeOff(page, SECURITY_TODAY.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), takeOff(page, SECURITY_TODAY.name).click()]);
   await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(0);
   await expect(putBack(page, SECURITY_TODAY.name)).toBeVisible();
   expect((await savedBlob(request)).layout.hidden).toEqual([SECURITY_TODAY.id]);
 
   // And move one, so the reload has to carry both halves of the blob.
-  await moveUp(page, HOSTS_ATTENTION.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), moveUp(page, HOSTS_ATTENTION.name).click()]);
   const AFTER = [
     'daily-open-issues',
     'daily-hosts-attention',
@@ -310,8 +313,7 @@ test('a change made in the window survives a reload, both ways round', async ({ 
 
   // Put it back, from the window on a page nobody has interacted with.
   await openArrange(page);
-  await putBack(page, SECURITY_TODAY.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), putBack(page, SECURITY_TODAY.name).click()]);
   await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
   // At the END of the page, because it was not in the DOM when the order was
   // last saved and so the saved order does not name it. That is the same rule a
@@ -376,8 +378,7 @@ test('the window can be opened, driven and closed by keyboard alone, and hands f
     `the ${HOSTS_ATTENTION.id} hide button`,
     4,
   );
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), page.keyboard.press('Enter')]);
   await expect(page.locator(`[data-panel-id="${HOSTS_ATTENTION.id}"]`)).toHaveCount(0);
 
   // Reload, so the way back has to be found on a page nobody has interacted
@@ -403,8 +404,7 @@ test('the window can be opened, driven and closed by keyboard alone, and hands f
 
   // Reorder from inside the window, by Tab and Enter.
   await tabUntil(page, (info) => info?.action === `down:${OPEN_ISSUES.id}`, 'the first row\'s Move down');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), page.keyboard.press('Enter')]);
   expect(await liveText(page)).toContain(`Moved ${OPEN_ISSUES.name} down to position 2 of 4.`);
   expect(await popupOrder(page)).toEqual(await domOrder(page));
   // Focus did not fall out of the window when the rows re-sorted under it.
@@ -412,8 +412,7 @@ test('the window can be opened, driven and closed by keyboard alone, and hands f
 
   // Put the hidden tile back, by Tab and Enter.
   await tabUntil(page, (info) => info?.action === `back:${HOSTS_ATTENTION.id}`, 'the Put back button');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), page.keyboard.press('Enter')]);
   await expect(page.locator(`[data-panel-id="${HOSTS_ATTENTION.id}"]`)).toHaveCount(1);
   expect((await savedBlob(request)).layout.hidden).toEqual([]);
 
@@ -444,8 +443,7 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
   await tabToHandle(page, DECLARED_ORDER[0]);
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), page.keyboard.press('Enter')]);
 
   const ORDER_A = [
     'daily-security-today',
@@ -463,8 +461,7 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
 
   // --- direction 1: hide, and the order must still be there ---
   await openPanelMenu(page, HOSTS_ATTENTION.id);
-  await hideButton(page, HOSTS_ATTENTION.id).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), hideButton(page, HOSTS_ATTENTION.id).click()]);
 
   {
     const blob = await savedBlob(request);
@@ -511,8 +508,7 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
   expect(await popupOrder(page), 'the window opened describing a page that is not on screen').toEqual(ORDER_B);
   await expect(putBack(page, HOSTS_ATTENTION.name)).toBeVisible();
 
-  await putBack(page, HOSTS_ATTENTION.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), putBack(page, HOSTS_ATTENTION.name).click()]);
   expect(await domOrder(page)).toEqual([...ORDER_B, HOSTS_ATTENTION.id]);
   {
     const blob = await savedBlob(request);
@@ -561,8 +557,7 @@ async function dragRow(page: Page, id: string, targetIndex: number, where: 'abov
   // an insertion line left on <body> is a fixed-position artefact over the
   // whole app.
   await expect(page.locator('[data-arrange-insert-line]')).toHaveCount(1);
-  await page.mouse.up();
-  await page.waitForTimeout(700);
+  await Promise.all([nextSave(page), page.mouse.up()]);
   await expect(page.locator('[data-arrange-insert-line]')).toHaveCount(0);
 }
 
@@ -590,8 +585,7 @@ test('a drag inside the window saves exactly the order Move up saves', async ({ 
   await reloadTab(page, DECLARED_ORDER.length);
   expect(await domOrder(page), 'the tab did not reload back to its declared order').toEqual(DECLARED_ORDER);
   await openArrange(page);
-  await moveUp(page, SECURITY_TODAY.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), moveUp(page, SECURITY_TODAY.name).click()]);
 
   expect(
     (await savedBlob(request)).order,
@@ -630,8 +624,7 @@ test('a row under "Off this page" cannot be dragged into the ordered list', asyn
   test.setTimeout(240_000);
   await goto(page);
   await openArrange(page);
-  await takeOff(page, HOSTS_ATTENTION.name).click();
-  await page.waitForTimeout(600);
+  await Promise.all([nextSave(page), takeOff(page, HOSTS_ATTENTION.name).click()]);
   await expect(putBack(page, HOSTS_ATTENTION.name)).toBeVisible();
 
   const VISIBLE = DECLARED_ORDER.filter((id) => id !== HOSTS_ATTENTION.id);

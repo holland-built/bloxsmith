@@ -41,6 +41,12 @@ $rel = Join-Path $work 'rel'
 New-Item -ItemType Directory -Path $rel -Force | Out-Null
 
 $base = 'https://github.com/holland-built/bloxsmith/releases/latest/download'
+# The workflow pins SETTLED_TAG to a release that has finished uploading
+# (scripts/ci/settled-release.sh). `latest` can move mid-run while a merge is
+# publishing, and then checksums.txt and its signature come from two releases.
+if ($env:SETTLED_TAG) {
+    $base = 'https://github.com/holland-built/bloxsmith/releases/download/' + $env:SETTLED_TAG
+}
 
 # --- fetch the genuine release -----------------------------------------------
 Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile (Join-Path $rel 'checksums.txt')
