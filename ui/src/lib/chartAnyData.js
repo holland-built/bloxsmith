@@ -53,3 +53,14 @@ export function anySentence(opts, set, p, cube) {
 export function firstSentence(text) {
   return (text ?? '').split(/(?<=\.)\s/)[0]
 }
+
+/**
+ * A count as Infoblox sent it, as a number, or null when there is none: a
+ * missing, null, blank or non-numeric value is unknown, never a real 0.
+ */
+export function anyValue(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (typeof v !== 'string' || v.trim() === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}

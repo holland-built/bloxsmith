@@ -3,7 +3,7 @@ import { Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../c
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { BigNumber } from '../components/ChartView.jsx'
 import { shortLabel, sideways, wideLabel } from '../lib/chartBuilder.js'
-import { findSets, firstSentence, label } from '../lib/chartAnyData.js'
+import { anyValue, findSets, firstSentence, label } from '../lib/chartAnyData.js'
 
 // Build a chart, "other Infoblox data": any data set Infoblox lists, then one
 // of its counts, a field to split by and a window. The list and each data
@@ -108,15 +108,22 @@ export function AnyPickers({ opts, any: { list, set, fields, picks, setPicks }, 
 function AnyChart({ set, picks, rows, cube }) {
   const { COLORS } = useChartTheme()
   const unit = label(set.measures.find((m) => m.name === picks.measure) ?? { name: picks.measure }, cube)
-  const data = useMemo(
-    () => rows.map((r) => ({ name: picks.split ? String(r[picks.split] ?? '(blank)') : unit, value: Number(r[picks.measure]) || 0 })),
+  const all = useMemo(
+    () => rows.map((r) => ({ name: picks.split ? String(r[picks.split] ?? '(blank)') : unit, value: anyValue(r[picks.measure]) })),
     [rows, picks, unit],
   )
-  if (!picks.split) return <BigNumber label="Your" name={unit} value={data[0]?.value ?? 0} />
+  // A row without a value is left off the chart and named, never drawn as 0.
+  const data = all.filter((d) => d.value !== null)
+  const missing = all.filter((d) => d.value === null).map((d) => d.name)
+  if (!data.length) return <Empty>Infoblox sent no value for these choices.</Empty>
+  if (!picks.split) return <BigNumber label="Your" name={unit} value={data[0].value} />
   const wide = sideways(data)
   // Names too long to sit under a bar get a row each, as ChartView does.
   return (
     <Suspense fallback={<Skeleton h={220} />}>
+      {missing.length > 0 && (
+        <p className="text-note text-muted mb-2">No value from Infoblox for {missing.join(', ')}, so {missing.length === 1 ? 'it is' : 'they are'} left out.</p>
+      )}
       <CategoryBars
         label="Your"
         data={data}

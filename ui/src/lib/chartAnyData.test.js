@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { anyUrl, findSets, firstSentence, settleAny } from './chartAnyData.js'
+import { anyUrl, anyValue, findSets, firstSentence, settleAny } from './chartAnyData.js'
 
 const SET = {
   name: 'C',
@@ -44,4 +44,11 @@ describe('findSets', () => {
 it('a description is cut to its first sentence', () => {
   assert.equal(firstSentence('DNS logs, one row per query. Use rcode equals 0 for successes.'), 'DNS logs, one row per query.')
   assert.equal(firstSentence(undefined), '')
+})
+
+it('a missing or non-numeric count is unknown, not 0', () => {
+  for (const v of [undefined, null, '', '  ', 'n/a', NaN, true, {}]) assert.equal(anyValue(v), null, String(v))
+  assert.equal(anyValue('0'), 0)
+  assert.equal(anyValue('48211'), 48211)
+  assert.equal(anyValue(2.5), 2.5)
 })

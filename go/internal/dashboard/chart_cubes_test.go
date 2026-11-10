@@ -268,3 +268,25 @@ func TestCubeList_FetchesTheMetaOnceAndSendsNoFields(t *testing.T) {
 		t.Fatalf("deprecated cube fields = %v", f)
 	}
 }
+
+// A 200 whose cubes is not an array is a broken answer: an error the next
+// caller retries, not an empty catalog kept for an hour.
+func TestCubeList_CubesNotAnArrayIsAnErrorAndNotKept(t *testing.T) {
+	for _, bad := range []string{`{"result":{"cubes":{}}}`, `{"result":{"cubes":null}}`, `{"result":{}}`, `{}`} {
+		var calls int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&calls, 1)
+			w.Write([]byte(bad))
+		}))
+		s := New(rest.New(srv.URL, rest.NewAuth("k", nil)), cache.New())
+		for i := 0; i < 2; i++ {
+			if res := s.CubeList(); res["status"] != "error" {
+				t.Errorf("%s: status = %v, want error", bad, res["status"])
+			}
+		}
+		if calls != 2 {
+			t.Errorf("%s: %d fetches over two asks, want 2 (the failure must not be kept)", bad, calls)
+		}
+		srv.Close()
+	}
+}

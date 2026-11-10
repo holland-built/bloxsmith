@@ -221,8 +221,11 @@ func (s *Service) CubeCatalog() (*CubeCatalog, error) {
 			if errored(st, err) {
 				return nil, fmt.Errorf("%s: status %d: %v", src.meta, st, err)
 			}
-			if asMap(asMap(body)["result"])["cubes"] == nil {
-				return nil, fmt.Errorf("%s: no cubes list in the answer", src.meta)
+			// A 200 without a cubes array (missing, null, an object) is a
+			// broken answer: trimmed, it would be an empty list kept for an
+			// hour, and the picker would say there is nothing to chart.
+			if _, ok := asMap(asMap(body)["result"])["cubes"].([]any); !ok {
+				return nil, fmt.Errorf("%s: the answer has no cubes list", src.meta)
 			}
 			lists[i] = trimCubeMeta(body, src.query)
 		}

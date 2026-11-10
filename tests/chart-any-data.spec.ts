@@ -107,3 +107,29 @@ test('a failed catalog says it could not load, not that there is nothing', async
   await expect(page.getByText(/to choose from|Nothing matches/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Back to common charts' })).toBeVisible();
 });
+
+test('a count Infoblox sent no value for is shown as missing, never as 0', async ({ page }) => {
+  await installFixtures(page, 'chart');
+  await mockCatalog(page, { status: 'ok', cubes: CUBES });
+  const m = 'DnsActivityV1.total_query_count';
+  const d = 'DnsActivityV1.device_name';
+  await page.route('**/api/chart/any?*', (route) => {
+    const split = new URL(route.request().url()).searchParams.get('split');
+    return route.fulfill({
+      json: {
+        status: 'ok', endpoint: '/api/cubejs/v1/query', query: { measures: [m] },
+        rows: split ? [{ [d]: 'ws-014.lab', [m]: '48211' }, { [d]: 'ws-020.lab', [m]: null }] : [{}],
+      },
+    });
+  });
+  await page.goto('/#chart');
+  await page.getByRole('button', { name: 'Chart other Infoblox data' }).click();
+  await page.getByLabel('Data', { exact: true }).selectOption({ label: 'DNS Activity' });
+  const result = page.locator('[data-panel-id="chart-result"]');
+  await expect(result).toContainText('Infoblox sent no value for these choices.');
+  await expect(result.getByRole('img', { name: /Your chart/ })).toHaveCount(0);
+
+  await page.getByLabel('Split by').selectOption({ label: 'Device Name' });
+  await expect(result).toContainText('No value from Infoblox for ws-020.lab, so it is left out.');
+  await expect(result).toContainText('48,211');
+});
