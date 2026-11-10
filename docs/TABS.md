@@ -96,14 +96,15 @@ Asking for an address ("give me an address in Dublin") opens Get an address, and
 
 What is wrong right now, service by service, and the page the app opens on. Refreshes every 30 seconds.
 
-- **The line under the title** says how much of the network the page could read: when the inventory arrived, how many subnets and hosts loaded out of the total, and whether the service list was cut short.
+- **Updated** (top right) is when the inventory arrived. Hover or tap it to see how much of the network the page could read: how many subnets and hosts loaded out of the total, and whether the service list was cut short. If the inventory could not be read, it says so in red.
+- **Five tiles**, one each for DNS, DHCP, IPAM, Hosts and Security. Each shows the main number and a one-word state: **Act** (something critical), **Look** (a warning), **Healthy**, or **Not checked** when a feed that would report a problem did not answer. Click a tile to show its detail underneath: for DNS, the last 24 hours of queries per second (the last hour is dashed because it is not finished; hover or tap a point for its value), and for the others a bar of how much is affected, with a link to its page.
 - **The service board**: one row each for DNS, DHCP, IPAM, Hosts and Security. Each row shows:
-  - **Open issues**, worst first. Each says Critical or Warning in words, what is wrong, and since when. An issue first seen in the last day says "new" and is drawn solid. One that has been open longer is drawn hollow and grey, so old problems don't look like a new outage. The text links to the page where you fix it, and **Ask why** opens the AI with a question about it. An issue that belongs to no service is listed under **Other**.
-  - **Measure**: the row's main number, with what it was counted over underneath, such as "of 334 leases loaded" or "in the latest 50 events".
-  - **Last 24h**: a small DNS query-rate line.
-  - **Service health**: the service's health from Infoblox (separate from how bad an open issue is), with how many of its machines are up.
+  - **The number**, with what it was counted over in its tip, such as "of 334 leases loaded" or "in the latest 50 events".
+  - **Open issues**, as tags. Hover or tap one to see Critical or Warning, what is wrong, and since when. An issue open longer than a day has a hollow dot, so old problems don't look like a new outage. The tag links to the page where you fix it, and **Ask why** (shown when you point at an issue) opens the AI with a question about it. An issue that belongs to no service is listed under **Other**.
+  - **Last 10 days**: a coloured day means an issue still open now was already open that day. Bloxsmith keeps no daily history, so any other past day is an empty outline ("no record"), never a green day.
+  - **State**: the service's health from Infoblox when it has one, otherwise the tile's word.
 
-  "none open" means the feed answered and found nothing. A feed that could not be read says "not checked", never "none".
+  "none open" means the feed answered and found nothing. A feed that could not be read says "not checked", never "none". **Hide** folds the board to one line of counts.
 - **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown.
 - **License Inventory**: each licence's SKU, state, expiry date and time left. Under 30 days is red, under 90 is amber.
 

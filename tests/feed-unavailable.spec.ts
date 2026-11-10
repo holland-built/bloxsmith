@@ -39,7 +39,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(row).toContainText('not checked: feed unavailable', { timeout: 20_000 });
-    await expect(row.locator('td').nth(1)).toContainText('unavailable');
+    await expect(row.locator('td').nth(0)).toContainText('unavailable');
     await expect(row).not.toContainText('none open');
     await expect(row).not.toContainText('0 of 0');
   });
@@ -50,7 +50,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     );
     await page.goto('/#overview');
     const row = hostsRow(page);
-    await expect(row.locator('td').nth(1)).toContainText('0 of 0 not online', { timeout: 20_000 });
+    await expect(row.locator('td').nth(0)).toContainText('0 of 0 not online', { timeout: 20_000 });
     await expect(row).toContainText('none');
     await expect(row).not.toContainText('unavailable');
   });
@@ -65,7 +65,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(row).toContainText('1 of 2 hosts is not online', { timeout: 20_000 });
-    await expect(row.locator('td').nth(1)).toContainText('1 of 2 not online');
+    await expect(row.locator('td').nth(0)).toContainText('1 of 2 not online');
     await expect(row).not.toContainText('unavailable');
   });
 });

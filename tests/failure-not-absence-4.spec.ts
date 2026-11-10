@@ -80,7 +80,7 @@ test.describe('Overview → service board (/api/data empty)', () => {
     await expect(row('IPAM')).toContainText('0 of 0 subnets ≥90%');
     await expect(row('Hosts')).toContainText('0 of 0 not online');
     await expect(row('Hosts')).toContainText('none open');
-    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(row(name).locator('td').nth(1)).not.toContainText('unavailable');
+    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(row(name).locator('td').nth(0)).not.toContainText('unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });
 });

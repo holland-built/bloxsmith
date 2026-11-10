@@ -1,0 +1,125 @@
+/* Overview's top half in the look the owner picked on 2026-11-09 (the
+   dashboard-design skill): soft cards, a pill for the update time, soft-fill
+   selection, numbers with their words in tips. Dark is the app default; light
+   follows data-theme. Meaning colours match the app's ok, warn and crit. */
+.ov-look {
+  --ov-card: #141417; --ov-soft: #1c1c20;
+  --ov-ink: #f3f3f5; --ov-ink2: #c4c4ca; --ov-muted: #8c8c95;
+  --ov-line: rgb(255 255 255 / .08); --ov-line2: rgb(255 255 255 / .16);
+  --ov-accent: #7b96ff; --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
+  --ov-tip: #2a3548; --ov-shadow: 0 1px 2px rgb(0 0 0 / .35);
+  display: flex; flex-direction: column; gap: 16px;
+  color: var(--ov-ink); font-variant-numeric: tabular-nums;
+}
+:root[data-theme="light"] .ov-look {
+  --ov-card: #ffffff; --ov-soft: #f1f1ef;
+  --ov-ink: #17171a; --ov-ink2: #48484d; --ov-muted: #66666d;
+  --ov-line: rgb(0 0 0 / .075); --ov-line2: rgb(0 0 0 / .14);
+  --ov-accent: #3e63dd; --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
+  --ov-tip: #1f2530; --ov-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 1px 1px rgb(0 0 0 / .02);
+}
+.ov-look a { color: inherit; text-decoration: none }
+.ov-look a:hover { text-decoration: underline }
+.ov-look :focus-visible { outline: 2px solid var(--ov-accent); outline-offset: 2px; border-radius: 6px }
+.ov-muted { color: var(--ov-muted) } .ov-small { font-size: 12.5px } .ov-pad { padding: 14px 18px }
+
+.ov-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px }
+.ov-head h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -.01em }
+.ov-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ov-line2); background: var(--ov-card); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--ov-ink2) }
+.ov-live { width: 7px; height: 7px; border-radius: 50%; background: var(--ov-ok) }
+.ov-live.down { background: var(--ov-crit) } .ov-live.wait { background: var(--ov-muted) }
+
+.ov-card { background: var(--ov-card); border: 1px solid var(--ov-line); border-radius: 16px; box-shadow: var(--ov-shadow) }
+.ov-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 14px 18px 8px }
+.ov-card-head h2 { font-size: 15px; font-weight: 600; margin: 0 }
+.ov-head-right { display: inline-flex; gap: 12px; align-items: baseline; min-width: 0; text-align: right }
+.ov-link { color: var(--ov-accent); text-decoration: underline; font-size: 13px }
+
+.ov-num { font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1 }
+.ov-num small { font-size: 13px; letter-spacing: 0; color: var(--ov-muted); font-weight: 400 }
+.ov-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px }
+.ov-verdict { font-size: 12.5px; font-weight: 600 }
+.ov-verdict.ok, .ov-verdict.none { color: var(--ov-ink2) } .ov-verdict.warn { color: var(--ov-warn) } .ov-verdict.crit { color: var(--ov-crit) }
+.ov-delta { font-size: 12.5px; color: var(--ov-ink2) }
+.ov-act { color: var(--ov-accent) !important; font-size: 13px; white-space: nowrap }
+
+/* tiles: one card with hairlines; the selected tile gets the soft fill */
+.ov-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); overflow: hidden }
+.ov-kpi { all: unset; box-sizing: border-box; padding: 8px; border-right: 1px solid var(--ov-line); cursor: pointer; display: block }
+.ov-kpi:last-child { border-right: 0 }
+.ov-kpi-in { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; color: var(--ov-ink2) }
+.ov-kpi:hover .ov-kpi-in { background: color-mix(in srgb, var(--ov-soft) 70%, transparent) }
+.ov-kpi[aria-pressed="true"] .ov-kpi-in { background: color-mix(in srgb, var(--ov-accent) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ov-accent) 25%, transparent); color: var(--ov-ink) }
+.ov-kpi:focus-visible { outline: none } .ov-kpi:focus-visible .ov-kpi-in { outline: 2px solid var(--ov-accent) }
+.ov-kpi-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px }
+
+.ov-ticks { display: flex; gap: 2px; height: 24px }
+.ov-ticks i { flex: 1; border-radius: 1px; background: var(--ov-line2) }
+.ov-ticks i.on.ok { background: color-mix(in srgb, var(--ov-ok) 70%, transparent) }
+.ov-ticks i.on.warn { background: var(--ov-warn) } .ov-ticks i.on.crit { background: var(--ov-crit) }
+.ov-ticks i.on.none { background: var(--ov-muted) }
+.ov-ticks-none { background: repeating-linear-gradient(90deg, var(--ov-line) 0 2px, transparent 2px 4px) }
+
+.ov-chart { position: relative; padding: 6px 18px 12px }
+.ov-chart svg { display: block; width: 100%; height: 200px }
+.ov-hits { position: absolute; inset: 6px 18px 30px; display: flex }
+.ov-hit { flex: 1; display: block; height: 100% }
+.ov-hit:hover, .ov-hit:focus-visible { background: linear-gradient(var(--ov-line2), var(--ov-line2)) center / 1px 100% no-repeat }
+.ov-axis { display: flex; justify-content: space-between; color: var(--ov-muted); font-size: 11.5px; margin-top: 6px }
+
+/* the board: one row per service */
+.ov-board-box { padding-bottom: 4px }
+.ov-board { width: 100%; border-collapse: collapse }
+.ov-board th, .ov-board td { text-align: left; padding: 12px 18px; border-top: 1px solid var(--ov-line); font-weight: 400; vertical-align: middle }
+.ov-board tbody th { font-weight: 600; white-space: nowrap; width: 90px }
+.ov-board td:nth-of-type(1) { width: 210px; white-space: nowrap }
+.ov-board .ov-mid { min-width: 0 }
+.ov-board .ov-r { text-align: right; white-space: nowrap; width: 110px }
+.ov-row-num { font-size: 22px }
+.ov-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px }
+.ov-issue { display: inline-flex; align-items: center; gap: 8px; max-width: 100% }
+.ov-flag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ov-line2); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; max-width: 100% }
+.ov-flag.crit { border-color: color-mix(in srgb, var(--ov-crit) 45%, transparent) }
+.ov-flag.warn { border-color: color-mix(in srgb, var(--ov-warn) 45%, transparent) }
+.ov-flag.standing { color: var(--ov-ink2) }
+.ov-flag.standing .ov-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--ov-muted) }
+.ov-flag.standing.crit .ov-dot { box-shadow: inset 0 0 0 2px var(--ov-crit) }
+.ov-flag.standing.warn .ov-dot { box-shadow: inset 0 0 0 2px var(--ov-warn) }
+/* "Ask why" on every line read as clutter (owner): it shows on the issue
+   under the pointer or with focus, and always on touch screens. */
+.ov-ask { opacity: 0 }
+.ov-issue:hover .ov-ask, .ov-issue:focus-within .ov-ask { opacity: 1 }
+@media (hover: none) { .ov-ask { opacity: 1 } }
+
+/* status strip: pale when fine, bright when not, outlined when not on record */
+.ov-strip { display: flex; gap: 3px; min-width: 150px }
+.ov-day { flex: 1; height: 22px; min-width: 7px; border-radius: 3px; display: block }
+.ov-day.ok { background: color-mix(in srgb, var(--ov-ok) 35%, transparent) }
+.ov-day.warn { background: var(--ov-warn) } .ov-day.crit { background: var(--ov-crit) }
+.ov-day.none { background: transparent; box-shadow: inset 0 0 0 1px var(--ov-line2) }
+
+.ov-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ov-muted) }
+.ov-dot.warn { background: var(--ov-warn) } .ov-dot.crit { background: var(--ov-crit) }
+.ov-chip { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; text-transform: capitalize }
+.ov-chip.none { background: var(--ov-soft); color: var(--ov-muted) }
+.ov-chip.ok { background: color-mix(in srgb, var(--ov-ok) 14%, transparent); color: var(--ov-ok) }
+.ov-chip.warn { background: color-mix(in srgb, var(--ov-warn) 16%, transparent); color: var(--ov-warn) }
+.ov-chip.crit { background: color-mix(in srgb, var(--ov-crit) 14%, transparent); color: var(--ov-crit) }
+
+/* Narrow screens scroll the board sideways inside its own box. Wide screens
+   do not clip, so the tips on the top and bottom rows stay whole. */
+@media (max-width: 900px) {
+  .ov-board-box { overflow-x: auto }
+  .ov-board { min-width: 760px }
+}
+
+/* one tip system: hover, focus, or tap */
+.ov-tipwrap { position: relative; cursor: help }
+.ov-tip { position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 280px;
+  background: var(--ov-tip); color: #f3f3f5; border-radius: 9px; padding: 8px 11px; font-size: 12.5px; line-height: 1.4; font-weight: 400; letter-spacing: 0;
+  box-shadow: 0 12px 32px -8px rgb(0 0 0 / .4); pointer-events: none; text-align: left; white-space: normal; display: none }
+.ov-tip b { display: block; font-size: 18px; font-weight: 600 }
+.ov-tip-sub { display: block; color: #b9bfcc; font-size: 11.5px }
+/* Closed tips take no room, so a tip near the right edge cannot widen the page. */
+.ov-tipwrap:hover > .ov-tip, .ov-tipwrap:focus-visible > .ov-tip, .ov-tipwrap[data-open] > .ov-tip { display: block }
+.ov-detail-foot { margin-top: 0; padding-top: 0 }
