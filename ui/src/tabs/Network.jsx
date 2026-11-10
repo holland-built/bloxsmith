@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -7,9 +7,12 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
-import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+// The look the owner picked for dashboards (Overview's tokens and tiles), plus
+// this page's own few rules.
+import './Overview.css'
+import './Network.css'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -73,9 +76,13 @@ export default function Network() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Network</h1>
-      <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
-      <HeadlineStrip label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
+      <div className="ov-look net-top">
+        <div>
+          <h1 className="net-h1">Network</h1>
+          <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
+        </div>
+        <Tiles label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
+      </div>
       {/* Every direct child of a grid with a layoutKey carries its own panelId,
           because CardGrid reads the saved order off `props.panelId` of its own
           children while it reads the live order off the DOM. A wrapper whose id
@@ -136,20 +143,77 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   const fmt = (v) => (v == null ? null : v.toLocaleString())
   const over = band((u) => utilBand(u) === 'crit')
   const mid = band((u) => utilBand(u) === 'warn')
+  const loadedWord = scope ? ' Counted over the subnets loaded, not all of them.' : ''
   return [
-    { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null) },
-    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit') },
-    { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn') },
-    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null) },
+    { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null),
+      tip: 'Every subnet, all sizes.' },
+    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit'),
+      tip: `Subnets ${UTIL_CRIT}% full or more, tiny /29–/32 links included.${loadedWord}` },
+    { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn'),
+      tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny /29–/32 links included.${loadedWord}` },
+    { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), tip: 'Leases on record from DHCP, in every state.' },
   ]
+}
+
+// Scroll to a panel and move focus to it; a panel taken off the page has no
+// element, so focus goes to Arrange panels, where it can be put back. The same
+// steps as the shared headline strip's jump (components/kit.jsx).
+function jumpToPanel(panelId) {
+  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
+  if (!el) {
+    ;[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Arrange panels')?.focus()
+    return
+  }
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+  el.focus({ preventScroll: true })
+}
+
+// The numbers across the top in Overview's look: one card split by hairlines.
+// A tile is quiet unless its number is a problem; then the number and a dot
+// take the problem's colour, and the tile itself stays unfilled, so a full
+// band draws the eye without the strip turning into blocks of colour. Same
+// list-of-buttons shape as the shared strip, so each button is still named
+// by its label and number alone; the explanation is its description.
+function Tiles({ items, label }) {
+  const id = useId()
+  return (
+    <ul aria-label={label} className="ov-card net-kpis">
+      {items.map((it, i) => {
+        const tone = it.value != null && (it.tone === 'crit' || it.tone === 'warn') ? it.tone : null
+        return (
+          <li key={it.label} className="net-kpi-cell">
+            <button type="button" className="ov-kpi net-kpi" data-tone={tone || undefined} title={it.tip}
+              aria-describedby={it.tip ? `${id}-${i}` : undefined} onClick={() => jumpToPanel(it.panelId)}>
+              <span className="ov-kpi-in">
+                <span className="ov-kpi-top">
+                  <span>{it.label}</span>
+                  {tone && <span aria-hidden="true" className={`ov-dot ${tone}`} />}
+                </span>
+                <span className={`ov-num net-num${tone ? ` ${tone}` : it.tone === 'ok' ? ' quiet' : ''}`}>{it.value ?? DASH}</span>
+              </span>
+            </button>
+            {it.tip && <span id={`${id}-${i}`} className="sr-only">{it.tip}</span>}
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 // ---------- utilization distribution ----------
 
+// Healthy in the same pale green everywhere on this page: chart, bars, table.
+const paleOk = (ok = 'var(--color-ok)') => `color-mix(in srgb, ${ok} 35%, transparent)`
+const barColor = (status) => (status.label === 'Healthy' ? paleOk() : status.color)
+
 function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   const { COLORS } = useChartTheme()
   const BANDS = [
-    { key: 'ok', label: `<${UTIL_WARN}%`, test: (u) => utilBand(u) === 'ok', color: COLORS.series },
+    // Healthy is pale, as on Infra's host donut, so the full bands are what
+    // the eye lands on even when nearly every subnet is fine.
+    { key: 'ok', label: `<${UTIL_WARN}%`, test: (u) => utilBand(u) === 'ok', color: paleOk(COLORS.ok) },
     { key: 'warn', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%`, test: (u) => utilBand(u) === 'warn', color: COLORS.warn },
     { key: 'crit', label: `≥${UTIL_CRIT}%`, test: (u) => utilBand(u) === 'crit', color: COLORS.crit },
   ]
@@ -249,7 +313,7 @@ function IpamSpaces({ panelId, ipam }) {
               <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-note">
                 <span className="w-[110px] truncate text-muted" title={r.label}>{r.label || r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
-                  <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: status.color }} />
+                  <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: barColor(status) }} />
                 </div>
                 <span className="w-12 text-right text-muted">{r.used.toLocaleString()}</span>
               </div>
@@ -268,6 +332,17 @@ function IpamSpaces({ panelId, ipam }) {
 }
 
 // ---------- DHCP leases ----------
+
+// A lease set never to end comes back ending in the year 9999; that is a
+// date nobody reads as "never", so it says so.
+function endsWord(ms, raw) {
+  if (isNaN(ms)) return raw || '—'
+  return new Date(ms).getUTCFullYear() >= 9999 ? 'never' : new Date(ms).toLocaleString()
+}
+
+// Some DHCP clients send their name wrapped in quote marks ("Mac"); the marks
+// are not part of the name.
+const unquote = (v) => (typeof v === 'string' ? v.replace(/^"(.*)"$/, '$1') : v)
 
 function DhcpLeases({ panelId, dhcp, innerRef }) {
   const hp = useHashParams()
@@ -300,8 +375,9 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
         const ms = r.ends ? new Date(r.ends).getTime() : NaN
         return {
           ...r,
+          hostname: unquote(r.hostname),
           _endsMs: isNaN(ms) ? 0 : ms,
-          endsLabel: !isNaN(ms) ? new Date(ms).toLocaleString() : r.ends || '—',
+          endsLabel: endsWord(ms, r.ends),
         }
       })
       .sort((a, b) => b._endsMs - a._endsMs)
@@ -332,14 +408,14 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       span={6}
       title="DHCP Leases"
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
           <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search address, hostname, MAC"
             placeholder="Search address, hostname, MAC…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className={`${FIELD_CLS} w-[220px]`}
+            className={`${FIELD_CLS} w-[220px] max-w-full`}
           />
           <select
             aria-label="Filter by state"
@@ -488,7 +564,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
             <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
               {/* no bar at all for an unknown util — a zero-width bar and a 0%
                   bar are indistinguishable, and one of them is a lie */}
-              {status && <div className="h-full" style={{ width: `${Math.min(100, r.util)}%`, background: status.color }} />}
+              {status && <div className="h-full" style={{ width: `${Math.min(100, r.util)}%`, background: barColor(status) }} />}
             </div>
             <span className="text-muted w-9 text-right">{r.util === null ? DASH : `${r.util}%`}</span>
           </div>
@@ -506,6 +582,11 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
           return <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium bg-line text-muted">Unknown</span>
         }
         const status = utilStatus(r.util)
+        // Healthy is a quiet word with no fill, so the red and amber chips
+        // are the only coloured ones in the column.
+        if (status.label === 'Healthy') {
+          return <span className="inline-block rounded-full px-2.5 py-0.5 text-note text-muted">{status.label}</span>
+        }
         return (
           <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: status.bg, color: status.fg }}>
             {status.label}
@@ -545,7 +626,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
       }
       note={links ? 'incl. /29–/32 infra links' : 'excl. /29–/32 infra links'}
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
           <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
             <input
               type="checkbox"
@@ -559,7 +640,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className={`${FIELD_CLS} w-[170px]`}
+            className={`${FIELD_CLS} w-[170px] max-w-full`}
           />
           <select
             aria-label="Filter by site"
