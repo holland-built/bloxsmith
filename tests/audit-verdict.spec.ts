@@ -78,6 +78,9 @@ test.describe('Audit — the trust verdict leads the page', () => {
     await expect(verdict(page)).toHaveAttribute('data-verdict', 'ok');
     await expect(trust(page).getByText(/tampered/i)).toHaveCount(0);
     await expect(trust(page).getByText(/not verified/i)).toHaveCount(0);
+    // No total in the reply: the count is unknown, never a verified 0.
+    await expect(trust(page)).not.toContainText('0 entries checked');
+    await expect(trust(page)).toContainText('Count of entries not reported');
   });
 
   // The verdict is the headline: above the panels, saying how many entries it
@@ -172,9 +175,10 @@ test.describe('Audit — the trust verdict leads the page', () => {
     await expect(tile).toHaveAttribute('data-failures', '2');
     await expect(tile).toHaveClass(/\bcrit\b/);
     await expect(tile).toContainText('Change allowed');
+    await expect(tile).toContainText('since the app started');
     body = { entries: [], chain_valid: true, broken_index: null, chain_verify_error: null };
     await page.reload();
-    await expect(trust(page).getByText('not reported')).toBeVisible();
+    await expect(trust(page).getByText('not reported', { exact: true })).toBeVisible();
     await expect(trust(page).locator('[data-failures]')).toHaveCount(0);
   });
 });

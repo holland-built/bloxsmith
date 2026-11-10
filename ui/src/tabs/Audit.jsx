@@ -399,7 +399,7 @@ function Mark({ state }) {
 // shows a dash, never a reassuring 0.
 function TrustStrip({ chain, entries }) {
   const v = verdictOf(chain.data, chain.error, chain.loading)
-  const total = Number.isFinite(chain.data?.total) ? chain.data.total : entries.length
+  const total = Number.isFinite(chain.data?.total) ? chain.data.total : null
   const newest = entries.reduce((m, r) => (r._ms != null && (!m || r._ms > m._ms) ? r : m), null)
   const failed = chain.data?.append_failures
   const last = chain.data?.last_append_failure
@@ -415,7 +415,7 @@ function TrustStrip({ chain, entries }) {
             {v.state === 'ok' ? (
               <span className="au-sub">
                 <Tip tip="Every entry's signature, the link to the entry before it, and the sealed count of entries were checked.">
-                  {total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} checked
+                  {total == null ? 'Count of entries not reported' : `${total.toLocaleString()} ${total === 1 ? 'entry' : 'entries'} checked`}
                 </Tip>
               </span>
             ) : v.state === 'crit' ? (
@@ -443,7 +443,7 @@ function TrustStrip({ chain, entries }) {
             {failState ? (
               <span className="ov-small">
                 <Tip tip={<>The log on disk is unaffected; the missing {failed === 1 ? 'record' : 'records'} cannot be recovered.{last?.error ? <span className="ov-tip-sub">{last.error}</span> : null}</>}>
-                  {last?.event ? `last: ${eventWord(last.event)}` : 'since the app started'}
+                  {last?.event ? `since the app started · last: ${eventWord(last.event)}` : 'since the app started'}
                 </Tip>
               </span>
             ) : (
