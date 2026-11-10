@@ -7,6 +7,8 @@ package rest
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -321,6 +323,23 @@ func (c *Client) authValue() string {
 		return c.pinned
 	}
 	return c.auth.Value()
+}
+
+// TenantTag is a short, one-way fingerprint of the credential this client
+// sends (with the base URL), for keying server-side caches by tenant. Two
+// requests pinned to different tenants get different tags, so a cached read
+// can never be handed to the other tenant even in the moment around a switch.
+// It is a hash, so the credential itself never becomes part of a key. Nil-safe.
+func (c *Client) TenantTag() string {
+	if c == nil {
+		return ""
+	}
+	v := c.pinned
+	if v == "" && c.auth != nil {
+		v = c.auth.Value()
+	}
+	sum := sha256.Sum256([]byte(c.baseURL + "\x00" + v))
+	return hex.EncodeToString(sum[:8])
 }
 
 func (c *Client) url(path string, params map[string]string) string {

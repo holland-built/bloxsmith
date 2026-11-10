@@ -48,6 +48,11 @@ func plural(n int, one, many string) string {
 
 // BestPractices runs every check and returns them in a fixed order.
 func (s *Service) BestPractices(ctx context.Context) map[string]any {
+	return shared(s, "best-practices", func() map[string]any { return s.bestPractices(ctx) })
+}
+
+// bestPractices is BestPractices without the single-flight wrapper (shared.go).
+func (s *Service) bestPractices(ctx context.Context) map[string]any {
 	ck := cache.Key("best-practices", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)

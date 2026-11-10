@@ -347,6 +347,11 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 // path) so a transient outage can't freeze a false "no insights" state for
 // the cache's lifetime.
 func (s *Service) FetchInsights() map[string]any {
+	return shared(s, "insights", func() map[string]any { return s.fetchInsights() })
+}
+
+// fetchInsights is FetchInsights without the single-flight wrapper (shared.go).
+func (s *Service) fetchInsights() map[string]any {
 	ck := cache.Key("insights", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
@@ -484,27 +489,38 @@ func (s *Service) cubeQuery(query map[string]any) []map[string]any {
 // real but zero query activity still reports "ok", mirroring the
 // availability/reason field names csp.go's exposureFeedUnavailable uses for
 // the same failure-vs-empty problem on the attack-surface feeds.
+//
+// The three queries are independent and run at once (fanOut).
 func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
-	volRows := s.cubeQuery(map[string]any{
-		"measures": []string{"DnsActivityV1.total_query_count"},
-		"timeDimensions": []map[string]any{{
-			"dimension": "DnsActivityV1.timestamp",
-			"dateRange": "last 7 days", "granularity": "day"}},
-	})
-	clientRows := s.cubeQuery(map[string]any{
-		"measures":   []string{"DnsActivityV1.total_query_count"},
-		"dimensions": []string{"DnsActivityV1.device_name", "DnsActivityV1.device_ip"},
-		"timeDimensions": []map[string]any{{
-			"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
-		"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 50,
-	})
-	typeRows := s.cubeQuery(map[string]any{
-		"measures":   []string{"DnsActivityV1.total_query_count"},
-		"dimensions": []string{"DnsActivityV1.query_type"},
-		"timeDimensions": []map[string]any{{
-			"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
-		"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 10,
-	})
+	var volRows, clientRows, typeRows []map[string]any
+	mustFanOut(
+		func() {
+			volRows = s.cubeQuery(map[string]any{
+				"measures": []string{"DnsActivityV1.total_query_count"},
+				"timeDimensions": []map[string]any{{
+					"dimension": "DnsActivityV1.timestamp",
+					"dateRange": "last 7 days", "granularity": "day"}},
+			})
+		},
+		func() {
+			clientRows = s.cubeQuery(map[string]any{
+				"measures":   []string{"DnsActivityV1.total_query_count"},
+				"dimensions": []string{"DnsActivityV1.device_name", "DnsActivityV1.device_ip"},
+				"timeDimensions": []map[string]any{{
+					"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
+				"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 50,
+			})
+		},
+		func() {
+			typeRows = s.cubeQuery(map[string]any{
+				"measures":   []string{"DnsActivityV1.total_query_count"},
+				"dimensions": []string{"DnsActivityV1.query_type"},
+				"timeDimensions": []map[string]any{{
+					"dimension": "DnsActivityV1.timestamp", "dateRange": "last 7 days"}},
+				"order": map[string]any{"DnsActivityV1.total_query_count": "desc"}, "limit": 10,
+			})
+		},
+	)
 	if volRows == nil || clientRows == nil || typeRows == nil {
 		log.Printf("dashboard: DNS analytics cube query failed (DnsActivityV1 unavailable)")
 		return map[string]any{
@@ -576,18 +592,30 @@ func (s *Service) hostDisplayNames() map[string]string {
 // "error" with a reason and an empty metrics list; a real tenant with
 // no per-host metrics still reports "ok" with an empty metrics list. The
 // "metrics" key and its row shape are unchanged.
+//
+// The name lookup and the two metric queries are independent and run at once
+// (fanOut); the rows are then read in the same metric order as before.
 func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
-	names := s.hostDisplayNames()
+	metricNames := []string{"host_cpu", "host_memory"}
+	var names map[string]string
+	metricRows := make([][]map[string]any, len(metricNames))
+	tasks := []func(){func() { names = s.hostDisplayNames() }}
+	for i, metricName := range metricNames {
+		tasks = append(tasks, func() {
+			metricRows[i] = s.cubeQuery(map[string]any{
+				"measures":   []string{cubeHost + ".avg_value"},
+				"dimensions": []string{cubeHost + ".host", cubeHost + ".metric_name_label"},
+				"filters": []map[string]any{{
+					"member": cubeHost + ".metric_name", "operator": "equals",
+					"values": []string{metricName}}},
+			})
+		})
+	}
+	mustFanOut(tasks...)
 	metrics := []any{}
 	failed := false
-	for _, metricName := range []string{"host_cpu", "host_memory"} {
-		rows := s.cubeQuery(map[string]any{
-			"measures":   []string{cubeHost + ".avg_value"},
-			"dimensions": []string{cubeHost + ".host", cubeHost + ".metric_name_label"},
-			"filters": []map[string]any{{
-				"member": cubeHost + ".metric_name", "operator": "equals",
-				"values": []string{metricName}}},
-		})
+	for i, metricName := range metricNames {
+		rows := metricRows[i]
 		if rows == nil {
 			failed = true
 			continue

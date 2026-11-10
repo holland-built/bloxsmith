@@ -26,6 +26,28 @@ type Store struct {
 	alertMu  sync.Mutex // ALERT_STATE_FILE (server.py:2642 _alert_lock)
 	fsMu     sync.Mutex // FIRST_SEEN_FILE  (server.py:2472 _first_seen_lock)
 	budgetMu sync.Mutex // ai_budget.json — no Python precedent, new in this port
+
+	// The first-seen history as this process last left it, the size and
+	// modification time the file had when it was last written, and when that
+	// was (now() seconds). Guarded by fsMu. See StampFirstSeen.
+	fsMem     map[string]map[string]float64
+	fsStamp   fileStamp
+	fsWroteAt float64
+}
+
+// fileStamp is what os.Stat says about a file, enough to tell that someone
+// other than this process has written it since.
+type fileStamp struct {
+	size int64
+	mod  time.Time
+}
+
+func stampOf(path string) (fileStamp, bool) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}, false
+	}
+	return fileStamp{st.Size(), st.ModTime()}, true
 }
 
 // New builds a Store rooted at stateDir. VIEWS_DIR is stateDir/views
@@ -224,6 +246,7 @@ const (
 	firstSeenGraceS     = 15 * 60      // flap-protection window (server.py:2473)
 	firstSeenRetentionS = 24 * 60 * 60 // prune entries older than this (2474)
 	firstSeenEntitySep  = "\x00"       // "{category}\x00{entity_id}" key (2622)
+	firstSeenFlushS     = 60           // rewrite at least this often while records are open
 )
 
 // firstSeenLoad reads the persisted first-seen history. Its second return
@@ -262,11 +285,28 @@ func (s *Store) firstSeenLoad() (m map[string]map[string]float64, ok bool) {
 // "first_seen_unknown": true, so a caller/UI can render "age unknown" rather
 // than a confident-looking "0s". The store is also NOT written in this case —
 // see the CRITICAL note below.
+//
+// WRITES ONLY WHAT IS NEW. /api/incidents polls this every 20 seconds, and
+// every poll used to rewrite the whole file, because every poll moves each
+// open record's "last" and the "last_poll" marker. Now the history this
+// process last wrote stays in memory (used only while the file still has the
+// size and modification time it was written with, so an outside edit is read
+// back in), and the file is rewritten when a record starts or is pruned, or
+// when the last write is firstSeenFlushS old. In between, only "last" times
+// lag on disk, by at most firstSeenFlushS, which matters only across a restart
+// and is well inside the 15-minute grace window those times are compared with.
 func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 	s.fsMu.Lock()
 	defer s.fsMu.Unlock()
 
-	store, loadOK := s.firstSeenLoad()
+	var store map[string]map[string]float64
+	loadOK := true
+	if st, ok := stampOf(s.firstSeenFile()); ok && s.fsMem != nil && st.size == s.fsStamp.size && st.mod.Equal(s.fsStamp.mod) {
+		store = s.fsMem
+	} else {
+		s.fsMem = nil
+		store, loadOK = s.firstSeenLoad()
+	}
 	if !loadOK {
 		// CRITICAL: a failed load must never be allowed to reach the write
 		// path below. Previously firstSeenLoad() always returned a usable
@@ -296,6 +336,7 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 	}
 	weWereAway := lastPoll != 0 && (n-lastPoll) > firstSeenGraceS
 
+	changed := false // a record started or was pruned
 	for _, sig := range signals {
 		key := str(sig, "category") + firstSeenEntitySep + str(sig, "entity_id")
 		rec := store[key]
@@ -304,6 +345,7 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 			rec["last"] = n
 		} else {
 			rec = map[string]float64{"first": n, "last": n}
+			changed = true
 		}
 		store[key] = rec
 		sig["detected_at"] = rec["first"]
@@ -313,12 +355,21 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 	for k, v := range store {
 		if k != firstSeenMeta && v["last"] < cutoff {
 			delete(store, k)
+			changed = true
 		}
 	}
 	store[firstSeenMeta] = map[string]float64{"last_poll": n}
+	if !changed && n-s.fsWroteAt < firstSeenFlushS {
+		s.fsMem = store
+		return signals
+	}
 	if err := atomicWriteJSON(s.firstSeenFile(), store); err != nil {
 		log.Printf("store: failed to persist first_seen.json: %v", err)
+		s.fsMem = nil // read the file back next time, as before this was kept in memory
+		return signals
 	}
+	s.fsMem, s.fsWroteAt = store, n
+	s.fsStamp, _ = stampOf(s.firstSeenFile())
 	return signals
 }
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"bloxsmith/internal/dashboard"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/vault"
@@ -328,6 +329,12 @@ func (d *Deps) withWriteLock(next http.Handler) http.Handler {
 		}
 		id, unknown := d.writeIdentity()
 		if unknown == "" && d.Vault != nil && d.Vault.WriteAllowed(id) {
+			// The short-lived tile reads (dashboard.CachedRead) would show the
+			// pre-write state for up to their TTL. Drop them once the write has
+			// finished, which also stops a read that was in flight during the
+			// write from being cached. Deferred so a write that panics still
+			// clears them.
+			defer d.dropTileReads()
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -347,6 +354,15 @@ func (d *Deps) withWriteLock(next http.Handler) http.Handler {
 		}
 		d.json(w, r, http.StatusForbidden, d.writeLockRefusal(id, unknown, path))
 	})
+}
+
+// dropTileReads clears every cached tile read after a tenant write. Only the
+// tile prefix: the generation, the /api/data aggregate and the 403
+// entitlement memory are left as they were.
+func (d *Deps) dropTileReads() {
+	if d.Dashboard != nil && d.Dashboard.Cache != nil {
+		d.Dashboard.Cache.InvalidatePrefix(dashboard.TileCachePrefix)
+	}
 }
 
 // --- POST /api/vault/tenant-writable ----------------------------------------

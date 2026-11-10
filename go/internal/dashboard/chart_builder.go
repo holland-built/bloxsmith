@@ -485,6 +485,11 @@ func (s *Service) ChartValues(ctx context.Context, countID, only, windowID strin
 // read as "no activity". "invalid" means the picks were refused and nothing
 // was sent. Only ok and empty are cached, the FetchInsights way.
 func (s *Service) RunChart(ctx context.Context, p ChartPicks) map[string]any {
+	return shared(s, "chart|"+picksKey(p), func() map[string]any { return s.runChart(ctx, p) })
+}
+
+// runChart is RunChart without the single-flight wrapper (shared.go).
+func (s *Service) runChart(ctx context.Context, p ChartPicks) map[string]any {
 	q, endpoint, err := BuildChartQuery(p)
 	if err != nil {
 		return map[string]any{"status": "invalid", "reason": err.Error()}
@@ -503,6 +508,14 @@ func (s *Service) RunChart(ctx context.Context, p ChartPicks) map[string]any {
 		}
 		return result
 	}
+	return s.runCubeQuery(ck, g, q, endpoint, qj)
+}
+
+// runCubeQuery sends one built chart query and shapes the answer: rows keyed
+// "Cube.field" as they came, status ok / empty / error. ok and empty are cached
+// under ck, fenced by g; an error is not. RunChart and RunAnyChart both end
+// here, so the two pages cannot drift apart on what a status means.
+func (s *Service) runCubeQuery(ck string, g uint64, q map[string]any, endpoint string, qj []byte) map[string]any {
 	body, st, err := s.cubeGet(endpoint, qj)
 	if errored(st, err) {
 		return map[string]any{

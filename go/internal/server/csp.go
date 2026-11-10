@@ -22,10 +22,16 @@ func (d *Deps) registerCSPRoutes(mux router) {
 	// fn is a METHOD EXPRESSION, not a bound method value: the service it runs
 	// against is chosen per request, so each tile reads the tenant that request
 	// started against rather than whichever one is active when it fires.
+	//
+	// Each tile is cached for dashboard.TileTTL per tenant (CachedRead): the
+	// pages poll every 30 seconds, and without it every poll from every open
+	// tab went upstream. None of these routes reads a query parameter, so the
+	// path is the whole key.
 	tile := func(path string, fn func(*dashboard.Service) map[string]any) {
 		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
 			defer d.recover500(w, r, path)
-			d.json(w, r, 200, fn(d.dash(r)))
+			svc := d.dash(r)
+			d.json(w, r, 200, svc.CachedRead(path, func() map[string]any { return fn(svc) }))
 		})
 	}
 	tile("/api/csp/host-health", (*dashboard.Service).CSPHostHealth)

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"bloxsmith/internal/cache"
@@ -38,12 +40,15 @@ func cubeQueryFromRequest(t *testing.T, r *http.Request) map[string]any {
 
 func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 	var seen []map[string]any
+	var mu sync.Mutex
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/cubejs/v1/query" {
-			t.Fatalf("unexpected path %s", r.URL.Path)
+			t.Errorf("unexpected path %s", r.URL.Path)
 		}
 		q := cubeQueryFromRequest(t, r)
+		mu.Lock()
 		seen = append(seen, q)
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"result":{"data":[
 			{"DnsActivityV1.total_query_count":"270196"}
@@ -55,6 +60,10 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 	if len(seen) != 3 {
 		t.Fatalf("cubejs calls = %d, want 3", len(seen))
 	}
+	// The three queries run at once, so they arrive in any order. Put them back
+	// in volume, top_clients, query_types order by their limit (none, 50, 10).
+	order := map[any]int{nil: 0, float64(50): 1, float64(10): 2}
+	sort.Slice(seen, func(i, j int) bool { return order[seen[i]["limit"]] < order[seen[j]["limit"]] })
 
 	// 1. volume: measures + daily-granularity 7-day timeDimension.
 	vol := seen[0]
@@ -160,6 +169,7 @@ func TestFetchDNSAnalytics_GenuineEmptyReportsOk(t *testing.T) {
 
 func TestFetchHostMetrics_QueryShapeAndHostNameResolution(t *testing.T) {
 	var seenFilters []string
+	var mu sync.Mutex // the name lookup and both metric queries run at once
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -171,7 +181,9 @@ func TestFetchHostMetrics_QueryShapeAndHostNameResolution(t *testing.T) {
 			q := cubeQueryFromRequest(t, r)
 			filters, _ := q["filters"].([]any)
 			f := asMap(filters[0])
+			mu.Lock()
 			seenFilters = append(seenFilters, getStr(f["values"].([]any)[0]))
+			mu.Unlock()
 
 			dims, _ := q["dimensions"].([]any)
 			if len(dims) != 2 || dims[0] != "HostMetricsV1.host" || dims[1] != "HostMetricsV1.metric_name_label" {
@@ -187,7 +199,7 @@ func TestFetchHostMetrics_QueryShapeAndHostNameResolution(t *testing.T) {
 				{"HostMetricsV1.host":null,"HostMetricsV1.metric_name_label":"` + metricName + `","HostMetricsV1.avg_value":"99"}
 			]}}`))
 		default:
-			t.Fatalf("unexpected path %s", r.URL.Path)
+			t.Errorf("unexpected path %s", r.URL.Path)
 		}
 	})
 

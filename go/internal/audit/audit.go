@@ -25,12 +25,15 @@ package audit
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +79,14 @@ type Log struct {
 	// because n writes were refused. Exposed through AppendHealth.
 	appendFailures int
 	lastFailure    *appendFailure
+
+	// The last full Verify verdict and the fingerprint of the bytes it was
+	// computed from; see Verify. fullVerifies counts full walks, for tests.
+	memoMu       sync.Mutex
+	memoOK       bool
+	memoSum      [sha256.Size]byte
+	memoVerdict  map[string]any
+	fullVerifies int
 }
 
 // appendFailure is the record of one entry that never reached disk.
@@ -212,7 +223,14 @@ func (l *Log) Read() ([]map[string]any, int, error) {
 		return out, 0, err
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
+	return parseEntries(f)
+}
+
+// parseEntries is Read's decoder, shared with Verify, which decodes the bytes
+// it has already read (and fingerprinted) rather than opening the file again.
+func parseEntries(r io.Reader) ([]map[string]any, int, error) {
+	out := []map[string]any{}
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	skipped := 0
 	for sc.Scan() {
@@ -508,6 +526,18 @@ var readSkewHook func()
 // The one window ordering does NOT close is a partial final line written by
 // another process, which still reads as could-not-verify rather than intact —
 // wrong, but on the safe side of the tri-state, and never a tamper accusation.
+//
+// REPEAT VERIFIES ARE ANSWERED FROM MEMORY ONLY FOR IDENTICAL BYTES. The Audit
+// page polls this every 30 seconds, and the full walk (decode, canonical hash
+// and HMAC of every entry) grows with the log. So the verdict is remembered
+// against a SHA-256 of the exact bytes it was computed from: the sealed head
+// and the whole log. The next call still reads both files in full, but when
+// the fingerprint matches it returns the remembered verdict instead of walking
+// again. Any change to either file, of any size and whatever its timestamps
+// say, changes the fingerprint and gets the full walk, so an edit made to
+// look untouched (same length, mtime put back) is still caught. The key is
+// fixed for the life of a Log, so it does not need to be in the fingerprint.
+// A read error is never remembered.
 func (l *Log) Verify() map[string]any {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -515,7 +545,7 @@ func (l *Log) Verify() map[string]any {
 	// Snapshot the head first, but hold its error and its verdicts until step 4:
 	// an unreadable head must not mask a tampered ENTRY that steps 1-3 would
 	// have caught, and moving the read forward must not move the verdict with it.
-	h, headErr := l.readHead()
+	headRaw, headPresent, headErr := l.readHeadBytes()
 
 	// Test seam. Nil in production; the deterministic ordering test sets it to
 	// append through a SECOND Log so the interleaving happens on every run
@@ -525,7 +555,50 @@ func (l *Log) Verify() map[string]any {
 		readSkewHook()
 	}
 
-	entries, skipped, err := l.Read()
+	logRaw, err := os.ReadFile(l.path)
+	if err != nil && os.IsNotExist(err) {
+		logRaw, err = nil, nil // a missing log is an empty one, as in Read
+	}
+	if err != nil {
+		return cannotVerify(fmt.Sprintf("audit log could not be read: %v", err))
+	}
+	if headErr != nil {
+		return l.verifyBytes(nil, headErr, logRaw)
+	}
+
+	fp := sha256.New()
+	if headPresent {
+		fmt.Fprintf(fp, "head %d\n", len(headRaw))
+		fp.Write(headRaw)
+	} else {
+		fp.Write([]byte("no head\n"))
+	}
+	fp.Write(logRaw)
+	var sum [sha256.Size]byte
+	fp.Sum(sum[:0])
+
+	l.memoMu.Lock()
+	if l.memoOK && l.memoSum == sum {
+		v := maps.Clone(l.memoVerdict)
+		l.memoMu.Unlock()
+		return v
+	}
+	l.memoMu.Unlock()
+
+	h, perr := parseHead(headRaw, headPresent)
+	v := l.verifyBytes(h, perr, logRaw)
+
+	l.memoMu.Lock()
+	l.memoSum, l.memoVerdict, l.memoOK = sum, maps.Clone(v), true
+	l.fullVerifies++
+	l.memoMu.Unlock()
+	return v
+}
+
+// verifyBytes is the full walk over one snapshot: the parsed head (or the
+// error reading it) and the log's bytes.
+func (l *Log) verifyBytes(h *headRecord, headErr error, logRaw []byte) map[string]any {
+	entries, skipped, err := parseEntries(bytes.NewReader(logRaw))
 	if err != nil {
 		return cannotVerify(fmt.Sprintf("audit log could not be read: %v", err))
 	}

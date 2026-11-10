@@ -49,15 +49,33 @@ func (l *Log) headFile() string {
 // apart from an unreadable head, which is an error. Verify must never treat
 // either as "intact".
 func (l *Log) readHead() (*headRecord, error) {
-	if l.trustDir == "" {
-		return nil, nil
+	b, present, err := l.readHeadBytes()
+	if err != nil {
+		return nil, err
 	}
-	b, err := os.ReadFile(l.headFile())
+	return parseHead(b, present)
+}
+
+// readHeadBytes reads the sealed head's raw bytes. present is false when there
+// is no head (no trust directory, or no file), which is not an error.
+func (l *Log) readHeadBytes() (b []byte, present bool, err error) {
+	if l.trustDir == "" {
+		return nil, false, nil
+	}
+	b, err = os.ReadFile(l.headFile())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, err
+		return nil, false, err
+	}
+	return b, true, nil
+}
+
+// parseHead decodes what readHeadBytes read; an absent head is (nil, nil).
+func parseHead(b []byte, present bool) (*headRecord, error) {
+	if !present {
+		return nil, nil
 	}
 	var h headRecord
 	if err := json.Unmarshal(b, &h); err != nil {
