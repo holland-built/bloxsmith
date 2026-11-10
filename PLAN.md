@@ -20,6 +20,14 @@
 - A hostname search shows the section as not applicable and sends nothing to Kentik.
 - Unit and browser tests cover all of those states; Codex reviewed the final diff.
 
+## What happened
+
+- Built as planned. Codex asked for two guards, both added with tests: all four answers must come back, and every row must carry a rate, or the read is a failure.
+- Live check 2026-11-10: 172.16.0.210 showed 5.5 kb/s out, 48 b/s in, NetFlow to 10.67.70.10 UDP 9995 and BGP with .221/.222 on TCP 179.
+- Next: the four MCP items (host config viewer, setup check, chart anything, search everything), then the page restyles.
+
 ## Done
+
+- 2026-11-10 Kentik traffic row on the search result page.
 
 - 2026-11-06 Best practices page, batch 1.

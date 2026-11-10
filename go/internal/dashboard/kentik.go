@@ -177,10 +177,16 @@ func (s *Service) kentikCall(email, token, ip string) (map[string]any, error) {
 			got[r.Bucket] = r.Data
 		}
 	}
-	// All four or nothing. A missing answer is not zero traffic.
+	// All four or nothing, and every row carries a rate. A missing answer or
+	// an unreadable rate is not zero traffic.
 	for _, b := range kentikBuckets {
 		if _, ok := got[b]; !ok {
 			return nil, fmt.Errorf("Kentik's reply was missing part of the answer (%s)", b)
+		}
+		for _, row := range got[b] {
+			if _, ok := row["avg_bits_per_sec"].(float64); !ok {
+				return nil, fmt.Errorf("Kentik's reply had a row with no traffic rate (%s)", b)
+			}
 		}
 	}
 

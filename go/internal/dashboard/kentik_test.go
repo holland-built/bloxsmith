@@ -94,6 +94,16 @@ func TestKentikTraffic_PartialReplyIsAnError(t *testing.T) {
 	}
 }
 
+// A row whose rate is missing is an unreadable answer, not zero traffic.
+func TestKentikTraffic_RowWithoutRateIsAnError(t *testing.T) {
+	var calls int32
+	body := strings.Replace(kentikReply(""), `"avg_bits_per_sec":52.44}]`, `"avg_bits_per_sec":null}]`, 1)
+	s := kentikService(t, 200, body, &calls)
+	if got := s.FetchKentikTraffic("172.16.0.210"); got["availability"] != "error" {
+		t.Fatalf("want error, got %v", got)
+	}
+}
+
 func TestKentikTraffic_RefusedLogin(t *testing.T) {
 	var calls int32
 	s := kentikService(t, 401, `{"error":"Unauthorized"}`, &calls)
