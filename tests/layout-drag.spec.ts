@@ -120,9 +120,8 @@ test('P9b: dragging a card right edge steps its span by whole integers only', as
   expectEverySpanWellFormed(await inlineSpans(page));
   expect(await strayDragStyles(page)).toEqual([]);
   await page.mouse.up();
-  await page.waitForTimeout(600);
 
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 4 / span 4');
+  await expect.poll(async () => (await inlineSpans(page))['dns-hero']).toBe('span 4 / span 4');
   await expect(page.locator('[data-layout-resize-indicator]')).toHaveCount(0);
 
   // Whole integers only: 30px past the span-3 edge is nowhere near the span-4
@@ -130,15 +129,13 @@ test('P9b: dragging a card right edge steps its span by whole integers only', as
   const g2 = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g2.box.left + 3 * track + 2 * gap + 30, g2.y, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(600);
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 3 / span 3');
+  await expect.poll(async () => (await inlineSpans(page))['dns-hero']).toBe('span 3 / span 3');
 
   // ...and down to the floor.
   const g3 = await grabRightEdge(page, 'dns-hero');
   await page.mouse.move(g3.box.left + track, g3.y, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(600);
-  expect((await inlineSpans(page))['dns-hero']).toBe('span 1 / span 1');
+  await expect.poll(async () => (await inlineSpans(page))['dns-hero']).toBe('span 1 / span 1');
 
   expectEverySpanWellFormed(await inlineSpans(page));
 
@@ -393,8 +390,7 @@ test('P9c: a keyboard-only run moves a card a position, changes its span, and bo
   expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
 
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
-  expect(await liveText(page)).toContain('Layout saved');
+  await expect.poll(() => liveText(page)).toContain('Layout saved');
   await expect(page.locator('[data-panel-id="dns-hero"] [data-layout-handle]')).toHaveAttribute('aria-pressed', 'false');
 
   const blob = await savedBlob(request);
@@ -447,8 +443,7 @@ test('Escape restores both the pre-move order and the pre-move span, and saves n
   expect(await domOrder(page)).not.toEqual(DECLARED_ORDER);
 
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(400);
-  expect(await liveText(page)).toContain('back where it started');
+  await expect.poll(() => liveText(page)).toContain('back where it started');
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
   // The span override is gone too: dns-hero is back to the span the row fill gave it.
   expect((await inlineSpans(page))['dns-hero']).toBe(spanBefore);
@@ -489,6 +484,9 @@ test('arrow keys do nothing until move mode is entered', async ({ page, request 
 // left the handle, and the restore effect stole focus it had not lost.
 test('move mode ends when focus leaves the handle, and the data poll never takes focus back', async ({ page, request }) => {
   test.setTimeout(180_000);
+  // Fake clock, so the 30s data poll below is driven by runFor instead of
+  // waited out in real time (as poll-hidden.spec.ts does).
+  await page.clock.install();
   await gotoOverview(page);
 
   await tabToHandle(page, 'dns-hero');
@@ -502,7 +500,6 @@ test('move mode ends when focus leaves the handle, and the data poll never takes
   const box = page.locator('[data-onebox]');
   await box.click();
   await box.fill('10.');
-  await page.waitForTimeout(400);
 
   // A blur that is NOT the component's own re-render ends move mode.
   await expect(handle).toHaveAttribute('aria-pressed', 'false');
@@ -515,7 +512,12 @@ test('move mode ends when focus leaves the handle, and the data poll never takes
   page.on('request', (r) => {
     if (r.url().includes('/api/data')) polls++;
   });
-  await page.waitForTimeout(35_000);
+  const answered = page.waitForResponse((r) => r.url().includes('/api/data'));
+  await page.clock.runFor(35_000);
+  await answered;
+  // The re-render the answer causes is what used to steal focus; give it time
+  // to land before checking that it did not.
+  await page.waitForTimeout(500);
   expect(polls, 'the 30s poll never fired, so this proves nothing').toBeGreaterThan(0);
 
   await expect(box).toBeFocused();
@@ -644,9 +646,8 @@ test('a grid whose DOM holds a panel its children cannot name says so, loudly', 
   await tabToHandle(page, 'dns-hero');
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(500);
 
-  expect(errors.join('\n')).toContain('smuggled-panel');
+  await expect.poll(() => errors.join('\n')).toContain('smuggled-panel');
   expect(errors.join('\n')).toContain('layoutKey="overview"');
 });
 
@@ -918,9 +919,8 @@ for (const tab of TAB_CASES) {
       const g = await grabRightEdge(page, tab.resizeSubject);
       await page.mouse.move(g.box.left + 4 * track + 3 * gap, g.y, { steps: 12 });
       await page.mouse.up();
-      await page.waitForTimeout(600);
 
-      expect((await inlineSpans(page))[tab.resizeSubject]).toBe('span 4 / span 4');
+      await expect.poll(async () => (await inlineSpans(page))[tab.resizeSubject]).toBe('span 4 / span 4');
       expectEverySpanWellFormed(await inlineSpans(page));
       expect(await strayDragStyles(page)).toEqual([]);
       expect(await tableOverflow(page)).toEqual([]);
@@ -1088,8 +1088,7 @@ for (const tab of TAB_CASES) {
       expect((await request.get(`/api/views/${view}`)).status()).toBe(404);
 
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(600);
-      expect(await liveText(page)).toContain('Layout saved');
+      await expect.poll(() => liveText(page)).toContain('Layout saved');
 
       const blob = await savedBlobFor(request, view);
       expect(blob.order).toEqual(swapped);

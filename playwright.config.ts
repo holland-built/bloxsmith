@@ -133,7 +133,15 @@ export default defineConfig({
   workers: 1,
   // 'html' always writes playwright-report/ (not just on failure) so CI has
   // something to upload as an artifact; 'never' skips auto-opening it locally.
-  reporter: [['list'], ['html', { open: 'never' }]],
+  //
+  // On CI the 'github' reporter is added so a test that failed once and passed
+  // on its retry is not silent: Playwright files it as an annotation on the run
+  // page and counts it in the "N flaky" summary. It does NOT fail the job. The
+  // stricter --fail-on-flaky-tests was rejected for now because it would turn
+  // one rare flake into a red PR; this makes flakes visible first.
+  reporter: process.env.CI
+    ? [['list'], ['github'], ['html', { open: 'never' }]]
+    : [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.NOC_BASE || DEFAULT_BASE_URL,
     // Capture for EVERY failed attempt, not 'on-first-retry'. The drilldown

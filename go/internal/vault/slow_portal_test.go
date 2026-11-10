@@ -37,7 +37,10 @@ func (p *slowPortal) waitForRequest(t *testing.T) {
 	t.Helper()
 	select {
 	case <-p.arrived:
-	case <-time.After(5 * time.Second):
+	// A "did it ever arrive" guard; the assertion is finishesWithin. It covers
+	// the scrypt derive UnlockR runs first, which under -race on a busy macOS
+	// runner outlasted the 5s this used to allow (CI run 42838586656).
+	case <-time.After(30 * time.Second):
 		t.Fatal("the vault never asked the portal for a name")
 	}
 }

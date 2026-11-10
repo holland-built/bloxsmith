@@ -132,7 +132,9 @@ test('a drag that saves says so, in words a sighted operator can actually see', 
 
   // It goes away on its own. A status that stays forever is chrome, and the
   // 2.5s timer is the whole difference.
-  await page.waitForTimeout(3000);
+  // Polled up to the same 3s the fixed wait gave it, so it still fails if
+  // the pill outlives that, and passes as soon as it clears.
+  await expect.poll(async () => (await pillNow(page))?.text, { message: 'the pill never cleared', timeout: 3000 }).toBe('');
   const after = await pillNow(page);
   expect(after?.text, 'the pill never cleared').toBe('');
   expect(after?.className).toContain('hidden');
@@ -207,6 +209,9 @@ test('the newest save is the only one that may speak', async ({ page }) => {
   });
 
   await recordPill(page);
+  const staleAnswered = page.waitForResponse(
+    (r) => r.url().endsWith('/api/views') && r.request().method() === 'POST' && r.status() === 500,
+  );
   await tabToHandle(page, DECLARED[0]);
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
@@ -214,8 +219,10 @@ test('the newest save is the only one that may speak', async ({ page }) => {
   await page.keyboard.press('Enter'); // back into move mode
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter'); // save #2 — fast, and fine
-  // Long enough for the held first POST to come home after the second.
-  await page.waitForTimeout(3000);
+  // Until the held first POST has come home after the second, plus two frames
+  // for the page to paint whatever that late answer makes it do.
+  await staleAnswered;
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
   expect(posts, 'this test needs two POSTs to prove anything').toBe(2);
   const seen = await pillSeen(page);

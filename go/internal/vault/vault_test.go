@@ -24,6 +24,7 @@ const fixturePassphrase = "test-passphrase-123"
 // TestDecryptsPythonFixture proves the Go vault decrypts a vault.json written by
 // the Python app to the exact expected plaintext (STATE-FILE COMPATIBILITY).
 func TestDecryptsPythonFixture(t *testing.T) {
+	useRealKDF(t)
 	src, err := os.ReadFile("testdata/python-vault-fixture.json")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -135,6 +136,7 @@ func TestRoundTripPythonReadable(t *testing.T) {
 // it — nothing here may be able to reach a developer's real vault directory.
 func v1FixtureCopy(t *testing.T) string {
 	t.Helper()
+	useRealKDF(t)
 	t.Setenv("HOME", t.TempDir())
 	src, err := os.ReadFile("testdata/python-vault-fixture.json")
 	if err != nil {
@@ -329,6 +331,7 @@ func handDecrypt(t *testing.T, token string, salt []byte, n int) []byte {
 // credential file on every startup for no reason — a needless write against the
 // one file with no backup.
 func TestMigrate_NativeCurrentVersionRoundTripsAndDoesNotRewrite(t *testing.T) {
+	useRealKDF(t)
 	t.Setenv("HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), "vault.json")
 
@@ -551,6 +554,7 @@ func TestRotate_UpgradesALegacyVaultToTheCurrentVersion(t *testing.T) {
 // this row. Add a NEW version to kdfByVersion, bump currentVaultVersion, and let
 // Unlock migrate — which is exactly what version 2 is.
 func TestKDFTable_V1ParametersAreFrozen(t *testing.T) {
+	useRealKDF(t)
 	got, ok := kdfByVersion[1]
 	if !ok {
 		t.Fatal("kdfByVersion has no entry for version 1 — every vault written before this change, " +

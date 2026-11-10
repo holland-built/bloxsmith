@@ -23,9 +23,8 @@ import { installBaselineWorld } from './page-fixtures';
 // change: the circle around each of the three overlapped a neighbour by 10.5px.
 // The size fix removes the argument rather than relying on the exception.
 
-// 30 page loads, each with a reload to apply the density. Well past the 30s
-// default, and a timeout here reads as "the h1 never appeared" rather than as
-// what it is.
+// 30 tab visits. Well past the 30s default, and a timeout here reads as "the
+// h1 never appeared" rather than as what it is.
 test.setTimeout(240_000);
 
 test.beforeEach(async ({ page }) => {
@@ -58,15 +57,23 @@ test('the panel header controls are 24x24 on a mouse, in both densities', async 
   let measured = 0;
 
   for (const density of DENSITIES) {
+    // The density is stored once and applied by ONE reload per density. It
+    // used to be stored and reloaded on every one of the 30 visits, which cost
+    // a page load each and changed nothing between visits of one density.
+    await page.goto(`/#${TABS[0]}`);
+    await expect(page.locator('h1').first()).toBeVisible();
+    // 'density' is the key ui/src/lib/density.js reads. This used to write
+    // 'noc.density', which nothing reads, so the compact pass measured the
+    // comfortable layout. The attribute check below makes a wrong key fail.
+    await page.evaluate((d) => {
+      try { localStorage.setItem('density', d); } catch {}
+    }, density);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-density', density);
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       for (const tab of TABS) {
         await page.goto(`/#${tab}`);
-        await expect(page.locator('h1').first()).toBeVisible();
-        await page.evaluate((d) => {
-          try { localStorage.setItem('noc.density', d); } catch {}
-        }, density);
-        await page.reload();
         await expect(page.locator('h1').first()).toBeVisible();
         await page.waitForTimeout(800);
 

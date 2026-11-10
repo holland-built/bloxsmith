@@ -224,11 +224,16 @@ test.describe('blast radius', () => {
       if (r.url().includes('/api/service-inventory')) seen.push(r.url());
     });
     await inventory(page, OWNS_NO_SECURITY);
+    // Fake clock, as poll-hidden.spec.ts does, so two poll ticks do not cost a
+    // real minute. The poll is the browser's own setInterval, which runFor drives.
+    await page.clock.install();
     await page.goto('/#security');
     await expect(hiddenRow(page)).toHaveCount(1);
 
     // Past two poll ticks.
-    await page.waitForTimeout(65_000);
+    await page.clock.runFor(65_000);
+    // Let a request the ticks started reach the listener above.
+    await page.waitForTimeout(500);
     expect(seen.length).toBe(1);
   });
 });

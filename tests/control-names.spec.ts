@@ -37,8 +37,36 @@ const TABS = [
   'audit', 'assets', 'provision', 'selfservice', 'drift', 'demo', 'changes', 'editor', 'ai',
 ];
 
-// How long a tab is given to paint its controls.
+// How long a tab is given to paint its controls, at most.
 const SETTLE_MS = 1400;
+
+// Waits until the page has stopped changing: no DOM mutation for QUIET_MS, or
+// SETTLE_MS in all, whichever comes first. It replaced a flat SETTLE_MS wait,
+// which every tab paid in full although the fixture world finishes painting in
+// a few hundred ms. Checked when it went in: every count and per-tab total the
+// three tests below collect was the same under both waits.
+const QUIET_MS = 300;
+async function settle(page: import('@playwright/test').Page) {
+  // Counted in 50ms timer ticks, not read off a clock: installBaselineWorld
+  // freezes the page's clock, but its timers keep running.
+  await page.evaluate(
+    ({ quietTicks, capTicks }) =>
+      new Promise<void>((resolve) => {
+        let ticks = 0;
+        let quiet = 0;
+        const mo = new MutationObserver(() => { quiet = 0; });
+        mo.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+        const tick = () => {
+          ticks += 1;
+          quiet += 1;
+          if (quiet >= quietTicks || ticks >= capTicks) { mo.disconnect(); resolve(); return; }
+          setTimeout(tick, 50);
+        };
+        setTimeout(tick, 50);
+      }),
+    { quietTicks: QUIET_MS / 50, capTicks: SETTLE_MS / 50 },
+  );
+}
 
 // The tabs that MUST render at least one select or input, and the floor for
 // each. Aggregate totals are not enough on their own: they let one tab stay
@@ -73,7 +101,7 @@ test('every select and input on every tab has an accessible name', async ({ page
 
   for (const tab of TABS) {
     await page.goto(`/#${tab}`);
-    await page.waitForTimeout(SETTLE_MS);
+    await settle(page);
     const res = await page.evaluate(() => {
       // The four routes to an accessible name that this app actually uses. An
       // implicit wrapper counts: the Field component in Provision and
@@ -136,7 +164,7 @@ test('a clickable table row is announced by its own first column', async ({ page
 
   for (const tab of TABS) {
     await page.goto(`/#${tab}`);
-    await page.waitForTimeout(SETTLE_MS);
+    await settle(page);
     const res = await page.evaluate(() => {
       const out: { panel: string; rows: number; distinct: number; sample: string; mismatched: { label: string; cells: string }[] }[] = [];
       document.querySelectorAll('table').forEach((table, i) => {
@@ -234,7 +262,7 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
       await page.evaluate((t) => localStorage.setItem('theme', t), theme);
       await page.reload();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await page.waitForTimeout(SETTLE_MS);
+      await settle(page);
       // Nothing on these four tabs paints link text at rest since Overview's
       // service board replaced the panel wall (its Incidents and Service health
       // links were the only ones). An open About does: "Open in Build a chart",

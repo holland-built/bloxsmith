@@ -221,6 +221,12 @@ jobs:
       # exempted to save minutes. The macos job below runs in parallel with this
       # one, so the critical path grows by about that same 2.5 minutes, not twice
       # it.
+      #
+      # Since 2026-11-10 vault's tests derive with a cheap scrypt table set in
+      # internal/vault/kdf_cost_test.go; only the legacy-file, migration and
+      # parameter tests switch back to the real one (useRealKDF). Vault under
+      # -race went from 190s to 27s locally. In CI it had been 247-449s, the
+      # long pole of this job and the macos job.
       - name: Go build + test (-race) + vet
         working-directory: go
         run: |
@@ -713,10 +719,23 @@ jobs:
           grep -q 'cd /d "%~dp0"' update.bat || {
             echo "::error::update.bat does not cd to its own directory"; exit 1; }
 
-      - name: install.sh installs the latest release, verifying both times
+      # Every step below that touches a real release uses THIS tag, not
+      # `latest`. A release is cut on every merge, and a job that ran while one
+      # was still uploading mixed one release's checksums.txt with another's
+      # signature and went red (see scripts/ci/settled-release.sh).
+      - name: Pick a release that has finished publishing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          bash scripts/install.sh --prefix "$RUNNER_TEMP/bx" | tee "$RUNNER_TEMP/install.log"
+          TAG="$(bash scripts/ci/settled-release.sh)"
+          echo "testing against $TAG"
+          echo "SETTLED_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: install.sh installs a finished release, verifying both times
+        run: |
+          set -euo pipefail
+          bash scripts/install.sh --version "$SETTLED_TAG" --prefix "$RUNNER_TEMP/bx" | tee "$RUNNER_TEMP/install.log"
           grep -q "signature: ok" "$RUNNER_TEMP/install.log" || {
             echo "::error::install.sh did not verify the release signature"; exit 1; }
           grep -q "checksum : ok" "$RUNNER_TEMP/install.log" || {
@@ -730,12 +749,12 @@ jobs:
         run: |
           set -euo pipefail
           W="$RUNNER_TEMP/shim"; mkdir -p "$W/bin" "$W/rel"
-          BASE=https://github.com/holland-built/bloxsmith/releases/latest/download
+          BASE="https://github.com/holland-built/bloxsmith/releases/download/$SETTLED_TAG"
           for f in checksums.txt checksums.txt.ed25519; do
-            curl -fsSLo "$W/rel/$f" "$BASE/$f"
+            curl -fsSL --retry 3 --retry-all-errors -o "$W/rel/$f" "$BASE/$f"
           done
           NUM="$(sed -n 's/.*bloxsmith_\([0-9][^_]*\)_.*/\1/p' "$W/rel/checksums.txt" | head -1)"
-          curl -fsSLo "$W/rel/bloxsmith_${NUM}_linux_amd64.tar.gz" \
+          curl -fsSL --retry 3 --retry-all-errors -o "$W/rel/bloxsmith_${NUM}_linux_amd64.tar.gz" \
             "$BASE/bloxsmith_${NUM}_linux_amd64.tar.gz"
           printf '%s\n' '#!/bin/sh' 'out=""; url=""' \
             'while [ $# -gt 0 ]; do case "$1" in -*o) out="$2"; shift 2;; -*) case "$1" in *o) out="$2"; shift 2;; *) shift;; esac;; *) url="$1"; shift;; esac; done' \
@@ -761,8 +780,8 @@ jobs:
         run: |
           set -euo pipefail
           W="$RUNNER_TEMP/nosig"; mkdir -p "$W/bin" "$W/rel" "$W/payload"
-          BASE=https://github.com/holland-built/bloxsmith/releases/latest/download
-          curl -fsSLo "$W/rel/checksums.txt" "$BASE/checksums.txt"
+          BASE="https://github.com/holland-built/bloxsmith/releases/download/$SETTLED_TAG"
+          curl -fsSL --retry 3 --retry-all-errors -o "$W/rel/checksums.txt" "$BASE/checksums.txt"
           NUM="$(sed -n 's/.*bloxsmith_\([0-9][^_]*\)_.*/\1/p' "$W/rel/checksums.txt" | head -1)"
           # A forged archive that really does contain a runnable "bloxsmith".
           printf '#!/bin/sh\necho FORGED\n' > "$W/payload/bloxsmith"
@@ -820,7 +839,7 @@ jobs:
         run: |
           set -uo pipefail
           W="$RUNNER_TEMP/ed25519"; mkdir -p "$W/bin" "$W/rel"
-          TAG="$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+          TAG="$(curl -fsSL --retry 3 --retry-all-errors -H "Authorization: Bearer $GITHUB_TOKEN" \
                    "https://api.github.com/repos/holland-built/bloxsmith/releases?per_page=100" \
                  | jq -r '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
                  | sort -V | head -1)"
@@ -830,7 +849,7 @@ jobs:
           BASE="https://github.com/holland-built/bloxsmith/releases/download/$TAG"
           for f in checksums.txt checksums.txt.sshsig checksums.txt.ed25519 \
                    "bloxsmith_${NUM}_linux_amd64.tar.gz"; do
-            curl -fsSLo "$W/rel/$f" "$BASE/$f" || {
+            curl -fsSL --retry 3 --retry-all-errors -o "$W/rel/$f" "$BASE/$f" || {
               echo "::error::could not mirror $f from $TAG"; exit 1; }
           done
           # Fetched, then deleted: if $TAG ever stops publishing an sshsig the
@@ -1082,6 +1101,18 @@ jobs:
           Write-Host "-- ssh-keygen -Y verify (usage line only, no real args) --"
           ssh-keygen -Y verify 2>&1 | Select-Object -First 1 | Write-Host
 
+      # Same reason as the install-sh job: test a release that has finished
+      # uploading, never one a merge is still publishing.
+      - name: Pick a release that has finished publishing
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="$(bash scripts/ci/settled-release.sh)"
+          echo "testing against $TAG"
+          echo "SETTLED_TAG=$TAG" >> "$GITHUB_ENV"
+
       # Run as a CHILD process (not dot-sourced) so its exit code is capturable
       # in $LASTEXITCODE / the process exit code, and tee output to a log file
       # so the assertions below can grep it. GitHub Actions sets CI=true, which
@@ -1093,12 +1124,12 @@ jobs:
       # later step, and that handoff silently lost lines: 'checksum : ok' was
       # reported absent from a log the console had visibly printed. Capturing
       # once removes the file, its encoding, and the cross-step handoff.
-      - name: install.ps1 installs the latest release, verifying both times
+      - name: install.ps1 installs a finished release, verifying both times
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
           $prefix = "$env:RUNNER_TEMP\bx"
-          $out = & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Prefix $prefix 2>&1 |
+          $out = & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Version $env:SETTLED_TAG -Prefix $prefix 2>&1 |
                    ForEach-Object { $_.ToString() }
           $code = $LASTEXITCODE
           $text = ($out -join "`n")
@@ -1107,7 +1138,7 @@ jobs:
           Write-Host "--- end installer output ---"
 
           if ($code -ne 0) {
-            Write-Host "::error::install.ps1 exited $code on a clean install of the real latest release"
+            Write-Host "::error::install.ps1 exited $code on a clean install of the real release $env:SETTLED_TAG"
             exit 1
           }
           # Both verification lines must have actually PRINTED. A verify step
@@ -1239,8 +1270,24 @@ jobs:
   # that reason — it fails the install STEP, which makes the JOB a failure, so
   # the upload runs and the run reads as broken rather than as something a
   # human cancelled.
+  #
+  # THE JOB RUNS IN PLAYWRIGHT'S OWN IMAGE since 2026-11-10. Every red master
+  # run from 2026-10-21 to then failed in the old "Install Playwright runner"
+  # step, which ran `npx playwright install --with-deps chromium`: apt pulled
+  # fonts from the Ubuntu mirror and sometimes hung past the step's 10-minute
+  # cap (fonts-wqy-zenhei alone once took 3m18s). The image has the browsers
+  # and the same install-deps packages, fonts included, already in it, so the
+  # step is now `npm ci` only. The UI ships its own font (Inter, ui/public/fonts)
+  # and no spec compares pixels, so system fonts only supply fallback glyphs.
+  #
+  # The image tag MUST equal the @playwright/test version in package.json, or
+  # the runner looks for a browser build the image does not have. The first
+  # step below checks that and says which one to change.
   e2e:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -1249,6 +1296,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # The container runs as root but the checkout belongs to the runner's
+      # user, so git refuses it as "dubious ownership" and `go build` cannot
+      # stamp its VCS info ("error obtaining VCS status: exit status 128").
+      - name: Trust the checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -1281,7 +1334,14 @@ jobs:
         timeout-minutes: 10
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          # Checks the browser this @playwright/test wants is in the image,
+          # rather than comparing two version strings someone could edit apart.
+          node -e "
+            const { chromium } = require('@playwright/test');
+            const v = require('@playwright/test/package.json').version;
+            try { require('fs').accessSync(chromium.executablePath()); console.log('chromium for @playwright/test ' + v + ' is in the image'); }
+            catch { console.log('::error::the e2e container has no chromium for @playwright/test ' + v + '. Set its image in ci.yml to mcr.microsoft.com/playwright:v' + v + '-noble.'); process.exit(1); }
+          "
 
       # scripts/e2e.sh passes its arguments straight through to
       # `npx playwright test`, so --shard needs no change to the script.
