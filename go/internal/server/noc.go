@@ -28,6 +28,7 @@ func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/source/{sid}", d.sourceRows)
 	mux.HandleFunc("GET /api/dns-analytics", d.dnsAnalytics)
 	mux.HandleFunc("GET /api/host-metrics", d.hostMetrics)
+	mux.HandleFunc("GET /api/host-config", d.hostConfig)
 	mux.HandleFunc("GET /api/threat-lookup", d.threatLookup)
 	mux.HandleFunc("GET /api/chart/options", d.chartOptions)
 	mux.HandleFunc("GET /api/chart", d.chart)
@@ -256,6 +257,31 @@ func (d *Deps) dnsAnalytics(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) hostMetrics(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/host-metrics")
 	d.json(w, r, 200, d.dash(r).FetchHostMetrics(r.Context()))
+}
+
+// hostConfig is GET /api/host-config?ophid=<32 hex>&type=dns|dhcp: the DNS or
+// DHCP config one host loaded, with every secret value hidden server-side
+// (dashboard.RedactConfig). Both inputs are checked here, before any call, and
+// anything else is a 400.
+func (d *Deps) hostConfig(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/host-config")
+	q := r.URL.Query()
+	ophid, typ := q.Get("ophid"), q.Get("type")
+	if !dashboard.ValidOphid(ophid) {
+		d.json(w, r, 400, map[string]any{"error": "ophid must be 32 hex characters"})
+		return
+	}
+	if !dashboard.HostConfigTypes[typ] {
+		d.json(w, r, 400, map[string]any{"error": "type must be dns or dhcp"})
+		return
+	}
+	svc := d.dash(r)
+	if svc == nil {
+		d.json(w, r, 200, map[string]any{"status": "error", "files": []any{},
+			"reason": "Could not reach Infoblox for this host's settings."})
+		return
+	}
+	d.json(w, r, 200, svc.FetchHostConfig(r.Context(), ophid, typ))
 }
 
 // threatLookup is GET /api/threat-lookup (server.py:5251): entity search over

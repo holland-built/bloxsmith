@@ -738,7 +738,7 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 		case "zones":
 			result[name], meta[name] = normZones(zonesD, viewMap), zonesStatus
 		case "hosts":
-			result[name], meta[name] = normHosts(hostsD), hostsStatus
+			result[name], meta[name] = withHostConfigKeys(normHosts(hostsD), hostsD), hostsStatus
 		case "secPolicies":
 			result[name], meta[name] = normPolicies(policiesD), policiesStatus
 		case "feeds":

@@ -10,6 +10,7 @@ import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import HostConfigViewer from '../components/HostConfigViewer.jsx'
 
 // ---------- helpers ----------
 
@@ -349,6 +350,10 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
+  const [configHost, setConfigHost] = useState(null)
+  // A row opens the host's settings only when the feed carries its OPH ID,
+  // which is what the settings read is keyed on.
+  const canOpen = useMemo(() => hosts.some((h) => /^[0-9a-f]{32}$/i.test(h.ophid || '')), [hosts])
 
   const statusFilter = status === 'error' ? 'offline' : status
 
@@ -457,9 +462,11 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
             rowCap={150}
             stickyHeader
             rowKey={(h, i) => `${h.name}|${h.ip}|${i}`}
+            onRowClick={canOpen ? (h) => { if (h.ophid) setConfigHost(h) } : undefined}
           />
         </div>
       )}
+      {configHost && <HostConfigViewer host={configHost} onClose={() => setConfigHost(null)} />}
     </Card>
   )
 }
