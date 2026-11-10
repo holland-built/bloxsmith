@@ -33,6 +33,9 @@ func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/chart/options", d.chartOptions)
 	mux.HandleFunc("GET /api/chart", d.chart)
 	mux.HandleFunc("GET /api/chart/values", d.chartValues)
+	mux.HandleFunc("GET /api/chart/cubes", d.chartCubes)
+	mux.HandleFunc("GET /api/chart/fields", d.chartFields)
+	mux.HandleFunc("GET /api/chart/any", d.chartAny)
 }
 
 // actions is GET /api/actions (server.py:5077): the raw IQ Actions payload.
@@ -345,6 +348,52 @@ func (d *Deps) chartValues(w http.ResponseWriter, r *http.Request) {
 	res := d.dash(r).ChartValues(ctx, q.Get("count"), q.Get("only"), q.Get("window"))
 	if res["status"] == "invalid" {
 		d.json(w, r, 400, map[string]any{"error": "That field can't be filtered on for this chart."})
+		return
+	}
+	d.json(w, r, 200, res)
+}
+
+// chartCubes is GET /api/chart/cubes: every data set Infoblox lists that can be
+// charted, trimmed (dashboard/chart_cubes.go). A failed fetch is status
+// "error", never an empty list.
+func (d *Deps) chartCubes(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart/cubes")
+	d.json(w, r, 200, d.dash(r).CubeList())
+}
+
+// chartFields is GET /api/chart/fields?cube=: one data set's counts and
+// fields. A name the catalog does not list is a 400.
+func (d *Deps) chartFields(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart/fields")
+	res := d.dash(r).CubeFields(r.URL.Query().Get("cube"))
+	if res["status"] == "invalid" {
+		d.json(w, r, 400, map[string]any{"error": "Infoblox doesn't list that data."})
+		return
+	}
+	d.json(w, r, 200, res)
+}
+
+// chartAny is GET /api/chart/any?cube=&measure=&split=&top=&time=&window=: one
+// chart of any listed data set. Every name is checked against the catalog;
+// anything else is a 400 and never reaches the tenant.
+func (d *Deps) chartAny(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/chart/any")
+	q := r.URL.Query()
+	p := dashboard.AnyPicks{Cube: q.Get("cube"), Measure: q.Get("measure"), Split: q.Get("split"),
+		Time: q.Get("time"), Window: q.Get("window")}
+	if t := q.Get("top"); t != "" {
+		n, err := strconv.Atoi(t)
+		if err != nil {
+			d.json(w, r, 400, map[string]any{"error": "How many must be a number."})
+			return
+		}
+		p.Top = n
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	res := d.dash(r).RunAnyChart(ctx, p)
+	if res["status"] == "invalid" {
+		d.json(w, r, 400, map[string]any{"error": "That data isn't available to chart."})
 		return
 	}
 	d.json(w, r, 200, res)
