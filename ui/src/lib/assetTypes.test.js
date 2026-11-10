@@ -62,3 +62,8 @@ test('seenAgo reads a zoneless cube time as UTC and says how long ago', () => {
   assert.equal(seenAgo('2025-12-29T12:00:00Z', now), '3d ago')
   assert.equal(seenAgo('', now), null)
 })
+
+test('typeTotal is unknown when any type count is missing, never a partial sum', () => {
+  assert.equal(typeTotal({ total: null, types: [{ label: 'Unclassified', count: 10 }, { label: 'Server', count: null }] }), null)
+  assert.equal(typeTotal({ types: [] }), null)
+})

@@ -12,8 +12,10 @@ export const UNCLASSIFIED = 'Unclassified'
 export function typeTotal(filters) {
   if (typeof filters?.total === 'number') return filters.total
   const types = filters?.types ?? []
-  if (!types.some((t) => typeof t.count === 'number')) return null
-  return types.reduce((s, t) => s + (typeof t.count === 'number' ? t.count : 0), 0)
+  // Any type without a count leaves the total unknown: summing the rest would
+  // overstate every share (one known type would read as 100%).
+  if (!types.length || !types.every((t) => typeof t.count === 'number')) return null
+  return types.reduce((s, t) => s + t.count, 0)
 }
 
 // A share as people say it: whole percent from 1% up, one decimal below that,
