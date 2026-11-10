@@ -137,7 +137,13 @@ func TestTeardownSeedDemoStream_UnreadableRegionIsAFailureNotASilence(t *testing
 	r := httptest.NewRequest("GET", "/api/teardown/seed-demo/stream?dry=1&regions=emea,apac", nil)
 	r.RemoteAddr = "127.0.0.1:12345"
 	d.teardownSeedDemoStream(rr, r)
-	assertRegionReportedFailed(t, rr.Body.String())
+	body := rr.Body.String()
+	assertRegionReportedFailed(t, body)
+	// The teardown copy of the loop once said "no sites were created for it",
+	// the provisioning wording, about a run that creates nothing.
+	if strings.Contains(body, "created") || !strings.Contains(body, "none of its sites were torn down") {
+		t.Fatalf("teardown must say the region's sites were not torn down, not that none were created; body=%s", body)
+	}
 }
 
 // The unreadable templates DIRECTORY gets the diagnosis that matches it. The
