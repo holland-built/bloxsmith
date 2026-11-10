@@ -241,6 +241,8 @@ test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-dow
     await expect(page.getByText('The last refresh failed.', { exact: false })).toHaveCount(0);
   });
 
+  // Since 2026-11-10 it counts offline or error hosts only, the rule Overview
+  // and Best practices use, so degraded and pending hosts are not in it.
   test('"Hosts Not Online" opens Infra filtered to the same hosts it counted', async ({ page }) => {
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
       hosts: [
@@ -251,13 +253,14 @@ test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-dow
       ],
     })));
     await page.goto('/#daily');
-    await expect(kpi(page, 'Hosts Not Online').getByText('3', { exact: true })).toBeVisible();
+    await expect(kpi(page, 'Hosts Not Online').getByText('1', { exact: true })).toBeVisible();
 
     await page.getByText('Hosts Not Online', { exact: true }).click();
-    await expect(page).toHaveURL(/#infra\?status=not-online/);
+    await expect(page).toHaveURL(/#infra\?status=offline/);
     const inventory = card(page, /Host Inventory/);
-    await expect(inventory.getByText('status: not online')).toBeVisible();
-    await expect(inventory.locator('tbody tr')).toHaveCount(3);
+    await expect(inventory.getByText('status: offline')).toBeVisible();
+    await expect(inventory.locator('tbody tr')).toHaveCount(1);
+    await expect(inventory.getByText('off-1')).toBeVisible();
     await expect(inventory.getByText('up-1')).toHaveCount(0);
   });
 });

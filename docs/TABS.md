@@ -52,7 +52,7 @@ If the tenant you are using is read-only, the buttons that would write are greye
 | [Security](#security) | no | Threats, exposures, lookalike domains |
 | [Infra](#infra) | no | Host and service health |
 | [Assets](#assets) | no | Every device Infoblox has found, searchable, a page at a time |
-| [Incidents](#incidents) | no | The SOC queue |
+| [Incidents](#incidents) | no | The IQ for Threat Defense action queue |
 | [Audit](#audit) | no | Who changed what |
 | [Changes](#changes) | no | What changed in the last 24 hours |
 | [Provision](#provision) | **yes** | Build subnets, sites and demo networks |
@@ -145,9 +145,9 @@ IP addresses and DHCP in detail.
 - **Utilization Distribution**: how many subnets fall in each fullness band.
 - **IPAM Spaces — Top Used**: addresses used in each IP space.
 - **DHCP Leases**: a lease table you can filter.
-- **Subnet table**: the full list, without /29 to /32 links.
+- **Subnet table**: the full list, without /29 to /32 links unless you tick **/29–/32 links**. Those small links are nearly always full, so they would bury the real subnets. The ≥90% counts on Overview, Daily and the tile above include them, and clicking one of those counts opens the list with them ticked.
 
-You can link straight to a view: `#network?subnet=10.0.0.0`, `#network?minUtil=90`, `#network?focus=leases`.
+You can link straight to a view: `#network?subnet=10.0.0.0`, `#network?minUtil=90`, `#network?minUtil=90&links=1`, `#network?focus=leases`.
 
 ## DNS
 
@@ -169,7 +169,7 @@ Threats and exposures. This tab reads several Infoblox feeds, so its panels can 
 - **Axur Supplier Risk**: problems Axur found at your suppliers, worst first, one row per supplier.
 - **CTEM Exposure**, **Exposures**, **Exposed Surface**, **CTEM Assets**: what of yours can be reached from the internet.
 - **Asset Insights** and **Asset Risk**.
-- **SOC Insights**.
+- **IQ for Threat Defense** (formerly SOC Insights).
 
 An empty panel means the feed returned nothing. It doesn't mean you are safe. Check the panel's note.
 
@@ -211,12 +211,12 @@ A panel that says **unavailable** couldn't be read, and it names the reason. A l
 
 ## Incidents
 
-The SOC queue. Refreshes every 20 seconds.
+The IQ for Threat Defense action queue. Refreshes every 20 seconds.
 
 - **Categories**: click a category to show only its incidents in the list.
 - **Triage**: the incident list. Click a row for the detail. Tick **Ack** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
 - **Severity Counts**: how many of the loaded incidents are critical, high, medium and low.
-- **SOC Queue**: Infoblox IQ Actions, with the detail of each one.
+- **IQ Actions**: actions from Infoblox IQ for Threat Defense, with the detail of each one.
 - **Action Volume**: actions per day.
 
 ## Audit
@@ -483,7 +483,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Security | Axur Supplier Risk | Axur's supplier risk service | No | it comes from Axur, not Infoblox |
 | Security | CTEM Exposure | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Threat Feed Activity | Infoblox's security hit records | As a copy | the blocked and allowed totals above the bars are worked out in the app |
-| Security | SOC Insights | Infoblox's SOC insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | IQ for Threat Defense | Infoblox IQ for Threat Defense insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Insights | Infoblox's asset insight records | No | it counts a different set of asset records from the ones Build a chart reads |
 | Security | Exposures | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Risk | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
@@ -503,7 +503,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Incidents | Categories | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Severity Counts | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Triage | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
-| Incidents | SOC Queue | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
+| Incidents | IQ Actions | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
 | Incidents | Action Volume | Infoblox IQ actions | No | the actions are counted by day in the app, not read from activity records |
 | Audit | Activity Summary | this app's own audit log | No | it is this app's own record, not Infoblox's |
 | Audit | Audit Log | this app's own audit log | No | it is a list, not a chart |

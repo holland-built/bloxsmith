@@ -46,10 +46,10 @@
   - button "About incidents-severity": ⓘ
   - button "Options for Severity Counts": ⋯
   - text: Critical 1 High 0 Medium 1 Low 0
-  - heading "SOC Queue" [level=2]
-  - text: IQ Actions 2
-  - 'button "About: SOC Queue"': "About: ⓘ"
-  - 'button "Options: SOC Queue"'
+  - heading "IQ Actions" [level=2]
+  - text: IQ for Threat Defense 2
+  - 'button "About: IQ Actions"': "About: ⓘ"
+  - 'button "Options: IQ Actions"'
   - table:
     - rowgroup:
       - row "Sev Action Status":

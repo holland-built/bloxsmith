@@ -92,17 +92,21 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   // missing from the union. Counting rows here is therefore an exact
   // whole-network figure for this tile, not a coverage-set sample.
   //
-  // NOT `_totals.subnetsCrit`, though it is the same threshold since
-  // 2026-10-04 (this tile counted from 85 until then): that total includes the
-  // /29-/32 infra links, and this count leaves them out.
+  // It agrees with `_totals.subnetsCrit` (same threshold since 2026-10-04,
+  // /29-/32 links included since 2026-11-10).
   //
   // The red band is inclusive at its lower edge (lib/utilBands.js), which
   // agrees with the drill-down this row links to: Network.jsx keeps
-  // `u >= minUtil`. The `<= 28` rule mirrors that same drill-down (Network.jsx
-  // `base`), which drops /29-/32 infra links; it is disclosed in the help copy
-  // for this panel.
-  const critSubnets = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && utilBand(Number(s.util) || 0) === 'crit')
-  const badHosts = hosts.filter((h) => !/online|active/i.test(h.status || ''))
+  // `u >= minUtil`, and `links=1` there keeps the /29-/32 links this counts.
+  // Every subnet ≥90%, /29-/32 links included, so this is the same number
+  // Network and Overview show (owner, 2026-11-10). How many of them are real
+  // subnets, not links, is offered underneath.
+  const critSubnets = subnets.filter((s) => utilBand(Number(s.util) || 0) === 'crit')
+  const critReal = critSubnets.filter((s) => (Number(s.cidr) || 0) <= 28)
+  // Offline or in error, the same rule as Overview's Hosts row, Infra's
+  // "offline" filter and the Best practices check, so the four agree.
+  // Pending, degraded and unknown hosts are not counted as down.
+  const badHosts = hosts.filter((h) => statusBucket(h.status) === 'offline')
   const zonesWithIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
 
   // The line under each number says what is behind it, from the same rows the
@@ -120,11 +124,11 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   // while the other two are fine, so the gate is per-row, not per-card.
   const cells = [
     {
-      label: `Subnets ≥${UTIL_CRIT}% Util`, value: critSubnets.length, color: COLORS.crit, hash: `network?minUtil=${UTIL_CRIT}`, status: meta.subnets,
-      detail: '/29–/32 links are left out.',
+      label: `Subnets ≥${UTIL_CRIT}% Util`, value: critSubnets.length, color: COLORS.crit, hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
+      detail: `${critReal.length.toLocaleString()} without /29–/32 links.`,
     },
     {
-      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=not-online', status: meta.hosts,
+      label: 'Hosts Not Online', value: badHosts.length, color: COLORS.warn, hash: 'infra?status=offline', status: meta.hosts,
       detail: `${hosts.length.toLocaleString()} hosts loaded.` +
         (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
     },
@@ -411,4 +415,15 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
       )}
     </Card>
   )
+}
+
+// Mirrors statusBucket() in Infra.jsx and Overview.jsx, which do not export
+// it. Keep the three in step.
+function statusBucket(s) {
+  s = s || ''
+  if (/^unknown$/i.test(s)) return 'unknown'
+  if (/online|up|active/i.test(s)) return 'active'
+  if (/degraded|warn/i.test(s)) return 'degraded'
+  if (/off|down|error|fail/i.test(s)) return 'offline'
+  return 'other'
 }

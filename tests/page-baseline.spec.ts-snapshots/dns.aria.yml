@@ -5,7 +5,7 @@
   - text: queries per second
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
-  - text: /\d+ ▲ \d+\.\d+% vs first hour/
+  - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago/
   - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
   - button "About dns-zone-kpis": ⓘ
   - button "Options for Zone Counts": ⋯

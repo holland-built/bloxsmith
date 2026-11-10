@@ -138,6 +138,7 @@ function SeverityHero({ panelId, hub, events }) {
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
   const scopeNote = sampleScopeNote(hub.data, 'events')
+  const otherSev = events.length - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
 
   return (
     <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
@@ -157,6 +158,16 @@ function SeverityHero({ panelId, hub, events }) {
                 <b>{counts[s] || 0}</b>
               </div>
             ))}
+            {/* Events with any other severity (info, blank) are in the bars
+                but were in no legend entry, so the legend added up to 6 over
+                bars holding 50. */}
+            {otherSev > 0 && (
+              <div className="flex items-center gap-1.5 text-note">
+                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.other }} />
+                <span className="text-muted">Other</span>
+                <b>{otherSev}</b>
+              </div>
+            )}
           </div>
           {hourly.length === 0 ? (
             <Empty>events lack timestamps</Empty>
@@ -612,6 +623,15 @@ function AxurPanel({ panelId, axur }) {
 
 // ---------- CTEM exposure ----------
 
+// The figure beside the title is how many were found recently (count_7d, or
+// count_24h when the 7-day figure is missing), not the total of the rows below.
+// It used to say "9,351 total" over rows adding up to 40,666.
+function ctemRecent(d) {
+  if (d?.count_7d) return <span className="text-note text-muted">{d.count_7d.toLocaleString()} new in 7 days</span>
+  if (d?.count_24h) return <span className="text-note text-muted">{d.count_24h.toLocaleString()} new in 24h</span>
+  return null
+}
+
 function CtemPanel({ panelId, ctem }) {
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
@@ -643,7 +663,7 @@ function CtemPanel({ panelId, ctem }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-note text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
+    <Card panelId={panelId} span={3} title="CTEM Exposure" right={ctemRecent(d)}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
         <FeedUnavailable label="CTEM exposure feed unavailable" />
       ) : empty ? <Empty /> : (
@@ -774,9 +794,9 @@ function InsightsPanel({ panelId, insights }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={3} title="IQ for Threat Defense" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
-        <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="SOC insights unavailable" />
+        <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="IQ for Threat Defense unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
         <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
       )}

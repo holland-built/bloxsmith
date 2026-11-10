@@ -79,7 +79,7 @@ test('Daily: the subnet count is the red band, and opens Network at it', async (
   await expect(row.getByText('2', { exact: true })).toHaveCount(0);
 
   await row.click();
-  await expect(page).toHaveURL(/#network\?minUtil=90$/);
+  await expect(page).toHaveURL(/#network\?minUtil=90&links=1$/);
   // And the list it opens holds that one subnet and not the 88% one.
   const table = page.locator('[data-panel-id="network-exhaustion"] tbody');
   await expect(table.getByText('10.0.91.0')).toBeVisible();

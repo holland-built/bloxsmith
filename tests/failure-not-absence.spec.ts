@@ -93,14 +93,14 @@ test.describe('Daily → Open Issues panel (hosts feed, one of three KPI rows)',
 
 // ---------- 3. Incidents → SOC Queue (FetchActions availability) ----------
 
-test.describe('Incidents → SOC Queue panel (IQ Actions feed)', () => {
+test.describe('Incidents → IQ Actions panel (IQ Actions feed)', () => {
   const DEAD = { actions: [], unavailable: 'IQ Actions service unavailable (upstream error).', availability: 'error' };
-  const EMPTY_OK = { actions: [], unavailable: 'No IQ Actions (SOC incidents) for this tenant.', availability: 'ok' };
+  const EMPTY_OK = { actions: [], unavailable: 'No IQ Actions for this tenant.', availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no pending actions"', async ({ page }) => {
     await page.route('**/api/actions*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#incidents');
-    const card = page.locator('text=SOC Queue').locator('..').locator('..');
+    const card = page.locator('[data-panel-id="incidents-soc-queue"]');
     await expect(card.getByText(/iq actions feed unavailable/i)).toBeVisible();
     await expect(card.getByText(/no pending actions/i)).toHaveCount(0);
   });
@@ -108,7 +108,7 @@ test.describe('Incidents → SOC Queue panel (IQ Actions feed)', () => {
   test('genuinely empty tenant still renders "no pending actions"', async ({ page }) => {
     await page.route('**/api/actions*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#incidents');
-    const card = page.locator('text=SOC Queue').locator('..').locator('..');
+    const card = page.locator('[data-panel-id="incidents-soc-queue"]');
     await expect(card.getByText(/no pending actions/i)).toBeVisible();
     await expect(card.getByText(/iq actions feed unavailable/i)).toHaveCount(0);
   });

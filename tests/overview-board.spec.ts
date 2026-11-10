@@ -15,7 +15,7 @@ const row = (page: Page, name: string) => page.locator(`[data-board] [data-board
 test('the board has a row per service, each linking to its page', async ({ page }) => {
   await installBaselineWorld(page);
   await page.goto('/#overview');
-  for (const [name, href] of [['DNS', '#dns'], ['DHCP', '#network?focus=leases'], ['IPAM', '#network?minUtil=90'], ['Hosts', '#infra?status=offline'], ['Security', '#security']]) {
+  for (const [name, href] of [['DNS', '#dns'], ['DHCP', '#network?focus=leases'], ['IPAM', '#network?minUtil=90&links=1'], ['Hosts', '#infra?status=offline'], ['Security', '#security']]) {
     await expect(row(page, name).getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
   }
   // The six number tiles and the folded "Needs a look" are gone.

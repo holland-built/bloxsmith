@@ -6,11 +6,11 @@
   - text: four questions asked of this window, each answered or explicitly not answered
   - 'button "About: Notability"': "About: ⓘ"
   - 'button "Options: Notability"'
-  - text: 1 Deletions Del
+  - text: 1+ Deletions Del
   - paragraph: Pulled out because a delete is the only operation with no later state left to inspect.
-  - text: 1 Failed changes Fail
+  - text: 1+ Failed changes Fail
   - paragraph: Anything whose result is not "success" — including a result the feed left blank, which is unread rather than fine.
-  - text: /2 Out of hours \d+:\d+–\d+:\d+/
+  - text: /2\+ Out of hours \d+:\d+–\d+:\d+/
   - paragraph: /Out of hours means at or after \d+:\d+, or before \d+:\d+, on your own local clock — your browser's time zone, not the tenant's\./
   - text: Not answered New actors this window Unknown
   - paragraph: "/Not enough history in this window — the \\d+-row cap was hit, so the oldest events in this window are missing and the earlier half is not represented\\. This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half\\. There is no history before this window, so nothing older can be checked\\./"
@@ -93,4 +93,4 @@
         - cell "actor-alpha"
         - cell "service"
         - cell "OOH"
-  - text: /DEL deletion FAIL result was not "success" OOH outside \d+:\d+–\d+:\d+ on your local clock Group counts describe the rows listed here, not the whole window Band counts describe the \d+-hour window, so they will not add up to these rows/
+  - text: /DEL deletion FAIL result was not "success" OOH from \d+:\d+ to \d+:\d+ on your local clock/

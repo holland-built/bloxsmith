@@ -56,24 +56,24 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
 
 // ---------- 2. Security → SOC Insights (FetchInsights availability) ----------
 
-test.describe('Security → SOC Insights panel (InsightsPanel)', () => {
-  const DEAD = { data: [], unavailable: 'SOC insights feed unavailable (upstream error).', availability: 'error' };
+test.describe('Security → IQ for Threat Defense panel (InsightsPanel)', () => {
+  const DEAD = { data: [], unavailable: 'IQ for Threat Defense insights unavailable (upstream error).', availability: 'error' };
   const EMPTY_OK = { data: [], availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no data"', async ({ page }) => {
     await page.route('**/api/insights*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#security');
-    const card = page.locator('text=SOC Insights').locator('..').locator('..');
-    await expect(card.getByText(/soc insights unavailable/i)).toBeVisible();
+    const card = page.locator('[data-panel-id="security-soc-insights"]');
+    await expect(card.getByText(/iq for threat defense unavailable/i)).toBeVisible();
     await expect(card.getByText(/^no data$/i)).toHaveCount(0);
   });
 
   test('a genuinely empty tenant still renders "no data"', async ({ page }) => {
     await page.route('**/api/insights*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#security');
-    const card = page.locator('text=SOC Insights').locator('..').locator('..');
+    const card = page.locator('[data-panel-id="security-soc-insights"]');
     await expect(card.getByText(/^no data$/i)).toBeVisible();
-    await expect(card.getByText(/soc insights unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/iq for threat defense unavailable/i)).toHaveCount(0);
   });
 });
 
