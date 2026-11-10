@@ -1,17 +1,15 @@
 import { plainMessage } from './plainWords.js'
+import { statusBucket } from './statusBucket.js'
 
 // The open issues on Overview's service board, worst first, each with the page
 // that fixes it. Built from the same feeds as the board's measures, so the two
 // never disagree.
 // Incidents arrive already grouped, one row per kind.
 
-// Same buckets as Overview's statusBucket(); only "offline" matters here. It
-// holds hosts Infoblox reports as offline, down OR error, so the words on
-// screen say "not online" rather than guess which one it was.
-const isOffline = (s) => {
-  s = s || ''
-  return !/^unknown$/i.test(s) && !/online|up|active/i.test(s) && !/degraded|warn/i.test(s) && /off|down|error|fail/i.test(s)
-}
+// Only the "offline" bucket matters here. It holds hosts Infoblox reports as
+// offline, down OR error, so the words on screen say "not online" rather than
+// guess which one it was.
+const isOffline = (s) => statusBucket(s) === 'offline'
 
 // Where each kind of incident is fixed, and the question to ask about it.
 const FIX = {

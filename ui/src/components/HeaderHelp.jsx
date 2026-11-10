@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { CONTROL_HELP } from '../lib/controlHelp.js'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // One dialog naming every control in the app header, and the two switches
 // (theme, spacing) that now live in Settings.
@@ -12,17 +13,15 @@ import { CONTROL_HELP } from '../lib/controlHelp.js'
 // shows one control at a time, so the row can never be read as a row. One
 // dialog, opened deliberately, answers "what is all this" in a single glance.
 //
-// WHY THE MODAL MACHINERY IS COPIED, NOT INVENTED. TenantManager.jsx already
-// solved this — dialog role, focus onto the panel rather than onto its first
-// button, a Tab trap re-read on every press, Escape stopped so it cannot also
-// reach App.jsx's document-level Escape (which belongs to the nav menus), and
+// WHY THE MODAL MACHINERY IS SHARED, NOT INVENTED. TenantManager.jsx already
+// solved this (the keys now live in lib/focusTrap.js) — dialog role, focus
+// onto the panel rather than onto its first button, a Tab trap re-read on
+// every press, Escape stopped so it cannot also reach App.jsx's
+// document-level Escape (which belongs to the nav menus), and
 // focus return owned by App.jsx because this component is unmounted by the time
 // the focus has to land. Every one of those is a decision with a reason behind
 // it in that file. A second, subtly different dialog in the same header would
 // be the version that rots.
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 export default function HeaderHelp({ onClose }) {
   const panelRef = useRef(null)
 
@@ -31,30 +30,7 @@ export default function HeaderHelp({ onClose }) {
   // be closed. Same choice, same reason, as the settings sheet.
   useEffect(() => { panelRef.current?.focus() }, [])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose} onKeyDown={onKeyDown}>

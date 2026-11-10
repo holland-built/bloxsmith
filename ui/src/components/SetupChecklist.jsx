@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import AiProviderForm from './AiProviderForm.jsx'
 import DemoSettingsForm from './DemoSettingsForm.jsx'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // "Finish setting up": the optional setup after the first Infoblox key. It
 // opens once over the dashboard (VaultGate sends bx:open-setup), and
 // Settings > Setup checklist opens it again. Nothing here is required, and
 // every form is the same one its usual page uses, so a setting has one home.
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const linkBtn = 'text-note font-medium text-link underline underline-offset-2'
 
 function Item({ id, title, why, checking, done, doneText, open, onToggle, info, children }) {
@@ -55,17 +54,7 @@ export default function SetupChecklist({ onClose, onOpenBrand, brandOpen }) {
   const sites = (Array.isArray(templates.data) ? templates.data : []).filter((t) => !t.type || t.type === 'site')
   const regions = [...new Set(sites.map((t) => String(t.name || '').split('/')[0]).filter(Boolean))]
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) return
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) { e.preventDefault(); last.focus() }
-    else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus() }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onKeyDown={onKeyDown}>

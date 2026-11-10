@@ -8,6 +8,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
+import { statusBucket } from '../lib/statusBucket.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import HostConfigViewer from '../components/HostConfigViewer.jsx'
@@ -278,19 +279,6 @@ function discoveryTile(feed) {
 }
 
 // ---------- host inventory table ----------
-
-// "unknown" is the backend's word for a host whose upstream status was absent
-// or unrecognised (norm.go). It used to be reported as "pending" — a real
-// lifecycle state an operator acts on — so it gets its own bucket everywhere
-// and is never folded back into pending, active or offline.
-function statusBucket(s) {
-  s = s || ''
-  if (/^unknown$/i.test(s)) return 'unknown'
-  if (/online|up|active/i.test(s)) return 'active'
-  if (/degraded|warn/i.test(s)) return 'degraded'
-  if (/off|down|error|fail/i.test(s)) return 'offline'
-  return 'other'
-}
 
 const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
 

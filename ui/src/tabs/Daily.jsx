@@ -8,6 +8,7 @@ import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 import { issueWord } from '../lib/plainWords.js'
 import Tip from '../components/Tip.jsx'
+import { statusBucket } from '../lib/statusBucket.js'
 import './Daily.css'
 
 // Per-slice status for a RAW useApi('/api/data') read.
@@ -468,15 +469,4 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
       )}
     </Card>
   )
-}
-
-// Mirrors statusBucket() in Infra.jsx and Overview.jsx, which do not export
-// it. Keep the three in step.
-function statusBucket(s) {
-  s = s || ''
-  if (/^unknown$/i.test(s)) return 'unknown'
-  if (/online|up|active/i.test(s)) return 'active'
-  if (/degraded|warn/i.test(s)) return 'degraded'
-  if (/off|down|error|fail/i.test(s)) return 'offline'
-  return 'other'
 }

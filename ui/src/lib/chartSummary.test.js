@@ -76,7 +76,7 @@ test('every chart on every page is given a label', () => {
   const dir = new URL('../tabs/', import.meta.url)
   // ChartView is Build a chart's chart (components/ChartView.jsx), which hands
   // its label to whichever of the others it draws.
-  const opening = /<(GradientArea|CategoryBars|StackedDayBars|StatusDonut|SubnetUsageBars|ChartView)\b/g
+  const opening = /<(GradientArea|CategoryBars|StackedDayBars|StatusDonut|ChartView)\b/g
   // The tag ends at the first "/>" outside any {…}. A plain "[^>]*" stops
   // early at the ">" of an arrow function in a prop, which two charts have.
   const tagFrom = (src, start) => {

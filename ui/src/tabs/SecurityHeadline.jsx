@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { securityHeadline } from '../lib/securityHeadline.js'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
 import './Security.css'
 
@@ -9,15 +10,6 @@ import './Security.css'
 // explanation in the tile's tip.
 //
 // Each tile jumps to the panel its number comes from.
-
-function jump(panelId) {
-  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
-  if (!el) return
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-  el.focus({ preventScroll: true })
-}
 
 const STATE_WORD = { loading: 'Loading…', failed: 'Unknown', notSetUp: 'Not set up', noneReported: 'None reported' }
 
@@ -38,7 +30,7 @@ function Tile({ t }) {
         data-key={t.key}
         title={tip || undefined}
         aria-describedby={tip ? id : undefined}
-        onClick={() => jump(t.panelId)}
+        onClick={() => jumpToPanel(t.panelId)}
       >
         <span className="ov-kpi-in">
           <span className="ov-kpi-top">

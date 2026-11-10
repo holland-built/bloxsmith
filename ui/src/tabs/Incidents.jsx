@@ -8,6 +8,7 @@ import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { categoryWord, plainMessage } from '../lib/plainWords.js'
 import Tip from '../components/Tip.jsx'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 import './Overview.css'
 import './Incidents.css'
 
@@ -658,13 +659,10 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
 
 // ---------- action detail drawer ----------
 
-// The same modal machinery as DocsPanel, HeaderHelp and TenantManager, copied
-// for the reason HeaderHelp.jsx gives. Until this was added the drawer covered
+// The same modal machinery as DocsPanel, HeaderHelp and TenantManager, shared
+// through lib/focusTrap.js for the reason HeaderHelp.jsx gives. Until this was added the drawer covered
 // the page but took no focus: Tab kept walking the queue behind the scrim, and
 // Escape did nothing.
-const DRAWER_FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 function ActionDetailDrawer({ actionId, onClose }) {
   const detail = useApi(`/api/actions/${actionId}`)
   const panelRef = useRef(null)
@@ -682,30 +680,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
     }
   }, [])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(DRAWER_FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose} onKeyDown={onKeyDown}>

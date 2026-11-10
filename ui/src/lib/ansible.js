@@ -18,8 +18,6 @@ const HEADER = [
 
 const RDATA_KEY = { A: 'address', AAAA: 'address', CNAME: 'cname', TXT: 'text' }
 
-export const ANSIBLE_JOBS = ['ip', 'dns', 'network']
-
 // playbookFor returns the playbook text, or '' for a job without one.
 export function playbookFor(job, input) {
   let title

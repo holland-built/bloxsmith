@@ -6,6 +6,7 @@ import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
 import AiProviderForm from './AiProviderForm.jsx'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -16,13 +17,6 @@ const inCls =
   `${FIELD_CLS} w-full`
 const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-control text-left text-copy text-field-txt hover:bg-line'
 const miniBtn = 'px-2 py-1 rounded-control border border-border text-note text-muted hover:text-txt hover:border-border-hover'
-
-// Everything that can hold focus inside the sheet, in document order. Read
-// fresh on every Tab because this sheet swaps whole sections in and out (add a
-// connection, replace a key, confirm a removal) — a list captured on open would
-// describe a sheet that is no longer on screen.
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 // The six sections of the drawer, in the order they are listed.
 const SECTIONS = [
@@ -126,34 +120,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   const panelRef = useRef(null)
   useEffect(() => { panelRef.current?.focus() }, [])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      // Stopped here so it cannot also reach App.jsx's document-level Escape,
-      // which is the group menus' and has no business firing off this one.
-      e.stopPropagation()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    // Only the two ends need handling: everything between them is the
-    // browser's own Tab order, which is already correct.
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active

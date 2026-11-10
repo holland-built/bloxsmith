@@ -4,6 +4,7 @@ import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sampleSince } from '../lib/sampleCount.js'
+import { statusBucket } from '../lib/statusBucket.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import Tip from '../components/Tip.jsx'
 import './Overview.css'
@@ -660,26 +661,4 @@ function DnsHero({ dns, panelId }) {
       )}
     </Card>
   )
-}
-
-
-// ---------- host status buckets ----------
-
-// "unknown" is the backend's word (go/internal/dashboard/norm.go) for a host
-// whose upstream status was absent or unrecognised — deliberately not the real
-// lifecycle state "pending" it used to masquerade as. It is its own bucket, not
-// part of Other: "we do not know this host's state" is a fact an operator acts
-// on, and folding it into a catch-all made this donut disagree with Infra's
-// (Unknown 2% / Other 8% there vs a single Other 10% here) about the same hosts.
-//
-// Mirrors statusBucket() / BUCKET_LABEL / the bucket order in ui/src/tabs/
-// Infra.jsx, which does not export them. Keep the two in step: same names, same
-// order, same colours, so the two screens read as one number.
-function statusBucket(s) {
-  s = s || ''
-  if (/^unknown$/i.test(s)) return 'unknown'
-  if (/online|up|active/i.test(s)) return 'active'
-  if (/degraded|warn/i.test(s)) return 'degraded'
-  if (/off|down|error|fail/i.test(s)) return 'offline'
-  return 'other'
 }

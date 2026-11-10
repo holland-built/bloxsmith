@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Empty, FeedUnavailable, FOCUS_RING, Skeleton } from './ui.jsx'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // The DNS or DHCP settings one host loaded, read through GET /api/host-config.
 // The server hides every password and secret key before the text gets here
@@ -14,9 +15,6 @@ const TYPES = [
 // host_type "6" is a NIOS grid member. The config tool has nothing for one:
 // asked live on 2026-11-10 it answered "none of [named.conf] present".
 export const NIOS_GRID_MEMBER = '6'
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 function fmtWhen(v) {
   const t = Date.parse(v)
@@ -81,30 +79,7 @@ export default function HostConfigViewer({ host, onClose }) {
     }
   }, [])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   const data = state.data
   const files = data?.status === 'ok' ? data.files || [] : []

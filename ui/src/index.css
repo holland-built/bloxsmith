@@ -556,9 +556,6 @@ html[data-theme="light"] { color-scheme: light; }
 }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* hide scrollbar on internally-scrolling strips (e.g. topbar nav on narrow widths) */
-.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-
 /* ---------- touch hit areas, and only on a touch pointer ----------
    The audit's item 5, and the narrow half of a finding that was rejected in its
    wide form. A blanket 44px floor on an 11px-dense desktop operator console
@@ -661,7 +658,6 @@ html[data-theme="light"] { color-scheme: light; }
     min-height: 0;
   }
 }
-.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* Obsidian: links are the text colour in dark theme, so they carry an
    underline to stay distinguishable without relying on colour (WCAG 1.4.1). */

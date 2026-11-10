@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseInline, sectionFor, parseBlocks, slugify } from '../lib/markdown.js'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // The tab documentation, read inside the app instead of on GitHub.
 //
@@ -22,9 +23,6 @@ import { parseInline, sectionFor, parseBlocks, slugify } from '../lib/markdown.j
 // to drift from the one on GitHub — which was the failure mode of every other
 // option. It is behind a dynamic import so its ~14 KB is paid only by readers
 // who open this panel, the same rule the charts now follow.
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 const DOCS_REPO_URL = 'https://github.com/holland-built/bloxsmith/blob/master/docs/TABS.md'
 
 function Inline({ text }) {
@@ -129,30 +127,7 @@ export default function DocsPanel({ anchor, onClose }) {
     return () => { alive = false }
   }, [])
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!items.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = items[0]
-    const last = items[items.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
 
   // A section that does not exist falls back to the whole document rather than
   // to an error: an anchor stops matching when the docs are REORGANISED, which

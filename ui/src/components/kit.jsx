@@ -1,26 +1,18 @@
-// Shared pieces of the page chrome: status pills, the row of headline number
-// tiles, and the breadcrumb bar.
+// Shared pieces of the page chrome: the row of headline number tiles and the
+// breadcrumb bar.
 //
 // Colours come only from tokens in index.css, so both themes and the contrast
 // tests cover them. Red means critical, amber means warning and green means
 // healthy, the same meaning the charts already use.
 import { useEffect, useRef, useState } from 'react'
 import { FOCUS_RING } from './ui.jsx'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 
 const TONE = {
-  crit: { bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)', dot: 'var(--color-crit)' },
-  warn: { bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)', dot: 'var(--color-warn)' },
-  ok: { bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)', dot: 'var(--color-ok)' },
-  neutral: { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)', dot: 'var(--color-other)' },
-}
-
-export function StatusPill({ tone = 'neutral', children }) {
-  const t = TONE[tone] || TONE.neutral
-  return (
-    <span className="inline-block rounded-mark px-2 py-0.5 text-note font-semibold whitespace-nowrap" style={{ background: t.bg, color: t.fg }}>
-      {children}
-    </span>
-  )
+  crit: { dot: 'var(--color-crit)' },
+  warn: { dot: 'var(--color-warn)' },
+  ok: { dot: 'var(--color-ok)' },
+  neutral: { dot: 'var(--color-other)' },
 }
 
 // The headline numbers across the top of a page, one tile each. A tile jumps
@@ -32,21 +24,6 @@ export function StatusPill({ tone = 'neutral', children }) {
 // colour and the tile is tinted with it. The label carries the meaning in
 // words ("Hosts offline"), so the colour is never the only signal, and a tile
 // whose value is unknown takes no tone at all: a dash is not good news.
-// Scroll to a panel and move focus to it. A panel taken off the page has no
-// element, so focus goes to Arrange panels, where it can be put back.
-function jumpToPanel(panelId) {
-  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
-  if (!el) {
-    const arrange = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Arrange panels')
-    arrange?.focus()
-    return
-  }
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-  el.focus({ preventScroll: true })
-}
-
 // min-h is the height of a tile holding all three lines (label, figure, note)
 // plus its border, so a tile with a dash and no note is already that box.
 // tests/overview-cls.spec.ts measures it.

@@ -11,6 +11,7 @@ import {
   shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
 } from '../lib/layout.js'
 import { utilBand } from '../lib/utilBands.js'
+import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // Where each panel's numbers come from (dashboard/panel_sources.go), by id.
 // Loaded the first time any About opens, not with the page: all 90 entries in
@@ -1139,14 +1140,6 @@ export function CardGrid({ className = '', layoutKey, children }) {
   )
 }
 
-// Everything that can hold focus inside the popup, in document order. Read
-// fresh on every Tab, exactly as HeaderHelp and TenantManager do: this list
-// changes with every button press here — taking a tile off the page moves a row
-// from one section to the other — so a list captured on open would describe a
-// dialog that is no longer on screen.
-const ARRANGE_FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 // The sentences that explain reorder, resize, hide and auto-save. They live
 // here rather than in panelHelp.js because they are facts about the LAYOUT
 // SYSTEM, not about a panel: which grids are managed can change, and 96
@@ -1363,31 +1356,10 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
   }
 
   const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      // A drag still in flight is abandoned rather than committed, the same way
-      // Escape abandons a keyboard move: nothing was saved on the way here.
-      dragCancelRef.current?.()
-      onClose()
-      return
-    }
-    if (e.key !== 'Tab') return
-    const focusable = [...panelRef.current.querySelectorAll(ARRANGE_FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!focusable.length) {
-      e.preventDefault()
-      panelRef.current.focus()
-      return
-    }
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const cur = document.activeElement
-    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && cur === last) {
-      e.preventDefault()
-      first.focus()
-    }
+    // A drag still in flight is abandoned rather than committed, the same way
+    // Escape abandons a keyboard move: nothing was saved on the way here.
+    if (e.key === 'Escape') dragCancelRef.current?.()
+    dialogKeyDown(e, panelRef.current, onClose)
   }
 
   const rowBtn =

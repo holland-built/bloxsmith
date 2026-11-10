@@ -100,6 +100,6 @@ test('no chart is drawn in the button colour', () => {
 test('"healthy" is drawn in the ok colour, not the button colour', () => {
   const kit = fs.readFileSync(path.join(SRC, 'components/kit.jsx'), 'utf8')
   const ui = fs.readFileSync(path.join(SRC, 'components/ui.jsx'), 'utf8')
-  assert.match(kit, /ok:\s*\{[^}]*dot:\s*'var\(--color-ok\)'/, 'StatusPill draws its ok dot in something other than --color-ok')
+  assert.match(kit, /ok:\s*\{[^}]*dot:\s*'var\(--color-ok\)'/, 'the headline tiles draw ok in something other than --color-ok')
   assert.match(ui, /label:\s*'Healthy',\s*color:\s*'var\(--color-ok\)'/, 'utilStatus draws Healthy in something other than --color-ok')
 })
