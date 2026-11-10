@@ -465,3 +465,16 @@ test('the truncated cap turns the new-actor cell unknown but leaves the other th
   assert.equal(actors.state, 'unknown')
   assert.equal(actors.chip, 'Unknown')
 })
+
+test('when the feed was capped, a zero is Unknown and a count is a floor, never "None"', () => {
+  const band = notability(ACTOR_ROWS.map((r) => ({ ...r, action: 'DELETE', result: 'success' })), { truncated: true })
+  const failures = band.find((c) => c.key === 'failures')
+  assert.equal(failures.count, 0)
+  assert.equal(failures.state, 'unknown')
+  assert.equal(failures.chip, 'Unknown')
+  assert.ok(failures.reason.length > 0)
+  assert.equal(band.find((c) => c.key === 'deletions').atLeast, true)
+  const uncapped = notability(ACTOR_ROWS.map((r) => ({ ...r, action: 'DELETE', result: 'success' })), { truncated: false })
+  assert.equal(uncapped.find((c) => c.key === 'failures').chip, 'None')
+  assert.equal(uncapped.find((c) => c.key === 'deletions').atLeast, false)
+})

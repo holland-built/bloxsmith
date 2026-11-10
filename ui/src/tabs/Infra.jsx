@@ -382,8 +382,9 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
     return hosts.filter((h) => {
-      // 'not-online' is Daily's "Hosts Not Online": every host that is not
-      // online or active, the same rule as the count that links here.
+      // 'not-online' (every host that is not online or active) is what Daily's
+      // "Hosts Not Online" linked to until 2026-11-10; it now links to
+      // 'offline'. Kept so old links still work.
       if (statusFilter === 'not-online') {
         if (/online|active/i.test(h.status || '')) return false
       } else if (statusFilter && statusBucket(h.status) !== statusFilter) return false

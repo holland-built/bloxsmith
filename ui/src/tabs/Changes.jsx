@@ -182,7 +182,7 @@ function BandCell({ cell }) {
             <span className="sr-only">Not answered</span>
           </>
         ) : (
-          cell.count
+          `${cell.count}${cell.atLeast ? '+' : ''}`
         )}
       </div>
       <div className="px-3 py-2.5 min-w-0">
@@ -299,8 +299,8 @@ function Feed({ groups }) {
   )
 }
 
-// Counts describe the rows listed under this header and nothing else — the
-// band above counts the whole window, so the two will not add up.
+// Counts describe the rows listed under this header. The band above counts
+// the same rows, all groups together.
 function groupCounts(group) {
   const parts = [`${group.total} ${group.total === 1 ? 'row' : 'rows'}`]
   if (group.successes) parts.push(`${group.successes} success`)
@@ -380,9 +380,7 @@ function Legend() {
     <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-note text-dim">
       <span><b className="text-muted">DEL</b> deletion</span>
       <span><b className="text-muted">FAIL</b> result was not "success"</span>
-      <span><b className="text-muted">OOH</b> outside 20:00–08:00 on your local clock</span>
-      <span>Group counts describe the rows listed here, not the whole window</span>
-      <span>Band counts describe the 24-hour window, so they will not add up to these rows</span>
+      <span><b className="text-muted">OOH</b> from 20:00 to 08:00 on your local clock</span>
     </div>
   )
 }

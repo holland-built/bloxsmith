@@ -300,13 +300,18 @@ export function newActors(rows, { truncated = false } = {}) {
  */
 export function notability(rows, { truncated = false } = {}) {
   const list = Array.isArray(rows) ? rows : []
+  // When the feed stopped at its row limit, the oldest part of the window was
+  // never read. A zero then is not "none happened", so it is Unknown, and a
+  // count is a floor ("6+"), not the window's total.
   const cell = (key, label, rowsMatched) => ({
     key,
     label,
     count: rowsMatched.length,
     rows: rowsMatched,
-    state: rowsMatched.length > 0 ? 'populated' : 'none',
-    chip: rowsMatched.length > 0 ? label : 'None',
+    state: rowsMatched.length > 0 ? 'populated' : truncated ? 'unknown' : 'none',
+    chip: rowsMatched.length > 0 ? label : truncated ? 'Unknown' : 'None',
+    atLeast: truncated && rowsMatched.length > 0,
+    reason: truncated && rowsMatched.length === 0 ? 'the 500-row cap was hit, so the oldest events in this window were never read' : '',
     caption: CAPTIONS[key],
   })
 

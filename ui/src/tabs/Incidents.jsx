@@ -532,7 +532,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
   const right = rows.length > 0 ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : undefined
 
   return (
-    <Card panelId={panelId} span={2} title="SOC Queue" note="IQ Actions" right={right}>
+    <Card panelId={panelId} span={2} title="IQ Actions" note="IQ for Threat Defense" right={right}>
       {loading ? (
         <Skeleton h={280} />
       ) : unavailable ? (
@@ -660,8 +660,11 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
         const d = new Date(t).toISOString().slice(0, 10)
         days[d] = (days[d] || 0) + 1
       }
-      const p = String(r.priority || '').toLowerCase()
-      if (pri[p] != null) pri[p]++
+      // The same mapping the queue uses, so these counts add up to the queue's
+      // total and call each row what the queue calls it. Counting only
+      // low/medium/high dropped every other row (225 here vs 228 in the queue).
+      const sev = mcpSeverity(r)
+      pri[sev] = (pri[sev] || 0) + 1
     }
     // The whole date is kept, not `date.slice(5)`: "01-27" is a machine's way of
     // writing a day, and it is also ambiguous outside the US. fmtShortDay turns
@@ -702,6 +705,9 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
             <span style={{ color: COLORS.sevHigh }}>High {byPriority.high}</span>
             <span style={{ color: COLORS.warn }}>Medium {byPriority.medium}</span>
             <span style={{ color: COLORS.accent }}>Low {byPriority.low}</span>
+            {Object.entries(byPriority).filter(([k, n]) => !['low', 'medium', 'high'].includes(k) && n > 0).map(([k, n]) => (
+              <span key={k} className="text-muted capitalize">{k} {n}</span>
+            ))}
           </div>
         </>
       )}

@@ -546,21 +546,22 @@ const CLAIMS = [
   },
   {
     panel: 'daily-open-issues',
-    says: /subnets 90% full or more \(tiny networks under 16 addresses left out\)/,
+    says: /subnets 90% full or more \(tiny \/29 to \/32 links included\)/,
     file: UTIL_BANDS,
     proofs: UTIL_BAND_PROOFS,
   },
   {
     panel: 'daily-open-issues',
-    says: /subnets 90% full or more \(tiny networks under 16 addresses left out\)/,
+    says: /subnets 90% full or more \(tiny \/29 to \/32 links included\)/,
     file: DAILY,
     proofs: [
       { re: /utilBand\(Number\(s\.util\) \|\| 0\) === 'crit'\)$/m, expect: "the count is utilBand()'s 'crit' band, inclusive like the drill-down" },
       {
-        re: /\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28 &&/,
-        expect: 'prefixes longer than /28 (fewer than 16 addresses) are filtered out before the util test',
+        re: /const critReal = critSubnets\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28\)/,
+        expect: 'the count without /29-/32 links keeps prefixes of /28 or shorter',
       },
-      { re: /hash: `network\?minUtil=\$\{UTIL_CRIT\}`/, expect: 'the row links to the same threshold, UTIL_CRIT' },
+      { re: /detail: `\$\{critReal\.length\.toLocaleString\(\)\} without \/29–\/32 links\.`/, expect: 'that count is shown underneath' },
+      { re: /hash: `network\?minUtil=\$\{UTIL_CRIT\}&links=1`/, expect: 'the row links to the same threshold with the links included, so the list matches the count' },
     ],
   },
   {

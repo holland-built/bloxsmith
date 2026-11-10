@@ -414,9 +414,12 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
     if (hp.subnet) setFilter(hp.subnet)
   }, [hp.subnet])
 
-  // /29-/32 are infra links (point-to-point/loopback), always ~100% — exclude,
-  // they'd bury real exhaustion (old app: 67db14e)
-  const base = useMemo(() => subnets.filter((s) => (Number(s.cidr) || 0) <= 28), [subnets])
+  // /29-/32 are infra links (point-to-point/loopback), always ~100%, so they
+  // are left out by default or they'd bury real exhaustion (old app: 67db14e).
+  // links=1 puts them back, so a "subnets ≥90%" count that includes them
+  // (Overview, Daily, the tile above) opens a list of the same length.
+  const links = hp.links === '1'
+  const base = useMemo(() => (links ? subnets : subnets.filter((s) => (Number(s.cidr) || 0) <= 28)), [subnets, links])
   const sites = useMemo(() => [...new Set(base.map((s) => s.site).filter(Boolean))].sort(), [base])
 
   const filtered = useMemo(() => {
@@ -540,9 +543,17 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
           )}
         </>
       }
-      note="excl. /29–/32 infra links"
+      note={links ? 'incl. /29–/32 infra links' : 'excl. /29–/32 infra links'}
       right={
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={links}
+              onChange={(e) => setHashParams('network', { ...hp, links: e.target.checked ? '1' : undefined })}
+            />
+            /29–/32 links
+          </label>
           <input {...MACHINE_TEXT}
             aria-label="Filter networks"
             placeholder="Filter…"

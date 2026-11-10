@@ -129,6 +129,10 @@ function QpsHero({ panelId, qps }) {
   const first = chartData[0]?.value
   const delta = first ? ((current - first) / first) * 100 : null
   const flat = delta != null && Math.abs(delta) < 0.05
+  // Say how far back the first point is, read from the rows themselves, not
+  // "first hour". Grey either way: more DNS traffic is not good or bad news.
+  const spanH = rows.length > 1 ? Math.round((new Date(rows.at(-1).hour) - new Date(rows[0].hour)) / 3600000) : null
+  const vs = Number.isFinite(spanH) && spanH > 0 ? `vs ${spanH}h ago` : 'vs first hour'
 
   return (
     <Card
@@ -148,8 +152,8 @@ function QpsHero({ panelId, qps }) {
           <div className="flex items-center gap-4 my-2">
             <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {delta != null && (
-              <span className="text-note" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
-                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} vs first hour
+              <span className="text-note" style={{ color: COLORS.other }}>
+                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} {vs}
               </span>
             )}
           </div>
@@ -559,7 +563,7 @@ function DnssecHealth({ panelId, dnssec }) {
         <>
           <div className="flex items-center gap-4 my-2">
             <div>
-              <div className="text-figure font-semibold tracking-tight" style={{ color: COLORS.ok }}>{signedCount.toLocaleString()}</div>
+              <div className="text-figure font-semibold tracking-tight" style={{ color: signedCount > 0 ? COLORS.ok : COLORS.other }}>{signedCount.toLocaleString()}</div>
               <div className="text-note text-muted">signed</div>
             </div>
             <div>

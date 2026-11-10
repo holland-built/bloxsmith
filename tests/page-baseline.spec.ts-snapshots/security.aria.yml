@@ -57,10 +57,10 @@
   - 'button "About: Security Inventory"': "About: ⓘ"
   - 'button "Options: Security Inventory"'
   - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
-  - heading "SOC Insights" [level=2]
+  - heading "IQ for Threat Defense" [level=2]
   - text: "1"
-  - 'button "About: SOC Insights"': "About: ⓘ"
-  - 'button "Options: SOC Insights"'
+  - 'button "About: IQ for Threat Defense"': "About: ⓘ"
+  - 'button "Options: IQ for Threat Defense"'
   - table:
     - rowgroup:
       - row "Threat Severity Status Events Last Seen":

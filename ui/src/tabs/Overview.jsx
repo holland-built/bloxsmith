@@ -122,7 +122,7 @@ function useBoard(dns) {
       measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: 'hourly average, last hour' },
     { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
       measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active leases`), scope: sliceOk('leases') ? `of ${n0(leases.length)} leases loaded` : '' },
-    { name: 'IPAM', href: '#network?minUtil=90', state: null, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
+    { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
       measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} subnets ≥90%`),
       scope: crit !== null && typeof totals.subnetsWarn === 'number' ? `${n0(totals.subnetsWarn - crit)} more at 70–89% · all subnets` : '' },
     { name: 'Hosts', href: '#infra?status=offline', state: null, n: offline, of: sliceOk('hosts') ? hosts.length : null,
@@ -631,6 +631,10 @@ function DnsHero({ dns, panelId }) {
   const first = chartData[0]?.value
   const delta = first ? ((current - first) / first) * 100 : null
   const flat = delta != null && Math.abs(delta) < 0.05
+  // Say how far back the first point is, read from the rows themselves, not
+  // "first hour". Grey either way: more DNS traffic is not good or bad news.
+  const spanH = rows.length > 1 ? Math.round((new Date(rows.at(-1).hour) - new Date(rows[0].hour)) / 3600000) : null
+  const vs = Number.isFinite(spanH) && spanH > 0 ? `vs ${spanH}h ago` : 'vs first hour'
 
   return (
     <Card
@@ -655,8 +659,8 @@ function DnsHero({ dns, panelId }) {
           <div className="flex items-center gap-4 my-2">
             <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {delta != null && (
-              <span className="text-note" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
-                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} vs first hour
+              <span className="text-note" style={{ color: COLORS.other }}>
+                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} {vs}
               </span>
             )}
           </div>

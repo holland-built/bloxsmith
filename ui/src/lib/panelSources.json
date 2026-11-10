@@ -272,9 +272,9 @@
   {
     "id": "security-soc-insights",
     "page": "Security",
-    "name": "SOC Insights",
+    "name": "IQ for Threat Defense",
     "kind": "rest",
-    "source": "Infoblox's SOC insights",
+    "source": "Infoblox IQ for Threat Defense insights",
     "builder": "no",
     "why": "it comes from the ordinary Infoblox API, not the activity records Build a chart reads"
   },
@@ -452,7 +452,7 @@
   {
     "id": "incidents-soc-queue",
     "page": "Incidents",
-    "name": "SOC Queue",
+    "name": "IQ Actions",
     "kind": "rest",
     "source": "Infoblox IQ actions",
     "builder": "no",

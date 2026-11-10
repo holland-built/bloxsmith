@@ -46,7 +46,7 @@
           - row /IPAM 1 subnets ≥\d+% none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 Look/:
             - rowheader "IPAM":
               - link "IPAM":
-                - /url: "#network?minUtil=90"
+                - /url: "#network?minUtil=90&links=1"
             - cell /1 subnets ≥\d+%/
             - cell "none open"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
@@ -106,7 +106,7 @@
   - text: queries per second
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
-  - text: /\d+ ▲ \d+\.\d+% vs first hour/
+  - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago/
   - application /DNS Query Rate — \d+[hmsp]+ chart/: /\d+:\d+ AM \d+:\d+ AM/
   - heading "License Inventory" [level=2]
   - text: 0 licenses

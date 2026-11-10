@@ -49,7 +49,7 @@ func (s *Service) FetchActions(ctx context.Context) map[string]any {
 	}
 	if !truthy(data["actions"]) {
 		if _, hasU := data["unavailable"]; !hasU {
-			data["unavailable"] = "No IQ Actions (SOC incidents) for this tenant."
+			data["unavailable"] = "No IQ Actions for this tenant."
 		}
 	}
 	data["availability"] = "ok"
@@ -356,7 +356,7 @@ func (s *Service) FetchInsights() map[string]any {
 	if err != nil {
 		return map[string]any{
 			"data":         []any{},
-			"unavailable":  "SOC Insights (security actions) unavailable (upstream error).",
+			"unavailable":  "IQ for Threat Defense insights unavailable (upstream error).",
 			"availability": "error",
 		}
 	}
@@ -366,7 +366,7 @@ func (s *Service) FetchInsights() map[string]any {
 		result = map[string]any{"data": normInsights(rows), "availability": "ok"}
 	} else {
 		result = map[string]any{"data": []any{},
-			"unavailable":  "No SOC Insights (security actions) in the last 30 days for this tenant.",
+			"unavailable":  "No IQ for Threat Defense insights in the last 30 days for this tenant.",
 			"availability": "ok"}
 	}
 	s.Cache.SetGen(ck, result, g)
