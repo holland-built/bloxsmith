@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useReducer, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
@@ -6,15 +6,21 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { eventWord } from '../lib/plainWords.js'
+// The look the owner picked for dashboards (2026-11-09) lives in Overview.css;
+// this page borrows its tokens and tiles so the two read as one product.
+import './Overview.css'
+import './Audit.css'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
 // are the two that get a colour. Everything else is one neutral tone rather than
 // a palette: there are six event kinds on this tenant today and no fixed set, so
-// colour-per-kind would mean a legend that changes shape with the data.
+// colour-per-kind would mean a legend that changes shape with the data. The
+// neutral tone is grey, not green (2026-11-10 review): a routine "Change
+// allowed" in saturated green competed with the refusals for the eye.
 function eventColor(event, COLORS) {
   if (/refused|denied|rbac/.test(event)) return COLORS.warn
   if (/error|unreadable|failed|orphaned/.test(event)) return COLORS.crit
-  return COLORS.ok
+  return COLORS.other
 }
 
 function fmtTs(ts) {
@@ -117,6 +123,7 @@ export default function Audit() {
     <div data-layout="record" className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Audit</h1>
       <TabIntro>Who changed what, in Bloxsmith and in the Infoblox Portal.</TabIntro>
+      <TrustStrip chain={chain} entries={entries} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -263,7 +270,9 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
             <div key={r.event}>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-note truncate" title={r.event}>{eventWord(r.event)}</span>
-                <span className="text-copy font-semibold tabular-nums" style={{ color: r.color }}>
+                {/* Only a refusal or a failure gets a coloured number; a routine
+                    kind's grey is for its bar, and as text it would be too faint. */}
+                <span className="text-copy font-semibold tabular-nums" style={r.color === COLORS.other ? undefined : { color: r.color }}>
                   {r.count.toLocaleString()}
                 </span>
               </div>
@@ -274,7 +283,8 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
               <div className="h-1.5 rounded-full bg-field overflow-hidden">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${biggest ? Math.max((r.count / biggest) * 100, 1) : 0}%`, background: r.color }}
+                  // A routine kind's bar is pale, so the refusals and failures lead.
+                  style={{ width: `${biggest ? Math.max((r.count / biggest) * 100, 1) : 0}%`, background: r.color === COLORS.other ? `color-mix(in srgb, ${r.color} 45%, transparent)` : r.color }}
                 />
               </div>
             </div>
@@ -290,12 +300,20 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
 function EventPill({ event }) {
   const { COLORS } = useChartTheme()
   const color = eventColor(event || '', COLORS)
+  // Routine kinds are a plain grey chip; only a refusal or a failure is tinted.
+  const routine = color === COLORS.other
   return (
-    <span title={event || undefined} className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `${color}22`, color }}>
+    <span
+      title={event || undefined}
+      className={`inline-block rounded-full px-2.5 py-0.5 text-note font-medium${routine ? ' text-muted' : ''}`}
+      style={routine ? { background: `${color}26` } : { background: `${color}22`, color }}
+    >
       {event ? eventWord(event) : '—'}
     </span>
   )
 }
+
+// ---------- the trust strip ----------
 
 // The audit chain hashes each entry to the one before it AND signs each entry
 // with a key held outside the log's directory, with a separately sealed record
@@ -304,97 +322,136 @@ function EventPill({ event }) {
 // /api/audit/log carries that verdict as three states: chain_valid true
 // (intact), chain_valid false + broken_index (tampered), or chain_verify_error
 // (the check itself could not run). A fetch failure is folded into the same
-// "could not verify" state — it must never be allowed to read as "chain is
-// fine" just because nothing loaded.
+// "not verified" state — it must never be allowed to read as "intact" just
+// because nothing loaded.
 //
-// The reason strings matter here. "could not verify" covers a lost or rotated
-// key as well as an unreadable file, and an operator who sees it needs to know
-// which — so chain_verify_error is shown, not just its existence. Likewise
+// The order of the checks follows audit.Classify (go/internal/audit/verdict.go),
+// so this page and `bloxsmith audit verify` cannot disagree: verify_error first,
+// then valid, and a `valid: false` with no entry number is unproven, not an
+// accusation.
+//
+// The reason strings matter. "Not verified" covers a lost or rotated key as
+// well as an unreadable file, and an operator who sees it needs to know which,
+// so chain_verify_error is shown, not just its existence. Likewise
 // broken_reason distinguishes a forged entry from a truncated tail.
-// The verdict above is produced by the same program that writes the log, which
-// is the one thing an operator cannot independently rely on. This names the
-// command that answers the same question with nothing running — read-only, on a
-// copied log, on another machine. It is not decoration: without it, an operator
-// has no way to know the option exists.
-function OfflineCheckHint() {
+function verdictOf(result, error, loading) {
+  if (loading && !result && !error) return { state: 'wait', word: 'Checking…' }
+  if (error || result == null || result.chain_verify_error) {
+    return { state: 'warn', word: 'Not verified', why: error ? 'the check could not be loaded' : result?.chain_verify_error }
+  }
+  if (result.chain_valid === true) return { state: 'ok', word: 'Intact' }
+  if (result.chain_valid === false && result.broken_index != null) {
+    return { state: 'crit', word: 'Tampered', at: result.broken_index, why: result.broken_reason }
+  }
+  // Unrecognized shape: same rule as a fetch failure, never imply "fine".
+  return { state: 'warn', word: 'Not verified', why: result.broken_reason || undefined }
+}
+
+// One tip for a number or a word: hover, keyboard focus or tap opens it, Escape
+// closes it. The same pattern as Overview's, so the two pages behave alike.
+function Tip({ tip, children, className = '' }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
   return (
-    <span className="text-dim">
-      {' · check it yourself with '}
-      <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">bloxsmith audit verify</code>
+    <span
+      className={`ov-tipwrap ${className}`}
+      tabIndex={0}
+      aria-describedby={id}
+      data-open={open || undefined}
+      onClick={() => setOpen((o) => !o)}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+    >
+      {children}
+      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
     </span>
   )
 }
 
-function ChainVerdict({ result, error, loading }) {
-  const { COLORS } = useChartTheme()
-  if (loading) return null
-  if (error || result == null || result.chain_verify_error) {
-    const why = error ? 'the check could not be loaded' : result?.chain_verify_error
-    return (
-      <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
-        chain integrity could not be verified
-        {why ? <span className="font-normal text-dim"> — {why}</span> : null}
-        <span className="font-normal"><OfflineCheckHint /></span>
-      </div>
-    )
-  }
-  if (result.chain_valid === false) {
-    return (
-      <div className="text-copy font-semibold mb-2" style={{ color: COLORS.crit }}>
-        chain tampered — broken at entry #{result.broken_index}
-        {result.broken_reason ? <span className="font-normal text-note"> — {result.broken_reason}</span> : null}
-        <span className="font-normal text-note"><OfflineCheckHint /></span>
-      </div>
-    )
-  }
-  if (result.chain_valid === true) {
-    return (
-      <div className="text-note text-dim mb-2">
-        chain intact — signature and entry count verified
-        <OfflineCheckHint />
-      </div>
-    )
-  }
-  // Unrecognized shape: same rule as a fetch failure — don't imply "fine".
-  return (
-    <div className="text-note font-medium mb-2" style={{ color: COLORS.warn }}>
-      chain integrity could not be verified
-    </div>
-  )
+// A shape beside the word, so the state does not rest on colour alone.
+function Mark({ state }) {
+  const p = { width: 22, height: 22, viewBox: '0 0 24 24', 'aria-hidden': true, className: `au-mark ${state}` }
+  if (state === 'ok') return <svg {...p}><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".16" /><path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  if (state === 'crit') return <svg {...p}><circle cx="12" cy="12" r="10" fill="currentColor" /><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--ov-card)" strokeWidth="2.2" strokeLinecap="round" /></svg>
+  if (state === 'warn') return <svg {...p}><path d="M12 3l10 18H2z" fill="currentColor" /><path d="M12 10v5" stroke="var(--ov-card)" strokeWidth="2.2" strokeLinecap="round" /><circle cx="12" cy="18" r="1.3" fill="var(--ov-card)" /></svg>
+  return <svg {...p}><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" /></svg>
 }
 
-// Entries the server could NOT write. This is a different fact from the chain
-// verdict above and is deliberately not folded into it: a refused append leaves
-// the chain on disk genuinely intact, because the entry was never written and
-// nothing was tampered with. Saying "tampered" here would be an accusation
-// nobody made, and saying "intact" alone would let a shorter list of entries
-// read as a quiet day.
+// THE ANSWER TO "CAN I TRUST THIS", FIRST ON THE PAGE (2026-11-10). It used to
+// be one pale line inside the Audit Log card, the palest text on the page,
+// while the tampered state was the loudest. Now the verdict is the headline
+// tile: pale with a tick when intact, filled red when tampered, amber when it
+// could not be checked, so a broken or unknown log never looks like a good one.
 //
-// HONEST LIMIT: append_failures is an in-memory counter scoped to "since this
-// process started". A restart resets it to 0 and the banner disappears — the
-// entry it was counting is still gone, and nothing on disk records that it ever
-// existed. So this is a live warning, not an audit of past losses.
+// The entry count is `total`, the entries this read decoded (state.go). Read
+// and Verify are two passes over the same file, so the count and the verdict
+// agree in the ordinary case; the tip says what was checked rather than
+// promising they are one snapshot.
 //
-// Absent field (an older server that predates the counter) renders nothing at
-// all — not an all-clear. Only a number greater than zero renders.
-function AppendFailures({ result }) {
-  const { COLORS } = useChartTheme()
-  const n = result?.append_failures
-  if (typeof n !== 'number' || n <= 0) return null
-  const last = result.last_append_failure
+// The command is visible, not in a tip: the verdict comes from the same program
+// that writes the log, and the command is how an operator checks it with
+// nothing running, on a copied log, on another machine.
+//
+// Not saved (append_failures) is a different fact from the verdict and stays a
+// tile of its own: a refused append leaves the chain on disk genuinely intact,
+// because the entry was never written. It is an in-memory counter "since this
+// process started", so a restart resets it; an absent field (an older server)
+// shows a dash, never a reassuring 0.
+function TrustStrip({ chain, entries }) {
+  const v = verdictOf(chain.data, chain.error, chain.loading)
+  const total = Number.isFinite(chain.data?.total) ? chain.data.total : entries.length
+  const newest = entries.reduce((m, r) => (r._ms != null && (!m || r._ms > m._ms) ? r : m), null)
+  const failed = chain.data?.append_failures
+  const last = chain.data?.last_append_failure
+  const failState = typeof failed === 'number' && failed > 0 ? 'crit' : ''
+
   return (
-    <div className="text-copy font-semibold mb-2" style={{ color: COLORS.crit }}>
-      {n} audit record{n === 1 ? '' : 's'} failed to write since the server started
-      {last?.event ? (
-        <span className="font-normal text-note">
-          {' — last: '}
-          <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">{last.event}</code>
-          {last.error ? <span className="text-dim"> ({last.error})</span> : null}
-        </span>
-      ) : null}
-      <span className="font-normal text-note text-dim">
-        {' · the chain on disk is unaffected; the missing record cannot be recovered'}
-      </span>
+    <div className="ov-look au-look">
+      <section className="ov-card au-strip" aria-label="Can you trust this log">
+        <div className={`au-tile au-verdict ${v.state}`} data-verdict={v.state}>
+          <div className="au-in">
+            <span className="ov-kpi-top"><span>Audit log</span></span>
+            <span className="au-word"><Mark state={v.state} /><span>{v.word}</span></span>
+            {v.state === 'ok' ? (
+              <span className="au-sub">
+                <Tip tip="Every entry's signature, the link to the entry before it, and the sealed count of entries were checked.">
+                  {total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} checked
+                </Tip>
+              </span>
+            ) : v.state === 'crit' ? (
+              <span className="au-sub au-why"><b>Broken at entry #{v.at}</b>{v.why ? <> — {v.why}</> : null}</span>
+            ) : v.state === 'warn' ? (
+              v.why ? <span className="au-sub au-why">{v.why}</span> : null
+            ) : null}
+            <span className="ov-muted ov-small au-cmd">Check it yourself: <code>bloxsmith audit verify</code></span>
+          </div>
+        </div>
+        <div className="au-tile">
+          <div className="au-in">
+            <span className="ov-kpi-top"><span>Last entry</span></span>
+            <span className="ov-num">
+              {newest ? new Date(newest._ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—'}
+              {newest ? <small> {new Date(newest._ms).toLocaleDateString([], { month: 'short', day: 'numeric' })}</small> : null}
+            </span>
+            <span className="ov-muted ov-small au-clip" title={newest?.event}>{newest ? eventWord(newest.event) : ' '}</span>
+          </div>
+        </div>
+        <div className={`au-tile ${failState}`} data-failures={typeof failed === 'number' ? failed : undefined}>
+          <div className="au-in">
+            <span className="ov-kpi-top"><span>Not saved</span>{failState ? <span className="ov-verdict crit">Act</span> : null}</span>
+            <span className="ov-num">{typeof failed === 'number' ? failed.toLocaleString() : '—'}</span>
+            {failState ? (
+              <span className="ov-small">
+                <Tip tip={<>The log on disk is unaffected; the missing {failed === 1 ? 'record' : 'records'} cannot be recovered.{last?.error ? <span className="ov-tip-sub">{last.error}</span> : null}</>}>
+                  {last?.event ? `last: ${eventWord(last.event)}` : 'since the app started'}
+                </Tip>
+              </span>
+            ) : (
+              <span className="ov-muted ov-small">{typeof failed === 'number' ? 'since the app started' : 'not reported'}</span>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
@@ -515,19 +572,19 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
       title="Audit Log"
       note="Bloxsmith actions"
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">
           <input {...MACHINE_TEXT}
             aria-label="Filter audit entries"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className={`${FIELD_CLS} w-[150px]`}
+            className={`${FIELD_CLS} w-[150px] max-w-full`}
           />
           <select
             aria-label="Filter by event"
             value={event}
             onChange={(e) => setEvent(e.target.value)}
-            className={FIELD_CLS}
+            className={`${FIELD_CLS} max-w-full`}
           >
             <option value="">All events</option>
             {kinds.map((k) => (
@@ -558,8 +615,6 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
         </div>
       }
     >
-      <ChainVerdict result={chain.data} error={chain.error} loading={chain.loading} />
-      <AppendFailures result={chain.data} />
       <ShortRead chain={chain} />
       <TruncationNote chain={chain} loaded={entries.length} />
       <LoadOlder more={more} />
@@ -663,14 +718,14 @@ function CspAuditTable({ panelId }) {
       title="CSP Portal Audit"
       note="external — Infoblox portal activity"
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">
           <input {...MACHINE_TEXT}
             aria-label="Search user or resource"
             placeholder="Search user or resource…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
-            className={`${FIELD_CLS} w-[220px]`}
+            className={`${FIELD_CLS} w-[220px] max-w-full`}
           />
           <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
             {loading ? 'Searching…' : 'Search'}

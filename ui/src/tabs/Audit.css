@@ -1,0 +1,37 @@
+/* Audit's trust strip, in the Overview look (Overview.css holds the tokens).
+   The verdict tile is the headline: pale with a tick when the log is intact,
+   filled red when it was tampered with, amber when it could not be checked. */
+.au-look { margin-bottom: 12px }
+.au-strip { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); overflow: visible }
+.au-tile { padding: 8px; border-right: 1px solid var(--ov-line); min-width: 0 }
+.au-tile:last-child { border-right: 0 }
+.au-in { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; color: var(--ov-ink2); font-size: 13.5px }
+.au-tile.crit .au-in { background: color-mix(in srgb, var(--ov-crit) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ov-crit) 45%, transparent) }
+.au-tile.warn .au-in { background: color-mix(in srgb, var(--ov-warn) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ov-warn) 45%, transparent) }
+.au-tile.crit .ov-num { color: var(--ov-crit) }
+.au-strip .ov-num { white-space: nowrap }
+
+.au-word { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; color: var(--ov-ink) }
+.au-verdict.crit .au-word { color: var(--ov-crit) }
+.au-verdict.warn .au-word { color: var(--ov-warn) }
+.au-verdict.wait .au-word { color: var(--ov-muted); font-weight: 500 }
+.au-mark { flex: none }
+.au-mark.ok { color: var(--ov-ok) } .au-mark.crit { color: var(--ov-crit) }
+.au-mark.warn { color: var(--ov-warn) } .au-mark.wait { color: var(--ov-muted) }
+
+.au-sub { color: var(--ov-ink2) }
+.au-why { color: var(--ov-ink); overflow-wrap: anywhere }
+.au-cmd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--ov-soft); border-radius: 6px; padding: 1px 6px; color: var(--ov-ink) }
+.au-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.au-clip .ov-tipwrap { white-space: nowrap }
+/* The tips in this strip sit below their words: the strip is the top of the
+   page and a tip above would run under the page bar. */
+.au-strip .ov-tip { bottom: auto; top: calc(100% + 8px); left: 0; transform: none }
+
+/* A phone: the verdict takes the whole first row, the two counts share the next. */
+@media (max-width: 640px) {
+  .au-strip { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) }
+  .au-verdict { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--ov-line) }
+  .au-word { font-size: 24px }
+  .au-strip .ov-num { font-size: 22px }
+}
