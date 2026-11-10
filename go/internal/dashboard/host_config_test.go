@@ -51,15 +51,18 @@ func TestHostConfigHidesTSIGSecret(t *testing.T) {
 
 func TestRedactConfigKinds(t *testing.T) {
 	cases := []struct{ name, in, secret, keep string }{
-		{"bind unquoted", "key k { secret abc123def; };", "abc123def", "secret \"(hidden)\""},
-		{"bind password", "password \"hunter2\";", "hunter2", "password \"(hidden)\""},
-		{"kea tsig", `"tsig-keys": [{"name": "k", "algorithm": "HMAC-SHA256", "secret": "c2VjcmV0"}]`, "c2VjcmV0", `"secret": "(hidden)"`},
-		{"kea login", `"clients": [{"user": "admin", "password": "p@ss\"word"}]`, "p@ss", `"password": "(hidden)"`},
-		{"kea secret file stays", `"secret-file": "/etc/kea/tsig.key"`, "", "/etc/kea/tsig.key"},
+		{"bind unquoted", "key k { secret abc123def; };", "abc123def", `secret "(hidden)";`},
+		{"bind password", "password \"hunter2\";", "hunter2", `password "(hidden)";`},
+		{"kea tsig", `{"tsig-keys": [{"name": "k", "algorithm": "HMAC-SHA256", "secret": "c2VjcmV0"}]}`, "c2VjcmV0", `"secret": "(hidden)"`},
+		{"kea login", `{"clients": [{"user": "admin", "password": "p@ss\"word"}]}`, "p@ss", `"password": "(hidden)"`},
+		{"kea secret file hidden too", `{"secret-file": "/etc/kea/tsig.key", "name": "k"}`, "/etc/kea/tsig.key", `"name": "k"`},
 	}
 	for _, c := range cases {
-		out, _ := RedactConfig(c.in)
-		if c.secret != "" && strings.Contains(out, c.secret) {
+		out, _, ok := RedactConfig(c.in)
+		if !ok {
+			t.Errorf("%s: withheld, want shown", c.name)
+		}
+		if strings.Contains(out, c.secret) {
 			t.Errorf("%s: secret survived: %s", c.name, out)
 		}
 		if !strings.Contains(out, c.keep) {
@@ -101,5 +104,52 @@ func TestWithHostConfigKeys(t *testing.T) {
 	rows := withHostConfigKeys(normHosts(raw), raw)
 	if rows[0]["ophid"] != "4cddc25663851bf076b51609af0e5d2b" || rows[0]["host_type"] != "6" {
 		t.Fatalf("row = %v", rows[0])
+	}
+}
+
+// Review findings on 1edb6e10: each of these leaked or was not caught.
+func TestRedactConfigHardShapes(t *testing.T) {
+	const sec = "c2VjcmV0"
+	cases := []struct{ name, in string }{
+		{"bind comment before value", `key "k" { algorithm hmac-sha256; secret /* note */ "c2VjcmV0"; };`},
+		{"bind value across lines", "key \"k\" {\n    secret\n        \"c2VjcmV0\"\n    ;\n};\n"},
+		{"bind comment line before value", "key \"k\" {\n    secret # base64 below\n        \"c2VjcmV0\";\n};\n"},
+		{"bind quoted value with ;", `key "k" { secret "c2Vj;cmV0c2VjcmV0"; };`},
+		{"kea escaped key", `{"DhcpDdns": {"tsig-keys": [{"name": "k", "\u0073ecret":"c2VjcmV0"}]}}`},
+		{"kea non-string value", `{"Control-agent": {"authentication": {"clients": [{"user": "a", "password": {"v": "c2VjcmV0"}}]}}}`},
+	}
+	for _, c := range cases {
+		out, _, ok := RedactConfig(c.in)
+		if strings.Contains(out, sec) || strings.Contains(out, "cmV0") {
+			t.Errorf("%s: secret survived (ok=%v): %s", c.name, ok, out)
+		}
+		if !ok {
+			t.Errorf("%s: withheld, want redacted and shown: %s", c.name, out)
+		}
+	}
+}
+
+// A secret in a shape the redactor cannot rewrite is withheld whole, and the
+// reply says so instead of sending text.
+func TestHostConfigWithholdsWhatItCannotHide(t *testing.T) {
+	for _, in := range []string{
+		// Kea allows comments, so this is not JSON and the text path cannot
+		// see inside the quoted key.
+		"// kea\n{\"Dhcp4\": {\"password\": \"c2VjcmV0\"}}",
+		// An escaped keyword outside JSON.
+		"// kea\n{\"\\u0073ecret\": \"c2VjcmV0\"}",
+	} {
+		if out, _, ok := RedactConfig(in); ok {
+			t.Errorf("want withheld, got shown: %s", out)
+		}
+	}
+	got := parseHostConfig(hostConfigReply(t, map[string]string{"kea-dhcp4.conf": "// kea\n{\"Dhcp4\": {\"password\": \"c2VjcmV0\"}}"}))
+	out, _ := json.Marshal(got)
+	if strings.Contains(string(out), "c2VjcmV0") {
+		t.Fatalf("withheld file leaked: %s", out)
+	}
+	f := got["files"].([]any)[0].(map[string]any)
+	if f["withheld"] != true || f["text"] != "" {
+		t.Fatalf("file = %v, want withheld with no text", f)
 	}
 }

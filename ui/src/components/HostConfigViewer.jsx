@@ -23,10 +23,15 @@ function fmtWhen(v) {
   return Number.isNaN(t) ? '' : new Date(t).toLocaleString()
 }
 
-// What the copy button puts on the clipboard: every file, each under its name.
+// The server withholds a whole file when it holds a secret it cannot safely
+// hide (hosts.go safeToShow). Such a file is named, never shown or copied.
+const WITHHELD = "This file holds a secret in a form Bloxsmith can't safely hide, so it isn't shown."
+
+// What the copy button puts on the clipboard: every shown file, each under its name.
 function allText(files) {
-  if (files.length === 1) return files[0].text
-  return files.map((f) => `# ${f.name}\n${f.text}`).join('\n\n')
+  const shown = files.filter((f) => !f.withheld)
+  if (files.length === 1) return shown[0].text
+  return shown.map((f) => `# ${f.name}\n${f.text}`).join('\n\n')
 }
 
 export default function HostConfigViewer({ host, onClose }) {
@@ -42,14 +47,23 @@ export default function HostConfigViewer({ host, onClose }) {
     const ctl = new AbortController()
     setState({ loading: true })
     setCopied('')
+    // Switching DNS/DHCP aborts the older read. Every state update below checks
+    // the signal, so a superseded read can never paint over the newer one, and
+    // an abort is never reported as a failure.
+    const live = () => !ctl.signal.aborted
     fetch(`/api/host-config?ophid=${encodeURIComponent(host.ophid)}&type=${type}`, { cache: 'no-store', signal: ctl.signal })
       .then(async (r) => {
-        const body = await r.json().catch(() => null)
+        let body = null
+        try {
+          body = await r.json()
+        } catch (e) {
+          if (e.name === 'AbortError') throw e
+        }
         if (!r.ok || !body) throw new Error(body?.error || `The server answered ${r.status}.`)
-        setState({ data: body })
+        if (live()) setState({ data: body })
       })
       .catch((e) => {
-        if (e.name !== 'AbortError') setState({ error: e.message || 'Could not load the settings.' })
+        if (live() && e.name !== 'AbortError') setState({ error: e.message || 'Could not load the settings.' })
       })
     return () => ctl.abort()
   }, [host.ophid, type, gridMember, attempt])
@@ -122,12 +136,16 @@ export default function HostConfigViewer({ host, onClose }) {
         {files.map((f) => (
           <section key={f.name} aria-label={f.name}>
             {files.length > 1 && <h3 className="text-note font-semibold text-muted mb-1 font-mono">{f.name}</h3>}
-            <pre
-              tabIndex={0}
-              className={`font-mono text-note leading-relaxed text-txt bg-field border border-line rounded-control p-3 overflow-x-auto whitespace-pre outline-none ${FOCUS_RING}`}
-            >
-              {f.text}
-            </pre>
+            {f.withheld ? (
+              <p className="text-note text-muted bg-field border border-line rounded-control p-3">{WITHHELD}</p>
+            ) : (
+              <pre
+                tabIndex={0}
+                className={`font-mono text-note leading-relaxed text-txt bg-field border border-line rounded-control p-3 overflow-x-auto whitespace-pre outline-none ${FOCUS_RING}`}
+              >
+                {f.text}
+              </pre>
+            )}
           </section>
         ))}
       </div>
@@ -184,7 +202,7 @@ export default function HostConfigViewer({ host, onClose }) {
                   </button>
                 ))}
               </div>
-              {files.length > 0 && (
+              {files.some((f) => !f.withheld) && (
                 <button
                   type="button"
                   onClick={copy}

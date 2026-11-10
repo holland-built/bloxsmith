@@ -106,33 +106,188 @@ func ValidOphid(s string) bool { return ophidRe.MatchString(s) }
 // HiddenValue replaces every secret value before a config leaves the server.
 const HiddenValue = "(hidden)"
 
-// Secrets come in two shapes in these files. BIND (named.conf) writes
-// `secret "base64...";` inside a key block, the live TSIG key seen in every
-// DNS sample. Kea (the DHCP files) is JSON, where a TSIG key or a control
-// agent login is `"secret": "..."` or `"password": "..."`. Both patterns match
-// on the setting's NAME, so a value of any length or alphabet is caught.
-// Paths to secret files (secret-file, password-file, session-keyfile) are not
-// secrets and stay. DNSSEC trust anchors (initial-key) are public keys and stay.
+// Secrets come in two shapes in these files, and both are found by the
+// setting's NAME, so a value of any length, type or alphabet is caught. A name
+// counts as secret when it contains one of secretWords, case-insensitive.
+// That also hides the paths in secret-file and password-file; over-hiding is
+// the safe direction. DNSSEC trust anchors (initial-key) are public and stay.
+//
+//   - Kea (the DHCP files) is JSON. It is decoded, walked, and re-written with
+//     indentation, so escaped names ("\u0073ecret") and non-string values are
+//     caught. No pattern is run over raw JSON.
+//   - BIND (named.conf) is text: `secret "base64...";` inside a key block, the
+//     live TSIG key in every DNS sample. Everything from the name to its
+//     closing ';' goes, with quoted strings and comments read as opaque, so a
+//     ';' inside quotes or a comment before the value cannot end it early.
+//
+// Then safeToShow scans the result. Anything it cannot vouch for withholds
+// the whole file rather than risk sending a secret.
+var secretWords = []string{"secret", "password", "passwd", "token", "psk"}
+
+func isSecretName(name string) bool {
+	l := strings.ToLower(name)
+	for _, w := range secretWords {
+		if strings.Contains(l, w) {
+			return true
+		}
+	}
+	return false
+}
+
 var (
-	bindSecretRe = regexp.MustCompile(`(?i)(^|[\s{;])(secret|password|passwd)(\s+)("(?:[^"\\]|\\.)*"|[^\s;{}"]+)`)
-	jsonSecretRe = regexp.MustCompile(`(?i)("[\w-]*(?:secret|password|passwd|token|psk)")(\s*:\s*)"(?:[^"\\]|\\.)*"`)
+	// A secret word, the rest of its name, then whatever value follows it.
+	secretUseRe = regexp.MustCompile(`(?i)(?:secret|password|passwd|token|psk)[\w-]*"?\s*[:=]?\s*`)
+	// An escaped character could spell a secret word the scan cannot read.
+	unicodeEscRe = regexp.MustCompile(`\\[uU][0-9a-fA-F]{4}`)
 )
 
-// RedactConfig replaces every secret value in one config file with
-// HiddenValue and says how many it replaced.
-func RedactConfig(text string) (string, int) {
+// RedactConfig hides every secret value in one config file. It returns the
+// text, how many values it hid, and ok=false when the file must be withheld
+// whole because safeToShow could not confirm nothing is left.
+func RedactConfig(text string) (string, int, bool) {
+	out, n, isJSON := redactJSON(text)
+	if !isJSON {
+		out, n = redactText(text)
+	}
+	if !safeToShow(out) {
+		return "", n, false
+	}
+	return out, n, true
+}
+
+// safeToShow is the last check: every secret word must be followed by
+// exactly the placeholder, and there must be no \u escape that could hide one.
+func safeToShow(text string) bool {
+	if unicodeEscRe.MatchString(text) {
+		return false
+	}
+	for _, m := range secretUseRe.FindAllStringIndex(text, -1) {
+		if !strings.HasPrefix(text[m[1]:], `"`+HiddenValue+`"`) {
+			return false
+		}
+	}
+	return true
+}
+
+func redactJSON(text string) (string, int, bool) {
+	t := strings.TrimSpace(text)
+	if t == "" || (t[0] != '{' && t[0] != '[') {
+		return "", 0, false
+	}
+	dec := json.NewDecoder(strings.NewReader(t))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil || dec.More() {
+		return "", 0, false
+	}
+	n := hideJSON(v)
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "    ")
+	if enc.Encode(v) != nil {
+		return "", 0, false
+	}
+	return b.String(), n, true
+}
+
+func hideJSON(v any) int {
 	n := 0
-	text = bindSecretRe.ReplaceAllStringFunc(text, func(m string) string {
-		n++
-		p := bindSecretRe.FindStringSubmatch(m)
-		return p[1] + p[2] + p[3] + `"` + HiddenValue + `"`
-	})
-	text = jsonSecretRe.ReplaceAllStringFunc(text, func(m string) string {
-		n++
-		p := jsonSecretRe.FindStringSubmatch(m)
-		return p[1] + p[2] + `"` + HiddenValue + `"`
-	})
-	return text, n
+	switch t := v.(type) {
+	case map[string]any:
+		for k, x := range t {
+			if isSecretName(k) {
+				t[k] = HiddenValue
+				n++
+			} else {
+				n += hideJSON(x)
+			}
+		}
+	case []any:
+		for _, x := range t {
+			n += hideJSON(x)
+		}
+	}
+	return n
+}
+
+// redactText reads BIND-style text: quoted strings, /* */, // and # comments
+// are copied through whole, and a bare word that names a secret is followed
+// by the placeholder in place of everything up to its closing ';'.
+func redactText(s string) (string, int) {
+	var b strings.Builder
+	n := 0
+	for i := 0; i < len(s); {
+		if j := skipOpaque(s, i); j > i {
+			b.WriteString(s[i:j])
+			i = j
+			continue
+		}
+		if !isWordByte(s[i]) {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && isWordByte(s[j]) {
+			j++
+		}
+		b.WriteString(s[i:j])
+		if isSecretName(s[i:j]) {
+			b.WriteString(` "` + HiddenValue + `"`)
+			n++
+			j = skipToSemicolon(s, j) // the ';' itself is copied next
+		}
+		i = j
+	}
+	return b.String(), n
+}
+
+func isWordByte(c byte) bool {
+	return c == '-' || c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// skipOpaque returns the end of a quoted string or comment starting at i, or
+// i when none starts there. An unclosed one runs to the end of the text.
+func skipOpaque(s string, i int) int {
+	switch {
+	case s[i] == '"':
+		for j := i + 1; j < len(s); j++ {
+			if s[j] == '\\' {
+				j++
+			} else if s[j] == '"' {
+				return j + 1
+			}
+		}
+		return len(s)
+	case strings.HasPrefix(s[i:], "/*"):
+		if k := strings.Index(s[i+2:], "*/"); k >= 0 {
+			return i + 2 + k + 2
+		}
+		return len(s)
+	case s[i] == '#' || strings.HasPrefix(s[i:], "//"):
+		if k := strings.IndexByte(s[i:], '\n'); k >= 0 {
+			return i + k
+		}
+		return len(s)
+	}
+	return i
+}
+
+// skipToSemicolon returns the index of the ';' that ends the statement
+// starting at i, stepping over quoted strings and comments; len(s) if none.
+func skipToSemicolon(s string, i int) int {
+	for i < len(s) {
+		if j := skipOpaque(s, i); j > i {
+			i = j
+			continue
+		}
+		if s[i] == ';' {
+			return i
+		}
+		i++
+	}
+	return len(s)
 }
 
 // parseHostConfig turns the tool's text reply into what the browser gets.
@@ -166,8 +321,12 @@ func parseHostConfig(text string) map[string]any {
 	files := make([]any, 0, len(names))
 	hidden := 0
 	for _, name := range names {
-		body, n := RedactConfig(v.Files[name])
+		body, n, ok := RedactConfig(v.Files[name])
 		hidden += n
+		if !ok {
+			files = append(files, map[string]any{"name": name, "text": "", "withheld": true})
+			continue
+		}
 		files = append(files, map[string]any{"name": name, "text": body})
 	}
 	status := "ok"
