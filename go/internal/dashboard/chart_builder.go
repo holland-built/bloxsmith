@@ -97,7 +97,6 @@ const (
 	cubeDNS     = "DnsActivityV1"
 	cubeThreats = "PortunusAggThreat_ch"
 	cubeHost    = "HostMetrics"
-	cubeDHCP    = "NetworkNstarDhcpLeaseActivity"
 	// One row per asset Infoblox holds now (assets.go has the measured facts).
 	cubeAssets = "AssetDetails_ch_agg"
 	// Security cubes live on their own service (csp.go CSPThreats).

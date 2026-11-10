@@ -36,12 +36,12 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"dns":       "DnsActivityV1.total_query_count",
 		"threats":   "PortunusAggThreat_ch.requests",
 		"qps":       "HostMetrics.avg_value",
-		"dhcp":      "NetworkNstarDhcpLeaseActivity.total_count",
+		"dhcp":      "DhcpLeaseActivityV1.total_count",
 		"assets":    "AssetDetails_ch_agg.assetsCount",
 		"newassets": "AssetDetails_ch_agg.assetsCount",
 	}
 	times := map[string]string{"dns": "DnsActivityV1.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
-		"qps": "HostMetrics.timestamp", "dhcp": "NetworkNstarDhcpLeaseActivity.timestamp",
+		"qps": "HostMetrics.timestamp", "dhcp": "DhcpLeaseActivityV1.timestamp",
 		"newassets": "AssetDetails_ch_agg.first_seen"}
 	endpoints := map[string]string{
 		"dns":       "/api/cubejs/v1/query",
@@ -60,7 +60,7 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"tclass":   {"PortunusAggThreat_ch.tclass"},
 		"policy":   {"PortunusAggThreat_ch.policy_name"},
 		"severity": {"PortunusAggThreat_ch.severity"},
-		"leaseop":  {"NetworkNstarDhcpLeaseActivity.lease_op"},
+		"leaseop":  {"DhcpLeaseActivityV1.lease_op"},
 		"atype":    {"AssetDetails_ch_agg.taxonomy_type_label"},
 		"acat":     {"AssetDetails_ch_agg.taxonomy_super_category_label"},
 		"os":       {"AssetDetails_ch_agg.os_type"},
@@ -167,11 +167,11 @@ func TestBuildChartQuery_NewPicksExactly(t *testing.T) {
 		{ChartPicks{Count: "threats", Split: "severity", Window: "7d", Over: "none", Top: 5},
 			top("PortunusAggThreat_ch", "requests", "severity", "last 7 days", 5), sec},
 		{ChartPicks{Count: "dhcp", Split: "leaseop", Window: "7d", Over: "none", Top: 5},
-			top("NetworkNstarDhcpLeaseActivity", "total_count", "lease_op", "last 7 days", 5), dhcp},
+			top("DhcpLeaseActivityV1", "total_count", "lease_op", "last 7 days", 5), dhcp},
 		{ChartPicks{Count: "dhcp", Split: "none", Window: "30d", Over: "day"},
 			map[string]any{
-				"measures": []any{"NetworkNstarDhcpLeaseActivity.total_count"},
-				"timeDimensions": []any{map[string]any{"dimension": "NetworkNstarDhcpLeaseActivity.timestamp",
+				"measures": []any{"DhcpLeaseActivityV1.total_count"},
+				"timeDimensions": []any{map[string]any{"dimension": "DhcpLeaseActivityV1.timestamp",
 					"dateRange": "last 30 days", "granularity": "day"}},
 			}, dhcp},
 		{ChartPicks{Count: "dns", Split: "none", Window: "24h", Over: "hour"},

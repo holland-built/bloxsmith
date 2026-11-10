@@ -25,10 +25,10 @@ test.beforeEach(async ({ page, request }) => {
   await page.route('**/api/chart?*', (route) =>
     route.fulfill({
       json: {
-        status: 'ok', endpoint: '/api/cubejs/v1/query', query: { measures: ['NetworkNstarDhcpLeaseActivity.total_count'] },
+        status: 'ok', endpoint: '/api/cubejs/v1/query', query: { measures: ['DhcpLeaseActivityV1.total_count'] },
         rows: [
-          { 'NetworkNstarDhcpLeaseActivity.lease_op': 'Update', 'NetworkNstarDhcpLeaseActivity.total_count': '4701' },
-          { 'NetworkNstarDhcpLeaseActivity.lease_op': 'Delete', 'NetworkNstarDhcpLeaseActivity.total_count': '2012' },
+          { 'DhcpLeaseActivityV1.lease_op': 'Update', 'DhcpLeaseActivityV1.total_count': '4701' },
+          { 'DhcpLeaseActivityV1.lease_op': 'Delete', 'DhcpLeaseActivityV1.total_count': '2012' },
         ],
       },
     }),
