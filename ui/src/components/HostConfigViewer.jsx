@@ -40,6 +40,10 @@ export default function HostConfigViewer({ host, onClose }) {
   const [copied, setCopied] = useState('')
   const [attempt, setAttempt] = useState(0)
   const panelRef = useRef(null)
+  // The tab on screen now, so a copy that finishes after a switch to the
+  // other tab does not report on it.
+  const typeRef = useRef(type)
+  typeRef.current = type
   const gridMember = String(host.host_type ?? '') === NIOS_GRID_MEMBER
 
   useEffect(() => {
@@ -107,12 +111,15 @@ export default function HostConfigViewer({ host, onClose }) {
   const label = TYPES.find((t) => t.id === type).label
 
   async function copy() {
+    const forType = type
+    let msg
     try {
       await navigator.clipboard.writeText(allText(files))
-      setCopied('Copied.')
+      msg = 'Copied.'
     } catch {
-      setCopied('Could not copy. Select the text and copy it by hand.')
+      msg = 'Could not copy. Select the text and copy it by hand.'
     }
+    if (typeRef.current === forType) setCopied(msg)
   }
 
   let body
