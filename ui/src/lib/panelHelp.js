@@ -105,11 +105,11 @@ export const PANEL_HELP = {
   // ---- Dns ----
   'dns-query-rate': {
     what: 'How many lookups a second your DNS servers answered, hour by hour, across the last 24 hours.',
-    look: 'The big figure is the latest hour, and the note beside it compares that hour with the first one on the chart. Hidden when no DNS service is found on this tenant.',
+    look: 'The big figure is the latest hour; the note beside it compares it with the same time yesterday, and is left out when there is no such hour. Hidden when no DNS service is found.',
   },
   'dns-zone-kpis': {
-    what: 'How many DNS zones you hold, how many of them have a problem, and how many are behaving oddly.',
-    look: 'A zone that publishes no cache time is never examined, so the small print says how many were skipped. Those zones are unchecked, not clean.',
+    what: 'The kinds of problem your DNS zones have, most common first; how many zones are forward and how many reverse; and how many have unusual settings.',
+    look: 'Click a kind to list just those zones in DNS Zones. A zone that publishes no cache time is never examined, so it is counted as not checked. Those zones are unchecked, not clean.',
   },
   'dns-services': {
     what: 'Each DNS service running on this tenant, with any comment written against it and the pool it belongs to.',
@@ -120,7 +120,7 @@ export const PANEL_HELP = {
     look: 'When this feed cannot be read the heading says "feed unavailable" and the panel stays empty, rather than drawing a flat line you could mistake for silence.',
   },
   'dns-zones': {
-    what: 'Every DNS zone that loaded, which view it sits in, how many records it holds, and how long answers are cached.',
+    what: 'Every DNS zone that loaded, which view it sits in, how many records it holds, and how long answers are cached. Zones with a problem come first.',
     look: 'Rows with a problem are tinted red. A dash under TTL means the zone publishes none, and "not checked" means the checks never ran — not that the zone is clean.',
   },
   'dns-dnssec-health': {

@@ -1,15 +1,33 @@
 - main "DNS tab":
   - heading "DNS" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
+  - list "Headline numbers":
+    - listitem:
+      - button /DNS queries \d+ a second/
+    - listitem:
+      - link /Zones Act \d+ with issues of \d+/:
+        - /url: "#dns?issues=1"
+    - listitem:
+      - button /Signing Look \d+ not signed of \d+ public/
+    - listitem:
+      - button /DNS services \d+/
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]
   - text: queries per second
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
-  - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago/
+  - text: /\d+/
   - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
   - button "About dns-zone-kpis": ⓘ
   - button "Options for Zone Counts": ⋯
-  - text: Zones 2 Zones needing attention 1 Unusual settings 1
+  - text: Issues by kind
+  - list "Zone issues by kind":
+    - listitem:
+      - 'button /low ttl: \d+ zones\. Show them\./'
+  - term: Forward
+  - definition: /\d+/
+  - term: Reverse
+  - definition: /\d+/
   - heading "DNS Services" [level=2]
   - text: 1 services
   - 'button "About: DNS Services"': "About: ⓘ"
@@ -37,7 +55,7 @@
   - 'button "Options: DNS Zones"'
   - table:
     - rowgroup:
-      - row "Zone View Records TTL":
+      - row "Zone View Records TTL Issues":
         - columnheader "Zone":
           - button "Zone"
         - columnheader "View":
@@ -46,22 +64,33 @@
           - button "Records"
         - columnheader "TTL":
           - button "TTL"
+        - columnheader "Issues":
+          - button "Issues"
     - rowgroup:
-      - row /baseline\.example\. baseline-view \d+ \d+/:
-        - cell "baseline.example."
-        - cell "baseline-view"
-        - cell /\d+/
-        - cell /\d+/
-      - row /other\.example\. baseline-view 3 \d+/:
+      - row /other\.example\. baseline-view 3 \d+ low ttl/:
         - cell "other.example."
         - cell "baseline-view"
         - cell "3"
         - cell /\d+/
+        - cell "low ttl"
+      - row /baseline\.example\. baseline-view \d+ \d+ —/:
+        - cell "baseline.example."
+        - cell "baseline-view"
+        - cell /\d+/
+        - cell /\d+/
+        - cell "—"
   - heading "DNSSEC Health" [level=2]
   - text: 1 unsigned
   - 'button "About: DNSSEC Health"': "About: ⓘ"
   - 'button "Options: DNSSEC Health"'
-  - text: /1 signed 1 public names unsigned \d+\.\d+% signed share \(of 2 public\) 1 internal, no signing needed/
+  - term: Not signed
+  - definition: "1"
+  - term: Signed
+  - definition: "1"
+  - term: Signed share
+  - definition: /\d+\.\d+%/
+  - term: Internal
+  - definition: "1"
   - table:
     - rowgroup:
       - row "Zone View":
