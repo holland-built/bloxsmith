@@ -59,7 +59,7 @@ export default function ChartView({ label, opts, picks, rows, barHref }) {
 }
 
 // One total. An average (queries per second) keeps one decimal; a count has none.
-function BigNumber({ label, name, value }) {
+export function BigNumber({ label, name, value }) {
   const text = value.toLocaleString(undefined, { maximumFractionDigits: 1 })
   return (
     <div role="img" aria-label={`${label} chart: ${name}, ${text}`} className="h-[160px] flex flex-col items-center justify-center gap-1">
