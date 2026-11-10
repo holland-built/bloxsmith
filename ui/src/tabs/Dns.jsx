@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme } from '../components/ui.jsx'
@@ -11,6 +11,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
+import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Dns.css'
 
@@ -57,34 +58,6 @@ function jumpToPanel(panelId) {
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
   if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
   el.focus({ preventScroll: true })
-}
-
-// One tip for every number, the same as Overview's: hover, keyboard focus or
-// tap opens it, Escape closes it. The visible text stays the name; the tip is
-// the description.
-function Tip({ tip, children, className = '', ...rest }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  if (!tip) return <span className={className} {...rest}>{children}</span>
-  return (
-    <span
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-      {...rest}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </span>
-  )
 }
 
 // The signing counts, read once so the headline and the DNSSEC panel cannot

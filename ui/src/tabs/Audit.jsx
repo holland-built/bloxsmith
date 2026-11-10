@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
@@ -6,6 +6,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { eventWord } from '../lib/plainWords.js'
+import Tip from '../components/Tip.jsx'
 // The look the owner picked for dashboards (2026-11-09) lives in Overview.css;
 // this page borrows its tokens and tiles so the two read as one product.
 import './Overview.css'
@@ -345,31 +346,6 @@ function verdictOf(result, error, loading) {
   }
   // Unrecognized shape: same rule as a fetch failure, never imply "fine".
   return { state: 'warn', word: 'Not verified', why: result.broken_reason || undefined }
-}
-
-// One tip for a number or a word: hover, keyboard focus or tap opens it, Escape
-// closes it. The same pattern as Overview's, so the two pages behave alike.
-function Tip({ tip, children, className = '' }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  return (
-    <span
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </span>
-  )
 }
 
 // A shape beside the word, so the state does not rest on colour alone.

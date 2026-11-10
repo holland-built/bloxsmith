@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
@@ -7,6 +7,7 @@ import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { categoryWord, plainMessage } from '../lib/plainWords.js'
+import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Incidents.css'
 
@@ -208,31 +209,6 @@ export default function Incidents() {
 }
 
 // ---------- the head: when the list was last read ----------
-
-// The same tip as Overview's: hover, keyboard focus or tap opens it, Escape
-// closes it. The visible text stays the name; the tip is the description.
-function Tip({ tip, children, className = '' }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  return (
-    <span
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </span>
-  )
-}
 
 // The time the incidents list arrived, not the time of this render. A failed
 // refresh says so, and the time stays on the last list that did arrive.

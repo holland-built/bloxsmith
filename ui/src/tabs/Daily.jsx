@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
@@ -7,6 +7,7 @@ import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCou
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 import { issueWord } from '../lib/plainWords.js'
+import Tip from '../components/Tip.jsx'
 import './Daily.css'
 
 // Per-slice status for a RAW useApi('/api/data') read.
@@ -81,34 +82,6 @@ export default function Daily() {
   )
 }
 
-// One tip for every number, the same behaviour as Overview's: hover, keyboard
-// focus or tap opens it, Escape closes it. The visible text stays the name;
-// the tip is its description.
-function Tip({ tip, children, className = '', ...rest }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  if (!tip) return <span className={className} {...rest}>{children}</span>
-  return (
-    <span
-      className={`dy-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-      {...rest}
-    >
-      {children}
-      <span role="tooltip" id={id} className="dy-tip">{tip}</span>
-    </span>
-  )
-}
-
 // When the inventory last arrived, and how often it refreshes (in the tip).
 // A failed refresh says so here once, in red, instead of a fresh-looking time.
 function Updated({ asOf, failed }) {
@@ -116,7 +89,7 @@ function Updated({ asOf, failed }) {
   const label = failed ? 'Refresh failed' : time ? `Updated ${time}` : 'Checking…'
   const tip = failed && time ? `Last good read ${time}. Tries again every 30 seconds.` : 'Refreshes every 30 seconds.'
   return (
-    <Tip tip={tip} className="dy-pill">
+    <Tip tip={tip} prefix="dy" className="dy-pill">
       <span className={`dy-live ${failed ? 'down' : time ? '' : 'wait'}`} aria-hidden="true" />
       <span>{label}</span>
     </Tip>
@@ -211,11 +184,11 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
                   {word && <span className={`dy-verdict ${bad ? c.sev : 'ok'}`}>{word}</span>}
                 </div>
                 {unavailable ? (
-                  <Tip tip="This feed did not answer." className="dy-num-word">
+                  <Tip tip="This feed did not answer." prefix="dy" className="dy-num-word">
                     <span style={{ color: COLORS.crit }}>unavailable</span>
                   </Tip>
                 ) : (
-                  <Tip tip={c.detail || null} className="dy-num">
+                  <Tip tip={c.detail || null} prefix="dy" className="dy-num">
                     <span style={{ color: bad ? tone[c.sev] : undefined }}>{c.value.toLocaleString()}</span> <small>{c.unit}</small>
                   </Tip>
                 )}
@@ -276,7 +249,7 @@ function SecurityToday({ sec, panelId }) {
       panelId={panelId}
       title="Security Today"
       right={
-        <Tip tip={sec.loading || secDead ? null : scopeTip} className="dy-tip-end text-note text-muted">
+        <Tip tip={sec.loading || secDead ? null : scopeTip} prefix="dy" className="dy-tip-end text-note text-muted">
           <span>{sec.loading || secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>
         </Tip>
       }
@@ -354,7 +327,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       panelId={panelId}
       title="Top Capacity Risks"
       note="least room left"
-      right={<Tip tip="The 10 with the fewest free addresses. /29–/32 links are left out." className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
+      right={<Tip tip="The 10 with the fewest free addresses. /29–/32 links are left out." prefix="dy" className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
     >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (

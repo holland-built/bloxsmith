@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import {
@@ -21,6 +21,7 @@ import {
   windowLabel,
   withinWindow,
 } from '../lib/changes.js'
+import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Changes.css'
 
@@ -150,34 +151,6 @@ export default function Changes() {
         </CardGrid>
       </div>
     </div>
-  )
-}
-
-// One tip for every number, the same one Overview uses: hover, keyboard focus
-// or tap opens it, Escape closes it. The visible text stays the name; the tip
-// is the description.
-function Tip({ tip, children, className = '', as: Tag = 'span', ...rest }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  if (!tip) return <Tag className={className} {...rest}>{children}</Tag>
-  return (
-    <Tag
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-      {...rest}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </Tag>
   )
 }
 
