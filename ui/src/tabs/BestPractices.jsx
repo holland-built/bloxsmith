@@ -24,15 +24,19 @@ const tone = (c) => (c.status === 'problem' ? sevOf(c).tone : c.status === 'pass
 // closes it. The same behaviour and look as Overview's tips.
 function Tip({ tip, children, className = '' }) {
   const id = useId()
-  const [open, setOpen] = useState(false)
+  // null follows hover and focus; true is opened by a tap; false is closed by
+  // Escape, which has to beat :focus-visible (a key press turns it on).
+  const [open, setOpen] = useState(null)
   return (
     <span
       className={`ov-tipwrap ${className}`}
       tabIndex={0}
       aria-describedby={id}
-      data-open={open || undefined}
-      onClick={() => setOpen((o) => !o)}
-      onBlur={() => setOpen(false)}
+      data-open={open === true || undefined}
+      data-closed={open === false || undefined}
+      onClick={() => setOpen((o) => o !== true)}
+      onBlur={() => setOpen(null)}
+      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
       onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
     >
       {children}
