@@ -573,18 +573,13 @@ const CLAIMS = [
     // panel was counted FROM those 50 was. The claim is now about the disclosure
     // rather than the number, so it binds to the code that renders it.
     panel: 'daily-security-today',
-    says: /the title says so and a line under the figures says the figures were counted from that sample/,
+    says: /the count by the title says so, and its tip says the figures were counted from that sample/,
     file: DAILY,
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(sec\.data, 'events'\)/, expect: 'the panel computes a scope note from the payload' },
       { re: /\{sec\.loading \|\| secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
-      // THE CLAIM IS THAT THE NOTE IS RENDERED. Not what size it is, not what
-      // colour. This proof was re-pointed three times in one week — at
-      // text-[11px], then text-caption, then text-note — every time the type
-      // scale moved and nothing the copy says changed. A proof that breaks on
-      // a rename is pinned to the wrong thing, so the size class is now a
-      // wildcard and only the parts the sentence actually claims are matched.
-      { re: /\{scopeNote && <div className="[^"]*\btext-dim\b[^"]*">\{scopeNote\}<\/div>\}/, expect: 'and the note is actually rendered under the figures' },
+      { re: /const scopeTip = \[scopeNote, /, expect: 'the scope note is the start of the tip' },
+      { re: /<Tip tip=\{sec\.loading \|\| secDead \? null : scopeTip\}/, expect: 'and that tip is on the count by the title' },
     ],
   },
   {
@@ -772,7 +767,7 @@ const CLAIMS = [
   },
   {
     panel: 'daily-open-issues',
-    says: /A row reading "unavailable" in red means that one feed failed/,
+    says: /A count reading "unavailable" in red means that one feed failed/,
     file: DAILY,
     proofs: [{ re: /style=\{\{ color: COLORS\.crit \}\}>unavailable</, expect: 'the "unavailable" row text is COLORS.crit (red)' }],
   },
@@ -883,7 +878,7 @@ const CLAIMS = [
     file: DAILY,
     proofs: [
       { re: /label: 'critical', value: Number\(counts\.critical\) \|\| 0, color: COLORS\.crit/, expect: 'critical is COLORS.crit (red)' },
-      { re: /label: 'blocked', value: Number\(sec\.data\?\.blocked\) \|\| 0, color: COLORS\.ok/, expect: 'blocked is COLORS.ok (green)' },
+      { re: /label: 'blocked', value: Number\(sec\.data\?\.blocked\) \|\| 0 \}/, expect: 'blocked is counted and shown, uncoloured' },
     ],
   },
 
@@ -893,11 +888,12 @@ const CLAIMS = [
   // next person can see what the detector actually bought.
   {
     panel: 'daily-hosts-attention',
-    says: /The count in the header shows a dash, not 0, when the machines could not be read\./,
+    says: /Offline or in error comes first with a red dot, then degraded in amber, then the rest in grey\./,
     file: DAILY,
     proofs: [
-      { re: /const feedDead = hostsStatus === 'error' && hosts\.length === 0/, expect: 'a dead hosts feed with nothing loaded is what "could not be read" means here' },
-      { re: /\{loading \|\| feedDead \? '—' : rows\.length\} shown/, expect: 'the header count is an em dash, not 0, when the feed is dead' },
+      { re: /const rank = \{ offline: 0, degraded: 1 \}/, expect: 'offline sorts first, degraded second, the rest after' },
+      { re: /const dot = \{ offline: COLORS\.crit, degraded: COLORS\.warn \}/, expect: 'offline is red, degraded amber' },
+      { re: /dot\[statusBucket\(h\.status\)\] \?\? COLORS\.other/, expect: 'and anything else grey' },
     ],
   },
   {
@@ -913,13 +909,13 @@ const CLAIMS = [
   },
   {
     panel: 'daily-dns-zone-issues',
-    says: /The red number is how many problems that zone has\./,
+    says: /The number is how many problems that zone has\./,
     file: DAILY,
     proofs: [
       { re: /\.map\(\(z\) => \(\{ \.\.\.z, count: z\.issues\.length/, expect: 'the number in that column is the length of the zone\'s issues list' },
       {
-        re: /background: 'var\(--pill-crit-bg\)', color: 'var\(--pill-crit-fg\)'/,
-        expect: 'that count is drawn in the crit (red) pill',
+        re: /background: 'var\(--pill-neutral-bg\)', color: 'var\(--pill-neutral-fg\)'/,
+        expect: 'that count is drawn in a neutral pill',
       },
     ],
   },
