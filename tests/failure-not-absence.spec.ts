@@ -73,8 +73,7 @@ test.describe('Daily → Open Issues panel (hosts feed, one of three KPI rows)',
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'error' } })),
     );
     await page.goto('/#daily');
-    const card = page.locator('text=Open Issues').locator('..').locator('..');
-    const hostsRow = card.getByText('Hosts Not Online', { exact: true }).locator('..');
+    const hostsRow = page.locator('[data-daily-tile="hosts"]');
     await expect(hostsRow.getByText('unavailable', { exact: true })).toBeVisible();
     await expect(hostsRow.getByText('0', { exact: true })).toHaveCount(0);
   });
@@ -84,8 +83,7 @@ test.describe('Daily → Open Issues panel (hosts feed, one of three KPI rows)',
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'empty' } })),
     );
     await page.goto('/#daily');
-    const card = page.locator('text=Open Issues').locator('..').locator('..');
-    const hostsRow = card.getByText('Hosts Not Online', { exact: true }).locator('..');
+    const hostsRow = page.locator('[data-daily-tile="hosts"]');
     await expect(hostsRow.getByText('unavailable', { exact: true })).toHaveCount(0);
     await expect(hostsRow.getByText('0', { exact: true })).toBeVisible();
   });

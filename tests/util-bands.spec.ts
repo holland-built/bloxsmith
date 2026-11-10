@@ -71,14 +71,14 @@ test('Network: the tiles, the chart labels and the table agree with Status', asy
 
 test('Daily: the subnet count is the red band, and opens Network at it', async ({ page }) => {
   await page.goto('/#daily');
-  // The row is the label's parent and holds the number beside it.
-  const row = page.getByText('Subnets ≥90% Util', { exact: true }).locator('..');
+  // The Subnets tile holds the number.
+  const row = page.locator('[data-daily-tile="subnets"]');
   await expect(row).toBeVisible({ timeout: 20_000 });
   // One: 91. It counted 88 as well, from 85, until 2026-10-04.
   await expect(row.getByText('1', { exact: true })).toBeVisible();
   await expect(row.getByText('2', { exact: true })).toHaveCount(0);
 
-  await row.click();
+  await row.getByRole('link', { name: 'Subnets', exact: true }).click();
   await expect(page).toHaveURL(/#network\?minUtil=90&links=1$/);
   // And the list it opens holds that one subnet and not the 88% one.
   const table = page.locator('[data-panel-id="network-exhaustion"] tbody');

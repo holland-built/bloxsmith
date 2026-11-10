@@ -14,7 +14,7 @@ import { test, expect } from './fixtures';
 // without this spec dictating copy.
 const TAB_HEADINGS: [string, string][] = [
   ['overview', 'Overview'],
-  ['daily', 'Daily Briefing'],
+  ['daily', 'Daily report'],
   ['best-practices', 'Best practices'],
   ['network', 'Network'],
   ['dns', 'DNS'],

@@ -103,7 +103,7 @@ test("the board's Hosts issue drills to Infra with status chip", async ({ page }
 
 test('Daily zones-with-issues KPI drills to DNS issues-only view', async ({ page }) => {
   await page.goto('/#daily');
-  await page.getByText('DNS zones needing attention').click();
+  await page.locator('[data-daily-tile="zones"]').getByRole('link', { name: 'DNS zones', exact: true }).click();
   await expect(page).toHaveURL(/#dns\?issues=1/);
   await expect(page.getByText(/issues only/)).toBeVisible();
 });

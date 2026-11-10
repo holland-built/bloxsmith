@@ -60,8 +60,9 @@ function card(page: import('@playwright/test').Page, title: string | RegExp) {
   return page.locator('h2', { hasText: title }).first().locator(CARD);
 }
 /** A headline tile: the label's parent is the tile, which holds the value and its note. */
-function kpi(page: import('@playwright/test').Page, label: string) {
-  return page.getByText(label, { exact: true }).locator('..');
+// One of Daily's three count tiles (Subnets, Hosts, DNS zones), by its key.
+function kpi(page: import('@playwright/test').Page, key: 'subnets' | 'hosts' | 'zones') {
+  return page.locator(`[data-daily-tile="${key}"]`);
 }
 
 // ---------- 1. Overview ← /api/data (whole request dead) ----------
@@ -156,20 +157,17 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 
     const hosts = card(page, 'Hosts Needing Attention');
     await expect(hosts.getByText('Hosts feed unavailable')).toBeVisible();
-    await expect(hosts.getByText('— shown', { exact: true })).toBeVisible();
-    await expect(hosts.getByText('0 shown', { exact: true })).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
     await expect(zones.getByText('DNS zones feed unavailable')).toBeVisible();
-    await expect(zones.getByText('— zones', { exact: true })).toBeVisible();
-    await expect(zones.getByText('0 zones', { exact: true })).toHaveCount(0);
 
     await expect(card(page, 'Top Capacity Risks').getByText('Subnets feed unavailable')).toBeVisible();
 
-    for (const label of ['Subnets ≥90% Util', 'Hosts Not Online', 'DNS zones needing attention']) {
-      const row = kpi(page, label);
+    for (const key of ['subnets', 'hosts', 'zones'] as const) {
+      const row = kpi(page, key);
       await expect(row.getByText('unavailable', { exact: true })).toBeVisible();
       await expect(row.getByText('0', { exact: true })).toHaveCount(0);
+      await expect(row.getByText('Healthy', { exact: true })).toHaveCount(0);
     }
   });
 
@@ -181,34 +179,31 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 
     const hosts = card(page, 'Hosts Needing Attention');
     await expect(hosts.getByText('all hosts online')).toBeVisible();
-    await expect(hosts.getByText('0 shown', { exact: true })).toBeVisible();
     await expect(hosts.getByText('Hosts feed unavailable')).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
     await expect(zones.getByText('no DNS zone issues')).toBeVisible();
-    await expect(zones.getByText('0 zones', { exact: true })).toBeVisible();
 
-    for (const label of ['Subnets ≥90% Util', 'Hosts Not Online', 'DNS zones needing attention']) {
-      const row = kpi(page, label);
+    for (const key of ['subnets', 'hosts', 'zones'] as const) {
+      const row = kpi(page, key);
       await expect(row.getByText('0', { exact: true })).toBeVisible();
       await expect(row.getByText('unavailable', { exact: true })).toHaveCount(0);
     }
   });
 });
 
-test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-down', () => {
-  test('a first read still in flight shows "—", never "0 shown" / "0 zones" / "0 events"', async ({ page }) => {
+test.describe('Daily → loading, stale rows, and the Hosts drill-down', () => {
+  test('a first read still in flight shows "—" and "Checking…", never a 0 or "Healthy"', async ({ page }) => {
     // Never answered: both feeds stay on their first read for the whole test.
     await page.route('**/api/data*', () => {});
     await page.route('**/api/hub/security*', () => {});
     await page.goto('/#daily');
 
-    await expect(card(page, 'Hosts Needing Attention').getByText('— shown', { exact: true })).toBeVisible();
-    await expect(card(page, 'DNS Zone Issues').getByText('— zones', { exact: true })).toBeVisible();
     await expect(card(page, 'Security Today').getByText('— events', { exact: true })).toBeVisible();
-    for (const zero of ['0 shown', '0 zones', '0 events']) {
-      await expect(page.getByText(zero, { exact: true })).toHaveCount(0);
-    }
+    await expect(page.getByText('Checking…', { exact: true })).toBeVisible();
+    await expect(page.getByText('0 events', { exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-daily-tile]')).toHaveCount(0);
+    await expect(page.getByText('Healthy', { exact: true })).toHaveCount(0);
   });
 
   test('a refresh that fails after a good read marks the kept rows as old', async ({ page }) => {
@@ -243,7 +238,7 @@ test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-dow
 
   // Since 2026-11-10 it counts offline or error hosts only, the rule Overview
   // and Best practices use, so degraded and pending hosts are not in it.
-  test('"Hosts Not Online" opens Infra filtered to the same hosts it counted', async ({ page }) => {
+  test('the Hosts tile opens Infra filtered to the same hosts it counted', async ({ page }) => {
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
       hosts: [
         { id: 'a', name: 'up-1', status: 'online', type: 'Host' },
@@ -253,9 +248,9 @@ test.describe('Daily → loading, stale rows, and the Hosts Not Online drill-dow
       ],
     })));
     await page.goto('/#daily');
-    await expect(kpi(page, 'Hosts Not Online').getByText('1', { exact: true })).toBeVisible();
+    await expect(kpi(page, 'hosts').getByText('1', { exact: true })).toBeVisible();
 
-    await page.getByText('Hosts Not Online', { exact: true }).click();
+    await kpi(page, 'hosts').getByRole('link', { name: 'Hosts', exact: true }).click();
     await expect(page).toHaveURL(/#infra\?status=offline/);
     const inventory = card(page, /Host Inventory/);
     await expect(inventory.getByText('status: offline')).toBeVisible();
