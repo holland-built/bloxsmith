@@ -334,7 +334,7 @@ func (s *Service) RunAnyChart(ctx context.Context, p AnyPicks) map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	body, st, err := s.Rest.GetEx(endpoint, map[string]string{"query": string(qj)})
+	body, st, err := s.cubeGet(endpoint, qj)
 	if errored(st, err) {
 		return map[string]any{
 			"query": q, "endpoint": endpoint, "rows": []map[string]any{},

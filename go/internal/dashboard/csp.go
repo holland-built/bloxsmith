@@ -646,7 +646,7 @@ func (s *Service) CSPThreats() map[string]any {
 			"dimension": "PortunusAggThreat_ch.timestamp",
 			"dateRange": "last 7 days", "granularity": "day"}},
 	})
-	body, st, err := s.Rest.GetEx("/api/cubejs-security/v1/query", map[string]string{"query": string(q)})
+	body, st, err := s.cubeGet(cubeSecurityEndpoint, q)
 	if errored(st, err) {
 		return errRows()
 	}
