@@ -292,7 +292,6 @@ const GO_DATA = 'go/internal/server/data.go'
 const GO_PROVISION = 'go/internal/server/provision.go'
 const GO_CSP = 'go/internal/dashboard/csp.go'
 const GO_ANALYTICS = 'go/internal/dashboard/analytics.go'
-const GO_HOSTS = 'go/internal/dashboard/hosts.go'
 const UTIL_BANDS = 'ui/src/lib/utilBands.js'
 
 // THE TWO NUMBERS LIVE IN ONE FILE since 2026-10-04 (lib/utilBands.js), so a
@@ -422,12 +421,7 @@ const CLAIMS = [
     file: DRIFT,
     proofs: [{ re: /const shown = open \? items : items\.slice\(0, 6\)/, expect: 'a collapsed group shows 6 items' }],
   },
-  {
-    panel: 'infra-onprem-hosts',
-    says: /Only the first five are listed\./,
-    file: INFRA,
-    proofs: [{ re: /panelId="infra-onprem-hosts"[\s\S]{0,240}?limit=\{5\}/, expect: 'the on-prem FeedCard is given limit={5}' }],
-  },
+
   {
     panel: 'daily-top-capacity-risks',
     says: /anything under 16 addresses, are left out on purpose/,
@@ -658,15 +652,7 @@ const CLAIMS = [
     file: GO_CSP,
     proofs: [{ re: /func \(s \*Service\) CSPJobs\(\)[\s\S]{0,200}?"_limit": "50"/, expect: 'CSPJobs asks for _limit 50' }],
   },
-  {
-    // The limit moved out of csp.go when four readers were made to share one
-    // (#85), so the proof follows it to the constant rather than to a literal
-    // that no longer exists at the call site.
-    panel: 'infra-host-health',
-    says: /at most 1,000/,
-    file: GO_HOSTS,
-    proofs: [{ re: /hostsListLimit = 1000/, expect: 'hostsListLimit, the limit every host reader sends, is 1000' }],
-  },
+
   {
     panel: 'dns-query-volume-7d',
     says: /on each of the last seven days/,

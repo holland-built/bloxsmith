@@ -13,7 +13,7 @@ import { installBaselineWorld } from './page-fixtures';
 //      getComputedStyle().font SHORTHAND carries NEITHER text-transform NOR
 //      letter-spacing. So "Status" was measured in mixed case with no tracking
 //      while "STATUS" was painted — 10.4px short, which clipped it to "STAT…"
-//      in Host Health and DFP Services.
+//      in DFP Services and Jobs.
 //   2. A badge cell paints its text at text-note (11px) inside a text-copy
 //      (14px) cell, and was measured at 14px. Sixteen pill cells across eight
 //      tabs were over-measured by 1–26px each, which is dead space by
@@ -291,16 +291,17 @@ test('a pill column is no wider than the pill it paints', async ({ page }) => {
     examined += res.seen;
   }
 
-  // COUNTED, not guessed: across the tabs above there are exactly three
-  // `badge: true` columns, all on Infra — Host Health, DFP Services and Jobs.
+  // COUNTED, not guessed: across the tabs above there are exactly two
+  // `badge: true` columns, both on Infra — DFP Services and Jobs (Host Health,
+  // the third, was merged into Host Inventory on 2026-11-10).
   // Infra's host-inventory status column declares badge AND render and is
-  // correctly reported as `render`, which is why it is not a fourth. Three is
+  // correctly reported as `render`, which is why it is not a third. Two is
   // the floor rather than a target, so removing one panel does not fail this,
   // but the classification silently breaking does.
   expect(
     examined,
     'no badge columns were found to measure — data-col-kind is missing, or colKind() no longer reports "badge"',
-  ).toBeGreaterThanOrEqual(3);
+  ).toBeGreaterThanOrEqual(2);
 
   expect(
     fat,

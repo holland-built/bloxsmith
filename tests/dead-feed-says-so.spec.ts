@@ -57,10 +57,10 @@ test('Audit: a portal search that fails outright says the feed is unavailable', 
   await expect(page.getByText('search failed', { exact: true })).toHaveCount(0);
 });
 
-test('Infra: a dead host-health feed draws the block, not a grey line', async ({ page }) => {
-  await page.route('**/api/csp/host-health*', dead);
+test('Infra: a dead on-prem host feed draws the block, not a grey line', async ({ page }) => {
+  await page.route('**/api/csp/onprem-hosts*', dead);
   await page.goto('/#infra');
-  const block = unavailable(page, 'infra-host-health');
+  const block = unavailable(page, 'infra-onprem-hosts');
   await expect(block).toBeVisible({ timeout: 20_000 });
   await expect(block).toContainText('Feed unavailable');
 });

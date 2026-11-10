@@ -164,34 +164,32 @@ test('incidents: the action drawer paints a real surface, not the scrim', async 
 
 // ---------- a table that scrolls can be scrolled from the keyboard ----------
 //
-// Host Health has no sortable heading and no clickable row, so once its rows
+// Host Apps has no sortable heading and no clickable row, so once its rows
 // overflow the box there was nothing in it a keyboard could land on. Chrome and
 // Firefox make such a box focusable by themselves; Safari does not, and axe
 // reported it on three panels of the live estate (`scrollable-region-focusable`:
-// dns-services, dns-dnssec-health, infra-host-health). The attribute is what is
+// dns-services, dns-dnssec-health, and Infra's old Host Health). The attribute is what is
 // asserted, because the behaviour alone already passes in this suite's Chromium.
 
-const hostHealth = (n: number) => ({
+const hostApps = (n: number) => ({
   status: 'ok',
   count: n,
   rows: Array.from({ length: n }, (_, i) => ({
-    ip: `10.10.0.${i + 2}`,
-    location: 'baseline-site',
+    app_count: 1,
+    apps: [],
     name: `baseline-host-${String(i).padStart(2, '0')}`,
-    nat_ip: '',
-    status: 'ok',
-    version: '0.0.0-baseline',
+    ophid: `ophid-baseline-${i}`,
   })),
 });
 
-const hostHealthBox = (page: import('@playwright/test').Page) =>
-  page.locator('[data-panel-id="infra-host-health"] div.overflow-y-auto');
+const hostAppsBox = (page: import('@playwright/test').Page) =>
+  page.locator('[data-panel-id="infra-onprem-hosts"] div.overflow-y-auto');
 
 test('infra: a table whose rows overflow is a tab stop, shows focus, and scrolls on End', async ({ page }) => {
-  await page.route('**/api/csp/host-health', (route) => route.fulfill({ json: hostHealth(40) }));
+  await page.route('**/api/csp/onprem-hosts', (route) => route.fulfill({ json: hostApps(40) }));
   await page.goto('/#infra');
 
-  const box = hostHealthBox(page);
+  const box = hostAppsBox(page);
   await expect(box.getByText('baseline-host-00')).toBeVisible({ timeout: 20_000 });
   // The premise: 40 rows do not fit. Without this the rest proves nothing.
   expect(await box.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(50);
@@ -217,8 +215,8 @@ test('infra: a table that fits is not given a tab stop', async ({ page }) => {
   // One row, from the baseline world. Guards the other direction: a stop on
   // every table, scrolling or not, would be one more Tab press per panel.
   await page.goto('/#infra');
-  const box = hostHealthBox(page);
-  await expect(box.getByText('baseline-host-a')).toBeVisible({ timeout: 20_000 });
+  const box = hostAppsBox(page);
+  await expect(box.getByText('baseline-onprem-a')).toBeVisible({ timeout: 20_000 });
   expect(await box.evaluate((el) => el.getAttribute('tabindex'))).toBeNull();
   await expect(page.getByRole('group', { name: 'Scrollable table' })).toHaveCount(0);
 });
@@ -230,10 +228,10 @@ test('infra: the tab stop follows the rows when spacing changes without a render
   // the layout. This pins that behaviour; it does not tell a size observer from
   // a check on render, because a render-only version was tried against it and
   // also passed here.
-  await page.route('**/api/csp/host-health', (route) => route.fulfill({ json: hostHealth(9) }));
+  await page.route('**/api/csp/onprem-hosts', (route) => route.fulfill({ json: hostApps(9) }));
   await page.goto('/#infra');
 
-  const box = hostHealthBox(page);
+  const box = hostAppsBox(page);
   await expect(box.getByText('baseline-host-00')).toBeVisible({ timeout: 20_000 });
   const overflow = () => box.evaluate((el) => el.scrollHeight - el.clientHeight);
   const density = (d: string) => page.evaluate((v) => { document.documentElement.dataset.density = v; }, d);

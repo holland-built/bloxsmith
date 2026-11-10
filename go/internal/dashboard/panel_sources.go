@@ -118,10 +118,7 @@ var panelSources = []PanelSource{
 	restPanel("infra-host-inventory", "Infra", "Host Inventory", srcHosts, whyList),
 	restPanel("infra-host-status", "Infra", "Host Status", srcHosts, "the hosts are counted by status in the app"),
 	restPanel("infra-service-health", "Infra", "Service Health", "the service list", "each group's health is rolled up in the app"),
-	restPanel("infra-host-health", "Infra", "Host Health", srcHosts, whyList),
-	restPanel("infra-onprem-hosts", "Infra", "On-Prem Hosts", "the on-prem host list", whyList),
-	{ID: "infra-asset-discovery", Page: "Infra", Name: "Asset Discovery", Kind: "cube", Source: "Infoblox's asset discovery records",
-		Builder: "no", Why: whyTotal},
+	restPanel("infra-onprem-hosts", "Infra", "Host Apps", "the on-prem host list", whyList),
 	restPanel("infra-jobs", "Infra", "Jobs", "the job list", whyList),
 	restPanel("infra-dfp-services", "Infra", "DFP Services", "the DNS forwarding proxy list", whyList),
 

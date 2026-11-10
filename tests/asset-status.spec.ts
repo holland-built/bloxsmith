@@ -6,7 +6,7 @@ import { test, expect } from './fixtures';
 // returns status: "error" on a failed query (or MCP init failure), and
 // reserves status: "empty" for a successful query that genuinely returned
 // zero. These specs prove the two panels that consume this payload — Infra's
-// Asset Discovery card and Security's Asset Insights card — tell the two
+// Discovered assets tile and Security's Asset Insights card — tell the two
 // cases apart: "error" renders the shared FeedUnavailable wording (never the
 // zero-count "no ... for this tenant" language), while "empty" still renders
 // the original empty-state wording, and "ok" renders the real total.
@@ -24,36 +24,36 @@ function scalarCountPayload(overrides: { total?: number; status: string }) {
   };
 }
 
-test.describe('Infra → Asset Discovery panel (discovery-status feed)', () => {
-  test('discovery feed error renders unavailable wording, not "no discovery data"', async ({ page }) => {
+test.describe('Infra → Discovered assets tile (discovery-status feed)', () => {
+  const tile = (page: import('@playwright/test').Page) =>
+    page.getByRole('list', { name: 'Headline numbers' }).getByRole('link', { name: /Discovered assets/ });
+
+  test('discovery feed error shows a dash and says unavailable, never a zero', async ({ page }) => {
     await page.route('**/api/csp/discovery-status*', (route) =>
       fulfillJson(route, scalarCountPayload({ status: 'error' })),
     );
     await page.goto('/#infra');
-    const card = page.locator('text=Asset Discovery').locator('..').locator('..');
-    await expect(card.getByText(/asset discovery unavailable/i)).toBeVisible();
-    await expect(card.getByText(/no discovery data for this tenant/i)).toHaveCount(0);
+    await expect(tile(page)).toContainText('unavailable');
+    await expect(tile(page)).toContainText('—');
+    await expect(tile(page)).not.toContainText('0');
   });
 
-  test('discovery feed empty renders the original empty-state wording', async ({ page }) => {
+  test('discovery feed empty shows a real zero', async ({ page }) => {
     await page.route('**/api/csp/discovery-status*', (route) =>
       fulfillJson(route, scalarCountPayload({ status: 'empty' })),
     );
     await page.goto('/#infra');
-    const card = page.locator('text=Asset Discovery').locator('..').locator('..');
-    await expect(card.getByText(/no discovery data for this tenant/i)).toBeVisible();
-    await expect(card.getByText(/asset discovery unavailable/i)).toHaveCount(0);
+    await expect(tile(page)).toContainText('0');
+    await expect(tile(page)).not.toContainText('unavailable');
   });
 
-  test('discovery feed ok renders the real total', async ({ page }) => {
+  test('discovery feed ok shows the real total and opens Assets', async ({ page }) => {
     await page.route('**/api/csp/discovery-status*', (route) =>
       fulfillJson(route, scalarCountPayload({ total: 42, status: 'ok' })),
     );
     await page.goto('/#infra');
-    const card = page.locator('text=Asset Discovery').locator('..').locator('..');
-    await expect(card.getByText('42')).toBeVisible();
-    await expect(card.getByText(/asset discovery unavailable/i)).toHaveCount(0);
-    await expect(card.getByText(/no discovery data for this tenant/i)).toHaveCount(0);
+    await expect(tile(page)).toContainText('42');
+    await expect(tile(page)).toHaveAttribute('href', '#assets');
   });
 });
 

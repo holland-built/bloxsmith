@@ -419,7 +419,6 @@ const AXUR = {
 // --- infra ------------------------------------------------------------------
 const DFP ={ status: 'ok', count: 1, rows: [{ id: 1, name: 'baseline-dfp', status: 'ok' }] };
 const DISCOVERY_STATUS = { status: 'ok', total: 7, breakdown_available: false, note: 'baseline' };
-const HOST_HEALTH = { status: 'ok', count: 1, rows: [{ ip: '10.10.0.2', location: 'baseline-site', name: 'baseline-host-a', nat_ip: '', status: 'ok', version: '0.0.0-baseline' }] };
 const JOBS = { status: 'ok', count: 1, rows: [{ created_at: agoIso(3 * HOUR), id: 'job/baseline-1', status: 'completed', type: 'discovery', user: 'baseline-operator' }] };
 const MAINTENANCE = { status: 'ok', enabled: false };
 const ONPREM_HOSTS = { status: 'ok', count: 1, rows: [{ app_count: 2, apps: [], name: 'baseline-onprem-a', ophid: 'ophid-baseline-1' }] };
@@ -629,7 +628,6 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/csp/dfp', body: DFP, required: true },
     { method: 'GET', path: '/api/hub/health', body: HUB_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/discovery-status', body: DISCOVERY_STATUS, required: true },
-    { method: 'GET', path: '/api/csp/host-health', body: HOST_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/jobs', body: JOBS, required: true },
     { method: 'GET', path: '/api/csp/maintenance', body: MAINTENANCE, required: true },
     { method: 'GET', path: '/api/csp/onprem-hosts', body: ONPREM_HOSTS, required: true },
