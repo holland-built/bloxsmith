@@ -73,7 +73,13 @@ export function JobRail({ tab, groups, tabs }) {
     )
   }
   return (
-    <nav aria-label="Pages" data-job-rail="" className="hidden md:flex flex-col w-52 shrink-0 border-r border-border bg-card py-2 sticky top-[57px] self-start h-[calc(100vh-57px)] overflow-y-auto">
+    // The outer div is the column: a flex child of App's row, so it stretches to
+    // the full height of the page and paints the card background and right
+    // border all the way down. The nav inside stays one screen tall and sticky,
+    // scrolling on its own. When the nav itself carried the background it was
+    // one screen tall, and a long page showed the page background below it.
+    <div data-job-column="" className="hidden md:block w-52 shrink-0 border-r border-border bg-card">
+    <nav aria-label="Pages" data-job-rail="" className="flex flex-col py-2 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
       {JOBS.map((j) => link(j.id, j.label))}
       <div className="border-t border-border my-2" />
       {rest.map((g) => {
@@ -101,6 +107,7 @@ export function JobRail({ tab, groups, tabs }) {
         )
       })}
     </nav>
+    </div>
   )
 }
 
