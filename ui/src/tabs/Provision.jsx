@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 // empty array a tenant that genuinely owns nothing produces. Unread, the select
 // falls back to its placeholder and Apply sits disabled with no reason given.
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
-import { useApi } from '../lib/api.js'
+import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { sizeWords, useSpaceOptions } from '../lib/spaceOptions.js'
 import { PageRail } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
@@ -512,9 +512,9 @@ function templateTitle(t) {
 }
 
 function SiteMode({ isAdmin }) {
-  const spacesApi = useApi('/api/ipam/spaces')
+  const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const spaces = spacesApi.data?.spaces ?? []
-  const templatesApi = useApi('/api/templates')
+  const templatesApi = useApi('/api/templates', SHARE_PICKER)
   const templates = Array.isArray(templatesApi.data) ? templatesApi.data : []
 
   const [siteSpace, setSiteSpace] = useState('')
@@ -720,8 +720,8 @@ function seedRegionLabel(r, templates) {
 }
 
 function SeedMode({ isAdmin }) {
-  const seedTemplates = useApi('/api/templates')
-  const spacesApi = useApi('/api/ipam/spaces')
+  const seedTemplates = useApi('/api/templates', SHARE_PICKER)
+  const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const spaces = spacesApi.data?.spaces ?? []
 
   const [regions, setRegions] = useState({ amer: true, emea: true, apac: true })

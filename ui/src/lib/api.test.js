@@ -12,6 +12,7 @@ import {
   sameJson,
   __resetAdoptionForTests,
   retryFailedFeeds,
+  shareResult,
   useApi,
 } from './api.js'
 
@@ -1117,4 +1118,113 @@ test('sameJson: an identical poll answer is the same, a changed one is not', () 
   const cyc = {}
   cyc.self = cyc
   assert.equal(sameJson(cyc, { self: 1 }), false, 'a payload that will not serialise is different, never an error')
+})
+
+// ---------------------------------------------------------------------------
+// Coming back to the browser tab. Every polled feed used to fetch at once on
+// every return, however brief the trip away; one that answered within the last
+// half of its interval now waits for its own next poll.
+// ---------------------------------------------------------------------------
+
+function fakeDocument(t) {
+  const listeners = new Set()
+  const realDocument = globalThis.document
+  const doc = {
+    hidden: false,
+    addEventListener: (type, fn) => { if (type === 'visibilitychange') listeners.add(fn) },
+    removeEventListener: (type, fn) => { if (type === 'visibilitychange') listeners.delete(fn) },
+  }
+  globalThis.document = doc
+  t.after(() => { globalThis.document = realDocument })
+  return {
+    away() { doc.hidden = true; for (const fn of [...listeners]) fn() },
+    back() { doc.hidden = false; for (const fn of [...listeners]) fn() },
+  }
+}
+
+test('returning soon after a poll answered does not fetch again', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 1 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/csp/dns-qps', { poll: 30_000 }))
+  await settle()
+  assert.equal(calls.length, 1)
+
+  tab.away()
+  now += 5_000 // a five-second alt-tab
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 1, 'an answer 5s old is fresher than the 30s poll promises')
+  hook.unmount()
+})
+
+test('returning after more than half the interval fetches at once, as before', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 1 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/csp/dns-qps', { poll: 30_000 }))
+  await settle()
+
+  tab.away()
+  now += 15_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 2, 'half the interval or more: refresh on return')
+  hook.unmount()
+})
+
+test('a feed whose last request failed asks again on return, however recent', async (t) => {
+  const { calls } = harness(t, [jsonOk({ rows: 1 }), jsonStatus(500), jsonOk({ rows: 2 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/csp/dns-qps', { poll: 30_000 }))
+  await settle()
+  hook.current.refetch()
+  await settle()
+  assert.ok(hook.current.error, 'the second request failed')
+
+  tab.away()
+  now += 1_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 3)
+  assert.deepEqual(hook.current.data, { rows: 2 })
+  hook.unmount()
+})
+
+// ---------------------------------------------------------------------------
+// shareResult: VaultGate reads /api/vault/status with a plain fetch to decide
+// whether to draw the app; the header's poll, mounting a moment later, takes
+// that answer instead of asking again.
+// ---------------------------------------------------------------------------
+
+test('a result shared from a plain fetch is adopted by a hook that mounts just after', async (t) => {
+  const { calls } = harness(t, [jsonOk({ ready: false })])
+  shareResult('/api/vault/status', { ready: true, active: 't1' })
+  const hook = mountHook(() => useApi('/api/vault/status', { poll: 30_000, adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.deepEqual(calls, [], 'no second read at boot')
+  assert.deepEqual(hook.current.data, { ready: true, active: 't1' })
+  hook.unmount()
+})
+
+test('a shared result is not adopted by a hook that did not opt in, nor once it is old', async (t) => {
+  const { calls } = harness(t, [jsonOk({ ready: true })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  shareResult('/api/vault/status', { ready: true })
+  const plain = mountHook(() => useApi('/api/vault/status'))
+  await settle()
+  assert.equal(calls.length, 1, 'a call site without the option always fetches')
+
+  shareResult('/api/vault/status', { ready: true })
+  now += WINDOW + 1
+  const late = mountHook(() => useApi('/api/vault/status', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(calls.length, 2, 'past the window the hook asks for itself')
+  plain.unmount()
+  late.unmount()
 })

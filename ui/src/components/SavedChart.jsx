@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { Card, Empty, FeedUnavailable, Skeleton, useGridLayout } from './ui.jsx'
 import ChartView from './ChartView.jsx'
 import { chartLink, chartUrl } from '../lib/chartBuilder.js'
@@ -52,7 +52,7 @@ function AboutControls({ chart, onRemoved }) {
 }
 
 export default function SavedChart({ panelId, chart, onRemoved }) {
-  const options = useApi('/api/chart/options')
+  const options = useApi('/api/chart/options', SHARE_PICKER)
   const result = useApi(chartUrl(chart.picks))
   const status = result.data?.status
   // The title is a template literal so arrangeNames.test.js can see it is

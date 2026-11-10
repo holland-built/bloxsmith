@@ -32,11 +32,16 @@ function useWriteTarget() {
   }, [])
   useEffect(() => {
     read(false)
-    const id = setInterval(() => read(false), 30000)
+    // Skipped while the browser tab is hidden, like every useApi poll; the
+    // visibility change below reads it again on the way back.
+    const id = setInterval(() => { if (!document.hidden) read(false) }, 30000)
+    const back = () => { if (!document.hidden) read(false) }
+    document.addEventListener('visibilitychange', back)
     const on = () => read(true)
     window.addEventListener('bx:write-target', on)
     return () => {
       clearInterval(id)
+      document.removeEventListener('visibilitychange', back)
       window.removeEventListener('bx:write-target', on)
     }
   }, [read])
@@ -53,7 +58,11 @@ export default function ConnStatus() {
   const lastFetchRef = useRef(null)
   const [, forceTick] = useState(0)
 
-  const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000 })
+  // Adopts only within 2s, which in practice means only VaultGate's read: the
+  // gate reads this url to decide whether to draw the app, and hands its answer
+  // over (shareResult) just before this mounts. Every 30s poll after that still
+  // asks for itself, so the lock check in lib/api.js stays this poll's own.
+  const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000, adoptIfFresherThan: 2000 })
   // ADOPTS, because this dot and the Overview tab want the same 294KB and used
   // to fetch it separately — this one at t=39ms and Overview at t=331ms on every
   // load, measured 2026-08-27. Whichever of the two asks second now takes the
@@ -65,7 +74,16 @@ export default function ConnStatus() {
   // Nothing about this dot's own freshness claim changes: it reports when data
   // was last SEEN, and an adopted result was seen just as recently as a fetched
   // one — more recently, in fact, than the request this call site no longer makes.
-  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 2000 })
+  //
+  // The window is 45s, not 2s, so the dot shares the PAGE's poll as well as its
+  // mount. Overview, Network, Infra and Daily poll this url every 30s, so at each
+  // of this dot's 60s ticks one of their answers is at most ~30s old and is taken
+  // instead of a third full fetch a minute. 45s sits between the two: above a
+  // 30s page poll, below this dot's own 60s, so it never re-takes its own answer
+  // from the tick before. On every other page nobody else asks and it fetches as
+  // it always did, which also keeps the server's full aggregate warm for the
+  // pages above.
+  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 45000 })
 
   // The write state sits beside the tenant name because it is the one fact an
   // operator needs before pressing Provision.

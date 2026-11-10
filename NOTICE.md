@@ -150,8 +150,9 @@ not claimed.
 ## Inter typeface
 
 The dark theme's typeface is [Inter](https://github.com/rsms/inter) by Rasmus Andersson,
-version 4.1, licensed under the SIL Open Font License 1.1. The font file is bundled at
-`ui/public/fonts/InterVariable.woff2`; its source is recorded in
+version 4.1, licensed under the SIL Open Font License 1.1. The font is bundled as two
+subsets of the original file, `ui/src/assets/fonts/Inter-latin.woff2` and
+`Inter-other.woff2`; the original and its source are recorded in
 [`third_party/inter/`](third_party/inter/). The licence is reproduced in full below,
 because this file is what ships inside every release archive and image.
 

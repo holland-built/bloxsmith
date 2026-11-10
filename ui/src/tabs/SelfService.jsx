@@ -9,7 +9,7 @@
 // a user. NOTICE.md ships inside the release archive and the container image, and
 // that is what carries the notice.
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
@@ -152,7 +152,7 @@ function allocateSentence(preview, subnet, name, dnsName, ptr) {
 }
 
 function AllocatePanel({ panelId }) {
-  const spacesApi = useApi('/api/ipam/spaces')
+  const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const spaceOpts = useSpaceOptions()
   const [space, setSpace] = useState('')
   const blocksApi = useApi(space ? `/api/ipam/blocks?space=${encodeURIComponent(space)}` : null)
@@ -168,7 +168,7 @@ function AllocatePanel({ panelId }) {
   const [dnsOn, setDnsOn] = useState(false)
   const [zoneId, setZoneId] = useState('')
   const [ptr, setPtr] = useState(false)
-  const zonesApi = useApi(dnsOn ? '/api/dns/zones' : null)
+  const zonesApi = useApi(dnsOn ? '/api/dns/zones' : null, SHARE_PICKER)
   const zones = zonesApi.data?.zones ?? []
 
   const flow = useWriteFlow('/api/selfservice/allocate')
@@ -331,7 +331,7 @@ function AllocatePanel({ panelId }) {
 // ---------- dns ----------
 
 function DnsPanel({ panelId }) {
-  const zonesApi = useApi('/api/dns/zones')
+  const zonesApi = useApi('/api/dns/zones', SHARE_PICKER)
   const [zoneId, setZoneId] = useState('')
   const [name, setName] = useState('')
   const [type, setType] = useState('A')
@@ -509,7 +509,7 @@ function useSearchTerm() {
 }
 
 function ManageRecordsPanel({ panelId, span }) {
-  const zonesApi = useApi('/api/dns/zones')
+  const zonesApi = useApi('/api/dns/zones', SHARE_PICKER)
   const [zoneId, setZoneId] = useState('')
   const [reverse, setReverse] = useState(false)
   const search = useSearchTerm()
@@ -827,7 +827,7 @@ function ManageRecordsPanel({ panelId, span }) {
 // ---------- manage addresses ----------
 
 function ManageAddressesPanel({ panelId }) {
-  const spacesApi = useApi('/api/ipam/spaces')
+  const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const [space, setSpace] = useState('')
   const subnetsApi = useApi(space ? `/api/ipam/subnets?space=${encodeURIComponent(space)}` : null)
   const [subnetId, setSubnetId] = useState('')
