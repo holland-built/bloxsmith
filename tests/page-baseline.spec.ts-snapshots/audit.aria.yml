@@ -1,5 +1,9 @@
 - main "Audit tab":
   - heading "Audit" [level=1]
+  - region "Can you trust this log":
+    - text: /Audit log Intact \d+ entries checked Check it yourself:/
+    - code: bloxsmith audit verify
+    - text: /Last entry \d+:\d+ AM Jan \d+ Couldn't delete a DNS record Not saved \d+ since the app started/
   - button "Arrange panels"
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
@@ -15,8 +19,6 @@
   - text: "5"
   - 'button "About: Audit Log"': "About: ⓘ"
   - 'button "Options: Audit Log"'
-  - text: chain intact — signature and entry count verified · check it yourself with
-  - code: bloxsmith audit verify
   - table:
     - rowgroup:
       - row "Time Actor Event Detail":
