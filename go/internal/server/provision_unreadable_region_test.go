@@ -20,8 +20,8 @@ import (
 // every template it tried had succeeded. An operator ticked three regions, got
 // two, and had no failure anywhere to explain the third. #134
 //
-// The provision and teardown streams are independent implementations of the
-// same loop, so both are asserted — one can regress without the other.
+// The provision and teardown streams share this loop (seedRun.sites) but each
+// passes its own message, so both are asserted.
 
 const seedRegionTemplate = `type: site
 site:

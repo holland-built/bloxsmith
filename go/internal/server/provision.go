@@ -97,208 +97,200 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 	makeZone := provision.PyStr(qp["make_zone"]) == "1"
 	dry := provision.TruthyDry(qp["dry"])
 
-	if !d.roleGate(r, "operator") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
+	d.stream(w, r, "operator", func(emit sse.Emit) {
+		// Extra detail merged into the provision-subnet-error row by the tail below.
+		// It carries the PHASE the run died in, because the two phases leave the
+		// tenant in opposite states: an "allocate" failure created nothing, while a
+		// "reverse-zone" failure leaves a real subnet behind (and is accompanied by
+		// its own provision-subnet success row naming it). Without this field the two
+		// are one indistinguishable event name in a log nobody can amend.
+		var errDetail map[string]any
 
-	// Extra detail merged into the provision-subnet-error row by the tail below.
-	// It carries the PHASE the run died in, because the two phases leave the
-	// tenant in opposite states: an "allocate" failure created nothing, while a
-	// "reverse-zone" failure leaves a real subnet behind (and is accompanied by
-	// its own provision-subnet success row naming it). Without this field the two
-	// are one indistinguishable event name in a log nobody can amend.
-	var errDetail map[string]any
-
-	err := func() error {
-		if block == "" {
-			emit(map[string]any{"error": "block is required"})
-			return nil
-		}
-		// `block` is a query-string parameter and used to be concatenated
-		// straight into the outgoing allocation path below. Go's transport does
-		// not clean ".." out of a request path, so a crafted block reached an
-		// arbitrary CSP path under the server's own tenant key — the same escape
-		// already closed for the DELETE routes (see editDelete). The UI's Block
-		// select sends a full-form id from GET /api/ipam/blocks, which
-		// ObjectPath maps to a byte-identical path, so nothing legitimate moves.
-		//
-		// Refused before the dry branch, so a preview cannot claim it would
-		// create something in a "block" the live run will reject.
-		blockPath, perr := edit.ObjectPath("ipam/address_block", block)
-		if perr != nil {
-			emit(map[string]any{"error": "invalid block id"})
-			return nil
-		}
-		emit(map[string]any{"step": fmt.Sprintf("Resolving block %s…", block)})
-		if dry {
-			// The preview names the subnet the live run would most likely create,
-			// worked out from the block's own contents by guessNextSubnet (which
-			// says why Infoblox's look-only call cannot be used). Only reads are
-			// sent. A preview's failures are emitted here and return nil: nothing
-			// was written, so no provision-subnet-error row belongs in the log
-			// (see the tail below).
-			cidrN, ok := parseIntStr(cidr)
-			if !ok {
-				emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
+		err := func() error {
+			if block == "" {
+				emit(map[string]any{"error": "block is required"})
 				return nil
 			}
-			blockNet, next, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
-			if gerr != nil {
-				// Not knowing which subnet is no reason to fail the preview: the
-				// live run asks Infoblox, which picks one itself.
-				msg := gerr.Error()
-				if ue, ok := gerr.(*rest.UpstreamError); ok {
-					msg = ue.Public()
-				}
-				emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create a /%d in block %s "+
-					"(could not work out which one: %s)", cidrN, block, msg)})
-				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": nil, "cidr": cidrN}})
+			// `block` is a query-string parameter and used to be concatenated
+			// straight into the outgoing allocation path below. Go's transport does
+			// not clean ".." out of a request path, so a crafted block reached an
+			// arbitrary CSP path under the server's own tenant key — the same escape
+			// already closed for the DELETE routes (see editDelete). The UI's Block
+			// select sends a full-form id from GET /api/ipam/blocks, which
+			// ObjectPath maps to a byte-identical path, so nothing legitimate moves.
+			//
+			// Refused before the dry branch, so a preview cannot claim it would
+			// create something in a "block" the live run will reject.
+			blockPath, perr := edit.ObjectPath("ipam/address_block", block)
+			if perr != nil {
+				emit(map[string]any{"error": "invalid block id"})
 				return nil
 			}
-			if cidrN < blockNet.Bits() || cidrN > blockNet.Addr().BitLen() {
-				emit(map[string]any{"error": fmt.Sprintf("a /%d does not fit in block %s", cidrN, blockNet)})
-				return nil
-			}
-			if !next.IsValid() {
-				emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet)})
-				return nil
-			}
-			addr := next.Addr().String()
-			emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create %s (probably; Infoblox makes the "+
-				"final pick) in block %s", next, blockNet)})
-			if makeZone {
-				if fqdn, ferr := provision.CidrToReverseZone(addr, cidrN); ferr == nil {
-					emit(map[string]any{"step": "[DRY-RUN] Would create DNS zone " + fqdn})
-				} else {
-					emit(map[string]any{"error": "the reverse DNS zone name could not be worked out: " + ferr.Error()})
+			emit(map[string]any{"step": fmt.Sprintf("Resolving block %s…", block)})
+			if dry {
+				// The preview names the subnet the live run would most likely create,
+				// worked out from the block's own contents by guessNextSubnet (which
+				// says why Infoblox's look-only call cannot be used). Only reads are
+				// sent. A preview's failures are emitted here and return nil: nothing
+				// was written, so no provision-subnet-error row belongs in the log
+				// (see the tail below).
+				cidrN, ok := parseIntStr(cidr)
+				if !ok {
+					emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
 					return nil
 				}
+				blockNet, next, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
+				if gerr != nil {
+					// Not knowing which subnet is no reason to fail the preview: the
+					// live run asks Infoblox, which picks one itself.
+					msg := gerr.Error()
+					if ue, ok := gerr.(*rest.UpstreamError); ok {
+						msg = ue.Public()
+					}
+					emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create a /%d in block %s "+
+						"(could not work out which one: %s)", cidrN, block, msg)})
+					emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": nil, "cidr": cidrN}})
+					return nil
+				}
+				if cidrN < blockNet.Bits() || cidrN > blockNet.Addr().BitLen() {
+					emit(map[string]any{"error": fmt.Sprintf("a /%d does not fit in block %s", cidrN, blockNet)})
+					return nil
+				}
+				if !next.IsValid() {
+					emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet)})
+					return nil
+				}
+				addr := next.Addr().String()
+				emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create %s (probably; Infoblox makes the "+
+					"final pick) in block %s", next, blockNet)})
+				if makeZone {
+					if fqdn, ferr := provision.CidrToReverseZone(addr, cidrN); ferr == nil {
+						emit(map[string]any{"step": "[DRY-RUN] Would create DNS zone " + fqdn})
+					} else {
+						emit(map[string]any{"error": "the reverse DNS zone name could not be worked out: " + ferr.Error()})
+						return nil
+					}
+				}
+				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN}})
+				return nil
 			}
-			emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN}})
-			return nil
-		}
-		cidrN, ok := parseIntStr(cidr)
-		if !ok {
-			return fmt.Errorf("invalid literal for int() with base 10: '%s'", cidr)
-		}
-		var body any
-		if name != "" || comment != "" {
-			bm := map[string]any{}
-			if name != "" {
-				bm["name"] = name
+			cidrN, ok := parseIntStr(cidr)
+			if !ok {
+				return fmt.Errorf("invalid literal for int() with base 10: '%s'", cidr)
 			}
-			if comment != "" {
-				bm["comment"] = comment
+			var body any
+			if name != "" || comment != "" {
+				bm := map[string]any{}
+				if name != "" {
+					bm["name"] = name
+				}
+				if comment != "" {
+					bm["comment"] = comment
+				}
+				body = bm
 			}
-			body = bm
-		}
-		result, status, werr := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
-			body, map[string]string{"cidr": strconv.Itoa(cidrN)})
-		emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
-		subnet := firstRowLocal(result)
+			result, status, werr := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
+				body, map[string]string{"cidr": strconv.Itoa(cidrN)})
+			emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
+			subnet := firstRowLocal(result)
 
-		// ALL THREE of these used to be discarded (`result, status, _`), and the
-		// handler went straight on to emit done:true and audit a success. rest.Write
-		// returns a nil error for an upstream 4xx/5xx — it hands back the parsed
-		// error body and the status instead (rest.go:429-437) — so a refused
-		// allocation reached the operator as "Provisioned — subnet " with an empty
-		// address, and reached the tamper-evident log as provision-subnet with
-		// subnet:<nil>. The frame above was the only trace, and the UI renders that
-		// frame's `step` and never its `status` (ui/src/tabs/Provision.jsx:186).
-		//
-		// The address, not the id, is what makes an allocation usable: it is the
-		// audit row's reconcilable field, the Result panel's text, and the input to
-		// CidrToReverseZone. A 2xx carrying no address is as empty as a 400.
-		// Read as a STRING rather than through PyStr, so a number or a nested object
-		// under "address" cannot coerce itself into a plausible-looking success.
-		//
-		// The 2xx upper bound is defence, not a live control: Go's client follows
-		// redirects, so a 3xx does not realistically arrive here. It is a range
-		// anyway because `>= 400` alone would accept one silently. status == 0 needs
-		// no arm of its own — Write returns 0 only together with a non-nil error
-		// (rest.go:419-427), so the werr test fires first.
-		addr, _ := subnet["address"].(string)
-		addr = strings.TrimSpace(addr)
-		switch {
-		case werr != nil:
-			errDetail = map[string]any{"phase": "allocate"}
-			return fmt.Errorf("the subnet allocation could not be sent: %v", werr)
-		case status < 200 || status > 299:
-			errDetail = map[string]any{"phase": "allocate"}
-			return fmt.Errorf("the subnet allocation was refused%s — nothing was created",
-				upstreamDetail(status, result))
-		case addr == "":
-			errDetail = map[string]any{"phase": "allocate"}
-			return fmt.Errorf("the subnet allocation returned HTTP %d but no subnet address, "+
-				"so nothing usable was created", status)
-		}
-
-		if makeZone {
-			// Everything from here on happens with a REAL subnet already carved out
-			// of the customer's address block, so every failure below records the
-			// provision-subnet success row FIRST — the log has to name what exists —
-			// and only then returns, letting the tail write the single
-			// provision-subnet-error row. Writing an error row here as well would
-			// double-count one failure.
+			// ALL THREE of these used to be discarded (`result, status, _`), and the
+			// handler went straight on to emit done:true and audit a success. rest.Write
+			// returns a nil error for an upstream 4xx/5xx — it hands back the parsed
+			// error body and the status instead (rest.go:429-437) — so a refused
+			// allocation reached the operator as "Provisioned — subnet " with an empty
+			// address, and reached the tamper-evident log as provision-subnet with
+			// subnet:<nil>. The frame above was the only trace, and the UI renders that
+			// frame's `step` and never its `status` (ui/src/tabs/Provision.jsx:186).
 			//
-			// The message names the subnet because the UI closes an error frame at
-			// status "idle" and never renders the Result panel
-			// (ui/src/tabs/Provision.jsx:110-118, 307): if the address is not in this
-			// sentence, the operator has no way to find what was just created.
-			zoneFailed := func(reason string) error {
-				d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
-					"block": block, "cidr": cidr, "subnet": addr})
-				errDetail = map[string]any{"phase": "reverse-zone", "subnet": addr}
-				return fmt.Errorf("subnet %s was created, but its reverse DNS zone was not: %s", addr, reason)
-			}
-			emit(map[string]any{"step": "Creating DNS zone…"})
-			zc := cidrN
-			if c, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
-				zc = c
-			}
-			fqdn, ferr := provision.CidrToReverseZone(addr, zc)
-			if ferr != nil {
-				// Previously a bare `return ferr`, which took the tail's error path
-				// with no provision-subnet row at all — the subnet existed and the log
-				// said nothing about it.
-				return zoneFailed(ferr.Error())
-			}
-			zresult, zstatus, zerr := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
-				map[string]any{"fqdn": fqdn}, nil)
-			emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
+			// The address, not the id, is what makes an allocation usable: it is the
+			// audit row's reconcilable field, the Result panel's text, and the input to
+			// CidrToReverseZone. A 2xx carrying no address is as empty as a 400.
+			// Read as a STRING rather than through PyStr, so a number or a nested object
+			// under "address" cannot coerce itself into a plausible-looking success.
+			//
+			// The 2xx upper bound is defence, not a live control: Go's client follows
+			// redirects, so a 3xx does not realistically arrive here. It is a range
+			// anyway because `>= 400` alone would accept one silently. status == 0 needs
+			// no arm of its own — Write returns 0 only together with a non-nil error
+			// (rest.go:419-427), so the werr test fires first.
+			addr, _ := subnet["address"].(string)
+			addr = strings.TrimSpace(addr)
 			switch {
-			case zerr != nil:
-				return zoneFailed(fmt.Sprintf("the request could not be sent: %v", zerr))
-			case zstatus < 200 || zstatus > 299:
-				return zoneFailed(fmt.Sprintf("it was refused%s", upstreamDetail(zstatus, zresult)))
+			case werr != nil:
+				errDetail = map[string]any{"phase": "allocate"}
+				return fmt.Errorf("the subnet allocation could not be sent: %v", werr)
+			case status < 200 || status > 299:
+				errDetail = map[string]any{"phase": "allocate"}
+				return fmt.Errorf("the subnet allocation was refused%s — nothing was created",
+					upstreamDetail(status, result))
+			case addr == "":
+				errDetail = map[string]any{"phase": "allocate"}
+				return fmt.Errorf("the subnet allocation returned HTTP %d but no subnet address, "+
+					"so nothing usable was created", status)
 			}
+
+			if makeZone {
+				// Everything from here on happens with a REAL subnet already carved out
+				// of the customer's address block, so every failure below records the
+				// provision-subnet success row FIRST — the log has to name what exists —
+				// and only then returns, letting the tail write the single
+				// provision-subnet-error row. Writing an error row here as well would
+				// double-count one failure.
+				//
+				// The message names the subnet because the UI closes an error frame at
+				// status "idle" and never renders the Result panel
+				// (ui/src/tabs/Provision.jsx:110-118, 307): if the address is not in this
+				// sentence, the operator has no way to find what was just created.
+				zoneFailed := func(reason string) error {
+					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
+						"block": block, "cidr": cidr, "subnet": addr})
+					errDetail = map[string]any{"phase": "reverse-zone", "subnet": addr}
+					return fmt.Errorf("subnet %s was created, but its reverse DNS zone was not: %s", addr, reason)
+				}
+				emit(map[string]any{"step": "Creating DNS zone…"})
+				zc := cidrN
+				if c, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
+					zc = c
+				}
+				fqdn, ferr := provision.CidrToReverseZone(addr, zc)
+				if ferr != nil {
+					// Previously a bare `return ferr`, which took the tail's error path
+					// with no provision-subnet row at all — the subnet existed and the log
+					// said nothing about it.
+					return zoneFailed(ferr.Error())
+				}
+				zresult, zstatus, zerr := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
+					map[string]any{"fqdn": fqdn}, nil)
+				emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
+				switch {
+				case zerr != nil:
+					return zoneFailed(fmt.Sprintf("the request could not be sent: %v", zerr))
+				case zstatus < 200 || zstatus > 299:
+					return zoneFailed(fmt.Sprintf("it was refused%s", upstreamDetail(zstatus, zresult)))
+				}
+			}
+			emit(map[string]any{"done": true, "subnet": map[string]any{
+				"id": subnet["id"], "address": subnet["address"], "cidr": subnet["cidr"]}})
+			d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
+				"block": block, "cidr": cidr, "subnet": subnet["address"]})
+			return nil
+		}()
+		if err != nil {
+			// There is deliberately NO !dry gate here, unlike every sibling error arm
+			// in this file. A dry run cannot reach this line: the `if dry` branch above
+			// emits its preview and returns nil before the first statement that can
+			// produce an error (the cidr parse), so `dry` is always false here. The
+			// gate that used to sit here read as an active control over a preview and
+			// was not one — no test could make it fire, in either direction.
+			detail := map[string]any{"block": block, "error": err.Error()}
+			for k, v := range errDetail {
+				detail[k] = v
+			}
+			d.auditAppend("provision-subnet-error", httpx.Actor(r), detail)
+			emit(map[string]any{"error": err.Error()})
 		}
-		emit(map[string]any{"done": true, "subnet": map[string]any{
-			"id": subnet["id"], "address": subnet["address"], "cidr": subnet["cidr"]}})
-		d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
-			"block": block, "cidr": cidr, "subnet": subnet["address"]})
-		return nil
-	}()
-	if err != nil {
-		// There is deliberately NO !dry gate here, unlike every sibling error arm
-		// in this file. A dry run cannot reach this line: the `if dry` branch above
-		// emits its preview and returns nil before the first statement that can
-		// produce an error (the cidr parse), so `dry` is always false here. The
-		// gate that used to sit here read as an active control over a preview and
-		// was not one — no test could make it fire, in either direction.
-		detail := map[string]any{"block": block, "error": err.Error()}
-		for k, v := range errDetail {
-			detail[k] = v
-		}
-		d.auditAppend("provision-subnet-error", httpx.Actor(r), detail)
-		emit(map[string]any{"error": err.Error()})
-	}
+	})
 }
 
 // upstreamDetail turns a rest.Write failure into the tail of one sentence:
@@ -350,92 +342,85 @@ func upstreamMessage(body any) string {
 
 func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 	qp := queryM(r)
-	if !d.roleGate(r, "operator") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
-	name := strings.TrimSpace(provision.PyStr(qp["template"]))
-	if name == "" {
-		emit(map[string]any{"error": "template is required"})
-		return
-	}
-	template, err := d.prov(r).LoadTemplate(name)
-	if err != nil {
-		emit(map[string]any{"error": err.Error()})
-		return
-	}
-	// The same check /api/templates/validate runs, before anything is created.
-	// Without it this stream went straight to TemplateToSiteConfig, which only
-	// requires the five mandatory values and an integer subnet_size — so an
-	// out-of-range CIDR, a duplicate subnet name, a DHCP offset outside 1-254
-	// or a host naming a subnet that does not exist all passed through, and a
-	// template the UI had already labelled "(invalid)" could allocate real
-	// subnets and zones and then fail part way through.
-	//
-	// Previews are refused too: the file is broken either way, and walking a
-	// plan that can never be built is a worse answer than saying so.
-	if v := provision.ValidateTemplate(template, name); v["valid"] != true {
-		errs, _ := v["errors"].([]provision.M)
-		emit(map[string]any{"error": invalidTemplateMessage(name, errs)})
-		return
-	}
-	cfg, err := provision.TemplateToSiteConfig(template, qp)
-	if err != nil {
-		emit(map[string]any{"error": err.Error()})
-		return
-	}
-	emit(map[string]any{"step": fmt.Sprintf("Provisioning site: %s", cfg.Site)})
-	result, err := d.prov(r).NewSiteProvisioner(cfg, emitter(emit)).Provision()
-	if err != nil {
-		// Provision's failure value carries the rollback report
-		// ({outcome, attempted, deleted, residual}) and nothing else. Both the
-		// operator's error frame and the permanent audit record get the SAME
-		// complete report: the stream already says "N object(s) could not be
-		// deleted" in prose, and the diagnosis' whole point is that a count is
-		// not enough to go clean up with.
-		//
-		// Copied through AS-IS. The report is already the only shape
-		// canonicalJSON accepts (map[string]any, int counts, []any residual);
-		// rebuilding it as []M / []map[string]any / a struct hits encode's
-		// default branch, and auditAppend only LOGS that error — the HTTP
-		// response would still succeed with nothing recorded.
-		//
-		// Presence check, never length: the report is unconditional on the
-		// failure path, and an "outcome":"complete" report with an empty
-		// residual is a load-bearing record ("rollback ran and deleted
-		// everything") that a len() guard would erase into silence.
-		//
-		// UNREACHABLE `else` TODAY, stated so nobody reads this as a live
-		// control: SiteProvisioner.Provision has exactly one failure return and
-		// it always carries the key (provision/site.go:820), so `ok` is always
-		// true here. It is kept because the alternative is unconditional
-		// assignment, which would write "rollback": null the day the callee
-		// stops setting it — a fabricated report is worse than an absent one.
-		detail := map[string]any{"template": name, "error": err.Error()}
-		frame := map[string]any{"error": err.Error()}
-		if rb, ok := result["rollback"]; ok {
-			detail["rollback"] = rb
-			frame["rollback"] = rb
+	d.stream(w, r, "operator", func(emit sse.Emit) {
+		name := strings.TrimSpace(provision.PyStr(qp["template"]))
+		if name == "" {
+			emit(map[string]any{"error": "template is required"})
+			return
 		}
+		template, err := d.prov(r).LoadTemplate(name)
+		if err != nil {
+			emit(map[string]any{"error": err.Error()})
+			return
+		}
+		// The same check /api/templates/validate runs, before anything is created.
+		// Without it this stream went straight to TemplateToSiteConfig, which only
+		// requires the five mandatory values and an integer subnet_size — so an
+		// out-of-range CIDR, a duplicate subnet name, a DHCP offset outside 1-254
+		// or a host naming a subnet that does not exist all passed through, and a
+		// template the UI had already labelled "(invalid)" could allocate real
+		// subnets and zones and then fail part way through.
+		//
+		// Previews are refused too: the file is broken either way, and walking a
+		// plan that can never be built is a worse answer than saying so.
+		if v := provision.ValidateTemplate(template, name); v["valid"] != true {
+			errs, _ := v["errors"].([]provision.M)
+			emit(map[string]any{"error": invalidTemplateMessage(name, errs)})
+			return
+		}
+		cfg, err := provision.TemplateToSiteConfig(template, qp)
+		if err != nil {
+			emit(map[string]any{"error": err.Error()})
+			return
+		}
+		emit(map[string]any{"step": fmt.Sprintf("Provisioning site: %s", cfg.Site)})
+		result, err := d.prov(r).NewSiteProvisioner(cfg, emitter(emit)).Provision()
+		if err != nil {
+			// Provision's failure value carries the rollback report
+			// ({outcome, attempted, deleted, residual}) and nothing else. Both the
+			// operator's error frame and the permanent audit record get the SAME
+			// complete report: the stream already says "N object(s) could not be
+			// deleted" in prose, and the diagnosis' whole point is that a count is
+			// not enough to go clean up with.
+			//
+			// Copied through AS-IS. The report is already the only shape
+			// canonicalJSON accepts (map[string]any, int counts, []any residual);
+			// rebuilding it as []M / []map[string]any / a struct hits encode's
+			// default branch, and auditAppend only LOGS that error — the HTTP
+			// response would still succeed with nothing recorded.
+			//
+			// Presence check, never length: the report is unconditional on the
+			// failure path, and an "outcome":"complete" report with an empty
+			// residual is a load-bearing record ("rollback ran and deleted
+			// everything") that a len() guard would erase into silence.
+			//
+			// UNREACHABLE `else` TODAY, stated so nobody reads this as a live
+			// control: SiteProvisioner.Provision has exactly one failure return and
+			// it always carries the key (provision/site.go:820), so `ok` is always
+			// true here. It is kept because the alternative is unconditional
+			// assignment, which would write "rollback": null the day the callee
+			// stops setting it — a fabricated report is worse than an absent one.
+			detail := map[string]any{"template": name, "error": err.Error()}
+			frame := map[string]any{"error": err.Error()}
+			if rb, ok := result["rollback"]; ok {
+				detail["rollback"] = rb
+				frame["rollback"] = rb
+			}
+			if !cfg.DryRun {
+				d.auditAppend("provision-site-error", httpx.Actor(r), detail)
+			}
+			if !provision.IsError(err) {
+				d.logExc("/api/provision/site/stream", err)
+			}
+			emit(frame)
+			return
+		}
+		emit(map[string]any{"done": true, "result": result})
 		if !cfg.DryRun {
-			d.auditAppend("provision-site-error", httpx.Actor(r), detail)
+			d.auditAppend("provision-site", httpx.Actor(r),
+				map[string]any{"template": name, "site": cfg.Site})
 		}
-		if !provision.IsError(err) {
-			d.logExc("/api/provision/site/stream", err)
-		}
-		emit(frame)
-		return
-	}
-	emit(map[string]any{"done": true, "result": result})
-	if !cfg.DryRun {
-		d.auditAppend("provision-site", httpx.Actor(r),
-			map[string]any{"template": name, "site": cfg.Site})
-	}
+	})
 }
 
 // --- GET /api/provision/seed-demo/stream (server.py:5545) --------------------
@@ -446,196 +431,132 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	regions := parseRegions(provision.PyStr(qp["regions"]))
 	override := ipSpaceOverride(qp)
 
-	if !d.roleGate(r, "operator") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
+	d.stream(w, r, "operator", func(emit sse.Emit) {
+		run := d.newSeedRun(r, emit, dry)
 
-	dryParam := "0"
-	if dry {
-		dryParam = "1"
-	}
-	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
+		// A bool would fold "cannot be read" into "not there",
+		// and those two need opposite advice — re-pulling the image fixes an absent
+		// directory and does nothing for a permission bit. #134
+		if unavailable := d.prov(r).TemplatesUnavailable(); unavailable != "" {
+			emit(map[string]any{"error": unavailable})
+			emit(terminalFrame(run.summary))
+			return
+		}
 
-	// A bool would fold "cannot be read" into "not there",
-	// and those two need opposite advice — re-pulling the image fixes an absent
-	// directory and does nothing for a permission bit. #134
-	if unavailable := d.prov(r).TemplatesUnavailable(); unavailable != "" {
-		emit(map[string]any{"error": unavailable})
-		emit(terminalFrame(summary))
-		return
-	}
+		const blocksTemplate = "blocks/regional_address_blocks.yaml"
+		emit(map[string]any{"step": "Seeding blocks…"})
+		if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
+			run.fail(blocksTemplate, err)
+		} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": run.dryParam, "ip_space": override}); err != nil {
+			run.fail(blocksTemplate, err)
+		} else if _, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
+			// Every provisioning error here is a *provision.Error (IsError is
+			// almost always true), so the old "only tally when !IsError" branch
+			// left this failure permanently invisible to the summary — the same
+			// "0 succeeded reads as done" bug this fix targets. Tally it.
+			run.fail(blocksTemplate, err)
+		} else {
+			run.done(blocksTemplate, "succeeded")
+		}
 
-	const blocksTemplate = "blocks/regional_address_blocks.yaml"
-	emit(map[string]any{"step": "Seeding blocks…"})
-	if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
-		summaryAppend(summary, "failed", blocksTemplate)
-		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-	} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": dryParam, "ip_space": override}); err != nil {
-		summaryAppend(summary, "failed", blocksTemplate)
-		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-	} else if _, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
-		// Every provisioning error here is a *provision.Error (IsError is
-		// almost always true), so the old "only tally when !IsError" branch
-		// left this failure permanently invisible to the summary — the same
-		// "0 succeeded reads as done" bug this fix targets. Tally it.
-		summaryAppend(summary, "failed", blocksTemplate)
-		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-	} else {
-		summaryAppend(summary, "succeeded", blocksTemplate)
-		emit(map[string]any{"template": blocksTemplate, "phase": "succeeded",
-			"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
-	}
-
-	sitePaths, unreadable := d.prov(r).SiteTemplateRelPaths(regions)
-	// A REGION NOBODY COULD READ IS A FAILURE, NOT AN EMPTY REGION. This used
-	// to be discarded, so a seed run over an unreadable region provisioned zero
-	// sites for it and still streamed a summary saying everything succeeded. #134
-	for _, region := range unreadable {
-		summaryAppend(summary, "failed", region)
-		emit(map[string]any{"template": region,
-			"error": fmt.Sprintf("region %s could not be read, so its site templates were never found — no sites were created for it", region)})
-	}
-	for _, rel := range sitePaths {
-		rel := rel
-		func() {
-			template, err := d.prov(r).LoadTemplate(rel)
-			if err != nil {
-				summaryAppend(summary, "failed", rel)
-				emit(map[string]any{"template": rel, "error": err.Error()})
-				return
-			}
-			cfg, err := provision.TemplateToSiteConfig(template,
-				provision.M{"dry": dryParam, "if_not_exists": true, "ip_space": override})
-			if err != nil {
-				summaryAppend(summary, "failed", rel)
-				emit(map[string]any{"template": rel, "error": err.Error()})
-				return
-			}
-			forward := func(obj map[string]any) {
-				if s, ok := obj["step"]; ok {
-					emit(map[string]any{"step": fmt.Sprintf("[%s] %s", rel, provision.PyStr(s))})
+		run.sites(regions,
+			"region %s could not be read, so its site templates were never found — no sites were created for it",
+			func(rel string, template provision.M, forward provision.Emitter) {
+				cfg, err := provision.TemplateToSiteConfig(template,
+					provision.M{"dry": run.dryParam, "if_not_exists": true, "ip_space": override})
+				if err != nil {
+					run.fail(rel, err)
+					return
+				}
+				result, err := d.prov(r).NewSiteProvisioner(cfg, forward).Provision()
+				if err != nil {
+					summaryAppend(run.summary, "failed", rel)
+					// Same copy-through as the single-site stream: the report as-is,
+					// selected by presence (never length), into both the frame and a
+					// per-template audit entry — and, like there, the presence check
+					// cannot currently be false: provision/site.go:820 is Provision's
+					// only failure return and it always carries the key. Kept, not
+					// deleted, for the same reason: unconditional assignment would
+					// fabricate a "rollback": null the day the callee stopped setting
+					// it. Stated here so it is not mistaken for a live control.
+					//
+					// This audit entry is NEW: until now a seed-demo run that
+					// stranded objects left no per-template record at all, only the
+					// aggregate "provision-seed-demo" entry with its succeeded/
+					// failed/skipped COUNTS (emitted below, and still emitted — these
+					// are additive to it, not a duplicate of it). A count cannot name
+					// the orphans.
+					//
+					// Deliberately scoped to THIS branch. The LoadTemplate and
+					// TemplateToSiteConfig failures above fail before a single
+					// upstream object is created, so there is no orphan to record and
+					// nothing was done to the tenant — they stay exactly as they are.
+					detail := map[string]any{"template": rel, "error": err.Error()}
+					frame := map[string]any{"template": rel, "error": err.Error()}
+					if rb, ok := result["rollback"]; ok {
+						detail["rollback"] = rb
+						frame["rollback"] = rb
+					}
+					if !dry {
+						d.auditAppend("provision-site-error", httpx.Actor(r), detail)
+					}
+					emit(frame)
+					return
+				}
+				if b, _ := result["skipped"].(bool); b {
+					run.done(rel, "skipped")
 				} else {
-					emit(obj)
+					run.done(rel, "succeeded")
 				}
-			}
-			result, err := d.prov(r).NewSiteProvisioner(cfg, forward).Provision()
-			if err != nil {
-				summaryAppend(summary, "failed", rel)
-				// Same copy-through as the single-site stream: the report as-is,
-				// selected by presence (never length), into both the frame and a
-				// per-template audit entry — and, like there, the presence check
-				// cannot currently be false: provision/site.go:820 is Provision's
-				// only failure return and it always carries the key. Kept, not
-				// deleted, for the same reason: unconditional assignment would
-				// fabricate a "rollback": null the day the callee stopped setting
-				// it. Stated here so it is not mistaken for a live control.
-				//
-				// This audit entry is NEW: until now a seed-demo run that
-				// stranded objects left no per-template record at all, only the
-				// aggregate "provision-seed-demo" entry with its succeeded/
-				// failed/skipped COUNTS (emitted below, and still emitted — these
-				// are additive to it, not a duplicate of it). A count cannot name
-				// the orphans.
-				//
-				// Deliberately scoped to THIS branch. The LoadTemplate and
-				// TemplateToSiteConfig failures above fail before a single
-				// upstream object is created, so there is no orphan to record and
-				// nothing was done to the tenant — they stay exactly as they are.
-				detail := map[string]any{"template": rel, "error": err.Error()}
-				frame := map[string]any{"template": rel, "error": err.Error()}
-				if rb, ok := result["rollback"]; ok {
-					detail["rollback"] = rb
-					frame["rollback"] = rb
-				}
-				if !dry {
-					d.auditAppend("provision-site-error", httpx.Actor(r), detail)
-				}
-				emit(frame)
-				return
-			}
-			if b, _ := result["skipped"].(bool); b {
-				summaryAppend(summary, "skipped", rel)
-				emit(map[string]any{"template": rel, "phase": "skipped",
-					"step": fmt.Sprintf("[%s] skipped", rel)})
-			} else {
-				summaryAppend(summary, "succeeded", rel)
-				emit(map[string]any{"template": rel, "phase": "succeeded",
-					"step": fmt.Sprintf("[%s] succeeded", rel)})
-			}
-		}()
-	}
+			})
 
-	emit(terminalFrame(summary))
-	if !dry {
-		// regions is a []string, which canonicalJSON's closed type switch does NOT
-		// accept — and auditAppend only LOGS that rejection, so passing it raw
-		// once made this whole entry vanish while the request still returned 200.
-		// It is safe here because audit.Log.Append widens every detail value
-		// first (audit/widen.go); do not add a local conversion back.
-		d.auditAppend("provision-seed-demo", httpx.Actor(r), map[string]any{
-			"regions":   regions,
-			"succeeded": lenOf(summary, "succeeded"),
-			"failed":    lenOf(summary, "failed"),
-			"skipped":   lenOf(summary, "skipped")})
-	}
+		run.finish("provision-seed-demo", regions)
+	})
 }
 
 // --- GET /api/teardown/site/stream (server.py:5617) --------------------------
 
 func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 	qp := queryM(r)
-	if !d.roleGate(r, "admin") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "admin required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
-	name := strings.TrimSpace(provision.PyStr(qp["template"]))
-	if name == "" {
-		emit(map[string]any{"error": "template is required"})
-		return
-	}
-	template, err := d.prov(r).LoadTemplate(name)
-	if err != nil {
-		emit(map[string]any{"error": err.Error()})
-		return
-	}
-	cfg, err := provision.TemplateToDecommissionConfig(template, qp)
-	if err != nil {
-		emit(map[string]any{"error": err.Error()})
-		return
-	}
-	if !cfg.DryRun && provision.PyStr(qp["confirm"]) != cfg.Site {
-		emit(map[string]any{"error": "confirmation required"})
-		return
-	}
-	emit(map[string]any{"step": fmt.Sprintf("Decommissioning site: %s", cfg.Site)})
-	result, err := d.prov(r).NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
-	if err != nil {
+	d.stream(w, r, "admin", func(emit sse.Emit) {
+		name := strings.TrimSpace(provision.PyStr(qp["template"]))
+		if name == "" {
+			emit(map[string]any{"error": "template is required"})
+			return
+		}
+		template, err := d.prov(r).LoadTemplate(name)
+		if err != nil {
+			emit(map[string]any{"error": err.Error()})
+			return
+		}
+		cfg, err := provision.TemplateToDecommissionConfig(template, qp)
+		if err != nil {
+			emit(map[string]any{"error": err.Error()})
+			return
+		}
+		if !cfg.DryRun && provision.PyStr(qp["confirm"]) != cfg.Site {
+			emit(map[string]any{"error": "confirmation required"})
+			return
+		}
+		emit(map[string]any{"step": fmt.Sprintf("Decommissioning site: %s", cfg.Site)})
+		result, err := d.prov(r).NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
+		if err != nil {
+			if !cfg.DryRun {
+				d.auditAppend("teardown-site-error", httpx.Actor(r),
+					map[string]any{"template": name, "error": err.Error()})
+			}
+			if !provision.IsError(err) {
+				d.logExc("/api/teardown/site/stream", err)
+			}
+			emit(map[string]any{"error": err.Error()})
+			return
+		}
+		emit(map[string]any{"done": true, "result": result})
 		if !cfg.DryRun {
-			d.auditAppend("teardown-site-error", httpx.Actor(r),
-				map[string]any{"template": name, "error": err.Error()})
+			d.auditAppend("teardown-site", httpx.Actor(r),
+				map[string]any{"template": name, "site": cfg.Site})
 		}
-		if !provision.IsError(err) {
-			d.logExc("/api/teardown/site/stream", err)
-		}
-		emit(map[string]any{"error": err.Error()})
-		return
-	}
-	emit(map[string]any{"done": true, "result": result})
-	if !cfg.DryRun {
-		d.auditAppend("teardown-site", httpx.Actor(r),
-			map[string]any{"template": name, "site": cfg.Site})
-	}
+	})
 }
 
 // --- GET /api/teardown/seed-demo/stream (server.py:5663) ---------------------
@@ -647,130 +568,162 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	override := ipSpaceOverride(qp)
 	confirm := provision.PyStr(qp["confirm"])
 
-	if !d.roleGate(r, "admin") {
-		d.json(w, r, 403, map[string]any{"ok": false, "error": "admin required"})
-		return
-	}
-	emit, ok := sse.Start(w, d.sseCORS(w, r))
-	if !ok {
-		return
-	}
-	defer d.recoverStream(&emit, r)
-	if !dry && confirm != "DELETE" {
-		emit(map[string]any{"error": "confirmation required"})
-		return
-	}
+	d.stream(w, r, "admin", func(emit sse.Emit) {
+		if !dry && confirm != "DELETE" {
+			emit(map[string]any{"error": "confirmation required"})
+			return
+		}
+		run := d.newSeedRun(r, emit, dry)
 
+		run.sites(regions,
+			"region %s could not be read, so its site templates were never found — no sites were created for it",
+			func(rel string, template provision.M, forward provision.Emitter) {
+				cfg, err := provision.TemplateToDecommissionConfig(template,
+					provision.M{"dry": run.dryParam, "ip_space": override})
+				if err != nil {
+					run.fail(rel, err)
+					return
+				}
+				if _, err := d.prov(r).NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
+					// Decommission deletes DNS zones, DHCP ranges, subnets and hosts
+					// FAIL-FORWARD — there is no rollback, so this arm is reached with
+					// part of a real site already destroyed, and the loop then moves on
+					// to the next template. Until now the only record of the whole run
+					// was the aggregate teardown-seed-demo entry below, carrying
+					// succeeded/failed/skipped COUNTS: "failed: 1" out of three
+					// templates cannot say WHICH region's estate is now half gone.
+					//
+					// This entry is the exact match of teardownSiteStream's
+					// teardown-site-error (same event, same {template, error} detail) —
+					// the single-site route has always written it on this same path.
+					// It is additive to the aggregate, which stays as it is.
+					//
+					// Template and error are ALL that is available here. Decommission
+					// returns (nil, err) on every failure path: the "what was already
+					// deleted" inventory it builds goes only to the operator's stream
+					// (emitIncomplete, decommission.go), never to the caller. Recording
+					// a residual list here would mean inventing one.
+					//
+					// Scoped to this branch only, like the seed-demo provision twin: the
+					// LoadTemplate and TemplateToDecommissionConfig arms above fail
+					// before the first DELETE, so nothing was destroyed to report.
+					if !dry {
+						d.auditAppend("teardown-site-error", httpx.Actor(r),
+							map[string]any{"template": rel, "error": err.Error()})
+					}
+					run.fail(rel, err)
+					return
+				}
+				run.done(rel, "succeeded")
+			})
+
+		const blocksTemplate = "blocks/regional_address_blocks.yaml"
+		emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
+		if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
+			run.fail(blocksTemplate, err)
+		} else {
+			blockName := bstr(bt, "name")
+			blockIPSpace := override
+			if blockIPSpace == nil || provision.PyStr(blockIPSpace) == "" {
+				if v := bstr(bt, "ip_space"); v != "" {
+					blockIPSpace = v
+				} else {
+					blockIPSpace = "default"
+				}
+			}
+			if _, err := d.prov(r).NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
+				run.fail(blocksTemplate, err)
+			} else {
+				run.done(blocksTemplate, "succeeded")
+			}
+		}
+
+		// A destructive bulk teardown, so a dropped aggregate entry here is the
+		// worse of the two (see seedRun.finish).
+		run.finish("teardown-seed-demo", regions)
+	})
+}
+
+// seedRun is the state the seed-demo provision and teardown streams share: one
+// run over the regional block pool and every site template of the chosen
+// regions, tallied into a succeeded/failed/skipped summary.
+type seedRun struct {
+	d        *Deps
+	r        *http.Request
+	emit     sse.Emit
+	dry      bool
+	dryParam string
+	summary  map[string]any
+}
+
+func (d *Deps) newSeedRun(r *http.Request, emit sse.Emit, dry bool) *seedRun {
 	dryParam := "0"
 	if dry {
 		dryParam = "1"
 	}
-	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
+	return &seedRun{d: d, r: r, emit: emit, dry: dry, dryParam: dryParam,
+		summary: map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}}
+}
 
-	sitePaths, unreadable := d.prov(r).SiteTemplateRelPaths(regions)
+// fail tallies tpl as failed and tells the operator why.
+func (s *seedRun) fail(tpl string, err error) {
+	summaryAppend(s.summary, "failed", tpl)
+	s.emit(map[string]any{"template": tpl, "error": err.Error()})
+}
+
+// done tallies tpl under phase ("succeeded" or "skipped") and says so.
+func (s *seedRun) done(tpl, phase string) {
+	summaryAppend(s.summary, phase, tpl)
+	s.emit(map[string]any{"template": tpl, "phase": phase,
+		"step": fmt.Sprintf("[%s] %s", tpl, phase)})
+}
+
+// sites runs step once per site template of regions. A template that will not
+// load is failed here; step gets the rest, with an emitter that prefixes each
+// progress line with the template's path, and reports through fail and done.
+// unreadableFmt is the message for a region whose templates could not be
+// listed, with %s for the region.
+func (s *seedRun) sites(regions []string, unreadableFmt string,
+	step func(rel string, template provision.M, forward provision.Emitter)) {
+	sitePaths, unreadable := s.d.prov(s.r).SiteTemplateRelPaths(regions)
 	// A REGION NOBODY COULD READ IS A FAILURE, NOT AN EMPTY REGION. This used
 	// to be discarded, so a seed run over an unreadable region provisioned zero
 	// sites for it and still streamed a summary saying everything succeeded. #134
 	for _, region := range unreadable {
-		summaryAppend(summary, "failed", region)
-		emit(map[string]any{"template": region,
-			"error": fmt.Sprintf("region %s could not be read, so its site templates were never found — no sites were created for it", region)})
+		summaryAppend(s.summary, "failed", region)
+		s.emit(map[string]any{"template": region, "error": fmt.Sprintf(unreadableFmt, region)})
 	}
 	for _, rel := range sitePaths {
-		rel := rel
-		func() {
-			template, err := d.prov(r).LoadTemplate(rel)
-			if err != nil {
-				summaryAppend(summary, "failed", rel)
-				emit(map[string]any{"template": rel, "error": err.Error()})
-				return
-			}
-			cfg, err := provision.TemplateToDecommissionConfig(template,
-				provision.M{"dry": dryParam, "ip_space": override})
-			if err != nil {
-				summaryAppend(summary, "failed", rel)
-				emit(map[string]any{"template": rel, "error": err.Error()})
-				return
-			}
-			forward := func(obj map[string]any) {
-				if s, ok := obj["step"]; ok {
-					emit(map[string]any{"step": fmt.Sprintf("[%s] %s", rel, provision.PyStr(s))})
-				} else {
-					emit(obj)
-				}
-			}
-			if _, err := d.prov(r).NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
-				summaryAppend(summary, "failed", rel)
-				// Decommission deletes DNS zones, DHCP ranges, subnets and hosts
-				// FAIL-FORWARD — there is no rollback, so this arm is reached with
-				// part of a real site already destroyed, and the loop then moves on
-				// to the next template. Until now the only record of the whole run
-				// was the aggregate teardown-seed-demo entry below, carrying
-				// succeeded/failed/skipped COUNTS: "failed: 1" out of three
-				// templates cannot say WHICH region's estate is now half gone.
-				//
-				// This entry is the exact match of teardownSiteStream's
-				// teardown-site-error (same event, same {template, error} detail) —
-				// the single-site route has always written it on this same path.
-				// It is additive to the aggregate, which stays as it is.
-				//
-				// Template and error are ALL that is available here. Decommission
-				// returns (nil, err) on every failure path: the "what was already
-				// deleted" inventory it builds goes only to the operator's stream
-				// (emitIncomplete, decommission.go), never to the caller. Recording
-				// a residual list here would mean inventing one.
-				//
-				// Scoped to this branch only, like the seed-demo provision twin: the
-				// LoadTemplate and TemplateToDecommissionConfig arms above fail
-				// before the first DELETE, so nothing was destroyed to report.
-				if !dry {
-					d.auditAppend("teardown-site-error", httpx.Actor(r),
-						map[string]any{"template": rel, "error": err.Error()})
-				}
-				emit(map[string]any{"template": rel, "error": err.Error()})
-				return
-			}
-			summaryAppend(summary, "succeeded", rel)
-			emit(map[string]any{"template": rel, "phase": "succeeded",
-				"step": fmt.Sprintf("[%s] succeeded", rel)})
-		}()
-	}
-
-	const blocksTemplate = "blocks/regional_address_blocks.yaml"
-	emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
-	if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
-		summaryAppend(summary, "failed", blocksTemplate)
-		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-	} else {
-		blockName := bstr(bt, "name")
-		blockIPSpace := override
-		if blockIPSpace == nil || provision.PyStr(blockIPSpace) == "" {
-			if v := bstr(bt, "ip_space"); v != "" {
-				blockIPSpace = v
+		template, err := s.d.prov(s.r).LoadTemplate(rel)
+		if err != nil {
+			s.fail(rel, err)
+			continue
+		}
+		forward := func(obj map[string]any) {
+			if st, ok := obj["step"]; ok {
+				s.emit(map[string]any{"step": fmt.Sprintf("[%s] %s", rel, provision.PyStr(st))})
 			} else {
-				blockIPSpace = "default"
+				s.emit(obj)
 			}
 		}
-		if _, err := d.prov(r).NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
-			summaryAppend(summary, "failed", blocksTemplate)
-			emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-		} else {
-			summaryAppend(summary, "succeeded", blocksTemplate)
-			emit(map[string]any{"template": blocksTemplate, "phase": "succeeded",
-				"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
-		}
+		step(rel, template, forward)
 	}
+}
 
-	emit(terminalFrame(summary))
-	if !dry {
-		// Same []string, same trap as provisionSeedDemoStream, and audit.Append's
-		// widening (audit/widen.go) is what makes it safe. This is a destructive
-		// bulk teardown, so the dropped entry was the worse of the two.
-		d.auditAppend("teardown-seed-demo", httpx.Actor(r), map[string]any{
+// finish sends the terminal frame and, on a real run, the aggregate audit entry.
+func (s *seedRun) finish(event string, regions []string) {
+	s.emit(terminalFrame(s.summary))
+	if !s.dry {
+		// regions is a []string, which canonicalJSON's closed type switch does NOT
+		// accept — and auditAppend only LOGS that rejection, so passing it raw
+		// once made this whole entry vanish while the request still returned 200.
+		// It is safe here because audit.Log.Append widens every detail value
+		// first (audit/widen.go); do not add a local conversion back.
+		s.d.auditAppend(event, httpx.Actor(s.r), map[string]any{
 			"regions":   regions,
-			"succeeded": lenOf(summary, "succeeded"),
-			"failed":    lenOf(summary, "failed"),
-			"skipped":   lenOf(summary, "skipped")})
+			"succeeded": lenOf(s.summary, "succeeded"),
+			"failed":    lenOf(s.summary, "failed"),
+			"skipped":   lenOf(s.summary, "skipped")})
 	}
 }
 
@@ -1185,7 +1138,23 @@ func firstRowLocal(resp any) map[string]any {
 	return map[string]any{}
 }
 
-// recoverStream is the panic guard for the five SSE provision/teardown streams.
+// stream is how every SSE handler opens: a caller below role need gets a 403
+// JSON body, everyone else gets the event stream, with recoverStream guarding
+// run against a panic.
+func (d *Deps) stream(w http.ResponseWriter, r *http.Request, need string, run func(emit sse.Emit)) {
+	if !d.roleGate(r, need) {
+		d.json(w, r, 403, map[string]any{"ok": false, "error": need + " required"})
+		return
+	}
+	emit, ok := sse.Start(w, d.sseCORS(w, r))
+	if !ok {
+		return
+	}
+	defer d.recoverStream(&emit, r)
+	run(emit)
+}
+
+// recoverStream is the panic guard for the SSE streams, deferred by stream.
 //
 // THEY HAD NONE. Every JSON handler in this package defers recoverEdit; not one
 // of the streams did, and sse.go's own comment ("nothing to recover mid-stream")
@@ -1237,8 +1206,8 @@ func (d *Deps) recoverStream(emit *sse.Emit, r *http.Request) {
 	}
 	// Both halves of this nil check are UNREACHABLE today and are kept only as
 	// defence, which this comment says out loud so it is not read as a live
-	// control: all five call sites pass &emit on a local, so the pointer is never
-	// nil, and each one returns early unless sse.Start reported ok — and Start
+	// control: its one call site, stream, passes &emit on a local, so the pointer
+	// is never nil, and it returns early unless sse.Start reported ok — and Start
 	// returns a nil Emit only together with ok == false (sse/sse.go:29-33), so the
 	// closure is never nil either. It stays because this function runs while the
 	// stack is already unwinding, exactly like the d.Audit guard above: calling
