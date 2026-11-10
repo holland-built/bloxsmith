@@ -141,7 +141,7 @@ export const PANEL_HELP = {
   },
   'security-response-summary': {
     what: 'What happened to the flagged lookups: how many were stopped, how many were only written down, and how many there were.',
-    look: 'The red figure counts critical events nobody has ticked off yet, and falls as you tick rows below. The last tile says Total Events only when the true count is known; otherwise it says Events Shown.',
+    look: 'The first figure counts unticked critical events, red when there are any. It falls as you tick rows. The last tile says Total Events only when the true count is known; otherwise it says Events Shown.',
   },
   'security-triage-inbox': {
     what: 'One row per flagged lookup, worst first: the name that was asked for, what the system did about it, and when.',
@@ -165,7 +165,7 @@ export const PANEL_HELP = {
   },
   'security-threat-feed-activity': {
     what: 'How many requests matched the threat feed each day, split into ones that were stopped and ones that were let through.',
-    look: 'Each day is one column: the red part was blocked, the blue cap on top was let through. Point at a column to read both figures.',
+    look: 'Each day is one column: the blue part was blocked, the grey cap on top was let through. Point at a column to read both figures.',
   },
   'security-soc-insights': {
     what: 'Threat campaigns the security service has raised against your tenant, with how many events each caused and when it was last seen.',
