@@ -54,5 +54,10 @@ test('Assets: a Cube.js time with no zone is read as UTC, so Last seen is never 
   await page.goto('/#assets');
   const row = page.getByRole('row', { name: /tz-asset/ });
   await expect(row).toBeVisible({ timeout: 20_000 });
-  await expect(row).toContainText(await page.evaluate((iso) => new Date(iso + 'Z').toLocaleString(), utcNoZone));
+  // The cell is an age ("1m ago") with the exact local time in its tip. Read
+  // as local time the stamp would sit hours ahead: the tip would show that
+  // later time, and the age could not be a past one.
+  const cell = row.locator('span[title]').last();
+  await expect(cell).toHaveText(/^(just now|\d+m ago)$/);
+  await expect(cell).toHaveAttribute('title', await page.evaluate((iso) => new Date(iso + 'Z').toLocaleString(), utcNoZone));
 });
