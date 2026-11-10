@@ -26,7 +26,7 @@ const STATE_WORD = { loading: 'Loading…', failed: 'Unknown', notSetUp: 'Not se
 function Tile({ t }) {
   const id = useId()
   const shown = t.value === null ? STATE_WORD[t.state] ?? '—' : t.value.toLocaleString()
-  const tip = t.value === null ? (t.state === 'failed' ? 'The feed did not answer, so this is not known' : t.state === 'notSetUp' ? 'Add an Axur key under Settings' : '') : t.tip
+  const tip = t.value === null ? (t.state === 'failed' ? 'Not reported by the feed, so this is not known' : t.state === 'notSetUp' ? 'Add an Axur key under Settings' : '') : t.tip
   // The tip sits beside the button, not inside it, so the button's name is
   // only its label and number; the tip is its description.
   return (

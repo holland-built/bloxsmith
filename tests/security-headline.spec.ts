@@ -44,3 +44,17 @@ test('Block is the last column and shows by itself only on critical or high rows
   await inbox.locator('tbody tr', { hasText: 'watch.baseline.example' }).hover();
   await expect(medium).toHaveCSS('opacity', '1');
 });
+
+test('a feed that answers without its counts shows Unknown, not 0', async ({ page }) => {
+  // Registered after the fixtures, so these win for the two routes.
+  const json = (body: unknown) => (route: import('@playwright/test').Route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  await page.route('**/api/hub/security*', json({ availability: 'ok', events: [] }));
+  await page.route('**/api/axur*', json({ configured: true, vendors: [] }));
+  await page.goto('/#security');
+  const head = page.getByRole('region', { name: 'Headline numbers' });
+  for (const key of ['attacks', 'blocked', 'credentials']) {
+    await expect(head.locator(`[data-key="${key}"] .sec-num`)).toHaveText('Unknown');
+  }
+  await expect(head.locator('[data-key="attacks"]')).not.toHaveAttribute('data-tone', /.+/);
+});

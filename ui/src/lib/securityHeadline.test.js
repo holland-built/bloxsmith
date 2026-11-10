@@ -62,3 +62,48 @@ test('exposures without a reported total show the rows loaded and say so', () =>
   assert.equal(t.exposures.value, 2)
   assert.equal(t.exposures.right, 'loaded')
 })
+
+// A response with no payload, or a payload without the counted field, was
+// read as 0 on every tile (Codex review of f9cc675a). Each is Unknown now.
+const ALL = (feed) => securityHeadline({ hub: feed, lookalikes: feed, exposures: feed, axur: feed })
+
+test('a finished request with no data is Unknown on every tile, never 0', () => {
+  for (const t of ALL({ loading: false, error: null, data: null })) {
+    assert.equal(t.value, null, t.key)
+    assert.equal(t.state, 'failed', t.key)
+    assert.equal(t.tone, null, t.key)
+  }
+})
+
+test('a successful answer missing the counted fields is Unknown, never 0', () => {
+  const t = byKey({
+    hub: ok({ availability: 'ok' }),
+    lookalikes: ok({ targets: [] }),
+    exposures: ok({ availability: 'ok', data: {} }),
+    axur: ok({ configured: true }),
+  })
+  for (const k of ['attacks', 'blocked', 'lookalikes', 'exposures', 'credentials']) {
+    assert.equal(t[k].value, null, k)
+    assert.equal(t[k].state, 'failed', k)
+  }
+})
+
+test('non-numeric count fields are Unknown, never 0', () => {
+  const t = byKey({
+    hub: ok({ availability: 'ok', blocked: '12', counts: { critical: null, high: 'x' } }),
+    lookalikes: ok({ domains: 'none' }),
+    exposures: ok({ availability: 'ok', data: { total_available: 'many', count: NaN, rows: null } }),
+    axur: ok({ configured: true, total_credentials: '9' }),
+  })
+  for (const k of ['attacks', 'blocked', 'lookalikes', 'exposures', 'credentials']) {
+    assert.equal(t[k].value, null, k)
+  }
+  // one of the two severity counts missing is still not a number to show
+  const half = byKey({ hub: ok({ availability: 'ok', counts: { critical: 2 } }), lookalikes: LOOK, exposures: EXP, axur: AXUR })
+  assert.equal(half.attacks.value, null)
+})
+
+test('Axur with no key stays Not set up, not Unknown', () => {
+  const t = byKey({ hub: HUB, lookalikes: LOOK, exposures: EXP, axur: ok({ configured: false }) })
+  assert.equal(t.credentials.state, 'notSetUp')
+})

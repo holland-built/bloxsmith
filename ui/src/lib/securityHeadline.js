@@ -2,26 +2,33 @@
 // needs action". Every number here is read from a feed the page already loads;
 // nothing is fetched or estimated for the headline.
 //
-// A tile's value is null when its feed is loading, failed, or not set up, so a
-// missing number shows as a dash or a word and never as a reassuring 0.
+// A tile's value is null when its feed is loading, failed, not set up, or
+// answered without the field the tile counts, so a missing number shows as a
+// word and never as a reassuring 0. A field that is absent, null or not a
+// finite number is never read as 0.
 // `tone` is set only when the number is a problem worth a look, so healthy
 // tiles stay pale and the eye lands on the bad one.
 
 import { isSample, sampleScopeNote } from './sampleCount.js'
 
 const n = (v) => (typeof v === 'number' ? v.toLocaleString() : '—')
+const fin = Number.isFinite
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
-function feedState(feed, dead) {
+// 'ok' only with a payload in hand, no failure, and the field this tile
+// counts present as usable data (`usable`). Anything else is 'failed', which
+// the tile shows as Unknown.
+function feedState(feed, dead, usable) {
   if (feed.loading && !feed.data) return 'loading'
-  if (dead) return 'failed'
+  if (dead || !isObj(feed.data) || !usable) return 'failed'
   return 'ok'
 }
 
 // Critical and high events, from the same counts the severity legend shows.
 function attacks(hub) {
   const d = hub.data ?? {}
-  const state = feedState(hub, !!hub.error || d.availability === 'error')
-  const value = state === 'ok' ? (d.counts?.critical ?? 0) + (d.counts?.high ?? 0) : null
+  const state = feedState(hub, !!hub.error || d.availability === 'error', fin(d.counts?.critical) && fin(d.counts?.high))
+  const value = state === 'ok' ? d.counts.critical + d.counts.high : null
   const sample = state === 'ok' && isSample(d)
   return {
     key: 'attacks',
@@ -35,7 +42,7 @@ function attacks(hub) {
     right: sample ? `latest ${n(d.returned ?? d.events?.length)}` : null,
     tone: value > 0 ? 'crit' : null,
     tip: [
-      state === 'ok' ? `${n(d.counts?.critical ?? 0)} critical, ${n(d.counts?.high ?? 0)} high` : null,
+      state === 'ok' ? `${n(d.counts.critical)} critical, ${n(d.counts.high)} high` : null,
       sampleScopeNote(d, 'events'),
     ].filter(Boolean).join(' · '),
   }
@@ -44,12 +51,12 @@ function attacks(hub) {
 // Threat events the policy blocked. Good news, so it is never coloured.
 function blocked(hub) {
   const d = hub.data ?? {}
-  const state = feedState(hub, !!hub.error || d.availability === 'error')
+  const state = feedState(hub, !!hub.error || d.availability === 'error', fin(d.blocked))
   return {
     key: 'blocked',
     panelId: 'security-response-summary',
     label: 'Blocked',
-    value: state === 'ok' ? d.blocked ?? 0 : null,
+    value: state === 'ok' ? d.blocked : null,
     unit: 'events',
     state,
     right: null,
@@ -62,7 +69,7 @@ function blocked(hub) {
 function lookalikes(feed) {
   const d = feed.data ?? {}
   const rows = Array.isArray(d.domains) ? d.domains : []
-  const state = feedState(feed, !!feed.error || !!d.unavailable)
+  const state = feedState(feed, !!feed.error || !!d.unavailable, Array.isArray(d.domains))
   const value = state === 'ok' ? rows.filter((r) => r.suspicious).length : null
   return {
     key: 'lookalikes',
@@ -81,11 +88,15 @@ function lookalikes(feed) {
 // gave one; otherwise the rows that arrived, and the tile says "loaded".
 function exposures(feed) {
   const p = feed.data ?? {}
-  const state = feedState(feed, !!feed.error || p.availability === 'error')
-  const rows = p.data?.rows ?? []
+  const rows = p.data?.rows
   const total = p.data?.total_available
-  const known = state === 'ok' && p.availability === 'ok' && typeof total === 'number'
-  const value = state !== 'ok' ? null : known ? total : p.data?.count ?? rows.length
+  const count = p.data?.count
+  // The reported total when there is one; otherwise the rows that arrived,
+  // counted by `count` or by the rows themselves. None of the three is Unknown.
+  const loaded = fin(count) ? count : Array.isArray(rows) ? rows.length : null
+  const state = feedState(feed, !!feed.error || p.availability === 'error', fin(total) || loaded !== null)
+  const known = state === 'ok' && p.availability === 'ok' && fin(total)
+  const value = state !== 'ok' ? null : known ? total : loaded
   return {
     key: 'exposures',
     panelId: 'security-exposures',
@@ -103,12 +114,12 @@ function exposures(feed) {
 function credentials(feed) {
   const d = feed.data ?? {}
   const notSetUp = !feed.error && d.configured === false
-  const state = notSetUp ? 'notSetUp' : feedState(feed, !!feed.error || !!d.unavailable)
+  const state = notSetUp ? 'notSetUp' : feedState(feed, !!feed.error || !!d.unavailable, fin(d.total_credentials))
   return {
     key: 'credentials',
     panelId: 'security-axur-incidents',
     label: 'Credentials',
-    value: state === 'ok' ? d.total_credentials ?? 0 : null,
+    value: state === 'ok' ? d.total_credentials : null,
     unit: 'exposed',
     state,
     right: state === 'ok' && Array.isArray(d.vendors) ? `${n(d.vendors.length)} suppliers` : null,
