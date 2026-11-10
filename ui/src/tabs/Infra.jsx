@@ -40,13 +40,26 @@ function feedStatus(api, name) {
   return sliceState(api.data, name).status
 }
 
+// A feed whose rows all come back with an empty status (Jobs and DFP do, for
+// this tenant) gets no Status column: a column of grey dashes reads as "fine".
+// The card's note says it once instead.
+function noStatus(feed) {
+  const rows = feed.data?.rows
+  return Array.isArray(rows) && rows.length > 0 && rows.every((r) => !r.status)
+}
+function statusColumn(feed) {
+  return noStatus(feed) ? [] : [{ key: 'status', label: 'Status', badge: true }]
+}
+function statusNote(feed, fallback) {
+  return noStatus(feed) ? 'no status in feed' : fallback
+}
+
 // ---------- main ----------
 
 export default function Infra() {
   // Charts added from Build a chart; they join the grid as ordinary panels.
   const savedCharts = useSavedChartPanels('infra')
   const data = useApi('/api/data', { poll: 30000 })
-  const health = useApi('/api/csp/host-health', { poll: 15000 })
   const onprem = useApi('/api/csp/onprem-hosts', { poll: 30000 })
   const jobs = useApi('/api/csp/jobs', { poll: 15000 })
   const dfp = useApi('/api/csp/dfp', { poll: 30000 })
@@ -86,7 +99,7 @@ export default function Infra() {
         )}
       </div>
       <TabIntro>Host and service health: hosts, jobs and DNS forwarding proxies.</TabIntro>
-      <HeadlineStrip label="Headline numbers" items={headlines(hosts, totalHosts, hostsStatus)} />
+      <HeadlineStrip label="Headline numbers" items={[...headlines(hosts, totalHosts, hostsStatus), discoveryTile(discovery)]} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -95,62 +108,46 @@ export default function Infra() {
         <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
-        <FeedCard
-          span={2}
-          panelId="infra-host-health"
-          title="Host Health"
-          note="CSP"
-          feed={health}
-          count
-          columns={[
-            // Card is narrow (measured ~457px); Status/Version already fit, so
-            // Name absorbs the leftover width and clips the longest tokens —
-            // there's no room to give it more.
-            { key: 'name', label: 'Name', grow: true },
-            { key: 'status', label: 'Status', badge: true },
-            { key: 'version', label: 'Version', mono: true },
-          ]}
-        />
+        {/* Host Health listed the same machines as Host Inventory, with a
+            Version column the feed leaves empty, so it was merged away. */}
         <FeedCard
           span={2}
           panelId="infra-onprem-hosts"
-          title="On-Prem Hosts"
+          title="Host Apps"
           note="CSP"
           feed={onprem}
-          limit={5}
-          viewAllHref="#infra"
+          count
           columns={[
             { key: 'name', label: 'Name' },
-            { key: 'ophid', label: 'OPH ID', mono: true },
+            { key: 'ophid', label: 'OPH ID', mono: true, priority: 'low' },
             { key: 'app_count', label: 'Apps', mono: true },
           ]}
         />
-        <DiscoveryStatus panelId="infra-asset-discovery" feed={discovery} />
         <FeedCard
           span={3}
           panelId="infra-jobs"
           title="Jobs"
-          note="recent"
           feed={jobs}
           count
+          note={statusNote(jobs, 'recent')}
           columns={[
             { key: 'created_at', label: 'Created', mono: true, render: (v) => fmtDate(v) },
             { key: 'type', label: 'Type', grow: true },
-            { key: 'status', label: 'Status', badge: true },
+            ...statusColumn(jobs),
             // Opaque service-principal string; maxCh is a measured ceiling, not a guess.
-            { key: 'user', label: 'User', maxCh: 20 },
+            { key: 'user', label: 'User', maxCh: 20, priority: 'low' },
           ]}
         />
         <FeedCard
           span={3}
           panelId="infra-dfp-services"
           title="DFP Services"
-          note="CSP"
+          note={statusNote(dfp, 'CSP')}
           feed={dfp}
           count
           columns={[
             { key: 'name', label: 'Name' },
-            { key: 'status', label: 'Status', badge: true },
+            ...statusColumn(dfp),
           ]}
         />
         {savedCharts}
@@ -197,7 +194,8 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
-    Active: COLORS.ok,
+    // Healthy is pale so the red and amber slices are what the eye lands on.
+    Active: `color-mix(in srgb, ${COLORS.ok} 35%, transparent)`,
     Degraded: COLORS.warn,
     Offline: COLORS.crit,
     Unknown: COLORS.other,
@@ -259,46 +257,23 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   )
 }
 
-// ---------- asset discovery status ----------
+// ---------- asset discovery tile ----------
 
-// One Card, four bodies. This used to be four early-return Cards with the same
-// title; they were collapsed because a panelId is a panel's identity, and the
-// same panel in four states must not claim four identities (the help scanner
-// checks ids are unique, and Card writes the id into the DOM).
-// The branch ORDER is unchanged and load-bearing: an unfinished read is not a
-// dead feed, and a dead feed is not a tenant with nothing discovered.
-function DiscoveryStatus({ feed, panelId }) {
+// One number, so a tile rather than a wide card. Same branch order as the card
+// it replaced: an unfinished read is not a dead feed, and a dead feed is not a
+// tenant with nothing discovered. It opens the Assets page, where the list is.
+function discoveryTile(feed) {
   const { data, error, loading } = feed
-
   const pending = loading && !data
   const dead = !pending && (error || data?.status === 'error')
-  const blank = !pending && !dead && (data?.status === 'empty' || !data?.total)
-  const ok = !pending && !dead && !blank
-
-  return (
-    <Card
-      span={2}
-      panelId={panelId}
-      title="Asset Discovery"
-      note={ok ? 'CSP' : undefined}
-      right={ok && !data.breakdown_available && data.note ? (
-        <span className="text-note text-dim">{data.note}</span>
-      ) : undefined}
-    >
-      {pending ? (
-        <Skeleton />
-      ) : dead ? (
-        <FeedUnavailable label="Asset discovery unavailable" />
-      ) : blank ? (
-        <Empty>no discovery data for this tenant</Empty>
-      ) : (
-        <div>
-          <span className="text-copy font-semibold">{data.total.toLocaleString()}</span>
-          <span className="text-dim text-note ml-1.5">assets with discovery status tracked</span>
-        </div>
-      )}
-    </Card>
-  )
+  const ok = !pending && !dead && typeof data?.total === 'number'
+  return {
+    label: 'Discovered assets',
+    href: '#assets',
+    value: ok ? data.total.toLocaleString() : null,
+    loading: pending,
+    note: dead ? 'unavailable' : undefined,
+  }
 }
 
 // ---------- host inventory table ----------

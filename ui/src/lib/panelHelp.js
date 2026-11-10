@@ -201,16 +201,9 @@ export const PANEL_HELP = {
     what: 'Your Infoblox machines grouped by state. "Unknown" is its own group: nothing reported a state for those, which is not the same as offline.',
     look: 'The percentages are shares of the machines that loaded, not of every machine you have. When those two numbers differ, a line under the list says so.',
   },
-  'infra-host-health': {
-    what: 'Each machine Infoblox reports on directly, the state it is in, and the software version it is running.',
-    look: 'The number by the title counts the machines that came back — at most 1,000, shown against the real total if you have more. "feed unavailable" means the read failed, not that you have none.',
-  },
   'infra-onprem-hosts': {
     what: 'The Infoblox boxes installed on your own sites, and how many Infoblox applications each one is running.',
-    look: 'Only the first five are listed. OPH ID is the identifier Infoblox uses for that box; Apps is how many services are loaded onto it.',
-  },
-  'infra-asset-discovery': {
-    what: 'How many devices discovery is currently tracking. A total only, with no breakdown behind it; the Assets tab is the list those devices come from.',
+    look: 'Scroll for the rest. OPH ID is the identifier Infoblox uses for that box; Apps is how many services are loaded onto it.',
   },
   'infra-jobs': {
     what: 'Recent background tasks Infoblox ran for this tenant — when each was created, what kind it was, and how it ended.',

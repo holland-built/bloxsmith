@@ -351,31 +351,13 @@
     "why": "each group's health is rolled up in the app"
   },
   {
-    "id": "infra-host-health",
-    "page": "Infra",
-    "name": "Host Health",
-    "kind": "rest",
-    "source": "the host list",
-    "builder": "no",
-    "why": "it is a list, not a chart"
-  },
-  {
     "id": "infra-onprem-hosts",
     "page": "Infra",
-    "name": "On-Prem Hosts",
+    "name": "Host Apps",
     "kind": "rest",
     "source": "the on-prem host list",
     "builder": "no",
     "why": "it is a list, not a chart"
-  },
-  {
-    "id": "infra-asset-discovery",
-    "page": "Infra",
-    "name": "Asset Discovery",
-    "kind": "cube",
-    "source": "Infoblox's asset discovery records",
-    "builder": "no",
-    "why": "it counts a different set of asset records from the ones Build a chart reads"
   },
   {
     "id": "infra-jobs",

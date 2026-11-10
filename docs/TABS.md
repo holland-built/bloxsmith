@@ -184,12 +184,13 @@ Axur is a separate company from Infoblox, with its own subscription and its own 
 
 ## Infra
 
-Host and service health. Host health refreshes every 15 seconds, the rest every 30 to 60.
+Host and service health. Jobs refresh every 15 seconds, the rest every 30 to 60.
 
-- **Host Health**, **On-Prem Hosts**, **Host Status**.
+- **Tiles** across the top: hosts, not online, degraded, unknown, and discovered assets (opens Assets).
+- **Host Inventory**, **Host Status**, **Service Health**.
+- **Host Apps**: each on-prem box and how many Infoblox apps it runs.
 - **Jobs**: recent job runs.
-- **DFP Services**: the state of each DNS forwarding proxy.
-- **Asset Discovery**: how discovery runs are going.
+- **DFP Services**: each DNS forwarding proxy, and its state when the feed has one.
 
 You can link straight to a view: `#infra?status=offline`.
 
@@ -492,9 +493,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Infra | Host Inventory | the host list | No | it is a list, not a chart |
 | Infra | Host Status | the host list | No | the hosts are counted by status in the app |
 | Infra | Service Health | the service list | No | each group's health is rolled up in the app |
-| Infra | Host Health | the host list | No | it is a list, not a chart |
-| Infra | On-Prem Hosts | the on-prem host list | No | it is a list, not a chart |
-| Infra | Asset Discovery | Infoblox's asset discovery records | No | it counts a different set of asset records from the ones Build a chart reads |
+| Infra | Host Apps | the on-prem host list | No | it is a list, not a chart |
 | Infra | Jobs | the job list | No | it is a list, not a chart |
 | Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
 | Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |

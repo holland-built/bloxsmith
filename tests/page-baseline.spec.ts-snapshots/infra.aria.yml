@@ -9,6 +9,9 @@
       - button "Degraded 1"
     - listitem:
       - button "Unknown 0"
+    - listitem:
+      - link "Discovered assets 7":
+        - /url: "#assets"
   - button "Arrange panels"
   - heading "Host Inventory" [level=2]
   - text: 3 hosts
@@ -55,25 +58,10 @@
   - 'button "About: Service Health"': "About: ⓘ"
   - 'button "Options: Service Health"'
   - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security beyond the row cap not listed
-  - heading "Host Health" [level=2]
+  - heading "Host Apps" [level=2]
   - text: CSP 1
-  - 'button "About: Host Health"': "About: ⓘ"
-  - 'button "Options: Host Health"'
-  - table:
-    - rowgroup:
-      - row "Name Status Version":
-        - columnheader "Name"
-        - columnheader "Status"
-        - columnheader "Version"
-    - rowgroup:
-      - row "baseline-host-a ok 0.0.0-baseline":
-        - cell "baseline-host-a"
-        - cell "ok"
-        - cell "0.0.0-baseline"
-  - heading "On-Prem Hosts" [level=2]
-  - text: CSP
-  - 'button "About: On-Prem Hosts"': "About: ⓘ"
-  - 'button "Options: On-Prem Hosts"'
+  - 'button "About: Host Apps"': "About: ⓘ"
+  - 'button "Options: Host Apps"'
   - table:
     - rowgroup:
       - row "Name OPH ID Apps":
@@ -85,11 +73,6 @@
         - cell "baseline-onprem-a"
         - cell "ophid-baseline-1"
         - cell "2"
-  - heading "Asset Discovery" [level=2]
-  - text: CSP baseline
-  - 'button "About: Asset Discovery"': "About: ⓘ"
-  - 'button "Options: Asset Discovery"'
-  - text: 7assets with discovery status tracked
   - heading "Jobs" [level=2]
   - text: recent 1
   - 'button "About: Jobs"': "About: ⓘ"
