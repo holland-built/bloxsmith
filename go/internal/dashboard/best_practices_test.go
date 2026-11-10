@@ -39,6 +39,8 @@ func bpService(t *testing.T, hosts []map[string]any, hostsTotal any, ha []map[st
 				return
 			}
 			writeResultsWithPage(w, ha, map[string]any{"total_size": strconv.Itoa(len(ha))})
+		case r.URL.Path == "/api/ddi/v1/dns/global":
+			_, _ = w.Write([]byte(`{"result":{"active_search_enable":true}}`))
 		default:
 			w.WriteHeader(404)
 		}
@@ -213,5 +215,67 @@ func TestBestPractices_GridHostWithoutRoleIsUnknown(t *testing.T) {
 	s := bpService(t, []map[string]any{bpHost("x", "online", tags)}, "1", nil, 200)
 	if c := findCheck(t, s.BestPractices(context.Background()), "gm-resilience"); c["status"] != "unknown" {
 		t.Fatalf("grid host with no role: want unknown, got %v", c)
+	}
+}
+
+// dns/global answers with a single object, shaped like the live reply saved
+// on 2026-11-10 (result.active_search_enable).
+func activeSearchService(t *testing.T, status int, body string) *Service {
+	t.Helper()
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/ddi/v1/dns/global" {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+	})
+	return s
+}
+
+func TestBestPractices_ActiveSearch(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+		status           int
+	}{
+		{"on", `{"result":{"active_search_enable":true,"dnssec_enabled":true}}`, "passed", 200},
+		{"off", `{"result":{"active_search_enable":false}}`, "problem", 200},
+		{"missing field", `{"result":{"dnssec_enabled":true}}`, "unknown", 200},
+		{"not a yes or no", `{"result":{"active_search_enable":"true"}}`, "unknown", 200},
+		{"failed request", `{"error":"boom"}`, "unknown", 500},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := findCheck(t, activeSearchService(t, tc.status, tc.body).BestPractices(context.Background()), "active-search")
+			if c["status"] != tc.want {
+				t.Fatalf("want %s, got %v", tc.want, c)
+			}
+			if tc.want == "unknown" && c["reason"] == "" {
+				t.Fatalf("couldn't-tell needs a reason: %v", c)
+			}
+		})
+	}
+}
+
+// A failed dns/global read is not cached, so the check recovers on retry.
+func TestBestPractices_ActiveSearchFailureNotCached(t *testing.T) {
+	fail := true
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/ddi/v1/dns/global" {
+			if fail {
+				w.WriteHeader(503)
+				return
+			}
+			_, _ = w.Write([]byte(`{"result":{"active_search_enable":true}}`))
+			return
+		}
+		writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+	})
+	if c := findCheck(t, s.BestPractices(context.Background()), "active-search"); c["status"] != "unknown" {
+		t.Fatalf("first read failed: want unknown, got %v", c)
+	}
+	fail = false
+	if c := findCheck(t, s.BestPractices(context.Background()), "active-search"); c["status"] != "passed" {
+		t.Fatalf("after recovery: want passed, got %v", c)
 	}
 }

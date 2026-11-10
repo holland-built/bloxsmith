@@ -51,7 +51,7 @@ test('with the backend unreachable, no check claims to have passed', async ({ pa
   // The e2e server points at an address that never answers, so every read fails.
   await page.goto('/#best-practices');
   const list = page.getByRole('list', { name: 'Best practice checks' });
-  await expect(list.locator(':scope > li')).toHaveCount(3);
+  await expect(list.locator(':scope > li')).toHaveCount(4);
   await expect(list).not.toContainText('Passed');
-  await expect(list.getByText("Couldn't tell")).toHaveCount(3);
+  await expect(list.getByText("Couldn't tell")).toHaveCount(4);
 });
