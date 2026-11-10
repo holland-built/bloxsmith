@@ -63,11 +63,10 @@ test('Network: when the server capped its at-risk read, the bands say they count
   await expect(headline(page, /^70–89% \(of loaded\) 0$/)).toBeVisible();
 });
 
-test('Network, DNS, Infra: a dead /api/data is a dash in the strip, never 0', async ({ page }) => {
+test('Network, Infra: a dead /api/data is a dash in the strip, never 0', async ({ page }) => {
   await page.route('**/api/data*', dead);
   for (const [tab, labels] of [
     ['network', [/^Subnets/, /^≥90%/, /^70–89%/]],
-    ['dns', [/^Zones [—0-9]/, /^Zones with issues/]],
     ['infra', [/^Hosts/, /^Not online/, /^Degraded/, /^Unknown/]],
   ] as const) {
     await page.goto(`/#${tab}`);
@@ -78,6 +77,22 @@ test('Network, DNS, Infra: a dead /api/data is a dash in the strip, never 0', as
   }
 });
 
+test('DNS: a dead /api/data is a dash in the zones headline, never 0', async ({ page }) => {
+  await page.route('**/api/data*', dead);
+  await page.goto('/#dns');
+  const zones = dnsTile(page, 'zones');
+  await expect(zones).toContainText('—');
+  await expect(zones).toContainText('Unavailable');
+  await expect(zones).not.toContainText(/\b0\b/);
+});
+
+// DNS's headline is the dashboard-look tile card (Dns.jsx), not kit's strip:
+// the zones tile is a link once there are zones with issues, so it is found
+// by its data-tile rather than as a button.
+function dnsTile(page: import('@playwright/test').Page, key: string) {
+  return page.getByRole('list', { name: 'Headline numbers' }).locator(`[data-tile="${key}"]`);
+}
+
 test('DNS: zones never run through the checks are named, not counted as clean', async ({ page }) => {
   await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({
     zones: [
@@ -87,8 +102,8 @@ test('DNS: zones never run through the checks are named, not counted as clean', 
     ],
   })));
   await page.goto('/#dns');
-  await expect(headline(page, /^Zones 3$/)).toBeVisible();
-  await expect(headline(page, /^Zones with issues \(of 2 checked\) 1$/)).toBeVisible();
+  await expect(dnsTile(page, 'zones')).toContainText('1 with issues');
+  await expect(dnsTile(page, 'zones')).toContainText('of 2 checked');
 });
 
 test('DNS: a refresh that fails after a good read turns the zone counts to dashes', async ({ page }) => {
@@ -98,10 +113,10 @@ test('DNS: a refresh that fails after a good read turns the zone counts to dashe
     zones: [{ id: 'z1', fqdn: 'a.example.', issues: ['High Neg-TTL'] }],
   }))));
   await page.goto('/#dns');
-  await expect(headline(page, /^Zones 1$/)).toBeVisible();
+  await expect(dnsTile(page, 'zones')).toContainText('1 with issues');
 
   fail = true;
   await page.clock.runFor(31_000); // past the 30s poll
-  await expect(headline(page, /^Zones [—0-9]/)).toContainText('—');
-  await expect(headline(page, /^Zones with issues/)).toContainText('—');
+  await expect(dnsTile(page, 'zones')).toContainText('—');
+  await expect(dnsTile(page, 'zones')).not.toContainText('with issues');
 });

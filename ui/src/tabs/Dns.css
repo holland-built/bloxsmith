@@ -1,0 +1,50 @@
+/* The DNS page in Overview's look (Overview.css holds the shared ov-*
+   classes and the tokens for both themes). Only what DNS adds is here. */
+
+/* The page borrows Overview's tokens by carrying .ov-look, but not its
+   layout or its tabular figures: DataTable and Card measure their text with a
+   canvas that knows nothing of font features, and tabular figures made every
+   measured column a little too narrow, so names were cut short. */
+.dns-page.ov-look { display: block; font-variant-numeric: normal; color: inherit }
+.dns-page > .ov-head { margin-bottom: 16px }
+.dns-page > .dns-kpis { margin-bottom: 16px }
+.dns-kpis, .dns-kinds, .dns-stats, .dns-split { font-variant-numeric: tabular-nums }
+
+/* Headline numbers: one card, hairlines between tiles. Each tile is a link
+   or a button inside a list item, so the hairline sits on the item. Two
+   across on a phone rather than four tall rows. */
+.ov-kpis.dns-kpis { list-style: none; padding: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) }
+.dns-kpis > li { min-width: 0; border-right: 1px solid var(--ov-line) }
+.dns-kpis > li:last-child { border-right: 0 }
+.dns-kpis .ov-kpi { border-right: 0; width: 100%; height: 100% }
+.dns-kpis .ov-kpi-in { color: var(--ov-ink); height: 100%; box-sizing: border-box }
+.dns-kpis a.ov-kpi:hover { text-decoration: none }
+.dns-num.crit { color: var(--ov-crit) }
+.dns-num.warn { color: var(--ov-warn) }
+@media (max-width: 520px) {
+  .dns-kpis > li:nth-child(2n) { border-right: 0 }
+  .dns-kpis > li:nth-child(-n + 2) { border-bottom: 1px solid var(--ov-line) }
+  .dns-kpis .ov-num { font-size: 24px }
+}
+
+/* Zone Counts: issue kinds as ranked rows with a thin bar along the bottom */
+.dns-kinds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column }
+.dns-kind { all: unset; box-sizing: border-box; position: relative; display: flex; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 8px 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px }
+.dns-kind:hover { background: color-mix(in srgb, var(--ov-soft) 70%, transparent) }
+.dns-kind:focus-visible { outline: 2px solid var(--ov-accent); outline-offset: 0 }
+.dns-kind-name { min-width: 0 }
+.dns-kind-n { font-weight: 600; color: var(--ov-crit) }
+.dns-kind-bar { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 3px; border-radius: 2px; background: var(--ov-line) }
+.dns-kind-bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 2px; background: var(--c); opacity: .7 }
+.dns-kind:hover .dns-kind-bar::after { opacity: 1 }
+.dns-split { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--ov-line); font-size: 13px }
+.dns-split div { display: flex; gap: 6px; align-items: baseline }
+.dns-split dt { color: var(--ov-muted) }
+.dns-split dd { margin: 0; font-weight: 600 }
+
+/* DNSSEC: a stat strip, label over number, no cards */
+.dns-stats { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 6px 0 12px }
+.dns-stats dt { font-size: 13px; color: var(--ov-muted) }
+.dns-stats dd { margin: 2px 0 0; font-size: 24px; font-weight: 500; letter-spacing: -.02em; line-height: 1.15 }
+.dns-stats dd small { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ov-muted) }

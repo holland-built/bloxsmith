@@ -1,17 +1,31 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useId, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
-import { HeadlineStrip } from '../components/kit.jsx'
-import { alarmTone } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
+import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
+import './Overview.css'
+import './Dns.css'
+
+// THE DNS PAGE IN THE OVERVIEW'S LOOK (2026-11-10).
+//
+// The owner picked the dashboard-design skill's look for Overview on
+// 2026-11-09, and this page now wears the same: a title with an "Updated"
+// pill, one card of headline numbers whose words are a label, a number and a
+// unit, and every explanation in a tip that opens on hover, focus or tap.
+//
+// A review found the page's real problem was order, not looks: 64 zones with
+// issues sat among 1,445 sorted A to Z. So the zone count with issues is a
+// headline that opens the issues-only list, the zone table puts zones with
+// issues first, and the Zone Counts panel says which kinds of issue they are.
+// The panels and their order are unchanged, so saved layouts keep working.
 
 // ---------- main ----------
 
@@ -25,28 +39,171 @@ const SLICES = ['zones']
 // Both charts on this tab share one shape; only they wait for recharts.
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
 
-// The counts across the top, each a jump to its panel. A feed that is down or
-// still loading is a dash, never zero; a failed poll's kept rows do not count
-// (useData keeps its last payload on error, so its slice status stays 'ok').
-// Zones that publish no TTL were never checked, so the issue count names the
-// population it covers, exactly as the Zone Counts panel it jumps to does.
-function headlines(qps, services, zones, zonesStatus, zonesFailed) {
+// CSPDNSServices asks Infoblox for `_limit: 200` (go/internal/dashboard/csp.go),
+// so a list of exactly that many may have been cut there.
+const SERVICES_LIMIT = 200
+
+const fmtQps = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1))
+const clock = (h) => {
+  const d = new Date(h)
+  return isNaN(d) ? String(h) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// Scroll to a panel and give it focus, as the old headline strip did.
+function jumpToPanel(panelId) {
+  const el = document.querySelector(`[data-panel-id="${panelId}"]`)
+  if (!el) return
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+  el.focus({ preventScroll: true })
+}
+
+// One tip for every number, the same as Overview's: hover, keyboard focus or
+// tap opens it, Escape closes it. The visible text stays the name; the tip is
+// the description.
+function Tip({ tip, children, className = '', ...rest }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  if (!tip) return <span className={className} {...rest}>{children}</span>
+  return (
+    <span
+      className={`ov-tipwrap ${className}`}
+      tabIndex={0}
+      aria-describedby={id}
+      data-open={open || undefined}
+      onClick={() => setOpen((o) => !o)}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+      {...rest}
+    >
+      {children}
+      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
+    </span>
+  )
+}
+
+// The signing counts, read once so the headline and the DNSSEC panel cannot
+// disagree. Only zones with public names (ending in a real TLD such as .com)
+// need signing; reverse zones and names like .local or .lab do not (owner,
+// 2026-11-09). public_name comes from the server (publicname.go).
+function signing(dnssec) {
+  const rows = dnssec.data?.rows ?? []
+  // CSPDnssec returns status:"error" at HTTP 200 on an upstream failure — the
+  // fetch itself never errors, so `dnssec.error` alone never catches this.
+  const failed = !!dnssec.error || dnssec.data?.status === 'error'
+  const publicRows = rows.filter((r) => r.public_name)
+  return {
+    rows,
+    failed,
+    publicRows,
+    signed: publicRows.filter((r) => r.dnssec_status === 'SIGNED').length,
+    unsigned: publicRows.filter((r) => r.dnssec_status === 'UNSIGNED').length,
+    internal: rows.length - publicRows.length,
+  }
+}
+
+// The headline numbers. A feed that is down or still loading is a dash or
+// "Loading…", never zero; a failed poll's kept rows do not count (useData
+// keeps its last payload on error, so its slice status stays 'ok'). Zones that
+// publish no TTL were never checked, so the zone tile names the population it
+// covers. Colour only where something needs a look.
+function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoading, dnssec }) {
   const qpsOk = !qps.loading && !qps.error && qps.data?.status !== 'error'
   const rows = qpsOk ? qps.data?.rows ?? [] : []
-  const last = rows.length ? rows[rows.length - 1].avg_value : null
+  // A missing latest reading is a dash, never 0.
+  const last = rows.length ? reading(rows[rows.length - 1].avg_value) : null
+  const cmp = vsYesterday(rows)
+  const qpsTip = last != null
+    ? `Average for the hour from ${clock(rows[rows.length - 1].hour)}, so far. ${cmp ? `Same time yesterday (${clock(cmp.wasHour)}): ${fmtQps(cmp.was)} a second.` : 'No reading from this time yesterday to compare with.'}`
+    : null
+
   const zonesOk = !zonesFailed && (zonesStatus === 'ok' || zonesStatus === 'empty')
   const checked = zonesOk ? zones.filter(ttlChecked).length : 0
-  const coverage = zonesOk && checked < zones.length ? ` (of ${checked.toLocaleString()} checked)` : ''
+  const unchecked = zonesOk ? zones.length - checked : 0
+  const withIssues = zonesOk ? zones.filter(hasIssues).length : null
+  const zoneWord = zonesLoading ? ['Checking', 'none'] : !zonesOk ? ['Unavailable', 'none']
+    : withIssues > 0 ? ['Act', 'crit'] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
+
+  const sg = signing(dnssec)
+  const sgOk = !dnssec.loading && !sg.failed
+  const sgWord = dnssec.loading ? ['Checking', 'none'] : !sgOk ? ['Unavailable', 'none']
+    : sg.unsigned > 0 ? ['Look', 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
+
   const svc = services.data?.rows
   const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
-  const fmt = (v) => (v == null ? null : v.toLocaleString())
-  const withIssues = zonesOk ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length : null
+  const svcCapped = svcOk && svc.length >= SERVICES_LIMIT
+
   return [
-    { panelId: 'dns-query-rate', label: 'DNS queries', value: Number.isFinite(last) ? (last >= 100 ? Math.round(last).toLocaleString() : last.toFixed(1)) : null, unit: 'per sec' },
-    { panelId: 'dns-zone-kpis', label: 'Zones', value: fmt(zonesOk ? zones.length : null) },
-    { panelId: 'dns-zone-kpis', label: `Zones with issues${coverage}`, value: fmt(withIssues), tone: alarmTone(withIssues, 'crit') },
-    { panelId: 'dns-services', label: 'DNS services', value: fmt(svcOk ? svc.length : null) },
+    {
+      key: 'queries', label: 'DNS queries', panelId: 'dns-query-rate',
+      value: last != null ? fmtQps(last) : null, loading: qps.loading, unit: 'a second',
+      sub: cmp ? `${changeText(cmp)} vs yesterday` : '',
+      tip: qpsTip,
+    },
+    {
+      key: 'zones', label: 'Zones', panelId: 'dns-zones', href: withIssues > 0 ? '#dns?issues=1' : null,
+      value: withIssues == null ? null : withIssues.toLocaleString(), loading: zonesLoading, unit: 'with issues',
+      word: zoneWord[0], sev: zoneWord[1],
+      sub: zonesOk ? (unchecked > 0 ? `of ${checked.toLocaleString()} checked` : `of ${zones.length.toLocaleString()}`) : '',
+      tip: zonesOk ? `Zones whose cache times need fixing.${unchecked > 0 ? ` ${unchecked.toLocaleString()} publish no cache time and were not checked.` : ''}${withIssues > 0 ? ' Opens the list of them.' : ''}` : null,
+    },
+    {
+      key: 'signing', label: 'Signing', panelId: 'dns-dnssec-health',
+      value: sgOk ? sg.unsigned.toLocaleString() : null, loading: dnssec.loading, unit: 'not signed',
+      word: sgWord[0], sev: sgWord[1],
+      sub: sgOk ? `of ${sg.publicRows.length.toLocaleString()} public` : '',
+      tip: sgOk ? 'Zones with public names, such as .com, that are not signed against tampering. Internal zones (reverse, .local, .lab) need no signing and are not counted.' : null,
+    },
+    {
+      key: 'services', label: 'DNS services', panelId: 'dns-services',
+      value: svcOk ? `${svc.length.toLocaleString()}${svcCapped ? '+' : ''}` : null, loading: services.loading, unit: '',
+      sub: '',
+      tip: svcOk ? `DNS services on this tenant.${svcCapped ? ` The list stops at ${SERVICES_LIMIT}.` : ''} The feed gives no up or down state, so this is a count, not a health check.` : null,
+    },
   ]
+}
+
+function Tiles(props) {
+  const T = headlines(props)
+  return (
+    <ul className="ov-card ov-kpis dns-kpis" aria-label="Headline numbers">
+      {T.map((t) => {
+        const tipId = `dns-tip-${t.key}`
+        const body = (
+          <span className="ov-kpi-in">
+            <span className="ov-kpi-top"><span>{t.label}</span>{t.word ? <span className={`ov-verdict ${t.sev}`}>{t.word}</span> : null}</span>
+            <span className={`ov-num dns-num ${t.value != null && t.value !== '0' ? t.sev ?? '' : ''}`}>
+              {t.value == null ? (t.loading ? <small>Loading…</small> : '—') : t.value}
+              {t.unit && t.value != null ? <small> {t.unit}</small> : null}
+            </span>
+            <span className="ov-muted ov-small">{t.sub || ' '}</span>
+          </span>
+        )
+        const common = { className: 'ov-kpi', title: t.tip || undefined, 'aria-describedby': t.tip ? tipId : undefined, 'data-tile': t.key }
+        return (
+          <li key={t.key}>
+            {t.href ? (
+              <a href={t.href} {...common} onClick={() => setTimeout(() => jumpToPanel(t.panelId), 0)}>{body}</a>
+            ) : (
+              <button type="button" {...common} onClick={() => jumpToPanel(t.panelId)}>{body}</button>
+            )}
+            {t.tip && <span id={tipId} className="sr-only">{t.tip}</span>}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// "Updated 11:02 PM" from when the zones arrived, not when the page drew.
+function Updated({ at, failed }) {
+  const label = failed ? 'Zones feed unavailable' : at ? `Updated ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Checking…'
+  return (
+    <Tip tip="Every number here is fetched again every 30 seconds." className="ov-pill" data-updated="">
+      <span className={`ov-live ${failed ? 'down' : at ? '' : 'wait'}`} aria-hidden="true" />{label}
+    </Tip>
+  )
 }
 
 export default function Dns() {
@@ -70,12 +227,16 @@ export default function Dns() {
   // 'ok' | 'empty' | 'error' — 'error' also when the payload arrived without
   // the zones slice, because that read did not deliver.
   const zonesStatus = data.status('zones')
+  // The time the zones payload arrived, not the time of this render.
+  const fetchedAt = useMemo(() => (data.data ? new Date() : null), [data.data])
 
   return (
-    <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">DNS</h1>
-      <TabIntro>Query load, DNS services, signed zones and policy zones, refreshed every 30 seconds.</TabIntro>
-      <HeadlineStrip label="Headline numbers" items={headlines(qps, services, zones, zonesStatus, !!data.error)} />
+    <div className="w-full px-6 py-5 ov-look dns-page">
+      <div className="ov-head">
+        <h1>DNS</h1>
+        <Updated at={fetchedAt} failed={!!data.error && !data.loading} />
+      </div>
+      <Tiles qps={qps} services={services} zones={zones} zonesStatus={zonesStatus} zonesFailed={!!data.error} zonesLoading={data.loading} dnssec={dnssec} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A
@@ -103,7 +264,7 @@ export default function Dns() {
           children: [<DnsServices key="dns-services" panelId="dns-services" services={services} />],
         })}
         <QueryVolume7d panelId="dns-query-volume-7d" analytics={analytics} />
-        <ZoneTable panelId="dns-zones" zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} loading={data.loading} />
+        <ZoneTable panelId="dns-zones" zones={zones} issuesOnly={hp.issues || ''} zonesStatus={zonesStatus} loading={data.loading} />
         <DnssecHealth panelId="dns-dnssec-health" dnssec={dnssec} />
         <RpzPanel panelId="dns-rpz" rpz={rpz} />
         <DtcLbdnPanel panelId="dns-dtc-lbdn" dtcLbdn={dtcLbdn} />
@@ -119,20 +280,14 @@ function QpsHero({ panelId, qps }) {
   const { COLORS } = useChartTheme()
   const rows = qps.data?.rows ?? []
   const status = qps.data?.status
-  const chartData = rows.map((r) => {
-    let label = r.hour
-    const d = new Date(r.hour)
-    if (!isNaN(d)) label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    return { label, value: Number(r.avg_value) || 0 }
-  })
-  const current = chartData.at(-1)?.value
-  const first = chartData[0]?.value
-  const delta = first ? ((current - first) / first) * 100 : null
-  const flat = delta != null && Math.abs(delta) < 0.05
-  // Say how far back the first point is, read from the rows themselves, not
-  // "first hour". Grey either way: more DNS traffic is not good or bad news.
-  const spanH = rows.length > 1 ? Math.round((new Date(rows.at(-1).hour) - new Date(rows[0].hour)) / 3600000) : null
-  const vs = Number.isFinite(spanH) && spanH > 0 ? `vs ${spanH}h ago` : 'vs first hour'
+  const chartData = rows.map((r) => ({ label: clock(r.hour), value: Number(r.avg_value) || 0 }))
+  // The big number is the latest reading as sent: a missing one is a dash,
+  // not the 0 the chart has to draw it as.
+  const current = rows.length ? reading(rows[rows.length - 1].avg_value) : null
+  // Against the same time yesterday, never the first hour on the chart: that
+  // set a quiet night against a busy afternoon. Grey either way: more DNS
+  // traffic is not good or bad news on its own.
+  const cmp = vsYesterday(rows)
 
   return (
     <Card
@@ -149,12 +304,16 @@ function QpsHero({ panelId, qps }) {
         <Empty />
       ) : (
         <>
-          <div className="flex items-center gap-4 my-2">
-            <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-            {delta != null && (
-              <span className="text-note" style={{ color: COLORS.other }}>
-                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} {vs}
-              </span>
+          <div className="flex items-baseline gap-3 my-2">
+            <span className="text-figure font-semibold tracking-tight">{current == null ? '—' : current.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            {cmp && (
+              <Tip
+                className="text-note text-muted"
+                data-qps-change=""
+                tip={`${clock(cmp.nowHour)} today, so far: ${fmtQps(cmp.now)} a second. ${clock(cmp.wasHour)} yesterday: ${fmtQps(cmp.was)} a second.`}
+              >
+                {changeText(cmp)} vs yesterday
+              </Tip>
             )}
           </div>
           {/* The big number above this chart already rounds to one decimal;
@@ -199,6 +358,20 @@ function ttlChecked(z) {
   return Array.isArray(z.issues)
 }
 
+/** True when the checks ran and found at least one issue. */
+function hasIssues(z) {
+  return Array.isArray(z.issues) && z.issues.length > 0
+}
+
+// Reverse zones end in in-addr.arpa or ip6.arpa; the same rule Get an address
+// uses to split its zone lists (SelfService.jsx).
+const isReverseZone = (z) => /(^|\.)(in-addr|ip6)\.arpa\.?$/i.test(String(z.fqdn ?? ''))
+
+// Zones with issues first, then zones the checks never ran on, then the rest;
+// A to Z within each. Sorting A to Z alone buried 64 zones with issues among
+// 1,445 (review, 2026-11-10).
+const zoneRank = (z) => (hasIssues(z) ? 2 : ttlChecked(z) ? 0 : 1)
+
 // Sort by TTL with unknowns last in BOTH directions. `Number(null) || 0` used
 // to file every unknown-TTL zone at the very front of an ascending sort, right
 // among the genuinely dangerous 30-second zones.
@@ -210,11 +383,16 @@ function ttlCompare(a, b, dir) {
 }
 
 // ---------- zone kpis ----------
+//
+// The headline already says how many zones have issues and out of how many,
+// so this panel no longer repeats those numbers. It says which kinds of issue
+// they are, largest first, each opening the zones that have it; then how the
+// zones split into forward and reverse, and how many were never checked.
 
 function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   // A load in flight is not a verdict. Without this the panel would print
-  // three confident zeros (before) or a feed-unavailable notice (now that an
+  // confident zeros (before) or a feed-unavailable notice (now that an
   // unarrived slice reads as 'error') for a read that simply has not finished.
   if (loading) {
     return (
@@ -223,7 +401,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
       </Card>
     )
   }
-  // All three cells read the same `zones` feed — a dead read means none of
+  // Every line here reads the same `zones` feed — a dead read means none of
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
@@ -233,51 +411,50 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
     )
   }
 
-  const issueCount = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
-  const anomalyCount = zones.filter((z) => z.anomaly).length
+  const byKind = new Map()
+  for (const z of zones) if (hasIssues(z)) for (const k of new Set(z.issues)) byKind.set(k, (byKind.get(k) ?? 0) + 1)
+  const kinds = [...byKind].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+  const top = kinds[0]?.[1] || 1
   // Zones with no published TTL were never run through the checks. They are
-  // not clean zones — they are unexamined ones, so "3 of N have issues" would
-  // be a claim about zones that were never all looked at. Both verdict tiles
-  // therefore name the population they actually cover. On the live tenant
-  // today every zone reports a TTL, so the coverage note stays hidden.
-  const checked = zones.filter(ttlChecked).length
-  const unchecked = zones.length - checked
-  const coverage = unchecked > 0 ? `of ${checked.toLocaleString()} checked` : null
-
-  const cells = [
-    {
-      label: 'Zones',
-      value: zones.length.toLocaleString(),
-      note: unchecked > 0 ? `${unchecked.toLocaleString()} publish no TTL` : null,
-    },
-    {
-      label: 'Zones needing attention',
-      value: issueCount.toLocaleString(),
-      color: issueCount > 0 ? COLORS.crit : COLORS.ok,
-      note: coverage,
-    },
-    {
-      label: 'Unusual settings',
-      value: anomalyCount.toLocaleString(),
-      color: anomalyCount > 0 ? COLORS.warn : COLORS.ok,
-      note: coverage,
-    },
-  ]
+  // not clean zones — they are unexamined ones.
+  const unchecked = zones.length - zones.filter(ttlChecked).length
+  const reverse = zones.filter(isReverseZone).length
+  // The server's own "unusual settings" flag, counted as it always was, so
+  // nothing the old panel showed is lost.
+  const anomalies = zones.filter((z) => z.anomaly).length
+  const open = (kind) => {
+    location.hash = `dns?issues=${encodeURIComponent(kind)}`
+    setTimeout(() => jumpToPanel('dns-zones'), 0)
+  }
 
   return (
     // All three branches of this component are the SAME panel and carry the
     // same `panelName`: they are the loading, the dead-feed and the data views
     // of one tile, so the popup must call it one thing whichever is on screen.
-    // It draws no heading — the cells are their own labels — which is why it
-    // used to be listed as "dns-zone-kpis".
-    <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
-      {cells.map((c, i) => (
-        <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
-          <div className="text-muted text-note">{c.label}</div>
-          <div className="text-figure font-semibold tracking-tight my-1" style={{ color: c.color }}>{c.value}</div>
-          {c.note && <div className="text-dim text-note leading-tight">{c.note}</div>}
-        </div>
-      ))}
+    // It draws no heading, which is why its About button is named by its id.
+    <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col">
+      <div className="text-note text-muted pt-1 pb-2">Issues by kind</div>
+      {kinds.length ? (
+        <ul className="dns-kinds" aria-label="Zone issues by kind">
+          {kinds.map(([k, n]) => (
+            <li key={k}>
+              <button type="button" className="dns-kind" onClick={() => open(k)} aria-label={`${issueWord(k)}: ${n.toLocaleString()} zones. Show them.`}>
+                <span className="dns-kind-name">{issueWord(k)}</span>
+                <span className="dns-kind-n">{n.toLocaleString()}</span>
+                <i className="dns-kind-bar" aria-hidden="true" style={{ '--w': `${(n / top) * 100}%`, '--c': COLORS.crit }} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-copy text-muted py-2">{zones.length === 0 ? 'No zones' : unchecked === zones.length ? 'None checked' : 'None found'}</div>
+      )}
+      <dl className="dns-split mt-auto">
+        <div><dt>Forward</dt><dd>{(zones.length - reverse).toLocaleString()}</dd></div>
+        <div><dt>Reverse</dt><dd>{reverse.toLocaleString()}</dd></div>
+        <div><dt>Unusual settings</dt><dd style={anomalies > 0 ? { color: COLORS.warn } : undefined}>{anomalies.toLocaleString()}</dd></div>
+        {unchecked > 0 && <div><dt>Not checked</dt><dd>{unchecked.toLocaleString()}</dd></div>}
+      </dl>
     </Card>
   )
 }
@@ -366,27 +543,38 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
-  const [sort, setSort] = useState({ key: 'fqdn', dir: 'asc' })
+  // Issues first by default (zoneRank), A to Z within. A header click still
+  // sorts by any column.
+  const [sort, setSort] = useState({ key: 'issues', dir: 'desc' })
+  // `issues=1` lists every zone with an issue; `issues=<kind>` (from Zone
+  // Counts) lists the zones with that one kind.
+  const kind = issuesOnly && issuesOnly !== '1' ? issuesOnly : null
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    let base = issuesOnly ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0) : zones
+    let base = issuesOnly ? zones.filter((z) => hasIssues(z) && (!kind || z.issues.includes(kind))) : zones
     if (!q) return base
     return base.filter((z) => [z.fqdn, z.view].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [zones, filter, issuesOnly])
+  }, [zones, filter, issuesOnly, kind])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
     const { key, dir } = sort
+    const byName = (a, b) => String(a.fqdn || '').localeCompare(String(b.fqdn || ''))
     arr.sort((a, b) => {
       // TTL has a third outcome — unknown — so it cannot go through the
       // number branch below, which would rank it as 0.
       if (key === 'ttl') return ttlCompare(a, b, dir)
+      // Issues: zones with issues, then unchecked, then clean; more issues
+      // before fewer; A to Z within, whichever way the column is turned.
+      if (key === 'issues') {
+        const d = zoneRank(a) - zoneRank(b) || (a.issues?.length || 0) - (b.issues?.length || 0)
+        return (dir === 'asc' ? d : -d) || byName(a, b)
+      }
       let av, bv
       if (key === 'fqdn') { av = a.fqdn || ''; bv = b.fqdn || '' }
       else if (key === 'view') { av = a.view || ''; bv = b.view || '' }
       else if (key === 'records') { av = Number(a.records) || 0; bv = Number(b.records) || 0 }
-      else if (key === 'issues') { av = (a.issues?.length) || 0; bv = (b.issues?.length) || 0 }
       else { av = a.fqdn || ''; bv = b.fqdn || '' }
       if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
       return dir === 'asc' ? av - bv : bv - av
@@ -398,9 +586,12 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   // is the crit text / anomaly pill node (or '—') so the primitive's hideWhenConstant
   // can auto-drop them when every value is "0" / "—" respectively.
   const rows = useMemo(() => sorted.map((z) => {
-    const hasIssues = Array.isArray(z.issues) && z.issues.length > 0
-    const issuesCell = hasIssues ? (
-      <span className="text-note" style={{ color: COLORS.crit }}>{z.issues.map(issueWord).join(', ')}</span>
+    const issues = hasIssues(z)
+    const issuesCell = issues ? (
+      <span className="text-note inline-flex items-center gap-1.5" style={{ color: COLORS.crit }}>
+        <i aria-hidden="true" className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
+        {z.issues.map(issueWord).join(', ')}
+      </span>
     ) : z.anomaly ? (
       <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
     ) : ttlChecked(z) ? '—' : (
@@ -416,9 +607,14 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       // No TTL published => em-dash, never a number this zone does not have.
       ttl: ttl == null ? '—' : ttl,
       issues: issuesCell,
-      _hasIssues: hasIssues,
+      _hasIssues: issues,
     }
   }), [sorted, COLORS])
+
+  // The Issues column stays whenever any zone has an issue or went unchecked.
+  // Left to hideWhenConstant, a single zone with an issue made the column's
+  // only non-empty cell "constant" and hid the one thing worth seeing.
+  const anyFlag = zones.some((z) => hasIssues(z) || z.anomaly || !ttlChecked(z))
 
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true },
@@ -429,7 +625,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
     // the TTL column full of dashes — silently dropping it reads as "TTL isn't
     // tracked" instead of "we don't know it".
     { key: 'ttl', label: 'TTL', mono: true, sortable: true, keep: true },
-    { key: 'issues', label: 'Issues', hideWhenConstant: true, sortable: true },
+    { key: 'issues', label: 'Issues', hideWhenConstant: true, keep: anyFlag, sortable: true },
   ]
 
   return (
@@ -452,7 +648,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
               className="text-note font-medium px-2 py-0.5 rounded-full cursor-pointer"
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
-              issues only ✕
+              {kind ? issueWord(kind) : 'issues only'} ✕
             </button>
           </span>
         ) : 'DNS Zones'
@@ -501,18 +697,8 @@ const DNSSEC_CAP = 150
 
 function DnssecHealth({ panelId, dnssec }) {
   const { COLORS } = useChartTheme()
-  const rows = dnssec.data?.rows ?? []
-  // CSPDnssec returns status:"error" at HTTP 200 on an upstream failure — the
-  // fetch itself never errors, so `dnssec.error` alone never catches this.
-  const status = dnssec.data?.status
-
-  // Only zones with public names (ending in a real TLD such as .com) need
-  // signing; reverse zones and names like .local or .lab do not (owner,
-  // 2026-11-09). public_name comes from the server (publicname.go).
-  const publicRows = rows.filter((r) => r.public_name)
-  const signedCount = publicRows.filter((r) => r.dnssec_status === 'SIGNED').length
-  const unsignedCount = publicRows.filter((r) => r.dnssec_status === 'UNSIGNED').length
-  const internalCount = rows.length - publicRows.length
+  // The same counts as the Signing headline, from the same helper.
+  const { rows, failed, publicRows, signed: signedCount, unsigned: unsignedCount, internal: internalCount } = signing(dnssec)
   const signedShare = publicRows.length ? (signedCount / publicRows.length) * 100 : null
 
   // This panel used to say "worst 150" over `unsigned.slice(0, DNSSEC_CAP)` of
@@ -555,32 +741,35 @@ function DnssecHealth({ panelId, dnssec }) {
     >
       {dnssec.loading ? (
         <Skeleton h={280} />
-      ) : dnssec.error || status === 'error' ? (
+      ) : failed ? (
         <FeedUnavailable label="DNSSEC feed unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no DNSSEC data</Empty>
       ) : (
         <>
-          <div className="flex items-center gap-4 my-2">
+          {/* Not signed leads, in amber when there are any: it is the one
+              that needs a look. Signed is never green: a count of signed
+              zones is not good news when most public ones are not. */}
+          <dl className="dns-stats">
             <div>
-              <div className="text-figure font-semibold tracking-tight" style={{ color: signedCount > 0 ? COLORS.ok : COLORS.other }}>{signedCount.toLocaleString()}</div>
-              <div className="text-note text-muted">signed</div>
+              <dt>Not signed</dt>
+              <dd style={unsignedCount > 0 ? { color: COLORS.warn } : undefined}>{unsignedCount.toLocaleString()}</dd>
             </div>
             <div>
-              <div className="text-figure font-semibold tracking-tight" style={{ color: unsignedCount > 0 ? COLORS.warn : COLORS.ok }}>{unsignedCount.toLocaleString()}</div>
-              <div className="text-note text-muted">public names unsigned</div>
+              <dt>Signed</dt>
+              <dd>{signedCount.toLocaleString()}</dd>
             </div>
             {signedShare != null && (
               <div>
-                <div className="text-figure font-semibold tracking-tight">{signedShare.toFixed(1)}%</div>
-                <div className="text-note text-muted">signed share (of {publicRows.length.toLocaleString()} public)</div>
+                <dt><Tip tip={`Of the ${publicRows.length.toLocaleString()} zones with public names.`}>Signed share</Tip></dt>
+                <dd>{signedShare.toFixed(1)}%</dd>
               </div>
             )}
             <div>
-              <div className="text-figure font-semibold tracking-tight text-muted">{internalCount.toLocaleString()}</div>
-              <div className="text-note text-muted">internal, no signing needed</div>
+              <dt><Tip tip="Reverse zones and names such as .local or .lab, which need no signing.">Internal</Tip></dt>
+              <dd className="text-muted">{internalCount.toLocaleString()}</dd>
             </div>
-          </div>
+          </dl>
           {publicRows.length === 0 ? (
             <Empty>no zones with public names</Empty>
           ) : unsigned.length === 0 ? (

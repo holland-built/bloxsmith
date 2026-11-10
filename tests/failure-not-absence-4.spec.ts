@@ -435,11 +435,11 @@ test.describe('DNS → zone table (zone with ttl:null)', () => {
     await expect(checked.getByText('3600', { exact: true })).toBeVisible();
     await expect(checked.getByText('not checked', { exact: true })).toHaveCount(0);
 
-    // The verdict tiles must name the population they actually cover: 2 zones,
-    // only 1 of them examined.
-    const kpis = page.getByText('Zones needing attention', { exact: true }).locator(CARD);
-    await expect(kpis.getByText('1 publish no TTL', { exact: true })).toBeVisible();
-    await expect(kpis.getByText('of 2 checked', { exact: true }).first()).toBeVisible();
+    // The verdict must name the population it actually covers: 3 zones, only
+    // 2 of them examined. The headline says so, and Zone Counts counts the
+    // unexamined one as not checked.
+    await expect(page.locator('[data-tile="zones"]')).toContainText('of 2 checked');
+    await expect(page.locator('[data-panel-id="dns-zone-kpis"]')).toContainText('Not checked1');
   });
 });
 
