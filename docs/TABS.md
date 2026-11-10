@@ -215,10 +215,10 @@ A panel that says **unavailable** couldn't be read, and it names the reason. A l
 
 The IQ for Threat Defense action queue. Refreshes every 20 seconds.
 
+- **Severity Counts**: at the top, how many of the loaded incidents are critical, high, medium and low. Click one to show only that level in the list.
 - **Categories**: click a category to show only its incidents in the list.
 - **Triage**: the incident list. Click a row for the detail. Tick **Ack** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
-- **Severity Counts**: how many of the loaded incidents are critical, high, medium and low.
-- **IQ Actions**: actions from Infoblox IQ for Threat Defense, with the detail of each one.
+- **IQ Actions**: actions from Infoblox IQ for Threat Defense, with the detail of each one. Each says whether it is open or resolved, open ones first. **Resolve** closes an open one; **Reopen** on a resolved one shows when you point at its row.
 - **Action Volume**: actions per day.
 
 ## Audit

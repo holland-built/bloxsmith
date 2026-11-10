@@ -239,7 +239,7 @@ export const PANEL_HELP = {
   },
   'incidents-severity': {
     what: 'How the problems in the list below split across the four seriousness levels.',
-    look: 'A dash instead of a count means nothing could be counted; it does not mean zero. When the list is capped these count only what is on screen.',
+    look: 'Pick a level to show only those in the list. A dash instead of a count means nothing could be counted; it does not mean zero. When the list is capped these count only what is on screen.',
   },
   'incidents-triage': {
     what: 'Every problem the last check found: what it affects, how serious it is, and how long ago it first appeared.',
@@ -247,7 +247,7 @@ export const PANEL_HELP = {
   },
   'incidents-soc-queue': {
     what: 'Work raised outside this dashboard that still needs somebody to act on it.',
-    look: 'Click the wording to see everything recorded about an item. Resolve marks it done and Reopen puts it back — both need operator rights, and say so if you lack them.',
+    look: 'Open items come first. Click the wording for the full record. Resolve closes an open item; Reopen shows on a resolved row when you point at it. Both need operator rights, and say so if you lack them.',
   },
   'incidents-action-volume': {
     what: 'The same work items counted by the day each was last touched, so a growing backlog is visible.',

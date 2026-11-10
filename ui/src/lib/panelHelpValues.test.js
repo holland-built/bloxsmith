@@ -849,10 +849,10 @@ const CLAIMS = [
     says: /across the four seriousness levels/,
     file: INCIDENTS,
     proofs: [
-      { re: /label: 'Critical', value: counts\.critical, color: COLORS\.crit/, expect: 'Critical is COLORS.crit (red)' },
-      { re: /label: 'High', value: counts\.high, color: COLORS\.sevHigh/, expect: 'High is COLORS.sevHigh (pink)' },
-      { re: /label: 'Medium', value: counts\.medium, color: COLORS\.warn/, expect: 'Medium is COLORS.warn (amber)' },
-      { re: /label: 'Low', value: counts\.low, color: COLORS\.accent/, expect: 'Low is COLORS.accent (blue)' },
+      { re: /\{ key: 'critical', label: 'Critical', tone: 'crit' \}/, expect: 'a Critical tile (red when above zero)' },
+      { re: /\{ key: 'high', label: 'High', tone: 'high' \}/, expect: 'a High tile (pink when above zero)' },
+      { re: /\{ key: 'medium', label: 'Medium', tone: 'warn' \}/, expect: 'a Medium tile (amber dot when above zero)' },
+      { re: /\{ key: 'low', label: 'Low', tone: 'low' \}/, expect: 'a Low tile (grey)' },
     ],
   },
   {
