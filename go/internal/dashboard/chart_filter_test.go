@@ -23,9 +23,9 @@ func TestBuildChartQuery_OneFilterExactly(t *testing.T) {
 			`[{"member":"DnsActivityV1.device_name","operator":"notEquals","values":["ws-014.lab"]}]`},
 		// A field holding several values per asset: contains, the value quoted.
 		{ChartPicks{Count: "assets", Split: "atype", Window: "now", Over: "none", Top: 10, Only: "missing", Is: "is", Value: "DNS Forward Record"},
-			`[{"member":"AssetDetails_ch_agg.insight_indicators_label","operator":"contains","values":["\"DNS Forward Record\""]}]`},
+			`[{"member":"AssetDetailsAggV1.insight_indicators_label","operator":"contains","values":["\"DNS Forward Record\""]}]`},
 		{ChartPicks{Count: "assets", Split: "source", Window: "now", Over: "none", Top: 10, Only: "problem", Is: "not", Value: "Zombie"},
-			`[{"member":"AssetDetails_ch_agg.insight_classifications_label","operator":"notContains","values":["\"Zombie\""]}]`},
+			`[{"member":"AssetDetailsAggV1.insight_classifications_label","operator":"notContains","values":["\"Zombie\""]}]`},
 		// A filter on a chart over time.
 		{ChartPicks{Count: "dns", Split: "none", Window: "7d", Over: "day", Only: "qtype", Is: "is", Value: "AAAA"},
 			`[{"member":"DnsActivityV1.query_type","operator":"equals","values":["AAAA"]}]`},
@@ -67,8 +67,9 @@ func TestBuildChartQuery_RefusesABadFilter(t *testing.T) {
 func TestBuildChartQuery_FilterKeepsTheCountsOwnFilter(t *testing.T) {
 	// qps carries a fixed metric filter; nothing can be added to it, but the
 	// fixed one must survive on every other path too.
+	// Two: the metric, and the stored step a chart by day reads (hostTier).
 	q, _, err := BuildChartQuery(ChartPicks{Count: "qps", Split: "none", Window: "7d", Over: "day"})
-	if err != nil || len(asSlice(roundTrip(t, q)["filters"])) != 1 {
+	if err != nil || len(asSlice(roundTrip(t, q)["filters"])) != 2 {
 		t.Fatalf("qps filter lost: %v %v", q, err)
 	}
 }

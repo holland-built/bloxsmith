@@ -27,7 +27,7 @@ func iqCube(t *testing.T, rows []map[string]any, seen *[]map[string]any) http.Ha
 func TestRunAITool_IQInsights_SummaryCountsActionsByType(t *testing.T) {
 	var seen []map[string]any
 	s, _ := newAIToolsTestService(t, iqCube(t, []map[string]any{
-		{"IqActions.type": "DNS Latency Spike", "IqActions.status": "resolved", "IqActions.severity": "high", "IqActions.count": "70"},
+		{"ActionsV1.type": "DNS Latency Spike", "ActionsV1.status": "resolved", "ActionsV1.severity": "high", "ActionsV1.action_count": "70"},
 	}, &seen))
 	out := s.RunAITool(context.Background(), "iq_insights", map[string]any{})
 	if !strings.Contains(out, "DNS Latency Spike") || !strings.Contains(out, "70") {
@@ -37,22 +37,22 @@ func TestRunAITool_IQInsights_SummaryCountsActionsByType(t *testing.T) {
 		t.Fatalf("expected one cube query, got %d", len(seen))
 	}
 	m, _ := seen[0]["measures"].([]any)
-	if len(m) != 1 || m[0] != "IqActions.count" {
-		t.Fatalf("summary should count IqActions, sent %v", seen[0])
+	if len(m) != 1 || m[0] != "ActionsV1.action_count" {
+		t.Fatalf("summary should count ActionsV1, sent %v", seen[0])
 	}
 }
 
 func TestRunAITool_IQInsights_RecentListsNewestFirstWithAClampedLimit(t *testing.T) {
 	var seen []map[string]any
 	s, _ := newAIToolsTestService(t, iqCube(t, []map[string]any{
-		{"IqActions.display_id": "IQ-219", "IqActions.title": "Latency up on dns1"},
+		{"ActionsV1.display_id": "IQ-219", "ActionsV1.title": "Latency up on dns1"},
 	}, &seen))
 	out := s.RunAITool(context.Background(), "iq_insights", map[string]any{"view": "recent", "limit": float64(9999)})
 	if !strings.Contains(out, "IQ-219") {
 		t.Fatalf("expected the recent action, got %q", out)
 	}
 	order, _ := seen[0]["order"].(map[string]any)
-	if order["IqActions.created_on"] != "desc" {
+	if order["ActionsV1.created_on"] != "desc" {
 		t.Fatalf("recent must be newest first, sent %v", seen[0])
 	}
 	if lim, _ := seen[0]["limit"].(float64); int(lim) != 50 {
@@ -78,7 +78,7 @@ func TestRunAITool_IQInsights_NoTokenUsageSaysSo(t *testing.T) {
 func TestRunAITool_IQInsights_MonthlyCountsByMonth(t *testing.T) {
 	var seen []map[string]any
 	s, _ := newAIToolsTestService(t, iqCube(t, []map[string]any{
-		{"IqActions.created_on.month": "2026-10-01T00:00:00.000", "IqActions.count": "31"},
+		{"ActionsV1.created_on.month": "2026-10-01T00:00:00.000", "ActionsV1.action_count": "31"},
 	}, &seen))
 	out := s.RunAITool(context.Background(), "iq_insights", map[string]any{"view": "monthly"})
 	if !strings.Contains(out, "2026-10") || !strings.Contains(out, "31") {
@@ -93,8 +93,8 @@ func TestRunAITool_IQInsights_MonthlyCountsByMonth(t *testing.T) {
 func TestRunAITool_IQInsights_TotalIsActionsNotGroups(t *testing.T) {
 	var seen []map[string]any
 	s, _ := newAIToolsTestService(t, iqCube(t, []map[string]any{
-		{"IqActions.type": "DNS Latency Spike", "IqActions.count": "70"},
-		{"IqActions.type": "DNS NXDOMAIN Spike", "IqActions.count": "39"},
+		{"ActionsV1.type": "DNS Latency Spike", "ActionsV1.action_count": "70"},
+		{"ActionsV1.type": "DNS NXDOMAIN Spike", "ActionsV1.action_count": "39"},
 	}, &seen))
 	var got struct {
 		TotalCount int `json:"total_count"`
@@ -121,7 +121,7 @@ func TestRunAITool_IQInsights_AnswerWithoutDataIsAFailure(t *testing.T) {
 func TestRunAITool_IQInsights_LongBreakdownIsCapped(t *testing.T) {
 	rows := make([]map[string]any, 80)
 	for i := range rows {
-		rows[i] = map[string]any{"IqActions.type": "t", "IqActions.count": "1"}
+		rows[i] = map[string]any{"ActionsV1.type": "t", "ActionsV1.action_count": "1"}
 	}
 	var seen []map[string]any
 	s, _ := newAIToolsTestService(t, iqCube(t, rows, &seen))

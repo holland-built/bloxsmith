@@ -51,8 +51,13 @@ import (
 // apart from "the query failed", so callers must not infer failure from a
 // zero total. Missing/unparseable measure values inside a successful
 // response still coerce to 0 via toFloat.
-func (s *Service) scalarCubeTotal(ctx context.Context, cube, measure string) (total int, ok bool) {
-	rows := s.Mcp.QueryCube(ctx, cube, []string{measure}, map[string]any{})
+//
+// The V1 cubes refuse a query without a time range, so it carries
+// snapshotWindow on timeField, and goes to the Cube.js endpoint only: the MCP
+// would cut that range to 30 days (cube_names.go).
+func (s *Service) scalarCubeTotal(ctx context.Context, cube, measure, timeField string) (total int, ok bool) {
+	rows := s.Mcp.QueryCubeDirectOnly(ctx, cube, []string{measure},
+		map[string]any{"time_dimensions": snapshotWindow(timeField)})
 	if rows == nil {
 		return 0, false
 	}
@@ -71,12 +76,12 @@ func (s *Service) scalarCubeTotal(ctx context.Context, cube, measure string) (to
 // cube query reuses the same "error" status as an MCP init failure, so a
 // dead lookup is never reported to the UI as "empty" (a fact about the
 // tenant's data) — see scalarCubeTotal.
-func (s *Service) scalarCount(ctx context.Context, cube, measure, note string) map[string]any {
+func (s *Service) scalarCount(ctx context.Context, cube, measure, timeField, note string) map[string]any {
 	if s.Mcp == nil {
 		return map[string]any{"total": 0, "breakdown_available": false,
 			"note": note, "status": "error"}
 	}
-	total, ok := s.scalarCubeTotal(ctx, cube, measure)
+	total, ok := s.scalarCubeTotal(ctx, cube, measure, timeField)
 	if !ok {
 		return map[string]any{"total": 0, "breakdown_available": false,
 			"note": note, "status": "error"}
@@ -93,7 +98,8 @@ func (s *Service) scalarCount(ctx context.Context, cube, measure, note string) m
 	}
 }
 
-// CSPDiscoveryStatus is the AssetDiscoveryStatus scalar-count tile.
+// CSPDiscoveryStatus is the AssetDiscoveryStatusV1 scalar-count tile. V1's
+// rowCount is the old cube's count; updated_at bounds it (cube_names.go).
 func (s *Service) CSPDiscoveryStatus(ctx context.Context) map[string]any {
 	ck := cache.Key("discovery-status", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
@@ -104,13 +110,14 @@ func (s *Service) CSPDiscoveryStatus(ctx context.Context) map[string]any {
 	// overall_status return 0 upstream." That was the false claim, printed at
 	// operators, and it was the wrong-literal probe talking (package doc).
 	// The replacement says only what is true: this tile asks for one number.
-	result := s.scalarCount(ctx, "AssetDiscoveryStatus", "AssetDiscoveryStatus.count",
+	result := s.scalarCount(ctx, cubeDiscovery, cubeDiscovery+".rowCount", cubeDiscovery+".updated_at",
 		"Total only — this tile does not request a per-status breakdown.")
 	s.Cache.SetGen(ck, result, g)
 	return result
 }
 
-// CSPAssetInsights is the AssetInsight scalar-count tile.
+// CSPAssetInsights is the AssetInsightV1 scalar-count tile, bounded on
+// evaluation_time; sync_time counted differently (cube_names.go).
 func (s *Service) CSPAssetInsights(ctx context.Context) map[string]any {
 	ck := cache.Key("asset-insights", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
@@ -121,7 +128,7 @@ func (s *Service) CSPAssetInsights(ctx context.Context) map[string]any {
 	// severity dimension was never itself probed — the 2026-08-06 session
 	// measured AssetDiscoveryStatus.overall_status and AssetDetails_ch_agg —
 	// so the honest note claims nothing about it either way.
-	result := s.scalarCount(ctx, "AssetInsight", "AssetInsight.count",
+	result := s.scalarCount(ctx, cubeInsight, cubeInsight+".count", cubeInsight+".evaluation_time",
 		"Total only — this tile does not request a per-severity breakdown.")
 	s.Cache.SetGen(ck, result, g)
 	return result

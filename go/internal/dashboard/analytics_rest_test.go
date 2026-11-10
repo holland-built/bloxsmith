@@ -174,17 +174,17 @@ func TestFetchHostMetrics_QueryShapeAndHostNameResolution(t *testing.T) {
 			seenFilters = append(seenFilters, getStr(f["values"].([]any)[0]))
 
 			dims, _ := q["dimensions"].([]any)
-			if len(dims) != 2 || dims[0] != "HostMetrics.host" || dims[1] != "HostMetrics.metric_name_label" {
+			if len(dims) != 2 || dims[0] != "HostMetricsV1.host" || dims[1] != "HostMetricsV1.metric_name_label" {
 				t.Errorf("dimensions = %v", q["dimensions"])
 			}
-			if f["member"] != "HostMetrics.metric_name" || f["operator"] != "equals" {
+			if f["member"] != "HostMetricsV1.metric_name" || f["operator"] != "equals" {
 				t.Errorf("filter = %+v", f)
 			}
 
 			metricName := getStr(f["values"].([]any)[0])
 			_, _ = w.Write([]byte(`{"result":{"data":[
-				{"HostMetrics.host":"uuid-1","HostMetrics.metric_name_label":"` + metricName + `","HostMetrics.avg_value":"12.5"},
-				{"HostMetrics.host":null,"HostMetrics.metric_name_label":"` + metricName + `","HostMetrics.avg_value":"99"}
+				{"HostMetricsV1.host":"uuid-1","HostMetricsV1.metric_name_label":"` + metricName + `","HostMetricsV1.avg_value":"12.5"},
+				{"HostMetricsV1.host":null,"HostMetricsV1.metric_name_label":"` + metricName + `","HostMetricsV1.avg_value":"99"}
 			]}}`))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
@@ -227,7 +227,7 @@ func TestFetchHostMetrics_UnresolvedHostKeepsRawID(t *testing.T) {
 			_, _ = w.Write([]byte(`{"results":[]}`))
 		case "/api/cubejs/v1/query":
 			_, _ = w.Write([]byte(`{"result":{"data":[
-				{"HostMetrics.host":"unknown-uuid","HostMetrics.metric_name_label":"CPU","HostMetrics.avg_value":"5"}
+				{"HostMetricsV1.host":"unknown-uuid","HostMetricsV1.metric_name_label":"CPU","HostMetricsV1.avg_value":"5"}
 			]}}`))
 		}
 	})

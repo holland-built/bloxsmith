@@ -2989,11 +2989,11 @@
       "time": "PortunusAggThreat_ch.timestamp"
     },
     {
-      "cube": "HostMetrics",
+      "cube": "HostMetricsV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": [
         {
-          "member": "HostMetrics.metric_name",
+          "member": "HostMetricsV1.metric_name",
           "operator": "equals",
           "values": [
             "dns_qps_iq"
@@ -3001,9 +3001,9 @@
         }
       ],
       "id": "qps",
-      "measure": "HostMetrics.avg_value",
+      "measure": "HostMetricsV1.avg_value",
       "name": "DNS queries per second",
-      "time": "HostMetrics.timestamp"
+      "time": "HostMetricsV1.timestamp"
     },
     {
       "cube": "DhcpLeaseActivityV1",
@@ -3015,37 +3015,38 @@
       "time": "DhcpLeaseActivityV1.timestamp"
     },
     {
-      "cube": "AssetDetails_ch_agg",
+      "cube": "AssetDetailsAggV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "assets",
-      "measure": "AssetDetails_ch_agg.assetsCount",
+      "measure": "AssetDetailsAggV1.assetsCount",
       "name": "Assets",
-      "time": "AssetDetails_ch_agg.timestamp"
+      "time": "AssetDetailsAggV1.timestamp"
     },
     {
-      "cube": "AssetDetails_ch_agg",
+      "cube": "AssetDetailsAggV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": null,
       "id": "newassets",
-      "measure": "AssetDetails_ch_agg.assetsCount",
+      "measure": "AssetDetailsAggV1.assetsCount",
       "name": "New assets still held",
-      "time": "AssetDetails_ch_agg.first_seen"
+      "time": "AssetDetailsAggV1.first_seen"
     }
   ],
   "names": {
-    "AssetDetails_ch_agg": "Assets",
-    "AssetDetails_ch_agg.assetsCount": "Assets",
-    "AssetDetails_ch_agg.deploymentContext": "Cloud or on-premises",
-    "AssetDetails_ch_agg.first_seen": "First seen",
-    "AssetDetails_ch_agg.insight_classifications_label": "Problem",
-    "AssetDetails_ch_agg.insight_indicators_label": "Missing record",
-    "AssetDetails_ch_agg.os_type": "Operating system",
-    "AssetDetails_ch_agg.provider_label": "Found by",
-    "AssetDetails_ch_agg.region_label": "Region",
-    "AssetDetails_ch_agg.taxonomy_super_category_label": "Category",
-    "AssetDetails_ch_agg.taxonomy_type_label": "Asset type",
-    "AssetDetails_ch_agg.vendor": "Vendor",
+    "AssetDetailsAggV1": "Assets",
+    "AssetDetailsAggV1.assetsCount": "Assets",
+    "AssetDetailsAggV1.deploymentContext": "Cloud or on-premises",
+    "AssetDetailsAggV1.first_seen": "First seen",
+    "AssetDetailsAggV1.insight_classifications_label": "Problem",
+    "AssetDetailsAggV1.insight_indicators_label": "Missing record",
+    "AssetDetailsAggV1.os_type": "Operating system",
+    "AssetDetailsAggV1.provider_label": "Found by",
+    "AssetDetailsAggV1.region_label": "Region",
+    "AssetDetailsAggV1.taxonomy_super_category_label": "Category",
+    "AssetDetailsAggV1.taxonomy_type_label": "Asset type",
+    "AssetDetailsAggV1.updated_at": "Last updated",
+    "AssetDetailsAggV1.vendor": "Vendor",
     "DhcpLeaseActivityV1": "DHCP lease activity",
     "DhcpLeaseActivityV1.lease_op": "What changed",
     "DhcpLeaseActivityV1.timestamp": "Time",
@@ -3058,10 +3059,10 @@
     "DnsActivityV1.rcode": "Answer",
     "DnsActivityV1.timestamp": "Time",
     "DnsActivityV1.total_query_count": "DNS queries",
-    "HostMetrics": "DNS server metrics",
-    "HostMetrics.avg_value": "Queries per second",
-    "HostMetrics.metric_name": "Metric",
-    "HostMetrics.timestamp": "Time",
+    "HostMetricsV1": "DNS server metrics",
+    "HostMetricsV1.avg_value": "Queries per second",
+    "HostMetricsV1.metric_name": "Metric",
+    "HostMetricsV1.timestamp": "Time",
     "PortunusAggThreat_ch": "Security hits",
     "PortunusAggThreat_ch.action": "What happened",
     "PortunusAggThreat_ch.policy_name": "Policy",
@@ -3344,7 +3345,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.taxonomy_type_label"
+        "AssetDetailsAggV1.taxonomy_type_label"
       ],
       "id": "atype",
       "name": "Asset type",
@@ -3358,7 +3359,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.taxonomy_super_category_label"
+        "AssetDetailsAggV1.taxonomy_super_category_label"
       ],
       "id": "acat",
       "name": "Category",
@@ -3368,7 +3369,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.os_type"
+        "AssetDetailsAggV1.os_type"
       ],
       "id": "os",
       "name": "Operating system",
@@ -3382,7 +3383,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.provider_label"
+        "AssetDetailsAggV1.provider_label"
       ],
       "id": "source",
       "name": "Found by",
@@ -3396,7 +3397,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.deploymentContext"
+        "AssetDetailsAggV1.deploymentContext"
       ],
       "id": "where",
       "name": "Cloud or on-premises",
@@ -3410,7 +3411,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.vendor"
+        "AssetDetailsAggV1.vendor"
       ],
       "id": "vendor",
       "name": "Vendor",
@@ -3424,7 +3425,7 @@
     {
       "buckets": null,
       "fields": [
-        "AssetDetails_ch_agg.region_label"
+        "AssetDetailsAggV1.region_label"
       ],
       "id": "region",
       "name": "Region",
@@ -3439,7 +3440,7 @@
         "Lifecycle"
       ],
       "fields": [
-        "AssetDetails_ch_agg.insight_classifications_label"
+        "AssetDetailsAggV1.insight_classifications_label"
       ],
       "id": "problem",
       "name": "Problem",
@@ -3457,7 +3458,7 @@
         "IPAM"
       ],
       "fields": [
-        "AssetDetails_ch_agg.insight_indicators_label"
+        "AssetDetailsAggV1.insight_indicators_label"
       ],
       "id": "missing",
       "name": "Missing record",
@@ -3483,18 +3484,18 @@
     25
   ],
   "values": {
-    "AssetDetails_ch_agg.deploymentContext": {
+    "AssetDetailsAggV1.deploymentContext": {
       "Onprem": "On-premises"
     },
-    "AssetDetails_ch_agg.insight_indicators_label": {
+    "AssetDetailsAggV1.insight_indicators_label": {
       "DNS Forward Record": "DNS name (forward record)",
       "DNS Pointer Record": "Reverse DNS (pointer record)",
       "IPAM": "IPAM record"
     },
-    "AssetDetails_ch_agg.os_type": {
+    "AssetDetailsAggV1.os_type": {
       "": "Not reported"
     },
-    "AssetDetails_ch_agg.vendor": {
+    "AssetDetailsAggV1.vendor": {
       "": "Not reported"
     },
     "DnsActivityV1.rcode": {
@@ -3502,7 +3503,7 @@
       "2": "Server failed",
       "3": "No such name"
     },
-    "HostMetrics.metric_name": {
+    "HostMetricsV1.metric_name": {
       "dns_qps_iq": "DNS queries per second"
     },
     "PortunusAggThreat_ch.action": {

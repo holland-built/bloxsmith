@@ -7,8 +7,8 @@ import CHART_OPTIONS from './chart-options.json';
 // Inventory with the same filter, as a link under the chart and on each bar.
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-const T = 'AssetDetails_ch_agg.taxonomy_type_label';
-const M = 'AssetDetails_ch_agg.assetsCount';
+const T = 'AssetDetailsAggV1.taxonomy_type_label';
+const M = 'AssetDetailsAggV1.assetsCount';
 const filterOf = (href: string) =>
   JSON.parse(LZString.decompressFromEncodedURIComponent(new URL(href.replace('/#/', '/')).searchParams.get('advancedFilterValue')!)!);
 

@@ -12,7 +12,7 @@ import (
 // assembleAssetsResult.
 
 // cubeRow builds one row as QueryCube hands it over: keys still carry the
-// "AssetDetails_ch_agg." prefix that flattenCubeRow strips.
+// "AssetDetailsAggV1." prefix that flattenCubeRow strips.
 func assetCubeRow(kv map[string]any) map[string]any {
 	out := map[string]any{}
 	for k, v := range kv {
@@ -23,7 +23,7 @@ func assetCubeRow(kv map[string]any) map[string]any {
 
 func listRow(cqid, name, typ, provider, vendor, lastSeen string) map[string]any {
 	return assetCubeRow(map[string]any{
-		"cqid": cqid, "name": name, "taxonomy_type_label": typ,
+		"cqid": cqid, "assetName": name, "taxonomy_type_label": typ,
 		"providers_label": provider, "vendor": vendor, "last_seen": lastSeen,
 	})
 }
@@ -113,8 +113,9 @@ func TestAssetFilters_SearchAndType(t *testing.T) {
 	if len(f) != 2 {
 		t.Fatalf("filters = %d, want 2", len(f))
 	}
-	if f[0]["member"] != assetsCube+".name" || f[0]["operator"] != "contains" {
-		t.Errorf("search filter = %+v, want contains on name", f[0])
+	// V1 renamed the old cube's name to assetName (same values on every row).
+	if f[0]["member"] != assetsCube+".assetName" || f[0]["operator"] != "contains" {
+		t.Errorf("search filter = %+v, want contains on assetName", f[0])
 	}
 	if f[1]["member"] != assetsCube+".taxonomy_type_label" || f[1]["operator"] != "equals" {
 		t.Errorf("type filter = %+v, want equals on taxonomy_type_label", f[1])

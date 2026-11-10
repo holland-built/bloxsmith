@@ -653,14 +653,17 @@ func (s *Service) CSPThreats() map[string]any {
 	return rowsResp(normThreats(cubeData(body)))
 }
 
+// CSPDNSQps is the DNS query rate, hour by hour. The granularity filter makes
+// HostMetricsV1 read its stored hour rows, as the old HostMetrics cube did
+// (cube_names.go); without it V1 averages 5-minute rows into other numbers.
 func (s *Service) CSPDNSQps() map[string]any {
 	q, _ := json.Marshal(map[string]any{
-		"measures": []string{"HostMetrics.avg_value"},
+		"measures": []string{"HostMetricsV1.avg_value"},
 		"filters": []map[string]any{{
-			"member": "HostMetrics.metric_name", "operator": "equals",
-			"values": []string{"dns_qps_iq"}}},
+			"member": "HostMetricsV1.metric_name", "operator": "equals",
+			"values": []string{"dns_qps_iq"}}, hostTier("hour")},
 		"timeDimensions": []map[string]any{{
-			"dimension": "HostMetrics.timestamp",
+			"dimension": "HostMetricsV1.timestamp",
 			"dateRange": "last 24 hours", "granularity": "hour"}},
 	})
 	body, st, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})

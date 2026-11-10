@@ -1199,16 +1199,28 @@ func (c *Client) QueryCubeErr(ctx context.Context, cube string, measures []strin
 // SecurityActionAssetsV1), so a 400-day question would get a 30-day answer.
 // A nil slice means the query failed.
 func (c *Client) QueryCubeDirectOnly(ctx context.Context, cube string, measures []string, opts map[string]any) []map[string]any {
+	rows, _ := c.QueryCubeDirectOnlyErr(ctx, cube, measures, opts)
+	return rows
+}
+
+// QueryCubeDirectOnlyErr is QueryCubeDirectOnly that also says why a nil slice
+// is nil, as QueryCubeErr does.
+func (c *Client) QueryCubeDirectOnlyErr(ctx context.Context, cube string, measures []string, opts map[string]any) ([]map[string]any, error) {
 	rows, fallback, err := c.queryCubeDirect(ctx, measures, opts)
 	if err != nil {
 		log.Printf("mcp: QueryCubeDirectOnly %s: %v", cube, err)
-		return nil
+		return nil, err
 	}
 	if fallback != "" {
 		log.Printf("mcp: QueryCubeDirectOnly %s: %s", cube, fallback)
-		return nil
+		// An HTTP refusal keeps its code, so Reason can still name a 403.
+		var code int
+		if _, e := fmt.Sscanf(fallback, "http %d", &code); e == nil {
+			return nil, &StatusError{Method: "cube query", Code: code}
+		}
+		return nil, errors.New("cube query: " + fallback)
 	}
-	return rows
+	return rows, nil
 }
 
 // queryCubeMCP is the MCP route: column names use "__" which is converted back

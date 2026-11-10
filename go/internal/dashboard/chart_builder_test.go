@@ -35,14 +35,14 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 	measures := map[string]string{
 		"dns":       "DnsActivityV1.total_query_count",
 		"threats":   "PortunusAggThreat_ch.requests",
-		"qps":       "HostMetrics.avg_value",
+		"qps":       "HostMetricsV1.avg_value",
 		"dhcp":      "DhcpLeaseActivityV1.total_count",
-		"assets":    "AssetDetails_ch_agg.assetsCount",
-		"newassets": "AssetDetails_ch_agg.assetsCount",
+		"assets":    "AssetDetailsAggV1.assetsCount",
+		"newassets": "AssetDetailsAggV1.assetsCount",
 	}
 	times := map[string]string{"dns": "DnsActivityV1.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
-		"qps": "HostMetrics.timestamp", "dhcp": "DhcpLeaseActivityV1.timestamp",
-		"newassets": "AssetDetails_ch_agg.first_seen"}
+		"qps": "HostMetricsV1.timestamp", "dhcp": "DhcpLeaseActivityV1.timestamp",
+		"newassets": "AssetDetailsAggV1.first_seen"}
 	endpoints := map[string]string{
 		"dns":       "/api/cubejs/v1/query",
 		"threats":   "/api/cubejs-security/v1/query",
@@ -61,13 +61,13 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		"policy":   {"PortunusAggThreat_ch.policy_name"},
 		"severity": {"PortunusAggThreat_ch.severity"},
 		"leaseop":  {"DhcpLeaseActivityV1.lease_op"},
-		"atype":    {"AssetDetails_ch_agg.taxonomy_type_label"},
-		"acat":     {"AssetDetails_ch_agg.taxonomy_super_category_label"},
-		"os":       {"AssetDetails_ch_agg.os_type"},
-		"source":   {"AssetDetails_ch_agg.provider_label"},
-		"where":    {"AssetDetails_ch_agg.deploymentContext"},
-		"vendor":   {"AssetDetails_ch_agg.vendor"},
-		"region":   {"AssetDetails_ch_agg.region_label"},
+		"atype":    {"AssetDetailsAggV1.taxonomy_type_label"},
+		"acat":     {"AssetDetailsAggV1.taxonomy_super_category_label"},
+		"os":       {"AssetDetailsAggV1.os_type"},
+		"source":   {"AssetDetailsAggV1.provider_label"},
+		"where":    {"AssetDetailsAggV1.deploymentContext"},
+		"vendor":   {"AssetDetailsAggV1.vendor"},
+		"region":   {"AssetDetailsAggV1.region_label"},
 	}
 	// Bucket splits add a filter per bucket when run, not a dimension.
 	buckets := map[string]bool{"problem": true, "missing": true}
@@ -99,9 +99,10 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 			t.Errorf("%+v: dimensions = %v, want %v", p, got, dims[p.Split])
 		}
 		if p.Count == "assets" {
-			// A snapshot has no time to window.
-			if _, ok := q["timeDimensions"]; ok || p.Window != "now" {
-				t.Errorf("%+v: assets must be now with no timeDimensions, got %v", p, q["timeDimensions"])
+			// A snapshot has no time to window, only the range V1 insists on.
+			want := []any{map[string]any{"dimension": "AssetDetailsAggV1.updated_at", "dateRange": snapshotRange}}
+			if !reflect.DeepEqual(q["timeDimensions"], want) || p.Window != "now" {
+				t.Errorf("%+v: assets must be now with only the snapshot range, got %v", p, q["timeDimensions"])
 			}
 			continue
 		}
@@ -128,7 +129,11 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		}
 		f := asSlice(q["filters"])
 		if p.Count == "qps" {
-			want := []any{map[string]any{"member": "HostMetrics.metric_name", "operator": "equals", "values": []any{"dns_qps_iq"}}}
+			want := []any{map[string]any{"member": "HostMetricsV1.metric_name", "operator": "equals", "values": []any{"dns_qps_iq"}}}
+			// By hour or by day reads that step's stored rows (cube_names.go).
+			if p.Over != "none" {
+				want = append(want, map[string]any{"member": "HostMetricsV1.granularity", "operator": "equals", "values": []any{p.Over}})
+			}
 			if !reflect.DeepEqual(f, want) {
 				t.Errorf("%+v: filters = %v, want the dns_qps_iq filter", p, f)
 			}
@@ -532,20 +537,20 @@ func TestRunChart_BucketsCountEachValueOnItsOwn(t *testing.T) {
 			t.Errorf("a bucket count must not group by, got dimensions %v", q["dimensions"])
 		}
 		f := asMap(asSlice(q["filters"])[0])
-		if f["member"] != "AssetDetails_ch_agg.insight_indicators_label" || f["operator"] != "contains" {
+		if f["member"] != "AssetDetailsAggV1.insight_indicators_label" || f["operator"] != "contains" {
 			t.Errorf("filter = %v", f)
 		}
 		v := asSlice(f["values"])[0].(string)
-		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetails_ch_agg.assetsCount":"` + counts[v] + `"}]}}`))
+		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetailsAggV1.assetsCount":"` + counts[v] + `"}]}}`))
 	})
 	res := s.RunChart(context.Background(), ChartPicks{Count: "assets", Split: "missing", Window: "now", Over: "none"})
 	if res["status"] != "ok" || calls.Load() != 3 {
 		t.Fatalf("status %v after %d calls, want ok after 3", res["status"], calls.Load())
 	}
 	want := []map[string]any{
-		{"AssetDetails_ch_agg.insight_indicators_label": "DNS Forward Record", "AssetDetails_ch_agg.assetsCount": "383"},
-		{"AssetDetails_ch_agg.insight_indicators_label": "DNS Pointer Record", "AssetDetails_ch_agg.assetsCount": "383"},
-		{"AssetDetails_ch_agg.insight_indicators_label": "IPAM", "AssetDetails_ch_agg.assetsCount": "49"},
+		{"AssetDetailsAggV1.insight_indicators_label": "DNS Forward Record", "AssetDetailsAggV1.assetsCount": "383"},
+		{"AssetDetailsAggV1.insight_indicators_label": "DNS Pointer Record", "AssetDetailsAggV1.assetsCount": "383"},
+		{"AssetDetailsAggV1.insight_indicators_label": "IPAM", "AssetDetailsAggV1.assetsCount": "49"},
 	}
 	if !reflect.DeepEqual(res["rows"], want) {
 		t.Fatalf("rows = %v", res["rows"])
@@ -563,7 +568,7 @@ func TestRunChart_OneFailedBucketFailsTheChart(t *testing.T) {
 			w.WriteHeader(502)
 			return
 		}
-		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetails_ch_agg.assetsCount":"5"}]}}`))
+		_, _ = w.Write([]byte(`{"result":{"data":[{"AssetDetailsAggV1.assetsCount":"5"}]}}`))
 	})
 	res := s.RunChart(context.Background(), ChartPicks{Count: "assets", Split: "problem", Window: "now", Over: "none"})
 	if res["status"] != "error" {
@@ -577,7 +582,9 @@ func TestBuildChartQuery_AssetsExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"dimensions":["AssetDetails_ch_agg.taxonomy_type_label"],"limit":10,"measures":["AssetDetails_ch_agg.assetsCount"],"order":{"AssetDetails_ch_agg.assetsCount":"desc"}}`
+	want := `{"dimensions":["AssetDetailsAggV1.taxonomy_type_label"],"limit":10,"measures":["AssetDetailsAggV1.assetsCount"],` +
+		`"order":{"AssetDetailsAggV1.assetsCount":"desc","AssetDetailsAggV1.taxonomy_type_label":"asc"},` +
+		`"timeDimensions":[{"dateRange":"from 365 days ago to now","dimension":"AssetDetailsAggV1.updated_at"}]}`
 	if b, _ := json.Marshal(q); string(b) != want {
 		t.Errorf("assets by type:\n got %s\nwant %s", b, want)
 	}
@@ -585,7 +592,7 @@ func TestBuildChartQuery_AssetsExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = `{"measures":["AssetDetails_ch_agg.assetsCount"],"timeDimensions":[{"dateRange":"last 90 days","dimension":"AssetDetails_ch_agg.first_seen","granularity":"week"}]}`
+	want = `{"measures":["AssetDetailsAggV1.assetsCount"],"timeDimensions":[{"dateRange":"last 90 days","dimension":"AssetDetailsAggV1.first_seen","granularity":"week"}]}`
 	if b, _ := json.Marshal(q); string(b) != want {
 		t.Errorf("new assets by week:\n got %s\nwant %s", b, want)
 	}
