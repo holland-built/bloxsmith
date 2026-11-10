@@ -10,7 +10,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
-import { changeText, vsYesterday } from '../lib/dnsCompare.js'
+import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import './Overview.css'
 import './Dns.css'
 
@@ -111,9 +111,10 @@ function signing(dnssec) {
 function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoading, dnssec }) {
   const qpsOk = !qps.loading && !qps.error && qps.data?.status !== 'error'
   const rows = qpsOk ? qps.data?.rows ?? [] : []
-  const last = rows.length ? Number(rows[rows.length - 1].avg_value) : null
+  // A missing latest reading is a dash, never 0.
+  const last = rows.length ? reading(rows[rows.length - 1].avg_value) : null
   const cmp = vsYesterday(rows)
-  const qpsTip = Number.isFinite(last)
+  const qpsTip = last != null
     ? `Average for the hour from ${clock(rows[rows.length - 1].hour)}, so far. ${cmp ? `Same time yesterday (${clock(cmp.wasHour)}): ${fmtQps(cmp.was)} a second.` : 'No reading from this time yesterday to compare with.'}`
     : null
 
@@ -136,7 +137,7 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
   return [
     {
       key: 'queries', label: 'DNS queries', panelId: 'dns-query-rate',
-      value: Number.isFinite(last) ? fmtQps(last) : null, loading: qps.loading, unit: 'a second',
+      value: last != null ? fmtQps(last) : null, loading: qps.loading, unit: 'a second',
       sub: cmp ? `${changeText(cmp)} vs yesterday` : '',
       tip: qpsTip,
     },
@@ -280,7 +281,9 @@ function QpsHero({ panelId, qps }) {
   const rows = qps.data?.rows ?? []
   const status = qps.data?.status
   const chartData = rows.map((r) => ({ label: clock(r.hour), value: Number(r.avg_value) || 0 }))
-  const current = chartData.at(-1)?.value
+  // The big number is the latest reading as sent: a missing one is a dash,
+  // not the 0 the chart has to draw it as.
+  const current = rows.length ? reading(rows[rows.length - 1].avg_value) : null
   // Against the same time yesterday, never the first hour on the chart: that
   // set a quiet night against a busy afternoon. Grey either way: more DNS
   // traffic is not good or bad news on its own.
@@ -302,7 +305,7 @@ function QpsHero({ panelId, qps }) {
       ) : (
         <>
           <div className="flex items-baseline gap-3 my-2">
-            <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            <span className="text-figure font-semibold tracking-tight">{current == null ? '—' : current.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {cmp && (
               <Tip
                 className="text-note text-muted"
@@ -416,6 +419,9 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // not clean zones — they are unexamined ones.
   const unchecked = zones.length - zones.filter(ttlChecked).length
   const reverse = zones.filter(isReverseZone).length
+  // The server's own "unusual settings" flag, counted as it always was, so
+  // nothing the old panel showed is lost.
+  const anomalies = zones.filter((z) => z.anomaly).length
   const open = (kind) => {
     location.hash = `dns?issues=${encodeURIComponent(kind)}`
     setTimeout(() => jumpToPanel('dns-zones'), 0)
@@ -446,6 +452,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
       <dl className="dns-split mt-auto">
         <div><dt>Forward</dt><dd>{(zones.length - reverse).toLocaleString()}</dd></div>
         <div><dt>Reverse</dt><dd>{reverse.toLocaleString()}</dd></div>
+        <div><dt>Unusual settings</dt><dd style={anomalies > 0 ? { color: COLORS.warn } : undefined}>{anomalies.toLocaleString()}</dd></div>
         {unchecked > 0 && <div><dt>Not checked</dt><dd>{unchecked.toLocaleString()}</dd></div>}
       </dl>
     </Card>

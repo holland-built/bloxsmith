@@ -72,6 +72,8 @@ test('Zone Counts lists issue kinds; a kind opens just those zones', async ({ pa
   await expect(kpis.getByRole('button', { name: /^cache time too short: 1 zones/ })).toBeVisible();
   await expect(kpis).toContainText('Forward5');
   await expect(kpis).toContainText('Reverse1');
+  // The server's "unusual settings" flag is still counted (it was dropped once).
+  await expect(kpis).toContainText('Unusual settings2');
   await kpis.getByRole('button', { name: /^remembers "not found" too long/ }).click();
   await expect(page).toHaveURL(/#dns\?issues=High%20Neg-TTL$/);
   await expect(zoneCard(page).locator('tbody tr')).toHaveCount(1);
@@ -105,4 +107,16 @@ test('query rate: 24 hours compares with the same time yesterday, in grey', asyn
     return c;
   });
   expect(color).toBe(muted);
+});
+
+test('query rate: a missing latest reading is a dash with no change, never 0 or ▼ 100%', async ({ page }) => {
+  await setup(page, qps(24, (i) => (i === 23 ? (null as unknown as number) : 10)));
+  await page.goto('/#dns');
+  const tile = page.locator('[data-tile="queries"]');
+  await expect(tile).toContainText('—');
+  await expect(tile).not.toContainText(/\b0\b/);
+  await expect(tile).not.toContainText('100%');
+  const hero = page.locator('[data-panel-id="dns-query-rate"]');
+  await expect(hero.locator('[data-qps-change]')).toHaveCount(0);
+  await expect(hero.getByText('—', { exact: true })).toBeVisible();
 });

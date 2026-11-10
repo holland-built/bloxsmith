@@ -10,6 +10,17 @@
 
 const HOUR_MS = 3600000
 
+/**
+ * One hour's reading as a number, or null when the feed sent none. Number()
+ * alone turns null and '' into 0, which would show a missing hour as a real
+ * zero and a fall of 100%.
+ */
+export function reading(v) {
+  if (v == null || (typeof v === 'string' && v.trim() === '')) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 /** { now, was, nowHour, wasHour, pct } for the latest hour vs a day before, or null. */
 export function vsYesterday(rows) {
   if (!Array.isArray(rows) || rows.length < 2) return null
@@ -23,9 +34,9 @@ export function vsYesterday(rows) {
     if (!best || Math.abs(gap - 24) < Math.abs(best.gap - 24)) best = { r, gap }
   }
   if (!best) return null
-  const now = Number(last.avg_value)
-  const was = Number(best.r.avg_value)
-  if (!Number.isFinite(now) || !Number.isFinite(was) || was <= 0) return null
+  const now = reading(last.avg_value)
+  const was = reading(best.r.avg_value)
+  if (now == null || was == null || was <= 0) return null
   return { now, was, nowHour: last.hour, wasHour: best.r.hour, pct: ((now - was) / was) * 100 }
 }
 

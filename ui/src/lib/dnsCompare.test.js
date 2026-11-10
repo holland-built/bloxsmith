@@ -1,7 +1,7 @@
 // Run with: npm test  (node --test, no test framework dependency)
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { changeText, vsYesterday } from './dnsCompare.js'
+import { changeText, reading, vsYesterday } from './dnsCompare.js'
 
 const H = 3600000
 const at = (h) => new Date(Date.UTC(2026, 10, 10, 0) + h * H).toISOString()
@@ -38,4 +38,22 @@ test('change text: arrows, flat, and a tiny base', () => {
   assert.equal(changeText({ was: 10, pct: 0.2 }), '±0%')
   assert.equal(changeText({ was: 0.4, pct: 400 }), 'was 0.4')
   assert.equal(changeText(null), null)
+})
+
+test('a missing reading on either side gives no comparison, never a 100% fall', () => {
+  for (const bad of [null, undefined, '', 'n/a']) {
+    const today = series(24, (i) => (i === 23 ? bad : 10))
+    assert.equal(vsYesterday(today), null, `latest ${String(bad)}`)
+    const yesterday = series(24, (i) => (i === 0 ? bad : 10))
+    assert.equal(vsYesterday(yesterday), null, `yesterday ${String(bad)}`)
+  }
+})
+
+test('reading: null, blank and non-numbers are missing, 0 is a reading', () => {
+  assert.equal(reading(null), null)
+  assert.equal(reading(undefined), null)
+  assert.equal(reading(''), null)
+  assert.equal(reading('x'), null)
+  assert.equal(reading(0), 0)
+  assert.equal(reading('2.5'), 2.5)
 })
