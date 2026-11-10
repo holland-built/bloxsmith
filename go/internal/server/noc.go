@@ -41,7 +41,12 @@ func (d *Deps) registerNOCRoutes(mux router) {
 // actions is GET /api/actions (server.py:5077): the raw IQ Actions payload.
 func (d *Deps) actions(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/actions")
-	d.json(w, r, 200, d.dash(r).FetchActions(r.Context()))
+	// Cached per tenant for dashboard.TileTTL: one read pages through up to ten
+	// MCP calls, and Incidents polls it every 30 seconds.
+	svc := d.dash(r)
+	d.json(w, r, 200, svc.CachedRead("/api/actions", func() map[string]any {
+		return svc.FetchActions(r.Context())
+	}))
 }
 
 // actionDetail is GET /api/actions/{id}: a single IQ Action read.
@@ -253,7 +258,10 @@ func (d *Deps) dnsAnalytics(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dns-analytics")
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	d.json(w, r, 200, d.dash(r).FetchDNSAnalytics(ctx))
+	svc := d.dash(r)
+	d.json(w, r, 200, svc.CachedRead("/api/dns-analytics", func() map[string]any {
+		return svc.FetchDNSAnalytics(ctx)
+	}))
 }
 
 // hostMetrics is GET /api/host-metrics (server.py:5215).

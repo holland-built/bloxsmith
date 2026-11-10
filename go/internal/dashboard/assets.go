@@ -264,9 +264,11 @@ func assetsUnavailable(aq AssetQuery, reason string) map[string]any {
 // CACHING. The key carries every parameter that changes the answer, so two
 // different searches cannot serve each other's rows — that sounds obvious and
 // is the exact bug a key built from the route path alone produces. It goes
-// through Cache.Do rather than Get/SetGen so N concurrent callers on a cold
+// through Cache.DoFresh rather than Get/SetGen so N concurrent callers on a cold
 // key (two browser tabs, a refresh landing on a first load) collapse into one
-// pair of upstream calls instead of 2N.
+// pair of upstream calls instead of 2N. DoFresh, not Do: the fetch reads the
+// request's context, so it cannot be left running as a background refresh
+// after the request ends, and the tab's manual Refresh must not get old rows.
 //
 // NO POLLING backs this endpoint by design. Asset data changes on discovery
 // sync cycles, not second to second, so Security.jsx's 30s poll would spend
@@ -279,7 +281,7 @@ func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir str
 		"page": strconv.Itoa(aq.Page),
 	}, false)
 
-	v, _ := s.Cache.Do(ck, func() (any, error) {
+	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
 		res := s.assetInventoryUncached(ctx, aq)
 		if res["availability"] == "error" {
 			return res, errAssetFeedDegraded
@@ -591,7 +593,7 @@ func normAssetRows(rows []map[string]any) []any {
 // and each arrives with the count it will produce.
 func (s *Service) FetchAssetFilters(ctx context.Context) map[string]any {
 	ck := cache.Key("assets", "filters", nil, false)
-	v, _ := s.Cache.Do(ck, func() (any, error) {
+	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
 		res := s.assetFiltersUncached(ctx)
 		if res["availability"] == "error" {
 			return res, errAssetFeedDegraded
@@ -700,7 +702,7 @@ func (s *Service) FetchAssetDetail(ctx context.Context, cqid string) map[string]
 		return assetDetailUnavailable("no asset id was supplied")
 	}
 	ck := cache.Key("assets", "detail", map[string]string{"cqid": cqid}, false)
-	v, _ := s.Cache.Do(ck, func() (any, error) {
+	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
 		res := s.assetDetailUncached(ctx, cqid)
 		if res["availability"] == "error" {
 			return res, errAssetFeedDegraded

@@ -41,6 +41,11 @@ const hubStatusUnknown = "unknown"
 
 // FetchHubHealth is fetch_hub_health (server.py:3648).
 func (s *Service) FetchHubHealth() []map[string]any {
+	return shared(s, "hub_health", func() []map[string]any { return s.fetchHubHealth() })
+}
+
+// fetchHubHealth is FetchHubHealth without the single-flight wrapper (shared.go).
+func (s *Service) fetchHubHealth() []map[string]any {
 	ck := cache.Key("hub_health", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.([]map[string]any)
@@ -219,6 +224,11 @@ func serviceInventoryTruncated(rows []any, body map[string]any) (bool, string) {
 //	          SET is not authoritative, so the caller must fail open exactly as
 //	          it does for error. Paging is deliberately not built.
 func (s *Service) FetchServiceInventory() map[string]any {
+	return shared(s, "service_inventory", func() map[string]any { return s.fetchServiceInventory() })
+}
+
+// fetchServiceInventory is FetchServiceInventory without the single-flight wrapper (shared.go).
+func (s *Service) fetchServiceInventory() map[string]any {
 	ck := cache.Key("service_inventory", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
@@ -264,6 +274,11 @@ func (s *Service) FetchServiceInventory() map[string]any {
 
 // FetchHubSecurity is fetch_hub_security (server.py:3685).
 func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
+	return shared(s, fmt.Sprintf("hub_security|%d|%d", windowSecs, limit), func() map[string]any { return s.fetchHubSecurity(windowSecs, limit) })
+}
+
+// fetchHubSecurity is FetchHubSecurity without the single-flight wrapper (shared.go).
+func (s *Service) fetchHubSecurity(windowSecs, limit int) map[string]any {
 	ck := cache.Key("hub_security", "",
 		map[string]string{"w": fmt.Sprint(windowSecs), "l": fmt.Sprint(limit)}, false)
 	if v, ok := s.Cache.Get(ck); ok {
@@ -487,6 +502,11 @@ func hubSevRank(level string) string {
 
 // FetchHubDomains is fetch_hub_domains (server.py:3740).
 func (s *Service) FetchHubDomains() map[string]any {
+	return shared(s, "hub_domains", func() map[string]any { return s.fetchHubDomains() })
+}
+
+// fetchHubDomains is FetchHubDomains without the single-flight wrapper (shared.go).
+func (s *Service) fetchHubDomains() map[string]any {
 	ck := cache.Key("hub_domains", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)

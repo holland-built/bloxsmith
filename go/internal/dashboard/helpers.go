@@ -61,11 +61,15 @@ type Service struct {
 	// With's shallow copy keeps one process-wide memory; nil (bare Service
 	// literals in tests) disables the backoff rather than panicking.
 	ent *entitlement
+	// secCube remembers, per tenant, that the security Cube.js service is
+	// failing (cube_query.go). A pointer for the same reason as ent; nil
+	// disables the memory.
+	secCube *cubeFallback
 }
 
 // New builds the dashboard service.
 func New(r *rest.Client, c *cache.Cache) *Service {
-	return &Service{Rest: r, Cache: c, ent: &entitlement{}}
+	return &Service{Rest: r, Cache: c, ent: &entitlement{}, secCube: &cubeFallback{}}
 }
 
 // With returns a copy of the service bound to a different rest.Client — in

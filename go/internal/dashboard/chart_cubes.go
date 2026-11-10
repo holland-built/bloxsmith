@@ -320,6 +320,11 @@ func (c *CubeCatalog) BuildQuery(p AnyPicks) (map[string]any, string, error) {
 // RunAnyChart checks the picks against the catalog, then runs the query the
 // way RunChart does, with the same ok / empty / error / invalid statuses.
 func (s *Service) RunAnyChart(ctx context.Context, p AnyPicks) map[string]any {
+	return shared(s, "chartany|"+picksKey(p), func() map[string]any { return s.runAnyChart(ctx, p) })
+}
+
+// runAnyChart is RunAnyChart without the single-flight wrapper (shared.go).
+func (s *Service) runAnyChart(ctx context.Context, p AnyPicks) map[string]any {
 	cat, err := s.CubeCatalog()
 	if err != nil {
 		return catalogUnavailable()
@@ -334,23 +339,5 @@ func (s *Service) RunAnyChart(ctx context.Context, p AnyPicks) map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	body, st, err := s.cubeGet(endpoint, qj)
-	if errored(st, err) {
-		return map[string]any{
-			"query": q, "endpoint": endpoint, "rows": []map[string]any{},
-			"status": "error", "reason": "Infoblox didn't answer this query (upstream error).",
-		}
-	}
-	raw := cubeData(body)
-	rows := make([]map[string]any, 0, len(raw))
-	for _, r := range raw {
-		rows = append(rows, asMap(r))
-	}
-	status := "ok"
-	if len(rows) == 0 {
-		status = "empty"
-	}
-	result := map[string]any{"query": q, "endpoint": endpoint, "rows": rows, "status": status}
-	s.Cache.SetGen(ck, result, g)
-	return result
+	return s.runCubeQuery(ck, g, q, endpoint, qj)
 }

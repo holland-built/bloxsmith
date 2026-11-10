@@ -727,10 +727,23 @@ func (s *Service) CSPDHCPLeases() map[string]any {
 }
 
 // CSPCtemExposure merges 3 sub-calls; any sub-error → status=error.
+// The sub-calls are independent, so they run at once (fanOut); a panic in one
+// still reaches the handler's recover, as it did when they ran in turn.
 func (s *Service) CSPCtemExposure() map[string]any {
-	statsB, statsH, e1 := s.Rest.GetEx("/api/attack-surface/v1/account/stats", nil)
-	expB, expH, e2 := s.Rest.GetEx("/api/attack-surface/v1/exposures/metrics/counts-by-period", nil)
-	matB, matH, e3 := s.Rest.GetEx("/api/attack-surface/v1/exposures/metrics/severity-priority-matrix", nil)
+	var (
+		statsB, expB, matB any
+		statsH, expH, matH int
+		e1, e2, e3         error
+	)
+	mustFanOut(
+		func() { statsB, statsH, e1 = s.Rest.GetEx("/api/attack-surface/v1/account/stats", nil) },
+		func() {
+			expB, expH, e2 = s.Rest.GetEx("/api/attack-surface/v1/exposures/metrics/counts-by-period", nil)
+		},
+		func() {
+			matB, matH, e3 = s.Rest.GetEx("/api/attack-surface/v1/exposures/metrics/severity-priority-matrix", nil)
+		},
+	)
 	if errored(statsH, e1) || errored(expH, e2) || errored(matH, e3) {
 		return map[string]any{"data": map[string]any{}, "status": "error"}
 	}
@@ -743,11 +756,21 @@ func (s *Service) CSPCtemExposure() map[string]any {
 }
 
 // CSPCtemAssets merges 4 sub-calls; any sub-error → status=error.
+// Run at once, like CSPCtemExposure.
 func (s *Service) CSPCtemAssets() map[string]any {
-	provB, provH, e1 := s.Rest.GetEx("/api/attack-surface/v1/providers", nil)
-	techB, techH, e2 := s.Rest.GetEx("/api/attack-surface/v1/technologies", nil)
-	portB, portH, e3 := s.Rest.GetEx("/api/attack-surface/v1/ports", nil)
-	cntB, cntH, e4 := s.Rest.GetEx("/api/attack-surface/v1/assets/count", map[string]string{"period": "7d"})
+	var (
+		provB, techB, portB, cntB any
+		provH, techH, portH, cntH int
+		e1, e2, e3, e4            error
+	)
+	mustFanOut(
+		func() { provB, provH, e1 = s.Rest.GetEx("/api/attack-surface/v1/providers", nil) },
+		func() { techB, techH, e2 = s.Rest.GetEx("/api/attack-surface/v1/technologies", nil) },
+		func() { portB, portH, e3 = s.Rest.GetEx("/api/attack-surface/v1/ports", nil) },
+		func() {
+			cntB, cntH, e4 = s.Rest.GetEx("/api/attack-surface/v1/assets/count", map[string]string{"period": "7d"})
+		},
+	)
 	if errored(provH, e1) || errored(techH, e2) || errored(portH, e3) || errored(cntH, e4) {
 		return map[string]any{"data": map[string]any{}, "status": "error"}
 	}
@@ -852,9 +875,17 @@ func (s *Service) CSPExposedIPs() map[string]any {
 }
 
 // CSPLicenseAlerts merges licenses + user_alerts; any sub-error → status=error.
+// Run at once, like CSPCtemExposure.
 func (s *Service) CSPLicenseAlerts() map[string]any {
-	licB, licH, le := s.Rest.GetEx("/licensing/v1/licenses", map[string]string{"state": "all"})
-	alB, alH, ae := s.Rest.GetEx("/atlas-notifications-mailbox/v1/user_alerts", nil)
+	var (
+		licB, alB any
+		licH, alH int
+		le, ae    error
+	)
+	mustFanOut(
+		func() { licB, licH, le = s.Rest.GetEx("/licensing/v1/licenses", map[string]string{"state": "all"}) },
+		func() { alB, alH, ae = s.Rest.GetEx("/atlas-notifications-mailbox/v1/user_alerts", nil) },
+	)
 	if errored(licH, le) || errored(alH, ae) {
 		return map[string]any{"licenses": []any{}, "alerts": []any{}, "status": "error"}
 	}

@@ -99,6 +99,11 @@ func inferIndicatorType(q string) string {
 // FetchDossier is fetch_dossier: create a TIDE lookup job (wait=true), then read
 // its results. 403 -> "not entitled"; invalid indicator -> "invalid ...".
 func (s *Service) FetchDossier(q, itype string) map[string]any {
+	return shared(s, "dossier|"+itype+"|"+q, func() map[string]any { return s.fetchDossier(q, itype) })
+}
+
+// fetchDossier is FetchDossier without the single-flight wrapper (shared.go).
+func (s *Service) fetchDossier(q, itype string) map[string]any {
 	q = strings.ToLower(strings.TrimSpace(q))
 	if q == "" {
 		return map[string]any{"query": "", "type": "", "summary": map[string]any{},
@@ -345,6 +350,11 @@ func normDossier(query, itype string, results []any) map[string]any {
 // FetchLookalikes is fetch_lookalikes: typosquat domains + protected targets via
 // TDLAD REST. Degrades on 403/error.
 func (s *Service) FetchLookalikes() map[string]any {
+	return shared(s, "lookalikes", func() map[string]any { return s.fetchLookalikes() })
+}
+
+// fetchLookalikes is FetchLookalikes without the single-flight wrapper (shared.go).
+func (s *Service) fetchLookalikes() map[string]any {
 	ck := cache.Key("lookalikes", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
