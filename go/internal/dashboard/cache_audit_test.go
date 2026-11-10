@@ -152,3 +152,31 @@ func TestCubeSecurityFallbackIsRemembered(t *testing.T) {
 		t.Fatalf("calls = %v, want the answering security service tried first again (security 3, main 4)", calls)
 	}
 }
+
+// TestCubeSecurityFallbackIsPerQuery: the security service refusing query A
+// must not send query B to the main service, which may answer B with no rows
+// where the security service has data.
+func TestCubeSecurityFallbackIsPerQuery(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("query")
+		mu.Lock()
+		order = append(order, r.URL.Path+" "+q)
+		mu.Unlock()
+		if r.URL.Path == cubeSecurityEndpoint && q == `{"q":"A"}` {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"data":[]}}`))
+	})
+	s.cubeGet(cubeSecurityEndpoint, []byte(`{"q":"A"}`))
+	mu.Lock()
+	order = nil
+	mu.Unlock()
+	s.cubeGet(cubeSecurityEndpoint, []byte(`{"q":"B"}`))
+	if len(order) == 0 || order[0] != cubeSecurityEndpoint+` {"q":"B"}` {
+		t.Fatalf("query B went %v, want the security service first", order)
+	}
+}

@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -18,10 +20,11 @@ import (
 // returned, so the caller reports that failure as before. Queries for any
 // other endpoint are passed through untouched.
 //
-// Once the security service has failed where the main one answered, that is
-// remembered for this tenant for cubeSecurityRetry, and queries go to the main
-// service first: without it, every threat query made two calls for as long as
-// the security service stayed down. Should the main service fail inside that
+// Once the security service has failed a query where the main one answered,
+// that is remembered for this tenant and this exact query for
+// cubeSecurityRetry, and that query goes to the main service first: without
+// it, every poll of a threat query made two calls for as long as the security
+// service stayed down. Other queries still try the security service first. Should the main service fail inside that
 // window, the security service is still asked, and an answer from it ends the
 // window early.
 func (s *Service) cubeGet(endpoint string, qj []byte) (any, int, error) {
@@ -29,7 +32,10 @@ func (s *Service) cubeGet(endpoint string, qj []byte) (any, int, error) {
 	if endpoint != cubeSecurityEndpoint {
 		return s.Rest.GetEx(endpoint, params)
 	}
-	tenant := s.Rest.TenantTag()
+	// Keyed by tenant AND query: the security service can refuse one query
+	// and still answer another, so only the query that failed skips it.
+	sum := sha256.Sum256(qj)
+	tenant := s.Rest.TenantTag() + "|" + hex.EncodeToString(sum[:8])
 	if s.secCube.down(tenant) {
 		b2, st2, err2 := s.Rest.GetEx(cubeEndpoint, params)
 		if !errored(st2, err2) {
@@ -58,9 +64,9 @@ func (s *Service) cubeGet(endpoint string, qj []byte) (any, int, error) {
 // it is tried first again.
 const cubeSecurityRetry = 10 * time.Minute
 
-// cubeFallback is the per-tenant memory of a failing security service. Keyed
-// by rest.Client.TenantTag, so one tenant's outage never reroutes another's
-// queries. Nil-safe: a Service built as a bare literal has no memory.
+// cubeFallback is the memory of a failing security service, keyed by
+// rest.Client.TenantTag plus a hash of the query, so neither another tenant's
+// queries nor this tenant's other queries are rerouted. Nil-safe: a Service built as a bare literal has no memory.
 type cubeFallback struct {
 	mu    sync.Mutex
 	until map[string]time.Time
