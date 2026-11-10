@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import {
-  FEED_PROMISE,
   NOT_ENOUGH_HISTORY,
+  OOH_END_HOUR,
+  OOH_START_HOUR,
   ROW_CAP,
   capNotice,
   feedState,
@@ -15,11 +16,21 @@ import {
   isFailure,
   isOutOfHours,
   notability,
+  shortActor,
   sinceIso,
+  windowLabel,
   withinWindow,
 } from '../lib/changes.js'
+import './Overview.css'
+import './Changes.css'
 
-// WHAT CHANGED — LAST 24 HOURS (#changes)
+// WHAT CHANGED (#changes)
+//
+// Restyled 2026-11-10 in the dashboard look the owner picked (Overview.css,
+// the dashboard-design skill): a short label and a number on screen, every
+// explanation in a tip. The honesty rule of v3.131.0 stays: when the feed
+// stopped at its row limit, no tile says None, counts read "6+", and the
+// window pill names the time really covered instead of "last 24 hours".
 //
 // A thin render layer. Every rule this screen states in words — the window,
 // the grouping, the four notability categories, the cap — is proved by
@@ -37,16 +48,7 @@ import {
 const WINDOW_TICK_MS = 30000
 const POLL_MS = 60000
 
-// Chip wording from the approved design. The library's generic chips stay in
-// lib/changes.js (where the tests read them); these are presentation only.
-const POPULATED_CHIP = {
-  deletions: 'Del',
-  failures: 'Fail',
-  outOfHours: '20:00–08:00',
-  newActors: 'New',
-}
-
-const FEED_COLS = 'grid-cols-[10px_130px_100px_110px_minmax(140px,1fr)_74px_96px]'
+const FEED_COLS = 'grid-cols-[10px_150px_90px_110px_minmax(160px,1fr)_80px_190px]'
 
 // The feed's columns, in the locked order from the design, named once so the
 // header row and every data cell agree on which aria-colindex means what.
@@ -56,10 +58,10 @@ const FEED_COLS = 'grid-cols-[10px_130px_100px_110px_minmax(140px,1fr)_74px_96px
 const FEED_COLUMNS = [
   { key: 'severity', label: 'Severity', srOnly: true },
   { key: 'ts', label: 'Local time' },
-  { key: 'action', label: 'Op' },
+  { key: 'action', label: 'Action' },
   { key: 'result', label: 'Result' },
-  { key: 'user', label: 'Actor' },
-  { key: 'kind', label: 'Kind' },
+  { key: 'user', label: 'Who' },
+  { key: 'kind', label: 'Type' },
   { key: 'flags', label: 'Flags' },
 ]
 
@@ -85,97 +87,155 @@ export default function Changes() {
   const groups = useMemo(() => groupByResource(rows), [rows])
   const summary = useMemo(() => feedSummary(rows), [rows])
   const state = feedState({ payload: data, error, loading, rowsInWindow: rows })
+  const win = windowLabel({ truncated, rows, nowMs })
+  // When the payload arrived, not when this render ran: the half-minute
+  // window tick must not make an old read look fresh.
+  const fetchedAt = useMemo(() => (data ? new Date() : null), [data])
 
   return (
-    <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
-      <p className="text-note text-muted mb-3 max-w-[80ch]">
-        Infoblox portal activity, {FEED_PROMISE}. This is a window on the audit route, not a change log: it
-        cannot show more than {ROW_CAP} events, and it holds no history from before the window.
-      </p>
-      <CardGrid layoutKey="changes">
-        <Card panelId="changes-notability" span={6} title="Notability" note="four questions asked of this window, each answered or explicitly not answered">
-          {state === 'loading' ? (
-            <Skeleton h={120} />
-          ) : state === 'unavailable' ? (
-            <FeedUnavailable label="CSP audit feed unavailable" reason="nothing can be said about the last 24 hours" />
-          ) : (
-            <NotabilityBand band={band} />
-          )}
-          {/* The live region is rendered in every state, empty, and filled when
-              the answer lands. A role="status" that is inserted already carrying
-              its text is announced unreliably — and this particular text is the
-              one that tells the operator they are NOT seeing everything that
-              changed, so a missed announcement is a missed 500-row cap. The
-              wrapper carries no spacing of its own, so while it is empty it
-              occupies no height and the band below is unmoved. */}
-          <div data-changes-cap-region="" role="status" aria-live="polite">
-            {cap.capped && <CapBanner text={cap.text} />}
-          </div>
-        </Card>
+    <div className="w-full px-6 py-5">
+      <div className="ov-look chg">
+        <div className="ov-head">
+          <h1>What changed</h1>
+          <span className="chg-pills">
+            {/* The window the page can honestly claim: "Last 24 hours" only
+                when the feed was not cut off at its row limit. */}
+            {/* No claim at all until a read has established what it covers. */}
+            {state === 'loading' || state === 'unavailable' ? null : (
+              <Tip tip={win.tip} className="ov-pill" data-changes-window="">
+                {win.text}
+              </Tip>
+            )}
+            <span className="ov-pill">
+              <span aria-hidden="true" className={`ov-live${state === 'unavailable' ? ' down' : state === 'loading' ? ' wait' : ''}`} />
+              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? 'Not updated' : `Updated ${fetchedAt ? fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`}
+            </span>
+          </span>
+        </div>
+        <CardGrid layoutKey="changes">
+          <Card panelId="changes-notability" span={6} title="Worth a look">
+            {state === 'loading' ? (
+              <Skeleton h={96} />
+            ) : state === 'unavailable' ? (
+              <FeedUnavailable label="CSP audit feed unavailable" reason="nothing can be said about the last 24 hours" />
+            ) : (
+              <NotabilityBand band={band} listed={summary.listed} />
+            )}
+            {/* The live region is rendered in every state, empty, and filled when
+                the answer lands. A role="status" that is inserted already carrying
+                its text is announced unreliably — and this particular text is the
+                one that tells the operator they are NOT seeing everything that
+                changed, so a missed announcement is a missed 500-row cap. The
+                wrapper carries no spacing of its own, so while it is empty it
+                occupies no height and the band below is unmoved. */}
+            <div data-changes-cap-region="" role="status" aria-live="polite">
+              {cap.capped && <CapNote text={cap.text} />}
+            </div>
+          </Card>
 
-        <Card
-          panelId="changes-changed-objects"
-          span={6}
-          title="Changed objects"
-          note="grouped by what was touched, newest group first"
-          right={state === 'ok' ? <span className="text-note text-muted">{summary.listed} rows · {summary.groups} groups</span> : null}
-        >
-          {state === 'loading' ? (
-            <Skeleton h={250} />
-          ) : state === 'unavailable' ? (
-            <FeedUnavailable label="CSP audit feed unavailable" reason="the portal audit read did not complete" />
-          ) : state === 'empty' ? (
-            <Empty>nothing changed in the last 24 hours</Empty>
-          ) : (
-            <>
-              <SpanBar summary={summary} />
-              <Feed groups={groups} />
-              <Legend />
-            </>
-          )}
-        </Card>
-      </CardGrid>
+          <Card panelId="changes-changed-objects" span={6} title="Changed objects">
+            {state === 'loading' ? (
+              <Skeleton h={250} />
+            ) : state === 'unavailable' ? (
+              <FeedUnavailable label="CSP audit feed unavailable" reason="the portal audit read did not complete" />
+            ) : state === 'empty' ? (
+              <Empty>nothing changed in the last 24 hours</Empty>
+            ) : (
+              <>
+                <SpanBar summary={summary} />
+                <Feed groups={groups} />
+              </>
+            )}
+          </Card>
+        </CardGrid>
+      </div>
     </div>
   )
 }
 
-// ---------- the notability band ----------
-
-// One ruled strip of four cells, each with its count in a fixed left lane, so
-// the four numbers sit at the same x-offset and the reason reads to the right.
-function NotabilityBand({ band }) {
+// One tip for every number, the same one Overview uses: hover, keyboard focus
+// or tap opens it, Escape closes it. The visible text stays the name; the tip
+// is the description.
+function Tip({ tip, children, className = '', as: Tag = 'span', ...rest }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  if (!tip) return <Tag className={className} {...rest}>{children}</Tag>
   return (
-    <div
-      data-changes-band=""
-      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 rounded-control border border-border overflow-hidden"
+    <Tag
+      className={`ov-tipwrap ${className}`}
+      tabIndex={0}
+      aria-describedby={id}
+      data-open={open || undefined}
+      onClick={() => setOpen((o) => !o)}
+      onBlur={() => setOpen(false)}
+      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+      {...rest}
     >
+      {children}
+      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
+    </Tag>
+  )
+}
+
+// ---------- the four tiles ----------
+
+// Four tiles in one strip, divided by hairlines: a label, a number, a word for
+// its state, and one short line. Every explanation is in the tile's tip.
+function NotabilityBand({ band, listed }) {
+  return (
+    <div data-changes-band="" className="chg-tiles">
       {band.map((cell) => (
-        <BandCell key={cell.key} cell={cell} />
+        <BandCell key={cell.key} cell={cell} listed={listed} />
       ))}
     </div>
   )
 }
 
-function BandCell({ cell }) {
-  const { COLORS } = useChartTheme()
+const TILE_LABEL = {
+  deletions: 'Deletions',
+  failures: 'Failed',
+  outOfHours: 'Out of hours',
+  newActors: 'New accounts',
+}
+
+// Deletions and failures are the two worth a look, so only they turn red when
+// there are any. Out of hours and new accounts are facts, not faults: their
+// numbers stay ink however large, so a busy night never shouts.
+const ALARM = new Set(['deletions', 'failures'])
+
+function tileLine(cell, listed) {
+  if (cell.state === 'unknown') return cell.key === 'newActors' && !/cap/.test(cell.reason) ? 'too little history' : 'older rows not read'
+  if (cell.key === 'outOfHours') return `${OOH_START_HOUR}:00–0${OOH_END_HOUR}:00 local`
+  if (cell.key === 'newActors') return cell.state === 'populated' ? cell.actors.map(shortActor).join(', ') : 'none in the recent half'
+  if (cell.atLeast) return 'older rows not read'
+  return `of ${listed} ${listed === 1 ? 'change' : 'changes'}`
+}
+
+function BandCell({ cell, listed }) {
   const unknown = cell.state === 'unknown'
   const populated = cell.state === 'populated'
-  const tone = !populated ? COLORS.other : cell.key === 'outOfHours' ? COLORS.warn : COLORS.crit
-
+  const alarm = populated && ALARM.has(cell.key)
+  const word = unknown ? 'Unknown' : populated ? (alarm ? 'Look' : '') : 'None'
+  const tip = (
+    <>
+      {unknown && <>{NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)}: {cell.reason}. </>}
+      {cell.atLeast && <>At least this many: the {ROW_CAP}-row limit was reached, so older rows were not read. </>}
+      {cell.caption}
+      {cell.key === 'newActors' && populated && <span className="ov-tip-sub">{cell.actors.join(', ')}</span>}
+    </>
+  )
   return (
-    <div
-      data-changes-cell={cell.key}
-      data-state={cell.state}
-      className="grid grid-cols-[62px_1fr] bg-field border-b xl:border-b-0 border-r border-line last:border-r-0 last:border-b-0"
-    >
-      {/* An unknown answer is a dash, never a 0. A zero in this lane would be
-          read as "none happened", which is the exact misreading the two guards
-          below the count exist to prevent. The dash carries that meaning to the
-          eye only — read aloud it is nothing at all, indistinguishable from an
-          empty lane — so the word it stands for goes beside it, hidden from
-          view and not from the accessibility tree. */}
-      <div className="flex items-start justify-center pt-2.5 text-figure leading-none font-semibold tabular-nums" style={{ color: unknown ? COLORS.other : tone }}>
+    <Tip as="div" tip={tip} data-changes-cell={cell.key} data-state={cell.state} className="chg-tile">
+      <span className="ov-kpi-top">
+        <span>{TILE_LABEL[cell.key]}</span>
+        <span className={`ov-verdict ${alarm ? 'crit' : 'none'}`}>{word}</span>
+      </span>
+      {/* An unknown answer is a dash, never a 0. A zero here would be read as
+          "none happened", which is the exact misreading the cap guard exists
+          to prevent. The dash carries that meaning to the eye only — read
+          aloud it is nothing at all — so the word it stands for goes beside
+          it, hidden from view and not from the accessibility tree. */}
+      <span className={`ov-num${alarm ? ' chg-alarm' : ''}`}>
         {unknown ? (
           <>
             <span aria-hidden="true">—</span>
@@ -184,61 +244,38 @@ function BandCell({ cell }) {
         ) : (
           `${cell.count}${cell.atLeast ? '+' : ''}`
         )}
-      </div>
-      <div className="px-3 py-2.5 min-w-0">
-        <div className="flex items-center justify-between gap-2.5">
-          <span className="text-note font-semibold">{cell.label}</span>
-          <Chip tone={populated ? (cell.key === 'outOfHours' ? 'warn' : 'crit') : 'quiet'}>
-            {populated ? POPULATED_CHIP[cell.key] : cell.chip}
-          </Chip>
-        </div>
-        <p className="mt-1.5 text-note text-muted leading-[1.45]">
-          {unknown && (
-            <span className="text-field-txt font-semibold">
-              {NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)} — {cell.reason}.{' '}
-            </span>
-          )}
-          {cell.caption}
-        </p>
-        {cell.state === 'populated' && cell.key === 'newActors' && (
-          <p className="mt-1 text-note text-dim truncate" title={cell.actors.join(', ')}>
-            {cell.actors.join(', ')}
-          </p>
-        )}
-      </div>
-    </div>
+      </span>
+      <span className="ov-muted ov-small chg-line">{tileLine(cell, listed)}</span>
+    </Tip>
   )
 }
 
-function CapBanner({ text }) {
-  const { COLORS } = useChartTheme()
+// The row limit, in grey: it is a fact about the feed, not a problem in the
+// network. The full sentence is the tip.
+function CapNote({ text }) {
   return (
-    <div
-      data-changes-cap=""
-      className="mt-2.5 flex items-start gap-2.5 rounded-control border border-border bg-field px-3 py-2"
-      style={{ borderColor: COLORS.warn }}
-    >
-      <Chip tone="warn">Capped</Chip>
-      <span className="text-note text-muted leading-[1.45]">{text}</span>
-    </div>
+    <Tip tip={text} className="chg-cap" data-changes-cap="">
+      <span aria-hidden="true" className="chg-cap-i">i</span>
+      Only the {ROW_CAP} most recent
+      {/* The live region announces this note, so the whole sentence rides
+          along for a screen reader, not only the short label. */}
+      <span className="sr-only">. {text}</span>
+    </Tip>
   )
 }
 
 // ---------- the feed ----------
 
-// States its own arithmetic, so the only derived number on this page can be
-// checked by hand against the two clocks either side of it.
+// The listed rows in numbers: how many, over how many objects, and the span
+// they cover. The exact clocks are the tip.
 function SpanBar({ summary }) {
+  const tip = `${summary.listed} rows in ${summary.groups} groups, from ${summary.earliestClock} to ${summary.latestClock} (${summary.spanText}).`
   return (
-    <div data-changes-span="" className="flex flex-wrap gap-x-5 gap-y-1 px-1 pb-2 text-note uppercase tracking-wide text-dim">
-      <span>rows listed here <b className="text-field-txt">{summary.listed}</b></span>
-      <span>groups <b className="text-field-txt">{summary.groups}</b></span>
-      <span>earliest <b className="text-field-txt">{summary.earliestClock}</b></span>
-      <span>latest <b className="text-field-txt">{summary.latestClock}</b></span>
-      <span>
-        span <b className="text-field-txt">{summary.spanText}</b>{' '}
-        <span className="text-dim normal-case">( {summary.latestClock} − {summary.earliestClock} )</span>
-      </span>
+    <div data-changes-span="" className="chg-span">
+      <Tip tip={tip}>
+        <b>{summary.listed}</b> {summary.listed === 1 ? 'change' : 'changes'} · <b>{summary.groups}</b> {summary.groups === 1 ? 'object' : 'objects'} ·{' '}
+        {summary.earliestClock}–{summary.latestClock}
+      </Tip>
     </div>
   )
 }
@@ -270,7 +307,7 @@ function Feed({ groups }) {
     >
       <div
         role="row"
-        className={`grid ${FEED_COLS} gap-x-3 sticky top-0 z-10 bg-card border-b border-border px-1 py-1.5 text-note uppercase tracking-wide text-dim`}
+        className={`grid ${FEED_COLS} gap-x-3 sticky top-0 z-10 bg-card border-b border-border px-2 py-1.5 text-note chg-colhead`}
       >
         {FEED_COLUMNS.map((col, i) => (
           <span key={col.key} role="columnheader" aria-colindex={i + 1}>
@@ -311,7 +348,7 @@ function groupCounts(group) {
 
 function GroupHeader({ group }) {
   return (
-    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center bg-line-2 border-b border-border px-1 py-1.5`}>
+    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-border px-2 py-1.5 chg-group`}>
       <span role="cell" aria-colindex={COL.severity} />
       <span
         role="rowheader"
@@ -322,7 +359,7 @@ function GroupHeader({ group }) {
       >
         <span role="heading" aria-level={3}>{group.resource}</span>
       </span>
-      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-note text-dim truncate">
+      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-note chg-dim truncate">
         {groupCounts(group)}
       </span>
     </div>
@@ -345,55 +382,33 @@ function FeedRow({ row }) {
   const date = formatDate(row.ts)
 
   return (
-    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-1 h-[28px] text-note`}>
+    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-2 h-[30px] text-note`}>
       <span
         role="cell"
         aria-colindex={COL.severity}
-        className="inline-block w-[6px] h-[6px] rounded-full"
+        className="inline-block w-[7px] h-[7px] rounded-full"
         style={{ background: rail }}
       >
         <span className="sr-only">{railWord}</span>
       </span>
-      <span role="cell" aria-colindex={COL.ts} className="font-mono text-note whitespace-nowrap">
-        <span className="text-dim mr-1.5">{date}</span>
+      <span role="cell" aria-colindex={COL.ts} className="tabular-nums whitespace-nowrap">
+        <span className="chg-dim mr-1.5">{date}</span>
         {formatClock(row.ts)}
       </span>
       <span role="cell" aria-colindex={COL.action} className="truncate" style={del ? { color: COLORS.crit } : undefined} title={row.action}>{row.action || '—'}</span>
-      <span role="cell" aria-colindex={COL.result} className="truncate" style={{ color: failed ? COLORS.crit : COLORS.ok }} title={row.result}>
+      {/* Success is the normal case, so it stays grey; only a failure is coloured. */}
+      <span role="cell" aria-colindex={COL.result} className={`truncate${failed ? '' : ' chg-dim'}`} style={failed ? { color: COLORS.crit } : undefined} title={row.result}>
         {row.result || 'not reported'}
       </span>
-      <span role="cell" aria-colindex={COL.user} className="truncate text-muted" title={`${row.user || '—'}${row.who_role ? ` · ${row.who_role}` : ''}`}>
-        {row.user || '—'}
+      <span role="cell" aria-colindex={COL.user} className="truncate" title={`${row.user || '—'}${row.who_role ? ` · ${row.who_role}` : ''}`}>
+        {shortActor(row.user) || '—'}
       </span>
-      <span role="cell" aria-colindex={COL.kind} className="truncate text-dim">{row.who_kind || '—'}</span>
+      <span role="cell" aria-colindex={COL.kind} className="truncate chg-dim">{row.who_kind || '—'}</span>
       <span role="cell" aria-colindex={COL.flags} className="flex items-center gap-1">
-        {del && <Chip tone="crit">Del</Chip>}
-        {failed && <Chip tone="crit">Fail</Chip>}
-        {ooh && <Chip tone="warn">OOH</Chip>}
+        {del && <span data-flag="deleted" className="ov-chip crit">Deleted</span>}
+        {failed && <span data-flag="failed" className="ov-chip crit">Failed</span>}
+        {ooh && <span data-flag="ooh" className="ov-chip none">Out of hours</span>}
       </span>
     </div>
-  )
-}
-
-function Legend() {
-  return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-note text-dim">
-      <span><b className="text-muted">DEL</b> deletion</span>
-      <span><b className="text-muted">FAIL</b> result was not "success"</span>
-      <span><b className="text-muted">OOH</b> from 20:00 to 08:00 on your local clock</span>
-    </div>
-  )
-}
-
-function Chip({ tone = 'quiet', children }) {
-  const { COLORS } = useChartTheme()
-  const color = tone === 'crit' ? COLORS.crit : tone === 'warn' ? COLORS.warn : COLORS.other
-  return (
-    <span
-      className="shrink-0 rounded-control border px-1.5 py-0 text-note leading-[14px] whitespace-nowrap"
-      style={{ color, borderColor: color }}
-    >
-      {children}
-    </span>
   )
 }

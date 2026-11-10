@@ -169,7 +169,8 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await page.goto('/#changes');
 
     await expect(band(page, 'outOfHours')).toHaveAttribute('data-state', 'populated');
-    await expect(page.getByText('OOH').first()).toBeVisible();
+    await expect(page.locator('[data-flag="ooh"]').first()).toBeVisible();
+    await expect(page.locator('[data-flag="ooh"]').first()).toHaveText('Out of hours');
   });
 
   test('(d) an empty category says "None" rather than disappearing', async ({ page }) => {
@@ -252,6 +253,8 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     // No band either: four "None" cells would answer four questions nobody
     // could actually ask.
     await expect(page.locator('[data-changes-band]')).toHaveCount(0);
+    // Nor a coverage claim: a failed read covers no window at all.
+    await expect(page.locator('[data-changes-window]')).toHaveCount(0);
   });
 
   test('a healthy but silent window is empty, not unavailable', async ({ page }) => {
@@ -282,6 +285,59 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     expect(age).toBeLessThan(24.1 * HOUR);
   });
 
+  // ---- the dashboard restyle, 2026-11-10 ----
+  //
+  // The review of 2026-11-10 found the page titled "last 24 hours" over a feed
+  // that the 500-row limit had cut to its last 50 minutes, and the out-of-hours
+  // count drawn as a big amber "500", which was only the row limit.
+
+  test('a capped feed names the window it really covers, never "last 24 hours"', async ({ page }) => {
+    await page.route('**/api/csp-audit*', (route) => fulfillJson(route, liveWindow({ truncated: true })));
+    await page.goto('/#changes');
+
+    const pill = page.locator('[data-changes-window]');
+    await expect(pill).toBeVisible();
+    // innerText: the pill's tip is in the DOM but not on screen.
+    const shown = await pill.evaluate((el) => (el.firstChild?.textContent ?? '').trim());
+    expect(shown).toMatch(/^Last \d+ (min|h)( \d+ min)? only$/);
+    expect(shown).not.toMatch(/24 hours/);
+    await expect(page.locator('h1')).not.toContainText(/24/);
+  });
+
+  test('an uncapped feed says "Last 24 hours"', async ({ page }) => {
+    await page.route('**/api/csp-audit*', (route) => fulfillJson(route, liveWindow({ truncated: false })));
+    await page.goto('/#changes');
+    const pill = page.locator('[data-changes-window]');
+    await expect(pill).toBeVisible();
+    expect(await pill.evaluate((el) => (el.firstChild?.textContent ?? '').trim())).toBe('Last 24 hours');
+  });
+
+  test('the out-of-hours count is never drawn in a warning colour, even at the row limit', async ({ page }) => {
+    const rows = Array.from({ length: 500 }, (_, i) => row({ id: `n${i}`, ts: outOfHoursAgoIso(), user: 'actor-a' }));
+    await page.route('**/api/csp-audit*', (route) =>
+      fulfillJson(route, { count: rows.length, rows, status: 'ok', truncated: true }));
+    await page.goto('/#changes');
+
+    const num = band(page, 'outOfHours').locator('.ov-num');
+    await expect(num).toHaveText('500+');
+    const [numColor, headColor] = await Promise.all([
+      num.evaluate((el) => getComputedStyle(el).color),
+      page.locator('h1').evaluate((el) => getComputedStyle(el).color),
+    ]);
+    expect(numColor).toBe(headColor);
+  });
+
+  test('long machine account ids are shortened on screen, the full id kept in the title', async ({ page }) => {
+    const long = 'federation.host.jbeuiwrsmjsteobvhe3geolegjqtoobtmq2teyrugq4dmmzumu2tmytbgq3wizjweaqcaiba';
+    const payload = liveWindow();
+    payload.rows[5] = row({ id: 'r6', ts: agoIso(2 * 60 * 1000), user: long, resource: 'addressservice' });
+    await page.route('**/api/csp-audit*', (route) => fulfillJson(route, payload));
+    await page.goto('/#changes');
+
+    const cell = feedTable(page).locator(`[aria-colindex="5"][title^="${long}"]`);
+    await expect(cell).toHaveText('federation.host.jb…qcaiba');
+  });
+
   // ---- accessibility audit, 2026-08-07 ----
   //
   // Measured before the fix: the feed held 0 tables, 0 lists and 0 role="row",
@@ -303,10 +359,10 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await expect(headers).toHaveCount(7);
     await expect(headers.nth(0)).toHaveText('Severity');
     await expect(headers.nth(1)).toHaveText('Local time');
-    await expect(headers.nth(2)).toHaveText('Op');
+    await expect(headers.nth(2)).toHaveText('Action');
     await expect(headers.nth(3)).toHaveText('Result');
-    await expect(headers.nth(4)).toHaveText('Actor');
-    await expect(headers.nth(5)).toHaveText('Kind');
+    await expect(headers.nth(4)).toHaveText('Who');
+    await expect(headers.nth(5)).toHaveText('Type');
     await expect(headers.nth(6)).toHaveText('Flags');
   });
 

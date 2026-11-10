@@ -143,7 +143,7 @@ var panelSources = []PanelSource{
 	restPanel("audit-csp-portal", "Audit", "CSP Portal Audit", srcAudit, whyList),
 
 	// ---- Changes ----
-	restPanel("changes-notability", "Changes", "Notability", srcAudit, "how notable each change is, is worked out in the app"),
+	restPanel("changes-notability", "Changes", "Worth a look", srcAudit, "how notable each change is, is worked out in the app"),
 	restPanel("changes-changed-objects", "Changes", "Changed objects", srcAudit, whyList),
 
 	// ---- Provision ----

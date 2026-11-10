@@ -1,33 +1,24 @@
 - main "Changes tab":
-  - heading /What changed — last \d+ hours/ [level=1]
-  - paragraph: "/Infoblox portal activity, the \\d+ most recent events in the last \\d+ hours, newest first\\. This is a window on the audit route, not a change log: it cannot show more than \\d+ events, and it holds no history from before the window\\./"
+  - heading "What changed" [level=1]
+  - text: /Last \d+ h only Updated .+/
   - button "Arrange panels"
-  - heading "Notability" [level=2]
-  - text: four questions asked of this window, each answered or explicitly not answered
-  - 'button "About: Notability"': "About: ⓘ"
-  - 'button "Options: Notability"'
-  - text: 1+ Deletions Del
-  - paragraph: Pulled out because a delete is the only operation with no later state left to inspect.
-  - text: 1+ Failed changes Fail
-  - paragraph: Anything whose result is not "success" — including a result the feed left blank, which is unread rather than fine.
-  - text: /2\+ Out of hours \d+:\d+–\d+:\d+/
-  - paragraph: /Out of hours means at or after \d+:\d+, or before \d+:\d+, on your own local clock — your browser's time zone, not the tenant's\./
-  - text: Not answered New actors this window Unknown
-  - paragraph: "/Not enough history in this window — the \\d+-row cap was hit, so the oldest events in this window are missing and the earlier half is not represented\\. This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half\\. There is no history before this window, so nothing older can be checked\\./"
-  - status: /Capped Capped at \d+ rows\. Showing the \d+ most recent events in the last \d+ hours, newest first\. Older events inside this \d+-hour window exist and are not on this screen\./
+  - heading "Worth a look" [level=2]
+  - 'button "About: Worth a look"': "About: ⓘ"
+  - 'button "Options: Worth a look"'
+  - text: /Deletions Look 1\+ older rows not read Failed Look 1\+ older rows not read Out of hours 2\+ \d+:\d+–\d+:\d+ local New accounts Unknown Not answered older rows not read/
+  - status: /Only the \d+ most recent/
   - heading "Changed objects" [level=2]
-  - text: grouped by what was touched, newest group first 5 rows · 4 groups
   - 'button "About: Changed objects"': "About: ⓘ"
   - 'button "Options: Changed objects"'
-  - text: /rows listed here 5 groups 4 earliest \d+:\d+:\d+ latest \d+:\d+:\d+ span \d+:\d+:\d+ \( \d+:\d+:\d+ − \d+:\d+:\d+ \)/
+  - text: /\d+ changes · \d+ objects · \d+:\d+:\d+–\d+:\d+:\d+/
   - table "Changed objects, grouped by resource":
-    - row "Severity Local time Op Result Actor Kind Flags":
+    - row "Severity Local time Action Result Who Type Flags":
       - columnheader "Severity"
       - columnheader "Local time"
-      - columnheader "Op"
+      - columnheader "Action"
       - columnheader "Result"
-      - columnheader "Actor"
-      - columnheader "Kind"
+      - columnheader "Who"
+      - columnheader "Type"
       - columnheader "Flags"
     - rowgroup "addressservice — 2 rows · 1 success · 1 not successful":
       - row "addressservice 2 rows · 1 success · 1 not successful":
@@ -35,22 +26,22 @@
         - rowheader "addressservice":
           - heading "addressservice" [level=3]
         - cell "2 rows · 1 success · 1 not successful"
-      - 'row /Critical \d+-\d+-\d+:\d+:\d+ UPDATE failed: denied actor-gamma service Fail/':
+      - 'row /Critical \d+-\d+-\d+:\d+:\d+ UPDATE failed: denied actor-gamma service Failed/':
         - cell "Critical"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "UPDATE"
         - 'cell "failed: denied"'
         - cell "actor-gamma"
         - cell "service"
-        - cell "Fail"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service OOH/:
+        - cell "Failed"
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "UPDATE"
         - cell "success"
         - cell "actor-beta"
         - cell "service"
-        - cell "OOH"
+        - cell "Out of hours"
     - rowgroup "subnetservice — 1 row · 1 success":
       - row "subnetservice 1 row · 1 success":
         - cell
@@ -71,26 +62,25 @@
         - rowheader "dnsrecord":
           - heading "dnsrecord" [level=3]
         - cell "1 row · 1 success · 1 deleted"
-      - row /Critical \d+-\d+-\d+:\d+:\d+ DELETE success actor-alpha service Del/:
+      - row /Critical \d+-\d+-\d+:\d+:\d+ DELETE success actor-alpha service Deleted/:
         - cell "Critical"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "DELETE"
         - cell "success"
         - cell "actor-alpha"
         - cell "service"
-        - cell "Del"
+        - cell "Deleted"
     - rowgroup "auth_zone — 1 row · 1 success":
       - row "auth_zone 1 row · 1 success":
         - cell
         - rowheader "auth_zone":
           - heading "auth_zone" [level=3]
         - cell "1 row · 1 success"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-alpha service OOH/:
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-alpha service Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "UPDATE"
         - cell "success"
         - cell "actor-alpha"
         - cell "service"
-        - cell "OOH"
-  - text: /DEL deletion FAIL result was not "success" OOH from \d+:\d+ to \d+:\d+ on your local clock/
+        - cell "Out of hours"

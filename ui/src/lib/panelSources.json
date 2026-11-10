@@ -479,7 +479,7 @@
   {
     "id": "changes-notability",
     "page": "Changes",
-    "name": "Notability",
+    "name": "Worth a look",
     "kind": "rest",
     "source": "the Infoblox audit log",
     "builder": "no",

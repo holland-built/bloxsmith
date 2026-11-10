@@ -366,8 +366,8 @@ html[data-density="compact"] {
 }
 
 /* ---------- record layout: the Risk tabs ----------
-   Security, Incidents, Audit and Changes are where the operator acts (ack,
-   block, load older), so each leads with its working table and runs dense and
+   Security, Incidents and Audit are where the operator acts (ack, block,
+   load older), so each leads with its working table and runs dense and
    square: compact's row height on the standard card pad, no corner radius. The lead table sits on
    the page under one rule instead of in a filled box. Border WIDTHS are left
    alone so no panel's measured width moves; only colours change. */
@@ -380,8 +380,7 @@ html[data-density="compact"] {
 [data-layout="record"] :is(
   [data-panel-id="security-triage-inbox"],
   [data-panel-id="incidents-triage"],
-  [data-panel-id="audit-log"],
-  [data-panel-id="changes-changed-objects"]
+  [data-panel-id="audit-log"]
 ) {
   background: transparent;
   border-color: transparent;
