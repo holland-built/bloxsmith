@@ -64,6 +64,7 @@ const TILE_COLS = {
   2: 'grid-cols-2',
   3: 'grid-cols-3',
   4: 'grid-cols-2 md:grid-cols-4',
+  5: 'grid-cols-2 md:grid-cols-5',
   6: 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
 }
 const TILE_COLS_DEFAULT = 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
@@ -71,7 +72,7 @@ const TILE_COLS_DEFAULT = 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
 export function HeadlineStrip({ items, label }) {
   return (
     <ul aria-label={label} className={`grid gap-[var(--sp-grid-gap)] mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
-      {items.map((it) => {
+      {items.map((it, i) => {
         const tone = it.value != null && TONE[it.tone] && it.tone !== 'neutral' ? it.tone : null
         // Only a tile that needs action is tinted. "ok" keeps its data-tone
         // but stays plain, so good news never competes with a red tile.
@@ -94,7 +95,9 @@ export function HeadlineStrip({ items, label }) {
           </>
         )
         return (
-          <li key={it.label} className="min-w-0">
+          // Five tiles in two columns leave the last one alone in its row, so
+          // it takes the whole row until the strip goes to five columns.
+          <li key={it.label} className={`min-w-0${items.length === 5 && i === 4 ? ' col-span-2 md:col-span-1' : ''}`}>
             {it.href ? (
               <a href={it.href} data-tone={tone || undefined} className={cls} style={style}>{body}</a>
             ) : (

@@ -701,7 +701,7 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   // AxurPanel in ui/src/tabs/Security.jsx for why it does not hide itself when
   // AXUR_API_KEY is unset.
   security: 14,
-  infra: 8,
+  infra: 6, // 8 until 2026-11-10, when Host Health merged into Host Inventory and Asset Discovery became a tile
   assets: 2,
   incidents: 5,
   audit: 3,
