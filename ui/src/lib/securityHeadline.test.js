@@ -82,10 +82,13 @@ test('a successful answer missing the counted fields is Unknown, never 0', () =>
     exposures: ok({ availability: 'ok', data: {} }),
     axur: ok({ configured: true }),
   })
-  for (const k of ['attacks', 'blocked', 'lookalikes', 'exposures', 'credentials']) {
+  for (const k of ['attacks', 'blocked', 'lookalikes', 'credentials']) {
     assert.equal(t[k].value, null, k)
     assert.equal(t[k].state, 'failed', k)
   }
+  // Exposures follows its panel, which says "no exposures reported" here.
+  assert.equal(t.exposures.value, null)
+  assert.equal(t.exposures.state, 'noneReported')
 })
 
 test('non-numeric count fields are Unknown, never 0', () => {
@@ -106,4 +109,22 @@ test('non-numeric count fields are Unknown, never 0', () => {
 test('Axur with no key stays Not set up, not Unknown', () => {
   const t = byKey({ hub: HUB, lookalikes: LOOK, exposures: EXP, axur: ok({ configured: false }) })
   assert.equal(t.credentials.state, 'notSetUp')
+})
+
+// The tile and the Exposures panel read the same answer the same way: ok with
+// no rows is "no exposures reported" below, so the tile says None reported in
+// grey, never Unknown and never a 0. A failed answer stays Unknown.
+test('exposures: an ok answer with no rows is None reported, a failed one Unknown', () => {
+  const tile = (exposures) => byKey({ hub: HUB, lookalikes: LOOK, exposures, axur: AXUR }).exposures
+  for (const data of [{}, { rows: [] }, { rows: [], count: 0 }, null]) {
+    const t = tile(ok({ availability: 'ok', status: 'ok', data }))
+    assert.equal(t.state, 'noneReported', JSON.stringify(data))
+    assert.equal(t.value, null)
+    assert.equal(t.tone, null)
+  }
+  assert.equal(tile(ok({ availability: 'error' })).state, 'failed')
+  assert.equal(tile({ loading: false, error: new Error('x'), data: null }).state, 'failed')
+  assert.equal(tile({ loading: false, error: null, data: null }).state, 'failed')
+  assert.equal(tile(ok('nope')).state, 'failed')
+  assert.equal(tile(ok({ availability: 'ok', data: { rows: [{}, {}] } })).value, 2)
 })

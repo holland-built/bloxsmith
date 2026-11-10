@@ -58,3 +58,12 @@ test('a feed that answers without its counts shows Unknown, not 0', async ({ pag
   }
   await expect(head.locator('[data-key="attacks"]')).not.toHaveAttribute('data-tone', /.+/);
 });
+
+test('an empty exposures answer reads None reported on the tile, matching the panel', async ({ page }) => {
+  // The fixture's /api/csp/exposures is ok with data: {}.
+  await page.goto('/#security');
+  await expect(page.locator('[data-panel-id="security-exposures"]')).toContainText('no exposures reported');
+  const num = page.getByRole('region', { name: 'Headline numbers' }).locator('[data-key="exposures"] .sec-num');
+  await expect(num).toHaveText('None reported');
+  await expect(num).toHaveClass(/sec-none/);
+});

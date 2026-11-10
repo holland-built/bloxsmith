@@ -92,11 +92,16 @@ function exposures(feed) {
   const total = p.data?.total_available
   const count = p.data?.count
   // The reported total when there is one; otherwise the rows that arrived,
-  // counted by `count` or by the rows themselves. None of the three is Unknown.
+  // counted by `count` or by the rows themselves.
   const loaded = fin(count) ? count : Array.isArray(rows) ? rows.length : null
-  const state = feedState(feed, !!feed.error || p.availability === 'error', fin(total) || loaded !== null)
+  // The Exposures panel's own rule: an answer that did not fail but holds no
+  // rows reads "no exposures reported". Without a total, the tile says the
+  // same thing in grey ("None reported") rather than Unknown or a 0.
+  const noRows = !Array.isArray(rows) || rows.length === 0
+  let state = feedState(feed, !!feed.error || p.availability === 'error', fin(total) || !noRows)
+  if (state === 'failed' && isObj(feed.data) && !feed.error && p.availability !== 'error') state = 'noneReported'
   const known = state === 'ok' && p.availability === 'ok' && fin(total)
-  const value = state !== 'ok' ? null : known ? total : loaded
+  const value = state !== 'ok' ? null : known ? total : loaded ?? total
   return {
     key: 'exposures',
     panelId: 'security-exposures',
