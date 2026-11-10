@@ -60,3 +60,19 @@ test('each IQ action says its state, open ones first, with the action that fits'
   // Open and resolved add up to the rows the queue holds.
   await expect(queue).toContainText('1 open · 3 resolved');
 });
+
+test('an action with no status is counted as unknown, not as open', async ({ page }) => {
+  await page.route(/\/api\/actions(\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true, availability: 'ok', actions_truncated: false,
+        actions: [action('a1', '', 'high'), action('a2', 'resolved', 'low')],
+      }),
+    }),
+  );
+  await page.goto('/#incidents');
+  const queue = page.locator('[data-panel-id="incidents-soc-queue"]');
+  await expect(queue).toContainText('0 open · 1 resolved · 1 unknown');
+});

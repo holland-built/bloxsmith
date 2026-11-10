@@ -589,7 +589,11 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
         .map(({ r }) => r),
     [rows, COLORS],
   )
-  const open = rows.filter((r) => !actionState(r).resolved).length
+  // Only a confirmed 'active' counts as open; a missing or odd status is
+  // counted on its own, never folded into open or resolved.
+  const open = rows.filter((r) => actionState(r).word === 'Open').length
+  const done = rows.filter((r) => actionState(r).resolved).length
+  const other = rows.length - open - done
   const columns = [
     {
       key: 'sev',
@@ -647,7 +651,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
   const right =
     rows.length > 0 ? (
       <span className="text-note text-muted">
-        {open.toLocaleString()} open · {(rows.length - open).toLocaleString()} resolved
+        {open.toLocaleString()} open · {done.toLocaleString()} resolved{other ? ` · ${other.toLocaleString()} unknown` : ''}
       </span>
     ) : undefined
 
