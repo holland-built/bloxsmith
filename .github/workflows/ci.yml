@@ -1297,6 +1297,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The container runs as root but the checkout belongs to the runner's
+      # user, so git refuses it as "dubious ownership" and `go build` cannot
+      # stamp its VCS info ("error obtaining VCS status: exit status 128").
+      - name: Trust the checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
