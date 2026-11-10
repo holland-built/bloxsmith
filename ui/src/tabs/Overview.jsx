@@ -1,10 +1,11 @@
-import { lazy, Suspense, useId, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { inboxRows } from '../lib/inboxRows.js'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sampleSince } from '../lib/sampleCount.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import Tip from '../components/Tip.jsx'
 import './Overview.css'
 
 // OVERVIEW IS A SERVICE BOARD, NOT A PANEL WALL (2026-11-09).
@@ -179,33 +180,6 @@ const HAS_HEALTH = new Set(['DNS', 'DHCP', 'Security'])
 const fmt = (v, d = 0) => (typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: d }) : '—')
 const upOf = (meta) => { const m = /(\d+)\s*\/\s*(\d+)\s*up/.exec(meta || ''); return m ? { up: +m[1], total: +m[2] } : null }
 const worst = (issues) => issues.reduce((w, r) => ((SEV_RANK[r.sev] || 0) > (SEV_RANK[w] || 0) ? r.sev : w), null)
-
-// One tip for every number: hover, keyboard focus or tap opens it, Escape
-// closes it. The visible text stays the name; the tip is the description.
-function Tip({ tip, children, className = '', ...rest }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  if (!tip) return <span className={className} {...rest}>{children}</span>
-  return (
-    <span
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-      {...rest}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </span>
-  )
-}
 
 // A service's state in one word. "Healthy" only when every feed that would
 // have reported a problem answered; a failed, missing or unknown check is

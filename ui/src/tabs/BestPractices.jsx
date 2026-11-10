@@ -1,7 +1,7 @@
-import { useId, useState } from 'react'
 import { Card, CardGrid, FetchError, Skeleton } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { order, SEVERITY, sevOf, splitCount, tally } from '../lib/bestPractices.js'
+import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './BestPractices.css'
 
@@ -19,31 +19,6 @@ import './BestPractices.css'
 const SHOW = 50
 const word = (c) => (c.status === 'problem' ? sevOf(c).label : c.status === 'passed' ? 'Passed' : "Couldn't tell")
 const tone = (c) => (c.status === 'problem' ? sevOf(c).tone : c.status === 'passed' ? 'ok' : 'unknown')
-
-// One tip for every short label: hover, keyboard focus or tap opens it, Escape
-// closes it. The same behaviour and look as Overview's tips.
-function Tip({ tip, children, className = '' }) {
-  const id = useId()
-  // null follows hover and focus; true is opened by a tap; false is closed by
-  // Escape, which has to beat :focus-visible (a key press turns it on).
-  const [open, setOpen] = useState(null)
-  return (
-    <span
-      className={`ov-tipwrap ${className}`}
-      tabIndex={0}
-      aria-describedby={id}
-      data-open={open === true || undefined}
-      data-closed={open === false || undefined}
-      onClick={() => setOpen((o) => o !== true)}
-      onBlur={() => setOpen(null)}
-      onMouseLeave={() => setOpen((o) => (o === false ? null : o))}
-      onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
-    >
-      {children}
-      <span role="tooltip" id={id} className="ov-tip">{tip}</span>
-    </span>
-  )
-}
 
 // The mark in front of each row: a problem's count in its severity colour,
 // a hollow dashed "?" for couldn't tell, a pale tick for passed.
