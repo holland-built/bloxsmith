@@ -24,22 +24,6 @@ const (
 
 func signalsNow() float64 { return float64(time.Now().UnixNano()) / 1e9 }
 
-// rowsOf coerces a FetchDashboardData sub-list (typed []map[string]any) to an
-// iterable slice, tolerating a []any too.
-func rowsOf(v any) []map[string]any {
-	switch t := v.(type) {
-	case []map[string]any:
-		return t
-	case []any:
-		out := make([]map[string]any, 0, len(t))
-		for _, x := range t {
-			out = append(out, asMap(x))
-		}
-		return out
-	}
-	return nil
-}
-
 // BuildSignals is build_signals (server.py:2521): derive alert Signals from the
 // assembled dashboard dict. Subnet util thresholds (>=90 crit, >=70 warn), zone
 // anomaly (warn), expired lease (warn) — mirrors the Python thresholds exactly.
@@ -47,7 +31,7 @@ func BuildSignals(data map[string]any) []map[string]any {
 	signals := []map[string]any{}
 	now := signalsNow()
 
-	for _, subnet := range rowsOf(data["subnets"]) {
+	for _, subnet := range anyToMaps(data["subnets"]) {
 		// A subnet whose utilization was never reported emits util = nil
 		// (normSubnets). Falling through would coerce that nil to 0, sail under
 		// both thresholds and classify the subnet "ok" by arithmetic accident —
@@ -78,7 +62,7 @@ func BuildSignals(data map[string]any) []map[string]any {
 		}
 	}
 
-	for _, zone := range rowsOf(data["zones"]) {
+	for _, zone := range anyToMaps(data["zones"]) {
 		if truthy(zone["anomaly"]) {
 			issues := []string{}
 			for _, is := range asSlice(zone["issues"]) {
@@ -96,7 +80,7 @@ func BuildSignals(data map[string]any) []map[string]any {
 		}
 	}
 
-	for _, lease := range rowsOf(data["leases"]) {
+	for _, lease := range anyToMaps(data["leases"]) {
 		if getStr(lease["state"]) == "expired" {
 			host := orStr(lease["host"], "")
 			if host == "" {
@@ -126,7 +110,7 @@ func BuildSignals(data map[string]any) []map[string]any {
 	// even unsigned public zones as minor (2026-11-09), so this is "info": it
 	// shows as a muted note, below every warning.
 	unsignedCount, knownCount := 0, 0
-	for _, zone := range rowsOf(data["zones"]) {
+	for _, zone := range anyToMaps(data["zones"]) {
 		status := getStr(zone["dnssec_status"])
 		if status == "" || !publicName(getStr(zone["fqdn"])) {
 			continue
