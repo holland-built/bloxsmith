@@ -16,7 +16,8 @@ const HOUR_MS = 3600000
  * zero and a fall of 100%.
  */
 export function reading(v) {
-  if (v == null || (typeof v === 'string' && v.trim() === '')) return null
+  // Only numbers and numeric strings are readings; Number(false) is 0 too.
+  if (typeof v !== 'number' && (typeof v !== 'string' || v.trim() === '')) return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }

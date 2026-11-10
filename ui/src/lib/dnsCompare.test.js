@@ -57,3 +57,10 @@ test('reading: null, blank and non-numbers are missing, 0 is a reading', () => {
   assert.equal(reading(0), 0)
   assert.equal(reading('2.5'), 2.5)
 })
+
+test('reading: booleans and objects are not readings', () => {
+  assert.equal(reading(false), null)
+  assert.equal(reading(true), null)
+  assert.equal(reading([]), null)
+  assert.equal(reading('12'), 12)
+})
