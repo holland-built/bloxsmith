@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Needs Python with fontTools and brotli installed (pip install fonttools brotli).
 """Split the Inter variable font into two files by unicode-range.
 
 The app used to ship one 352 KB InterVariable.woff2, and main.jsx holds the

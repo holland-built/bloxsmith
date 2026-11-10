@@ -23,7 +23,6 @@ func staticSite(t *testing.T) (http.Handler, string) {
 		"assets/app-AbC1.js":  js,
 		"assets/app-AbC1.css": "body{margin:0}",
 		"assets/pic-Zz9.png":  "not really a png",
-		"fonts/Inter.woff2":   "font bytes",
 	} {
 		p := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -144,13 +143,5 @@ func TestStatic_HeadSendsHeadersOnly(t *testing.T) {
 	w := get(h, http.MethodHead, "/assets/app-AbC1.js", map[string]string{"Accept-Encoding": "gzip"})
 	if w.Header().Get("Content-Encoding") != "gzip" || w.Body.Len() != 0 {
 		t.Fatalf("HEAD: encoding %q, body %d bytes", w.Header().Get("Content-Encoding"), w.Body.Len())
-	}
-}
-
-func TestStatic_FontGetsADay(t *testing.T) {
-	h, _ := staticSite(t)
-	w := get(h, http.MethodGet, "/fonts/Inter.woff2", nil)
-	if cc := w.Header().Get("Cache-Control"); cc != "public, max-age=86400" {
-		t.Fatalf("Cache-Control = %q", cc)
 	}
 }

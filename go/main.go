@@ -75,7 +75,7 @@ func uiFS() fs.FS {
 // gzipped when the browser asks. Before this every reload re-fetched about 1.15 MB
 // of script, uncompressed, because everything carried no-store. Everything else —
 // index.html above all, which names the current hashes — stays no-store
-// (mirror server.py:6509-6512). The font is not hashed, so it gets a day.
+// (mirror server.py:6509-6512). The font lives under /assets/ too, hashed.
 func staticHandler() http.Handler {
 	if dir := os.Getenv("WEB_DIR"); dir != "" {
 		log.Printf("dev: serving UI from disk WEB_DIR=%s (not embed)", dir)
@@ -94,8 +94,6 @@ func staticHandler() http.Handler {
 			if zipped.serve(w, r, name) {
 				return
 			}
-		case strings.HasPrefix(name, "fonts/") && fileExists(fsys, name):
-			w.Header().Set("Cache-Control", "public, max-age=86400")
 		default:
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		}
