@@ -563,7 +563,7 @@ func (s *Service) hostDisplayNames() map[string]string {
 	return out
 }
 
-// FetchHostMetrics is fetch_host_metrics: one HostMetrics cube query per
+// FetchHostMetrics is fetch_host_metrics: one HostMetricsV1 cube query per
 // per-host metric (host_cpu, host_memory) over direct REST — HostMetrics has
 // no host_name dimension and requires a metric_name filter, unlike the old
 // (never-working) MCP query. HostMetrics.host is an opaque UUID; it is
@@ -582,10 +582,10 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 	failed := false
 	for _, metricName := range []string{"host_cpu", "host_memory"} {
 		rows := s.cubeQuery(map[string]any{
-			"measures":   []string{"HostMetrics.avg_value"},
-			"dimensions": []string{"HostMetrics.host", "HostMetrics.metric_name_label"},
+			"measures":   []string{cubeHost + ".avg_value"},
+			"dimensions": []string{cubeHost + ".host", cubeHost + ".metric_name_label"},
 			"filters": []map[string]any{{
-				"member": "HostMetrics.metric_name", "operator": "equals",
+				"member": cubeHost + ".metric_name", "operator": "equals",
 				"values": []string{metricName}}},
 		})
 		if rows == nil {

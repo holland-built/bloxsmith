@@ -69,7 +69,7 @@ export function shouldHidePanel(state, required) {
 //                               -> /api/ddi/v1/dns/service (csp.go CSPDNSServices):
 //                                  the DNS service objects themselves.
 //                             DNS Query Rate — 24h  /api/csp/dns-qps
-//                               -> cubejs HostMetrics, metric dns_qps_iq
+//                               -> cubejs HostMetricsV1, metric dns_qps_iq
 //                                  (csp.go CSPDNSQps): a per-host metric only a
 //                                  deployed DNS service emits.
 //   dhcp ['dhcp','ndhcp']     DHCP Leases  /api/csp/dhcp-leases

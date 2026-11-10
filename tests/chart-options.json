@@ -2989,11 +2989,11 @@
       "time": "PortunusAggThreat_ch.timestamp"
     },
     {
-      "cube": "HostMetrics",
+      "cube": "HostMetricsV1",
       "endpoint": "/api/cubejs/v1/query",
       "filters": [
         {
-          "member": "HostMetrics.metric_name",
+          "member": "HostMetricsV1.metric_name",
           "operator": "equals",
           "values": [
             "dns_qps_iq"
@@ -3001,9 +3001,9 @@
         }
       ],
       "id": "qps",
-      "measure": "HostMetrics.avg_value",
+      "measure": "HostMetricsV1.avg_value",
       "name": "DNS queries per second",
-      "time": "HostMetrics.timestamp"
+      "time": "HostMetricsV1.timestamp"
     },
     {
       "cube": "DhcpLeaseActivityV1",
@@ -3058,10 +3058,10 @@
     "DnsActivityV1.rcode": "Answer",
     "DnsActivityV1.timestamp": "Time",
     "DnsActivityV1.total_query_count": "DNS queries",
-    "HostMetrics": "DNS server metrics",
-    "HostMetrics.avg_value": "Queries per second",
-    "HostMetrics.metric_name": "Metric",
-    "HostMetrics.timestamp": "Time",
+    "HostMetricsV1": "DNS server metrics",
+    "HostMetricsV1.avg_value": "Queries per second",
+    "HostMetricsV1.metric_name": "Metric",
+    "HostMetricsV1.timestamp": "Time",
     "PortunusAggThreat_ch": "Security hits",
     "PortunusAggThreat_ch.action": "What happened",
     "PortunusAggThreat_ch.policy_name": "Policy",
@@ -3502,7 +3502,7 @@
       "2": "Server failed",
       "3": "No such name"
     },
-    "HostMetrics.metric_name": {
+    "HostMetricsV1.metric_name": {
       "dns_qps_iq": "DNS queries per second"
     },
     "PortunusAggThreat_ch.action": {

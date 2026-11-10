@@ -114,7 +114,7 @@ test('with cube names on, the sentence uses the real names', () => {
   )
   assert.equal(
     sentence(OPTIONS, picks('qps', 'none', 'today', 'hour'), true),
-    'HostMetrics.avg_value by HostMetrics.timestamp.hour, today',
+    'HostMetricsV1.avg_value by HostMetricsV1.timestamp.hour, today',
   )
 })
 
@@ -180,7 +180,7 @@ test('over time becomes a line in time order, labelled the way people say it', (
     { label: '13:00', value: 10 },
     { label: '14:00', value: 20 },
   ])
-  const days = [{ 'HostMetrics.timestamp.day': '2026-10-20T00:00:00.000', 'HostMetrics.avg_value': '346.1' }]
+  const days = [{ 'HostMetricsV1.timestamp.day': '2026-10-20T00:00:00.000', 'HostMetricsV1.avg_value': '346.1' }]
   assert.deepEqual(chartData(OPTIONS, picks('qps', 'none', '7d', 'day'), days, false), [{ label: 'Oct 20', value: 346.1 }])
 })
 
@@ -244,10 +244,10 @@ test('how the chart was made: one short labelled line per pick that applies', ()
 
 test('with cube names on, the lines use the real names', () => {
   assert.deepEqual(describePicks(OPTIONS, picks('qps', 'none', 'today', 'hour'), true), [
-    { label: 'Counted', text: 'HostMetrics.avg_value' },
+    { label: 'Counted', text: 'HostMetricsV1.avg_value' },
     { label: 'When', text: 'today' },
     { label: 'Over time', text: 'hour' },
-    { label: 'Only counting', text: 'HostMetrics.metric_name equals dns_qps_iq' },
+    { label: 'Only counting', text: 'HostMetricsV1.metric_name equals dns_qps_iq' },
   ])
   assert.deepEqual(describePicks(OPTIONS, picks('dns', 'domain', '7d', 'none', 25), true), [
     { label: 'Counted', text: 'DnsActivityV1.total_query_count' },

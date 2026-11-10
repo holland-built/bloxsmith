@@ -676,7 +676,7 @@ const CLAIMS = [
     file: GO_CSP,
     proofs: [
       {
-        re: /"HostMetrics\.timestamp",[\s\S]{0,40}?"dateRange": "last 24 hours", "granularity": "hour"/,
+        re: /"HostMetricsV1\.timestamp",[\s\S]{0,40}?"dateRange": "last 24 hours", "granularity": "hour"/,
         expect: 'CSPDNSQps asks for a 24-hour range at hour granularity',
       },
     ],
@@ -687,7 +687,7 @@ const CLAIMS = [
     file: GO_CSP,
     proofs: [
       {
-        re: /"HostMetrics\.timestamp",[\s\S]{0,40}?"dateRange": "last 24 hours", "granularity": "hour"/,
+        re: /"HostMetricsV1\.timestamp",[\s\S]{0,40}?"dateRange": "last 24 hours", "granularity": "hour"/,
         expect: 'CSPDNSQps asks for a 24-hour range at hour granularity',
       },
     ],

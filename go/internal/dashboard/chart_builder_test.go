@@ -35,13 +35,13 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 	measures := map[string]string{
 		"dns":       "DnsActivityV1.total_query_count",
 		"threats":   "PortunusAggThreat_ch.requests",
-		"qps":       "HostMetrics.avg_value",
+		"qps":       "HostMetricsV1.avg_value",
 		"dhcp":      "DhcpLeaseActivityV1.total_count",
 		"assets":    "AssetDetails_ch_agg.assetsCount",
 		"newassets": "AssetDetails_ch_agg.assetsCount",
 	}
 	times := map[string]string{"dns": "DnsActivityV1.timestamp", "threats": "PortunusAggThreat_ch.timestamp",
-		"qps": "HostMetrics.timestamp", "dhcp": "DhcpLeaseActivityV1.timestamp",
+		"qps": "HostMetricsV1.timestamp", "dhcp": "DhcpLeaseActivityV1.timestamp",
 		"newassets": "AssetDetails_ch_agg.first_seen"}
 	endpoints := map[string]string{
 		"dns":       "/api/cubejs/v1/query",
@@ -128,7 +128,11 @@ func TestBuildChartQuery_EveryAllowedCombination(t *testing.T) {
 		}
 		f := asSlice(q["filters"])
 		if p.Count == "qps" {
-			want := []any{map[string]any{"member": "HostMetrics.metric_name", "operator": "equals", "values": []any{"dns_qps_iq"}}}
+			want := []any{map[string]any{"member": "HostMetricsV1.metric_name", "operator": "equals", "values": []any{"dns_qps_iq"}}}
+			// By hour or by day reads that step's stored rows (cube_names.go).
+			if p.Over != "none" {
+				want = append(want, map[string]any{"member": "HostMetricsV1.granularity", "operator": "equals", "values": []any{p.Over}})
+			}
 			if !reflect.DeepEqual(f, want) {
 				t.Errorf("%+v: filters = %v, want the dns_qps_iq filter", p, f)
 			}

@@ -285,19 +285,19 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 // only in Cube.js, which find_data and api_get cannot reach, so this reads the
 // same Cube.js endpoint get_dns_analytics does.
 func (s *Service) iqInsights(args map[string]any) string {
-	months := []map[string]any{{"dimension": "IqActions.created_on", "granularity": "month", "dateRange": "last 12 months"}}
+	months := []map[string]any{{"dimension": cubeActions + ".created_on", "granularity": "month", "dateRange": "last 12 months"}}
 	var q map[string]any
 	what, none := "IQ actions", "No IQ actions recorded."
 	switch aiStr(args["view"]) {
 	case "recent":
 		q = map[string]any{
-			"dimensions": []string{"IqActions.display_id", "IqActions.type", "IqActions.title", "IqActions.severity",
-				"IqActions.status", "IqActions.created_on", "IqActions.resolved_on"},
-			"order": map[string]any{"IqActions.created_on": "desc"},
+			"dimensions": []string{cubeActions + ".display_id", cubeActions + ".type", cubeActions + ".title",
+				cubeActions + ".severity", cubeActions + ".status", cubeActions + ".created_on", cubeActions + ".resolved_on"},
+			"order": map[string]any{cubeActions + ".created_on": "desc"},
 			"limit": aiClampInt(args["limit"], ai.IQLimitDefault, ai.IQLimitMin, ai.IQLimitMax),
 		}
 	case "monthly":
-		q = map[string]any{"measures": []string{"IqActions.count"}, "timeDimensions": months}
+		q = map[string]any{"measures": []string{cubeActions + ".action_count"}, "timeDimensions": months}
 	case "tokens":
 		q = map[string]any{
 			"measures":   []string{"TokenUtilProtoSrvIQMonthly.tokens"},
@@ -308,9 +308,9 @@ func (s *Service) iqInsights(args map[string]any) string {
 		// An empty answer is real: IQ token billing is not live on every tenant yet.
 		what, none = "IQ token usage", "No IQ token usage recorded in the last 12 months. IQ token billing may not be switched on for this account yet."
 	default:
-		q = map[string]any{"measures": []string{"IqActions.count"},
-			"dimensions": []string{"IqActions.type", "IqActions.status", "IqActions.severity"},
-			"order":      map[string]any{"IqActions.count": "desc"}}
+		q = map[string]any{"measures": []string{cubeActions + ".action_count"},
+			"dimensions": []string{cubeActions + ".type", cubeActions + ".status", cubeActions + ".severity"},
+			"order":      map[string]any{cubeActions + ".action_count": "desc"}}
 	}
 	text, _ := json.Marshal(q)
 	body, status, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(text)})
@@ -327,10 +327,10 @@ func (s *Service) iqInsights(args map[string]any) string {
 	out := map[string]any{}
 	// For the counted views, total_count is the number of IQ actions, added up
 	// from every row, so a breakdown of 30 groups is never read as 30 actions.
-	if m, _ := q["measures"].([]string); len(m) == 1 && m[0] == "IqActions.count" {
+	if m, _ := q["measures"].([]string); len(m) == 1 && m[0] == cubeActions+".action_count" {
 		total := 0
 		for _, r := range rows {
-			n, _ := strconv.Atoi(aiStr(asMap(r)["IqActions.count"]))
+			n, _ := strconv.Atoi(aiStr(asMap(r)[cubeActions+".action_count"]))
 			total += n
 		}
 		out["total_count"] = total

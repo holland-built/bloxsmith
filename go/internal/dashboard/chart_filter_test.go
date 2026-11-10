@@ -67,8 +67,9 @@ func TestBuildChartQuery_RefusesABadFilter(t *testing.T) {
 func TestBuildChartQuery_FilterKeepsTheCountsOwnFilter(t *testing.T) {
 	// qps carries a fixed metric filter; nothing can be added to it, but the
 	// fixed one must survive on every other path too.
+	// Two: the metric, and the stored step a chart by day reads (hostTier).
 	q, _, err := BuildChartQuery(ChartPicks{Count: "qps", Split: "none", Window: "7d", Over: "day"})
-	if err != nil || len(asSlice(roundTrip(t, q)["filters"])) != 1 {
+	if err != nil || len(asSlice(roundTrip(t, q)["filters"])) != 2 {
 		t.Fatalf("qps filter lost: %v %v", q, err)
 	}
 }

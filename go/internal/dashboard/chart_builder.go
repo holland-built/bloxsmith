@@ -59,6 +59,10 @@ type chartCount struct {
 	// NoWeek: the cube refuses a week step (HostMetrics answered 400 to
 	// granularity "week", measured 2026-10-26; day and hour work).
 	NoWeek bool
+	// Tiered: the cube stores rows per 5 minutes, per hour and per day, and a
+	// chart by hour or by day must read that step's stored rows (hostTier),
+	// or V1 averages other rows into different numbers (cube_names.go).
+	Tiered bool
 	// Time is the time dimension windows and over-time apply to; "" is
 	// "timestamp", the activity cubes' event time.
 	Time string
@@ -96,9 +100,6 @@ type chartChoice struct {
 const (
 	cubeDNS     = "DnsActivityV1"
 	cubeThreats = "PortunusAggThreat_ch"
-	cubeHost    = "HostMetrics"
-	// One row per asset Infoblox holds now (assets.go has the measured facts).
-	cubeAssets = "AssetDetails_ch_agg"
 	// Security cubes live on their own service (csp.go CSPThreats).
 	cubeEndpoint         = "/api/cubejs/v1/query"
 	cubeSecurityEndpoint = "/api/cubejs-security/v1/query"
@@ -127,7 +128,7 @@ var chartCatalog = struct {
 			// Every hourly slice came back as one midnight row (measured live 2026-10-22).
 			DaysOnly: true},
 		{ID: "qps", Name: "DNS queries per second", Cube: cubeHost, Measure: cubeHost + ".avg_value",
-			Endpoint: cubeEndpoint, Splits: []string{"none"}, NoWeek: true,
+			Endpoint: cubeEndpoint, Splits: []string{"none"}, NoWeek: true, Tiered: true,
 			Filters: []map[string]any{{"member": cubeHost + ".metric_name", "operator": "equals",
 				"values": []string{"dns_qps_iq"}}}},
 		// Changes the lease log recorded, not the leases held now.
@@ -374,6 +375,9 @@ func BuildChartQuery(p ChartPicks) (map[string]any, string, error) {
 		q["dimensions"] = split.Fields
 	}
 	filters := slices.Clone(count.Filters)
+	if count.Tiered && over.Value != "" {
+		filters = append(filters, hostTier(over.Value))
+	}
 	if p.Only != "" || p.Is != "" || p.Value != "" {
 		f, err := onlyFilter(*count, p)
 		if err != nil {
