@@ -1,0 +1,1 @@
+function e(e){return e||=``,/^unknown$/i.test(e)?`unknown`:/online|up|active/i.test(e)?`active`:/degraded|warn/i.test(e)?`degraded`:/off|down|error|fail/i.test(e)?`offline`:`other`}export{e as t};
