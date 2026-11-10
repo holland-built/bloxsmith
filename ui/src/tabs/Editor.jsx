@@ -3,6 +3,7 @@ import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
+import { tokenFetch } from '../lib/authFetch.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -257,7 +258,7 @@ export default function Editor() {
 
   async function doFetch(url, method, body) {
     try {
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await tokenFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json().catch(() => ({}))
       return { ok: res.ok, data }
     } catch {
@@ -331,7 +332,7 @@ export default function Editor() {
     setDelArmed(false)
     setStatus('busy')
     setResult(null)
-    fetch(`${spec.endpoint}/${encodeURIComponent(editId.trim())}`, { method: 'DELETE' })
+    tokenFetch(`${spec.endpoint}/${encodeURIComponent(editId.trim())}`, { method: 'DELETE' })
       .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
       .catch(() => ({ ok: false, data: { error: 'network error' } }))
       .then(({ ok, data }) => {

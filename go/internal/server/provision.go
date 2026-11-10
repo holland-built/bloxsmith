@@ -576,7 +576,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 		run := d.newSeedRun(r, emit, dry)
 
 		run.sites(regions,
-			"region %s could not be read, so its site templates were never found — no sites were created for it",
+			"region %s could not be read, so its site templates were never found — none of its sites were torn down, so any that exist are still there",
 			func(rel string, template provision.M, forward provision.Emitter) {
 				cfg, err := provision.TemplateToDecommissionConfig(template,
 					provision.M{"dry": run.dryParam, "ip_space": override})

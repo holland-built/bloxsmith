@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { tokenFetch } from '../lib/authFetch.js'
 
 // Which tenant a change would land in, and whether it may be changed.
 //
@@ -164,7 +165,7 @@ export default function ConnStatus() {
   const switchTenant = async (id) => {
     if (id === activeTenant || switching) return
     setSwitching(true)
-    const r = await fetch('/api/vault/active', {
+    const r = await tokenFetch('/api/vault/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),

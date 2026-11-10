@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
+import { tokenFetch } from '../lib/authFetch.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -134,7 +135,7 @@ export default function Incidents() {
   async function setActionStatus(id, nextStatus) {
     setActionStatusState((p) => ({ ...p, [id]: { pending: true, error: null } }))
     try {
-      const res = await fetch(`/api/actions/${id}/status`, {
+      const res = await tokenFetch(`/api/actions/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),

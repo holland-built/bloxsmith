@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { COLORS, FIELD_CLS } from './ui.jsx'
-import { authFetch } from '../lib/authFetch.js'
+import { tokenFetch } from '../lib/authFetch.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { API_KEY_BOX } from '../lib/secretBox.js'
 
@@ -39,7 +39,7 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
   async function save() {
     setSaving(true); setSaveMsg(null)
     try {
-      const r = await authFetch('/api/vault/demo', {
+      const r = await tokenFetch('/api/vault/demo', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, joinToken: token }),
       })

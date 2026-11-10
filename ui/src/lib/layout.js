@@ -20,6 +20,8 @@
 // key is exactly what ViewWrite's whitelist throws away. `layout` itself is
 // stored as an opaque map, so no Go change was needed to add it.
 
+import { tokenFetch } from './authFetch.js'
+
 export const LAYOUT_VERSION = 1
 
 // The grid is grid-cols-2 md:4 xl:6 (ui.jsx), so 6 is the widest span that has
@@ -472,7 +474,7 @@ export function buildSaveBlob(tabId, order, spans, hidden = []) {
 // a record that fails the strict payload check all land in the same place, for
 // the same reason: there is no layout we can trust, so none is applied and the
 // tab renders exactly as it did before this file existed.
-export async function loadLayout(tabId, fetchImpl = fetch) {
+export async function loadLayout(tabId, fetchImpl = tokenFetch) {
   const name = layoutViewName(tabId)
   try {
     const listRes = await fetchImpl('/api/views')
@@ -501,7 +503,7 @@ export async function loadLayout(tabId, fetchImpl = fetch) {
 // the boolean was the one failure mode that did not, and it was the common one.
 // Throwing makes all three arrive at the same place, and nothing in the app
 // read the return value.
-export async function saveLayout(tabId, { order, spans, hidden }, fetchImpl = fetch) {
+export async function saveLayout(tabId, { order, spans, hidden }, fetchImpl = tokenFetch) {
   const blob = buildSaveBlob(tabId, order, spans, hidden)
   const verdict = validateSave(blob)
   if (!verdict.ok) throw new Error(`refusing to save an invalid layout: ${verdict.error}`)

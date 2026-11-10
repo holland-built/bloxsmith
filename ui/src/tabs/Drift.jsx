@@ -6,6 +6,7 @@ import { PageRail } from '../components/kit.jsx'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { Card, CardGrid, COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+import { tokenFetch } from '../lib/authFetch.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
 // lives in lib/ so npm test can reach it — inside this file it was a
 // cross-language prose contract nothing checked. See driftStatus.test.js.
@@ -38,7 +39,7 @@ export default function Drift() {
     setChecking(true)
     setResult(null)
     setErr(null)
-    fetch('/api/drift/check', {
+    tokenFetch('/api/drift/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ template, ip_space: ipSpace || undefined }),

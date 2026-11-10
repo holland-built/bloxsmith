@@ -2,16 +2,12 @@ import { useEffect, useState } from 'react'
 import { FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { vpost } from '../lib/authFetch.js'
 
 // The AI tab's provider: one form, used in Settings > Integrations and in the
 // setup checklist. Any provider that takes OpenAI-style chat requests works;
 // Claude's API does, at the address below. The values for each preset are the
 // ones docs/DEPLOYMENT.md lists.
-
-const vpost = (url, body) =>
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
-    .catch(() => ({ ok: false, data: { error: 'network error' } }))
 
 const inCls = `${FIELD_CLS} w-full`
 const miniBtn = 'px-2 py-1 rounded-control border border-border text-note text-muted hover:text-txt hover:border-border-hover'

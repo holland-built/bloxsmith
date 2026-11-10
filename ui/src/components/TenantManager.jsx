@@ -7,11 +7,7 @@ import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
 import AiProviderForm from './AiProviderForm.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
-
-const vpost = (url, body) =>
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
-    .catch(() => ({ ok: false, data: { error: 'network error' } }))
+import { tokenFetch, vpost } from '../lib/authFetch.js'
 
 const inCls =
   `${FIELD_CLS} w-full`
@@ -59,11 +55,6 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   // and it is the one fact about the key that is safe to hold in React state.
   const [axur, setAxur] = useState({ key: '', stored: false, busy: false, err: '', msg: '' })
   const [kentik, setKentik] = useState({ email: '', token: '', stored: false, busy: false, err: '', msg: '' })
-
-  const authHeaders = () => {
-    const t = localStorage.getItem('dashToken')
-    return t ? { 'X-Auth-Token': t } : {}
-  }
 
   const load = () => {
     // A failed status read must not read as "no tenants saved" — that's a
@@ -160,7 +151,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
 
   const switchCspAccount = async (id) => {
     setAcctSwitchErr('')
-    const r = await fetch('/api/switch-account', {
+    const r = await tokenFetch('/api/switch-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -335,7 +326,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
 
   const lockNow = async () => {
     setLocking(true)
-    await fetch('/api/vault/lock', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: '{}' })
+    await tokenFetch('/api/vault/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
     setLocking(false)
     window.dispatchEvent(new Event('bx:vault-locked'))
     onClose()

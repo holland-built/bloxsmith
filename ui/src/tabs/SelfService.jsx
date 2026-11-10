@@ -17,6 +17,7 @@ import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, Previ
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
+import { tokenFetch } from '../lib/authFetch.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -68,7 +69,7 @@ function useWriteFlow(url) {
     setStatus('busy')
     setError(null)
     setMessage(null)
-    return fetch(url, {
+    return tokenFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, dry }),
@@ -578,7 +579,7 @@ function ManageRecordsPanel({ panelId, span }) {
     setHeld(snapshot)
     editedWhileBusy.current = false
     setStatus('busy'); setError(null); setMessage(null)
-    fetch('/api/dns/records', {
+    tokenFetch('/api/dns/records', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...buildBody(snapshot), dry: true }),
@@ -626,7 +627,7 @@ function ManageRecordsPanel({ panelId, span }) {
           setStatus('idle'); setPreview(null); setStale(false); setHeld(null)
           return null
         }
-        return fetch('/api/dns/records', {
+        return tokenFetch('/api/dns/records', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...buildBody(held), dry: false }),
@@ -689,7 +690,7 @@ function ManageRecordsPanel({ panelId, span }) {
     clearTimeout(armTimerRef.current)
     setArmedId(null)
     setDeleteError(null)
-    fetch(`/api/dns/records/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
+    tokenFetch(`/api/dns/records/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}))
         if (!r.ok || j.error) {
@@ -871,7 +872,7 @@ function ManageAddressesPanel({ panelId }) {
     clearTimeout(armTimerRef.current)
     setArmedId(null)
     setReleaseError(null)
-    fetch(`/api/ipam/addresses/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
+    tokenFetch(`/api/ipam/addresses/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}))
         if (!r.ok || j.error) {
