@@ -237,10 +237,10 @@ There are two logs on purpose: one records what this app did, the other what eve
 
 What changed in the Portal in the last 24 hours. It reads the same Portal audit log as the Audit tab's Portal panel, limited to one day and grouped by what was changed.
 
-- **Notability**: four questions about the day: anything deleted, any failed changes, changes made out of hours, and anyone new making changes. Each question gets an answer, None, or Unknown when the data can't tell. Someone counts as new if they made changes in the later half of the 24 hours and none in the earlier half. There is no history before that to check.
+- **Worth a look**: four questions about the day: anything deleted, any failed changes, changes made out of hours, and anyone new making changes. Each question gets an answer, None, or Unknown when the data can't tell. Someone counts as new if they made changes in the later half of the 24 hours and none in the earlier half. There is no history before that to check.
 - **Changed objects**: the changes grouped by the object they touched, newest group first. Deletions and failures are red.
 
-It shows at most the 500 latest events from the last 24 hours. The Portal returns no more than that in one request, so on a busy day the oldest changes are left out, and the page says so when that happens.
+It shows at most the 500 latest events from the last 24 hours. The Portal returns no more than that in one request, so on a busy day the oldest changes are left out. When that happens the page says so, and the box at the top shows how far back the list really reaches instead of "Last 24 hours".
 
 ---
 
@@ -508,7 +508,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Audit | Activity Summary | this app's own audit log | No | it is this app's own record, not Infoblox's |
 | Audit | Audit Log | this app's own audit log | No | it is a list, not a chart |
 | Audit | CSP Portal Audit | the Infoblox audit log | No | it is a list, not a chart |
-| Changes | Notability | the Infoblox audit log | No | how notable each change is, is worked out in the app |
+| Changes | Worth a look | the Infoblox audit log | No | how notable each change is, is worked out in the app |
 | Changes | Changed objects | the Infoblox audit log | No | it is a list, not a chart |
 | Provision | Subnet: Request | the Infoblox API | No | it is a form, not a chart |
 | Provision | Subnet: Live log | the Infoblox API | No | it is a live log, not a chart |

@@ -271,7 +271,7 @@ export const PANEL_HELP = {
   // ---- Changes ----
   'changes-notability': {
     what: 'What was deleted in the last 24 hours, what failed, what happened between 20:00 and 08:00, and who acted for the first time.',
-    look: 'A dash instead of a count means the question could not be answered; it does not mean zero. A warning appears here when the 500-event limit was reached.',
+    look: 'A dash instead of a count means the question could not be answered; it does not mean zero. A grey note appears here when the 500-event limit was reached.',
   },
   'changes-changed-objects': {
     what: 'Portal actions from the last 24 hours, 500 at most: the local time, what was done, whether it succeeded, and which account did it.',
