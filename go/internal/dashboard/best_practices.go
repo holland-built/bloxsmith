@@ -66,10 +66,15 @@ func (s *Service) BestPractices(ctx context.Context) map[string]any {
 	haWhole := haErr == nil && listComplete(ha, haTotal, haTotal >= 0)
 	failed = failed || haErr != nil
 
+	_, dnsBody, dnsErr := s.Rest.GetPageStrict("/api/ddi/v1/dns/global", nil)
+	as := activeSearchCheck(dnsBody, dnsErr == nil)
+	failed = failed || as.Status == "unknown"
+
 	checks := []bpCheck{
 		hostsDownCheck(hosts, hostsOK, hostsWhole),
 		gmResilienceCheck(hosts, hostsOK, hostsWhole),
 		dhcpAAPCheck(ha, haErr == nil, haWhole),
+		as,
 	}
 	out := map[string]any{"checks": checks}
 	if !failed {
@@ -243,6 +248,33 @@ func dhcpAAPCheck(ha []any, readOK, whole bool) bpCheck {
 	default:
 		c.Title = "No DHCP HA group uses Advanced Active/Passive"
 		c.Status, c.Items = "passed", []map[string]any{}
+	}
+	return c
+}
+
+// activeSearchCheck reads result.active_search_enable from dns/global (the
+// path the IQ Agent onboarding prompt names, /api/v1/dns/global, is a 404).
+// Only a true or false proves anything; a failed read, or a reply without the
+// field, is "couldn't tell".
+func activeSearchCheck(body map[string]any, readOK bool) bpCheck {
+	c := bpCheck{
+		ID: "active-search", Severity: "medium", Title: "30-day Active Search",
+		Why: "Infoblox's IQ Agent needs 30-day Active Search turned on to show DNS activity history.",
+	}
+	if !readOK {
+		return unknown(c, false, "DNS settings")
+	}
+	on, ok := asMap(body["result"])["active_search_enable"].(bool)
+	switch {
+	case !ok:
+		c.Status, c.Items = "unknown", []map[string]any{}
+		c.Reason = "The DNS settings didn't say whether Active Search is on."
+	case on:
+		c.Title = "30-day Active Search is on"
+		c.Status, c.Items = "passed", []map[string]any{}
+	default:
+		c.Title = "30-day Active Search is off"
+		c.Status, c.Items = "problem", []map[string]any{}
 	}
 	return c
 }
