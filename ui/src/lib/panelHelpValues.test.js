@@ -701,12 +701,12 @@ const CLAIMS = [
   // ---- colours ----
   {
     panel: 'audit-activity-summary',
-    says: /A refusal is amber, a failure red, everything else green/,
+    says: /A refusal is amber, a failure red, everything else grey/,
     file: AUDIT,
     proofs: [
       { re: /refused\|denied\|rbac\/\.test\(event\)\) return COLORS\.warn/, expect: 'a refusal is COLORS.warn (amber)' },
       { re: /error\|unreadable\|failed\|orphaned\/\.test\(event\)\) return COLORS\.crit/, expect: 'a failure is COLORS.crit (red)' },
-      { re: /return COLORS\.ok\n\}/, expect: 'everything else falls through to COLORS.ok (green)' },
+      { re: /return COLORS\.other\n\}/, expect: 'everything else falls through to COLORS.other (grey)' },
     ],
   },
   {

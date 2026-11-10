@@ -257,11 +257,11 @@ export const PANEL_HELP = {
   // ---- Audit ----
   'audit-activity-summary': {
     what: 'A tally of the entries below, grouped by the kind of event each one records, largest kind first.',
-    look: 'A refusal is amber, a failure red, everything else green. Past the five largest kinds the rest fold into one row, so the rows still add up. Bars scale to the largest kind, not the total.',
+    look: 'A refusal is amber, a failure red, everything else grey. Past the five largest kinds the rest fold into one row, so the rows still add up. Bars scale to the largest kind, not the total.',
   },
   'audit-log': {
     what: 'Every change made through this app: who, what event, and the detail it was recorded with. Readable and searchable here, but not downloadable.',
-    look: 'The line above the table says whether the record has been tampered with. "Could not be verified" is not the same as intact, and the command shown checks it independently.',
+    look: 'The box at the top of the page says whether the record has been tampered with. "Not verified" is not the same as intact, and the command shown checks it independently.',
   },
   'audit-csp-portal': {
     what: 'Actions taken in the Infoblox portal itself, by people and by machine accounts, rather than through this app. The search is capped, and the count says so.',
