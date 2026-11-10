@@ -3,11 +3,11 @@
 // with its reason. When the ranked list cannot be had, it is the plain list,
 // so these pages work exactly as before.
 import { useMemo } from 'react'
-import { useApi } from './api.js'
+import { SHARE_PICKER, useApi } from './api.js'
 
 export function useSpaceOptions() {
   const ranked = useApi('/api/desk/spaces')
-  const plain = useApi('/api/ipam/spaces')
+  const plain = useApi('/api/ipam/spaces', SHARE_PICKER)
   const list = ranked.data?.spaces?.length ? ranked.data.spaces : null
   const options = useMemo(() => (list
     ? list.map((s) => ({ value: s.id, label: s.reason ? `${s.name || s.id} (${s.reason})` : (s.name || s.id), name: s.name, yours: s.yours }))

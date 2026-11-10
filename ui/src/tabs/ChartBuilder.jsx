@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
 import ChartView from '../components/ChartView.jsx'
 import { AnyHow, AnyPickers, AnyResult } from './ChartAnyData.jsx'
@@ -521,7 +521,7 @@ function Builder({ opts, params }) {
 }
 
 export default function ChartBuilder() {
-  const options = useApi('/api/chart/options')
+  const options = useApi('/api/chart/options', SHARE_PICKER)
   const params = useHashParams()
   const cube = useCubeNames()
   return (

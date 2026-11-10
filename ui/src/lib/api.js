@@ -250,7 +250,8 @@ export function retryFailedFeeds() {
 // poll instead — up to 30s later.
 //
 // That is survivable ONLY because the lock has its own signal that this does not
-// touch: ConnStatus polls /api/vault/status every 30s WITHOUT adopting, and
+// touch: ConnStatus polls /api/vault/status every 30s and adopts only an answer
+// from the 2s before (in practice VaultGate's, at boot), and
 // `status.ready === false` drives the same locked state that the event does. A
 // 503 on /api/data is the secondary detector, not the primary one. If that ever
 // stops being true — if /api/data's 503 becomes the only way the app learns the
@@ -260,6 +261,18 @@ const adoptCounts = new Map() // url -> how many mounted hooks opted in, so the 
 const lastOk = new Map() // url -> { json, at, seq }
 const seqByUrl = new Map() // url -> the sequence number of the newest request STARTED
 const asking = new Map() // url -> { settled } for a request an opted-in hook sent and has not heard back from
+
+/**
+ * Options for a picker list (zones, IP spaces, templates, chart options) that
+ * several panels on one page read at the same moment. The panels mount together,
+ * so the first one's answer, or its request still in flight, serves the rest:
+ * Self-service used to send two zone lists and three space lists on every visit.
+ * 2s, the same window the header and Overview share /api/data with: wide enough
+ * for panels mounting together, far too narrow to stand in for a later re-read.
+ * None of these call sites polls or refetches, so nothing here can hand a list
+ * from before a change to a panel that asked after it.
+ */
+export const SHARE_PICKER = { adoptIfFresherThan: 2000 }
 
 // How long a second asker waits for a first that is still answering, before
 // sending its own. Warm answers take 8-36ms (see the measurements above), so this
@@ -341,6 +354,26 @@ function freshOk(url, withinMs) {
   return performance.now() - hit.at <= withinMs ? hit : null
 }
 
+/**
+ * Offer a success fetched OUTSIDE useApi to the hooks that opt in to adopting
+ * this url, on exactly the terms a hook's own success is offered: newest request
+ * wins, a caller's window decides, failures are never offered.
+ *
+ * For a read that must stay a plain fetch and that finishes just before the
+ * hooks wanting the same answer mount. VaultGate is the one caller: it reads
+ * /api/vault/status to decide whether to draw the app at all, and the header's
+ * ConnStatus, mounting a moment later, used to read it again at once.
+ *
+ * Unlike a hook's own success this is kept even before anyone has opted in,
+ * because the hooks it is for do not exist yet when it lands. One entry per url,
+ * overwritten each time, so it cannot grow; the last watcher leaving drops it as
+ * usual.
+ */
+export function shareResult(url, json) {
+  const seq = claimSeq(url)
+  lastOk.set(url, { json: structuredClone(json), at: performance.now(), seq })
+}
+
 // performance.now(), NOT Date.now(), and this is not a style preference.
 //
 // Date.now() is the WALL clock. It jumps: an NTP correction, a laptop waking
@@ -403,6 +436,9 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   urlRef.current = url
   const joiningRef = useRef(false) // a wait for another asker's answer is pending
   const warmRef = useRef(false) // flips once a load has succeeded for this url
+  // performance.now() of this url's last answer, fetched or adopted; null until
+  // one has landed. Read only by the return-to-tab check below.
+  const answeredAtRef = useRef(null)
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
   // One stable object for the whole life of the hook; only its fields change,
@@ -438,6 +474,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         if (genRef.current === gen) warmRef.current = true
         if (!live()) return
         failuresRef.current = 0
+        answeredAtRef.current = performance.now()
         // Cloned, so two hooks never hold one mutable payload. Two fetches would
         // have produced two independent objects, and a panel that sorts or
         // splices its slice in place must not reach into another panel's copy.
@@ -527,6 +564,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         publishOk(url, seq, json)
         if (!live()) return
         failuresRef.current = 0
+        answeredAtRef.current = performance.now()
         // A poll that brings back what the screen already shows keeps the old
         // object, so React has nothing to re-render. Most 30-second polls are
         // identical: the server caches for five minutes.
@@ -537,6 +575,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
       })
       .catch((err) => {
         if (!live()) return
+        answeredAtRef.current = null // a failed feed asks again on return
         // error stays set and loading stays false for the whole retry wait, so
         // no existing branch at any call site sees a state it did not see
         // before; `retrying` is the only new signal.
@@ -639,6 +678,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
       setForUrl(url)
     }
     warmRef.current = false // a new url is cold again
+    answeredAtRef.current = null // and has answered nothing yet
     failuresRef.current = 0 // and gets a full retry budget
     setLoading(true)
     load()
@@ -646,13 +686,22 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     let onVisible
     if (poll) {
       // A tab nobody is looking at does not poll. Coming back fetches at once,
-      // so what is on screen is never older than one poll plus the return.
+      // so what is on screen is never older than one poll plus the return —
+      // unless this feed answered within the last half of its interval. Every
+      // polled feed on the page used to fire together on each return, however
+      // brief the trip away (an alt-tab of a few seconds re-read the lot); a
+      // feed that answered moments ago is already fresher than the promise, and
+      // its next poll still comes on time. A failure clears the answer time,
+      // so a feed whose last request failed still asks again at once.
       id = setInterval(() => {
         if (!pageHidden()) load()
       }, poll)
       if (typeof document !== 'undefined') {
         onVisible = () => {
-          if (!pageHidden()) load()
+          if (pageHidden()) return
+          const at = answeredAtRef.current
+          if (at !== null && performance.now() - at < poll / 2) return
+          load()
         }
         document.addEventListener('visibilitychange', onVisible)
       }

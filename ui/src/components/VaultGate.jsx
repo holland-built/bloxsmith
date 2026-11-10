@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
 import { vpost } from '../lib/authFetch.js'
+import { shareResult } from '../lib/api.js'
 
 const inCls =
   `${FIELD_CLS} w-full`
@@ -235,7 +236,12 @@ export default function VaultGate({ children }) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then((d) => { if (alive.current) { setSt(d); setStatusError(false) } })
+      .then((d) => {
+        // The header's status poll mounts the moment this lets the app draw, and
+        // wants this same answer; it takes it rather than asking again.
+        shareResult('/api/vault/status', d)
+        if (alive.current) { setSt(d); setStatusError(false) }
+      })
       // A failed status read must not be treated as "no vault configured" —
       // {vaultMode:false} here used to fall straight through to `return
       // children`, rendering the full dashboard as if vault mode were off.

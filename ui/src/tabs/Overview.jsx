@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { inboxRows } from '../lib/inboxRows.js'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
@@ -29,6 +29,36 @@ import './Overview.css'
 // 2026-11-09 from four looks built with the dashboard-design skill.
 
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
+
+// Draws its children once the box is within 400px of the screen, or once the
+// browser is idle after the first draw, whichever comes first, with a Skeleton
+// of the same height until then. The DNS chart below the board is the only thing
+// on Overview that needs the chart library (111 KB gzipped), and it sits under
+// the fold, so the library is no longer fetched and parsed ahead of the board.
+// It still loads on every visit, just after the page has drawn: a placeholder
+// that waited for a scroll would sit there saying "Loading…" about something
+// that is not loading, which is what readers and the page checks would hear.
+// Without IntersectionObserver it draws at once.
+function WhenNear({ h, children }) {
+  const ref = useRef(null)
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    if (near) return undefined
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setNear(true)
+    }, { rootMargin: '400px 0px' })
+    io.observe(ref.current)
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(() => setNear(true), { timeout: 2000 })
+      : setTimeout(() => setNear(true), 1000)
+    return () => {
+      io.disconnect()
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle)
+      else clearTimeout(idle)
+    }
+  }, [near])
+  return near ? children : <div ref={ref}><Skeleton h={h} /></div>
+}
 
 const DAY_S = 86400
 const n0 = (v) => (typeof v === 'number' ? v.toLocaleString() : '—')
@@ -646,17 +676,19 @@ function DnsHero({ dns, panelId }) {
           {/* The headline above this chart already rounds the same series to
               one decimal; the tooltip used to answer `value : 346.1144444444444`
               for the very same point. One decimal, and the unit spelled out. */}
-          <Suspense fallback={<Skeleton h={230} />}>
-            <GradientArea
-              label="DNS Query Rate — 24h"
-              data={chartData}
-              color={COLORS.series}
-              gradientId="dnsFill"
-              unit="queries per second"
-              height={230}
-              yDomain={['dataMin - 0.5', 'dataMax + 0.5']}
-            />
-          </Suspense>
+          <WhenNear h={230}>
+            <Suspense fallback={<Skeleton h={230} />}>
+              <GradientArea
+                label="DNS Query Rate — 24h"
+                data={chartData}
+                color={COLORS.series}
+                gradientId="dnsFill"
+                unit="queries per second"
+                height={230}
+                yDomain={['dataMin - 0.5', 'dataMax + 0.5']}
+              />
+            </Suspense>
+          </WhenNear>
         </>
       )}
     </Card>
