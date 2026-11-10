@@ -100,9 +100,12 @@ export default function Changes() {
           <span className="chg-pills">
             {/* The window the page can honestly claim: "Last 24 hours" only
                 when the feed was not cut off at its row limit. */}
-            <Tip tip={win.tip} className="ov-pill" data-changes-window="">
-              {win.text}
-            </Tip>
+            {/* No claim at all until a read has established what it covers. */}
+            {state === 'loading' || state === 'unavailable' ? null : (
+              <Tip tip={win.tip} className="ov-pill" data-changes-window="">
+                {win.text}
+              </Tip>
+            )}
             <span className="ov-pill">
               <span aria-hidden="true" className={`ov-live${state === 'unavailable' ? ' down' : state === 'loading' ? ' wait' : ''}`} />
               {state === 'loading' ? 'Checking…' : state === 'unavailable' ? 'Not updated' : `Updated ${fetchedAt ? fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`}

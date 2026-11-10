@@ -253,6 +253,8 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     // No band either: four "None" cells would answer four questions nobody
     // could actually ask.
     await expect(page.locator('[data-changes-band]')).toHaveCount(0);
+    // Nor a coverage claim: a failed read covers no window at all.
+    await expect(page.locator('[data-changes-window]')).toHaveCount(0);
   });
 
   test('a healthy but silent window is empty, not unavailable', async ({ page }) => {
