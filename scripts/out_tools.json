@@ -1,9 +1,10 @@
 [
   {
     "name": "infoblox-hosts_get_host_config",
-    "description": "Fetch the requested variant of the DNS or DHCP configuration files for a specific on-prem host. Returns the base configuration by default; pass `variant=dfp` to get the DNS Firewall Proxy configuration a NIOS-X host running DFP actually loads, or `variant=ibpolicy` when that host runs DFP together with the On-Prem Policy Engine. The response names the effective file and why it was chosen. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
+    "description": "Fetch the requested variant of the DNS or DHCP configuration files for a specific on-prem host. Returns the base configuration by default; pass `variant=dfp` to get the DNS Firewall Proxy configuration a NIOS-X host running DFP actually loads, or `variant=ibpolicy` when that host runs DFP together with the On-Prem Policy Engine. The response names the effective file and why it was chosen; for NIOS-X DNS `files` also carries any custom root hints files (`root.servers.*`) in the selected bundle version. Use to read how one specific host is configured: forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. The files are that host's effective runtime configuration, so names in them can differ from the names shown in the Portal (for example the default DNS view appears as `_default`). Not a source for listing, counting, or confirming the existence of DNS views, zones, or records across a grid or many hosts: use the Portal DNS configuration API (DnsConfig) for those, where NIOS grid objects appear with their Portal names. If you have no tool for that API, say so instead of answering from one host's files. For Microsoft DNS hosts the response carries a `collection` object; `files` is empty only when `collection.evidence_available` is `false`, because the evidence was withheld or never collected (see `collection.reason`), not because the host has no configuration. A `snapshot_stale` result is `degraded` but still carries the stale snapshot in `files` and its `version` (`evidence_available` is `true`); check `collection.freshness` before relying on it. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
     "params": [
       "config_type*:string",
+      "event_time:string",
       "ophid*:string",
       "variant:string",
       "version:string"
@@ -177,7 +178,7 @@
   },
   {
     "name": "infoblox-portal_query_cube",
-    "description": "Execute a CubeJS query and store results for SQL analysis.\n\nQuery Building Tips:\n1. Always use fully qualified names (CubeName.field) for measures and dimensions\n2. Time dimensions support relative ranges like '24 hours', '7 days' (auto-converted to date tuples)\n3. Filters use operators like: equals, notEquals, contains, gt, gte, lt, lte\n\nCommon Patterns:\n- Time series: Add time_dimensions with granularity for trends over time\n- Top N: Use order with limit to get highest/lowest values\n- Filtering: Use filters to narrow down to specific criteria\n- Grouping: Add dimensions to segment data by categories",
+    "description": "Execute a CubeJS query and store results for SQL analysis.\n\nQuery Building Tips:\n1. Always use fully qualified names (CubeName.field) for measures and dimensions\n2. Time dimensions support relative ranges like '24 hours', '7 days' (auto-converted to date tuples)\n3. Filters use operators like: equals, notEquals, contains, gt, gte, lt, lte\n\nCommon Patterns:\n- Time series: Add time_dimensions with granularity for trends over time\n- Top N: Use order with limit to get highest/lowest values\n- Filtering: Use filters to narrow down to specific criteria\n- Segments: Use segments for a cube's named, pre-defined filters (see get_cube_info)\n- Grouping: Add dimensions to segment data by categories",
     "params": [
       "task_description*:string",
       "cube_name*:string",
@@ -185,6 +186,7 @@
       "dimensions:[{'items': {'type': 'string'}, 'type': 'array'}, {'type': 'null'}]",
       "time_dimensions:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
       "filters:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
+      "segments:[{'items': {'type': 'string'}, 'type': 'array'}, {'type': 'null'}]",
       "order:[{'additionalProperties': {'enum': ['asc', 'desc'], 'type': 'string'}, 'type': 'object'}, {'type': 'null'}]",
       "limit:[{'type': 'integer'}, {'type': 'null'}]",
       "offset:[{'type': 'integer'}, {'type': 'null'}]",
@@ -254,6 +256,12 @@
     ]
   },
   {
+    "name": "infoblox-portal_app_ping",
+    "description": "Acknowledge a probe from an MCP App shell.\n\nA multiplexing gateway renames this server's tools with a prefix, but an\napp only knows the bare names. Calling this under each candidate prefix\nfinds the one that resolves *before* any action is dispatched, so a wrong\nguess costs a no-op instead of a replayed mutation.  Reads and writes\nnothing.",
+    "params": [],
+    "required": []
+  },
+  {
     "name": "infoblox-portal_get_dashboard",
     "description": "Re-read a dashboard's surface, or report that it has not changed (app-only).",
     "params": [
@@ -320,7 +328,7 @@
   },
   {
     "name": "iq-actions_list_actions",
-    "description": "List and search actions for your account. Shows action summaries including title, status, priority, and last activity. Supports keyword search (query), filtering by status, priority, type, and creation-date range, plus sorting and pagination.",
+    "description": "List and search actions for your account. Shows action summaries including title, status, priority, and last activity. Supports keyword search (query), filtering by status, priority, type, and creation-date range, plus sorting and pagination. Every parameter is optional, and the filters are combined with AND. With no created_after or created_before, results are limited to actions created in the last 30 days; to search further back, set created_after explicitly (giving either date turns the 30-day default off).",
     "params": [
       "created_after:string",
       "created_before:string",
@@ -332,21 +340,45 @@
       "sort_field:string",
       "sort_order:string",
       "status:string",
+      "status_category:string",
+      "status_key:string",
       "type:string"
     ],
     "required": []
   },
   {
+    "name": "iq-actions_list_action_states",
+    "description": "List the lifecycle states an action can be in for your account, with each state's key, label and category (open or closed). Use the key as status_key in list_actions and update_action.",
+    "params": [
+      "action_type:string",
+      "format:string",
+      "include_archived:boolean"
+    ],
+    "required": []
+  },
+  {
+    "name": "iq-actions_list_allowed_transitions",
+    "description": "List the states an action can be moved into right now, given the state it is in. Use a returned key as status_key in update_action.",
+    "params": [
+      "format:string",
+      "id*:string"
+    ],
+    "required": [
+      "id"
+    ]
+  },
+  {
     "name": "iq-actions_update_action",
-    "description": "Update the status of an existing action. Valid statuses are: active, resolved. Helps track action lifecycle and progress through workflow stages.",
+    "description": "Move an existing action to another lifecycle state by status_key, optionally recording a reason. Use list_allowed_transitions to see which states this action can move to now, or list_action_states for every key in your account.",
     "params": [
       "format:string",
       "id*:string",
-      "status*:string"
+      "reason:string",
+      "status:string",
+      "status_key:string"
     ],
     "required": [
-      "id",
-      "status"
+      "id"
     ]
   }
 ]

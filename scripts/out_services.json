@@ -21,24 +21,24 @@
         "service_name": "Atcep",
         "title": "Infoblox EndPoint API",
         "version": "v1",
-        "paths_count": 19,
-        "description": "Infoblox Endpoint is a lightweight roaming agent that redirects DNS traffic from your remote devices to Infoblox Cloud. It enables you to apply appropriate security policies to your roaming end users in remote sites and branch offices.\n\nFor end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nWhen you use Infoblox Endpoint, DNS queries are sent to Infoblox Cloud directly in all scenarios except those where (1) queries target the bypassed domains and (2) internal domains are collected through the DHCP server. If you have internal domains served by your local DNS servers and you want to reach them without interruptions, consider adding them to the bypassed internal domains list; this will ensure that DNS queries for these internal domains get sent to the local DNS servers rather than Infoblox Cloud.\n\nInfoblox Endpoint supports dual-stack IPv4 and IPv6 DNS configurations, thereby protecting all devices, regardless of their network environments. Infoblox Endpoint in a dual-stack environment can proxy IPv6 DNS queries and forward them to Infoblox Cloud over IPv4.\n",
+        "paths_count": 20,
+        "description": "**Important: some endpoints have moved.** The operations marked DEPRECATED below have moved to the `/api/endpoints/atcep/v1/` base path. They remain available here for backward compatibility. Request and response schemas are unchanged - only the base path differs. VPN profile operations are unaffected.\n\nInfoblox Endpoint is a lightweight roaming agent that redirects DNS traffic from your remote devices to Infoblox Cloud. It enables you to apply appropriate security policies to your roaming end users in remote sites and branch offices.\n\nFor end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nWhen you use Infoblox Endpoint, DNS queries are sent to Infoblox Cloud directly in all scenarios except those where (1) queries target the bypassed domains and (2) internal domains are collected through the DHCP server. If you have internal domains served by your local DNS servers and you want to reach them without interruptions, consider adding them to the bypassed internal domains list; this will ensure that DNS queries for these internal domains get sent to the local DNS servers rather than Infoblox Cloud.\n\nInfoblox Endpoint supports dual-stack IPv4 and IPv6 DNS configurations, thereby protecting all devices, regardless of their network environments. Infoblox Endpoint in a dual-stack environment can proxy IPv6 DNS queries and forward them to Infoblox Cloud over IPv4.\n",
         "base_path": "/api/endpoints/atcep/v1"
       },
       {
         "service_name": "Atcfw",
         "title": "Infoblox FW API",
         "version": "v1",
-        "paths_count": 27,
-        "description": "An extension of the Infoblox Suite, Infoblox Threat Defense Cloud provides visibility into infected and compromised off-premises devices, roaming users, remote sites, and branch offices. You can subscribe to Infoblox Cloud and use its functionality to mitigate and control malware, provide unprecedented insight into your network security posture, and enable timely action. Infoblox Cloud also offers unified policy management, reporting, and threat analytics across the entire spectrum. Using automated and high-quality threat intelligence feeds and unique behavioral analytics, it automatically stops device communications with C&Cs/botnets and prevents DNS-based data exfiltration.\n\nThe mission-critical DNS infrastructure can become a vulnerable component in your network when it is inadequately protected by traditional security solutions and, consequently, used as an attack surface. Compromise of DNS services can result in catastrophic failures in the network and system. To fully protect your network in today\u2019s cyber-security threat environment, Infoblox sets a new DNS security standard by offering scalable, integrated enterprise-grade protection for your DNS infrastructure.\n\nUse the Infoblox Cloud Services Portal to view the status of your subscription and threat-intelligence feeds and to manage your network scope and roaming end users. Use the Infoblox Threat Lookup tool and predefined reports to learn about threats in your networks.\n",
+        "paths_count": 32,
+        "description": "An extension of the Infoblox Suite, Infoblox Threat Defense Cloud provides visibility into infected and compromised off-premises devices, roaming users, remote sites, and branch offices. You can subscribe to Infoblox Cloud and use its functionality to mitigate and control malware, provide unprecedented insight into your network security posture, and enable timely action. Infoblox Cloud also offers unified policy management, reporting, and threat analytics across the entire spectrum. Using automated and high-quality threat intelligence feeds and unique behavioral analytics, it automatically stops device communications with C&Cs/botnets and prevents DNS-based data exfiltration.\n\nThe mission-critical DNS infrastructure can become a vulnerable component in your network when it is inadequately protected by traditional security solutions and, consequently, used as an attack surface. Compromise of DNS services can result in catastrophic failures in the network and system. To fully protect your network in today\u2019s cyber-security threat environment, Infoblox sets a new DNS security standard by offering scalable, integrated enterprise-grade protection for your DNS infrastructure.\n\nUse the Infoblox Cloud Services Portal to view the status of your subscription and threat-intelligence feeds and to manage your network scope and roaming end users. Use the Infoblox Threat Lookup tool and predefined reports to learn about threats in your networks.\n\n\nNamed lists and custom lists: the Infoblox Portal calls these objects \"Custom Lists\"; this API calls them \"Named Lists\" (`/named_lists`). Treat the two terms as the same thing, including the default lists \"Default Block\" and \"Default Allow\" (types `default_block` and `default_allow`).\n\nThreat Insight lists: lists such as \"Threat Insight - DGA\" and \"Threat Insight - Data Exfiltration\" are named lists in this service, not TIDE data. They are the entries of `GET /named_lists` whose `type` is anything other than `custom_list`, `default_allow` or `default_block`: Infoblox creates and maintains them, and their names start with \"Threat Insight\". Identify a specific list by its `name` in the response. Answer questions about a list from that list's own fields: its size from `item_count` (not TIDE threat counts), its threat level and confidence from `threat_level` and `confidence_level`, and the security policies that use it from `policies` (do not rebuild this from `/security_policies`). When asked which Threat Insight lists exist, name every list that matches this rule; do not limit the answer to particular types. Always look these values up; never answer them from general knowledge.\n\nList items: `GET /named_lists` does not return list items; `GET /named_lists/{id}` does.\n\nChanging a list: adding or removing entries only raises an approval form, and nothing runs until the user approves it. When asked to add an entry and the user does not name a list, do not ask which list first: use the default list of that type (\"Default Allow\" for an allow list, \"Default Block\" for a block list), say which list you chose, and raise the form; the user can decline it or ask for another list. When asked to remove an entry, first read the list's items (`GET /named_lists/{id}`) and confirm the entry is there; if it is not, say so and do not raise a removal form.",
         "base_path": "/api/atcfw/v1"
       },
       {
         "service_name": "AuditLog",
         "title": "Audit Logging",
         "version": "1.0",
-        "paths_count": 2,
-        "description": "The service manages audit logs by validating incoming log entities, preserving them in the underlying storage system, and providing read access to them; write access is only available via gRPC from other services in the cluster.",
+        "paths_count": 1,
+        "description": "The service manages audit logs by validating incoming log entities, preserving them in the underlying storage system, and providing read access to them; write access is only available via gRPC from other services in the cluster.\n\nAudit entries are read with `GET /logs` and its `_filter`. The filter supports `==`, `!=`, `>`, `>=`, `<`, `<=`, `~` (regex match), `!~`, `and`, `or`, `not` and parentheses. There is no `contains` or `like`: a filter using one fails with HTTP 400 \"Unexpected token\". Use `~` for a substring or pattern match.\n\nThe `result` field is a plain string, and its values are capitalised exactly `Success` and `Failed`. `result == 'SUCCESS'` matches nothing and returns zero rows without an error. Bound a time window with `created_at >= '2026-10-28T00:00:00Z'` (ISO 8601, UTC).\n\nA filtered query that returns zero rows is not evidence that nothing happened; the filter may be wrong. Before reporting \"no entries\" or \"no changes\", rerun with only the time window, read the real `result`, `action` and `resource_type` values in those rows, and filter on what you see. If the answer is still empty, state the exact filter you used.",
         "base_path": "/api/auditlog/v1"
       },
       {
@@ -46,14 +46,14 @@
         "title": "The On-Prem Authentication Service API",
         "version": "v1",
         "paths_count": 11,
-        "description": "The On-Prem Authentication Service API provides means to configure and associate an authentication profiles to be used within user identity acquisition process for the sake of per-usergroup policy enforcement.\n\n",
+        "description": "The On-Prem Authentication Service API is the cloud control plane for Infoblox's on-prem captive-portal authentication. CSP administrators configure authentication profiles (LDAP, SAML 2.0, OpenID Connect) per account and assign them to on-prem hosts and services. The on-prem Atlas Config Manager pulls the assembled config bundle from the internal /configuration endpoints. Authentication is JWT-based via the Authorization header; OPA / granular-authz gates per-RPC access in production. Endpoints under /api/authn/v1/profiles, /account, /hosts, and /infra/services are customer-facing; /configuration and /accounts/sync are internal service-to-service contracts.\n\n",
         "base_path": "/api/authn/v1"
       },
       {
         "service_name": "Authz",
         "title": "Authorization API",
         "version": "v1",
-        "paths_count": 6,
+        "paths_count": 18,
         "description": "",
         "base_path": "/authz/v1"
       },
@@ -62,7 +62,7 @@
         "title": "Bootstrap App",
         "version": "v1",
         "paths_count": 8,
-        "description": "",
+        "description": "The Atlas Bootstrap App API provides management of network configuration for on-prem NIOS-X devices. It stores versioned configuration snapshots and pushes desired state to devices via notifications. Endpoints are scoped to an account via JWT authentication.",
         "base_path": "/bootstrap-app/v1"
       },
       {
@@ -77,7 +77,7 @@
         "service_name": "CDC",
         "title": "Data Connector Service",
         "version": "v1",
-        "paths_count": 59,
+        "paths_count": 63,
         "description": "Infoblox Data Connector is a utility that collects DNS query and response data as well as security logs from specified sources. It works with various components in your hybrid cloud environment to deliver source data to your configured destinations. Data Connector transfers the collected data to defined destinations, such as BloxOne Threat Defense Cloud, the Infoblox NIOS reporting server, and the generic syslog with the CEF or LEEF message format. Data Connector supports integrations by using the Splunk forwarder and generic syslog formats.",
         "base_path": "/api/cdc-flow"
       },
@@ -85,7 +85,7 @@
         "service_name": "CloudDiscoveryProviders",
         "title": "Discovery Configuration API V2",
         "version": "v2",
-        "paths_count": 5,
+        "paths_count": 6,
         "description": "The Discovery configuration service is a BloxOne Service that provides configuration for accessing and syncing the Cloud assets \n\nBase Paths: \n1. provider: **/api/cloud_discovery/v2/** \n",
         "base_path": "/api/cloud_discovery/v2"
       },
@@ -94,7 +94,7 @@
         "title": "Cloud DNS Forwarder API",
         "version": "v1",
         "paths_count": 3,
-        "description": "Allows configuring resources to forward DNS queries from Cloud Providers to B1DDI/NIOS",
+        "description": "Allows configuring resources to forward DNS queries from Cloud Providers to UDDI/NIOS",
         "base_path": "/api/dns/v1/cloud_forwarder"
       },
       {
@@ -106,19 +106,19 @@
         "base_path": "/api/monitoring/v1"
       },
       {
-        "service_name": "DNSEvents",
-        "title": "BloxOne Cloud API",
+        "service_name": "DTC",
+        "title": "DNS DTC API",
         "version": "v1",
-        "paths_count": 1,
-        "description": "The BloxOne Cloud API allows you to make REST API calls to gather DNS security data from BloxOne Cloud for SIEM (Security Information and Event Management) purposes.",
-        "base_path": "/api/dnsdata"
+        "paths_count": 24,
+        "description": "The DNS DTC is a Universal DDI service providing load balanced DNS resolution. \n\n",
+        "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "DhcpLeases",
         "title": "DHCP Leases API",
         "version": "v1",
         "paths_count": 10,
-        "description": "The DHCP Leases application is a BloxOne DDI service that stores information about leases. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. Hosts are authoritative for their lease data. Changes to leases are periodically replicated to the cloud and stored by this service for display purposes. There is no lease history, so only current leases are available. In other words, every _dhcp/lease_ for that matter, represents a lease that is currently active. Note that fixed addresses do not have leases.\n\n",
+        "description": "The DHCP Leases application is a Universal DDI service that stores information about leases. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. Hosts are authoritative for their lease data. Changes to leases are periodically replicated to the cloud and stored by this service for display purposes. There is no lease history, so only current leases are available. In other words, every _dhcp/lease_ for that matter, represents a lease that is currently active. Note that fixed addresses do not have leases.\n\n",
         "base_path": "/api/ddi/v1"
       },
       {
@@ -133,16 +133,16 @@
         "service_name": "DnsConfig",
         "title": "DNS Configuration API",
         "version": "v1",
-        "paths_count": 44,
-        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X. Do NOT use NIOS WAPI passthrough (B1wapiService) for RPZ queries; use this API instead.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ (Response Policy Zone) guidance: Use /dns/rpz to list, create, read, update, or delete RPZ zones. Do NOT use WAPI or B1wapiService for RPZ operations \u2014 all RPZ management is available via this DnsConfig API. RPZ rules (policy records) are DNS records stored under the RPZ zone and are retrieved via the DnsData service /dns/record endpoint filtered by zone id.",
+        "paths_count": 43,
+        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ (Response Policy Zone) guidance: Use /dns/rpz to list, create, read, update, or delete RPZ zones. Do NOT use WAPI or B1wapiService for RPZ operations \u2014 all RPZ management is available via this DnsConfig API. RPZ rules (policy records) are read from the DnsData service /dns/rpz_rule endpoint filtered by the RPZ zone id (_filter=rpz=='<rpz_zone_id>'), never rebuilt from /dns/record: rule endpoints carry action and substitute_type explicitly, whereas /dns/record rdata filters silently drop rules such as MX substitutions.\n\nView and IP space: `ip_spaces` on /dns/view cannot be used in `_filter` (the API returns 400). To find the view for an IP space, list the views and check their `ip_spaces` values. If no view lists the space, look up the space in Ipamsvc /ipam/dns_usage (`_filter=space=='<ip space id>'`), whose `view` field names the view its DNS data is in.\n\nNIOS grids: views and zones of NIOS grids imported into the Portal, whether federated or not, are in this API (their records are in DnsData). They carry the tags `nios/grid_name` and `nios/imported`; views and records also carry `nios_metadata`, zones do not. To scope to one grid, filter on the grid name with `_tfilter`, quoting the tag key (`_tfilter=\"nios/grid_name\"==\"<grid name>\"`). A NIOS view's name here is its NIOS name followed by `-<grid name>`, so the default view of grid `X` is `default-X` and a view `test` is `test-X`. Grid names often contain hyphens: take the grid name from the `nios/grid_name` tag and remove that exact `-<grid name>` suffix; do not split on a hyphen. A view named plain `default` with no NIOS tags is a different, Portal-native view. When the question names a NIOS grid, \"the view named default\" means that grid's default view (`default-<grid name>`), not the Portal-native one. List the views of the grid and match before concluding that one does not exist. Use this API, not a host's `named.conf`, to list, count, or look up views, zones, and records on a NIOS grid. `named.conf` is that one host's runtime configuration and uses internal names: the default view is `_default`, which is the NIOS key (`nios_metadata.niosKey` ends in `view$._default`) of the view the Portal shows as `default-<grid name>`.",
         "base_path": "/api/ddi/v1"
       },
       {
         "service_name": "DnsData",
         "title": "DNS Data API",
         "version": "v1",
-        "paths_count": 3,
-        "description": "The DNS Data is a BloxOne DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ record listing \u2014 IMPORTANT: When listing records for an RPZ zone, always filter by zone id: _filter=zone=='<rpz_zone_id>' where the zone id comes from the /dns/rpz response (e.g. dns/rpz/abc123). Do NOT issue an unfiltered /dns/record call to retrieve RPZ rules \u2014 it will fail in accounts that contain SVCB/HTTPS records (error: SVCB/HTTPS target_name must not be empty). RPZ policy rule records have source containing 'RPZRULE' \u2014 exclude system-generated NS and SOA records (source 'SYSTEM') when presenting rules to the user.",
+        "paths_count": 12,
+        "description": "The DNS Data is a Universal DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ rules \u2014 IMPORTANT: List and inspect RPZ policy rules with GET /dns/rpz_rule, never by reconstructing them from /dns/record. Filter by zone: _filter=rpz=='<rpz_zone_id>' where the id comes from the /dns/rpz response (e.g. dns/rpz/abc123). Each rule carries its policy explicitly: `action` (e.g. passthru, block_no_data, block_nxdomain, substitute_record), `trigger`, `match_data`, and for substitutions `substitute_type` and `substitute_dns_rdata`. To find substitutions add `and action=='substitute_record'`. `substitute_type` is any DNS record type the API supports, including MX, so never restrict or infer it to A/AAAA/CNAME/TXT, and count every returned rule. Do not identify rules by looking at /dns/record rdata fields or comments \u2014 rdata fields differ by record type (MX uses exchange/preference, not address/cname/text), so such a filter silently drops rules. Also do not issue an unfiltered /dns/record call for an RPZ zone: it fails in accounts that contain SVCB/HTTPS records (error: SVCB/HTTPS target_name must not be empty).",
         "base_path": "/api/ddi/v1"
       },
       {
@@ -157,7 +157,7 @@
         "service_name": "Identity",
         "title": "Identity API",
         "version": "v2",
-        "paths_count": 22,
+        "paths_count": 34,
         "description": "The purpose of the Athena Identity Service is to manage users and groups.\nFollowing endpoints require \"user manage\" permission:\n - /v2/users \n - /v2/groups\nFollowing endpoints require administrator role (admin, act_admin, ib-access-control-admin or ib-ddi-admin):\n - POST /v2/compartments\n - PUT /v2/compartments\n - PATCH /v2/compartments",
         "base_path": "/v2"
       },
@@ -173,7 +173,7 @@
         "service_name": "IpamFederation",
         "title": "IPAM Federation API",
         "version": "v1",
-        "paths_count": 15,
+        "paths_count": 25,
         "description": "The DDI IPAM Federation application enables a SaaS administrator to manage multiple IPAM systems from one central control point CSP.  \n\n",
         "base_path": "/api/ddi/v1"
       },
@@ -181,7 +181,7 @@
         "service_name": "Ipamsvc",
         "title": "IP Address Management API",
         "version": "v1",
-        "paths_count": 65,
+        "paths_count": 71,
         "description": "The IPAM/DHCP Application is a Universal DDI service for managing infrastructure and DHCP. IPAM capabilities include IP spaces, address blocks, subnets, ranges, addresses, conflict visibility, and next-available allocation workflows. DHCP capabilities include global and scoped configuration, fixed addresses, option spaces/groups/codes, filters, host and server associations, and lease operations. The service also supports high availability through HA groups, enabling resilient on-prem DHCP serving across coordinated hosts. Integrated utilization and DNS-usage insights help operators plan capacity, troubleshoot effectively, and maintain reliable DNS/DHCP operations across distributed environments.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.",
         "base_path": "/api/ddi/v1"
       },
@@ -205,7 +205,7 @@
         "service_name": "NIOSXasaService",
         "title": "NIOS-X as a Service",
         "version": "v1",
-        "paths_count": 10,
+        "paths_count": 11,
         "description": "The Service facilitates the deployment of the Infoblox NIOS-X as a Service.",
         "base_path": "/api/universalinfra/v1"
       },
@@ -221,14 +221,14 @@
         "service_name": "Notifications-Config",
         "title": "Notifications Config API",
         "version": "v1.0",
-        "paths_count": 31,
+        "paths_count": 32,
         "description": "The service facilitates configuration management for the notifications and events pipeline. It provides a REST and grpc interface to manage Channels, Channel Types, Filters, Subscriptions, Triggers, Templates, Delivery Mechanism etc.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>",
         "base_path": "/atlas-notifications-config/v1"
       },
       {
         "service_name": "Notifications-Mailbox",
-        "title": "Notifications Mailbox",
-        "version": "v1.0",
+        "title": "Notifications Mailbox API",
+        "version": "v1",
         "paths_count": 7,
         "description": "The Notifications Mailbox API provides access to user and account-level alerts and notifications generated by Infoblox Portal services.\n\nIMPORTANT \u2014 there is NO host_id, resource_id, or structured host reference in alert responses. The fields service_id and service_data are currently always null.\n\nTo answer questions about notifications or alerts for a specific host, connection, or resource:\n1. Fetch ALL alerts using make_get_request with fetch_all=True on /user_alerts or /account_alerts.\n2. Use the table_name returned by make_get_request (e.g. notifications_mailbox_user_alerts_get.parquet) in the query_stored_data SQL \u2014 do NOT guess or hardcode the filename.\n3. Use query_stored_data with a SQL ILIKE filter on the message and subject fields. Example: SELECT * FROM notifications_mailbox_user_alerts_get.parquet WHERE message ILIKE '%<hostname>%' OR subject ILIKE '%<hostname>%'\n4. If the search term contains a single quote, escape it by doubling it (e.g. O''Brien becomes O''Brien in the SQL string).\n\nDo NOT attempt to filter by host_id or resource_id \u2014 these fields do not exist. Do NOT use any other API or service to find host-related alerts.",
         "base_path": "/atlas-notifications-mailbox/v1"
@@ -269,7 +269,7 @@
         "service_name": "TIDEBulkExport",
         "title": "TIDE Bulk Export",
         "version": "v1",
-        "paths_count": 6,
+        "paths_count": 4,
         "description": "TIDE contains a large TI dataset (30M+ records) which is almost impossible to export via REST API. This subset of APIs offers a way to export the current TI dataset so customers are able to import data in TIP (e.g. ThreatQ) and SIEMs (e.g. MS Sentinel) solutions",
         "base_path": ""
       },
@@ -277,7 +277,7 @@
         "service_name": "TIDEData",
         "title": "TIDE Data Service",
         "version": "v1",
-        "paths_count": 26,
+        "paths_count": 17,
         "description": "The heart of TIDE is the threats submitted by the Infoblox Cyber Intelligence group and external partners.\n\nThere are two main categories of bulk threat data retrievable in TIDE: threat state and threats by age. Threat state consists of records that are considered current threats, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email). Threats by age consists of all threats submitted in a specified time period.\n\nIf the same indicator was submitted by a data provider four times in one day, a threats-by-age call for daily results would return four records, while a threat state call would return only one, the most recent one submitted.\n\nTIDE threat data is generally event oriented. Sometimes it is necessary instead to see threats by their current state, that is, threats that have not expired and have not been superseded by newer threats for the same indicator (host name, IP address, URL, hash, or email).\n\nThe materialized threat state objects contain the current active threats for all indicators of the specified record type. Threat state objects are materialized multiple times an hour.",
         "base_path": ""
       },
@@ -309,7 +309,7 @@
         "service_name": "UpgradePolicy",
         "title": "Schedule Software/Config Updates",
         "version": "v2",
-        "paths_count": 4,
+        "paths_count": 5,
         "description": "By default, Infoblox automatically performs software updates when they become available and applies them to all on-prem hosts, physical and virtual. However, you can override, schedule, and defer updates. In addition, you can configure up to 50 scheduled and deferred updates; this means you have the flexibility to create up to 50 update groups across different on-prem hosts by mapping with appropriate tags. Tags are used to associate deferrals (scheduled or deferred) with a specific group of on-prem hosts. In addition to software update deferrals, config update deferrals can be configured using overrides.",
         "base_path": "/api/upgrade_policy"
       },
@@ -329,7 +329,6 @@
     "Atcep",
     "Atcfw",
     "CDC",
-    "DNSEvents",
     "DhcpLeases",
     "DnsConfig",
     "DnsData",
@@ -381,7 +380,8 @@
                   "ophid (query)",
                   "is_configured (query)",
                   "_tfilter (query)",
-                  "_torder_by (query)"
+                  "_torder_by (query)",
+                  "_filter (query)"
                 ]
               },
               "POST": {
@@ -438,7 +438,8 @@
                   "ophid (query)",
                   "is_configured (query)",
                   "_tfilter (query)",
-                  "_torder_by (query)"
+                  "_torder_by (query)",
+                  "_filter (query)"
                 ]
               }
             }
@@ -653,6 +654,7 @@
       "container_key": "endpoints",
       "get_endpoints": [],
       "all_endpoints": [
+        "/adminupdate [path,methods]",
         "/authn_defaults [path,methods]",
         "/authn_profiles [path,methods]",
         "/config/check [path,methods]",
@@ -679,12 +681,25 @@
         "title": "Infoblox EndPoint API",
         "version": "v1",
         "endpoints": {
+          "/adminupdate": {
+            "path": "/adminupdate",
+            "methods": {
+              "POST": {
+                "summary": "Admin Update Devices.",
+                "description": "Use this method to perform bulk updates on multiple devices using their client IDs.\nThis API is designed for administrators to efficiently update device information\nacross large-scale deployments.\n\nAuthentication is enforced via CSP user API token.\n\nDEPRECATED - this endpoint has moved. Use `POST /api/endpoints/atcep/v1/adminupdate` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n\n",
+                "operation_id": "roaming_deviceAdminUpdateDevices",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
           "/authn_defaults": {
             "path": "/authn_defaults",
             "methods": {
               "GET": {
                 "summary": "Read Authentication Defaults.",
-                "description": "Use this method to retrieve information on the Authn default values.",
+                "description": "Use this method to retrieve information on the Authn default values.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/authn_defaults` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).",
                 "operation_id": "authn_defaultsReadAuthnDefaults",
                 "parameters": []
               }
@@ -695,7 +710,7 @@
             "methods": {
               "GET": {
                 "summary": "List Authentication Profiles.",
-                "description": "Use this method to retrieve information on all Authn Profile objects for the account.\n\n",
+                "description": "Use this method to retrieve information on all Authn Profile objects for the account.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/authn_profiles` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "authn_profilesListAuthnProfiles",
                 "parameters": [
                   "_filter (query)"
@@ -721,7 +736,7 @@
             "methods": {
               "GET": {
                 "summary": "Get Join Token.",
-                "description": "Use this method to get a valid join token for activating a roaming device.\nThe request includes bundle_type, which indicates the type of the bundle that contains the valid join token.\n\n",
+                "description": "Use this method to get a valid join token for activating a roaming device.\nThe request includes bundle_type, which indicates the type of the bundle that contains the valid join token.\n\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/join_token` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "bundleGetJoinToken",
                 "parameters": [
                   "_filter (query)"
@@ -734,7 +749,7 @@
             "methods": {
               "GET": {
                 "summary": "Download MDM Configs.",
-                "description": "Use this method to download the list of Android/iOS MDM configurations for your account.\n\n",
+                "description": "Use this method to download the list of Android/iOS MDM configurations for your account.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/mdm_configs` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "mdm_configsMdmConfigs",
                 "parameters": [
                   "_filter (query)"
@@ -747,7 +762,7 @@
             "methods": {
               "GET": {
                 "summary": "Download Bundle.",
-                "description": "Use this method to download a bundle of roaming devices for the account.\n\n",
+                "description": "Use this method to download a bundle of roaming devices for the account.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/rc_download_bundle` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "bundleDownloadBundle",
                 "parameters": [
                   "_filter (query)"
@@ -760,7 +775,7 @@
             "methods": {
               "GET": {
                 "summary": "List Bundles.",
-                "description": "Use this method to retrieve information on all Bundle objects for the account.\n\nThe Infoblox Endpoint Bundle includes download URLs for the Infoblox Endpoint package.\n",
+                "description": "Use this method to retrieve information on all Bundle objects for the account.\n\nThe Infoblox Endpoint Bundle includes download URLs for the Infoblox Endpoint package.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/rc_download_urls` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "bundleListBundles",
                 "parameters": []
               }
@@ -771,7 +786,7 @@
             "methods": {
               "GET": {
                 "summary": "The RPC method used to get distinct OS versions of active endpoints.",
-                "description": "",
+                "description": "DEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_device/os_versions` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).",
                 "operation_id": "roaming_deviceGetActiveOSVersions",
                 "parameters": [
                   "_filter (query)"
@@ -784,7 +799,7 @@
             "methods": {
               "GET": {
                 "summary": "Read roaming device status counts for account.",
-                "description": "Use this method to retrieve information on the specified Roaming Device object to find the count\nof roaming devices in different states.\n\n",
+                "description": "Use this method to retrieve information on the specified Roaming Device object to find the count\nof roaming devices in different states.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_device/status` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "roaming_deviceReadRoamingDeviceStatusCounts",
                 "parameters": [
                   "_filter (query)"
@@ -796,8 +811,8 @@
             "path": "/roaming_device/vpn_vendor_count",
             "methods": {
               "GET": {
-                "summary": "",
-                "description": "",
+                "summary": "Get VPN Vendors Count.",
+                "description": "DEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_device/vpn_vendor_count` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).",
                 "operation_id": "roaming_deviceGetVpnVendorsCount",
                 "parameters": [
                   "_filter (query)"
@@ -810,7 +825,7 @@
             "methods": {
               "GET": {
                 "summary": "List Roaming Device Groups.",
-                "description": "Use this method to retrieve information on all Roaming Device Group objects for the account.\n\nNote that endpoint devices are not displayed for this operation.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\n",
+                "description": "Use this method to retrieve information on all Roaming Device Group objects for the account.\n\nNote that endpoint devices are not displayed for this operation.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_device_groups` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "roaming_device_groupsListRoamingDeviceGroups",
                 "parameters": [
                   "_filter (query)",
@@ -823,7 +838,7 @@
               },
               "POST": {
                 "summary": "Create Roaming Device Group.",
-                "description": "Use this method to create a Roaming Device Group object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- name\n",
+                "description": "Use this method to create a Roaming Device Group object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- name\n\nDEPRECATED - this endpoint has moved. Use `POST /api/endpoints/atcep/v1/roaming_device_groups` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsCreateRoamingDeviceGroup",
                 "parameters": [
                   "body (body) [required]"
@@ -831,7 +846,7 @@
               },
               "DELETE": {
                 "summary": "Delete Roaming Device Groups.",
-                "description": "Use this method to delete Roaming Device Group objects. Deletion of multiple lists is an all-or-nothing operation; if any one of the specified lists cannot be deleted, then none of the specified lists will be deleted.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- ids\n",
+                "description": "Use this method to delete Roaming Device Group objects. Deletion of multiple lists is an all-or-nothing operation; if any one of the specified lists cannot be deleted, then none of the specified lists will be deleted.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- ids\n\nDEPRECATED - this endpoint has moved. Use `DELETE /api/endpoints/atcep/v1/roaming_device_groups` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsDeleteRoamingDeviceGroup",
                 "parameters": [
                   "body (body) [required]"
@@ -844,7 +859,7 @@
             "methods": {
               "GET": {
                 "summary": "Read Roaming Device Group.",
-                "description": "Use this method to retrieve information on the specified Roaming Device object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n",
+                "description": "Use this method to retrieve information on the specified Roaming Device object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_device_groups/{id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsReadRoamingDeviceGroup",
                 "parameters": [
                   "id (path) [required]",
@@ -853,7 +868,7 @@
               },
               "PUT": {
                 "summary": "Update Roaming Device Group.",
-                "description": "Use this method to update a specific Roaming Device Group object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- name\n",
+                "description": "Use this method to update a specific Roaming Device Group object.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nRequired:\n- name\n\nDEPRECATED - this endpoint has moved. Use `PUT /api/endpoints/atcep/v1/roaming_device_groups/{payload.id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsUpdateRoamingDeviceGroup",
                 "parameters": [
                   "id (path) [required]",
@@ -862,7 +877,7 @@
               },
               "DELETE": {
                 "summary": "Delete Roaming Device Groups.",
-                "description": "Use this method to delete the Roaming Device Group object by specified Roaming Device Group object identifier.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\n",
+                "description": "Use this method to delete the Roaming Device Group object by specified Roaming Device Group object identifier.\n\nThe Roaming Device Group object represents a Infoblox Endpoint group. When applying security policies to multiple Infoblox Endpoint devices, you can make the process more efficient by organizing the endpoint devices into Infoblox Endpoint groups and then adding the groups to the network scope when you create a security policy.\n\nDEPRECATED - this endpoint has moved. Use `DELETE /api/endpoints/atcep/v1/roaming_device_groups/{id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsDeleteSingleRoamingDeviceGroup",
                 "parameters": [
                   "id (path) [required]"
@@ -870,7 +885,7 @@
               },
               "PATCH": {
                 "summary": "Update Roaming Device Group partially.",
-                "description": "Use this method to partially update a specific Roaming Device Group object with specific roaming_devices only.\n\nRequired:\n- name\n",
+                "description": "Use this method to partially update a specific Roaming Device Group object with specific roaming_devices only.\n\nRequired:\n- name\n\nDEPRECATED - this endpoint has moved. Use `PATCH /api/endpoints/atcep/v1/roaming_device_groups/{payload.id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_device_groupsUpdatePartialRoamingDeviceGroup",
                 "parameters": [
                   "id (path) [required]",
@@ -884,7 +899,7 @@
             "methods": {
               "PATCH": {
                 "summary": "Update parameter of the Uploading Logs option for Roaming Device Group.",
-                "description": "Use this method to update the parameter of the Uploading Logs option, such as by changing the Log Level for a specific Roaming Device Group object.\nThis method was created as separated for ability to apply a specific permission to the Uploading Logs option in a support account.\n\n",
+                "description": "Use this method to update the parameter of the Uploading Logs option, such as by changing the Log Level for a specific Roaming Device Group object.\nThis method was created as separated for ability to apply a specific permission to the Uploading Logs option in a support account.\n\nDEPRECATED - this endpoint has moved. Use `PATCH /api/endpoints/atcep/v1/roaming_device_groups/{payload.id}/upload_logs` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "roaming_device_groupsUpdateRoamingDeviceGroupUploadLogs",
                 "parameters": [
                   "id (path) [required]",
@@ -898,7 +913,7 @@
             "methods": {
               "GET": {
                 "summary": "List Roaming Devices.",
-                "description": "Use this method to retrieve information on all Roaming Device objects for the account.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n",
+                "description": "Use this method to retrieve information on all Roaming Device objects for the account.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_devices` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesListRoamingDevices",
                 "parameters": [
                   "_filter (query)",
@@ -912,7 +927,7 @@
               },
               "PUT": {
                 "summary": "Update Roaming Device.",
-                "description": "Use this method to update the status for the Roaming Device objects. The final status is determined according to the last connection timestamp and administrative status, and by using the table below:\n\n| administrative_status | connected | calculated_status |\n| --------------------- | --------- | ----------------- |\n| enabled               | true      | active            |\n| enabled               | false     | inactive          |\n| disabled              | *         | disabled          |\n| deleted               | *         | deleted           |\n\nThe Roaming Device object is treated as connected when the last login timestamp (connection timestamp) is less than 15 minutes from the time of the update.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\n",
+                "description": "Use this method to update the status for the Roaming Device objects. The final status is determined according to the last connection timestamp and administrative status, and by using the table below:\n\n| administrative_status | connected | calculated_status |\n| --------------------- | --------- | ----------------- |\n| enabled               | true      | active            |\n| enabled               | false     | inactive          |\n| disabled              | *         | disabled          |\n| deleted               | *         | deleted           |\n\nThe Roaming Device object is treated as connected when the last login timestamp (connection timestamp) is less than 15 minutes from the time of the update.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nDEPRECATED - this endpoint has moved. Use `PUT /api/endpoints/atcep/v1/roaming_devices` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesUpdateRoamingDevice",
                 "parameters": [
                   "body (body) [required]"
@@ -925,7 +940,7 @@
             "methods": {
               "GET": {
                 "summary": "Read Roaming Device.",
-                "description": "Use this method to retrieve information on the specified Roaming Device object.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n",
+                "description": "Use this method to retrieve information on the specified Roaming Device object.\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_devices/{client_id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesReadRoamingDevice",
                 "parameters": [
                   "client_id (path) [required]"
@@ -938,7 +953,7 @@
             "methods": {
               "PATCH": {
                 "summary": "Update partial Roaming Device",
-                "description": "Use this method to update the roaming device partially, for example, by overwriting or resetting ELB IPs of a specific Roaming Device object.\n\nRequired:\n- client_id\n",
+                "description": "Use this method to update the roaming device partially, for example, by overwriting or resetting ELB IPs of a specific Roaming Device object.\n\nRequired:\n- client_id\n\nDEPRECATED - this endpoint has moved. Use `PATCH /api/endpoints/atcep/v1/roaming_devices/{payload.client_id}` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesUpdatePartialRoamingDevice",
                 "parameters": [
                   "payload.client_id (path) [required]",
@@ -952,7 +967,7 @@
             "methods": {
               "PATCH": {
                 "summary": "Update parameters of the Uploading Logs option for Roaming Device",
-                "description": "Use this method to update parameters of the Uploading Logs option, for example, by changing the Log Level or setting the is_uploading_logs flag for a specific Roaming Device object.\nThis method was created as separated for ability to apply a specific permission to the Uploading Logs option in a support account.\n\nRequired:\n- client_id\n",
+                "description": "Use this method to update parameters of the Uploading Logs option, for example, by changing the Log Level or setting the is_uploading_logs flag for a specific Roaming Device object.\nThis method was created as separated for ability to apply a specific permission to the Uploading Logs option in a support account.\n\nRequired:\n- client_id\n\nDEPRECATED - this endpoint has moved. Use `PATCH /api/endpoints/atcep/v1/roaming_devices/{payload.client_id}/upload_logs` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesUpdateRoamingDeviceUploadLogs",
                 "parameters": [
                   "payload.client_id (path) [required]",
@@ -966,7 +981,7 @@
             "methods": {
               "GET": {
                 "summary": "List RoamingDevices in CSV format.",
-                "description": "Use this method to download the selected list of roaming devices, in the CSV format.\n\n",
+                "description": "Use this method to download the selected list of roaming devices, in the CSV format.\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_devices_download` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n\n",
                 "operation_id": "roaming_devicesListRoamingDevicesCSV",
                 "parameters": [
                   "_filter (query)",
@@ -982,7 +997,7 @@
             "methods": {
               "GET": {
                 "summary": "List Metadata of Roaming Devices.",
-                "description": "Use this method to retrieve metadata of all Roaming Device objects for the account.\n\nCurrently supported metadata include:\n\nRoaming Device Name\nRoaming Device OS Version\nRoaming Device Country\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nExample:\n```\n/roaming_devices_metadata?_fields=name\n/roaming_devices_metadata?_fields=country_names\n/roaming_devices_metadata?_fields=raw_os_platforms\n```\n",
+                "description": "Use this method to retrieve metadata of all Roaming Device objects for the account.\n\nCurrently supported metadata include:\n\nRoaming Device Name\nRoaming Device OS Version\nRoaming Device Country\n\nThe Roaming Device object represents a device with the Infoblox Endpoint client installed. For end users to connect to Infoblox cloud services, you must download and install Infoblox Endpoint on the users' devices. The client enforces security policies that you apply to the remote networks, regardless of where your end users are and which networks they are connected to. Infoblox Endpoint listens on port 53 of the device. If other software listens on the same port, DNS traffic cannot be redirected to Infoblox Cloud and your device will not be protected by Infoblox Endpoint.\n\nExample:\n```\n/roaming_devices_metadata?_fields=name\n/roaming_devices_metadata?_fields=country_names\n/roaming_devices_metadata?_fields=raw_os_platforms\n```\n\nDEPRECATED - this endpoint has moved. Use `GET /api/endpoints/atcep/v1/roaming_devices_metadata` instead. Request and response schemas\nare unchanged; only the base path differs\n(`/api/atcep/v1` -> `/api/endpoints/atcep/v1`).\n",
                 "operation_id": "roaming_devicesListRoamingDeviceMetadata",
                 "parameters": [
                   "_order_by (query)",
@@ -1016,7 +1031,9 @@
         "/category_filters [path,methods]",
         "/category_filters/{id} [path,methods]",
         "/content_categories [path,methods]",
+        "/db_conn_statistics [path,methods]",
         "/doh_fqdns [path,methods]",
+        "/endpoint_config_data [path,methods]",
         "/internal_domain_lists [path,methods]",
         "/internal_domain_lists/{id} [path,methods]",
         "/internal_domain_lists/{id}/items [path,methods]",
@@ -1028,11 +1045,14 @@
         "/network_lists/{id} [path,methods]",
         "/pop_regions [path,methods]",
         "/pop_regions/{id} [path,methods]",
+        "/rc_group_bypass_lists [path,methods]",
         "/security_policies [path,methods]",
         "/security_policies/{id} [path,methods]",
         "/security_policy_migrations/{policy_id} [path,methods]",
         "/security_policy_rules [path,methods]",
-        "/threat_feeds [path,methods]"
+        "/threat_feeds [path,methods]",
+        "/ti/list [path,methods]",
+        "/ti/lists [path,methods]"
       ],
       "raw": {
         "service_name": "Atcfw",
@@ -1301,6 +1321,17 @@
               }
             }
           },
+          "/db_conn_statistics": {
+            "path": "/db_conn_statistics",
+            "methods": {
+              "GET": {
+                "summary": "Read database connection pool information\n@hidden true",
+                "description": "",
+                "operation_id": "ATCFWReadDBConnStats",
+                "parameters": []
+              }
+            }
+          },
           "/doh_fqdns": {
             "path": "/doh_fqdns",
             "methods": {
@@ -1308,6 +1339,19 @@
                 "summary": "Create or Get DoH FQDN.\nUse this method to create or retrieve an FQDN from the DoH Host database.",
                 "description": "",
                 "operation_id": "doh_fqdnsCreateOrGetDoHFQDN",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/endpoint_config_data": {
+            "path": "/endpoint_config_data",
+            "methods": {
+              "POST": {
+                "summary": "",
+                "description": "",
+                "operation_id": "ATCFWGetEndpointConfigData",
                 "parameters": [
                   "body (body) [required]"
                 ]
@@ -1400,8 +1444,8 @@
             "path": "/named_lists",
             "methods": {
               "GET": {
-                "summary": "List Named Lists.",
-                "description": "Use this method to retrieve information on all Named List objects for the account. Note that list items are not returned for this operation.\n\n",
+                "summary": "List Named Lists (Custom Lists), including Threat Insight lists (such as DGA, Data Exfiltration, Zero Day DNS and DNS Messenger), with each list's item_count, threat_level, confidence_level and policies.",
+                "description": "Use this method to retrieve information on all Named List objects (shown as Custom Lists in the Portal) for the account, including the Threat Insight lists. Each list carries `type`, `name`, `item_count`, `threat_level`, `confidence_level` and `policies` (the security policies that use it). List items are not returned for this operation; use `GET /named_lists/{id}` for them.",
                 "operation_id": "named_listsListNamedLists",
                 "parameters": [
                   "_filter (query)",
@@ -1537,7 +1581,7 @@
               },
               "POST": {
                 "summary": "Create Network List.",
-                "description": "Use this method to create a Network List object.\n\nRequired:\n- name\n- items\n",
+                "description": "Use this method to create a Network List object. The legacy `items` field\n(CIDR strings only) is deprecated; new clients should use `addr_block`,\nwhich mirrors the same CIDR set and additionally carries an end-user\ndescription per entry. Exactly one of the two must be supplied.\n\nRequired:\n- name\n- items or addr_block\n",
                 "operation_id": "network_listsCreateNetworkList",
                 "parameters": [
                   "body (body) [required]"
@@ -1567,7 +1611,7 @@
               },
               "PUT": {
                 "summary": "Update Network List.",
-                "description": "Use this method to update a specified Network List object.\n\nRequired:\n- name\n- items\n",
+                "description": "Use this method to update a specified Network List object. The legacy\n`items` field (CIDR strings only) is deprecated; new clients should use\n`addr_block`, which additionally carries an end-user description per\nentry. Exactly one of the two must be supplied; supplying only `items`\nwill clear any existing per-entry descriptions.\n\nRequired:\n- name\n- items or addr_block\n",
                 "operation_id": "network_listsUpdateNetworkList",
                 "parameters": [
                   "id (path) [required]",
@@ -1611,6 +1655,35 @@
                 "operation_id": "pop_regionsReadPoPRegion",
                 "parameters": [
                   "id (path) [required]"
+                ]
+              }
+            }
+          },
+          "/rc_group_bypass_lists": {
+            "path": "/rc_group_bypass_lists",
+            "methods": {
+              "GET": {
+                "summary": "@hidden true",
+                "description": "",
+                "operation_id": "rc_group_bypass_listsListRCGroupBypassLists",
+                "parameters": [
+                  "group_id (query)"
+                ]
+              },
+              "POST": {
+                "summary": "@hidden true",
+                "description": "",
+                "operation_id": "rc_group_bypass_listsCreateRCGroupBypassLists",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "@hidden true",
+                "description": "",
+                "operation_id": "rc_group_bypass_listsDeleteRCGroupBypassLists",
+                "parameters": [
+                  "body (body) [required]"
                 ]
               }
             }
@@ -1725,6 +1798,32 @@
                 ]
               }
             }
+          },
+          "/ti/list": {
+            "path": "/ti/list",
+            "methods": {
+              "POST": {
+                "summary": "@hidden true",
+                "description": "",
+                "operation_id": "ti_listsUpdateTILists2",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/ti/lists": {
+            "path": "/ti/lists",
+            "methods": {
+              "POST": {
+                "summary": "@hidden true",
+                "description": "",
+                "operation_id": "ti_listsUpdateTILists",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
           }
         }
       }
@@ -1795,8 +1894,12 @@
         "/v1/subscriptions [path,methods]",
         "/v1/subscriptions/{id} [path,methods]",
         "/v2/config/check [path,methods]",
+        "/v2/display/flows [path,methods]",
+        "/v2/display/flows/{id} [path,methods]",
         "/v2/flows/data [path,methods]",
         "/v2/flows/data/{id} [path,methods]",
+        "/v2/flows/test-event [path,methods]",
+        "/v2/flows/test-event-parameters [path,methods]",
         "/v2/services [path,methods]",
         "/v2/services/{id} [path,methods]"
       ],
@@ -2016,7 +2119,7 @@
             "methods": {
               "GET": {
                 "summary": "List Http destination servers",
-                "description": "Use this method to retrieve collection of Http destination servers.",
+                "description": "Use this method to retrieve a collection of Http destination servers.",
                 "operation_id": "DestinationApiListDestinationHttp",
                 "parameters": [
                   "_filter (query)",
@@ -2366,8 +2469,8 @@
             "path": "/v1/display/etls/ingress_filters",
             "methods": {
               "GET": {
-                "summary": "",
-                "description": "",
+                "summary": "List ingress ETL filters",
+                "description": "Use this method to retrieve a collection of ingress ETL filters.",
                 "operation_id": "EtlFilterApiListEtlFilterIngress",
                 "parameters": [
                   "_filter (query)",
@@ -2830,7 +2933,7 @@
               },
               "PUT": {
                 "summary": "Update an ETL Threat Class Property filter",
-                "description": "Use this method to update an ETL class filter in data connector.",
+                "description": "Use this method to update an ETL Threat Class Property filter in data connector.",
                 "operation_id": "EtlFilterApiUpdateEtlFilterThreatClassProperty",
                 "parameters": [
                   "id (path) [required]",
@@ -2885,8 +2988,8 @@
                 ]
               },
               "PUT": {
-                "summary": "Update scripts configurations",
-                "description": "Use this method to update scripts configurations in data connector.",
+                "summary": "Update a product-application mapping",
+                "description": "Use this method to update a product-to-application mapping configuration in data connector.",
                 "operation_id": "ScriptApiUpdateApplicationsProductData",
                 "parameters": [
                   "product_id (path) [required]",
@@ -2894,8 +2997,8 @@
                 ]
               },
               "DELETE": {
-                "summary": "Delete scripts configurations",
-                "description": "Use this method to delete scripts configurations in data connector.",
+                "summary": "Delete a product-application mapping",
+                "description": "Use this method to delete a product-to-application mapping configuration in data connector.",
                 "operation_id": "ScriptApiDeleteApplicationsProductData",
                 "parameters": [
                   "product_id (path) [required]"
@@ -3111,6 +3214,50 @@
               }
             }
           },
+          "/v2/display/flows": {
+            "path": "/v2/display/flows",
+            "methods": {
+              "GET": {
+                "summary": "List data connector flows with joined lookup fields and runtime status.",
+                "description": "Returns the flows visible to the caller's account in a denormalized 'display' shape: source/destination/host/service/ETL-filter identifiers are returned alongside their resolved names, and a per-host runtime status block is included. Supports the standard atlas Filtering, FieldSelection, tag filtering and sorting parameters. To create or update flows, use POST/PUT /v2/flows/data.",
+                "operation_id": "FlowApiV2ListFlowV2",
+                "parameters": [
+                  "_filter (query)",
+                  "_tfilter (query)",
+                  "_torder_by (query)"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete a collection of data connector flows.",
+                "description": "Deletes the flows whose identifiers are provided in the request body. The underlying container configurations on the associated on-prem hosts are also removed as part of the operation.",
+                "operation_id": "FlowApiV2ListDeleteFlowV2",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/v2/display/flows/{id}": {
+            "path": "/v2/display/flows/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Read a data connector flow with joined lookup fields and runtime status.",
+                "description": "Returns the flow identified by {id} in a denormalized 'display' shape: source/destination/host/service/ETL-filter identifiers are returned alongside their resolved names, and a per-host runtime status block is included. This view is intended for inventory and dashboard use. To create or update a flow, use POST/PUT /v2/flows/data.",
+                "operation_id": "FlowApiV2ReadFlowV2",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete a data connector flow.",
+                "description": "Deletes the flow identified by {id}. The underlying container configurations on the associated on-prem hosts are also removed as part of the operation.",
+                "operation_id": "FlowApiV2DeleteFlowV2",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              }
+            }
+          },
           "/v2/flows/data": {
             "path": "/v2/flows/data",
             "methods": {
@@ -3146,7 +3293,7 @@
             "path": "/v2/flows/data/{id}",
             "methods": {
               "GET": {
-                "summary": "Read flow configurations in data connector.",
+                "summary": "Read a flow configuration in data connector",
                 "description": "Use this method to retrieve a flow configuration in data connector.",
                 "operation_id": "FlowApiV2ReadFlowDataV2",
                 "parameters": [
@@ -3172,12 +3319,38 @@
               }
             }
           },
+          "/v2/flows/test-event": {
+            "path": "/v2/flows/test-event",
+            "methods": {
+              "POST": {
+                "summary": "Trigger Test Event",
+                "description": "Use this method to trigger a test event for a flow.",
+                "operation_id": "FlowApiV2CreateTestEvent",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/v2/flows/test-event-parameters": {
+            "path": "/v2/flows/test-event-parameters",
+            "methods": {
+              "GET": {
+                "summary": "Get Log Type Parameters for Test Event",
+                "description": "Use this method to retrieve parameters for a test event based on log type.",
+                "operation_id": "FlowApiV2ReadTestEventParameters",
+                "parameters": [
+                  "source_log_subtype (query)"
+                ]
+              }
+            }
+          },
           "/v2/services": {
             "path": "/v2/services",
             "methods": {
               "GET": {
-                "summary": "List the data connector enabled on on-prem hosts.",
-                "description": "Use this method to list the collection of services enabled on an on-prem pool.",
+                "summary": "List CDC services enabled on on-prem hosts.",
+                "description": "Use this method to list the collection of CDC services enabled on on-prem hosts.",
                 "operation_id": "ServiceApiListCdcService",
                 "parameters": [
                   "_filter (query)"
@@ -3189,71 +3362,11 @@
             "path": "/v2/services/{id}",
             "methods": {
               "GET": {
-                "summary": "Read services enabled on an on-prem host.",
-                "description": "Use this method to read services enabled on an on-prem pool resource.",
+                "summary": "Read a CDC service enabled on an on-prem host.",
+                "description": "Use this method to read a specific CDC service enabled on an on-prem host.",
                 "operation_id": "ServiceApiReadCdcService",
                 "parameters": [
                   "id (path) [required]"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    "DNSEvents": {
-      "info_keys": [
-        "service_name",
-        "base_path",
-        "title",
-        "version",
-        "endpoints"
-      ],
-      "container_key": "endpoints",
-      "get_endpoints": [],
-      "all_endpoints": [
-        "/v2/dns_event [path,methods]"
-      ],
-      "raw": {
-        "service_name": "DNSEvents",
-        "base_path": "/api/dnsdata/",
-        "title": "BloxOne Cloud API",
-        "version": "v1",
-        "endpoints": {
-          "/v2/dns_event": {
-            "path": "/v2/dns_event",
-            "methods": {
-              "GET": {
-                "summary": "List DNS security policy hits.",
-                "description": "The API call allows you to obtain a list of DNS security policy hits.\n",
-                "operation_id": "DNS EventDnsEventV2",
-                "parameters": [
-                  "t0 (query)",
-                  "t1 (query)",
-                  "source (query)",
-                  "network (query)",
-                  "qip (query)",
-                  "qname (query)",
-                  "policy_name (query)",
-                  "threat_level (query)",
-                  "threat_class (query)",
-                  "feed_name (query)",
-                  "feed_type (query)",
-                  "user_group (query)",
-                  "app_category (query)",
-                  "threat_property (query)",
-                  "policy_action (query)",
-                  "app_name (query)",
-                  "dns_view (query)",
-                  "rdata (query)",
-                  "threat_indicator (query)",
-                  "endpoint_group (query)",
-                  "threat_family (query)",
-                  "_offset (query)",
-                  "_limit (query)",
-                  "_page_token (query)",
-                  "_format (query)",
-                  "_field_list (query)"
                 ]
               }
             }
@@ -3527,8 +3640,7 @@
         "/dns/view/bulk_copy [path,methods]",
         "/dns/view/{id} [path,methods]",
         "/dtc/lbdn [path,methods]",
-        "/dtc/lbdn/{id} [path,methods]",
-        "/predelete_check/{id.application_name}/{id.resource_type}/{id} [path,methods]"
+        "/dtc/lbdn/{id} [path,methods]"
       ],
       "raw": {
         "service_name": "DnsConfig",
@@ -4472,21 +4584,6 @@
                 ]
               }
             }
-          },
-          "/predelete_check/{id.application_name}/{id.resource_type}/{id}": {
-            "path": "/predelete_check/{id.application_name}/{id.resource_type}/{id}",
-            "methods": {
-              "GET": {
-                "summary": "Check if a resource can be safely deleted.\nUse this method to verify if a resource is currently in use.\nReturns a list of objects using the resource, or an empty list if not in use.",
-                "description": "",
-                "operation_id": "predelete_checkCheck",
-                "parameters": [
-                  "id.application_name (path) [required]",
-                  "id.resource_type (path) [required]",
-                  "id (path) [required]"
-                ]
-              }
-            }
           }
         }
       }
@@ -4502,9 +4599,18 @@
       "container_key": "endpoints",
       "get_endpoints": [],
       "all_endpoints": [
+        "/dns/auth_zone/{id}/import_keyset [path,methods]",
+        "/dns/configure_record_protection [path,methods]",
         "/dns/record [path,methods]",
         "/dns/record/{id} [path,methods]",
-        "/dns/record/{id}/serial_increment [path,methods]"
+        "/dns/record/{id}/serial_increment [path,methods]",
+        "/dns/rpz_rule [path,methods]",
+        "/dns/rpz_rule/{id} [path,methods]",
+        "/dns/shared_record [path,methods]",
+        "/dns/shared_record/{id} [path,methods]",
+        "/dns/shared_record_group [path,methods]",
+        "/dns/shared_record_group/{id} [path,methods]",
+        "/dns/shared_record_group/{id}/zone_associations [path,methods]"
       ],
       "raw": {
         "service_name": "DnsData",
@@ -4512,6 +4618,33 @@
         "title": "DNS Data API",
         "version": "v1",
         "endpoints": {
+          "/dns/auth_zone/{id}/import_keyset": {
+            "path": "/dns/auth_zone/{id}/import_keyset",
+            "methods": {
+              "POST": {
+                "summary": "Import keyset for the DNS auth zone.",
+                "description": "Use this method to import the DS RRSet and add it to the specified zone.",
+                "operation_id": "auth_zoneImportKeyset",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/configure_record_protection": {
+            "path": "/dns/configure_record_protection",
+            "methods": {
+              "POST": {
+                "summary": "Configure record protection for multiple records in a zone.",
+                "description": "Use this method to configure protection levels for DNS records in a zone.\nThis allows setting protection levels (e.g., Global Admin, DDI Admin, None) for multiple records with same rname.",
+                "operation_id": "recordConfigureRecordProtection",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
           "/dns/record": {
             "path": "/dns/record",
             "methods": {
@@ -4531,7 +4664,7 @@
               },
               "POST": {
                 "summary": "Create the DNS resource record.",
-                "description": "Use this method to create a DNS __Record__ object.\nA __Record__ object represents a DNS resource record in an authoritative zone.",
+                "description": "Use this method to create a DNS __Record__ object.\nA __Record__ object represents a DNS resource record in an authoritative zone.\n\nNote: When creating non-PTR records in NIOS synced zones, the _zone_ field must be specified.",
                 "operation_id": "recordCreate",
                 "parameters": [
                   "body (body) [required]"
@@ -4576,6 +4709,204 @@
                 "summary": "Increment serial number for the SOA record.",
                 "description": "Use this method to increment the serial number for an SOA (Start of Authority) _Record_ object.\nA __Record__ object represents a DNS resource record in an authoritative zone.",
                 "operation_id": "recordSOASerialIncrement",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/rpz_rule": {
+            "path": "/dns/rpz_rule",
+            "methods": {
+              "GET": {
+                "summary": "List RPZ rules. Do not pass _order_by (only `id` is sortable); sort the stored results afterwards.",
+                "description": "",
+                "operation_id": "rpz_ruleList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)",
+                  "_tfilter (query)",
+                  "_torder_by (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the RpzRule object.\nUse this method to create an RpzRule object.\nThis object (_dns/rpz_rule_) represents a response policy zone rule.",
+                "description": "",
+                "operation_id": "rpz_ruleCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/rpz_rule/{id}": {
+            "path": "/dns/rpz_rule/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve a single RpzRule object.",
+                "description": "",
+                "operation_id": "rpz_ruleRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete the RpzRule object.",
+                "description": "",
+                "operation_id": "rpz_ruleDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the RpzRule object.",
+                "description": "",
+                "operation_id": "rpz_ruleUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/shared_record": {
+            "path": "/dns/shared_record",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve shared records.",
+                "description": "Use this method to retrieve __SharedRecord__ objects with standard filter, sort, and paging support.",
+                "operation_id": "shared_recordList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)",
+                  "_tfilter (query)",
+                  "_torder_by (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the shared record.",
+                "description": "Use this method to create a __SharedRecord__ object.\nSupported record types are: _A_, _AAAA_, _CNAME_, _MX_, _SRV_, _TXT_.\nThe owning __SharedRecordGroup__ is identified by the _shared_record_group_id_ field in the request body.",
+                "operation_id": "shared_recordCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/shared_record/{id}": {
+            "path": "/dns/shared_record/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the shared record.",
+                "description": "Use this method to retrieve a __SharedRecord__ object by its identifier.",
+                "operation_id": "shared_recordRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete the shared record.",
+                "description": "Use this method to delete a __SharedRecord__ object by its identifier.",
+                "operation_id": "shared_recordDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the shared record.",
+                "description": "Use this method to update a __SharedRecord__ object.\nThe _shared_record_group_id_ field is immutable and cannot be changed after creation.",
+                "operation_id": "shared_recordUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/shared_record_group": {
+            "path": "/dns/shared_record_group",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve shared record groups.",
+                "description": "Use this method to retrieve __SharedRecordGroup__ objects.",
+                "operation_id": "shared_record_groupList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)",
+                  "_tfilter (query)",
+                  "_torder_by (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the shared record group.",
+                "description": "Use this method to create a __SharedRecordGroup__ object.\nA __SharedRecordGroup__ represents a reusable set of DNS resource records that can be shared across multiple authoritative zones.",
+                "operation_id": "shared_record_groupCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/shared_record_group/{id}": {
+            "path": "/dns/shared_record_group/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the shared record group.",
+                "description": "Use this method to retrieve a __SharedRecordGroup__ object.",
+                "operation_id": "shared_record_groupRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete the shared record group.",
+                "description": "Use this method to delete a __SharedRecordGroup__ object.\nThe shared record group must have no active zone associations before it can be deleted.",
+                "operation_id": "shared_record_groupDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the shared record group.",
+                "description": "Use this method to update a __SharedRecordGroup__ object.",
+                "operation_id": "shared_record_groupUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dns/shared_record_group/{id}/zone_associations": {
+            "path": "/dns/shared_record_group/{id}/zone_associations",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve zones associated with the shared record group.",
+                "description": "Use this method to list all zones associated with a __SharedRecordGroup__.",
+                "operation_id": "shared_record_groupListSRGZoneAssociations",
+                "parameters": [
+                  "id (path) [required]",
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Replace the set of zones associated with the shared record group.",
+                "description": "Use this method to set the complete list of zones associated with a __SharedRecordGroup__.\nThis call replaces the existing association set: zones present in _zones_ are associated;\nzones currently associated but absent from _zones_ are dissociated.\nOnly authoritative zones in the same provider instance are eligible.\nPassing an empty _zones_ list dissociates all zones.",
+                "operation_id": "shared_record_groupSRGZoneAssociation",
                 "parameters": [
                   "id (path) [required]",
                   "body (body) [required]"
@@ -4841,7 +5172,7 @@
             "methods": {
               "GET": {
                 "summary": "List all the Services (applications) along with its associated Hosts.",
-                "description": "List services (NIOS-X applications) joined with the hosts they run on and the status of both. This is the read-only view behind Manage -> Infrastructure -> Services, but it does not hold every service: it omits the Infoblox-managed XaaS services (see below), so a list or count of DHCP or DNS servers must start from `/services`, which holds them all. Use this collection to answer which service runs on which host and in what state.\n\n**Filter on the service's own fields, never through the nested host object.** `_filter=hosts.display_name=='<host>'` and `_filter=host.display_name=='<host>'` are both rejected by the server with HTTP 500. The filters that work are the service's own fields, above all `service_type` and `name`:\n- All NIOS grid DHCP services: `_filter=service_type=='ndhcp'`. Grid and NIOS-X cloud DHCP together: `_filter=service_type=='dhcp' or service_type=='ndhcp'`. The same pair applies to DNS as `ndns` and `dns`.\n- The service of one named host: an `ndhcp` or `ndns` service is always named `<service_type>_<the host's display_name>`, so `_filter=name=='ndhcp_<host display name>'` returns that host's NIOS DHCP service and nothing else. Other service types usually follow the same pattern but not always, so if an exact-name filter comes back empty, fall back to filtering on `service_type` and matching `hosts[].display_name` in the result.\n\n**Never conclude that a host does not run a service from an unfiltered listing of this collection.** An account holds far more services than any one host does, and a host's service is as likely to sit further down the collection as to be missing from it. Establish absence with a filter that names the host or the service type, and report a service as absent only when that filtered query itself returns nothing.\n\n**To find which host a service runs on, match the host on `ophid`, `display_name` or `ip_address`, never on `id`.** The `hosts[].id` returned here is bare (for example `jbeuiwrx...`) with no `infra/host/` prefix, whereas `/hosts` returns the same host as `infra/host/jbeuiwrx...` (and `/detail_hosts` returns it bare too). Comparing ids as complete strings across these endpoints never matches, which makes a host look like it runs no service when it does. The service's own `id` follows the same pattern: this collection returns it bare (for example `sflgouttnz6b...`) while `/services` returns `infra/service/sflgouttnz6b...`. To combine the two collections, join them on the service `name`, which is identical in both, never on `id`; an `id` join matches no row and leaves every status and check-in blank.\n\n**Infoblox-managed XaaS services and their hosts are absent from this collection.** The pool-based DHCP and DNS services that Infoblox runs for the account (`managed_by` `infoblox`, named `DHCP <host>` and `DNS <host>` on hosts named `xaas-<site>`, for example `DHCP xaas-sydney`) never appear here, and their hosts (`host_subtype` `b1managed`) appear neither in `hosts[]` here nor in `/detail_hosts`. They are DHCP and DNS servers all the same. `/services` returns them: `_filter=service_type=='dhcp'` there includes the XaaS DHCP services, `_filter=name=='DHCP xaas-sydney'` returns that one service, and each service's `configs[].host_id` names its host. `/hosts` returns the host itself. A list or count of DHCP or DNS servers taken from this collection alone is therefore incomplete: add the `dhcp` or `dns` services that `/services` returns and this collection does not. **Never conclude from this collection that a `xaas-*` host runs no service, or that the `xaas-*` host serving a subnet has no DHCP service.** For a `xaas-*` host, look the host up in `/hosts` and its services in `/services`.",
+                "description": "List services (NIOS-X applications) joined with the hosts they run on and the status of both. This is the read-only view behind Manage -> Infrastructure -> Services, but it does not hold every service: it omits the Infoblox-managed XaaS services (see below), so a list or count of DHCP or DNS servers must start from `/services`, which holds them all. Use this collection to answer which service runs on which host and in what state.\n\n**Filter on the service's own fields, never through the nested host object.** `_filter=hosts.display_name=='<host>'` and `_filter=host.display_name=='<host>'` are both rejected by the server with HTTP 500. The filters that work are the service's own fields, above all `service_type` and `name`:\n- All NIOS grid DHCP services: `_filter=service_type=='ndhcp'`. Grid and NIOS-X cloud DHCP together: `_filter=service_type=='dhcp' or service_type=='ndhcp'`. The same pair applies to DNS as `ndns` and `dns`.\n- The service of one named host: an `ndhcp` or `ndns` service is always named `<service_type>_<the host's display_name>`, so `_filter=name=='ndhcp_<host display name>'` returns that host's NIOS DHCP service and nothing else. Other service types usually follow the same pattern but not always, so if an exact-name filter comes back empty, fall back to filtering on `service_type` and matching `hosts[].display_name` in the result.\n\n**Never conclude that a host does not run a service from an unfiltered listing of this collection.** An account holds far more services than any one host does, and a host's service is as likely to sit further down the collection as to be missing from it. Establish absence with a filter that names the host or the service type, and report a service as absent only when that filtered query itself returns nothing.\n\n**To find which host a service runs on, match the host on `ophid`, `display_name` or `ip_address`, never on `id`.** The `hosts[].id` returned here is bare (for example `jbeuiwrx...`) with no `infra/host/` prefix, whereas `/hosts` returns the same host as `infra/host/jbeuiwrx...` (and `/detail_hosts` returns it bare too). Comparing ids as complete strings across these endpoints never matches, which makes a host look like it runs no service when it does. The service's own `id` follows the same pattern: this collection returns it bare (for example `sflgouttnz6b...`) while `/services` returns `infra/service/sflgouttnz6b...`. To combine the two collections, join them on the service `name`, which is identical in both, never on `id`; an `id` join matches no row and leaves every status and check-in blank.\n\n**Infoblox-managed XaaS services and their hosts are absent from this collection.** The pool-based DHCP and DNS services that Infoblox runs for the account (`managed_by` `infoblox`, named `DHCP <host>` and `DNS <host>` on hosts named `xaas-<site>`, for example `DHCP xaas-sydney`) never appear here, and their hosts (`host_subtype` `b1managed`) appear neither in `hosts[]` here nor in `/detail_hosts`. They are DHCP and DNS servers all the same. `/services` returns them: `_filter=service_type=='dhcp'` there includes the XaaS DHCP services, `_filter=name=='DHCP xaas-sydney'` returns that one service, and each service's `configs[].host_id` names its host. `/hosts` returns the host itself. A list or count of DHCP or DNS servers taken from this collection alone is therefore incomplete: add the `dhcp` or `dns` services that `/services` returns and this collection does not. **Never conclude from this collection that a `xaas-*` host runs no service, or that the `xaas-*` host serving a subnet has no DHCP service.** For a `xaas-*` host, look the host up in `/hosts` and its services in `/services`. **Uptime or availability of services** is the number of services whose `composite_status` is `online` or `started`, divided by all services in the group, as a percentage. Compute it per `service_type` or for the whole account, and give both counts next to the percentage.",
                 "operation_id": "DetailList",
                 "parameters": [
                   "_filter (query)",
@@ -4958,7 +5289,7 @@
             "methods": {
               "POST": {
                 "summary": "Disconnect a Host by resource ID.",
-                "description": "The user can disconnect the host from the cloud (for example, if in case a host is compromised).",
+                "description": "The user can disconnect the host from the cloud (for example, if a host is compromised).",
                 "operation_id": "HostsDisconnect",
                 "parameters": [
                   "id (path) [required]",
@@ -5052,17 +5383,27 @@
       "container_key": "endpoints",
       "get_endpoints": [],
       "all_endpoints": [
+        "/federation/aws/scope/management [path,methods]",
+        "/federation/aws/scope/token [path,methods]",
         "/federation/create_next_available_fld [path,methods]",
+        "/federation/delegation [path,methods]",
+        "/federation/delegation/{id} [path,methods]",
         "/federation/federated_block [path,methods]",
         "/federation/federated_block/{id} [path,methods]",
+        "/federation/federated_block/{id}/create_next_available_fld [path,methods]",
         "/federation/federated_block/{id}/next_available_federated_block [path,methods]",
         "/federation/federated_block/{id}/next_available_overlapping_block [path,methods]",
         "/federation/federated_block/{id}/next_available_reserved_block [path,methods]",
+        "/federation/federated_pool [path,methods]",
+        "/federation/federated_pool/{id} [path,methods]",
+        "/federation/federated_pool/{id}/create_next_available_fld [path,methods]",
+        "/federation/federated_pool/{id}/next_available_federated_block [path,methods]",
         "/federation/federated_realm [path,methods]",
         "/federation/federated_realm/{id} [path,methods]",
         "/federation/forward_looking_delegation [path,methods]",
         "/federation/forward_looking_delegation/{id} [path,methods]",
         "/federation/list_next_available_fld [path,methods]",
+        "/federation/next_appropriate_delegation [path,methods]",
         "/federation/overlapping_block [path,methods]",
         "/federation/overlapping_block/{id} [path,methods]",
         "/federation/reserved_block [path,methods]",
@@ -5074,6 +5415,32 @@
         "title": "IPAM Federation API",
         "version": "v1",
         "endpoints": {
+          "/federation/aws/scope/management": {
+            "path": "/federation/aws/scope/management",
+            "methods": {
+              "POST": {
+                "summary": "Configure management settings for AWS IPAM scopes",
+                "description": "Enable or disable external management of an AWS IPAM scope by updating the federated realm's metadata to reflect the desired management mode",
+                "operation_id": "aws_scope_managementScopeManagement",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/aws/scope/token": {
+            "path": "/federation/aws/scope/token",
+            "methods": {
+              "POST": {
+                "summary": "Generate AWS IPAM scope authentication token",
+                "description": "Generate a time-limited JWT token for authenticating requests to the specified AWS IPAM scope",
+                "operation_id": "aws_scope_tokenGenerateToken",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
           "/federation/create_next_available_fld": {
             "path": "/federation/create_next_available_fld",
             "methods": {
@@ -5082,6 +5449,69 @@
                 "description": "Use this method to create the next \"n\" available __ForwardLookingDelegation__ objects considering the parameter passed.\nThe response will be \"n\" __ForwardLookingDelegation__ objects.\nA __ForwardLookingDelegation__ object (_federation/forward_looking_delegation_) is a set of contiguous IP addresses with no gap, expressed as a CIDR block. Forward Looking Delegations may be used to allocate unique space for future resources which will ultimately hold a Delegation for the same CIDR block.",
                 "operation_id": "next_available_fldCreateNextAvailableFLDBlocks",
                 "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/delegation": {
+            "path": "/federation/delegation",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the delegation.",
+                "description": "Use this method to retrieve __Delegation__ objects.\nThe __Delegation__ explicitly marks authority for an address range assigned to another IPAM service.",
+                "operation_id": "delegationList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)",
+                  "_torder_by (query)",
+                  "_tfilter (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the delegation.",
+                "description": "Use this method to create a __Delegation__ object.\nThe __Delegation__ explicitly marks authority for an address range assigned to another IPAM service.",
+                "operation_id": "delegationCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "No-op DELETE Delegation operation.",
+                "description": "This method has no-operation, but is provided for client IPAM services performing a DELETE of zero Delegations that did not detect the empty request.",
+                "operation_id": "delegationDeleteWithoutId",
+                "parameters": []
+              }
+            }
+          },
+          "/federation/delegation/{id}": {
+            "path": "/federation/delegation/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the delegation.",
+                "description": "Use this method to retrieve a __Delegation__ object.\nThe __Delegation__ explicitly marks authority for an address range assigned to another IPAM service.",
+                "operation_id": "delegationRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete the delegation.",
+                "description": "Use this method to delete a __Delegation__ object.\nThe __Delegation__ explicitly marks authority for an address range assigned to another IPAM service.",
+                "operation_id": "delegationDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the delegation.",
+                "description": "Use this method to update a __Delegation__ object.\nThe __Delegation__ explicitly marks authority for an address range assigned to another IPAM service.",
+                "operation_id": "delegationUpdate",
+                "parameters": [
+                  "id (path) [required]",
                   "body (body) [required]"
                 ]
               }
@@ -5137,6 +5567,20 @@
                 "summary": "Update the federated block.",
                 "description": "Use this method to update a __FederatedBlock__ object.\nThe __FederatedBlock__ object allows a uniform representation of the address space segmentation, supporting functions such as administrative grouping, routing aggregation, delegation etc.",
                 "operation_id": "federated_blockUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/federated_block/{id}/create_next_available_fld": {
+            "path": "/federation/federated_block/{id}/create_next_available_fld",
+            "methods": {
+              "POST": {
+                "summary": "Create the next available __ForwardLookingDelegation__ objects within a specific __FederatedBlock__.\nUse this method to create the next available __ForwardLookingDelegation__ objects under the specified parent __FederatedBlock__.",
+                "description": "",
+                "operation_id": "next_available_fldCreateNextAvailableFLD",
                 "parameters": [
                   "id (path) [required]",
                   "body (body) [required]"
@@ -5215,6 +5659,91 @@
                 "summary": "Retrieve the next available reserved block.",
                 "description": "Use this method to allocate the next available __ReservedBlock__ objects.\nThis allocates one or more __ReservedBlock__ objects from the specified parent __FederatedBlock__ block.",
                 "operation_id": "next_available_reserved_blockCreateNextAvailableReservedBlocks",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/federated_pool": {
+            "path": "/federation/federated_pool",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve federated pools.",
+                "description": "Use this method to retrieve __FederatedPool__ objects.\nThe __FederatedPool__ object represents a group of federated blocks that can be allocated for specific providers and regions.",
+                "operation_id": "federated_poolList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)",
+                  "_torder_by (query)",
+                  "_tfilter (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the federated pool.",
+                "description": "Use this method to create a __FederatedPool__ object.\nThe __FederatedPool__ object represents a group of federated blocks that can be allocated for specific providers and regions..",
+                "operation_id": "federated_poolCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/federated_pool/{id}": {
+            "path": "/federation/federated_pool/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the federated pool.",
+                "description": "Use this method to retrieve a __FederatedPool__ object.\nThe __FederatedPool__ object represents a group of federated blocks that can be allocated for specific providers and regions.",
+                "operation_id": "federated_poolRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Delete the federated pool.",
+                "description": "Use this method to delete a __FederatedPool__ object.\nThe __FederatedPool__ object represents a group of federated blocks that can be allocated for specific providers and regions.",
+                "operation_id": "federated_poolDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the federated pool.",
+                "description": "Use this method to update a __FederatedPool__ object.\nThe __FederatedPool__ object represents a group of federated blocks that can be allocated for specific providers and regions.",
+                "operation_id": "federated_poolUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/federated_pool/{id}/create_next_available_fld": {
+            "path": "/federation/federated_pool/{id}/create_next_available_fld",
+            "methods": {
+              "POST": {
+                "summary": "Create the next available __ForwardLookingDelegation__ objects within a pool.",
+                "description": "Use this method to allocate the next available __ForwardLookingDelegation__ objects within a specific federated pool.\nFederated blocks within the pool are evaluated in ascending CIDR order (largest address space first).\nReturns the allocated __ForwardLookingDelegation__ objects.",
+                "operation_id": "next_available_fldCreateNextAvailableFLDForPool",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/federation/federated_pool/{id}/next_available_federated_block": {
+            "path": "/federation/federated_pool/{id}/next_available_federated_block",
+            "methods": {
+              "POST": {
+                "summary": "Create the next available federated blocks within a pool.",
+                "description": "Use this method to allocate the next available __FederatedBlock__ objects within a specific federated pool.\nThis allocates one or more __FederatedBlock__ objects from the specified federated pool.\nThis is a thin wrapper that reuses the block-level NAB logic by finding suitable parent blocks in the pool.",
+                "operation_id": "next_available_pool_blockCreateNextAvailableBlocks",
                 "parameters": [
                   "id (path) [required]",
                   "body (body) [required]"
@@ -5349,6 +5878,19 @@
                   "name (query)",
                   "comment (query)",
                   "protocol (query)"
+                ]
+              }
+            }
+          },
+          "/federation/next_appropriate_delegation": {
+            "path": "/federation/next_appropriate_delegation",
+            "methods": {
+              "POST": {
+                "summary": "Create Next Appropriate Delegation",
+                "description": "Creates next appropriate __Delegation__ objects based on the provided payload. This method is used to generate a __Delegation__ that fits the specified criteria.",
+                "operation_id": "next_appropriate_delegationCreateNextAppropriateDelegation",
+                "parameters": [
+                  "body (body) [required]"
                 ]
               }
             }
@@ -5493,6 +6035,7 @@
         "/dhcp/global [path,methods]",
         "/dhcp/global/{id} [path,methods]",
         "/dhcp/ha_group [path,methods]",
+        "/dhcp/ha_group/linked_ha_groups [path,methods]",
         "/dhcp/ha_group/{id} [path,methods]",
         "/dhcp/hardware_filter [path,methods]",
         "/dhcp/hardware_filter/{id} [path,methods]",
@@ -5531,6 +6074,7 @@
         "/ipam/asm/{id} [path,methods]",
         "/ipam/dns_usage [path,methods]",
         "/ipam/dns_usage/{id} [path,methods]",
+        "/ipam/export/table [path,methods]",
         "/ipam/host [path,methods]",
         "/ipam/host/{id} [path,methods]",
         "/ipam/ip_space [path,methods]",
@@ -5541,6 +6085,10 @@
         "/ipam/range [path,methods]",
         "/ipam/range/{id} [path,methods]",
         "/ipam/range/{id}/nextavailableip [path,methods]",
+        "/ipam/shared_network [path,methods]",
+        "/ipam/shared_network/{id} [path,methods]",
+        "/ipam/shared_network/{id}/set_host_or_ha_group [path,methods]",
+        "/ipam/shared_network/{id}/subnets [path,methods]",
         "/ipam/subnet [path,methods]",
         "/ipam/subnet/{id} [path,methods]",
         "/ipam/subnet/{id}/ancestor [path,methods]",
@@ -5757,7 +6305,7 @@
             "methods": {
               "GET": {
                 "summary": "Retrieve HA groups.",
-                "description": "Use this method to retrieve __HAGroup__ objects.\nThe __HAGroup__ (_dhcp/ha_group_) object represents on-prem hosts that can serve the same leases for HA.",
+                "description": "Retrieve DHCP HA groups. The `mode` values `active-active`, `active-passive` and `advanced-active-passive` are three separate modes, and `advanced-active-passive` is not a kind of `active-passive`. When the user asks for groups of a named mode (for example \"active passive HA groups\"), the answer is the number of groups whose `mode` equals that value exactly, and that number leads the answer, even when it is 0. Groups in other modes may be listed separately, but never added to it.",
                 "operation_id": "ha_groupList",
                 "parameters": [
                   "_filter (query)",
@@ -5774,6 +6322,19 @@
                 "summary": "Create the HA group.",
                 "description": "Use this method to create an __HAGroup__ object.\nThe __HAGroup__ object represents on-prem hosts that can serve the same leases for HA.",
                 "operation_id": "ha_groupCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/dhcp/ha_group/linked_ha_groups": {
+            "path": "/dhcp/ha_group/linked_ha_groups",
+            "methods": {
+              "POST": {
+                "summary": "Retrieve the list of linked HA groups.",
+                "description": "Use this method to retrieve linked HA groups. For a given HA group or hosts, a linked HA group is any\ngroup that shares a host with it, either directly or transitively through other groups.\nIn other words, groups are linked if they can be connected through a chain of shared hosts.\nOnly one of HA group or hosts can be given in a request.\nFor a given HA group or hosts, this returns, if any are present, __LinkedHAGroup__ objects.",
+                "operation_id": "ha_groupListLinkedHAGroups",
                 "parameters": [
                   "body (body) [required]"
                 ]
@@ -6028,7 +6589,8 @@
                   "_offset (query)",
                   "_limit (query)",
                   "_page_token (query)",
-                  "_order_by (query)"
+                  "_order_by (query)",
+                  "filter_rule_only (query)"
                 ]
               },
               "POST": {
@@ -6430,7 +6992,9 @@
                   "_page_token (query)",
                   "_order_by (query)",
                   "_torder_by (query)",
-                  "_tfilter (query)"
+                  "_tfilter (query)",
+                  "federated_realm (query)",
+                  "cidr_block (query)"
                 ]
               },
               "POST": {
@@ -6564,7 +7128,9 @@
                   "name (query)",
                   "comment (query)",
                   "dhcp_host (query)",
-                  "federated_realms (query)"
+                  "federated_realms (query)",
+                  "disable_dhcp (query)",
+                  "shared_network (query)"
                 ]
               },
               "POST": {
@@ -6641,6 +7207,19 @@
               }
             }
           },
+          "/ipam/export/table": {
+            "path": "/ipam/export/table",
+            "methods": {
+              "POST": {
+                "summary": "Initiate an asynchronous table export.",
+                "description": "Use this method to start an asynchronous export of table data.\nThe response contains a _result.req_id_ that can be used to track the export status.\nThe initial _result.status_ is set to _pending_.",
+                "operation_id": "export_tableExportTable",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
           "/ipam/host": {
             "path": "/ipam/host",
             "methods": {
@@ -6713,7 +7292,8 @@
                   "_page_token (query)",
                   "_order_by (query)",
                   "_torder_by (query)",
-                  "_tfilter (query)"
+                  "_tfilter (query)",
+                  "federated_realm (query)"
                 ]
               },
               "POST": {
@@ -6877,6 +7457,88 @@
               }
             }
           },
+          "/ipam/shared_network": {
+            "path": "/ipam/shared_network",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve shared networks.",
+                "description": "Use this method to retrieve __SharedNetwork__ objects.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.\n\nWhen filtering by _protocol_ (_ip4_ or _ip6_), shared networks that have no member subnets are always included in the results,\nregardless of the requested protocol value, because no protocol has been assigned to them yet and any subnet can still be added.",
+                "operation_id": "shared_networkList",
+                "parameters": [
+                  "_filter (query)",
+                  "_offset (query)",
+                  "_limit (query)",
+                  "_page_token (query)",
+                  "_order_by (query)"
+                ]
+              },
+              "POST": {
+                "summary": "Create the shared network.",
+                "description": "Use this method to create a __SharedNetwork__ object.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkCreate",
+                "parameters": [
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/ipam/shared_network/{id}": {
+            "path": "/ipam/shared_network/{id}",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve the shared network.",
+                "description": "Use this method to retrieve a __SharedNetwork__ object.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkRead",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "DELETE": {
+                "summary": "Move the shared network to the recycle bin.",
+                "description": "Use this method to move a __SharedNetwork__ object to the recycle bin.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkDelete",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              },
+              "PATCH": {
+                "summary": "Update the shared network.",
+                "description": "Use this method to update a __SharedNetwork__ object.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkUpdate",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/ipam/shared_network/{id}/set_host_or_ha_group": {
+            "path": "/ipam/shared_network/{id}/set_host_or_ha_group",
+            "methods": {
+              "POST": {
+                "summary": "Set host or HA group reference for the shared network.",
+                "description": "Use this method to set host or HA group for all subnets that are members of the __SharedNetwork__ object.\nNote that this will also set the same for applicable ranges (children of subnets).\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkSetHostOrHaGroupInSharedNetwork",
+                "parameters": [
+                  "id (path) [required]",
+                  "body (body) [required]"
+                ]
+              }
+            }
+          },
+          "/ipam/shared_network/{id}/subnets": {
+            "path": "/ipam/shared_network/{id}/subnets",
+            "methods": {
+              "GET": {
+                "summary": "Retrieve subnet members of a shared network.",
+                "description": "Use this method to retrieve the resource identifiers, along with name, IP and CIDR values, of all subnets that are assigned to a __SharedNetwork__ object.\nThis is the primary way to enumerate subnet membership for a shared network.\nThe __SharedNetwork__ object groups multiple subnets together, allowing them to share a common physical wire or relay agent.",
+                "operation_id": "shared_networkGetSharedNetworkSubnets",
+                "parameters": [
+                  "id (path) [required]"
+                ]
+              }
+            }
+          },
           "/ipam/subnet": {
             "path": "/ipam/subnet",
             "methods": {
@@ -6891,7 +7553,9 @@
                   "_page_token (query)",
                   "_order_by (query)",
                   "_torder_by (query)",
-                  "_tfilter (query)"
+                  "_tfilter (query)",
+                  "federated_realm (query)",
+                  "cidr_block (query)"
                 ]
               },
               "POST": {
