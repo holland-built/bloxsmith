@@ -57,7 +57,7 @@ async function open(page: Page, hash: string, ready: () => Promise<void>) {
 }
 
 const overviewReady = (page: Page) => () =>
-  expect(page.locator('[data-board-row="Hosts"]')).toContainText(/\d+ of \d+ not online/, { timeout: 20_000 });
+  expect(page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^Hosts / })).toContainText(/\d+ of \d+ not online/, { timeout: 20_000 });
 
 test('Overview: /api/data is fetched twice a minute, not three times', async ({ page }) => {
   const c = await open(page, 'overview', overviewReady(page));

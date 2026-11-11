@@ -83,7 +83,9 @@ test.describe('Overview → service board (/api/data empty)', () => {
     await expect(tile('IPAM')).toContainText('0 of 0 subnets ≥90%');
     await expect(tile('Hosts')).toContainText('0 of 0 not online');
     await expect(row('Hosts')).toContainText('none open');
-    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
+    // The verdict, not the whole tile: the tile's tip also carries the health
+    // check's own note, which this test does not fake.
+    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name).locator('.ov-verdict')).not.toHaveText('Unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });
 });

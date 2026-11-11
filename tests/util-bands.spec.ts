@@ -49,11 +49,11 @@ test.beforeEach(async ({ page }) => {
 const badge = (page: import('@playwright/test').Page, panel: string, addr: string) =>
   page.locator(`[data-panel-id="${panel}"] tbody tr`).filter({ hasText: addr }).locator('span.rounded-full');
 
-// Overview's table and heatmap legend went on 2026-11-09; its IPAM board row
+// Overview's table and heatmap legend went on 2026-11-09; its IPAM tile
 // is what still counts by the bands. Network's table below still grades rows.
-test('Status: the IPAM board row counts by the same bands', async ({ page }) => {
+test('Status: the IPAM tile counts by the same bands', async ({ page }) => {
   await page.goto('/#overview');
-  const ipam = page.locator('[data-board] [data-board-row="IPAM"]');
+  const ipam = page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^IPAM / });
   await expect(ipam).toContainText('1 of 4 subnets ≥90%', { timeout: 20_000 });
   await expect(ipam).toContainText('2 more at 70–89%');
 });
