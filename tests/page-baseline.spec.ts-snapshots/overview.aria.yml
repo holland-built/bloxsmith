@@ -9,9 +9,7 @@
     - button "Security Act 3 critical or high 3 critical or high events · whole window · beyond the row cap"
   - region "DNS detail":
     - heading "DNS" [level=2]
-    - text: /Last \d+ hours/
-    - 'img /DNS queries per second, last \d+ hours: from \d+\.\d+ to \d+\.\d+/'
-    - text: /\d+:\d+ AM \d+:\d+ AM \d+:\d+ AM \d+[hmsp]+ ago \d+[hmsp]+ ago Now \d+ queries\/s · hourly average, last hour · 2\/2 online/
+    - text: /\d+ queries\/s · hourly average, last hour · 2\/2 online/
     - link "Open DNS":
       - /url: "#dns"
   - region "Services":
@@ -20,42 +18,33 @@
     - region "Service board":
       - table:
         - rowgroup:
-          - row /Service Now Open issues Last \d+ days State/:
+          - row /Service Open issues Last \d+ days/:
             - columnheader "Service"
-            - columnheader "Now"
             - columnheader "Open issues"
             - columnheader /Last \d+ days/
-            - columnheader "State"
         - rowgroup:
-          - row /DNS \d+ queries\/s none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 healthy/:
+          - row /DNS none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
             - rowheader "DNS":
               - link "DNS":
                 - /url: "#dns"
-            - cell /\d+ queries\/s/
             - cell "none open"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "healthy"
-          - row /DHCP 1 active leases none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 degraded/:
+          - row /DHCP none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
             - rowheader "DHCP":
               - link "DHCP":
                 - /url: "#network?focus=leases"
-            - cell "1 active leases"
             - cell "none open"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "degraded"
-          - row /IPAM 1 subnets ≥\d+% none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 Look/:
+          - row /IPAM none open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
             - rowheader "IPAM":
               - link "IPAM":
                 - /url: "#network?minUtil=90&links=1"
-            - cell /1 subnets ≥\d+%/
             - cell "none open"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "Look"
-          - 'row /Hosts 1 not online 1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 Act/':
+          - 'row /Hosts 1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
             - rowheader "Hosts":
               - link "Hosts":
                 - /url: "#infra?status=offline"
-            - cell "1 not online"
             - 'cell "1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online?"':
               - list:
                 - listitem:
@@ -67,12 +56,10 @@
                     - /url: "#ai?q=Which%20hosts%20are%20not%20online%3F"
                     - text: Ask why
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "Act"
-          - 'row /Security 3 critical or high 3 critical or high security events Open: 3 critical or high security events Ask the AI: Which domains are on threat feeds\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 Act/':
+          - 'row /Security 3 critical or high security events Open: 3 critical or high security events Ask the AI: Which domains are on threat feeds\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
             - rowheader "Security":
               - link "Security":
                 - /url: "#security"
-            - cell "3 critical or high"
             - 'cell "3 critical or high security events Open: 3 critical or high security events Ask the AI: Which domains are on threat feeds?"':
               - list:
                 - listitem:
@@ -84,12 +71,10 @@
                     - /url: "#ai?q=Which%20domains%20are%20on%20threat%20feeds%3F"
                     - text: Ask why
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "Act"
-          - 'row /Other 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1 Look/':
+          - 'row /Other 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
             - rowheader "Other":
               - link "Other":
                 - /url: "#incidents"
-            - cell
             - 'cell "2 subnets close to full Open: 2 subnets close to full"':
               - list:
                 - listitem:
@@ -98,7 +83,6 @@
                     - /url: "#incidents"
                     - text: ""
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-            - cell "Look"
   - heading "Charts" [level=2]
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:

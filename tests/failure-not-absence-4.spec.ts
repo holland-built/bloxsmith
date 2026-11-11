@@ -75,13 +75,20 @@ test.describe('Overview → service board (/api/data empty)', () => {
         meta: { subnets: 'empty', hosts: 'empty', leases: 'empty' },
       })),
     );
+    // A healthy health feed, so the only "unavailable" a tile could show is the
+    // inventory's own: the tile's tip also carries the health check's note.
+    await page.route('**/api/hub/health*', (route) =>
+      fulfillJson(route, ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'ok', statusLabel: 'healthy', meta: '', availability: 'ok' }))),
+    );
     await page.goto('/#overview');
     const row = (name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
-    await expect(row('DHCP')).toContainText('0 active leases', { timeout: 20_000 });
-    await expect(row('IPAM')).toContainText('0 of 0 subnets ≥90%');
-    await expect(row('Hosts')).toContainText('0 of 0 not online');
+    // The counts are on the tiles; the board rows hold the open issues.
+    const tile = (name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
+    await expect(tile('DHCP')).toContainText('0 active leases', { timeout: 20_000 });
+    await expect(tile('IPAM')).toContainText('0 of 0 subnets ≥90%');
+    await expect(tile('Hosts')).toContainText('0 of 0 not online');
     await expect(row('Hosts')).toContainText('none open');
-    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(row(name).locator('td').nth(0)).not.toContainText('unavailable');
+    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });
 });

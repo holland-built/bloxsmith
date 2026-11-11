@@ -16,7 +16,7 @@ test('a panel still waiting for its data says Loading, not a blank grey box', as
   await page.route('**/api/csp/dns-qps*', () => new Promise(() => {}));
   await page.goto('/#overview');
   await expect(page.getByRole('status').filter({ hasText: 'Loading…' }).first()).toBeVisible();
-  await expect(page.locator('[data-board] [data-board-row="Hosts"]')).toContainText('Loading…');
+  await expect(page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^Hosts / })).toContainText('Loading…');
 });
 
 test('chart bars carry their numbers, and a short top 10 says why it is short', async ({ page }) => {

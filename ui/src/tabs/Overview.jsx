@@ -277,41 +277,6 @@ function TickBar({ fill, good, sev, label }) {
   )
 }
 
-// The last 24 hours of DNS queries. The last hour is not finished, so its
-// segment is dashed. Each hour has its own tip.
-function DnsChart({ dns, ok }) {
-  if (dns.loading) return <Skeleton h={200} />
-  if (!ok) return <FeedUnavailable label="DNS query rate feed unavailable" />
-  const rows = dns.data?.rows ?? []
-  const v = rows.map((r) => Number(r.avg_value) || 0)
-  if (v.length < 2) return <p className="ov-muted ov-pad">No DNS history yet</p>
-  const max = Math.max(...v) * 1.15 || 1
-  const W = 720, H = 200
-  const x = (i) => (i / (v.length - 1)) * W
-  const y = (val) => H - (val / max) * H
-  const solid = v.slice(0, -1).map((val, i) => `${x(i)},${y(val)}`).join(' ')
-  const area = `0,${H} ${v.map((val, i) => `${x(i)},${y(val)}`).join(' ')} ${W},${H}`
-  const hour = (h) => { const d = new Date(h); return isNaN(d) ? h : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-  return (
-    <div className="ov-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`DNS queries per second, last 24 hours: from ${v[0].toFixed(1)} to ${v[v.length - 1].toFixed(1)}`}>
-        <defs><linearGradient id="ovDnsFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--ov-accent)" stopOpacity=".18" /><stop offset="1" stopColor="var(--ov-accent)" stopOpacity="0" /></linearGradient></defs>
-        <polygon points={area} fill="url(#ovDnsFill)" />
-        <polyline points={solid} fill="none" stroke="var(--ov-accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        <polyline points={`${x(v.length - 2)},${y(v[v.length - 2])} ${x(v.length - 1)},${y(v[v.length - 1])}`} fill="none" stroke="var(--ov-accent)" strokeWidth="2" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <div className="ov-hits">
-        {rows.map((r, i) => (
-          <Tip key={r.hour} className="ov-hit" tip={<><b>{v[i].toFixed(1)}</b> queries/s<span className="ov-tip-sub">{hour(r.hour)}{i === v.length - 1 ? ' · this hour so far' : ''}</span></>}>
-            <span className="sr-only">{hour(r.hour)}</span>
-          </Tip>
-        ))}
-      </div>
-      <div className="ov-axis"><span>24h ago</span><span>12h ago</span><span>Now</span></div>
-    </div>
-  )
-}
-
 // Five tiles in one card. Clicking one shows its detail below: the DNS chart,
 // or for the others a bar against what it is out of, with a link to its page.
 function Tiles({ board, dns }) {
@@ -333,12 +298,12 @@ function Tiles({ board, dns }) {
         ))}
       </section>
       <section className="ov-card" aria-label={`${cur.name} detail`}>
-        <div className="ov-card-head"><h2>{cur.name}</h2><span className="ov-muted">{cur.name === 'DNS' ? 'Last 24 hours' : cur.right}</span></div>
-        {cur.name === 'DNS' ? <DnsChart dns={dns} ok={board.dnsOk} /> : (
-          <div className="ov-pad">
-            <TickBar fill={cur.fill} good={cur.good} sev={cur.v.sev} label={`${cur.name}: ${cur.value} ${cur.unit} ${cur.right ?? ''}`} />
-          </div>
-        )}
+        <div className="ov-card-head"><h2>{cur.name}</h2><span className="ov-muted">{cur.right}</span></div>
+        {/* No DNS chart here: "DNS Query Rate — 24h" under Charts is the one
+            chart (owner, 2026-11-10: the page said everything twice). */}
+        <div className="ov-pad">
+          <TickBar fill={cur.fill} good={cur.good} sev={cur.v.sev} label={`${cur.name}: ${cur.value} ${cur.unit} ${cur.right ?? ''}`} />
+        </div>
         {/* The chosen tile's explanation, written out: picking a tile by tap
             or keyboard shows it, not only a mouse hover over the tile. */}
         <div className="ov-foot ov-pad ov-detail-foot"><span className="ov-muted">{cur.tip}</span><a className="ov-act" href={cur.b?.href}>Open {cur.name}</a></div>
@@ -405,14 +370,6 @@ function IssueList({ b, checked, none }) {
   return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'none open' : 'not checked: feed unavailable'}</span>
 }
 
-// The number on a row: big when there is one, the word when the feed is
-// loading or failed. The tip holds the measure and the scope it was counted over.
-function Measure({ b, t }) {
-  if (!t) return <span className="ov-muted">{b.measure || ' '}</span>
-  if (b.measure === 'Loading…' || b.measure === 'unavailable') return <span className="ov-muted">{b.measure}</span>
-  return <Tip tip={[b.measure, b.scope].filter(Boolean).join(' · ')} className="ov-num ov-row-num">{t.value} <small>{t.unit}</small></Tip>
-}
-
 // The board can be folded to one line of counts, so the charts below come up
 // to the top (owner, 2026-11-09). The choice is kept in this browser only.
 const BOARD_KEY = 'bloxsmith.overview.boardHidden'
@@ -468,22 +425,17 @@ function ServiceBoard({ board, dns }) {
       <div id="ov-board-table" hidden={hidden} role="region" aria-label="Service board" tabIndex={0} className="ov-board-box">
         <table className="ov-board" data-board="">
           <thead className="sr-only">
-            <tr><th scope="col">Service</th><th scope="col">Now</th><th scope="col">Open issues</th><th scope="col">Last 10 days</th><th scope="col">State</th></tr>
+            <tr><th scope="col">Service</th><th scope="col">Open issues</th><th scope="col">Last 10 days</th></tr>
           </thead>
           <tbody>
             {board.board.map((b) => {
               const t = T[b.name]
               const v = t ? t.v : verdict(b, board.issuesChecked[b.name])
-              // The service's own label ("degraded") only when it says the same
-              // as the verdict; a worse open issue or a failed feed wins.
-              const word = (b.state?.statusLabel && b.state.status === v.sev) ? b.state.statusLabel : v.word
               return (
                 <tr key={b.name} data-board-row={b.name}>
                   <th scope="row"><a href={b.href}>{b.name}</a></th>
-                  <td><Measure b={b} t={t} /></td>
                   <td className="ov-mid"><IssueList b={b} checked={board.issuesChecked[b.name]} none={board.noneLabel[b.name]} /></td>
                   <td><Strip issues={b.issues} state={b.state} v={v} /></td>
-                  <td className="ov-r"><span className={`ov-chip ${v.sev}`}>{word}</span></td>
                 </tr>
               )
             })}

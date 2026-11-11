@@ -11,6 +11,9 @@ import { installBaselineWorld } from './page-fixtures';
 const down = (route: Route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' });
 const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 const row = (page: Page, name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
+// Each service's number, its scope and its one-word state are on its tile
+// only; the board rows hold what the tiles do not (owner, 2026-11-10).
+const tile = (page: Page, name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
 
 test('the board has a row per service, each linking to its page', async ({ page }) => {
   await installBaselineWorld(page);
@@ -30,8 +33,8 @@ test('an offline host is an open issue on the Hosts row, not "none"', async ({ p
   await expect(hosts).toContainText('1 of 3 hosts is not online', { timeout: 20_000 });
   await expect(hosts).toContainText('Critical');
   await expect(hosts).not.toContainText('none open');
-  await expect(hosts).toContainText('1 of 3 not online');
-  await expect(hosts).toContainText('all hosts');
+  await expect(tile(page, 'Hosts')).toContainText('1 of 3 not online');
+  await expect(tile(page, 'Hosts')).toContainText('all hosts');
 });
 
 test('an issue first seen today says new; one the board cannot place goes under Other', async ({ page }) => {
@@ -48,15 +51,15 @@ test('a real zero is shown as 0, with the scope it was counted over', async ({ p
   await installBaselineWorld(page);
   await page.route('**/api/csp/dns-qps*', (route) => json(route, { count: 2, rows: [{ hour: '2026-01-01T10:00:00.000', avg_value: 3 }, { hour: '2026-01-01T11:00:00.000', avg_value: 0 }] }));
   await page.goto('/#overview');
-  await expect(row(page, 'DNS')).toContainText('0.0 queries/s', { timeout: 20_000 });
-  await expect(row(page, 'DNS')).toContainText('hourly average, last hour');
+  await expect(tile(page, 'DNS')).toContainText('0.0 queries/s', { timeout: 20_000 });
+  await expect(tile(page, 'DNS')).toContainText('hourly average, last hour');
 });
 
 test('a dead inventory feed says unavailable and not checked, never a number or "none"', async ({ page }) => {
   await installBaselineWorld(page);
   await page.route('**/api/data*', down);
   await page.goto('/#overview');
-  for (const name of ['IPAM', 'Hosts', 'DHCP']) await expect(row(page, name)).toContainText('unavailable', { timeout: 20_000 });
+  for (const name of ['IPAM', 'Hosts', 'DHCP']) await expect(tile(page, name)).toContainText('unavailable', { timeout: 20_000 });
   await expect(row(page, 'Hosts')).toContainText('not checked: feed unavailable');
   await expect(row(page, 'Hosts')).not.toContainText('none open');
   await expect(page.locator('[data-coverage]')).toContainText('Inventory feed unavailable');
@@ -92,7 +95,6 @@ test('a clear Security row over a truncated sample says it is only clear for tha
 // The tiles above the board (owner's pick, 2026-11-10) say one word per
 // service. "Healthy" is only said when every feed that could have reported a
 // problem answered; a dead one is "Not checked", and no day is drawn green.
-const tile = (page: Page, name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
 
 test('with the incidents and health feeds dead, no tile or row says Healthy and no day is green', async ({ page }) => {
   await installBaselineWorld(page);
@@ -128,5 +130,5 @@ test("a service whose own check says healthy still shows Act when a critical iss
   await page.route('**/api/hub/health*', (route) => json(route, [{ name: 'Security', status: 'ok', statusLabel: 'healthy', meta: '' }]));
   await page.goto('/#overview');
   await expect(row(page, 'Security')).toContainText('3 critical or high security events', { timeout: 20_000 });
-  await expect(row(page, 'Security').locator('.ov-chip')).toHaveText('Act');
+  await expect(tile(page, 'Security').locator('.ov-verdict')).toHaveText('Act');
 });
