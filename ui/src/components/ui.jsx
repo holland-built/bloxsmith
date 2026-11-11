@@ -528,8 +528,9 @@ export function CardGrid({ className = '', layoutKey, children }) {
 
   // ---- can this grid be rearranged at all? ----
   //
-  // WHY THIS EXISTS. Reordering needs somewhere to reorder TO. #editor renders
-  // exactly one panel (editor-object-form) and always will, and on that tab the
+  // WHY THIS EXISTS. Reordering needs somewhere to reorder TO. A grid showing
+  // one panel (#editor, until it became a form on 2026-11-11; now any grid
+  // with all but one panel hidden) left the
   // ⠿ handle had nowhere to drag to, move mode's arrow keys moved nothing, and
   // the generated help sentence below still told the operator "You can move
   // this panel" — a claim the tab could not honour. Resize and hide are not
@@ -544,8 +545,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
   // which carries no id and is not something anyone can move.
   //
   // Recomputed whenever the children or the layout change, because the count is
-  // not static: #drift shows one panel until a drift check runs and two
-  // afterwards, and hiding one of two panels takes a grid back down to one.
+  // not static: hiding one of two panels takes a grid down to one.
   const reorderable = useMemo(() => {
     if (!layoutKey) return false
     const hidden = new Set(layout?.hidden ?? [])
@@ -1156,8 +1156,8 @@ export function CardGrid({ className = '', layoutKey, children }) {
 // themselves, so the window gains one paragraph rather than stacking two.
 //
 // TWO PARTS, BECAUSE THEY ARE NOT TRUE OF THE SAME PAGES. Moving needs another
-// panel to move past; resizing, auto-save and hiding do not. #editor renders
-// one panel and always will, so on that tab the move sentence was describing a
+// panel to move past; resizing, auto-save and hiding do not. On a grid showing
+// one panel (#editor did, until 2026-11-11) the move sentence was describing a
 // gesture the operator could not perform — and the Move button it names is not
 // rendered there either. The gate is `items.length > 1`, which is the same
 // count CardGrid's `reorderable` uses (arrangeItems is the order minus the
@@ -2904,6 +2904,10 @@ export function PageHelp({ anchor }) {
 
 const PA_BTN = 'px-3.5 py-1.5 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 
+// `part` splits it across a two-column form page (FormColumns): 'start' is the
+// Preview button and the stale warning, under the inputs; 'outcome' is Apply,
+// the messages and the preview, beside them, so Apply sits under what it
+// applies. Render both with the same props. 'all' keeps them together.
 export function PreviewApply({
   status = 'idle', // 'idle' | 'busy' | 'previewed' | 'applied'
   stale = false,
@@ -2918,44 +2922,46 @@ export function PreviewApply({
   destructive = false,
   error,
   message,
+  part = 'all',
   children,
 }) {
   const busy = status === 'busy'
   const showApply = status === 'previewed' && !stale && !busy
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onPreview}
-          disabled={busy || disabled}
-          className={PA_BTN}
-          style={{ background: COLORS.accent, color: COLORS.onAccent }}
-        >
-          {busy ? busyLabel : previewLabel}
-        </button>
-        {showApply && (
-          <button
-            type="button"
-            onClick={onApply}
-            disabled={applyDisabled}
-            className={PA_BTN}
-            style={{ background: destructive ? COLORS.crit : COLORS.ok, color: destructive ? COLORS.onCrit : COLORS.onOk }}
-          >
-            {applyLabel}
-          </button>
-        )}
-        {showApply && applyDisabled && applyNote && (
-          <span className="text-note" style={{ color: COLORS.warn }}>{applyNote}</span>
-        )}
-        {status === 'previewed' && stale && (
-          <span className="text-note" style={{ color: COLORS.warn }}>
-            inputs changed — preview again
-          </span>
-        )}
-      </div>
-
+  const previewBtn = (
+    <button
+      type="button"
+      onClick={onPreview}
+      disabled={busy || disabled}
+      className={PA_BTN}
+      style={{ background: COLORS.accent, color: COLORS.onAccent }}
+    >
+      {busy ? busyLabel : previewLabel}
+    </button>
+  )
+  const applyBits = showApply && (
+    <>
+      <button
+        type="button"
+        onClick={onApply}
+        disabled={applyDisabled}
+        className={PA_BTN}
+        style={{ background: destructive ? COLORS.crit : COLORS.ok, color: destructive ? COLORS.onCrit : COLORS.onOk }}
+      >
+        {applyLabel}
+      </button>
+      {applyDisabled && applyNote && (
+        <span className="text-note" style={{ color: COLORS.warn }}>{applyNote}</span>
+      )}
+    </>
+  )
+  const staleNote = status === 'previewed' && stale && (
+    <span className="text-note" style={{ color: COLORS.warn }}>
+      inputs changed — preview again
+    </span>
+  )
+  const outcome = (
+    <>
       {error && (
         <div
           role="alert"
@@ -2980,6 +2986,28 @@ export function PreviewApply({
       {/* Dimmed when stale: the body below still shows the OLD payload, and it
           must not read as describing the current inputs. */}
       <div className={stale ? 'opacity-40' : undefined}>{children}</div>
+    </>
+  )
+
+  if (part === 'start') {
+    return <div className="flex items-center gap-2">{previewBtn}{staleNote}</div>
+  }
+  if (part === 'outcome') {
+    return (
+      <div className="flex flex-col gap-3">
+        {outcome}
+        {applyBits && <div className="flex items-center gap-2">{applyBits}</div>}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        {previewBtn}
+        {applyBits}
+        {staleNote}
+      </div>
+      {outcome}
     </div>
   )
 }

@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses — /api/templates
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
 // collapse into the same empty list a tenant that owns nothing produces.
-import { PageRail } from '../components/kit.jsx'
+import { ColumnHeading, FormColumns } from '../components/kit.jsx'
 import FilterSelect from '../components/FilterSelect.jsx'
-import { Card, CardGrid, COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
+import { COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
@@ -75,147 +75,145 @@ export default function Drift() {
     setOpenCats((s) => { const n = new Set(s); if (n.has(cat)) n.delete(cat); else n.add(cat); return n })
   }
 
+  // Inputs on the left, the answer on the right (owner, 2026-11-11): the
+  // result appears beside the button that asked for it. Below lg they stack.
+  const form = (
+    <section aria-labelledby="drift-form-h" data-drift-form="">
+      <ColumnHeading id="drift-form-h">Check drift</ColumnHeading>
+      <div className="flex flex-col gap-3">
+        <div role="group" aria-label="Template" className="text-note text-muted flex flex-col gap-1">
+          Template
+          {templatesApi.loading ? (
+            <Skeleton h={38} />
+          ) : (
+            <FilterSelect
+              label="Template"
+              value={template}
+              onChange={setTemplate}
+              options={templates.map((t) => ({ value: t.name, label: `${t.name} — ${t.region || ''}/${t.environment || ''}` }))}
+              placeholder="Select a template"
+            />
+          )}
+        </div>
+        <div role="group" aria-label="IP space (override)" className="text-note text-muted flex flex-col gap-1">
+          IP space (override)
+          <FilterSelect
+            label="IP space (override)"
+            value={ipSpace}
+            onChange={setIpSpace}
+            options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
+            placeholder="— template default —"
+          />
+        </div>
+        <div>
+          <FetchError error={templatesApi.error} stale={templates.length > 0} />
+          <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+          {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
+          {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+        </div>
+        <button
+          disabled={checking || !template}
+          onClick={check}
+          className="px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
+          style={{ background: COLORS.accent, color: COLORS.onAccent }}
+        >
+          {checking ? 'Checking…' : 'Check drift'}
+        </button>
+      </div>
+    </section>
+  )
+
+  const findings = result && (
+    result.found === false ? (
+        <Empty>site not found for this template</Empty>
+      ) : (
+        <>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className="font-mono text-note">{result.site || template}</span>
+            <span
+              className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium"
+              style={
+                result.drifted
+                  ? { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }
+                  : { background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
+              }
+            >
+              {result.drifted ? `✕ ${result.drifts?.length || 0} items` : '✓ in-sync'}
+            </span>
+            {result.subnet_count != null && (
+              <span className="text-note text-muted">{result.subnet_count} subnets</span>
+            )}
+          </div>
+          {result.summary && (
+            <div className="text-note text-dim mb-3">
+              {typeof result.summary === 'string'
+                ? result.summary
+                : `${result.summary.total ?? 0} total · ${result.summary.errors ?? 0} error${result.summary.errors === 1 ? '' : 's'} · ${result.summary.warnings ?? 0} warning${result.summary.warnings === 1 ? '' : 's'}`}
+            </div>
+          )}
+          {sortedCats.length === 0 ? (
+            <Empty>no drift items</Empty>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {sortedCats.map(([cat, items]) => {
+                const open = openCats.has(cat)
+                const shown = open ? items : items.slice(0, 6)
+                return (
+                  <div key={cat}>
+                    <div className="text-note font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
+                    <div className="flex flex-col gap-1.5">
+                      {shown.map((d, i) => {
+                        const st = PILL[driftItemKind(d)]
+                        return (
+                          <div key={i} className="flex items-start gap-2 text-copy">
+                            <span
+                              className="inline-block rounded-full px-2 py-0.5 text-note font-medium shrink-0 mt-0.5"
+                              style={{ background: st.bg, color: st.fg }}
+                            >
+                              {st.label}
+                            </span>
+                            <span className="text-muted">{d.message}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {items.length > 6 && (
+                      <button
+                        onClick={() => toggleCat(cat)}
+                        className="text-note text-dim mt-1.5 underline underline-offset-2"
+                      >
+                        {open ? 'show less' : `+${items.length - 6} more`}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )
+  )
+
+  const resultCol = (
+    <section aria-labelledby="drift-result-h" data-drift-result="">
+      <ColumnHeading id="drift-result-h">Result</ColumnHeading>
+      {err ? (
+        <div role="alert" className="text-copy" style={{ color: COLORS.crit }}>{err}</div>
+      ) : checking ? (
+        <p role="status" className="text-copy text-muted">Checking…</p>
+      ) : result ? (
+        <div role="status">{findings}</div>
+      ) : (
+        <p className="text-copy text-muted">Pick a template and press Check drift. What Infoblox has that the template lacks, what it lacks, and what it holds differently are listed here.</p>
+      )}
+    </section>
+  )
+
   return (
-    <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Drift</h1>
       <TabIntro>Lists the gaps between a site template and what is in Infoblox, without changing anything.</TabIntro>
-
-      {/* The 720px cap that used to live on a plain <div> around these two cards
-          is now on the cards themselves. A div wrapping a Card hides that Card's
-          panelId from CardGrid (it reads props.panelId off its DIRECT children),
-          and a grid item with max-width + auto side margins centres in its track
-          exactly the way the wrapper centred inside the page. */}
-      <CardGrid layoutKey="drift">
-        <Card
-          panelId="drift-check"
-          span={6}
-          className="max-w-[720px]"
-          title="Check drift"
-          note="compare a site template against live Infoblox state"
-        >
-          <div className="flex flex-col gap-3">
-            <div role="group" aria-label="Template" className="text-note text-muted flex flex-col gap-1">
-              Template
-              {templatesApi.loading ? (
-                <Skeleton h={38} />
-              ) : (
-                <FilterSelect
-                  label="Template"
-                  value={template}
-                  onChange={setTemplate}
-                  options={templates.map((t) => ({ value: t.name, label: `${t.name} — ${t.region || ''}/${t.environment || ''}` }))}
-                  placeholder="Select a template"
-                />
-              )}
-            </div>
-            <div role="group" aria-label="IP space (override)" className="text-note text-muted flex flex-col gap-1">
-              IP space (override)
-              <FilterSelect
-                label="IP space (override)"
-                value={ipSpace}
-                onChange={setIpSpace}
-                options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
-                placeholder="— template default —"
-              />
-            </div>
-            <div>
-              <FetchError error={templatesApi.error} stale={templates.length > 0} />
-              <FetchError error={spacesApi.error} stale={spaces.length > 0} />
-              {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
-              {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
-            </div>
-            <button
-              disabled={checking || !template}
-              onClick={check}
-              className="px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
-              style={{ background: COLORS.accent, color: COLORS.onAccent }}
-            >
-              {checking ? 'Checking…' : 'Check drift'}
-            </button>
-          </div>
-        </Card>
-
-        {err && (
-          <Card key="drift-error" panelId="drift-error" span={6} className="max-w-[720px]" title="Error">
-            <div className="text-copy" style={{ color: COLORS.crit }}>{err}</div>
-          </Card>
-        )}
-
-        {result && (
-          <Card key="drift-result" panelId="drift-result" span={6} title="Result">
-            {result.found === false ? (
-              <Empty>site not found for this template</Empty>
-            ) : (
-              <>
-                <div className="flex items-center gap-3 mb-3 flex-wrap">
-                  <span className="font-mono text-note">{result.site || template}</span>
-                  <span
-                    className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium"
-                    style={
-                      result.drifted
-                        ? { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }
-                        : { background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
-                    }
-                  >
-                    {result.drifted ? `✕ ${result.drifts?.length || 0} items` : '✓ in-sync'}
-                  </span>
-                  {result.subnet_count != null && (
-                    <span className="text-note text-muted">{result.subnet_count} subnets</span>
-                  )}
-                </div>
-                {result.summary && (
-                  <div className="text-note text-dim mb-3">
-                    {typeof result.summary === 'string'
-                      ? result.summary
-                      : `${result.summary.total ?? 0} total · ${result.summary.errors ?? 0} error${result.summary.errors === 1 ? '' : 's'} · ${result.summary.warnings ?? 0} warning${result.summary.warnings === 1 ? '' : 's'}`}
-                  </div>
-                )}
-                {sortedCats.length === 0 ? (
-                  <Empty>no drift items</Empty>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {sortedCats.map(([cat, items]) => {
-                      const open = openCats.has(cat)
-                      const shown = open ? items : items.slice(0, 6)
-                      return (
-                        <div key={cat}>
-                          <div className="text-note font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
-                          <div className="flex flex-col gap-1.5">
-                            {shown.map((d, i) => {
-                              const st = PILL[driftItemKind(d)]
-                              return (
-                                <div key={i} className="flex items-start gap-2 text-copy">
-                                  <span
-                                    className="inline-block rounded-full px-2 py-0.5 text-note font-medium shrink-0 mt-0.5"
-                                    style={{ background: st.bg, color: st.fg }}
-                                  >
-                                    {st.label}
-                                  </span>
-                                  <span className="text-muted">{d.message}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                          {items.length > 6 && (
-                            <button
-                              onClick={() => toggleCat(cat)}
-                              className="text-note text-dim mt-1.5 underline underline-offset-2"
-                            >
-                              {open ? 'show less' : `+${items.length - 6} more`}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-        )}
-      </CardGrid>
+      <FormColumns form={form} result={resultCol} />
     </div>
-    </PageRail>
   )
 }

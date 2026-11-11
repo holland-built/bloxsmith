@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openTask } from './page-fixtures';
 import type { Page, Route } from '@playwright/test';
 
 // Covers ManageRecordsPanel + ManageAddressesPanel in ui/src/tabs/SelfService.jsx.
@@ -30,12 +31,12 @@ async function stubIpamPickers(page: Page) {
 }
 
 async function selectZone(page: Page) {
-  const card = page.locator('h2', { hasText: 'Manage Records' }).locator('xpath=ancestor::div[contains(@class,"bg-card")]');
+  const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
 }
 
 async function selectSpaceAndSubnet(page: Page) {
-  const card = page.locator('h2', { hasText: 'Manage Addresses' }).locator('xpath=ancestor::div[contains(@class,"bg-card")]');
+  const card = await openTask(page, 'addresses');
   await card.locator('select').first().selectOption(SPACE.id);
   await card.locator('select').nth(1).selectOption(SUBNET.id);
 }
@@ -279,7 +280,7 @@ test.describe('ManageAddressesPanel', () => {
     await page.goto('/#selfservice');
     await selectSpaceAndSubnet(page);
 
-    const card = page.locator('h2', { hasText: 'Manage Addresses' }).locator('xpath=ancestor::div[contains(@class,"bg-card")]');
+    const card = await openTask(page, 'addresses');
     const row = card.locator('.rounded-control.border.border-border.p-2').filter({ hasText: addr.address });
 
     await row.getByRole('button', { name: 'Release' }).click();

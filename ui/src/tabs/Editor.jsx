@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
-import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
@@ -355,8 +355,7 @@ export default function Editor() {
   const previewBody = preview ? (preview.would_create || preview.would_update || preview) : null
 
   return (
-    <PageRail>
-    <div className="max-w-[820px] p-5">
+    <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
       <TabIntro>Make, change or delete one DNS or DHCP item at a time.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply and Delete are off." />
@@ -378,8 +377,11 @@ export default function Editor() {
         ))}
       </div>
 
-      <CardGrid layoutKey="editor">
-        <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
+      {/* Inputs on the left, the preview and the button that applies it on the
+          right (owner, 2026-11-11). Below lg they stack, form first. */}
+      {spec ? <FormColumns form={
+        <section aria-labelledby="editor-form-h" data-editor-form="">
+        <ColumnHeading id="editor-form-h">{`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}</ColumnHeading>
         <div data-form-cols="" className="flex flex-col gap-3">
           {EDIT_DELETE_TYPES.includes(type) && (
             <FindExisting
@@ -427,6 +429,7 @@ export default function Editor() {
           ))}
 
           <PreviewApply
+            part="start"
             status={status}
             stale={stale}
             onPreview={() => send(true)}
@@ -434,9 +437,7 @@ export default function Editor() {
             applyLabel={isUpdate ? 'Update' : 'Create'}
             error={result && !result.ok ? result.msg : null}
             message={result && result.ok ? result.msg : null}
-          >
-            <PreviewBox data={previewBody} note={`preview — nothing has been ${isUpdate ? 'changed' : 'created'} yet`} />
-          </PreviewApply>
+          />
 
           {canDelete && (
             <div className="flex pt-1 border-t border-border">
@@ -453,11 +454,26 @@ export default function Editor() {
             </div>
           )}
         </div>
-        </Card>
-      </CardGrid>
-
-      {!spec && <Empty>unknown type</Empty>}
+        </section>
+      } result={
+        <section aria-labelledby="editor-result-h" data-editor-result="">
+          <ColumnHeading id="editor-result-h">Preview</ColumnHeading>
+          <PreviewApply
+            part="outcome"
+            status={status}
+            stale={stale}
+            onPreview={() => send(true)}
+            onApply={() => send(false)}
+            applyLabel={isUpdate ? 'Update' : 'Create'}
+            error={result && !result.ok ? result.msg : null}
+            message={result && result.ok ? result.msg : null}
+          >
+            {previewBody
+              ? <PreviewBox data={previewBody} note={`preview — nothing has been ${isUpdate ? 'changed' : 'created'} yet`} />
+              : !result && <p className="text-copy text-muted">Press Preview to see what would be sent. Nothing changes in Infoblox until you press {isUpdate ? 'Update' : 'Create'}.</p>}
+          </PreviewApply>
+        </section>
+      } /> : <Empty>unknown type</Empty>}
     </div>
-    </PageRail>
   )
 }

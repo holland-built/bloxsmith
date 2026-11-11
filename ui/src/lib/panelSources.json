@@ -675,78 +675,6 @@
     "why": "it is a list, not a chart"
   },
   {
-    "id": "selfservice-allocate",
-    "page": "Get an address",
-    "name": "Get an address",
-    "kind": "rest",
-    "source": "the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "selfservice-create-record",
-    "page": "Get an address",
-    "name": "Create DNS Record",
-    "kind": "rest",
-    "source": "the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "selfservice-manage-records",
-    "page": "Get an address",
-    "name": "Manage Records",
-    "kind": "rest",
-    "source": "the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "selfservice-manage-addresses",
-    "page": "Get an address",
-    "name": "Manage Addresses",
-    "kind": "rest",
-    "source": "the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "editor-object-form",
-    "page": "Editor",
-    "name": "Create or edit an object",
-    "kind": "rest",
-    "source": "the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "drift-check",
-    "page": "Drift",
-    "name": "Check drift",
-    "kind": "rest",
-    "source": "your templates and the Infoblox API",
-    "builder": "no",
-    "why": "it is a form, not a chart"
-  },
-  {
-    "id": "drift-error",
-    "page": "Drift",
-    "name": "Error",
-    "kind": "rest",
-    "source": "your templates and the Infoblox API",
-    "builder": "no",
-    "why": "it reports what a change did, not a chart"
-  },
-  {
-    "id": "drift-result",
-    "page": "Drift",
-    "name": "Result",
-    "kind": "rest",
-    "source": "your templates and the Infoblox API",
-    "builder": "no",
-    "why": "it compares your templates with what is there, worked out in the app"
-  },
-  {
     "id": "bp-checks",
     "page": "Best practices",
     "name": "Checks",
@@ -808,32 +736,5 @@
     "source": "Infoblox's threat intelligence",
     "builder": "no",
     "why": "it looks up one name at a time, not a chart"
-  },
-  {
-    "id": "chart-picks",
-    "page": "Build a chart",
-    "name": "Choose",
-    "kind": "local",
-    "source": "your picks",
-    "builder": "no",
-    "why": "it is Build a chart's own menu"
-  },
-  {
-    "id": "chart-result",
-    "page": "Build a chart",
-    "name": "Your chart",
-    "kind": "cube",
-    "source": "Infoblox's activity records, as your picks ask",
-    "builder": "no",
-    "why": "it is Build a chart itself"
-  },
-  {
-    "id": "chart-how",
-    "page": "Build a chart",
-    "name": "How this chart was made",
-    "kind": "cube",
-    "source": "Infoblox's activity records, as your picks ask",
-    "builder": "no",
-    "why": "it is Build a chart itself"
   }
 ]

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { installBaselineWorld } from './page-fixtures';
+import { installBaselineWorld, openTask } from './page-fixtures';
 
 // Manage Records and Manage Addresses used to show the first 200 rows with no
 // way to reach the rest. Now each has a search box and Show 200 more, and
@@ -27,7 +27,7 @@ test('a record past the first 200 can be shown, re-checked and deleted', async (
     return r.fulfill({ json: { records: rows, total: 300, limit: 200 } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-manage-records"]');
+  const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
   await expect(card.getByText('showing 200 of 300')).toBeVisible();
   await card.getByRole('button', { name: 'Show 200 more' }).click();
@@ -51,7 +51,7 @@ test('the record search asks the server, after typing stops', async ({ page }) =
     return r.fulfill({ json: { records: q ? [rec(7)] : [rec(1)] } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-manage-records"]');
+  const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
   await card.getByRole('searchbox', { name: 'Find a record' }).pressSequentially('host7');
   await expect(card.getByText('host7', { exact: true })).toBeVisible();
@@ -66,7 +66,7 @@ test('an address is found by its full IP', async ({ page }) => {
     return r.fulfill({ json: { addresses: q ? [{ id: 'a9', address: '10.9.200.9', name: 'printer', state: 'used' }] : [], truncated: !q, limit: 200 } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-manage-addresses"]');
+  const card = await openTask(page, 'addresses');
   await card.locator('select').first().selectOption('sp1');
   await card.locator('select').nth(1).selectOption('sub1');
   await card.getByRole('searchbox', { name: 'Find an address' }).fill('10.9.200.9');

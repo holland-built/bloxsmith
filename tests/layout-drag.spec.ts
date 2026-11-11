@@ -708,9 +708,9 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   audit: 3,
   changes: 2,
   provision: 2,
-  selfservice: 4,
-  editor: 1,
-  drift: 1,
+  // selfservice, editor and drift left this table on 2026-11-11, when those
+  // pages became two-column forms with no panels. The one-panel shape they
+  // used to prove is now made below by hiding one of #changes' two panels.
   ai: 2,
 };
 
@@ -792,14 +792,35 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
   }
 
   // The rule above is only worth having if the suite actually contains both
-  // shapes. Asserted rather than assumed: if every tab in TAB_PANEL_COUNTS
-  // grew past one panel, `panels >= 2 ? panels : 0` would be an untested branch
-  // dressed up as a check.
+  // shapes. No page shows exactly one panel any more, so make one: hide one of
+  // #changes' two panels. That is the case `reorderable` exists for — no move
+  // handle, but the strip stays, because it is the only way back.
   const counts = Object.values(TAB_PANEL_COUNTS);
-  expect(counts.filter((n) => n === 1).length, 'no one-panel tab left, so the handle rule proves nothing')
-    .toBeGreaterThan(0);
   expect(counts.filter((n) => n >= 2).length, 'no multi-panel tab left, so the handle rule proves nothing')
     .toBeGreaterThan(0);
+
+  await page.request.delete('/api/views/__layout_changes');
+  try {
+    await page.goto('/#changes');
+    await page.waitForFunction(() => document.querySelectorAll('[data-panel-id]').length === 2, null, { timeout: 20_000 });
+    await page.getByRole('button', { name: 'Options: Worth a look' }).click({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Take off the page Worth a look' }).click({ timeout: 10_000 });
+    await page.waitForFunction(() => document.querySelectorAll('[data-panel-id]').length === 1, null, { timeout: 10_000 });
+    await page.waitForTimeout(400);
+    const one = await page.evaluate(() => ({
+      panels: document.querySelectorAll('[data-panel-id]').length,
+      handles: document.querySelectorAll('[data-layout-handle]').length,
+      hotspots: document.querySelectorAll('[data-layout-resize]').length,
+      hides: document.querySelectorAll('[data-layout-hide]').length,
+      strips: document.querySelectorAll('[data-testid="hidden-tiles"]').length,
+      arrange: document.querySelectorAll('[data-layout-arrange]').length,
+    }));
+    expect(one, '#changes with one panel hidden').toEqual({
+      panels: 1, handles: 0, hotspots: 1, hides: 1, strips: 1, arrange: 1,
+    });
+  } finally {
+    await page.request.delete('/api/views/__layout_changes');
+  }
 });
 
 // ---------------------------------------------------------------------------

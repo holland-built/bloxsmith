@@ -284,9 +284,6 @@ const AUDIT = 'ui/src/tabs/Audit.jsx'
 const CHART_STACKED = 'ui/src/charts/StackedDayBars.jsx'
 const CHANGES_TAB = 'ui/src/tabs/Changes.jsx'
 const PROVISION = 'ui/src/tabs/Provision.jsx'
-const SELFSERVICE = 'ui/src/tabs/SelfService.jsx'
-const DRIFT = 'ui/src/tabs/Drift.jsx'
-const EDITOR = 'ui/src/tabs/Editor.jsx'
 const CHANGES_LIB = 'ui/src/lib/changes.js'
 const GO_DATA = 'go/internal/server/data.go'
 const GO_PROVISION = 'go/internal/server/provision.go'
@@ -415,12 +412,6 @@ const CLAIMS = [
     file: SECURITY,
     proofs: [{ re: /function summarizeArr\(arr, n = 6\)/, expect: 'the per-group sample defaults to 6' }],
   },
-  {
-    panel: 'drift-result',
-    says: /Six per group are shown, worst group first/,
-    file: DRIFT,
-    proofs: [{ re: /const shown = open \? items : items\.slice\(0, 6\)/, expect: 'a collapsed group shows 6 items' }],
-  },
 
   {
     panel: 'daily-top-capacity-risks',
@@ -432,12 +423,6 @@ const CLAIMS = [
         expect: 'prefixes longer than /28 (fewer than 16 addresses) are filtered out',
       },
     ],
-  },
-  {
-    panel: 'selfservice-manage-records',
-    says: /200 entries at most/,
-    file: SELFSERVICE,
-    proofs: [{ re: /\/api\/dns\/records\?zone=\$\{encodeURIComponent\(zoneId\)\}&_limit=200/, expect: 'the records request asks for _limit=200' }],
   },
   {
     panel: 'changes-changed-objects',
@@ -829,17 +814,6 @@ const CLAIMS = [
     proofs: [{ re: /color: COLORS\.warn \}\}>Preview — nothing was deleted\./, expect: 'the preview line is COLORS.warn (amber)' }],
   },
   {
-    panel: 'drift-result',
-    says: /A red count is how many differences were found, green means none/,
-    file: DRIFT,
-    proofs: [
-      {
-        re: /result\.drifted[\s\S]{0,80}?'var\(--pill-crit-bg\)'[\s\S]{0,80}?'var\(--pill-ok-bg\)'/,
-        expect: 'a drifted result gets the crit pill (red), an in-sync one the ok pill (green)',
-      },
-    ],
-  },
-  {
     panel: 'incidents-severity',
     says: /across the four seriousness levels/,
     file: INCIDENTS,
@@ -1094,33 +1068,6 @@ const CLAIMS = [
     says: /Red lines are objects it could not delete\./,
     file: PROVISION,
     proofs: [LOG_ERROR_RED_PROOF],
-  },
-  {
-    panel: 'selfservice-manage-records',
-    says: /Delete takes two clicks\./,
-    file: SELFSERVICE,
-    proofs: [
-      { re: /function handleDeleteClick\(row\) \{\n\s*if \(armedId !== row\.id\) \{/, expect: 'the first click on an unarmed row does not delete' },
-      { re: /setArmLabel\(`Click again to delete \$\{fresh\.type\}/, expect: 'it arms the row and asks for a second click instead' },
-    ],
-  },
-  {
-    panel: 'selfservice-manage-addresses',
-    says: /It takes two clicks to confirm and then happens immediately — there is no preview and no undo\./,
-    file: SELFSERVICE,
-    proofs: [
-      { re: /function handleRelease\(row\) \{\n\s*if \(armedId !== row\.id\) \{/, expect: 'the first click on an unarmed row does not release the address' },
-      { re: /setArmLabel\(`Click again to release \$\{fresh\.address\}/, expect: 'it arms the row and asks for a second click instead' },
-    ],
-  },
-  {
-    panel: 'editor-object-form',
-    says: /Delete takes two clicks and is final\./,
-    file: EDITOR,
-    proofs: [
-      { re: /if \(!delArmed\) \{\n\s*setDelArmed\(true\)/, expect: 'the first click only arms the delete' },
-      { re: /\{delArmed \? 'Click again to permanently delete' :/, expect: 'the armed button asks for the second click' },
-    ],
   },
 ]
 

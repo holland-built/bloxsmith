@@ -183,3 +183,24 @@ export function ReadOnlyNote({ ro, what }) {
     </p>
   )
 }
+
+// A form page: the inputs on the left, what they produce on the right, so the
+// result appears beside the button that made it instead of under a wall of
+// panels. Anything wide, such as a history list, goes below both. Below lg the
+// two stack, form first.
+export function FormColumns({ form, result, below, cols = 'lg:grid-cols-[minmax(0,480px)_minmax(0,1fr)]' }) {
+  return (
+    <>
+      <div className={`grid grid-cols-1 ${cols} gap-6 items-start`}>
+        <div className="min-w-0">{form}</div>
+        <div className="min-w-0" data-result-column="">{result}</div>
+      </div>
+      {below && <div className="mt-8">{below}</div>}
+    </>
+  )
+}
+
+// The heading over each column of a form page.
+export function ColumnHeading({ id, children }) {
+  return <h2 id={id} className="text-copy font-semibold mb-3">{children}</h2>
+}

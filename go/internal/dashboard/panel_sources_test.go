@@ -52,8 +52,8 @@ func TestPanelSources_FactsHoldTogether(t *testing.T) {
 			t.Errorf("%s: a | would break the docs table", p.ID)
 		}
 	}
-	if len(seen) != 90 {
-		t.Errorf("%d panels, want 90: the 85 in panel-inventory.md (Overview dropped 5 on 2026-11-09, Infra merged 2 away on 2026-11-10), the 4 on Demo server, the 2 on Automate and the 1 on Best practices", len(seen))
+	if len(seen) != 79 {
+		t.Errorf("%d panels, want 79: the 85 in panel-inventory.md (Overview dropped 5 on 2026-11-09, Infra merged 2 away on 2026-11-10, and Get an address, Editor, Drift and Build a chart dropped their 11 on 2026-11-11 for plain two-column forms), the 4 on Demo server, the 2 on Automate and the 1 on Best practices", len(seen))
 	}
 }
 

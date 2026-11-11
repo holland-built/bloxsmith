@@ -73,9 +73,9 @@ You can rearrange every tab, and each tab remembers its own layout. Moving a pan
 - **Arrange panels**: a button above the panels opens a window called "Arrange this page". It lists what is on the page, in the order you see it, and lists separately anything you took off. Drag a row up or down, or use its **Move up** and **Move down** buttons. **Take off the page** and **Put back on the page** hide a panel and bring it back. A panel you put back goes to the *end* of the page, not where it was before, and the window says so. The window also explains all of this in words, for anyone who hasn't used a ⠿ grip before.
 - **Saving**: there is no Save button. Every move, resize and hide is saved as soon as you let go, the page tells you it saved, and the layout is still there on your next visit and after a server restart.
 
-Two tabs have fewer controls on purpose. **Editor** has one panel and always will. **Drift** has one until you run a check, and a second one appears with the result. A single panel has nowhere to move, so those tabs show no ⠿ handle and no **Arrange panels** button until a second panel appears. A control that can't do anything would only mislead. Resize and ✕ still work on a single panel, and if you take that panel off the page, the **Arrange panels** button appears so you can bring it straight back.
+Four tabs are forms, not panels: **Get an address**, **Editor**, **Drift** and **Build a chart**. They have no ⠿, ✕, ⓘ or **Arrange panels**. What you fill in is on the left, and what it produces (a preview, a result or a chart) is on the right, beside the button that made it. On a narrow screen the two stack, form first.
 
-On wide screens, Provision, Get an address, Editor and Drift also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Seed demo.
+On wide screens, Provision and Demo server also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Seed demo.
 
 You can't add or delete panels. Each tab has a fixed set that comes with the app, and **Take off the page** only hides one. If a panel is missing and you didn't hide it, the service behind it wasn't found on this tenant. The tab says so, in a row that offers to show the panel anyway.
 
@@ -315,7 +315,7 @@ Progress for each template adds up as `done/total`, and each failure is listed. 
 
 ## Get an address
 
-**Writes to Infoblox.** Two short forms for everyday requests, so people don't need the full Editor, and two panels for changing what already exists. The forms use the [Preview and Apply flow](#the-write-flow). Manage Records and Manage Addresses have a simpler edit and delete flow, described below.
+**Writes to Infoblox.** Pick one of four jobs with the buttons at the top: two short forms for everyday requests, so people don't need the full Editor, and two lists for changing what already exists. Each form shows its preview to the right of the fields, with the button that applies it under the preview. Switching jobs keeps what you typed, and a link such as `#selfservice?task=record` opens one job directly. The forms use the [Preview and Apply flow](#the-write-flow). Changing or deleting records and giving back addresses have a simpler flow, described below.
 
 ### Get an address
 
@@ -326,7 +326,7 @@ Take the next free address, or several, from a subnet.
 3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
 4. **Preview** shows which addresses it would take, in a sentence. **Allocate** takes them and names the address you got.
 
-### Create DNS Record
+### Create a DNS record
 
 Add a record to a zone you already have.
 
@@ -337,7 +337,7 @@ Add a record to a zone you already have.
 
 The preview shows the record the way the *server* read it, which is often not how you typed it. For example, an SRV value of `10 5 5060 sip.example.com` comes back split into priority, weight, port and target. It is worth a look.
 
-### Manage Records
+### Change or delete records
 
 Edit or delete a record that is already in a zone.
 
@@ -345,11 +345,11 @@ Choose **Forward zones** or **Reverse zones**, then pick a **zone** (the search 
 
 **Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record as it is right now. If the record can't be re-checked, or someone else already removed it, the button doesn't arm and says why. If you don't click again within four seconds, it goes back to normal.
 
-### Manage Addresses
+### Give back an address
 
 Give an address back so it can be used again.
 
-Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its full IP address or by a word in its comment, or press **Show 200 more**. **Release** works like Delete in Manage Records. One click shows "Click again to release `<address>`", the second click releases it, and after four seconds it goes back to normal.
+Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its full IP address or by a word in its comment, or press **Show 200 more**. **Release** works like Delete when changing records. One click shows "Click again to release `<address>`", the second click releases it, and after four seconds it goes back to normal.
 
 ## Editor
 
@@ -530,14 +530,6 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
 | Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
 | Automate | Your recent changes | the app's own run records | No | it is a list, not a chart |
-| Get an address | Get an address | the Infoblox API | No | it is a form, not a chart |
-| Get an address | Create DNS Record | the Infoblox API | No | it is a form, not a chart |
-| Get an address | Manage Records | the Infoblox API | No | it is a form, not a chart |
-| Get an address | Manage Addresses | the Infoblox API | No | it is a form, not a chart |
-| Editor | Create or edit an object | the Infoblox API | No | it is a form, not a chart |
-| Drift | Check drift | your templates and the Infoblox API | No | it is a form, not a chart |
-| Drift | Error | your templates and the Infoblox API | No | it reports what a change did, not a chart |
-| Drift | Result | your templates and the Infoblox API | No | it compares your templates with what is there, worked out in the app |
 | Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
 | Demo server | Settings | the app's own vault | No | it is a form, not a chart |
 | Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |
@@ -545,9 +537,6 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Demo server | Runs | the app's own run records | No | it is a list, not a chart |
 | AI | Ask AI | the AI model, reading the Infoblox API | No | the AI writes the answer, and Build a chart uses no AI |
 | AI | Threat lookup | Infoblox's threat intelligence | No | it looks up one name at a time, not a chart |
-| Build a chart | Choose | your picks | No | it is Build a chart's own menu |
-| Build a chart | Your chart | Infoblox's activity records, as your picks ask | No | it is Build a chart itself |
-| Build a chart | How this chart was made | Infoblox's activity records, as your picks ask | No | it is Build a chart itself |
 <!-- panel-sources:end -->
 
 ---

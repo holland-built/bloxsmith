@@ -37,7 +37,7 @@ test.beforeEach(async ({ page, request }) => {
 });
 test.afterEach(async ({ request }) => clean(request));
 
-const heading = (page: Page) => page.locator('[data-panel-id="chart-result"] h2');
+const heading = (page: Page) => page.locator('[data-chart-result] h2');
 const saved = (page: Page) => page.locator('[data-panel-id^="saved-"]');
 
 async function openAbout(page: Page, name: string) {

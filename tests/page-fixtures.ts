@@ -686,9 +686,14 @@ const PER_PAGE: Record<string, Handler[]> = {
 // Shell endpoints a given page legitimately does not call. Without this, the
 // "required fixture never requested" check would fail every dossier run.
 // Measured by probe: #dossier issues no /api/views request because it has no
-// panel grid to arrange.
+// panel grid to arrange. The same holds for the four two-column form pages
+// since 2026-11-11.
 const SHELL_EXEMPT: Record<string, string[]> = {
   dossier: ['GET /api/views'],
+  selfservice: ['GET /api/views'],
+  editor: ['GET /api/views'],
+  drift: ['GET /api/views'],
+  chart: ['GET /api/views'],
 };
 
 export const HAS_FIXTURES = Object.keys(PER_PAGE);
@@ -811,4 +816,13 @@ export async function installFixtures(page: Page, pageId: string): Promise<Fixtu
             .filter((h) => h.required && !hit.has(`${h.method} ${h.path}`) && !exempt.has(`${h.method} ${h.path}`))
             .map((h) => `${h.method} ${h.path}`),
   };
+}
+
+// Get an address shows one of four jobs at a time (2026-11-11); the others stay
+// mounted but hidden. This presses the job's button and returns its section,
+// which holds both the form and what it produced.
+const TASK_LABEL = { address: 'Get an address', record: 'Create a DNS record', records: 'Change or delete records', addresses: 'Give back an address' } as const;
+export async function openTask(page: Page, task: keyof typeof TASK_LABEL) {
+  await page.getByRole('group', { name: 'Task' }).getByRole('button', { name: TASK_LABEL[task], exact: true }).click();
+  return page.locator(`[data-task="${task}"]`);
 }

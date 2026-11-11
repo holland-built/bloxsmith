@@ -357,41 +357,6 @@ export const PANEL_HELP = {
     what: 'Everything built on this page, newest first, with what became of each item.',
     look: 'Remove lists what is still there first. Delete these then deletes exactly those items, and nothing Bloxsmith did not make here. If something cannot be deleted, Remove again retries only that.',
   },
-  'selfservice-allocate': {
-    what: 'Takes free addresses out of a subnet you choose and reserves them, optionally under a name you give.',
-    look: 'Preview only asks the server to check the request — nothing is taken. Allocate then commits it immediately; nobody approves it. Changing a field cancels the preview.',
-  },
-  'selfservice-create-record': {
-    what: 'Adds a new entry to a DNS zone you already have, pointing a name at an address or another name.',
-    look: 'Preview checks the details and creates nothing. Create commits straight away, with no approval step. Edit anything afterwards and you have to preview again.',
-  },
-  'selfservice-manage-records': {
-    what: 'Everything a zone you pick currently points at, 200 entries at most; a line above the list says when there are more than that.',
-    look: 'Update needs a preview first, and stops rather than overwriting if the entry moved since you looked. Delete takes two clicks. Some types are shown but cannot be edited.',
-  },
-  'selfservice-manage-addresses': {
-    what: 'The addresses handed out in one subnet, with what state each is in and who it belongs to.',
-    look: 'Release hands an address back to the free pool. It takes two clicks to confirm and then happens immediately — there is no preview and no undo.',
-  },
-
-  // ---- Editor ----
-  'editor-object-form': {
-    what: 'A form that creates one DNS, address, DHCP or host object, or changes an existing one once you paste its ID into the first box.',
-    look: 'Preview shows exactly what would be sent and saves nothing; only Create or Update writes it. Changing any field withdraws the preview. Delete takes two clicks and is final.',
-  },
-
-  // ---- Drift ----
-  'drift-check': {
-    what: 'Picks which site template a real site is measured against. The list holds every site template this system knows of.',
-    look: 'IP space is optional: left alone, the template decides. The button stays greyed out until a template is chosen. Running it only reads, it changes nothing.',
-  },
-  'drift-error': {
-    what: 'Shows only when the comparison could not run, with whatever the server said went wrong. Nothing was compared, so this is not a verdict that the site is fine.',
-  },
-  'drift-result': {
-    what: 'Where the site differs from the template: each line is either missing, changed to something else, or there but not asked for.',
-    look: 'A red count is how many differences were found, green means none. Six per group are shown, worst group first; "+N more" opens the rest.',
-  },
 
   // ---- Best practices ----
   'bp-checks': {
@@ -425,19 +390,6 @@ export const PANEL_HELP = {
   'ai-threat-lookup': {
     what: 'Type one domain, IP address or host name and see what is known about it on the threat feeds.',
     look: 'A link under the result opens the full dossier — the same name seen through your assets, DNS, IPAM and recent changes. Blocking needs a dashboard token.',
-  },
-
-  // ---- ChartBuilder ----
-  'chart-picks': {
-    what: 'The menus that decide the chart. Only choices that work together are listed, so every combination draws something.',
-  },
-  'chart-result': {
-    what: 'The chart for your choices, drawn from the numbers Infoblox sent back. No AI writes or changes them.',
-    look: 'When Infoblox does not answer, the panel says so. That is kept apart from "no activity", which means it answered with nothing to count.',
-  },
-  'chart-how': {
-    what: 'The query the app sent, word for word, and the first rows that came back, so each number on the chart can be checked.',
-    look: 'With cube names off, a plain-words copy of the query sits beside the real one.',
   },
 }
 

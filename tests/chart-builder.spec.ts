@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const heading = (page: import('@playwright/test').Page) =>
-  page.locator('[data-panel-id="chart-result"] h2, [data-panel-id="chart-result"] h3').first();
+  page.locator('[data-chart-result] h2, [data-chart-result] h3').first();
 
 test('the sentence follows the picks', async ({ page }) => {
   await page.goto('/#chart');
@@ -91,7 +91,7 @@ test('round two adds things to count and split by, each hidden where it does not
 
 test('how the chart was made is short labelled lines, the query folded away', async ({ page }) => {
   await page.goto('/#chart');
-  const how = page.locator('[data-panel-id="chart-how"]');
+  const how = page.locator('[data-chart-how]');
   await expect(how.locator('dt')).toHaveText(['Counted', 'Split by', 'When', 'Showing']);
   await expect(how.locator('dd')).toHaveText(['DNS queries', 'Device', 'Last 7 days', 'Top 10, highest first']);
   await expect(page.getByText('The question, in plain words')).toHaveCount(0);
@@ -122,7 +122,7 @@ test('the switch swaps the labels for cube names and is kept on reload', async (
   const sw = page.getByRole('switch', { name: 'Show cube names' });
   await expect(sw).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DNS queries');
-  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('Device');
+  await expect(page.locator('[data-chart-how] th').first()).toHaveText('Device');
 
   await sw.click();
   await expect(sw).toHaveAttribute('aria-checked', 'true');
@@ -130,7 +130,7 @@ test('the switch swaps the labels for cube names and is kept on reload', async (
   await expect(heading(page)).toHaveText(
     'DnsActivityV1.total_query_count by DnsActivityV1.device_name, DnsActivityV1.device_ip, last 7 days, limit 10',
   );
-  await expect(page.locator('[data-panel-id="chart-how"] th').first()).toHaveText('DnsActivityV1.device_name');
+  await expect(page.locator('[data-chart-how] th').first()).toHaveText('DnsActivityV1.device_name');
   await expect(page.getByText('The question, in plain words')).toHaveCount(0);
 
   await page.reload();
