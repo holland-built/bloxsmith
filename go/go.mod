@@ -16,7 +16,11 @@ module bloxsmith
 // Raised from 1.26.9 to 1.26.10 on 2026-10-21 for the same reason: govulncheck
 // found GO-2026-6809 (crypto/x509), reachable through http.Server.Serve, "Fixed in
 // crypto/x509@go1.26.10".
-go 1.26.10
+//
+// Raised from 1.26.10 to 1.26.11 on 2026-11-11 for the same reason: govulncheck
+// found GO-2026-6859 (net/http), reachable through the server's response
+// writers, "Fixed in net/http@go1.26.11".
+go 1.26.11
 
 require (
 	github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611
