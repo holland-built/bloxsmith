@@ -42,13 +42,13 @@ test('with no page named, the app opens on Overview: the service board, with the
   await expect(hosts).toContainText('1 of 2 hosts is not online');
   await expect(hosts.getByRole('link', { name: 'Ask the AI: Which hosts are not online?' })).toHaveAttribute('href', '#ai?q=Which%20hosts%20are%20not%20online%3F');
   await expect(ipam).toContainText('Critical');
-  await expect(ipam).toContainText('1,746 subnets are filling up');
+  await expect(ipam).toContainText('1,746 subnets are 70% full or more');
   await expect(ipam).toContainText('3 are 90% full or more');
   await expect(dns).toContainText('Warning');
   await expect(dns).toContainText('64 zones have DNS timing problems');
   await expect(board).not.toContainText('×');
   // The sentence is the link; there is no column of buttons.
-  await expect(ipam.getByRole('link', { name: '1,746 subnets are filling up' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
+  await expect(ipam.getByRole('link', { name: '1,746 subnets are 70% full or more' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
   await expect(board.locator('a.bg-accent')).toHaveCount(0);
 });
 

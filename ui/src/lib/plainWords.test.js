@@ -23,7 +23,7 @@ test('server sentences lose their engineering words', () => {
   assert.equal(plainMessage('1 dns ttl anomaly'), '1 zone has a DNS timing problem')
   assert.equal(plainMessage('Windows Wireless at 80% utilization'), 'Windows Wireless is 80% full')
   assert.equal(plainMessage('602 of 602 DNS zones unsigned (DNSSEC)'), '602 of 602 DNS zones not signed (DNSSEC)')
-  assert.equal(plainMessage('2 subnet utilization'), '2 subnets are filling up')
+  assert.equal(plainMessage('2 subnet utilization'), '2 subnets are 70% full or more')
   assert.equal(plainMessage(undefined), '')
 })
 

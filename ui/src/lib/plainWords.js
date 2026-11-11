@@ -48,7 +48,10 @@ export function plainMessage(text) {
   let s = String(text ?? '')
   for (const [k, v] of Object.entries(ISSUE)) s = s.split(k).join(v)
   s = s.replace(/^(\d+) dns ttl anomaly$/, (_, n) => `${n} ${n === '1' ? 'zone has a' : 'zones have'} DNS timing ${n === '1' ? 'problem' : 'problems'}`)
-  s = s.replace(/^(\d+) subnet utilization$/, (_, n) => `${n} ${n === '1' ? 'subnet is' : 'subnets are'} filling up`)
+  // The cutoff is said, not implied: beside "947 subnets ≥90%" on Overview,
+  // "1,739 filling up" read as a contradiction (owner, 2026-11-11). The server
+  // raises this at 70% (BuildSignals in go/internal/dashboard/signals.go).
+  s = s.replace(/^(\d+) subnet utilization$/, (_, n) => `${n} ${n === '1' ? 'subnet is' : 'subnets are'} 70% full or more`)
   s = s.replace(/^(\d+) dhcp expired lease$/, (_, n) => `${n} expired address ${n === '1' ? 'lease' : 'leases'}`)
   s = s.replace(/^(\d+) dnssec unsigned$/, (_, n) => `${n} DNS ${n === '1' ? 'zone' : 'zones'} not signed`)
   s = s.replace(/ at (\d+)% utilization$/, ' is $1% full')
