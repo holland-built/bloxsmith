@@ -75,6 +75,11 @@ test.describe('Overview → service board (/api/data empty)', () => {
         meta: { subnets: 'empty', hosts: 'empty', leases: 'empty' },
       })),
     );
+    // A healthy health feed, so the only "unavailable" a tile could show is the
+    // inventory's own: the tile's tip also carries the health check's note.
+    await page.route('**/api/hub/health*', (route) =>
+      fulfillJson(route, ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'ok', statusLabel: 'healthy', meta: '', availability: 'ok' }))),
+    );
     await page.goto('/#overview');
     const row = (name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
     // The counts are on the tiles; the board rows hold the open issues.
@@ -83,9 +88,7 @@ test.describe('Overview → service board (/api/data empty)', () => {
     await expect(tile('IPAM')).toContainText('0 of 0 subnets ≥90%');
     await expect(tile('Hosts')).toContainText('0 of 0 not online');
     await expect(row('Hosts')).toContainText('none open');
-    // The verdict, not the whole tile: the tile's tip also carries the health
-    // check's own note, which this test does not fake.
-    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name).locator('.ov-verdict')).not.toHaveText('Unavailable');
+    for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });
 });
