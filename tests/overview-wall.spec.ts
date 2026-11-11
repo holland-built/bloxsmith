@@ -11,8 +11,9 @@ import { dataPayload, installBaselineWorld } from './page-fixtures';
 const fulfillJson = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 const row = (page: Page, name: string) => page.locator(`[data-board] [data-board-row="${name}"]`);
-// Cells after the row header: measure, issues, last 10 days, state.
-const measure = (page: Page, name: string) => row(page, name).locator('td').nth(0);
+// The measure and its scope are on the service's tile, not its board row
+// (owner, 2026-11-10: the page said everything twice).
+const measure = (page: Page, name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
 
 test('a row that counts something bad names it as an issue, with its severity and how much', async ({ page }) => {
   await installBaselineWorld(page);
@@ -55,8 +56,8 @@ test('a zero counted over part of the hosts says so, and a missing whole-network
 test('each service row shows its state from the health feed, and a partial service list says so', async ({ page }) => {
   await installBaselineWorld(page);
   await page.goto('/#overview');
-  await expect(row(page, 'DHCP')).toContainText('degraded', { timeout: 20_000 });
-  await expect(row(page, 'DHCP')).toContainText('1 stopped · 1/2 up');
+  await expect(measure(page, 'DHCP').locator('.ov-verdict')).toHaveText('Look', { timeout: 20_000 });
+  await expect(measure(page, 'DHCP')).toContainText('1 stopped · 1/2 up');
   await expect(page.locator('[data-coverage]')).toContainText('services: partial list (500-row limit)');
   // An incident no service claims is still shown, and leads to Incidents.
   await expect(row(page, 'Other')).toContainText('subnets close to full');

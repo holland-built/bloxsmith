@@ -52,9 +52,9 @@ test('one page load makes one /api/data request, not two', async ({ page }) => {
   // in the header and mounts with the shell; Overview mounts with the tab, and
   // it is the later of the two, so waiting for a panel that depends on the
   // payload waits for both.
-  // The board's Hosts measure reads "N of M not online" only once /api/data has
+  // The Hosts tile's measure reads "N of M not online" only once /api/data has
   // answered (it says "Loading…" before and "unavailable" on failure).
-  await expect(page.locator('[data-board-row="Hosts"]')).toContainText(/\d+ of \d+ not online/, { timeout: 20_000 });
+  await expect(page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^Hosts / })).toContainText(/\d+ of \d+ not online/, { timeout: 20_000 });
   // A moment past the render, so a second request issued just after the first
   // one resolved is still caught rather than missed by measuring too early.
   await page.waitForTimeout(1000);

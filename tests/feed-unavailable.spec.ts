@@ -31,6 +31,8 @@ function dataPayload(overrides: { hosts?: unknown[]; subnets?: unknown[]; auditL
 
 test.describe('Overview → Hosts row of the service board (hosts feed)', () => {
   const hostsRow = (page: import('@playwright/test').Page) => page.locator('[data-board] [data-board-row="Hosts"]');
+  // The count itself is on the Hosts tile above the board.
+  const hostsTile = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^Hosts / });
 
   test('hosts feed error says unavailable and not checked, never "none open" or a zero', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
@@ -39,7 +41,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(row).toContainText('not checked: feed unavailable', { timeout: 20_000 });
-    await expect(row.locator('td').nth(0)).toContainText('unavailable');
+    await expect(hostsTile(page)).toContainText('unavailable');
     await expect(row).not.toContainText('none open');
     await expect(row).not.toContainText('0 of 0');
   });
@@ -50,7 +52,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     );
     await page.goto('/#overview');
     const row = hostsRow(page);
-    await expect(row.locator('td').nth(0)).toContainText('0 of 0 not online', { timeout: 20_000 });
+    await expect(hostsTile(page)).toContainText('0 of 0 not online', { timeout: 20_000 });
     await expect(row).toContainText('none');
     await expect(row).not.toContainText('unavailable');
   });
@@ -65,7 +67,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(row).toContainText('1 of 2 hosts is not online', { timeout: 20_000 });
-    await expect(row.locator('td').nth(0)).toContainText('1 of 2 not online');
+    await expect(hostsTile(page)).toContainText('1 of 2 not online');
     await expect(row).not.toContainText('unavailable');
   });
 });

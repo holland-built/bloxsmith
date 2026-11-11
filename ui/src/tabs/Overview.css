@@ -60,22 +60,14 @@
 .ov-ticks i.on.none { background: var(--ov-muted) }
 .ov-ticks-none { background: repeating-linear-gradient(90deg, var(--ov-line) 0 2px, transparent 2px 4px) }
 
-.ov-chart { position: relative; padding: 6px 18px 12px }
-.ov-chart svg { display: block; width: 100%; height: 200px }
-.ov-hits { position: absolute; inset: 6px 18px 30px; display: flex }
-.ov-hit { flex: 1; display: block; height: 100% }
-.ov-hit:hover, .ov-hit:focus-visible { background: linear-gradient(var(--ov-line2), var(--ov-line2)) center / 1px 100% no-repeat }
-.ov-axis { display: flex; justify-content: space-between; color: var(--ov-muted); font-size: 11.5px; margin-top: 6px }
 
 /* the board: one row per service */
 .ov-board-box { padding-bottom: 4px }
 .ov-board { width: 100%; border-collapse: collapse }
 .ov-board th, .ov-board td { text-align: left; padding: 12px 18px; border-top: 1px solid var(--ov-line); font-weight: 400; vertical-align: middle }
 .ov-board tbody th { font-weight: 600; white-space: nowrap; width: 90px }
-.ov-board td:nth-of-type(1) { width: 210px; white-space: nowrap }
+.ov-board td:nth-of-type(2) { width: 190px }
 .ov-board .ov-mid { min-width: 0 }
-.ov-board .ov-r { text-align: right; white-space: nowrap; width: 110px }
-.ov-row-num { font-size: 22px }
 .ov-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px }
 .ov-issue { display: inline-flex; align-items: center; gap: 8px; max-width: 100% }
 .ov-flag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ov-line2); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; max-width: 100% }
