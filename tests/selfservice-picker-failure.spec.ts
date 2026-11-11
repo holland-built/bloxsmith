@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openTask } from './page-fixtures';
 
 // SelfService.jsx's Allocate / DNS / Manage panels each fetch a picker list
 // (/api/ipam/spaces, /api/dns/zones) via useApi(). A failed read leaves
@@ -10,7 +11,6 @@ import { test, expect } from './fixtures';
 // wired into these pickers too. These specs stub each picker endpoint failing,
 // then genuinely empty, and assert the wording differs.
 
-const CARD_XPATH = 'xpath=ancestor::div[contains(@class,"bg-card")]';
 
 test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)', () => {
   test('a failed /api/ipam/spaces read shows a fetch-error, not "no IP spaces"', async ({ page }) => {
@@ -19,11 +19,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     await page.goto('/#selfservice');
 
-    const allocateCard = page.locator('h2', { hasText: 'Get an address' }).locator(CARD_XPATH);
+    const allocateCard = await openTask(page, 'address');
     await expect(allocateCard.getByText(/could not load current data/i)).toBeVisible();
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
 
-    const manageAddressesCard = page.locator('h2', { hasText: 'Manage Addresses' }).locator(CARD_XPATH);
+    const manageAddressesCard = await openTask(page, 'addresses');
     await expect(manageAddressesCard.getByText(/could not load current data/i)).toBeVisible();
     await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
   });
@@ -34,11 +34,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     await page.goto('/#selfservice');
 
-    const allocateCard = page.locator('h2', { hasText: 'Get an address' }).locator(CARD_XPATH);
+    const allocateCard = await openTask(page, 'address');
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toBeVisible();
     await expect(allocateCard.getByText(/could not load current data/i)).toHaveCount(0);
 
-    const manageAddressesCard = page.locator('h2', { hasText: 'Manage Addresses' }).locator(CARD_XPATH);
+    const manageAddressesCard = await openTask(page, 'addresses');
     await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toBeVisible();
     await expect(manageAddressesCard.getByText(/could not load current data/i)).toHaveCount(0);
   });
@@ -51,11 +51,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (DNS zones)'
 
     await page.goto('/#selfservice');
 
-    const dnsCard = page.locator('h2', { hasText: 'Create DNS Record' }).locator(CARD_XPATH);
+    const dnsCard = await openTask(page, 'record');
     await expect(dnsCard.getByText(/could not load current data/i)).toBeVisible();
     await expect(dnsCard.getByText('no DNS zones', { exact: true })).toHaveCount(0);
 
-    const manageRecordsCard = page.locator('h2', { hasText: 'Manage Records' }).locator(CARD_XPATH);
+    const manageRecordsCard = await openTask(page, 'records');
     await expect(manageRecordsCard.getByText(/could not load current data/i)).toBeVisible();
     await expect(manageRecordsCard.getByText('no DNS zones', { exact: true })).toHaveCount(0);
   });
@@ -66,11 +66,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (DNS zones)'
 
     await page.goto('/#selfservice');
 
-    const dnsCard = page.locator('h2', { hasText: 'Create DNS Record' }).locator(CARD_XPATH);
+    const dnsCard = await openTask(page, 'record');
     await expect(dnsCard.getByText('no DNS zones', { exact: true })).toBeVisible();
     await expect(dnsCard.getByText(/could not load current data/i)).toHaveCount(0);
 
-    const manageRecordsCard = page.locator('h2', { hasText: 'Manage Records' }).locator(CARD_XPATH);
+    const manageRecordsCard = await openTask(page, 'records');
     await expect(manageRecordsCard.getByText('no DNS zones', { exact: true })).toBeVisible();
     await expect(manageRecordsCard.getByText(/could not load current data/i)).toHaveCount(0);
   });

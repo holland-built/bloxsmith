@@ -12,12 +12,13 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { PageRail, ReadOnlyNote } from '../components/kit.jsx'
-import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
 import { tokenFetch } from '../lib/authFetch.js'
+import { setHashParams, useHashParams } from '../lib/hash.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -151,7 +152,7 @@ function allocateSentence(preview, subnet, name, dnsName, ptr) {
   return `This will take ${list}${where}${called}.${dns}`
 }
 
-function AllocatePanel({ panelId }) {
+function AllocatePanel() {
   const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const spaceOpts = useSpaceOptions()
   const [space, setSpace] = useState('')
@@ -223,8 +224,23 @@ function AllocatePanel({ panelId }) {
     ...(dnsName ? { dns: { zone_id: zoneId, name: name.trim(), type: String(targetSubnet?.address || '').includes(':') ? 'AAAA' : 'A', create_ptr: ptr } } : {}),
   })
 
+  // One set of props for both halves of the Preview/Apply flow, so the button
+  // under the inputs and the Allocate beside the preview never disagree.
+  const applyProps = {
+    status: flow.status,
+    stale: flow.stale,
+    disabled: !target || dnsIncomplete,
+    onPreview: () => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') },
+    onApply: () => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) }),
+    applyLabel: 'Allocate',
+    error: flow.error,
+    message: flow.message,
+  }
+
   return (
-    <Card panelId={panelId} span={3} title="Get an address" note="pick space → block → subnet">
+    <FormColumns form={
+    <section aria-labelledby="ss-allocate-h">
+      <ColumnHeading id="ss-allocate-h">Get an address</ColumnHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="IP Space" group>
           <FilterSelect
@@ -303,34 +319,33 @@ function AllocatePanel({ panelId }) {
         )}
       </div>
 
-      <PreviewApply
-        status={flow.status}
-        stale={flow.stale}
-        disabled={!target || dnsIncomplete}
-        onPreview={() => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') }}
-        onApply={() => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) })}
-        applyLabel="Allocate"
-        error={flow.error}
-        message={flow.message}
-      >
-        <PreviewBox
-          data={flow.preview}
-          note="preview — no address has been taken yet"
-          summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
-        />
-      </PreviewApply>
+      <PreviewApply {...applyProps} part="start" />
 
       <FetchError error={spacesApi.error} stale={spaces.length > 0} />
       <FetchError error={blocksApi.error} stale={blocks.length > 0} />
       <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
       {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
-    </Card>
+    </section>
+    } result={
+    <section aria-labelledby="ss-allocate-result-h" data-result-of="allocate">
+      <ColumnHeading id="ss-allocate-result-h">Preview</ColumnHeading>
+      <PreviewApply {...applyProps} part="outcome">
+        {flow.preview ? (
+          <PreviewBox
+            data={flow.preview}
+            note="preview — no address has been taken yet"
+            summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
+          />
+        ) : !flow.message && <p className="text-copy text-muted">Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</p>}
+      </PreviewApply>
+    </section>
+    } />
   )
 }
 
 // ---------- dns ----------
 
-function DnsPanel({ panelId }) {
+function DnsPanel() {
   const zonesApi = useApi('/api/dns/zones', SHARE_PICKER)
   const [zoneId, setZoneId] = useState('')
   const [name, setName] = useState('')
@@ -362,8 +377,21 @@ function DnsPanel({ panelId }) {
       (flow.previewReply?.duplicate_check === 'unavailable' ? " It could not check whether this record already exists." : ' No identical record exists.')
     : null
 
+  const applyProps = {
+    status: flow.status,
+    stale: flow.stale,
+    disabled: !zoneId || !value,
+    onPreview: () => flow.runPreview(body(), 'Create'),
+    onApply: () => flow.runApply(body(), () => `Done. ${owner} now points to ${value.trim()}${canPtr && ptr ? ', and its reverse record is made' : ''}.`),
+    applyLabel: 'Create',
+    error: flow.error,
+    message: flow.message,
+  }
+
   return (
-    <Card panelId={panelId} span={3} title="Create DNS Record" note="preview is validated by the server">
+    <FormColumns form={
+    <section aria-labelledby="ss-record-h">
+      <ColumnHeading id="ss-record-h">Create a DNS record</ColumnHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label={type === 'PTR' ? 'Zone (reverse zones)' : 'Zone'} group>
           <FilterSelect
@@ -409,22 +437,21 @@ function DnsPanel({ panelId }) {
         </label>
       )}
 
-      <PreviewApply
-        status={flow.status}
-        stale={flow.stale}
-        disabled={!zoneId || !value}
-        onPreview={() => flow.runPreview(body(), 'Create')}
-        onApply={() => flow.runApply(body(), () => `Done. ${owner} now points to ${value.trim()}${canPtr && ptr ? ', and its reverse record is made' : ''}.`)}
-        applyLabel="Create"
-        error={flow.error}
-        message={flow.message}
-      >
-        <PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />
-      </PreviewApply>
+      <PreviewApply {...applyProps} part="start" />
 
       <FetchError error={zonesApi.error} stale={zones.length > 0} />
       {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
-    </Card>
+    </section>
+    } result={
+    <section aria-labelledby="ss-record-result-h" data-result-of="record">
+      <ColumnHeading id="ss-record-result-h">Preview</ColumnHeading>
+      <PreviewApply {...applyProps} part="outcome">
+        {flow.preview
+          ? <PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />
+          : !flow.message && <p className="text-copy text-muted">Fill in the record and press Preview. Infoblox checks it first, and nothing is created until you press Create.</p>}
+      </PreviewApply>
+    </section>
+    } />
   )
 }
 
@@ -508,7 +535,7 @@ function useSearchTerm() {
   return { text, setText, term }
 }
 
-function ManageRecordsPanel({ panelId, span }) {
+function ManageRecordsPanel() {
   const zonesApi = useApi('/api/dns/zones', SHARE_PICKER)
   const [zoneId, setZoneId] = useState('')
   const [reverse, setReverse] = useState(false)
@@ -707,13 +734,15 @@ function ManageRecordsPanel({ panelId, span }) {
   const note = truncNote(paged.extra.data ?? recordsApi.data, records)
 
   return (
-    <Card panelId={panelId} span={span} title="Manage Records" note="edit or delete existing DNS records">
+    <FormColumns form={
+    <section aria-labelledby="ss-records-h">
+      <ColumnHeading id="ss-records-h">Change or delete DNS records</ColumnHeading>
       <div className="mb-3">
         <fieldset className="flex gap-4 mb-2 text-copy">
           <legend className="sr-only">Which zones to list</legend>
           {[[false, 'Forward zones'], [true, 'Reverse zones']].map(([rev, text]) => (
             <label key={text} className="flex items-center gap-2">
-              <input type="radio" name={`${panelId}-zone-kind`} checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }} />
+              <input type="radio" name="ss-records-zone-kind" checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }} />
               {text}
             </label>
           ))}
@@ -731,12 +760,7 @@ function ManageRecordsPanel({ panelId, span }) {
 
       <FetchError error={zonesApi.error} stale={zones.length > 0} />
       {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
-
       {zoneId && (
-        <>
-          <FetchError error={recordsApi.error} stale={records.length > 0} />
-          {deleteError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
-          {!deleteError && panelMessage && <div className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
           <input
             {...MACHINE_TEXT}
             type="search"
@@ -746,6 +770,17 @@ function ManageRecordsPanel({ panelId, span }) {
             value={search.text}
             onChange={(e) => search.setText(e.target.value)}
           />
+      )}
+    </section>
+    } result={
+    <section aria-labelledby="ss-records-result-h" data-result-of="records">
+      <ColumnHeading id="ss-records-result-h">Records</ColumnHeading>
+      {!zoneId && <p className="text-copy text-muted">Pick a zone to list its records. Each one can be changed or deleted here.</p>}
+      {zoneId && (
+        <>
+          <FetchError error={recordsApi.error} stale={records.length > 0} />
+          {deleteError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
+          {!deleteError && panelMessage && <div className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
           {note && <div className="text-note text-dim mb-2">{note}</div>}
           {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>{search.term ? 'no records match that search' : 'no records in this zone'}</Empty>}
           {records.length > 0 && (
@@ -820,13 +855,14 @@ function ManageRecordsPanel({ panelId, span }) {
           <ShowMore list={list} />
         </>
       )}
-    </Card>
+    </section>
+    } />
   )
 }
 
 // ---------- manage addresses ----------
 
-function ManageAddressesPanel({ panelId }) {
+function ManageAddressesPanel() {
   const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const [space, setSpace] = useState('')
   const subnetsApi = useApi(space ? `/api/ipam/subnets?space=${encodeURIComponent(space)}` : null)
@@ -888,7 +924,9 @@ function ManageAddressesPanel({ panelId }) {
   const note = truncNote(paged.extra.data ?? addressesApi.data, addresses)
 
   return (
-    <Card panelId={panelId} span={3} title="Manage Addresses" note="release an allocated address">
+    <FormColumns form={
+    <section aria-labelledby="ss-addresses-h">
+      <ColumnHeading id="ss-addresses-h">Give back an address</ColumnHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="IP Space" group>
           <FilterSelect
@@ -914,11 +952,7 @@ function ManageAddressesPanel({ panelId }) {
       <FetchError error={spacesApi.error} stale={spaces.length > 0} />
       <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
       {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
-
       {subnetId && (
-        <>
-          <FetchError error={addressesApi.error} stale={addresses.length > 0} />
-          {releaseError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
           <input
             {...MACHINE_TEXT}
             type="search"
@@ -928,6 +962,16 @@ function ManageAddressesPanel({ panelId }) {
             value={search.text}
             onChange={(e) => search.setText(e.target.value)}
           />
+      )}
+    </section>
+    } result={
+    <section aria-labelledby="ss-addresses-result-h" data-result-of="addresses">
+      <ColumnHeading id="ss-addresses-result-h">Addresses</ColumnHeading>
+      {!subnetId && <p className="text-copy text-muted">Pick a space and a subnet to list the addresses in use. Release one to give it back.</p>}
+      {subnetId && (
+        <>
+          <FetchError error={addressesApi.error} stale={addresses.length > 0} />
+          {releaseError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
           {note && <div className="text-note text-dim mb-2">{note}</div>}
           {!addressesApi.loading && !addressesApi.error && addresses.length === 0 && <Empty>{search.term ? 'no addresses match that search' : 'no addresses in this subnet'}</Empty>}
           {addresses.length > 0 && (
@@ -960,45 +1004,53 @@ function ManageAddressesPanel({ panelId }) {
           <ShowMore list={list} />
         </>
       )}
-    </Card>
+    </section>
+    } />
   )
 }
 
 // ---------- main ----------
 
-// ManageAddressesPanel is live — the server filter field was fixed (parent, not subnet).
-const SHOW_MANAGE_ADDRESSES = true
+// The four jobs this page does, one at a time (owner, 2026-11-11). Each keeps
+// what was typed while another is open: all four stay mounted and the others
+// are hidden. #selfservice?task=record opens on one directly.
+const TASKS = [
+  { id: 'address', label: 'Get an address', el: AllocatePanel },
+  { id: 'record', label: 'Create a DNS record', el: DnsPanel },
+  { id: 'records', label: 'Change or delete records', el: ManageRecordsPanel },
+  { id: 'addresses', label: 'Give back an address', el: ManageAddressesPanel },
+]
 
 export default function SelfService() {
   const ro = useReadOnly()
+  const hp = useHashParams()
+  const task = TASKS.some((t) => t.id === hp.task) ? hp.task : 'address'
   return (
-    <PageRail>
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Get an address</h1>
       <TabIntro>Take the next free address from a subnet, or add a record to a DNS zone.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply is off." />
-      {/* The two flex rows these panels used to sit in are one CardGrid now, and
-          the div around each panel is gone rather than kept: a div wrapping a
-          Card hides that Card's panelId from the grid, which reads props.panelId
-          off its DIRECT children (lib/layout.js sortByOrder) and logs a console
-          error when it cannot see one. The panelId literal therefore sits on the
-          call site and each panel forwards it to its Card.
-
-          span={3} is what the flex widths already resolved to: two `flex-1`
-          items in a row are (W - gap) / 2 wide each, and three of six tracks is
-          3t + 2g = (W - g) / 2 — the same number, at xl, at md (SPAN_CLASS[3]
-          renders col-span-2 of 4) and stacked at the base 2-track grid. The one
-          place it differs is a viewport wide enough for the old
-          `max-w-[640px]` to bind (content wider than ~1292px, i.e. around 1340
-          and up): Allocate and Create DNS Record now grow with the row instead
-          of stopping at 640px and leaving the right of the page empty. */}
-      <CardGrid layoutKey="selfservice">
-        <AllocatePanel panelId="selfservice-allocate" />
-        <DnsPanel panelId="selfservice-create-record" />
-        <ManageRecordsPanel panelId="selfservice-manage-records" span={SHOW_MANAGE_ADDRESSES ? 3 : 6} />
-        {SHOW_MANAGE_ADDRESSES && <ManageAddressesPanel key="selfservice-manage-addresses" panelId="selfservice-manage-addresses" />}
-      </CardGrid>
+      <div role="group" aria-label="Task" className="flex flex-wrap gap-1.5 mb-5">
+        {TASKS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-pressed={task === t.id}
+            onClick={() => setHashParams('selfservice', { ...hp, task: t.id === 'address' ? undefined : t.id })}
+            className="px-2.5 py-1.5 rounded-control border text-copy"
+            style={task === t.id
+              ? { borderColor: COLORS.accent, background: 'var(--color-line-2)', color: 'var(--color-txt)' }
+              : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {TASKS.map(({ id, el: Task }) => (
+        <div key={id} data-task={id} hidden={task !== id}>
+          <Task />
+        </div>
+      ))}
     </div>
-    </PageRail>
   )
 }

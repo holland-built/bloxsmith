@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
+import { Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
+import { ColumnHeading, FormColumns } from '../components/kit.jsx'
 import ChartView from '../components/ChartView.jsx'
 import { AnyHow, AnyPickers, AnyResult } from './ChartAnyData.jsx'
 import { anySentence } from '../lib/chartAnyData.js'
@@ -199,11 +200,12 @@ function OpenInInfoblox({ opts, picks, rows, cube }) {
   )
 }
 
-function ResultPanel({ panelId, opts, picks, params, result, cube, any }) {
+function ResultPanel({ opts, picks, params, result, cube, any }) {
   const heading = any ? anySentence(opts, any.set, any.picks, cube) : sentence(opts, picks, cube)
   const status = result.data?.status
   return (
-    <Card panelId={panelId} panelName="Your chart" title={heading} span={4}>
+    <section aria-labelledby="chart-result-h" data-chart-result="">
+      <ColumnHeading id="chart-result-h">{heading}</ColumnHeading>
       {any ? <AnyResult any={any} cube={cube} /> : result.loading ? <Skeleton h={220} /> : result.error || status === 'error' ? (
         <FeedUnavailable label="This chart could not be drawn" reason={result.data?.reason} />
       ) : status === 'empty' ? (
@@ -227,7 +229,7 @@ function ResultPanel({ panelId, opts, picks, params, result, cube, any }) {
           <AddToPage key={JSON.stringify(picks)} picks={picks} defaultTitle={sentence(opts, picks, false)} />
         )
       )}
-    </Card>
+    </section>
   )
 }
 
@@ -428,12 +430,13 @@ function downloadCsv(table, name) {
   URL.revokeObjectURL(url)
 }
 
-function HowPanel({ panelId, opts, picks, result, cube, any }) {
+function HowPanel({ opts, picks, result, cube, any }) {
   const query = result.data?.query
   const rows = result.data?.rows ?? []
   const table = sampleTable(opts, rows.slice(0, 5), cube)
   return (
-    <Card panelId={panelId} title="How this chart was made" span={6}>
+    <section aria-labelledby="chart-how-h" data-chart-how="">
+      <ColumnHeading id="chart-how-h">How this chart was made</ColumnHeading>
       {any ? <AnyHow any={any} /> : !query ? (
         result.loading ? <Skeleton h={120} /> : <Empty>No query has run yet.</Empty>
       ) : (
@@ -489,7 +492,7 @@ function HowPanel({ panelId, opts, picks, result, cube, any }) {
           </details>
         </div>
       )}
-    </Card>
+    </section>
   )
 }
 
@@ -506,17 +509,23 @@ function Builder({ opts, params }) {
   const onPick = (level, value) => setPicks((p) => pickOne(opts, p, level, value))
   const onFilter = (change) => setPicks((p) => settlePicks(opts, { ...p, ...change }))
   return (
-    <CardGrid layoutKey="chart">
-      <Card panelId="chart-picks" title="Choose" span={2}>
-        {other ? (
-          <AnyPickers opts={opts} any={any} onBack={() => setOther(false)} cube={cube} />
-        ) : (
-          <Pickers opts={opts} picks={picks} onPick={onPick} onPicks={setPicks} onFilter={onFilter} onMore={() => setOther(true)} cube={cube} />
-        )}
-      </Card>
-      <ResultPanel panelId="chart-result" opts={opts} picks={picks} params={params} result={result} cube={cube} any={other && any} />
-      <HowPanel panelId="chart-how" opts={opts} picks={picks} result={result} cube={cube} any={other && any} />
-    </CardGrid>
+    // The picks on the left, the chart they make on the right, and how it was
+    // made below both (owner, 2026-11-11). Below lg they stack, picks first.
+    <FormColumns
+      cols="lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]"
+      form={
+        <section aria-labelledby="chart-picks-h" data-chart-picks="">
+          <ColumnHeading id="chart-picks-h">Choose</ColumnHeading>
+          {other ? (
+            <AnyPickers opts={opts} any={any} onBack={() => setOther(false)} cube={cube} />
+          ) : (
+            <Pickers opts={opts} picks={picks} onPick={onPick} onPicks={setPicks} onFilter={onFilter} onMore={() => setOther(true)} cube={cube} />
+          )}
+        </section>
+      }
+      result={<ResultPanel opts={opts} picks={picks} params={params} result={result} cube={cube} any={other && any} />}
+      below={<HowPanel opts={opts} picks={picks} result={result} cube={cube} any={other && any} />}
+    />
   )
 }
 

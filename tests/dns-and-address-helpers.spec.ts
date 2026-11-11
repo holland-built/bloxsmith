@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openTask } from './page-fixtures';
 
 // Three helpers taken from a colleague's Infoblox CSP tool (2026-11-09):
 // the DNS form refuses a record that already exists, both forms can make the
@@ -14,7 +15,7 @@ test('the DNS form says a record already exists, and offers no Create', async ({
     r.fulfill(json({ ok: false, duplicate: true, error: 'That A record already exists: host1 10.0.0.5. Nothing was created.' }, 409)),
   );
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Create DNS Record' }).first();
+  const panel = await openTask(page, 'record');
   await panel.getByRole('combobox', { name: 'Zone' }).selectOption('dns/auth_zone/z1');
   await panel.getByPlaceholder('host or @').fill('host1');
   await panel.getByPlaceholder('192.0.2.10').fill('10.0.0.5');
@@ -33,7 +34,7 @@ test('the DNS form offers the reverse record for A and AAAA only, and sends it',
     return r.fulfill(json({ ok: true, dry_run: true, record: { name_in_zone: 'host1', type: 'A' } }));
   });
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Create DNS Record' }).first();
+  const panel = await openTask(page, 'record');
   const ptr = panel.getByRole('checkbox', { name: 'Also create the reverse (PTR) record' });
   await expect(ptr).toBeVisible();
   await panel.getByRole('combobox', { name: 'Type' }).selectOption('CNAME');
@@ -67,7 +68,7 @@ test('Get an address can give the address its DNS name in the same step', async 
     return r.fulfill(json({ ok: true, dry_run: true, addresses: [{ address: '10.0.42.1' }], record: { dry_run: true } }));
   });
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Get an address' }).first();
+  const panel = await openTask(page, 'address');
   await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
   const dnsBox = panel.getByRole('checkbox', { name: 'Also give it a DNS name' });
 
@@ -104,7 +105,7 @@ const optionValues = (sel: import('@playwright/test').Locator) =>
 test('the DNS form lists forward zones, and only reverse zones for PTR', async ({ page }) => {
   await page.route('**/api/dns/zones*', (r) => r.fulfill(json(MIXED)));
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Create DNS Record' }).first();
+  const panel = await openTask(page, 'record');
   const zone = panel.getByRole('combobox', { name: 'Zone' });
   await expect.poll(() => optionValues(zone)).toEqual(['dns/auth_zone/f1', 'dns/auth_zone/f2']);
   await zone.selectOption('dns/auth_zone/f1');
@@ -120,7 +121,7 @@ test('the DNS form lists forward zones, and only reverse zones for PTR', async (
 test('Manage Records switches between forward and reverse zones, and searches them', async ({ page }) => {
   await page.route('**/api/dns/zones*', (r) => r.fulfill(json(MIXED)));
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Manage Records' }).first();
+  const panel = await openTask(page, 'records');
   const zone = panel.getByRole('combobox', { name: 'Zone' });
   await expect.poll(() => optionValues(zone)).toEqual(['dns/auth_zone/f1', 'dns/auth_zone/f2']);
   await panel.getByRole('radio', { name: 'Reverse zones' }).check();
@@ -132,10 +133,10 @@ test('the page is named for the menu button, and its lists can be searched', asy
   await page.route('**/api/dns/zones*', (r) => r.fulfill(json(MIXED)));
   await page.goto('/#selfservice');
   await expect(page.getByRole('heading', { level: 1, name: 'Get an address' })).toBeVisible();
-  const get = page.locator('[data-panel-id]').filter({ hasText: 'pick space' }).first();
+  const get = await openTask(page, 'address');
   await expect(get.getByRole('heading', { name: 'Get an address' })).toBeVisible();
   await expect(get.getByRole('searchbox', { name: 'Search Block' })).toBeAttached();
-  const manage = page.locator('[data-panel-id]').filter({ hasText: 'Manage Addresses' }).first();
+  const manage = await openTask(page, 'addresses');
   await expect(manage.getByRole('searchbox', { name: 'Search IP Space' })).toBeAttached();
   await expect(manage.getByRole('searchbox', { name: 'Search Subnet' })).toBeAttached();
 });

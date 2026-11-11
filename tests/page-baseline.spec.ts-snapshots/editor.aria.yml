@@ -1,9 +1,4 @@
 - main "Editor tab":
-  - navigation "On this page":
-    - paragraph: On this page
-    - list:
-      - listitem:
-        - button "DNS Zone — Create"
   - heading "Editor" [level=1]
   - paragraph: Make, change or delete one DNS or DHCP item at a time.
   - button "DNS Zone"
@@ -12,24 +7,26 @@
   - button "DHCP Range"
   - button "Host"
   - button "Tags"
-  - heading "DNS Zone — Create" [level=2]
-  - 'button "About: DNS Zone — Create"': "About: ⓘ"
-  - 'button "Options: DNS Zone — Create"'
-  - text: Change or delete an existing DNS zone
-  - searchbox "Change or delete an existing DNS zone"
-  - text: ID of an existing one (leave blank to make a new one)
-  - textbox "ID of an existing one (leave blank to make a new one)":
-    - /placeholder: existing object id — enables update/delete
-  - text: Zone name *
-  - textbox "Zone name *":
-    - /placeholder: zone.example.com.
-  - text: DNS view ID *
-  - textbox "DNS view ID *":
-    - /placeholder: view id
-  - text: Comment
-  - textbox "Comment":
-    - /placeholder: ""
-  - text: Tags (key=value, key2=value2)
-  - textbox "Tags (key=value, key2=value2)":
-    - /placeholder: env=prod,team=noc
-  - button "Preview"
+  - region "DNS Zone — Create":
+    - heading "DNS Zone — Create" [level=2]
+    - text: Change or delete an existing DNS zone
+    - searchbox "Change or delete an existing DNS zone"
+    - text: ID of an existing one (leave blank to make a new one)
+    - textbox "ID of an existing one (leave blank to make a new one)":
+      - /placeholder: existing object id — enables update/delete
+    - text: Zone name *
+    - textbox "Zone name *":
+      - /placeholder: zone.example.com.
+    - text: DNS view ID *
+    - textbox "DNS view ID *":
+      - /placeholder: view id
+    - text: Comment
+    - textbox "Comment":
+      - /placeholder: ""
+    - text: Tags (key=value, key2=value2)
+    - textbox "Tags (key=value, key2=value2)":
+      - /placeholder: env=prod,team=noc
+    - button "Preview"
+  - region "Preview":
+    - heading "Preview" [level=2]
+    - paragraph: Press Preview to see what would be sent. Nothing changes in Infoblox until you press Create.

@@ -1,107 +1,40 @@
 - main "Get an address tab":
-  - navigation "On this page":
-    - paragraph: On this page
-    - list:
-      - listitem:
-        - button "Get an address"
-      - listitem:
-        - button "Create DNS Record"
-      - listitem:
-        - button "Manage Records"
-      - listitem:
-        - button "Manage Addresses"
   - heading "Get an address" [level=1]
   - paragraph: Take the next free address from a subnet, or add a record to a DNS zone.
-  - button "Arrange panels"
-  - heading "Get an address" [level=2]
-  - text: pick space → block → subnet
-  - 'button "About: Get an address"': "About: ⓘ"
-  - 'button "Options: Get an address"'
-  - group "IP Space":
-    - text: ""
-    - searchbox "Search IP Space"
-    - status
-    - combobox "IP Space":
-      - option "Select space…" [selected]
-      - option /Baseline Space \(\d+ of \d+ addresses free\)/
-  - group "Block":
-    - text: ""
-    - searchbox "Search Block" [disabled]
-    - status
-    - combobox "Block" [disabled]:
-      - option "Any block" [selected]
-  - group "Subnet":
-    - text: ""
-    - searchbox "Search Subnet" [disabled]
-    - status
-    - combobox "Subnet" [disabled]:
-      - option "Select subnet…" [selected]
-  - text: Count
-  - spinbutton "Count": "1"
-  - text: Name (optional)
-  - textbox "Name (optional)":
-    - /placeholder: host-01
-  - checkbox "Also give it a DNS name"
-  - text: Also give it a DNS name
-  - button "Preview" [disabled]
-  - heading "Create DNS Record" [level=2]
-  - text: preview is validated by the server
-  - 'button "About: Create DNS Record"': "About: ⓘ"
-  - 'button "Options: Create DNS Record"'
-  - group "Zone":
-    - text: ""
-    - searchbox "Search Zone"
-    - status
-    - combobox "Zone":
-      - option "Select zone…" [selected]
-      - option "baseline.example."
-  - text: Type
-  - combobox "Type":
-    - option "A" [selected]
-    - option "AAAA"
-    - option "CNAME"
-    - option "TXT"
-  - text: Name
-  - textbox "Name":
-    - /placeholder: host or @
-  - text: Value
-  - textbox "Value":
-    - /placeholder: 192.0.2.10
-  - group: More options
-  - checkbox "Also create the reverse (PTR) record"
-  - text: Also create the reverse (PTR) record
-  - button "Preview" [disabled]
-  - heading "Manage Records" [level=2]
-  - text: edit or delete existing DNS records
-  - 'button "About: Manage Records"': "About: ⓘ"
-  - 'button "Options: Manage Records"'
-  - group "Which zones to list":
-    - text: ""
-    - radio "Forward zones" [checked]
-    - text: Forward zones
-    - radio "Reverse zones"
-    - text: Reverse zones
-  - group "Zone":
-    - text: ""
-    - searchbox "Search Zone"
-    - status
-    - combobox "Zone":
-      - option "Select zone…" [selected]
-      - option "baseline.example."
-  - heading "Manage Addresses" [level=2]
-  - text: release an allocated address
-  - 'button "About: Manage Addresses"': "About: ⓘ"
-  - 'button "Options: Manage Addresses"'
-  - group "IP Space":
-    - text: ""
-    - searchbox "Search IP Space"
-    - status
-    - combobox "IP Space":
-      - option "Select space…" [selected]
-      - option "Baseline Space"
-  - group "Subnet":
-    - text: ""
-    - searchbox "Search Subnet" [disabled]
-    - status
-    - combobox "Subnet" [disabled]:
-      - option "Select subnet…" [selected]
+  - group "Task":
+    - button "Get an address" [pressed]
+    - button "Create a DNS record"
+    - button "Change or delete records"
+    - button "Give back an address"
+  - region "Get an address":
+    - heading "Get an address" [level=2]
+    - group "IP Space":
+      - text: ""
+      - searchbox "Search IP Space"
+      - status
+      - combobox "IP Space":
+        - option "Select space…" [selected]
+        - option /Baseline Space \(\d+ of \d+ addresses free\)/
+    - group "Block":
+      - text: ""
+      - searchbox "Search Block" [disabled]
+      - status
+      - combobox "Block" [disabled]:
+        - option "Any block" [selected]
+    - group "Subnet":
+      - text: ""
+      - searchbox "Search Subnet" [disabled]
+      - status
+      - combobox "Subnet" [disabled]:
+        - option "Select subnet…" [selected]
+    - text: Count
+    - spinbutton "Count": "1"
+    - text: Name (optional)
+    - textbox "Name (optional)":
+      - /placeholder: host-01
+    - checkbox "Also give it a DNS name"
+    - text: Also give it a DNS name
+    - button "Preview" [disabled]
+  - region "Preview":
+    - heading "Preview" [level=2]
+    - paragraph: Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.

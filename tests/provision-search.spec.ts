@@ -137,13 +137,21 @@ test('on a wide screen the caption sits beside its field; on a phone it sits abo
   expect(g.ctl.y).toBeGreaterThan(g.cap.y + g.cap.height - 1);
 });
 
-test('Editor fields sit beside their captions on a wide screen too', async ({ page }) => {
+// Since 2026-11-11 Editor is two columns: a 480px form on the left, the
+// preview on the right. 480px is under the 36rem point where [data-form-cols]
+// puts captions beside controls, so on a wide screen the captions sit above
+// their fields and the preview takes the room beside the form instead.
+test('Editor on a wide screen: the preview sits beside the form, captions above fields', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#editor');
-  const row = page.locator('[data-panel-id="editor-object-form"] [data-field]').first();
+  const row = page.locator('[data-editor-form] [data-field]').first();
   const cap = await row.locator(':scope > span').boundingBox();
   const ctl = await row.locator('input').boundingBox();
-  expect(ctl!.x).toBeGreaterThan(cap!.x + cap!.width);
+  expect(ctl!.y).toBeGreaterThan(cap!.y + cap!.height - 1);
+  const form = await page.locator('[data-editor-form]').boundingBox();
+  const result = await page.locator('[data-editor-result]').boundingBox();
+  expect(result!.x).toBeGreaterThan(form!.x + form!.width);
+  expect(Math.abs(result!.y - form!.y)).toBeLessThan(12);
 });
 
 test('a block search belongs to its space: changing the space clears it, and no old block can be picked', async ({ page }) => {

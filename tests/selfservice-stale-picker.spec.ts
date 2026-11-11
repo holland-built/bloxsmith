@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { installBaselineWorld } from './page-fixtures';
+import { installBaselineWorld, openTask } from './page-fixtures';
 
 // useApi used to keep handing out the previous url's data while a new url
 // loaded. Self-Service's Block picker, enabled whenever a space is chosen,
@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 
 test('while the new space\'s blocks load, the Block picker offers none of the old space\'s', async ({ page }) => {
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id="selfservice-allocate"]');
+  const panel = await openTask(page, 'address');
   // The dropdown itself: the IP Space field also has a search box now.
   const space = panel.getByRole('combobox', { name: 'IP Space' });
   const block = panel.getByLabel('Block');

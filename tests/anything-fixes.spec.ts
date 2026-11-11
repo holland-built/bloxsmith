@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { installBaselineWorld } from './page-fixtures';
+import { installBaselineWorld, openTask } from './page-fixtures';
 
 // Fixes from the "change anything" pass. Each test failed on the code before it.
 
@@ -26,7 +26,7 @@ test('an edit made while Preview is loading leaves no Create button for the old 
     return r.fulfill({ json: { ok: true, dry_run: true, record: { name_in_zone: 'www', dns_rdata: '192.0.2.10' } } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-create-record"]');
+  const card = await openTask(page, 'record');
   await card.getByRole('combobox', { name: 'Zone' }).selectOption(ZONE.id);
   await card.getByLabel('Value').fill('192.0.2.10');
   await card.getByRole('button', { name: 'Preview' }).click();
@@ -45,7 +45,7 @@ test('Delete does not arm when the record cannot be re-checked', async ({ page }
     return reads === 1 ? r.fulfill({ json: { records: [rec] } }) : r.fulfill({ status: 502, json: { error: 'upstream' } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-manage-records"]');
+  const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
   await card.getByRole('button', { name: 'Delete' }).click();
   await expect(card.getByText("Couldn't re-check that record, so it wasn't deleted. Try again.")).toBeVisible();
@@ -62,7 +62,7 @@ test('Allocate says which address it reserved', async ({ page }) => {
     return r.fulfill({ json: dry ? { ok: true, dry_run: true, addresses: [{ address: '10.1.2.30' }] } : { ok: true, addresses: [{ id: 'a1', address: '10.1.2.37' }] } });
   });
   await page.goto('/#selfservice');
-  const card = page.locator('[data-panel-id="selfservice-allocate"]');
+  const card = await openTask(page, 'address');
   await card.getByRole('combobox', { name: 'IP Space' }).selectOption({ label: 'Lab' });
   await card.getByRole('combobox', { name: 'Subnet' }).selectOption('sub1');
   await card.getByRole('button', { name: 'Preview' }).click();

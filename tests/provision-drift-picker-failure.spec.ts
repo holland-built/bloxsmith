@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openTask } from './page-fixtures';
 import type { Page, Route } from '@playwright/test';
 
 // Sibling of tests/selfservice-picker-failure.spec.ts, which proved the same
@@ -179,7 +180,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     await page.goto('/#drift');
 
-    const check = card(page, 'Check drift');
+    const check = page.locator('[data-drift-form]');
     await expect(check.getByText(/could not load current data: 500/i)).toBeVisible();
     await expect(check.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toHaveCount(0);
   });
@@ -190,7 +191,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     await page.goto('/#drift');
 
-    const check = card(page, 'Check drift');
+    const check = page.locator('[data-drift-form]');
     await expect(check.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toBeVisible();
     await expect(check.getByText(FETCH_ERROR)).toHaveCount(0);
   });
@@ -201,7 +202,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     await page.goto('/#drift');
 
-    const check = card(page, 'Check drift');
+    const check = page.locator('[data-drift-form]');
     await expect(check.getByText(/could not load current data: 502/i)).toBeVisible();
     await expect(check.getByText('no IP spaces', { exact: true })).toHaveCount(0);
   });
@@ -212,7 +213,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     await page.goto('/#drift');
 
-    const check = card(page, 'Check drift');
+    const check = page.locator('[data-drift-form]');
     await expect(check.getByText('no IP spaces', { exact: true })).toBeVisible();
     await expect(check.getByText(FETCH_ERROR)).toHaveCount(0);
   });
@@ -269,7 +270,7 @@ test.describe('SelfService delete — already_gone must not read as "deleted"', 
     );
 
     await page.goto('/#selfservice');
-    const manage = card(page, 'Manage Records');
+    const manage = await openTask(page, 'records');
     await manage.locator('select').selectOption(ZONE.id);
     await manage.getByRole('button', { name: 'Delete' }).click();
     await manage.getByRole('button', { name: 'Confirm delete' }).click();

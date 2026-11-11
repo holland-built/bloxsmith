@@ -27,12 +27,12 @@ import { test, expect } from './fixtures';
 // and there is none to clean up. That is what keeps it out of the view-ownership
 // rules in playwright.config.ts's `workers: 1` comment — it is not a writer.
 //
-// The 15 ids are the app's tab ids (ui/src/App.jsx), the same list
-// tests/tabs-smoke.spec.ts carries and for the same reason: a tab missing from
-// this array is a tab nothing here ever looks at.
+// The app's tab ids that carry panels (ui/src/App.jsx). #selfservice, #editor,
+// #drift and #chart are left out since 2026-11-11: they are two-column forms
+// with no panels, so there is no "Arrange this page" popup to read there.
 const TABS = [
   'overview', 'daily', 'network', 'dns', 'security', 'infra', 'assets', 'incidents',
-  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'demo', 'ai', 'chart',
+  'audit', 'changes', 'provision', 'demo', 'ai',
 ];
 
 // A panelId's shape: kebab-case, which is what panelHelp.test.js already
@@ -75,12 +75,11 @@ for (const id of TABS) {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto(`/#${id}`);
     await expect(page.locator('h1').first()).toBeVisible();
-    // Panels first: #chart draws its grid only once its menus have loaded, and
-    // counting the button before then skipped the tab about one run in five.
+    // Panels first, so the button is not counted before the grid has drawn.
     await expect(page.locator('[data-panel-id]').first()).toBeVisible();
 
     // The button is absent by design on a one-panel tab with nothing hidden
-    // (#editor renders exactly one panel and always will) — CardGrid gates the
+    // — CardGrid gates the
     // strip on `reorderable || hiddenTiles.length`. That is not a failure, and
     // the aggregate check at the bottom is what stops it from becoming an
     // excuse for the whole file to pass on nothing.

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { installBaselineWorld } from './page-fixtures';
+import { installBaselineWorld, openTask } from './page-fixtures';
 
 // Get an address took 5 clicks every time: space, subnet, Preview, Allocate,
 // plus finding the page. Most people take addresses from the same subnet again,
@@ -37,7 +37,7 @@ test('the form starts on the last space and subnet an address came from', async 
   const t = await tenantId(page);
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST(t));
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id="selfservice-allocate"]');
+  const panel = await openTask(page, 'address');
   await expect(panel.getByRole('combobox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/b');
   await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/s2');
   await expect(panel.getByRole('button', { name: 'Preview' })).toBeEnabled();
@@ -48,7 +48,7 @@ test('a remembered subnet that no longer exists is not picked', async ({ page })
   const t = await tenantId(page);
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST(t, 'ipam/subnet/gone'));
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id="selfservice-allocate"]');
+  const panel = await openTask(page, 'address');
   await expect(panel.getByRole('combobox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/b');
   await page.waitForTimeout(500);
   await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('');
@@ -59,13 +59,13 @@ test('another tenant\'s last pick is not used', async ({ page }) => {
   await page.evaluate((v) => localStorage.setItem('bloxsmith.allocate.last', v), LAST('some-other-tenant'));
   await page.goto('/#selfservice');
   await page.waitForTimeout(800);
-  await expect(page.locator('[data-panel-id="selfservice-allocate"]').getByRole('combobox', { name: 'IP Space' })).toHaveValue('');
+  await expect((await openTask(page, 'address')).getByRole('combobox', { name: 'IP Space' })).toHaveValue('');
 });
 
 test('a successful Allocate is what gets remembered, not a pick', async ({ page }) => {
   await page.route('**/api/selfservice/allocate*', (route) => json(route, [{ address: '10.2.1.5' }]));
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id="selfservice-allocate"]');
+  const panel = await openTask(page, 'address');
   await panel.getByRole('combobox', { name: 'IP Space' }).selectOption({ label: 'Berlin Office' });
   await panel.getByRole('combobox', { name: 'Subnet' }).selectOption({ label: '10.2.1.0/24 — office-b' });
   expect(await page.evaluate(() => localStorage.getItem('bloxsmith.allocate.last'))).toBeNull();

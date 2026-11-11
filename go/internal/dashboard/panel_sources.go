@@ -170,20 +170,6 @@ var panelSources = []PanelSource{
 	restPanel("automate-job", "Automate", "The job you picked", srcAPI, whyForm),
 	{ID: "automate-recent", Page: "Automate", Name: "Your recent changes", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
 
-	// ---- Get an address ----
-	restPanel("selfservice-allocate", "Get an address", "Get an address", srcAPI, whyForm),
-	restPanel("selfservice-create-record", "Get an address", "Create DNS Record", srcAPI, whyForm),
-	restPanel("selfservice-manage-records", "Get an address", "Manage Records", srcAPI, whyForm),
-	restPanel("selfservice-manage-addresses", "Get an address", "Manage Addresses", srcAPI, whyForm),
-
-	// ---- Editor ----
-	restPanel("editor-object-form", "Editor", "Create or edit an object", srcAPI, whyForm),
-
-	// ---- Drift ----
-	restPanel("drift-check", "Drift", "Check drift", "your templates and the Infoblox API", whyForm),
-	restPanel("drift-error", "Drift", "Error", "your templates and the Infoblox API", whyResult),
-	restPanel("drift-result", "Drift", "Result", "your templates and the Infoblox API", "it compares your templates with what is there, worked out in the app"),
-
 	// ---- Best practices ----
 	restPanel("bp-checks", "Best practices", "Checks", "the Infoblox API", "it checks design rules against what is there, worked out in the app"),
 
@@ -197,13 +183,6 @@ var panelSources = []PanelSource{
 	{ID: "ai-ask", Page: "AI", Name: "Ask AI", Kind: "local", Source: "the AI model, reading the Infoblox API",
 		Builder: "no", Why: "the AI writes the answer, and Build a chart uses no AI"},
 	restPanel("ai-threat-lookup", "AI", "Threat lookup", "Infoblox's threat intelligence", "it looks up one name at a time, not a chart"),
-
-	// ---- Build a chart ----
-	{ID: "chart-picks", Page: "Build a chart", Name: "Choose", Kind: "local", Source: "your picks", Builder: "no", Why: "it is Build a chart's own menu"},
-	{ID: "chart-result", Page: "Build a chart", Name: "Your chart", Kind: "cube", Source: "Infoblox's activity records, as your picks ask",
-		Builder: "no", Why: "it is Build a chart itself"},
-	{ID: "chart-how", Page: "Build a chart", Name: "How this chart was made", Kind: "cube", Source: "Infoblox's activity records, as your picks ask",
-		Builder: "no", Why: "it is Build a chart itself"},
 }
 
 // PanelSources is every panel, in page order.

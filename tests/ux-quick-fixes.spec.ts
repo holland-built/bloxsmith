@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openTask } from './page-fixtures';
 
 // The quick fixes from the UX audit of 2026-10-26: placeholders that say they
 // are loading, chart bars that carry their numbers, a short top-N that says
@@ -32,7 +33,7 @@ test('chart bars carry their numbers, and a short top 10 says why it is short', 
     })),
   );
   await page.goto('/#chart');
-  const card = page.locator('[data-panel-id]').filter({ has: page.getByRole('heading', { name: /^Top 10 devices/ }) });
+  const card = page.locator('[data-chart-result]').filter({ has: page.getByRole('heading', { name: /^Top 10 devices/ }) });
   await expect(card.getByText('Only 2 have anything to count, so this shows all 2.')).toBeVisible();
   // The numbers are SVG text inside the chart, which is one image to a screen
   // reader, so they are found as drawn text rather than by role.
@@ -49,7 +50,7 @@ test('a subnet is found by typing, and the preview is a sentence', async ({ page
     r.fulfill(json({ addresses: [{ address: '10.0.42.1', id: 'ipam/address/00000000-0000-0000-0000-000000000001' }] })),
   );
   await page.goto('/#selfservice');
-  const panel = page.locator('[data-panel-id]').filter({ hasText: 'Get an address' }).first();
+  const panel = await openTask(page, 'address');
   await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('searchbox', { name: 'Search Subnet' }).fill('site-42');
   await panel.getByRole('button', { name: '10.0.42.0/24 — site-42', exact: true }).click();

@@ -15,7 +15,7 @@ const panelTitles = (page: import('@playwright/test').Page) =>
 
 // Also after every test, so a failed assertion cannot leave the view behind.
 test.afterEach(async ({ request }) => {
-  await request.delete('/api/views/__layout_selfservice');
+  await request.delete('/api/views/__layout_provision-subnet');
 });
 
 test.beforeEach(async ({ page }) => {
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-for (const tab of ['provision', 'selfservice', 'editor', 'drift', 'demo']) {
+for (const tab of ['provision', 'demo']) {
   test(`#${tab}: the rail names exactly the panels on the page, in order`, async ({ page }) => {
     await page.goto(`/#${tab}`);
     await expect(rail(page)).toBeVisible();
@@ -56,13 +56,16 @@ test('a rail item moves focus to its panel, clear of the sticky header', async (
   expect(await panel.evaluate((el) => el.getBoundingClientRect().top)).toBeGreaterThanOrEqual(headerBottom);
 });
 
-test('the rail follows a panel title change (Editor type switch)', async ({ page }) => {
-  await page.goto('/#editor');
-  await expect.poll(() => railItems(page)).toEqual(['DNS Zone — Create']);
-  await page.getByRole('button', { name: 'Subnet', exact: true }).click();
-  await expect.poll(() => railItems(page)).toEqual(await panelTitles(page));
-  expect(await railItems(page)).not.toEqual(['DNS Zone — Create']);
-});
+// Since 2026-11-11 these four are two-column forms with no panels, so a rail
+// would be an empty list beside them.
+for (const tab of ['selfservice', 'editor', 'drift', 'chart']) {
+  test(`#${tab}: a form page shows no rail`, async ({ page }) => {
+    await page.goto(`/#${tab}`);
+    await expect(page.locator('h1').first()).toBeVisible();
+    await expect(page.locator('[data-panel-id]')).toHaveCount(0);
+    await expect(rail(page)).toHaveCount(0);
+  });
+}
 
 test('a long live log does not make the rail re-read the page per line', async ({ page }) => {
   await page.goto('/#provision');
@@ -90,19 +93,19 @@ test('a long live log does not make the rail re-read the page per line', async (
 });
 
 test('a panel taken off the page leaves the rail', async ({ page, request }) => {
-  // Hiding saves the Self-Service layout on the test server, and later specs
+  // Hiding saves the Provision layout on the test server, and later specs
   // read that page, so the saved view is removed before and after.
-  await request.delete('/api/views/__layout_selfservice');
-  await page.goto('/#selfservice');
-  await expect(rail(page).getByRole('button', { name: 'Manage Records' })).toBeVisible();
-  await page.getByRole('button', { name: 'Options: Manage Records' }).click();
-  await page.getByRole('button', { name: 'Take off the page Manage Records' }).click();
-  await expect(rail(page).getByRole('button', { name: 'Manage Records' })).toHaveCount(0);
+  await request.delete('/api/views/__layout_provision-subnet');
+  await page.goto('/#provision');
+  await expect(rail(page).getByRole('button', { name: 'Live log' })).toBeVisible();
+  await page.getByRole('button', { name: 'Options: Live log' }).click();
+  await page.getByRole('button', { name: 'Take off the page Live log' }).click();
+  await expect(rail(page).getByRole('button', { name: 'Live log' })).toHaveCount(0);
 });
 
 test('on a phone there is no rail, and the forms keep the width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#selfservice');
-  await expect(page.locator('[data-panel-id="selfservice-allocate"]')).toBeVisible();
+  await page.goto('/#provision');
+  await expect(page.locator('[data-panel-id="provision-subnet-request"]')).toBeVisible();
   await expect(rail(page)).toBeHidden();
 });

@@ -51,7 +51,7 @@ async function mockCatalog(page: import('@playwright/test').Page, cubes: unknown
 }
 
 const heading = (page: import('@playwright/test').Page) =>
-  page.locator('[data-panel-id="chart-result"] h2, [data-panel-id="chart-result"] h3').first();
+  page.locator('[data-chart-result] h2, [data-chart-result] h3').first();
 
 test('any data set: search, pick, chart, and back to the common charts', async ({ page }) => {
   await installFixtures(page, 'chart');
@@ -73,7 +73,7 @@ test('any data set: search, pick, chart, and back to the common charts', async (
   // A date is a window, not a split.
   await expect(page.getByLabel('Split by').locator('option')).toHaveText(['Nothing, one total', 'Device Name', 'Query Type']);
   await expect(heading(page)).toHaveText('DNS Activity: Total Query Count, last 7 days');
-  await expect(page.locator('[data-panel-id="chart-result"]')).toContainText('50,123');
+  await expect(page.locator('[data-chart-result]')).toContainText('50,123');
 
   await page.getByLabel('Split by').selectOption({ label: 'Device Name' });
   await page.getByLabel('How many').selectOption({ label: 'Top 5' });
@@ -125,7 +125,7 @@ test('a count Infoblox sent no value for is shown as missing, never as 0', async
   await page.goto('/#chart');
   await page.getByRole('button', { name: 'Chart other Infoblox data' }).click();
   await page.getByLabel('Data', { exact: true }).selectOption({ label: 'DNS Activity' });
-  const result = page.locator('[data-panel-id="chart-result"]');
+  const result = page.locator('[data-chart-result]');
   await expect(result).toContainText('Infoblox sent no value for these choices.');
   await expect(result.getByRole('img', { name: /Your chart/ })).toHaveCount(0);
 
