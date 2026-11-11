@@ -44,6 +44,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await expect(hostsTile(page)).toContainText('unavailable');
     await expect(row).not.toContainText('none open');
     await expect(row).not.toContainText('0 of 0');
+    await expect(hostsTile(page)).not.toContainText('0 of 0');
   });
 
   test('hosts feed empty is a real zero and "none open", not unavailable', async ({ page }) => {
