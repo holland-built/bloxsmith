@@ -1,5 +1,17 @@
 [
  {
+  "path": "/api/anycast/v1/accm/ac_configs",
+  "base": "/api/anycast/v1",
+  "service": "Anycast",
+  "summary": "Retrieve Multiple Anycast Configurations"
+ },
+ {
+  "path": "/api/anycast/v1/accm/ac_runtime_statuses",
+  "base": "/api/anycast/v1",
+  "service": "Anycast",
+  "summary": "Read a list of Anycast Configurations"
+ },
+ {
   "path": "/api/atcdfp/v1/dfp_services",
   "base": "/api/atcdfp/v1",
   "service": "Atcdfp",
@@ -21,7 +33,7 @@
   "path": "/api/endpoints/atcep/v1/roaming_device/vpn_vendor_count",
   "base": "/api/endpoints/atcep/v1",
   "service": "Atcep",
-  "summary": "/roaming_device/vpn_vendor_count"
+  "summary": "Get VPN Vendors Count."
  },
  {
   "path": "/api/endpoints/atcep/v1/roaming_device_groups",
@@ -69,7 +81,7 @@
   "path": "/api/atcfw/v1/named_lists",
   "base": "/api/atcfw/v1",
   "service": "Atcfw",
-  "summary": "List Named Lists."
+  "summary": "List Named Lists (Custom Lists), including Threat Insight lists (such as DGA, Data Exfiltration, Zero Day DNS and DNS Me"
  },
  {
   "path": "/api/atcfw/v1/network_lists",
@@ -141,7 +153,7 @@
   "path": "/api/cdc-flow/v1/display/etls/ingress_filters",
   "base": "/api/cdc-flow",
   "service": "CDC",
-  "summary": "/v1/display/etls/ingress_filters"
+  "summary": "List ingress ETL filters"
  },
  {
   "path": "/api/cdc-flow/v1/display/sources",
@@ -216,6 +228,12 @@
   "summary": "List schedule sources"
  },
  {
+  "path": "/api/cdc-flow/v2/display/flows",
+  "base": "/api/cdc-flow",
+  "service": "CDC",
+  "summary": "List data connector flows with joined lookup fields and runtime status."
+ },
+ {
   "path": "/api/cdc-flow/v2/flows/data",
   "base": "/api/cdc-flow",
   "service": "CDC",
@@ -225,13 +243,7 @@
   "path": "/api/cdc-flow/v2/services",
   "base": "/api/cdc-flow",
   "service": "CDC",
-  "summary": "List the data connector enabled on on-prem hosts."
- },
- {
-  "path": "/api/dnsdata/v2/dns_event",
-  "base": "/api/dnsdata",
-  "service": "DNSEvents",
-  "summary": "List DNS security policy hits."
+  "summary": "List CDC services enabled on on-prem hosts."
  },
  {
   "path": "/api/ddi/v1/dhcp/fingerprint",
@@ -342,6 +354,24 @@
   "summary": "Retrieve DNS resource records."
  },
  {
+  "path": "/api/ddi/v1/dns/rpz_rule",
+  "base": "/api/ddi/v1",
+  "service": "DnsData",
+  "summary": "List RPZ rules. Do not pass _order_by (only `id` is sortable); sort the stored results afterwards."
+ },
+ {
+  "path": "/api/ddi/v1/dns/shared_record",
+  "base": "/api/ddi/v1",
+  "service": "DnsData",
+  "summary": "Retrieve shared records."
+ },
+ {
+  "path": "/api/ddi/v1/dns/shared_record_group",
+  "base": "/api/ddi/v1",
+  "service": "DnsData",
+  "summary": "Retrieve shared record groups."
+ },
+ {
   "path": "/api/infra/v1/detail_hosts",
   "base": "/api/infra/v1",
   "service": "Infrastructure",
@@ -366,10 +396,22 @@
   "summary": "List all the Service resources for an account."
  },
  {
+  "path": "/api/ddi/v1/federation/delegation",
+  "base": "/api/ddi/v1",
+  "service": "IpamFederation",
+  "summary": "Retrieve the delegation."
+ },
+ {
   "path": "/api/ddi/v1/federation/federated_block",
   "base": "/api/ddi/v1",
   "service": "IpamFederation",
   "summary": "Retrieve the federated blocks."
+ },
+ {
+  "path": "/api/ddi/v1/federation/federated_pool",
+  "base": "/api/ddi/v1",
+  "service": "IpamFederation",
+  "summary": "Retrieve federated pools."
  },
  {
   "path": "/api/ddi/v1/federation/federated_realm",
@@ -508,6 +550,12 @@
   "base": "/api/ddi/v1",
   "service": "Ipamsvc",
   "summary": "Retrieve ranges."
+ },
+ {
+  "path": "/api/ddi/v1/ipam/shared_network",
+  "base": "/api/ddi/v1",
+  "service": "Ipamsvc",
+  "summary": "Retrieve shared networks."
  },
  {
   "path": "/api/ddi/v1/ipam/subnet",
