@@ -104,12 +104,194 @@ Requires:
 >   --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
 >   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 > ```
-> **Binary tarballs remain checksum-verified only** (`checksums.txt`), not
-> signature-signed — the installer/self-update verify the checksum, which catches
-> corruption/truncation but not publisher identity.
+> Release files are also protected by an Ed25519 signature on `checksums.txt`. The public key
+> is built into the program (`go/signing.go`) and pinned in both installer scripts, and the
+> installer and `bloxsmith update` refuse a release whose signature is missing or wrong. See
+> **Code signing** in the [README](../README.md).
 
-- **Verify the checksum** — the installer and `bloxsmith update` do this automatically
-  against the release's `checksums.txt` (fail-closed on mismatch).
+- **Verify the checksum and signature**: the installer and `bloxsmith update` do both automatically
+  against the release's `checksums.txt` and fail closed on a mismatch.
 - **Pin by digest** in `docker-compose.yml` (`image: ghcr.io/holland-built/bloxsmith@sha256:<digest>`) for a reproducible deploy. Resolve the digest with `docker buildx imagetools inspect …:latest`.
 - **Updating.** The Go binary self-updates: the ⋯ menu shows "Update now", which downloads the release tarball, verifies its checksum, atomically swaps the binary and restarts (a stepped modal shows check → download → verify → apply → restart); `bloxsmith update` does the download, verify and swap headless, but restarts nothing — that process is not a server, so a server already running keeps the old binary until you restart it (`bloxsmith service restart`, or stop and start it). The Docker image path is explicit — `docker compose pull && docker compose up -d`, or the `update.command`/`update.bat`/`update.sh` scripts. Enterprise Docker updates deliberately on a pinned schedule.
 - **Rollback:** manual only — there is no automatic image rollback. `docker-compose.yml` does define a healthcheck (`CMD /app/bloxsmith healthcheck`), but nothing acts on it: `restart: unless-stopped` fires on exit, not on health, so an unhealthy container is reported and left running. The updater never touches the Docker socket either (see `go/apply.go`: it only swaps its own binary). To revert, pin the previous tag or digest in `docker-compose.yml` and run `docker compose up -d`; the `noc-vault` volume is untouched by the swap, so tenant keys survive it.
+
+> **Make the GHCR package public (one-time)** so others pull without a login:
+> `github.com/users/holland-built/packages/container/bloxsmith/settings`
+> → *Change visibility* → **Public**. The source repo can stay private; package
+> visibility is independent. (Otherwise each user runs `docker login ghcr.io` with a
+> token that has `read:packages`.)
+
+## How the update check works
+
+The server checks GitHub Releases for `holland-built/bloxsmith` **only when
+asked** — there is no background timer, so an idle server makes no requests at
+all. `GET /api/update/check` is the check; the dashboard calls it on page load
+and every 6 hours per open tab, and `bloxsmith update` calls it from the command
+line. The browser never contacts GitHub directly — the server does the check and
+the browser just reads the result.
+
+The answer is remembered in memory for **30 minutes (±3 minutes)** so repeat page
+loads do not each spend a request against GitHub's unauthenticated limit of 60
+requests/hour, which is shared by every machine behind the same public IP. The
+response says which it is: `cached` (true/false) and `checkedAt` (when GitHub was
+actually contacted). A failed check reports `error` and is never replaced by the
+last good answer — "the check failed" and "you are up to date" are different
+answers and render differently. Applying an update always fetches fresh; the
+cache is on the check only. The cache is per process — restarting the server
+clears it.
+
+`GET /api/vault/status` also embeds an `update` object, but only
+`{current, checkDisabled, selfUpdate}` in it carry information; its `latest`,
+`available` and `url` are always empty/false placeholders because that endpoint
+does no network call. `/api/update/check` is the only source of a real answer.
+
+`DISABLE_UPDATE_CHECK=1` stops `GET /api/update/check` contacting GitHub. It
+returns the running version plus `checkDisabled: true` and no `latest` —
+**deliberately not the same as "you are on the newest version"**, since nothing
+was looked up; the dashboard then shows no update UI at all. Honest scope: this
+switches off the automatic/browser-driven check only. Explicitly running
+`bloxsmith update`, or `POST /api/update/apply`, still contacts GitHub — those
+are direct operator requests to update, not background polling.
+
+## What's inside a release (SBOM)
+
+### The SBOM (what's inside the release)
+
+Every release also publishes an **SBOM** — a machine-readable list of the
+libraries compiled into the binary — one per archive, named
+`<archive-name>.sbom.json`. That is what to hand a security review that asks
+what the software is made of, and what to grep the morning a CVE lands in a Go
+module.
+
+Format is **SPDX 2.3 JSON**, produced by [syft](https://github.com/anchore/syft).
+Contents are the Go module graph read back out of the compiled binary — direct
+and transitive dependencies with exact versions, plus a `stdlib` entry pinning
+the Go toolchain the release was built with.
+
+Fetch one and read it:
+
+```bash
+# the release version to check, without the leading v
+V=3.70.6
+# the download folder for that release
+BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
+# download the Linux amd64 dependency list (SBOM)
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+
+# every dependency and its version
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+The SBOM is signed the same way everything else in the release is — cosign
+keyless, with the release workflow's GitHub OIDC identity, no key stored
+anywhere. Verify it before trusting it:
+
+```bash
+# download the SBOM's signature
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig"
+# download the certificate that goes with the signature
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem"
+
+# check the SBOM was signed by this repo's release workflow
+cosign verify-blob \
+  --certificate "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem" \
+  --signature   "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig" \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+Each SBOM is also listed in `checksums.txt`, so it is covered by that file's
+Ed25519 and `ssh-keygen` signatures as well. The standalone `.sig`/`.pem` pair
+exists because an SBOM is the one artifact that gets forwarded on its own —
+attached to a ticket, uploaded to a vendor portal — where `checksums.txt` is
+nowhere in sight.
+
+#### The dashboard UI's npm dependencies
+
+The archive SBOMs above are read out of the **compiled binary**, and the web UI
+inside it (`go/web/`, an `index.html` plus hashed `assets/*.js`) is the built UI,
+embedded with `go:embed`.
+Nothing in a Go module list can see React, recharts or tailwind, so a fifth
+document is published alongside them:
+
+```bash
+# download the web UI's dependency list
+curl -fsSLO "$BASE/bloxsmith_${V}_ui_npm.sbom.json"
+# list every UI package and its version, sorted
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_ui_npm.sbom.json" | sort
+```
+
+Same format, same signing, same `checksums.txt` entry as the archive SBOMs. It is
+built from `ui/package-lock.json` rather than from the bundle, and it is the
+**production dependency closure** — the packages whose code can reach the bundle.
+`devDependencies` are excluded, so the linter and the type stubs are not in it.
+
+One thing that looks wrong and is not: `vite` and its `@rolldown/*` bindings
+*are* listed even though `vite` sits in `devDependencies`. `@tailwindcss/vite` is
+a production dependency and peer-depends on vite, so npm does not mark vite
+dev-only and it is genuinely part of the production closure. The set is therefore
+a **superset** of what literally ends up in `go/web/assets/` — it also carries
+build-time tools reachable from a production dependency, such as tailwind itself.
+That is the deliberate direction to err in: it over-reports rather than hiding
+something that shipped.
+
+### The container image's SBOM (attestation)
+
+`docker run` is the first install path in the README, and until now it was the
+one artifact with no ingredients list at all. The pushed image now carries its
+SBOM as a **cosign attestation** — signed with the same keyless GitHub OIDC
+identity as the image signature, stored in the registry beside the image, and
+covering **every architecture separately**.
+
+`ghcr.io/holland-built/bloxsmith:<tag>` is a multi-arch index, and `cosign attest`
+has no recursive mode, so an attestation on the tag would be one architecture's
+SBOM claiming to describe both. Nothing is attached to the index for that reason.
+**Resolve the architecture digest first:**
+
+```bash
+# the release version to check, without the leading v
+V=3.70.6
+# the image to check
+IMAGE=ghcr.io/holland-built/bloxsmith
+# your computer type: amd64, or arm64 for Apple silicon and ARM servers
+ARCH=amd64
+
+# find the image ID for your computer type
+DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE:$V" \
+  | jq -r --arg a "$ARCH" '.manifests[] | select(.platform.architecture == $a) | .digest')
+
+# check the attached dependency lists were signed by the release workflow, then print them
+cosign verify-attestation --type spdxjson \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "$IMAGE@$DIGEST" \
+  | jq -r '.payload | @base64d | fromjson | .predicate
+           | "\(.name):", (.packages[] | "  \(.name) \(.versionInfo)")'
+```
+
+Two attestations come back per architecture, and the `.predicate.name` tells them
+apart:
+
+| `.predicate.name` | What it lists |
+|---|---|
+| `ghcr.io/holland-built/bloxsmith` | The image scanned in the registry — the Go module graph **and** the distroless base's own packages (`base-files`, `media-types`, `netbase`, `tzdata`, `tzdata-legacy`) with their Debian versions |
+| `bloxsmith-ui-npm` | The same UI npm closure published as a release artifact above — attached here too, because the bundle is inside the binary inside this image |
+
+Together those two are the whole image. `<tag>` and `latest` resolve to the same
+index, so both are covered by the same per-architecture attestations.
+
+> **What is still not covered.** Two things, and neither is hidden by a green
+> check elsewhere:
+>
+> The **UI SBOM is derived from the lockfile, not from the shipped bundle.** It
+> says what the bundle was built from; it does not prove `go/web/assets/` was built
+> from exactly that. The check that ties the two together is a different one — the
+> "UI dist up to date" step in [ci.yml](../.github/workflows/ci.yml) rebuilds the
+> bundle from `ui/` and fails if `go/web/` differs.
+>
+> The **`ghcr.io` image attestation only exists for releases cut after this
+> change**. Tags published earlier have a cosign image *signature* but no SBOM
+> attestation, and `cosign verify-attestation` against them will correctly find
+> nothing. For those, generate one yourself:
+> `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.

@@ -1,7 +1,7 @@
 # ui — Bloxsmith dashboard frontend
 
 The Vite + React single-page app behind the Bloxsmith NOC dashboard. `src/App.jsx`
-lazy-loads the 15 tabs in `src/tabs/`, so each one arrives as its own chunk on
+lazy-loads every tab in `src/tabs/`, so each one arrives as its own chunk on
 first visit.
 
 ## Commands

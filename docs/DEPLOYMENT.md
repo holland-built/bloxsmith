@@ -1,411 +1,67 @@
 # Deployment & reference
 
-Full reference for **Bloxsmith**. For the 30-second start see the
-[README](../README.md#quick-start); this doc covers every install path, the
-environment variables, LLM providers, and security.
+The detail behind the [README](../README.md). The README has every way to install Bloxsmith and
+the everyday tasks (updating, backup, uninstall). This file covers running it as a server, the
+settings, and how the security pieces work.
 
-- [Standalone binary (no Docker)](#standalone-binary-no-docker)
-- [SE demo path (docker run)](#se-demo-path-docker-run)
-- [Customer path (compose)](#customer-path-compose)
+- [Ways to run it](#ways-to-run-it)
 - [Updating](#updating)
-- [Install from the prebuilt image](#install-from-the-prebuilt-image)
 - [Build from source (dev)](#build-from-source-dev)
-- [Provisioning templates](#provisioning-templates)
 - [Getting the keys](#getting-the-keys)
 - [Using a different LLM provider](#using-a-different-llm-provider)
+- [Provisioning templates](#provisioning-templates)
 - [Environment variables](#environment-variables)
 - [Auto-unlock after an upgrade](#auto-unlock-after-an-upgrade)
+- [Backup & restore](#backup--restore)
+- [Behind a reverse proxy](#behind-a-reverse-proxy)
 - [Security notes](#security-notes)
 
 ---
 
-## Standalone binary (no Docker)
+## Ways to run it
 
-A single self-contained binary, published on GitHub Releases. Nothing else is
-required — no Docker, no Python, no checkout. macOS and Linux:
-
-```bash
-# download the installer
-curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
-# read it before running it; press q to quit
-less install.sh
-# run it
-sh install.sh
-```
-
-The two-step form is deliberate: you read the script before it runs. The
-installer detects your OS/arch, downloads the matching release asset, verifies
-its SHA-256 against the release's `checksums.txt` (**fail-closed** — a mismatch
-aborts without installing), and installs to `$HOME/.local/bin`. No sudo.
-
-| Flag | Effect |
-|------|--------|
-| `--version vX.Y.Z` | Pin an exact release instead of `latest` |
-| `--prefix DIR` | Install somewhere other than `$HOME/.local/bin` |
-| `--help` | Usage |
-
-Then `bloxsmith` starts it, `bloxsmith service install` registers it to run in
-the background at login, and `bloxsmith update` upgrades in place.
-
-> Checksum verification detects a corrupt or truncated download; it does **not**
-> prove publisher identity, since checksums ship alongside the archive.
-> The multi-arch **ghcr images** are now cosign keyless-signed in CI (GitHub OIDC
-> identity — verify with `cosign verify ghcr.io/holland-built/bloxsmith:<tag>
-> --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/'
-> --certificate-oidc-issuer https://token.actions.githubusercontent.com`), and each
-> architecture of the image also carries an SBOM attestation — see
-> [the image attestation](#the-container-images-sbom-attestation). The
-> standalone binary remains checksum-only.
-
-### The SBOM (what's inside the release)
-
-Every release also publishes an **SBOM** — a machine-readable list of the
-libraries compiled into the binary — one per archive, named
-`<archive-name>.sbom.json`. That is what to hand a security review that asks
-what the software is made of, and what to grep the morning a CVE lands in a Go
-module.
-
-Format is **SPDX 2.3 JSON**, produced by [syft](https://github.com/anchore/syft).
-Contents are the Go module graph read back out of the compiled binary — direct
-and transitive dependencies with exact versions, plus a `stdlib` entry pinning
-the Go toolchain the release was built with.
-
-Fetch one and read it:
-
-```bash
-# the release version to check, without the leading v
-V=3.70.6
-# the download folder for that release
-BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
-# download the Linux amd64 dependency list (SBOM)
-curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
-
-# every dependency and its version
-jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
-```
-
-The SBOM is signed the same way everything else in the release is — cosign
-keyless, with the release workflow's GitHub OIDC identity, no key stored
-anywhere. Verify it before trusting it:
-
-```bash
-# download the SBOM's signature
-curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig"
-# download the certificate that goes with the signature
-curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem"
-
-# check the SBOM was signed by this repo's release workflow
-cosign verify-blob \
-  --certificate "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem" \
-  --signature   "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig" \
-  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
-```
-
-Each SBOM is also listed in `checksums.txt`, so it is covered by that file's
-Ed25519 and `ssh-keygen` signatures as well. The standalone `.sig`/`.pem` pair
-exists because an SBOM is the one artifact that gets forwarded on its own —
-attached to a ticket, uploaded to a vendor portal — where `checksums.txt` is
-nowhere in sight.
-
-#### The dashboard UI's npm dependencies
-
-The archive SBOMs above are read out of the **compiled binary**, and the web UI
-inside it (`go/web/`, an `index.html` plus hashed `assets/*.js`) is the built UI,
-embedded with `go:embed`.
-Nothing in a Go module list can see React, recharts or tailwind, so a fifth
-document is published alongside them:
-
-```bash
-# download the web UI's dependency list
-curl -fsSLO "$BASE/bloxsmith_${V}_ui_npm.sbom.json"
-# list every UI package and its version, sorted
-jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_ui_npm.sbom.json" | sort
-```
-
-Same format, same signing, same `checksums.txt` entry as the archive SBOMs. It is
-built from `ui/package-lock.json` rather than from the bundle, and it is the
-**production dependency closure** — the packages whose code can reach the bundle.
-`devDependencies` are excluded, so the linter and the type stubs are not in it.
-
-One thing that looks wrong and is not: `vite` and its `@rolldown/*` bindings
-*are* listed even though `vite` sits in `devDependencies`. `@tailwindcss/vite` is
-a production dependency and peer-depends on vite, so npm does not mark vite
-dev-only and it is genuinely part of the production closure. The set is therefore
-a **superset** of what literally ends up in `go/web/assets/` — it also carries
-build-time tools reachable from a production dependency, such as tailwind itself.
-That is the deliberate direction to err in: it over-reports rather than hiding
-something that shipped.
-
-### The container image's SBOM (attestation)
-
-`docker run` is the first install path in the README, and until now it was the
-one artifact with no ingredients list at all. The pushed image now carries its
-SBOM as a **cosign attestation** — signed with the same keyless GitHub OIDC
-identity as the image signature, stored in the registry beside the image, and
-covering **every architecture separately**.
-
-`ghcr.io/holland-built/bloxsmith:<tag>` is a multi-arch index, and `cosign attest`
-has no recursive mode, so an attestation on the tag would be one architecture's
-SBOM claiming to describe both. Nothing is attached to the index for that reason.
-**Resolve the architecture digest first:**
-
-```bash
-# the release version to check, without the leading v
-V=3.70.6
-# the image to check
-IMAGE=ghcr.io/holland-built/bloxsmith
-# your computer type: amd64, or arm64 for Apple silicon and ARM servers
-ARCH=amd64
-
-# find the image ID for your computer type
-DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE:$V" \
-  | jq -r --arg a "$ARCH" '.manifests[] | select(.platform.architecture == $a) | .digest')
-
-# check the attached dependency lists were signed by the release workflow, then print them
-cosign verify-attestation --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  "$IMAGE@$DIGEST" \
-  | jq -r '.payload | @base64d | fromjson | .predicate
-           | "\(.name):", (.packages[] | "  \(.name) \(.versionInfo)")'
-```
-
-Two attestations come back per architecture, and the `.predicate.name` tells them
-apart:
-
-| `.predicate.name` | What it lists |
-|---|---|
-| `ghcr.io/holland-built/bloxsmith` | The image scanned in the registry — the Go module graph **and** the distroless base's own packages (`base-files`, `media-types`, `netbase`, `tzdata`, `tzdata-legacy`) with their Debian versions |
-| `bloxsmith-ui-npm` | The same UI npm closure published as a release artifact above — attached here too, because the bundle is inside the binary inside this image |
-
-Together those two are the whole image. `<tag>` and `latest` resolve to the same
-index, so both are covered by the same per-architecture attestations.
-
-> **What is still not covered.** Two things, and neither is hidden by a green
-> check elsewhere:
->
-> The **UI SBOM is derived from the lockfile, not from the shipped bundle.** It
-> says what the bundle was built from; it does not prove `go/web/assets/` was built
-> from exactly that. The check that ties the two together is a different one — the
-> "UI dist up to date" step in [ci.yml](../.github/workflows/ci.yml) rebuilds the
-> bundle from `ui/` and fails if `go/web/` differs.
->
-> The **`ghcr.io` image attestation only exists for releases cut after this
-> change**. Tags published earlier have a cosign image *signature* but no SBOM
-> attestation, and `cosign verify-attestation` against them will correctly find
-> nothing. For those, generate one yourself:
-> `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.
-
-### Windows
-
-No winget. The primary path is **download-inspect-run** `install.ps1` — no admin,
-no Docker:
-
-```powershell
-# download the installer
-iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
-# read it before running it
-notepad install.ps1
-# run it; the Bypass setting applies to this one run only
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-`install.ps1` resolves the latest version from `checksums.txt`, downloads
-`bloxsmith_<ver>_windows_amd64.zip`, verifies its SHA-256 (**fail-closed**),
-installs `bloxsmith.exe` to `%LOCALAPPDATA%\Programs\Bloxsmith`, and adds that
-dir to your **user** PATH (reopen the shell to pick it up). Flags: `-Version
-vX.Y.Z` to pin, `-Prefix DIR` to install elsewhere.
-
-Secondary path — skip the script and download the
-`bloxsmith_<ver>_windows_amd64.zip` directly from the
-[latest release](https://github.com/holland-built/bloxsmith/releases/latest),
-unzip it, and run `bloxsmith.exe`.
-
-The app self-updates in place (in-app **Update now** / `bloxsmith update`) — there
-is no `winget upgrade` step. As with the shell installer, the SHA-256 check proves
-integrity, not publisher identity; the binary is unsigned (the container images
-are cosign-signed in CI, but the standalone binary is not).
-
-> **Note:** install.ps1 is new and tested on PowerShell 5.1+/7 — run it once on a
-> real Windows machine to confirm before advertising it for wide use.
-
----
-
-## SE demo path (docker run)
-
-You're an Infoblox SE showing this on a laptop or a customer LAN with Docker.
-Pull and run the prebuilt Go image directly:
-
-```bash
-# start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
-  -v noc-vault:/vault -v /var/run/docker.sock:/var/run/docker.sock \
-  --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
-
-# to reach it from your network at http://<host-ip>:8080,
-# change 127.0.0.1: to 0.0.0.0: in the -p flag above
-```
-
-Mounting `/var/run/docker.sock` lets the in-app self-update work; drop that `-v` to
-disable it. For an unattended vault auto-unlock passphrase, see
-[Auto-unlock](#auto-unlock-after-an-upgrade). Re-running with `:latest` after a
-`docker pull` picks up the newest release — see [Updating](#updating).
-
-> ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
-> On a trusted LAN, keep the vault **locked** when not presenting (don't set an
-> auto-unlock passphrase). On an untrusted network, use the `secure` Caddy profile
-> or a VPN.
-
----
-
-## Customer path (compose)
-
-You're self-hosting this permanently on a server/VM (Proxmox, NUC, cloud).
-**Compose** is recommended — env vars (including the Watchtower fallback wiring)
-survive Docker restarts automatically, and the compose file mounts the Docker
-socket so the in-app self-update works.
-
-```bash
-# get the code and go into its folder
-git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-# make your own copy of the settings file, then fill in INFOBLOX_API_KEY
-cp .env.example .env
-# start the dashboard, reachable only from this computer
-docker compose up -d
-# start it reachable from your whole network; the token is what allows changes
-DASHBOARD_TOKEN=pick-a-long-random-string BIND=0.0.0.0 docker compose up -d
-# start it behind the secure proxy: HTTPS plus a username and password
-docker compose --profile secure up -d
-```
-
-> **Updating `.env`:** after `git pull`, compare `.env` with `.env.example` — add any
-> new variables shown in the example; your existing values are preserved.
-
-For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all access
-goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
-
-```bash
-# turn a password into the hash to paste into BASIC_AUTH_HASH (use your own password)
-docker run --rm caddy caddy hash-password -p 'yourpassword'
-```
+The install commands are in the README: the
+[quick start](../README.md#quick-start) for Docker Compose, and **Other ways to install** under it
+for Docker without Compose, Homebrew and the installer scripts.
 
 | Scenario | Command | URL |
 |----------|---------|-----|
-| Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
-| Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
-| Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
-| Desktop / no-clone | `docker run … ghcr.io/holland-built/bloxsmith:latest` | http://localhost:8080 |
-| Laptop / no Docker | `bloxsmith` (standalone binary) | http://localhost:8080 |
+| This computer only (Compose) | `docker compose up -d` | http://localhost:8080 |
+| Whole network (Compose) | `DASHBOARD_TOKEN=<long-random-string> BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
+| Whole network, with HTTPS and a login | `docker compose --profile secure up -d` | https://host-ip:8443 |
+| No Compose | `docker run … ghcr.io/holland-built/bloxsmith:latest` | http://localhost:8080 |
+| No Docker | `bloxsmith` (Homebrew or installer script) | http://localhost:8080 |
 
-Tenant keys live AES-encrypted in the `noc-vault` Docker volume — they survive
-updates, restarts, and container recreation. For unattended restarts (no browser
-step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
-[Auto-unlock](#auto-unlock-after-an-upgrade).
+The README's **Run it as an always-on server** has the steps for the network and HTTPS rows.
+
+If you run from a clone of the repo, compare `.env` with `.env.example` after each `git pull`
+and add any new settings shown in the example. Your existing values are kept.
+
+> **Single key via env (skip the vault):** pass `-e INFOBLOX_API_KEY="Token <key>"`
+> (and optionally `-e GROQ_API_KEY=...`); the dashboard loads straight to data.
+> Drop `-v noc-vault:/vault` in that case.
 
 ---
 
 ## Updating
 
-**Standalone binary:** `bloxsmith update` (or the in-app **Update now** button) —
-downloads the release tarball, verifies its checksum, and swaps the binary in place.
-The CLI restarts nothing: a server already running (a service, or one you started
-in a terminal) keeps the OLD binary until you restart it — `bloxsmith service
-restart`, or stop and start it. The in-app button hands over by itself, because
-there it is the running server updating.
+The README's **Updating** section has the commands for each install. In short:
 
-**SE demo (Docker):** `docker pull ghcr.io/holland-built/bloxsmith:latest && docker
-restart bloxsmith`, or use the in-app **Update now** button.
+| Installed with | Update with |
+|---|---|
+| Docker Compose | `docker compose pull && docker compose up -d`, or double-click the update file |
+| Docker without Compose | `docker pull ghcr.io/holland-built/bloxsmith:latest`, then remove and re-run the container |
+| Homebrew or an installer script | `bloxsmith update`, then `bloxsmith service restart`. The in-app **Update now** button restarts by itself |
 
-**Customer:** `docker compose pull && docker compose up -d`, or use the in-app
-**Update now** button.
+Bloxsmith checks GitHub for a new release only when the dashboard is open or you run
+`bloxsmith update`. It never updates itself without you pressing a button.
+`DISABLE_UPDATE_CHECK=1` turns the check off; the dashboard then shows no update prompt.
 
-The server checks GitHub Releases for `holland-built/bloxsmith` **only when
-asked** — there is no background timer, so an idle server makes no requests at
-all. `GET /api/update/check` is the check; the dashboard calls it on page load
-and every 6 hours per open tab, and `bloxsmith update` calls it from the command
-line. The browser never contacts GitHub directly — the server does the check and
-the browser just reads the result.
-
-The answer is remembered in memory for **30 minutes (±3 minutes)** so repeat page
-loads do not each spend a request against GitHub's unauthenticated limit of 60
-requests/hour, which is shared by every machine behind the same public IP. The
-response says which it is: `cached` (true/false) and `checkedAt` (when GitHub was
-actually contacted). A failed check reports `error` and is never replaced by the
-last good answer — "the check failed" and "you are up to date" are different
-answers and render differently. Applying an update always fetches fresh; the
-cache is on the check only. The cache is per process — restarting the server
-clears it.
-
-`GET /api/vault/status` also embeds an `update` object, but only
-`{current, checkDisabled, selfUpdate}` in it carry information; its `latest`,
-`available` and `url` are always empty/false placeholders because that endpoint
-does no network call. `/api/update/check` is the only source of a real answer.
-
-`DISABLE_UPDATE_CHECK=1` stops `GET /api/update/check` contacting GitHub. It
-returns the running version plus `checkDisabled: true` and no `latest` —
-**deliberately not the same as "you are on the newest version"**, since nothing
-was looked up; the dashboard then shows no update UI at all. Honest scope: this
-switches off the automatic/browser-driven check only. Explicitly running
-`bloxsmith update`, or `POST /api/update/apply`, still contacts GitHub — those
-are direct operator requests to update, not background polling.
-
-There is no automatic image rollback. `docker-compose.yml` **does** define a
-healthcheck (`CMD /app/bloxsmith healthcheck`), but nothing acts on it:
-`restart: unless-stopped` fires on exit, not on health, so an unhealthy container
-is reported and left running. What the probe buys is the truth being visible —
-`docker compose ps` and `docker inspect` show unhealthy with the probe's stderr
-attached, a `health_status: unhealthy` event is emitted for anything watching the
-Docker event stream, and `depends_on: {condition: service_healthy}` becomes
-usable. Turning that into an automatic restart needs a supervisor on top.
-The compose file does not mount `/var/run/docker.sock` — the in-app updater never
-touches the Docker socket, image, or container. It only downloads its own release tarball,
-verifies the checksum, and swaps its own binary in place (see
-[go/apply.go](../go/apply.go)), then re-execs — the in-app button only; the
-`bloxsmith update` CLI swaps and stops, and you restart the server yourself. Run
-inside a container, that
-patches the process only — it does not change the image, so the next `docker
-compose pull && docker compose up -d` (or any container recreate) reverts it.
-For Docker installs, apply updates with the pull/up command or the update
-script above. There is no separate image-rollback path: to go back to a
-known-good version, pin its tag or digest in `docker-compose.yml` and run
-`docker compose up -d`.
-
-(No Watchtower sidecar ships in `docker-compose.yml` — auto-update via a
-sidecar was considered and never built.)
-
-There is **no unattended auto-update and no polling updater** — the daily check
-only surfaces availability. Applying an update is always a user action, whether
-that's the button click or the manual command above.
-
----
-
-## Install from the prebuilt image
-
-No source checkout, no build — just Docker. Releases are cut by the tag-triggered
-CI workflow ([release.yml](../.github/workflows/release.yml)), which runs goreleaser
-to publish AND cosign keyless-sign the multi-arch image to GitHub Container Registry
-(GHCR) alongside the binary tarballs (see [SHIP.md](SHIP.md)); local goreleaser is
-the manual fallback. The push/PR CI ([ci.yml](../.github/workflows/ci.yml)) only
-builds and tests the tree — it does not publish or sign images.
-
-To see what is inside the image you are about to run, read its SBOM attestation:
-[the container image's SBOM](#the-container-images-sbom-attestation).
-
-```bash
-# start it at http://localhost:8080, reachable only from this computer
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -e PUBLISHED_BIND=127.0.0.1 \
-  -v noc-vault:/vault \
-  --restart unless-stopped \
-  ghcr.io/holland-built/bloxsmith:latest
-```
-
-No keys on the command line. On first open the dashboard walks you through a
-quick **setup**: pick a passphrase, then add one or more **tenants** (a name + its
-Infoblox API key, with an optional Groq key for the AI box). Keys are
-**AES-encrypted at rest** in the `noc-vault` volume under your passphrase. Switch
-between tenants any time from the sidebar.
+In Docker, **Update now** patches the running program only. The next `docker compose pull` or
+any container re-create puts the image's version back, so update Docker installs with the
+commands above. To go back to an older version, pin its tag (below) and run
+`docker compose up -d`. How the update check works inside is in
+[SHIP.md](SHIP.md#how-the-update-check-works).
 
 ### Pinning a version
 
@@ -414,23 +70,10 @@ between tenants any time from the sidebar.
 [Releases page](https://github.com/holland-built/bloxsmith/releases/latest).
 Shortened (`:3.52`) and `v`-prefixed (`:v3.52.1`) tags are **not** published.
 
-Pinning opts you out of updates: `docker compose pull` re-fetches the same image
-and the in-app **Update now** button has nothing to move to. Updating a pinned
+Pinning holds a Docker install on that version: `docker compose pull` fetches the same image
+again. **Update now** still offers newer releases, but in Docker it only patches the running
+program until the container is re-created (see above). Updating a pinned
 deploy means editing the number yourself.
-
-> **Single key via env (skip the vault):** pass `-e INFOBLOX_API_KEY="Token <key>"`
-> (and optionally `-e GROQ_API_KEY=...`); the dashboard loads straight to data.
-> Drop `-v noc-vault:/vault` in that case.
-
-> **Make the GHCR package public (one-time)** so others pull without a login:
-> `github.com/users/holland-built/packages/container/bloxsmith/settings`
-> → *Change visibility* → **Public**. The source repo can stay private; package
-> visibility is independent. (Otherwise each user runs `docker login ghcr.io` with a
-> token that has `read:packages`.)
-
-This manual `docker run` is the always-works fallback behind both the
-[SE demo path](#se-demo-path-docker-run) and the
-[Customer path](#customer-path-compose) above.
 
 ---
 
@@ -595,11 +238,9 @@ OpenAI-compatible gateway for Claude.
 
 ## Provisioning templates
 
-The provisioning tools read their YAML/JSON templates from disk at `TEMPLATES_DIR`
-(default `/templates` in the container, the binary's own directory standalone).
-**These templates are not yet packaged into the distroless container image** — a
-known follow-up. Until then, provisioning that relies on bundled templates needs a
-`TEMPLATES_DIR` mounted from the host (e.g. `-v ./templates:/templates`).
+The provisioning tools read their YAML and JSON templates from `TEMPLATES_DIR`. They ship with
+Bloxsmith: inside the container image at `/templates`, and next to the program in the release
+download. Set `TEMPLATES_DIR` only to use your own templates instead.
 
 ---
 
@@ -819,7 +460,7 @@ Keys stay AES-encrypted on disk; whoever can read the passphrase source can decr
 the vault, so a stolen `vault.json` alone is useless. A wrong/missing passphrase
 just falls back to manual unlock in the browser.
 
-For unattended restarts on the [Customer path](#customer-path-compose), set
+For unattended restarts of a [Docker Compose install](#ways-to-run-it), set
 `VAULT_PASSPHRASE_FILE` in `.env` so a server reboot doesn't require a browser visit.
 
 ---
@@ -832,12 +473,9 @@ wherever `VAULT_DIR` resolved to. Losing it loses **every tenant API key**, and
 they are not recoverable from the Infoblox side: they are re-issued, one portal
 visit per tenant.
 
-```bash
-# save the vault, audit log and settings into one file only you can read
-bloxsmith vault-backup /path/to/bloxsmith-2026-08-06.tar.gz
-```
-
-That writes one gzipped tar, mode `0600`, containing the whole state directory:
+The commands for each install are in the README's
+[Back up and restore](../README.md#backup-and-uninstall). `bloxsmith vault-backup <file>`
+writes one gzipped tar, mode `0600`, containing the whole state directory:
 `vault.json`, `audit_log.jsonl`, `brand.json`, `logo.png`, `alert_state.json`,
 `first_seen.json`, `ai_budget.json`, `views/` and `teardown-exports/`.
 
@@ -861,49 +499,10 @@ you are about to destroy the original.
 
 Both are printed on every run, so nobody discovers the gap at restore time.
 
-### From Docker
-
-The container has no shell and no `rm` (`gcr.io/distroless/static`), so run the
-binary directly, write the archive outside the vault volume, and copy it out.
-This works for Compose and plain `docker run`, which both name the container
-`bloxsmith`:
-
-```bash
-# write a backup to the container's temporary folder, outside the vault volume
-docker exec bloxsmith /app/bloxsmith vault-backup /tmp/backup.tar.gz --force
-# copy it out to the current folder with today's date, owned by you
-docker cp bloxsmith:/tmp/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
-```
-
-`/tmp` is the container's own filesystem, so the archive never lands in the
-`noc-vault` volume and is gone when the container is replaced. `--force` lets the
-next backup overwrite it. `docker cp` writes the host copy as your user, where a
-one-off `docker run -v "$PWD":/out` would leave it owned by root on Linux.
-
-To restore into Docker, stop the container and run the restore in a one-off
-container against the same volume:
-
-```bash
-# stop Bloxsmith; its volumes are kept
-docker stop bloxsmith
-# restore the backup into the noc-vault volume with a one-off container
-docker run --rm -v noc-vault:/vault -v "$PWD":/backup:ro ghcr.io/holland-built/bloxsmith:latest vault-restore /backup/backup.tar.gz --confirm restore --force
-# start Bloxsmith again and unlock it with the passphrase the backup was made with
-docker start bloxsmith
-```
-
 ### Restoring
 
-```bash
-# put the backup back; stop the server first
-bloxsmith vault-restore ./bloxsmith-backup-2026-08-06.tar.gz --confirm restore
-```
-
-**Stop the server first.** A running server holds the vault open in memory and
-rewrites `vault.json` on the next tenant change, which would silently undo the
-restore some minutes later. The command warns if something is listening on the
-configured port, but it cannot tell your server from anything else on that port,
-so it warns rather than refuses.
+Stop Bloxsmith before restoring: a running copy keeps the old vault in memory and writes it
+back over the restore on the next tenant change. `bloxsmith vault-restore` guards the rest:
 
 | Guard | Behaviour |
 |---|---|
@@ -1155,8 +754,7 @@ into an admin bypass or into a forged name in a tamper-evident log.
   without unpacking anything: one per archive for the Go modules, one for the embedded
   UI's npm closure, and a cosign **attestation** on each architecture of the ghcr image.
   The UI SBOM is read from the lockfile, so it says what the bundle was built from rather
-  than proving what is in it. See [the SBOM](#the-sbom-whats-inside-the-release) and
-  [the image attestation](#the-container-images-sbom-attestation).
+  than proving what is in it. See [the SBOM and the image attestation](SHIP.md#whats-inside-a-release-sbom).
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.
