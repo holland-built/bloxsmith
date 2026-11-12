@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/holland-built/bloxsmith/ci.yml?branch=master&label=CI)](https://github.com/holland-built/bloxsmith/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/holland-built/bloxsmith?label=release)](https://github.com/holland-built/bloxsmith/releases/latest)
+[![Last commit](https://img.shields.io/github/last-commit/holland-built/bloxsmith)](https://github.com/holland-built/bloxsmith/commits/master)
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![Infoblox](https://img.shields.io/badge/Infoblox-Portal%20%2F%20CSP-0F6EB4)
@@ -32,7 +33,7 @@ security data.
 | Build a chart | Your own DNS, security or DHCP chart, picked from menus, that you can add to the Overview, Network, DNS, Security or Infra page |
 | AI query box (optional) | Ask questions about your data in plain English |
 
-[What each tab does](docs/TABS.md) lists all 17 tabs and says which ones change things in Infoblox.
+[What each tab does](docs/TABS.md) lists every tab and says which ones change things in Infoblox.
 
 ## What people use it for
 
@@ -43,7 +44,7 @@ Every page is in the menu down the left side: the everyday ones on top, the rest
 | Check the network first thing in the morning | **Overview**, then **Daily** | Look for subnets running out of addresses, DNS errors and new security hits |
 | Find a device | **Assets** | Type part of its name, or pick a type |
 | Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
-| Give someone an address or a DNS record | **Self-Service** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
+| Give someone an address or a DNS record | **Get an address** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
 | See who changed what today | **Changes** | Changes from the last 24 hours, grouped by what was touched. **Audit** goes further back |
 | Show a customer what automation looks like | **Demo server** | Builds a NIOS-X server on Proxmox, then removes it. See [Demo server](#demo-server) below |
 
@@ -94,9 +95,10 @@ Every page is in the menu down the left side: the everyday ones on top, the rest
    ```
 4. Go to <http://localhost:8080> and pick a passphrase. It unlocks your saved keys.
 5. Make an API key at <https://csp.infoblox.com> (your name, top right > **User API Keys** > **Create**) and paste it into Bloxsmith.
-6. The dashboard opens with a short **Finish setting up** checklist: AI answers, the demo server, your logo and name, and site templates. Each one is optional; skip any of them and open the list again from **Setup checklist** in **Settings**.
 
 You only add the key once. It is kept encrypted and survives restarts and updates.
+
+The dashboard then opens with a short **Finish setting up** checklist: AI answers, the demo server, your logo and name, and site templates. Each one is optional. Skip any of them, and open the list again from **Setup checklist** in **Settings**.
 
 <details>
 <summary><b>What you need</b></summary>

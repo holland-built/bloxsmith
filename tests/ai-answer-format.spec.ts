@@ -12,20 +12,20 @@ test('an AI answer shows its bold line and its table, not markdown characters', 
     '**Found 1 network list and 5 hosts.**',
     '| Item | Answer |',
     '|---|---|',
-    '| Network list | **sholland-home** |',
+    '| Network list | **example-home** |',
     '| Note | see [this page](https://evil.example) |',
     '- Subnets not checked',
   ].join('\n');
   await page.route('**/api/query', (route) => route.fulfill(json({ answer, suggestions: [] })));
   await page.goto('/#ai');
   const box = page.getByPlaceholder('Ask about your network…');
-  await box.fill('show me sholland networks');
+  await box.fill('show me example networks');
   await box.press('Enter');
   const log = page.getByRole('log');
   await expect(log.locator('strong', { hasText: 'Found 1 network list and 5 hosts.' })).toBeVisible();
   const table = log.getByRole('table');
   await expect(table.getByRole('columnheader', { name: 'Item' })).toBeVisible();
-  await expect(table.getByRole('cell', { name: 'sholland-home' })).toBeVisible();
+  await expect(table.getByRole('cell', { name: 'example-home' })).toBeVisible();
   await expect(log.getByRole('listitem')).toHaveText('Subnets not checked');
   await expect(log).not.toContainText('**');
   await expect(log).not.toContainText('|');
