@@ -821,6 +821,20 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		return M{"ok": false, "error": "invalid subnet id"}, 400
 	}
 
+	// "Reserve for a device": one address locked to a MAC. A dhcp value that is
+	// not an object is refused rather than ignored, or the caller would get a
+	// plain allocation it did not ask for.
+	if has(body, "dhcp") {
+		dhcp := asMap(body["dhcp"])
+		if dhcp == nil {
+			return M{"ok": false, "error": "dhcp must be an object with a mac"}, 400
+		}
+		if count != 1 {
+			return M{"ok": false, "error": "a reservation for a device takes exactly one address"}, 400
+		}
+		return c.reserveForDevice(objPath, subnetID, name, dns, dhcp, dry)
+	}
+
 	if dry {
 		// GET on nextavailableip lists the next free addresses without
 		// reserving them (operation subnetListNextAvailableIP; POST is the one
@@ -851,14 +865,8 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 
 	// Validate the DNS payload up front so a malformed type/value fails 400
 	// BEFORE any IP is reserved (else the reservation is orphaned).
-	if dns != nil {
-		rtype := strings.ToUpper(pyStrOr(dns, "type", "A"))
-		rval := strings.TrimSpace(pyStr(dns["value"]))
-		if rval != "" || (rtype != "A" && rtype != "AAAA") {
-			if _, err := Rdata(rtype, rval); err != nil {
-				return M{"ok": false, "error": fmt.Sprintf("invalid dns payload: %s", err.Error())}, 400
-			}
-		}
+	if err := validateRecord(dns); err != nil {
+		return M{"ok": false, "error": fmt.Sprintf("invalid dns payload: %s", err.Error())}, 400
 	}
 
 	var bodyExtra any
@@ -875,38 +883,10 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	out := M{"ok": true, "addresses": addressSummaries(addresses)}
 
 	if dns != nil && len(addresses) > 0 {
-		zoneID := pyStr(dns["zone_id"])
-		rname := pyStr(dns["name"])
-		rtype := strings.ToUpper(pyStrOr(dns, "type", "A"))
-		rvalue := pyStr(dns["value"])
-		if rvalue == "" {
-			rvalue = pyStr(asMap(addresses[0])["address"])
-		}
-		var rresp any
-		var rstatus int
-		if rdata, err := Rdata(rtype, rvalue); err != nil {
-			rresp, rstatus = M{"error": err.Error()}, 400
-		} else {
-			recordBody := M{"name_in_zone": rname, "zone": zoneID, "type": rtype, "rdata": rdata}
-			if truthy(dns["create_ptr"], false) && (rtype == "A" || rtype == "AAAA") {
-				recordBody["options"] = M{"create_ptr": true, "check_rmz": true}
-			}
-			rresp, rstatus, _ = c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
-		}
+		rresp, rstatus := c.createAddressRecord(dns, pyStr(asMap(addresses[0])["address"]))
 
 		if (rstatus == 200 || rstatus == 201) && asMap(rresp) != nil {
-			rm := asMap(rresp)
-			rec := asMap(rm["result"])
-			if rec == nil {
-				if results, ok := rm["results"].([]any); ok && len(results) > 0 {
-					rec = asMap(results[0])
-				}
-			}
-			var recID any
-			if rec != nil {
-				recID = rec["id"]
-			}
-			out["record"] = M{"ok": true, "id": recID, "status": rstatus}
+			out["record"] = M{"ok": true, "id": recordID(rresp), "status": rstatus}
 		} else if writeUnreadable(rresp, rstatus) || outcomeUnknown(rstatus) {
 			// Upstream ACCEPTED the record write and we cannot read back what it
 			// made — or never said (a timeout or a gateway error): the record may
@@ -978,6 +958,57 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	}
 
 	return out, 200
+}
+
+// validateRecord checks an allocation's optional DNS payload before anything is
+// reserved. An empty A/AAAA value is fine: it is filled with the address.
+func validateRecord(dns M) error {
+	if dns == nil {
+		return nil
+	}
+	rtype := strings.ToUpper(pyStrOr(dns, "type", "A"))
+	rval := strings.TrimSpace(pyStr(dns["value"]))
+	if rval != "" || (rtype != "A" && rtype != "AAAA") {
+		if _, err := Rdata(rtype, rval); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createAddressRecord makes the DNS record an allocation asked for, pointing at
+// address unless the payload names its own value.
+func (c *Client) createAddressRecord(dns M, address string) (any, int) {
+	rtype := strings.ToUpper(pyStrOr(dns, "type", "A"))
+	rvalue := pyStr(dns["value"])
+	if rvalue == "" {
+		rvalue = address
+	}
+	rdata, err := Rdata(rtype, rvalue)
+	if err != nil {
+		return M{"error": err.Error()}, 400
+	}
+	recordBody := M{"name_in_zone": pyStr(dns["name"]), "zone": pyStr(dns["zone_id"]), "type": rtype, "rdata": rdata}
+	if truthy(dns["create_ptr"], false) && (rtype == "A" || rtype == "AAAA") {
+		recordBody["options"] = M{"create_ptr": true, "check_rmz": true}
+	}
+	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
+	return resp, status
+}
+
+// recordID pulls the created record's id from a "result" or "results" body.
+func recordID(resp any) any {
+	rm := asMap(resp)
+	rec := asMap(rm["result"])
+	if rec == nil {
+		if results, ok := rm["results"].([]any); ok && len(results) > 0 {
+			rec = asMap(results[0])
+		}
+	}
+	if rec == nil {
+		return nil
+	}
+	return rec["id"]
 }
 
 // pyStrOr is Python `str(d.get(k) or default)`.

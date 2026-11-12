@@ -93,7 +93,7 @@ var tenantWriteAuditEvents = map[string][]string{
 	"POST /api/retag/block":     {"retag-block", "retag-block-error"},
 
 	// --- DNS and IPAM edits --------------------------------------------------
-	"POST /api/selfservice/allocate": {"selfservice-allocate", "selfservice-allocate-orphaned", "selfservice-allocate-record-unreadable"},
+	"POST /api/selfservice/allocate": {"selfservice-allocate", "selfservice-allocate-orphaned", "selfservice-allocate-record-unreadable", "selfservice-reserve-record-failed"},
 	"POST /api/dns/records":          {"dns-record-create", "dns-record-create-unreadable"},
 	"POST /api/desk/run":             {"desk-build", "demo-build", "demo-build-error"},
 	"POST /api/desk/remove":          {"desk-remove", "demo-remove", "demo-remove-error"},

@@ -176,7 +176,8 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 	case resultOK(res) && !isDry(res):
 		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
-			"tag_value": b["tag_value"], "count": b["count"]})
+			"tag_value": b["tag_value"], "count": b["count"],
+			"fixed_address": res["fixed_address"]})
 	case createdUnreadable(res):
 		// The allocate path's DNS record write was accepted and could not be read
 		// back, so the record is live and the addresses stayed reserved for it on
@@ -186,7 +187,8 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		// nothing stands in for it.
 		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"], "tag_value": b["tag_value"],
-			"addresses": res["addresses"], "still_reserved": true, "created_unreadable": true})
+			"addresses": res["addresses"], "still_reserved": true, "created_unreadable": true,
+			"fixed_address": res["fixed_address"]})
 	case !isDry(res):
 		// The ok-only gate left the same hole editCreate had: an ok:false that
 		// nonetheless left live objects on the tenant. Here they are IP addresses
@@ -199,6 +201,12 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		// anyone counting allocations would count this as one. The ids are copied
 		// through as the builder's own []any (audit/widen.go handles the element
 		// types) so the row names each stranded address.
+		// "Reserve for a device" made its reservation but not the DNS record:
+		// the reservation is live and kept on purpose, so it gets a row.
+		if fa, _ := res["fixed_address"].(map[string]any); fa != nil && fa["ok"] == true {
+			d.auditAppend("selfservice-reserve-record-failed", httpx.Actor(r), map[string]any{
+				"subnet_id": b["subnet_id"], "fixed_address": fa})
+		}
 		if orphans := strandedReservations(res); orphans != nil {
 			d.auditAppend("selfservice-allocate-orphaned", httpx.Actor(r), map[string]any{
 				"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
