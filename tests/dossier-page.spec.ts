@@ -184,9 +184,9 @@ test.describe('palette: indicator search', () => {
   test('an empty query still lists every tab and offers no indicator row', async ({ page }) => {
     await page.goto('/#overview');
     const dialog = await openPalette(page);
-    // 19 tabs — the palette still receives TABS,
+    // 20 tabs — the palette still receives TABS,
     // never PAGES, so the hidden dossier page must not be in this list.
-    await expect(dialog.getByRole('option')).toHaveCount(19);
+    await expect(dialog.getByRole('option')).toHaveCount(20);
     await expect(dialog.getByText(/Search everything for/)).toHaveCount(0);
     await expect(dialog.getByRole('option', { name: /^Dossier$/ })).toHaveCount(0);
   });
