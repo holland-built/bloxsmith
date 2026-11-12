@@ -124,6 +124,8 @@ function useWriteFlow(url) {
 // Name the address the server actually reserved; it can differ from the preview.
 function allocatedMsg(j, dnsName) {
   const got = (j?.addresses || []).map((a) => a?.address).filter(Boolean)
+  const fixed = j?.fixed_address
+  if (fixed?.ok) return `Done. ${fixed.address} is reserved for the device ${fixed.mac}${dnsName && j?.record?.ok ? `, and ${dnsName} now points to it` : ''}.`
   if (got.length === 1 && dnsName && j?.record?.ok) return `Done. ${got[0]} is yours, and ${dnsName} now points to it.`
   if (got.length === 1) return `Done. ${got[0]} is yours.`
   if (got.length > 1) return `Done. These ${got.length} addresses are yours: ${got.join(', ')}.`
@@ -141,7 +143,7 @@ const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s
 
 // The preview said what it would do as raw JSON. Say it as a sentence; the
 // JSON stays under Details for anyone checking the ids.
-function allocateSentence(preview, subnet, name, dnsName, ptr) {
+function allocateSentence(preview, subnet, name, dnsName, ptr, mac) {
   const rows = Array.isArray(preview) ? preview : null
   const addrs = rows?.map((r) => r?.address).filter(Boolean) ?? []
   if (!addrs.length) return null
@@ -149,7 +151,8 @@ function allocateSentence(preview, subnet, name, dnsName, ptr) {
   const where = subnet ? ` in subnet ${subnetLabel(subnet)}` : ''
   const called = name.trim() ? `, named ${name.trim()}` : ''
   const dns = dnsName ? ` It will also point ${dnsName} to it${ptr ? ', with a reverse record' : ''}.` : ''
-  return `This will take ${list}${where}${called}.${dns}`
+  const device = mac ? ` Only the device ${mac} will get it from DHCP.` : ''
+  return `This will take ${list}${where}${called}.${device}${dns}`
 }
 
 function AllocatePanel() {
@@ -171,6 +174,9 @@ function AllocatePanel() {
   const [ptr, setPtr] = useState(false)
   const zonesApi = useApi(dnsOn ? '/api/dns/zones' : null, SHARE_PICKER)
   const zones = zonesApi.data?.zones ?? []
+  // "Lock it to a device": a DHCP reservation, so only that MAC address gets it.
+  const [deviceOn, setDeviceOn] = useState(false)
+  const [mac, setMac] = useState('')
 
   const flow = useWriteFlow('/api/selfservice/allocate')
 
@@ -217,11 +223,17 @@ function AllocatePanel() {
   const zone = zones.find((z) => z.id === zoneId)
   const dnsName = dnsOn && single && zone && name.trim() ? `${name.trim()}.${String(zone.fqdn || zone.name || '').replace(/\.$/, '')}` : ''
   const dnsIncomplete = dnsOn && single && !dnsName
-  const body = () => ({
+  const device = deviceOn && single
+  const macOk = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(mac.trim())
+  // Reserve takes the exact address the preview showed, so what is reserved is
+  // what was previewed; the server refuses if it was taken meanwhile.
+  const previewed = flow.stale ? '' : flow.previewReply?.fixed_address?.address || ''
+  const body = (apply) => ({
     subnet_id: target,
     count: Number(count) || 1,
     name,
     ...(dnsName ? { dns: { zone_id: zoneId, name: name.trim(), type: String(targetSubnet?.address || '').includes(':') ? 'AAAA' : 'A', create_ptr: ptr } } : {}),
+    ...(device ? { dhcp: { mac: mac.trim(), name: name.trim(), ...(apply && previewed ? { address: previewed } : {}) } } : {}),
   })
 
   // One set of props for both halves of the Preview/Apply flow, so the button
@@ -229,10 +241,10 @@ function AllocatePanel() {
   const applyProps = {
     status: flow.status,
     stale: flow.stale,
-    disabled: !target || dnsIncomplete,
-    onPreview: () => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(), 'Allocate') },
-    onApply: () => flow.runApply(body(), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) }),
-    applyLabel: 'Allocate',
+    disabled: !target || dnsIncomplete || (device && !macOk),
+    onPreview: () => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(false), device ? 'Reserve' : 'Allocate') },
+    onApply: () => flow.runApply(body(true), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) }),
+    applyLabel: device ? 'Reserve' : 'Allocate',
     error: flow.error,
     message: flow.message,
   }
@@ -317,6 +329,27 @@ function AllocatePanel() {
             <FetchError error={zonesApi.error} stale={zones.length > 0} />
           </div>
         )}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={deviceOn} disabled={!single} onChange={(e) => { setDeviceOn(e.target.checked); flow.markStale() }} />
+          Lock it to one device (DHCP reservation)
+          {!single && <span className="text-note text-muted">(one address at a time)</span>}
+        </label>
+        {device && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+            <Field label="Device MAC address">
+              <input {...MACHINE_TEXT}
+                className={inputCls}
+                value={mac}
+                onChange={(e) => { setMac(e.target.value); flow.markStale() }}
+                placeholder="aa:bb:cc:dd:ee:ff"
+                aria-invalid={mac.trim() !== '' && !macOk}
+              />
+            </Field>
+            <p className="text-note text-muted self-end">
+              {mac.trim() && !macOk ? 'Six pairs of letters or digits, like aa:bb:cc:dd:ee:ff.' : 'Preview checks this device has no reservation yet.'}
+            </p>
+          </div>
+        )}
       </div>
 
       <PreviewApply {...applyProps} part="start" />
@@ -334,7 +367,7 @@ function AllocatePanel() {
           <PreviewBox
             data={flow.preview}
             note="preview — no address has been taken yet"
-            summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr)}
+            summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr, device ? flow.previewReply?.fixed_address?.mac : '')}
           />
         ) : !flow.message && <p className="text-copy text-muted">Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</p>}
       </PreviewApply>

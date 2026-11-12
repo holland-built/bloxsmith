@@ -160,3 +160,70 @@ func TestSelfserviceAllocate_DryRunWritesNoAuditEntry(t *testing.T) {
 		t.Fatalf("audit entries = %d, want 0 (a preview reserves nothing); entries=%v", len(got), got)
 	}
 }
+
+// --- "Reserve for a device": the reservation is live, so it is always recorded --
+
+// reserveUpstream answers the reservation path: subnet read, MAC check, next
+// free address, the fixed-address create, then a DNS record with dnsStatus.
+func reserveUpstream(dnsStatus int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "GET" && strings.HasSuffix(path, "/ipam/subnet/s-42"):
+			io.WriteString(w, `{"result":{"address":"10.7.0.0","cidr":24,"space":"ipam/ip_space/sp-1"}}`)
+		case r.Method == "GET" && strings.HasSuffix(path, "/dhcp/fixed_address"):
+			io.WriteString(w, `{"results":[]}`)
+		case r.Method == "GET" && strings.HasSuffix(path, "/nextavailableip"):
+			io.WriteString(w, `{"results":[{"address":"10.7.0.9"}]}`)
+		case r.Method == "POST" && strings.HasSuffix(path, "/dhcp/fixed_address"):
+			w.WriteHeader(201)
+			io.WriteString(w, `{"result":{"id":"dhcp/fixed_address/f-1"}}`)
+		case r.Method == "POST" && strings.HasSuffix(path, "/dns/record"):
+			w.WriteHeader(dnsStatus)
+			io.WriteString(w, `{"result":{"id":"dns/record/r-1"}}`)
+		default:
+			w.WriteHeader(500)
+			fmt.Fprintf(w, `{"error":"unexpected upstream call %s %s"}`, r.Method, path)
+		}
+	}
+}
+
+func reserveRequest() *http.Request {
+	body := `{"subnet_id":"s-42","dry":false,"dhcp":{"mac":"aa:bb:cc:dd:ee:01","name":"printer-3"},"dns":{"zone_id":"z-1","name":"printer-3"}}`
+	r := httptest.NewRequest("POST", "/api/selfservice/allocate", strings.NewReader(body))
+	r.RemoteAddr = "127.0.0.1:12345"
+	return r
+}
+
+func TestSelfserviceReserve_SuccessRowNamesTheReservation(t *testing.T) {
+	d, logPath := newDeleteDeps(t, reserveUpstream(201))
+	rr := httptest.NewRecorder()
+	d.body(d.selfserviceAllocate)(rr, reserveRequest())
+	if rr.Code != 200 {
+		t.Fatalf("status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	entries := auditEntries(t, logPath, "selfservice-allocate")
+	if len(entries) != 1 {
+		t.Fatalf("selfservice-allocate entries = %d, want 1", len(entries))
+	}
+	fa, _ := residualAuditDetail(t, entries[0])["fixed_address"].(map[string]any)
+	if fa["mac"] != "aa:bb:cc:dd:ee:01" || fa["address"] != "10.7.0.9" {
+		t.Fatalf("the row should name the MAC and address reserved: %v", fa)
+	}
+}
+
+func TestSelfserviceReserve_DNSFailureStillRecordsTheReservation(t *testing.T) {
+	d, logPath := newDeleteDeps(t, reserveUpstream(400))
+	rr := httptest.NewRecorder()
+	d.body(d.selfserviceAllocate)(rr, reserveRequest())
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	if n := len(auditEntries(t, logPath, "selfservice-reserve-record-failed")); n != 1 {
+		t.Fatalf("selfservice-reserve-record-failed entries = %d, want 1: the reservation is live", n)
+	}
+	if n := len(auditEntries(t, logPath, "selfservice-allocate")); n != 0 {
+		t.Fatalf("a half-done request must not be filed as a success, got %d", n)
+	}
+}

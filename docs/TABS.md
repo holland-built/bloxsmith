@@ -324,7 +324,8 @@ Take the next free address, or several, from a subnet.
 1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Every list has a search box above it; type part of a name or address to narrow it. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
 3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
-4. **Preview** shows which addresses it would take, in a sentence. **Allocate** takes them and names the address you got.
+4. To keep a single address for one device, tick **Lock it to one device (DHCP reservation)** and type the device's MAC address, such as `aa:bb:cc:dd:ee:ff`. DHCP then gives that address to that device only. Preview refuses a device that already has a reservation. **Reserve** takes the exact address the preview showed; if someone took it meanwhile, nothing is made and you preview again. With a DNS name as well, the reservation is made first, and it stays even if the DNS record fails.
+5. **Preview** shows which addresses it would take, in a sentence. **Allocate** (or **Reserve**) takes them and names the address you got.
 
 ### Create a DNS record
 
