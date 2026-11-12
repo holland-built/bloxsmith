@@ -417,6 +417,35 @@ Enter a domain, IP address or host. It returns the matching threat records and a
 
 **Block domain** adds the domain you looked up to your blocking policy, which is a real change to your tenant. It needs a dashboard token (set it under ⋯ Settings), and **Unblock** in the same place undoes it.
 
+### Infoblox AI connection (MCP)
+
+Infoblox offers 31 actions through its AI connection, called MCP. Bloxsmith uses the ones in the table below. Most of what Bloxsmith shows comes from Infoblox's normal API instead, so it works without this connection.
+
+These features need your Infoblox Portal user to be in the `ib-mcp-server-user` group, which your Infoblox account admin adds. Without it, they say "Infoblox refused the call (HTTP 403)" and the rest of Bloxsmith carries on.
+
+| You want to | Go to | Infoblox action it uses |
+|---|---|---|
+| See Infoblox IQ's suggested actions | **Incidents** > **IQ Actions** | `iq-actions_list_actions` |
+| Read one action in full | Click its row in **IQ Actions** | `iq-actions_get_action` |
+| Close an action, or open it again | **Resolve** or **Reopen** in **IQ Actions**. This changes it in Infoblox | `iq-actions_update_action` |
+| See the DNS or DHCP settings an on-prem host loaded | **Infra** > **Host Inventory**, click the host | `infoblox-hosts_get_host_config` |
+| Look up a domain, IP or host in threat records | **AI** > **Threat lookup**. **Ask AI** uses the same search | `infoblox-portal_network_entity_search` |
+| Block a bad domain | **Block domain** in **Threat lookup**. This changes your block list | `infoblox-portal_make_patch_request` |
+| Unblock it again | **Unblock** in **Threat lookup** | `infoblox-portal_make_delete_request` |
+| Ask a question in plain words | **AI** > **Ask AI**, which uses this to pick which Infoblox data to read | `infoblox-portal_search_available_services` |
+| Count assets when Infoblox's direct data feed fails | **Assets**, automatically, as a backup | `infoblox-portal_query_cube` |
+| Read a large backup answer in pieces | **Assets**, with the action above | `infoblox-portal_query_stored_data` |
+
+Search inside Threat lookup and Ask AI depends on `infoblox-portal_network_entity_search`, which returned nothing when last checked in November 2026. Until Infoblox fixes that, those searches come back empty.
+
+The rest are not used:
+
+- **Built in but not called:** `infoblox-portal_make_get_request`. Bloxsmith reads Infoblox's API directly.
+- **Changes made another way:** `infoblox-portal_make_post_request`, `infoblox-portal_make_put_request`. Bloxsmith's other changes, such as addresses, records and subnets, go through Infoblox's API directly, with a preview first.
+- **Describe Infoblox's catalog:** `infoblox-portal_list_all_available_services`, `infoblox-portal_get_service_info`, `infoblox-portal_get_method_info`, `infoblox-portal_search_available_cubes`, `infoblox-portal_list_all_cubes`, `infoblox-portal_get_cube_info`, `infoblox-portal_read_resource`. Bloxsmith keeps its own copy, and a nightly check compares it with Infoblox's.
+- **Action states:** `iq-actions_list_action_states`, `iq-actions_list_allowed_transitions`. Bloxsmith only moves an action between open and resolved.
+- **For Infoblox's own chat app:** `infoblox-portal_show_table`, `infoblox-portal_get_table_page`, `infoblox-portal_get_dashboard`, `infoblox-portal_user_action`, `infoblox-portal_app_ping`, `infoblox-portal_get_approval_form`, `infoblox-portal_submit_approval`, `infoblox-portal_deny_approval`, `infoblox-portal_always_allow_approval`. They drive its tables, dashboards and approval forms.
+
 ## Build a chart
 
 **Read-only.** Make a chart by picking from menus. No typing, no AI.

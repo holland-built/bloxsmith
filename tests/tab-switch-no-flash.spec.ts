@@ -170,7 +170,16 @@ test('switching tabs never blanks the page, and logs no console error', async ({
     // A switch that fetched nothing never suspended, so the two assertions
     // below are true of it for free. Only a switch that actually held a chunk
     // is counted, and only that kind has to have watched a real window.
-    if (delayedNow > 0) {
+    //
+    // HELD A CHUNK *AND* SUSPENDED. A held request is not proof the switch
+    // waited on it: since 2026-11-11 the cached #editor -> #overview switch
+    // puts Overview's heading up on the first frame and only then fetches a
+    // chart chunk in the background, so delayedNow is 1 over a switch that
+    // never suspended, and the floor failed it (2 of 12 local runs, and CI).
+    // A switch suspended if some frame did not yet show the destination
+    // heading; one that never did is the cached case described above.
+    const suspended = samples.some((s) => s.h1 !== heading);
+    if (delayedNow > 0 && suspended) {
       realSwitches++;
       expect(
         samples.length,
