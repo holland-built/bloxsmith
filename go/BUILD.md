@@ -82,17 +82,6 @@ produces and publishes:
   distroless, multi-arch), **cosign keyless-signed** in CI — same env contract as
   before, drops into the existing `docker-compose.yml` + `noc-vault` volume unchanged.
 
-## This REPLACED the old distribution path (Python retired 2026-07)
-
-The Python image and its scripts are gone; the Go binary is the whole product.
-
-| Old (Python image, deleted) | New (Go binary) |
-|---|---|
-| `release-image.sh` (local docker build+push) | `goreleaser release` (`dockers:` block) |
-| `docker-publish.yml` CI build-push | tag-triggered `.github/workflows/release.yml` runs `goreleaser release` + cosign-signs images (local goreleaser is the fallback, see `docs/SHIP.md`); `ci.yml` only builds/tests + a snapshot |
-| `Dockerfile` (`APP_VERSION` ARG) | `go/Dockerfile.goreleaser` + ldflags `-X main.version` |
-| brew/Windows: none | goreleaser `brews:` block; Windows via `scripts/install.ps1` + direct zip |
-
 ## Secrets/tokens needed at real-release time (not for `--snapshot`)
 
 - `GITHUB_TOKEN` — creating the GitHub Release and uploading its archives,
