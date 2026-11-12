@@ -441,7 +441,7 @@ Search inside Threat lookup and Ask AI depends on `infoblox-portal_network_entit
 The other 21 actions are not used:
 
 - **Built in but not called:** `infoblox-portal_make_get_request`. Bloxsmith reads Infoblox's API directly.
-- **Changes made another way:** `infoblox-portal_make_post_request`, `infoblox-portal_make_put_request`. Bloxsmith makes its changes through Infoblox's API directly, with a preview first.
+- **Changes made another way:** `infoblox-portal_make_post_request`, `infoblox-portal_make_put_request`. Bloxsmith's other changes, such as addresses, records and subnets, go through Infoblox's API directly, with a preview first.
 - **Describe Infoblox's catalog:** `infoblox-portal_list_all_available_services`, `infoblox-portal_get_service_info`, `infoblox-portal_get_method_info`, `infoblox-portal_search_available_cubes`, `infoblox-portal_list_all_cubes`, `infoblox-portal_get_cube_info`, `infoblox-portal_read_resource`. Bloxsmith keeps its own copy, and a nightly check compares it with Infoblox's.
 - **Action states:** `iq-actions_list_action_states`, `iq-actions_list_allowed_transitions`. Bloxsmith only moves an action between open and resolved.
 - **For Infoblox's own chat app:** `infoblox-portal_show_table`, `infoblox-portal_get_table_page`, `infoblox-portal_get_dashboard`, `infoblox-portal_user_action`, `infoblox-portal_app_ping`, `infoblox-portal_get_approval_form`, `infoblox-portal_submit_approval`, `infoblox-portal_deny_approval`, `infoblox-portal_always_allow_approval`. They drive its tables, dashboards and approval forms.
