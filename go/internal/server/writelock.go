@@ -68,6 +68,9 @@ var tenantWritePaths = map[string]bool{
 	"/api/selfservice/allocate": true,
 	"/api/dns/records":          true,
 
+	// Site lists: a custom list and a security-policy rule.
+	"/api/lists/apply": true,
+
 	// The job desk: Build and Remove (server/desk.go). Previews too, like the
 	// Self-Service POSTs they wrap.
 	"/api/desk/run":    true,
