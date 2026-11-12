@@ -105,6 +105,7 @@ You only add the key once. It is kept encrypted and survives restarts and update
 |---|---|
 | Your computer | Docker Desktop on macOS, Windows or Linux |
 | Infoblox | A Portal login that can create a User API key |
+| Infoblox user group (optional) | Your Portal user in the `ib-mcp-server-user` group, for IQ actions on **Incidents** and host settings on **Infra**. Your Infoblox account admin adds it. Everything else works without it |
 | Network | Outbound HTTPS to csp.infoblox.com |
 | Port | 8080 free on your computer, or change `PORT` (see Troubleshooting) |
 
@@ -540,6 +541,7 @@ rm -rf ~/Library/Application\ Support/bloxsmith
 | Port 8080 is already in use | Another program has it | Change `PORT` in `docker-compose.yml`, or run `bloxsmith --port 9090` |
 | macOS says the app cannot be opened | The program is not signed by Apple | Right-click > **Open**, or run `xattr -dr com.apple.quarantine` on the file |
 | Windows SmartScreen blocks it | The program is not signed by Microsoft | Click **More info** > **Run anyway** |
+| **Incidents** or **Infra** says *Infoblox refused the call (HTTP 403)* | Most often, your Portal user is not in the `ib-mcp-server-user` group | Ask your Infoblox account admin to add you to it, then reload the page |
 | Audit log says *could not verify* | The audit signing key volume was lost | Keep `noc-audit-trust` when you replace the container |
 
 The signing warnings only apply to Homebrew and the installer scripts. The Docker install never
