@@ -33,7 +33,7 @@ security data.
 | Build a chart | Your own DNS, security or DHCP chart, picked from menus, that you can add to the Overview, Network, DNS, Security or Infra page |
 | AI query box (optional) | Ask questions about your data in plain English |
 
-[What each tab does](docs/TABS.md) lists every tab and says which ones change things in Infoblox.
+[What each tab does](docs/TABS.md) lists every tab and says which ones change things in Infoblox. [Infoblox AI connection](docs/TABS.md#infoblox-ai-connection-mcp) lists the Infoblox AI actions Bloxsmith uses, what for, and the user group they need.
 
 ## What people use it for
 
