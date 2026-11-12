@@ -29,6 +29,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['selfservice', 'Get an address'],
   ['editor', 'Editor'],
   ['drift', 'Drift'],
+  ['lists', 'Site lists'],
   ['demo', 'Demo server'],
   ['ai', 'AI Assistant'],
   ['chart', 'Build a chart'],
@@ -42,7 +43,7 @@ const GROUP_TABS: Record<string, string[]> = {
   Status: ['Overview', 'Daily', 'Best practices'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
-  Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Demo server'],
+  Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Site lists', 'Demo server'],
   Ask: ['AI', 'Build a chart'],
 };
 
