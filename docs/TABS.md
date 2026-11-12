@@ -419,7 +419,7 @@ Enter a domain, IP address or host. It returns the matching threat records and a
 
 ### Infoblox AI connection (MCP)
 
-Infoblox offers 31 actions through its AI connection, called MCP. Bloxsmith uses 10 of them, for the features below. Most of what Bloxsmith shows comes from Infoblox's normal API instead, so it works without this connection.
+Infoblox offers 31 actions through its AI connection, called MCP. Bloxsmith uses the ones in the table below. Most of what Bloxsmith shows comes from Infoblox's normal API instead, so it works without this connection.
 
 These features need your Infoblox Portal user to be in the `ib-mcp-server-user` group, which your Infoblox account admin adds. Without it, they say "Infoblox refused the call (HTTP 403)" and the rest of Bloxsmith carries on.
 
@@ -438,7 +438,7 @@ These features need your Infoblox Portal user to be in the `ib-mcp-server-user` 
 
 Search inside Threat lookup and Ask AI depends on `infoblox-portal_network_entity_search`, which returned nothing when last checked in November 2026. Until Infoblox fixes that, those searches come back empty.
 
-The other 21 actions are not used:
+The rest are not used:
 
 - **Built in but not called:** `infoblox-portal_make_get_request`. Bloxsmith reads Infoblox's API directly.
 - **Changes made another way:** `infoblox-portal_make_post_request`, `infoblox-portal_make_put_request`. Bloxsmith's other changes, such as addresses, records and subnets, go through Infoblox's API directly, with a preview first.
