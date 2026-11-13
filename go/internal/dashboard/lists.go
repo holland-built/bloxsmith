@@ -31,8 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"bloxsmith/internal/rest"
 )
 
 // ListActions are the six rule actions a policy accepts for a custom list, in
@@ -255,12 +253,11 @@ func (s *Service) readList(id int) (map[string]any, int, error) {
 
 // listByName finds a custom list by its exact name; nil when there is none.
 func (s *Service) listByName(name string) (map[string]any, error) {
-	esc, err := rest.CSPQ(name)
-	if err != nil {
-		return nil, err
-	}
+	// Infoblox refuses name as a filter field on named lists ("Invalid filter
+	// field: name"), so read them all, every type, and match here. A name is
+	// taken whatever type the list holding it is.
 	rows, err := s.Rest.GetStrict(atcfw+"/named_lists", map[string]string{
-		"_filter": fmt.Sprintf(`name=="%s"`, esc), "_fields": "id,name,type,policies"})
+		"_fields": "id,name,type,policies", "_limit": "1000"})
 	if err != nil {
 		return nil, err
 	}
