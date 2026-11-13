@@ -105,6 +105,7 @@ func TestAnUnreadableThreatReplyIsNotClean(t *testing.T) {
 		`{"threat": [{"host": "zoom.us", "threat_level": "high"}]}`,
 		`{"threat": ["zoom.us"]}`,
 		`{"record_count": 0}`,
+		`{"threat": [{"host": "", "threat_level": 80}]}`,
 	} {
 		f := newFakeTenant()
 		f.threatBody = body

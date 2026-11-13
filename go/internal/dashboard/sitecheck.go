@@ -108,7 +108,7 @@ func (s *Service) checkBatch(b []string) (map[string]*SiteThreat, string) {
 		r, ok := t.(map[string]any)
 		host, okHost := r["host"].(string)
 		level, err := strconv.ParseFloat(fmt.Sprint(r["threat_level"]), 64)
-		if !ok || !okHost || err != nil {
+		if !ok || !okHost || strings.TrimSpace(host) == "" || err != nil {
 			return nil, unreadable
 		}
 		host = canonDomain(host)
