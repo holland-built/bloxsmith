@@ -646,7 +646,7 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
           {plan.length === 0
             ? <p className="text-note">Nothing from this change is left to remove.</p>
             : <>
-                <p className="text-note text-txt">This will delete:</p>
+                <p className="text-note text-txt">{`Made by Bloxsmith${run.created ? ` on ${when(run.created)}` : ''}. Safe to delete.`} This will delete:</p>
                 <ul className="text-note list-disc pl-5">
                   {plan.map((o) => (
                     <li key={o.id}>
@@ -682,7 +682,8 @@ const olderDemoRun = (d) => ({
 })
 
 function RecentChanges({ api, ro }) {
-  const list = api.data?.runs ?? []
+  // Only Automate's own runs: other pages' changes are on Made with Bloxsmith.
+  const list = (api.data?.runs ?? []).filter((r) => !r.source)
   const demo = api.data?.demo ?? {}
   const older = api.data?.older_demos ?? []
   // While a change or its demo server is still going, check every 20 seconds.

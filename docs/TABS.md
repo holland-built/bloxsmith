@@ -404,6 +404,24 @@ Some things are refused before anything changes: a new list name that is already
 
 If someone changes the policy between your Preview and **Add to policy**, nothing is written to the policy and you preview again. After the change, the page reads the policy back and tells you if any rule it had before is missing.
 
+## Made with Bloxsmith
+
+**Writes to Infoblox.** Lists everything Bloxsmith made and deleted, newest first, and deletes what you pick.
+
+- **What Bloxsmith made and deleted**: every change from Automate, Get an address, Site lists and the Editor, and every delete. Get an address, Site lists and the Editor also show their own under **Made here**.
+- **Delete something else**: pick what kind of item, type a name (or the full address for an IP address), and press **Find**. Up to 25 matches show.
+
+Every **Delete** asks once before it deletes. The question says either **Made by Bloxsmith on (date). Safe to delete.**, **Made by Bloxsmith, but it has changed since. Are you sure?**, or **Not made by Bloxsmith. Are you sure?** Only **Delete it** deletes.
+
+Some deletes are refused, and the page says why:
+- a custom list a policy still uses (delete its rule first)
+- a network or zone that holds things Bloxsmith did not make
+- a policy changed by someone else since you pressed Delete (press Delete again to check it afresh)
+
+What Bloxsmith makes carries the tag **made_by=bloxsmith** in Infoblox, where the item allows tags. Custom lists say "Made by Bloxsmith" in their description instead. The tag is only a label: Bloxsmith decides what it made from its own record of each item's exact ID, because Infoblox can copy tags down from a parent. Items made on Get an address and Site lists before 13 November 2026 are not in that record.
+
+On a read-only tenant, **Delete** still shows the question, and **Delete it** is off.
+
 ## Demo server
 
 **Writes, after a preview.** Builds a NIOS-X server on Proxmox and shows each Infoblox step as code. Made for showing a customer what automation looks like from start to finish, usually in about five minutes once the NIOS-X image is on Proxmox.
@@ -578,6 +596,8 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
 | Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
 | Automate | Your recent changes | the app's own run records | No | it is a list, not a chart |
+| Made with Bloxsmith | What Bloxsmith made and deleted | the app's own run records | No | it is a list, not a chart |
+| Made with Bloxsmith | Delete something else | the Infoblox API | No | it is a form, not a chart |
 | Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
 | Demo server | Settings | the app's own vault | No | it is a form, not a chart |
 | Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |

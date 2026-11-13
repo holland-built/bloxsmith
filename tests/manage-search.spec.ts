@@ -26,6 +26,9 @@ test('a record past the first 200 can be shown, re-checked and deleted', async (
     const rows = Array.from({ length: 200 }, (_, i) => rec(off + i)).filter((x) => Number(x.id.slice(1)) < 300);
     return r.fulfill({ json: { records: rows, total: 300, limit: 200 } });
   });
+  // The delete check (Made with Bloxsmith) answers; nothing is deleted here.
+  await page.route('**/api/made/delete', (r) => r.fulfill({ json: { ok: true, dry_run: true, label: 'host250', made: false,
+    changed: false, gone: false, blocked: '', confirm: 'c' } }));
   await page.goto('/#selfservice');
   const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);

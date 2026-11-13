@@ -53,7 +53,10 @@ func (d *Deps) deskRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	demos, older := d.deskDemoRuns(rs)
-	d.json(w, r, 200, map[string]any{"runs": rs, "demo": demos, "older_demos": older})
+	// tenant lets a page offer Delete only on what was made on the tenant in
+	// use now; a list id from another tenant could name a different list here.
+	tenant, _ := d.writeIdentity()
+	d.json(w, r, 200, map[string]any{"runs": rs, "demo": demos, "older_demos": older, "tenant": tenant})
 }
 
 // deskJob turns one job's plain answers into a call on an existing builder.
@@ -182,7 +185,8 @@ func (d *Deps) deskRun(w http.ResponseWriter, r *http.Request, b map[string]any)
 		return
 	}
 	title := job.title(in)
-	run := runs.Run{ID: runs.NewID(time.Now()), Job: jobID, Title: title, Space: inStr(in, "space"),
+	tenant, _ := d.writeIdentity()
+	run := runs.Run{ID: runs.NewID(time.Now()), Job: jobID, Title: title, Space: inStr(in, "space"), Tenant: tenant,
 		Created: time.Now().UTC().Format(time.RFC3339), Status: runs.Building, Objects: []runs.Object{}}
 	if err := l.Add(run); err != nil {
 		d.json(w, r, 500, map[string]any{"ok": false, "error": "could not record the change, so it was not made: " + err.Error()})

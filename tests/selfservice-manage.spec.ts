@@ -30,6 +30,22 @@ async function stubIpamPickers(page: Page) {
   await page.route('**/api/ipam/subnets*', (route) => route.fulfill({ json: { subnets: [SUBNET] } }));
 }
 
+// Deletes go through Made with Bloxsmith: a check (dry), whose confirm code the
+// delete must send back. Returns the live delete bodies.
+async function stubMadeDelete(page: Page, made = false) {
+  const live: Record<string, unknown>[] = [];
+  await page.route('**/api/made/delete', (route) => {
+    const b = route.request().postDataJSON();
+    if (b.dry) {
+      return route.fulfill({ json: { ok: true, dry_run: true, kind: b.kind, id: b.id, label: b.id, made, changed: false,
+        gone: false, blocked: '', confirm: 'code-1', ...(made ? { made_on: '2026-11-13T10:00:00Z' } : {}) } });
+    }
+    live.push(b);
+    return route.fulfill({ json: { ok: true, already_gone: false } });
+  });
+  return live;
+}
+
 async function selectZone(page: Page) {
   const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
@@ -198,21 +214,12 @@ test.describe('ManageRecordsPanel', () => {
     await expect(rowLocator(page, '198.51.100.9')).toHaveCount(0);
   });
 
-  test('two-click delete arm: first click only arms, second click fires exactly one DELETE', async ({ page }) => {
+  test('two-click delete arm: first click checks and arms, second click deletes once with the check\'s code', async ({ page }) => {
     await stubZones(page);
     await stubIpamPickers(page);
     const rec = { id: 'rec-del', type: 'A', name_in_zone: 'www', ttl: 300, dns_rdata: '192.0.2.10', comment: '' };
-    const deletes: string[] = [];
-
     await page.route('**/api/dns/records*', (route) => route.fulfill({ json: { records: [rec] } }));
-    await page.route('**/api/dns/records/*', (route) => {
-      deletes.push(route.request().url());
-      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
-      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
-      // true for a 404. This stub predated the field and its absence now means
-      // UNKNOWN, which the UI must not render as a confirmed deletion.
-      return route.fulfill({ json: { ok: true, already_gone: false } });
-    });
+    const deletes = await stubMadeDelete(page);
 
     await page.goto('/#selfservice');
     await selectZone(page);
@@ -221,13 +228,13 @@ test.describe('ManageRecordsPanel', () => {
     await row.getByRole('button', { name: 'Delete' }).click();
 
     await expect(row.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
-    await expect(row.getByText(`Click again to delete A www -> ${rec.dns_rdata}`)).toBeVisible();
+    await expect(row.getByText(`Not made by Bloxsmith. Are you sure? Click again to delete A www -> ${rec.dns_rdata}`)).toBeVisible();
     expect(deletes).toHaveLength(0);
 
     await row.getByRole('button', { name: 'Confirm delete' }).click();
 
     await expect.poll(() => deletes.length).toBe(1);
-    expect(deletes[0]).toContain(`/api/dns/records/${encodeURIComponent(rec.id)}`);
+    expect(deletes[0]).toEqual({ kind: 'dns_record', id: rec.id, dry: false, confirm: 'code-1' });
     await expect(page.getByText('DNS record deleted.')).toBeVisible();
   });
 
@@ -235,17 +242,8 @@ test.describe('ManageRecordsPanel', () => {
     await stubZones(page);
     await stubIpamPickers(page);
     const rec = { id: 'rec-del2', type: 'A', name_in_zone: 'www', ttl: 300, dns_rdata: '192.0.2.11', comment: '' };
-    const deletes: string[] = [];
-
     await page.route('**/api/dns/records*', (route) => route.fulfill({ json: { records: [rec] } }));
-    await page.route('**/api/dns/records/*', (route) => {
-      deletes.push(route.request().url());
-      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
-      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
-      // true for a 404. This stub predated the field and its absence now means
-      // UNKNOWN, which the UI must not render as a confirmed deletion.
-      return route.fulfill({ json: { ok: true, already_gone: false } });
-    });
+    const deletes = await stubMadeDelete(page);
 
     await page.goto('/#selfservice');
     await selectZone(page);
@@ -262,20 +260,11 @@ test.describe('ManageRecordsPanel', () => {
 });
 
 test.describe('ManageAddressesPanel', () => {
-  test('two-click release: DELETE hits /api/ipam/addresses/<id> URL-encoded', async ({ page }) => {
+  test('two-click release: says Bloxsmith made it, then deletes that exact address with the code', async ({ page }) => {
     await stubIpamPickers(page);
     const addr = { id: 'ipam/address/1', address: '10.0.0.5', state: 'used', name: 'host-1', comment: '' };
-    const deletes: string[] = [];
-
     await page.route('**/api/ipam/addresses*', (route) => route.fulfill({ json: { addresses: [addr] } }));
-    await page.route('**/api/ipam/addresses/*', (route) => {
-      deletes.push(route.request().url());
-      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
-      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
-      // true for a 404. This stub predated the field and its absence now means
-      // UNKNOWN, which the UI must not render as a confirmed deletion.
-      return route.fulfill({ json: { ok: true, already_gone: false } });
-    });
+    const deletes = await stubMadeDelete(page, true);
 
     await page.goto('/#selfservice');
     await selectSpaceAndSubnet(page);
@@ -285,12 +274,12 @@ test.describe('ManageAddressesPanel', () => {
 
     await row.getByRole('button', { name: 'Release' }).click();
     await expect(row.getByRole('button', { name: 'Confirm release' })).toBeVisible();
+    await expect(row.getByText(/^Made by Bloxsmith on .+\. Safe to delete\. Click again to release 10\.0\.0\.5/)).toBeVisible();
     expect(deletes).toHaveLength(0);
 
     await row.getByRole('button', { name: 'Confirm release' }).click();
 
     await expect.poll(() => deletes.length).toBe(1);
-    expect(deletes[0]).toContain(`/api/ipam/addresses/${encodeURIComponent(addr.id)}`);
-    expect(deletes[0]).toContain('%2F');
+    expect(deletes[0]).toEqual({ kind: 'address', id: addr.id, dry: false, confirm: 'code-1' });
   });
 });

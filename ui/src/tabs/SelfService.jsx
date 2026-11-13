@@ -20,6 +20,8 @@ import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
 import { setHashParams, useHashParams } from '../lib/hash.js'
+import MadeList from '../components/MadeList.jsx'
+import { checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
 const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -658,6 +660,7 @@ function ManageRecordsPanel() {
   const [armedId, setArmedId] = useState(null)
   const [armLabel, setArmLabel] = useState('')
   const armTimerRef = useRef(null)
+  const confirmRef = useRef('')
   useEffect(() => () => clearTimeout(armTimerRef.current), [])
 
   function handleDeleteClick(row) {
@@ -677,20 +680,29 @@ function ManageRecordsPanel() {
             return
           }
           const nm = fresh.name_in_zone || '@'
-          setArmLabel(`Click again to delete ${fresh.type} ${nm} -> ${fresh.dns_rdata}`)
-          setArmedId(row.id)
-          clearTimeout(armTimerRef.current)
-          armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
+          // The one "are you sure": says whether Bloxsmith made it.
+          return checkDelete('dns_record', row.id).then((c) => {
+            if (!c.ok || c.data?.blocked) {
+              setDeleteError(c.data?.blocked || c.data?.error || "Couldn't check that record, so it wasn't deleted. Try again.")
+              return
+            }
+            confirmRef.current = c.data.confirm
+            setArmLabel(`${whoMade(c.data)} Click again to delete ${fresh.type} ${nm} -> ${fresh.dns_rdata}`)
+            setArmedId(row.id)
+            clearTimeout(armTimerRef.current)
+            armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
+          })
         })
       return
     }
     clearTimeout(armTimerRef.current)
     setArmedId(null)
     setDeleteError(null)
-    tokenFetch(`/api/dns/records/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}))
-        if (!r.ok || j.error) {
+    confirmDelete('dns_record', row.id, confirmRef.current)
+      .then(({ ok: rOk, status, data }) => {
+        const r = { ok: rOk, status }
+        const j = data || {}
+        if (!r.ok || j.error || j.ok === false) {
           setDeleteError(j.error || `HTTP ${r.status} — delete failed, record still exists`)
           return
         }
@@ -853,6 +865,7 @@ function ManageAddressesPanel() {
   const [armLabel, setArmLabel] = useState('')
   const [releaseError, setReleaseError] = useState(null)
   const armTimerRef = useRef(null)
+  const confirmRef = useRef('')
   useEffect(() => () => clearTimeout(armTimerRef.current), [])
 
   function handleRelease(row) {
@@ -868,20 +881,29 @@ function ManageAddressesPanel() {
             if (j) { patchMore(paged, row.id); addressesApi.refetch() }
             return
           }
-          setArmLabel(`Click again to release ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
-          setArmedId(row.id)
-          clearTimeout(armTimerRef.current)
-          armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
+          // The one "are you sure": says whether Bloxsmith made it.
+          return checkDelete('address', row.id).then((c) => {
+            if (!c.ok || c.data?.blocked) {
+              setReleaseError(c.data?.blocked || c.data?.error || "Couldn't check that address, so it wasn't released. Try again.")
+              return
+            }
+            confirmRef.current = c.data.confirm
+            setArmLabel(`${whoMade(c.data)} Click again to release ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
+            setArmedId(row.id)
+            clearTimeout(armTimerRef.current)
+            armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
+          })
         })
       return
     }
     clearTimeout(armTimerRef.current)
     setArmedId(null)
     setReleaseError(null)
-    tokenFetch(`/api/ipam/addresses/${encodeURIComponent(row.id)}`, { method: 'DELETE' })
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}))
-        if (!r.ok || j.error) {
+    confirmDelete('address', row.id, confirmRef.current)
+      .then(({ ok: rOk, status, data }) => {
+        const r = { ok: rOk, status }
+        const j = data || {}
+        if (!r.ok || j.error || j.ok === false) {
           setReleaseError(j.error || `HTTP ${r.status} — release failed, address still allocated`)
           return
         }
@@ -1021,6 +1043,11 @@ export default function SelfService() {
           <Task />
         </div>
       ))}
+      <section className="mt-8" aria-labelledby="selfservice-made-h">
+        <ColumnHeading id="selfservice-made-h">Made here</ColumnHeading>
+        <p className="text-note text-muted mb-2">Addresses, reservations and DNS names made on this page, newest first. Each delete asks first.</p>
+        <MadeList sources={['address', 'dns']} ro={ro.readOnly} empty="Nothing made here yet." />
+      </section>
     </div>
   )
 }

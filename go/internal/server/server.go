@@ -155,6 +155,7 @@ func (d *Deps) registerAll(mux router) {
 	d.registerCSPRoutes(mux)
 	d.registerEditRoutes(mux)
 	d.registerDeskRoutes(mux)
+	d.registerMadeRoutes(mux)
 	d.registerProvisionRoutes(mux)
 	d.registerAIRoutes(mux)
 	d.registerAccountRoutes(mux)

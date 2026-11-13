@@ -7,6 +7,7 @@ import (
 
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
+	"bloxsmith/internal/runs"
 )
 
 // registerEditRoutes wires the Phase 1f DNS + Cloud-Resource-Editor write path
@@ -172,6 +173,10 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 	defer d.recoverEdit(w, r, "/api/selfservice/allocate")
 	res, status := d.editFor(r).SelfserviceAllocate(b)
 	d.json(w, r, status, res)
+	if !isDry(res) {
+		objs, note, title := allocateMade(res, b)
+		d.recordMade(r, "address", title, objs, note, resultOK(res))
+	}
 	switch {
 	case resultOK(res) && !isDry(res):
 		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
@@ -226,6 +231,14 @@ func (d *Deps) dnsRecordCreate(w http.ResponseWriter, r *http.Request, b map[str
 	defer d.recoverEdit(w, r, "/api/dns/records")
 	res, status := d.editFor(r).DNSRecordCreate(b)
 	d.json(w, r, status, res)
+	if rec, _ := res["record"].(map[string]any); resultOK(res) && !isDry(res) && anyStr(rec["id"]) != "" {
+		label := strings.TrimSpace(anyStr(b["name_in_zone"]) + " " + strings.ToUpper(anyStr(b["type"])))
+		if l := lookOf("dns_record", rec); l != "" {
+			label = strings.SplitN(l, " {", 2)[0]
+		}
+		d.recordMade(r, "dns", "DNS name "+label, []runs.Object{{ID: anyStr(rec["id"]), Kind: "dns_record",
+			Label: label, Look: lookOf("dns_record", rec), State: runs.Created}}, "", true)
+	}
 	switch {
 	case resultOK(res) && !isDry(res):
 		d.auditAppend("dns-record-create", httpx.Actor(r), map[string]any{
@@ -366,6 +379,21 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	defer d.recoverEdit(w, r, "/api/edit/"+resource)
 	result, status := res.Create(b)
 	d.json(w, r, status, result)
+	if !isDry(result) && (resultOK(result) || taggingFailed(result)) {
+		obj, _ := result[res.ResultKey].(map[string]any)
+		id := anyStr(obj["id"])
+		if id == "" {
+			id = anyStr(result["id"])
+		}
+		if id != "" {
+			label := lookOf(resource, obj)
+			if label == "" {
+				label = id
+			}
+			d.recordMade(r, "editor", strings.ReplaceAll(resource, "_", " ")+" "+label, []runs.Object{{ID: id, Kind: resource,
+				Label: label, Look: lookOf(resource, obj), State: runs.Created}}, "", resultOK(result))
+		}
+	}
 	switch {
 	case resultOK(result) && !isDry(result):
 		d.auditAppend("edit-"+resource+"-create", httpx.Actor(r),

@@ -369,35 +369,43 @@ func (c *Client) url(path string, params map[string]string) string {
 // checked for and passed through as (nil, status, nil) before the JSON
 // parse is even attempted.
 func (c *Client) GetEx(path string, params map[string]string) (any, int, error) {
+	body, status, _, err := c.GetETag(path, params)
+	return body, status, err
+}
+
+// GetETag is GetEx plus the response's ETag header, so a later WriteIfMatch
+// can refuse to save over a change someone else made in between.
+func (c *Client) GetETag(path string, params map[string]string) (any, int, string, error) {
 	req, err := http.NewRequest("GET", c.url(path, params), nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	req.Header.Set("Authorization", c.authValue())
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	defer resp.Body.Close()
+	etag := resp.Header.Get("ETag")
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, resp.StatusCode, nil
+		return nil, resp.StatusCode, "", nil
 	}
 	if len(raw) == 0 {
 		// A genuinely empty body (204, or a 200 with no content) is a
 		// legitimate no-op result, not a decode failure.
-		return nil, resp.StatusCode, nil
+		return nil, resp.StatusCode, etag, nil
 	}
 	var parsed any
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("rest: decode response body for %s: %w", path, err)
+		return nil, resp.StatusCode, "", fmt.Errorf("rest: decode response body for %s: %w", path, err)
 	}
 	switch parsed.(type) {
 	case map[string]any, []any:
-		return parsed, resp.StatusCode, nil
+		return parsed, resp.StatusCode, etag, nil
 	default:
-		return nil, resp.StatusCode, fmt.Errorf("rest: unexpected response shape %T for %s", parsed, path)
+		return nil, resp.StatusCode, "", fmt.Errorf("rest: unexpected response shape %T for %s", parsed, path)
 	}
 }
 
@@ -532,6 +540,12 @@ func (c *Client) getStrict(path string, params map[string]string) ([]any, map[st
 // (parsed_body, http_status). On an HTTP error it captures the parsed error body
 // (Python's e.read() -> json). status is 0 on a network error.
 func (c *Client) Write(method, path string, body any, params map[string]string) (any, int, error) {
+	return c.WriteIfMatch(method, path, body, params, "")
+}
+
+// WriteIfMatch is Write with an If-Match header when etag is not empty, so
+// Infoblox can answer 412 instead of saving over a newer version.
+func (c *Client) WriteIfMatch(method, path string, body any, params map[string]string, etag string) (any, int, error) {
 	var rdr io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -547,6 +561,9 @@ func (c *Client) Write(method, path string, body any, params map[string]string) 
 	req.Header.Set("Authorization", c.authValue())
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	if etag != "" {
+		req.Header.Set("If-Match", etag)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, 0, err

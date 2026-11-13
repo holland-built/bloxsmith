@@ -93,7 +93,7 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 
 	resp, fstatus, _ := c.Rest.Write("POST", "/api/ddi/v1/dhcp/fixed_address", M{
 		"address": address, "match_type": "mac", "match_value": mac,
-		"name": devName, "ip_space": space,
+		"name": devName, "ip_space": space, "tags": withMadeTag(nil),
 	}, nil)
 	switch {
 	case writeUnreadable(resp, fstatus) || outcomeUnknown(fstatus):

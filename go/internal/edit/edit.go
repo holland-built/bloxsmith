@@ -532,6 +532,7 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 		return out, 200
 	}
 
+	recordBody["tags"] = withMadeTag(recordBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
 	if writeUnreadable(resp, status) {
 		// The record is LIVE in the customer's DNS. Reporting the old ok:false
@@ -992,6 +993,7 @@ func (c *Client) createAddressRecord(dns M, address string) (any, int) {
 	if truthy(dns["create_ptr"], false) && (rtype == "A" || rtype == "AAAA") {
 		recordBody["options"] = M{"create_ptr": true, "check_rmz": true}
 	}
+	recordBody["tags"] = withMadeTag(recordBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
 	return resp, status
 }

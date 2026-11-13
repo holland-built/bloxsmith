@@ -170,6 +170,10 @@ var panelSources = []PanelSource{
 	restPanel("automate-job", "Automate", "The job you picked", srcAPI, whyForm),
 	{ID: "automate-recent", Page: "Automate", Name: "Your recent changes", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
 
+	// ---- Made with Bloxsmith ----
+	{ID: "made-all", Page: "Made with Bloxsmith", Name: "What Bloxsmith made and deleted", Kind: "local", Source: "the app's own run records", Builder: "no", Why: whyList},
+	restPanel("made-find", "Made with Bloxsmith", "Delete something else", srcAPI, whyForm),
+
 	// ---- Best practices ----
 	restPanel("bp-checks", "Best practices", "Checks", "the Infoblox API", "it checks design rules against what is there, worked out in the app"),
 

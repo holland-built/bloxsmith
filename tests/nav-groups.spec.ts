@@ -30,6 +30,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['editor', 'Editor'],
   ['drift', 'Drift'],
   ['lists', 'Site lists'],
+  ['made', 'Made with Bloxsmith'],
   ['demo', 'Demo server'],
   ['ai', 'AI Assistant'],
   ['chart', 'Build a chart'],
@@ -43,7 +44,7 @@ const GROUP_TABS: Record<string, string[]> = {
   Status: ['Overview', 'Daily', 'Best practices'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
-  Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Site lists', 'Demo server'],
+  Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Site lists', 'Made with Bloxsmith', 'Demo server'],
   Ask: ['AI', 'Build a chart'],
 };
 

@@ -175,7 +175,7 @@ func TestZoneCreate_SendsCloudPrimaryTypeUpstream(t *testing.T) {
 	builderWantField(t, req, "fqdn", "example.com.")
 	builderWantField(t, req, "view", "view-1")
 	builderWantField(t, req, "comment", "prod zone")
-	builderWantField(t, req, "tags", map[string]any{"Owner": "noc"})
+	builderWantField(t, req, "tags", map[string]any{"Owner": "noc", "made_by": "bloxsmith"})
 
 	zone := asMap(res["zone"])
 	if zone == nil || zone["id"] != "dns/auth_zone/z1" {
@@ -196,11 +196,11 @@ func TestZoneCreate_OptionalFieldsOmittedWhenFalsy(t *testing.T) {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	req := f.wantOneCall(t)
-	for _, k := range []string{"comment", "tags"} {
-		if _, present := req.Body[k]; present {
-			t.Fatalf("body carries %q = %#v, want the key absent when falsy", k, req.Body[k])
-		}
+	if _, present := req.Body["comment"]; present {
+		t.Fatalf("body carries comment = %#v, want the key absent when falsy", req.Body["comment"])
 	}
+	// Only Bloxsmith's own made_by tag, since the caller gave none.
+	builderWantField(t, req, "tags", map[string]any{"made_by": "bloxsmith"})
 }
 
 func TestZoneCreate_ValidationRefusedBeforeWire(t *testing.T) {
@@ -555,7 +555,7 @@ func TestSubnetCreate_LiveCreateThenTagsForTeardown(t *testing.T) {
 
 	// 2. the tag PATCH — the teardown-critical half.
 	builderWantMethodPath(t, calls[1], http.MethodPatch, "/api/ddi/v1/ipam/subnet/s1")
-	builderWantField(t, calls[1], "tags", map[string]any{"Env": "prod", "Name": "test-subnet"})
+	builderWantField(t, calls[1], "tags", map[string]any{"Env": "prod", "Name": "test-subnet", "made_by": "bloxsmith"})
 	builderWantField(t, calls[1], "name", "test-subnet")
 	builderWantField(t, calls[1], "comment", "noc subnet")
 
@@ -585,7 +585,7 @@ func TestSubnetCreate_CallerTagsWinOverNameDefault(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("%d upstream requests, want 2: %+v", len(calls), calls)
 	}
-	builderWantField(t, calls[1], "tags", map[string]any{"Name": "explicit-name"})
+	builderWantField(t, calls[1], "tags", map[string]any{"Name": "explicit-name", "made_by": "bloxsmith"})
 }
 
 // TestSubnetCreate_TagPatchIsRetriedExactlyOnce is the D2 proof. The subnet is
@@ -623,7 +623,7 @@ func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
 	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet")
 	for i := 1; i < 3; i++ {
 		builderWantMethodPath(t, calls[i], http.MethodPatch, "/api/ddi/v1/ipam/subnet/s1")
-		builderWantField(t, calls[i], "tags", map[string]any{"Site": "hq", "Name": "n"})
+		builderWantField(t, calls[i], "tags", map[string]any{"Site": "hq", "Name": "n", "made_by": "bloxsmith"})
 	}
 	if !reflect.DeepEqual(calls[1].Body, calls[2].Body) {
 		t.Fatalf("the retry body %#v differs from the first PATCH body %#v — the retry must resend the same tags",
@@ -833,7 +833,7 @@ func TestRangeCreate_SendsStartEndSpaceUpstream(t *testing.T) {
 	builderWantField(t, req, "end", "10.0.0.20")
 	builderWantField(t, req, "space", "sp1")
 	builderWantField(t, req, "comment", "dhcp pool")
-	builderWantField(t, req, "tags", map[string]any{"Env": "prod"})
+	builderWantField(t, req, "tags", map[string]any{"Env": "prod", "made_by": "bloxsmith"})
 
 	rng := asMap(res["range"])
 	if rng == nil || rng["id"] != "ipam/range/r1" {
@@ -899,7 +899,7 @@ func TestHostCreate_SendsAddressesAndAutoGenerateUpstream(t *testing.T) {
 	// Omitted auto_generate_records defaults to TRUE — the builder creates DNS
 	// records as a side effect unless the caller opts out.
 	builderWantField(t, req, "auto_generate_records", true)
-	builderWantField(t, req, "tags", map[string]any{"Env": "prod"})
+	builderWantField(t, req, "tags", map[string]any{"Env": "prod", "made_by": "bloxsmith"})
 	builderWantField(t, req, "host_names", []any{map[string]any{"name": "alias1"}})
 }
 
@@ -918,11 +918,10 @@ func TestHostCreate_AutoGenerateRecordsOptOutReachesTheWire(t *testing.T) {
 	}
 	req := f.wantOneCall(t)
 	builderWantField(t, req, "auto_generate_records", false)
-	for _, k := range []string{"tags", "host_names"} {
-		if _, present := req.Body[k]; present {
-			t.Fatalf("body carries %q = %#v, want the key absent when not supplied", k, req.Body[k])
-		}
+	if _, present := req.Body["host_names"]; present {
+		t.Fatalf("body carries host_names = %#v, want the key absent when not supplied", req.Body["host_names"])
 	}
+	builderWantField(t, req, "tags", map[string]any{"made_by": "bloxsmith"})
 }
 
 func TestHostCreate_ValidationRefusedBeforeWire(t *testing.T) {

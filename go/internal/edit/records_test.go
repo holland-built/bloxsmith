@@ -193,6 +193,7 @@ func TestDNSRecordCreate_SendsTheDeclaredRecordUpstream(t *testing.T) {
 		"rdata":        map[string]any{"address": "10.0.0.5"},
 		"ttl":          float64(300),
 		"comment":      "prod host",
+		"tags":         map[string]any{"made_by": "bloxsmith"},
 	}
 	if !reflect.DeepEqual(map[string]any(call.Body), map[string]any(want)) {
 		t.Fatalf("wrong body on the wire:\n got %#v\nwant %#v", call.Body, want)

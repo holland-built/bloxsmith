@@ -14,6 +14,7 @@ import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
+import MadeList from '../components/MadeList.jsx'
 
 // The six actions a policy takes for a list, in the order people reach for
 // them, each with what it means for someone visiting one of the sites.
@@ -323,6 +324,11 @@ export default function SiteLists() {
           </PreviewApply>
         </section>
       } />
+      <section className="mt-8" aria-labelledby="lists-made-h">
+        <ColumnHeading id="lists-made-h">Lists and rules made here</ColumnHeading>
+        <p className="text-note text-muted mb-2">Newest first. Delete a rule before its list. Each delete asks first.</p>
+        <MadeList sources={['lists']} ro={ro.readOnly} empty="Nothing made here yet." />
+      </section>
     </div>
   )
 }

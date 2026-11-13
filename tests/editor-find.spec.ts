@@ -58,10 +58,12 @@ test('a Delete armed for one host is disarmed by picking another', async ({ page
     { id: 'ipam/host/1', label: 'alpha', fields: { name: 'alpha', addresses: '10.0.0.1', comment: '' } },
     { id: 'ipam/host/2', label: 'beta', fields: { name: 'beta', addresses: '10.0.0.2', comment: '' } },
   ] } }));
-  const deletes: string[] = [];
-  await page.route('**/api/edit/host/*', (r) => {
-    if (r.request().method() !== 'DELETE') return r.fallback();
-    deletes.push(r.request().url());
+  // Hosts are deleted through Made with Bloxsmith: a check, then the delete.
+  const deletes: Record<string, unknown>[] = [];
+  await page.route('**/api/made/delete', (r) => {
+    const b = r.request().postDataJSON();
+    if (b.dry) return r.fulfill({ json: { ok: true, dry_run: true, label: b.id, made: false, changed: false, gone: false, blocked: '', confirm: 'c' } });
+    deletes.push(b);
     return r.fulfill({ json: { ok: true } });
   });
   await page.goto('/#editor?type=host');
@@ -69,6 +71,7 @@ test('a Delete armed for one host is disarmed by picking another', async ({ page
   await page.getByRole('button', { name: 'alpha' }).click();
   await page.getByRole('button', { name: 'Delete Host' }).click();
   await expect(page.getByRole('button', { name: 'Click again to permanently delete' })).toBeVisible();
+  await expect(page.getByText('Not made by Bloxsmith. Are you sure?')).toBeVisible();
   await page.getByRole('button', { name: 'beta' }).click();
   // Straight away, well inside the 4 s the arm lasts: this click must only arm.
   await page.locator('button', { hasText: /Delete Host|Click again to permanently delete/ }).click();
