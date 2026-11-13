@@ -77,11 +77,16 @@ func (f *fakeTenant) serve(t *testing.T) *Service {
 			f.policy["rules"] = rules
 			out(map[string]any{"results": f.policy})
 		case r.Method == "GET" && p == "/api/atcfw/v1/named_lists":
+			// The real API refuses name (and id) as a filter field, seen live on
+			// 2026-11-13: {"error":[{"message":"Invalid filter field: name"}]}.
+			if strings.Contains(r.URL.Query().Get("_filter"), "name") {
+				w.WriteHeader(400)
+				out(map[string]any{"error": []any{map[string]any{"message": "Invalid filter field: name"}}})
+				return
+			}
 			var rows []any
 			for _, l := range f.lists {
-				if strings.Contains(r.URL.Query().Get("_filter"), fmt.Sprintf("%q", l["name"])) {
-					rows = append(rows, l)
-				}
+				rows = append(rows, l)
 			}
 			out(map[string]any{"results": rows})
 		case r.Method == "POST" && p == "/api/atcfw/v1/named_lists":
