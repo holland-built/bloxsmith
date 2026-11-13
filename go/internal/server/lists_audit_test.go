@@ -26,6 +26,8 @@ func listsUpstream(policyPut int) http.HandlerFunc {
 			_ = json.Unmarshal(raw, &body)
 		}
 		switch p := r.URL.Path; {
+		case p == "/tide/api/data/threats/state/host": // nothing is a threat here
+			out(map[string]any{"threat": []any{}, "record_count": 0})
 		case p == "/api/atcfw/v1/security_policies/7" && r.Method == "GET":
 			out(map[string]any{"results": map[string]any{"id": 7, "name": "Office", "rules": rules}})
 		case p == "/api/atcfw/v1/security_policies/7" && r.Method == "PUT":

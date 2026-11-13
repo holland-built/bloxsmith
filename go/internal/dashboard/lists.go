@@ -132,6 +132,13 @@ type ListPlan struct {
 	Position     int // where the rule goes: 0 is the top, len(rules) the bottom
 	Fingerprint  string
 	Dry          bool
+	// RiskyOK are sites the threat check flagged that the owner ticked to add
+	// anyway; UncheckedOK adds sites the check could not look up.
+	RiskyOK     []string
+	UncheckedOK bool
+	// checked is what the threat check found, set by screen, so the
+	// fingerprint covers it.
+	checked string
 }
 
 // ParseListPlan reads a request body. Errors are for the person, not a log.
@@ -193,6 +200,12 @@ func ParseListPlan(b map[string]any) (ListPlan, error) {
 		p.Fingerprint = ""
 	}
 	p.Dry = b["dry"] != false
+	for _, v := range asSlice(b["risky_ok"]) {
+		if d := canonDomain(fmt.Sprint(v)); d != "" {
+			p.RiskyOK = append(p.RiskyOK, d)
+		}
+	}
+	p.UncheckedOK = b["unchecked_ok"] == true
 	return p, nil
 }
 
@@ -220,7 +233,7 @@ func ruleView(r map[string]any) map[string]any {
 // what was asked for, so Apply writes only what the preview showed: different
 // domains, list, action or position after the preview is refused too.
 func fingerprint(rules []any, p ListPlan) string {
-	raw, _ := json.Marshal([]any{rules, p.PolicyID, p.Domains, p.ListID, p.ListName, p.Action, p.RedirectName, p.Position})
+	raw, _ := json.Marshal([]any{rules, p.PolicyID, p.Domains, p.ListID, p.ListName, p.Action, p.RedirectName, p.Position, p.checked})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:8])
 }
@@ -356,6 +369,47 @@ func (s *Service) plan(p ListPlan) (*planned, int, error) {
 	return pl, 0, nil
 }
 
+// screen runs the threat check on the sites about to be added, before the
+// fingerprint, so Apply adds exactly what the preview showed and refuses if
+// the check came out differently. A flagged site, or one the check could not
+// look up, is left out unless the owner said to add it.
+func (s *Service) screen(pl *planned, p *ListPlan) map[string]any {
+	risky, unchecked, reason := s.CheckSites(pl.toAdd)
+	found, _ := json.Marshal([]any{risky, unchecked})
+	p.checked = string(found)
+	ok := map[string]bool{}
+	for _, d := range p.RiskyOK {
+		ok[d] = true
+	}
+	out := map[string]bool{}
+	flagged := make([]map[string]any, 0, len(risky))
+	for _, t := range risky {
+		flagged = append(flagged, map[string]any{"domain": t.Domain, "class": t.Class, "property": t.Property, "level": t.Level, "added": ok[t.Domain]})
+		if !ok[t.Domain] {
+			out[t.Domain] = true
+		}
+	}
+	if !p.UncheckedOK {
+		for _, d := range unchecked {
+			out[d] = true
+		}
+	}
+	if len(out) > 0 {
+		keep := func(xs []string) []string {
+			k := make([]string, 0, len(xs))
+			for _, x := range xs {
+				if !out[x] {
+					k = append(k, x)
+				}
+			}
+			return k
+		}
+		pl.toAdd, p.Domains = keep(pl.toAdd), keep(p.Domains)
+	}
+	return map[string]any{"checked": len(pl.toAdd) + len(out) - len(unchecked), "risky": flagged,
+		"unchecked": len(unchecked), "unchecked_added": p.UncheckedOK && len(unchecked) > 0, "reason": reason, "left_out": len(out)}
+}
+
 func (pl *planned) after(p ListPlan) []any {
 	if !pl.needsRule {
 		return pl.rules
@@ -386,6 +440,7 @@ func (s *Service) ApplyList(p ListPlan) (map[string]any, int) {
 	if err != nil {
 		return map[string]any{"ok": false, "error": err.Error()}, st
 	}
+	threats := s.screen(pl, &p)
 	fp := fingerprint(pl.rules, p)
 	newList := pl.list == nil
 	var alsoUsedBy []any
@@ -401,9 +456,10 @@ func (s *Service) ApplyList(p ListPlan) (map[string]any, int) {
 		sample = sample[:50]
 	}
 	summary := map[string]any{
-		"list":   map[string]any{"name": pl.listName, "new": newList, "will_add": len(pl.toAdd), "already_there": pl.already, "also_used_by": alsoUsedBy},
-		"policy": map[string]any{"id": p.PolicyID, "name": pl.policy["name"], "adds_rule": pl.needsRule, "existing_rule": pl.ruleAt + 1, "before": views(pl.rules), "after": views(pl.after(p))},
-		"sample": sample,
+		"list":    map[string]any{"name": pl.listName, "new": newList, "will_add": len(pl.toAdd), "already_there": pl.already, "also_used_by": alsoUsedBy},
+		"policy":  map[string]any{"id": p.PolicyID, "name": pl.policy["name"], "adds_rule": pl.needsRule, "existing_rule": pl.ruleAt + 1, "before": views(pl.rules), "after": views(pl.after(p))},
+		"sample":  sample,
+		"threats": threats,
 	}
 	if p.Dry {
 		summary["ok"], summary["dry_run"], summary["fingerprint"] = true, true, fp

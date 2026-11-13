@@ -28,6 +28,13 @@ type fakeTenant struct {
 	editRule bool // someone else edits the policy right after it is read during apply
 	dropRule bool // the PUT silently loses the policy's last rule
 	reads    int
+	// threats are sites Infoblox lists as threats, by level; threatDown
+	// makes the threat lookup fail.
+	threats     map[string]int
+	threatDown  bool
+	lookups     int
+	threatBody  string // when set, the threat lookup answers this as it is
+	threatClass string // class of every threat (default Scam)
 }
 
 func newFakeTenant() *fakeTenant {
@@ -57,6 +64,29 @@ func (f *fakeTenant) serve(t *testing.T) *Service {
 		w.Header().Set("Content-Type", "application/json")
 		out := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 		p := r.URL.Path
+		if p == "/tide/api/data/threats/state/host" {
+			f.lookups++
+			if f.threatDown {
+				w.WriteHeader(503)
+				return
+			}
+			if f.threatBody != "" {
+				_, _ = io.WriteString(w, f.threatBody)
+				return
+			}
+			class := f.threatClass
+			if class == "" {
+				class = "Scam"
+			}
+			found := []any{}
+			for _, h := range strings.Split(r.URL.Query().Get("host"), ",") {
+				if lvl, ok := f.threats[h]; ok {
+					found = append(found, map[string]any{"host": h, "threat_level": lvl, "class": class, "property": class + "_Generic"})
+				}
+			}
+			out(map[string]any{"threat": found, "record_count": len(found)})
+			return
+		}
 		switch {
 		case r.Method == "GET" && p == "/api/atcfw/v1/security_policies/7":
 			f.reads++
