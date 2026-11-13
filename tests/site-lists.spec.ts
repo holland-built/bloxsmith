@@ -1,7 +1,9 @@
 import { test, expect } from './fixtures';
 
-// Site lists (owner, 2026-11-12): sites from InfoRank, a CSV or pasted text go
-// into a custom list, and the list into a policy with any action, at any place.
+// Site lists (owner, 2026-11-12): sites from the top sites, a CSV or pasted
+// text go into a custom list, and the list into a policy with any action, at
+// any place. Top sites compares InfoRank with this network's busiest sites,
+// and a never-add list is left out (owner, 2026-11-13).
 
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const TARGETS = {
@@ -25,8 +27,9 @@ const PLAN = {
   sample: ['google.com', 'zoom.us'],
 };
 
-async function open(page: import('@playwright/test').Page, sent: Record<string, any>[]) {
+async function open(page: import('@playwright/test').Page, sent: Record<string, any>[], never: string[] = []) {
   await page.route('**/api/lists/targets', (r) => r.fulfill(json(TARGETS)));
+  await page.route('**/api/lists/never-add', (r) => r.fulfill(json({ ok: true, sites: never })));
   await page.route('**/api/lists/apply', (r) => {
     const b = r.request().postDataJSON();
     sent.push(b);
@@ -61,17 +64,75 @@ test('pasted sites go into a new list, placed where asked, with the action asked
   expect(sent.at(-1)).toMatchObject({ dry: false, fingerprint: 'fp-1' });
 });
 
-test('the top sites come from InfoRank, and the page says which day', async ({ page }) => {
+test('the top sites compare InfoRank with this network, and the owner picks which go in', async ({ page }) => {
   const asked: string[] = [];
   await page.route('**/api/lists/inforank*', (r) => {
     asked.push(r.request().url());
-    return r.fulfill(json({ ok: true, date: '2026-11-12T17:34:56Z', total: 50000, domains: ['gstatic.com', 'cloudfront.net', 'akamai.net'] }));
+    return r.fulfill(json({ ok: true, date: '2026-11-12T17:34:56Z', total: 50000, domains: ['gstatic.com', 'apple.com', 'akamai.net'] }));
   });
-  await open(page, []);
+  await page.route('**/api/lists/busiest*', (r) => {
+    asked.push(r.request().url());
+    return r.fulfill(json({ ok: true, domains: ['apple.com', 'netflix.com', 'gstatic.com'], queries: [9, 8, 7], total: 40, names: 300, estimate: false, days: 7 }));
+  });
+  const sent: Record<string, any>[] = [];
+  await open(page, sent);
   await page.getByRole('spinbutton', { name: 'How many, from the top' }).fill('3');
-  await page.getByRole('button', { name: 'Get the list' }).click();
-  await expect(page.getByText("The 3 most popular sites from Infoblox's InfoRank list of 2026-11-12.")).toBeVisible();
-  expect(asked.at(-1)).toContain('top=3');
+  await page.getByRole('button', { name: 'Get both lists' }).click();
+  const cmp = page.locator('[data-top-compare]');
+  await expect(cmp).toContainText('InfoRank: the 3 most popular sites on the internet, list of 2026-11-12.');
+  await expect(cmp).toContainText('Your network: the 3 sites looked up most in the last 7 days.');
+  await expect(cmp.getByText('On both lists: 2')).toBeVisible();
+  await expect(cmp.getByText('Only on InfoRank: 1')).toBeVisible();
+  await expect(cmp.getByText('Only on your network: 1')).toBeVisible();
+  expect(asked.some((u) => u.includes('inforank?top=3'))).toBe(true);
+  expect(asked.some((u) => u.includes('busiest?top=3'))).toBe(true);
+
+  await page.getByRole('combobox', { name: 'Which of the top 3 go in' }).selectOption('both');
+  await page.getByRole('textbox', { name: 'New list name' }).fill('top-sites');
+  await page.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('7');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0].domains).toEqual(['gstatic.com', 'apple.com']);
+});
+
+test('when one list cannot be read, the other still works', async ({ page }) => {
+  await page.route('**/api/lists/inforank*', (r) => r.fulfill(json({ ok: false, error: 'InfoRank list: http 403' }, 502)));
+  await page.route('**/api/lists/busiest*', (r) => r.fulfill(json({ ok: true, domains: ['apple.com'], queries: [9], total: 1, names: 10000, estimate: true, days: 7 })));
+  await open(page, []);
+  await page.getByRole('button', { name: 'Get both lists' }).click();
+  const cmp = page.locator('[data-top-compare]');
+  await expect(cmp).toContainText('Could not get the InfoRank list: InfoRank list: http 403');
+  await expect(cmp).toContainText('an estimate because Infoblox sent only the 10,000 busiest names');
+  await expect(page.getByRole('combobox', { name: /Which of the top/ }).locator('option')).toHaveText(["Your network's busiest sites"]);
+  await expect(page.getByText('1 site ready.')).toBeVisible();
+});
+
+test('sites on the never-add list are left out, and saving it sends the cleaned list', async ({ page }) => {
+  const sent: Record<string, any>[] = [];
+  await open(page, sent, ['google.com']);
+  let saved: any = null;
+  await page.route('**/api/lists/never-add', (r) => {
+    if (r.request().method() !== 'POST') return r.fulfill(json({ ok: true, sites: ['google.com'] }));
+    saved = r.request().postDataJSON();
+    return r.fulfill(json({ ok: true, sites: saved.sites }));
+  });
+  await page.reload();
+  await page.getByRole('radio', { name: 'Paste them in' }).check();
+  await page.getByRole('textbox', { name: 'One site per line, or separated by commas' }).fill('www.google.com zoom.us');
+  await expect(page.getByText('1 site on the never-add list will be left out: www.google.com')).toBeVisible();
+  await expect(page.getByText('1 site ready.')).toBeVisible();
+  await page.getByRole('textbox', { name: 'New list name' }).fill('top-sites');
+  await page.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('7');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0].domains).toEqual(['www.google.com', 'zoom.us']);
+
+  const box = page.getByRole('textbox', { name: /Sites never to add/ });
+  await expect(box).toHaveValue('google.com');
+  await box.fill('Google.com\nexample.org');
+  await page.getByRole('button', { name: 'Save never-add list' }).click();
+  await expect(page.getByText('Saved: 2 sites never to add.')).toBeVisible();
+  expect(saved).toEqual({ sites: ['google.com', 'example.org'] });
 });
 
 test('a CSV file is read from its first column', async ({ page }) => {
@@ -93,6 +154,7 @@ test('Redirect asks which block page', async ({ page }) => {
 
 test('the preview warns when other policies use the list', async ({ page }) => {
   await page.route('**/api/lists/targets', (r) => r.fulfill(json(TARGETS)));
+  await page.route('**/api/lists/never-add', (r) => r.fulfill(json({ ok: true, sites: [] })));
   await page.route('**/api/lists/apply', (r) => r.fulfill(json({ ...PLAN,
     list: { name: 'vip', new: false, will_add: 1, already_there: 1, also_used_by: ['Lab'] },
     policy: { ...PLAN.policy, adds_rule: false, existing_rule: 2, after: TARGETS.policies[0].rules } })));

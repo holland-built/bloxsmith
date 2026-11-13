@@ -1,6 +1,9 @@
 // Site lists: put a list of websites into a security policy (owner,
-// 2026-11-12). The sites come from Infoblox's InfoRank list of the most popular
-// domains, a CSV file or pasted text. They go into a custom list, new or one
+// 2026-11-12). The sites come from the top sites, a CSV file or pasted text.
+// Top sites compares Infoblox's InfoRank list of the most popular domains with
+// this network's own busiest sites over the last 7 days, and the owner picks
+// which go in (owner, 2026-11-13: "lets offer both and compare"). Sites on the
+// never-add list are left out, here and again on the server. They go into a custom list, new or one
 // you have, and the list goes into a policy with whichever action you pick, at
 // the place in the policy's order you pick. The server previews first and
 // applies only what it previewed; see go/internal/dashboard/lists.go.
@@ -8,8 +11,8 @@ import { useId, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
-import { parseCsv, parsePasted } from '../lib/siteList.js'
-import { tokenFetch } from '../lib/authFetch.js'
+import { compareTop, neverAdd, parseCsv, parsePasted } from '../lib/siteList.js'
+import { authFetch } from '../lib/authFetch.js'
 import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
@@ -70,6 +73,9 @@ function PlanView({ plan }) {
     : added
       ? `This will add ${plural(added, 'site')} to ${list.name}`
       : `Every site is already in ${list.name}, so the list stays as it is`
+  const never = plan.never_add_left_out
+    ? ` ${plural(plan.never_add_left_out, 'site')} on the never-add list ${plan.never_add_left_out === 1 ? 'is' : 'are'} left out.`
+    : ''
   const kept = list.already_there ? ` (${plural(list.already_there, 'site')} already there ${list.already_there === 1 ? 'is left as it is' : 'are left as they are'})` : ''
   const after = policy.after || []
   const newAt = policy.adds_rule ? after.findIndex((r) => r.data === list.name) : -1
@@ -78,7 +84,7 @@ function PlanView({ plan }) {
     : ` ${policy.name} already uses it (rule ${policy.existing_rule}), so the policy does not change.`
   return (
     <div className="flex flex-col gap-3 text-copy">
-      <p>{what}{kept}.{rule}</p>
+      <p>{what}{kept}.{rule}{never}</p>
       {list.also_used_by?.length > 0 && (
         <p role="note" className="rounded-control px-3 py-2" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>
           {list.name} is also used by {list.also_used_by.join(', ')}. The new sites take effect there too.
@@ -113,6 +119,70 @@ function doneMsg(j) {
   return `Done. ${l.name} gained ${plural(added, 'site')}${rule}.`
 }
 
+// Which sites the Top sites choice gives, or null until both lists are in.
+function topPick(tops, cmp, use) {
+  if (!tops) return null
+  const ir = tops.inforank.domains ?? []
+  const nw = tops.network.domains ?? []
+  const pick = {
+    inforank: ir,
+    network: nw,
+    both: cmp?.both ?? [],
+    either: cmp ? [...ir, ...cmp.onlyB] : [],
+  }[use] ?? []
+  return { domains: pick, bad: [], note: '' }
+}
+
+const USE = [
+  { id: 'inforank', label: 'The most popular sites (InfoRank)' },
+  { id: 'network', label: "Your network's busiest sites" },
+  { id: 'both', label: 'Only sites on both lists' },
+  { id: 'either', label: 'Sites on either list' },
+]
+
+// A few names, then "and N more" in a disclosure with all of them.
+function Names({ title, list }) {
+  return (
+    <details>
+      <summary className="cursor-pointer">{title}: {list.length.toLocaleString()}</summary>
+      <p className="mt-1 text-note text-muted break-words">{list.length ? list.join(', ') : 'none'}</p>
+    </details>
+  )
+}
+
+// The two top lists compared, and the choice of which sites go in.
+function TopCompare({ tops, cmp, use, onUse }) {
+  const { n, inforank, network } = tops
+  const day = String(inforank.date || '').slice(0, 10)
+  return (
+    <div className="flex flex-col gap-2 text-copy" data-top-compare="">
+      <p className="text-note text-muted">
+        {inforank.error
+          ? `Could not get the InfoRank list: ${inforank.error}`
+          : `InfoRank: the ${plural(inforank.domains.length, 'most popular site')} on the internet${day ? `, list of ${day}` : ''}.`}
+        {' '}
+        {network.error
+          ? `Could not get your network's busiest sites: ${network.error}`
+          : `Your network: the ${plural(network.domains.length, 'site')} looked up most in the last ${network.days} days${network.estimate ? ', an estimate because Infoblox sent only the 10,000 busiest names' : ''}.`}
+      </p>
+      {cmp && (
+        <div className="flex flex-col gap-1">
+          <Names title="On both lists" list={cmp.both} />
+          <Names title="Only on InfoRank" list={cmp.onlyA} />
+          <Names title="Only on your network" list={cmp.onlyB} />
+        </div>
+      )}
+      <Field label={`Which of the top ${n.toLocaleString()} go in`}>
+        <select className={FIELD_CLS} value={use} onChange={(e) => onUse(e.target.value)}>
+          {USE.filter((u) => (u.id === 'inforank' ? !inforank.error : u.id === 'network' ? !network.error : cmp)).map((u) => (
+            <option key={u.id} value={u.id}>{u.label}</option>
+          ))}
+        </select>
+      </Field>
+    </div>
+  )
+}
+
 export default function SiteLists() {
   const ro = useReadOnly()
   const targets = useApi('/api/lists/targets')
@@ -120,8 +190,10 @@ export default function SiteLists() {
   const policies = targets.data?.policies ?? []
   const redirects = targets.data?.redirects ?? []
 
-  const [source, setSource] = useState('inforank')
+  const [source, setSource] = useState('top')
   const [top, setTop] = useState(100)
+  const [tops, setTops] = useState(null) // { n, inforank, network }: each { domains, ... } or { error }
+  const [use, setUse] = useState('inforank')
   const [loaded, setLoaded] = useState(null) // { domains, bad, note }
   const [loadErr, setLoadErr] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -140,33 +212,55 @@ export default function SiteLists() {
 
   const policy = policies.find((p) => String(p.id) === policyId)
   const rules = policy?.rules ?? []
+  const cmp = tops?.inforank?.domains && tops?.network?.domains ? compareTop(tops.inforank.domains, tops.network.domains) : null
   const pasteParsed = source === 'paste' ? parsePasted(pasted) : null
-  const ready = source === 'paste' ? pasteParsed : loaded
-  const domains = ready?.domains ?? []
+  const ready = source === 'paste' ? pasteParsed : source === 'top' ? topPick(tops, cmp, use) : loaded
+
+  // The never-add list: saved per tenant by the server, which leaves those
+  // sites out again whatever is sent.
+  const neverApi = useApi('/api/lists/never-add')
+  const savedNever = neverApi.data?.sites ?? []
+  const [neverText, setNeverText] = useState(null) // null until edited
+  const [neverMsg, setNeverMsg] = useState(null)
+  const [neverBusy, setNeverBusy] = useState(false)
+  const split = neverAdd(ready?.domains ?? [], savedNever)
+  const domains = split.keep
+
+  async function saveNever() {
+    const parsed = parsePasted(neverText ?? savedNever.join('\n'))
+    if (parsed.bad.length) { setNeverMsg({ err: true, text: `Not a site: ${parsed.bad.slice(0, 5).join(', ')}` }); return }
+    setNeverBusy(true)
+    const r = await authFetch('/api/lists/never-add', { method: 'POST', body: JSON.stringify({ sites: parsed.domains }) })
+    setNeverBusy(false)
+    if (!r.ok) { setNeverMsg({ err: true, text: r.data?.error || `HTTP ${r.status}` }); return }
+    setNeverText(null)
+    setNeverMsg({ err: false, text: `Saved: ${plural(r.data.sites.length, 'site')} never to add.` })
+    neverApi.refetch()
+    flow.markStale()
+  }
 
   // Each load gets a number; a reply for an older one (the source was changed,
   // or loaded again, while it was on its way) is dropped, so the sites never
   // change under a preview.
   const loadSeq = useRef(0)
-  function pickSource(v) { loadSeq.current++; setSource(v); setLoaded(null); setLoadErr(null); setLoading(false); flow.markStale() }
+  function pickSource(v) { loadSeq.current++; setSource(v); setLoaded(null); setTops(null); setLoadErr(null); setLoading(false); flow.markStale() }
 
+  // Both lists at once. One failing still shows the other.
   function loadTop() {
     const n = Number(top)
     if (!Number.isInteger(n) || n < 1 || n > MAX) { setLoadErr(`Pick a number from 1 to ${MAX.toLocaleString()}.`); return }
     const seq = ++loadSeq.current
     setLoading(true)
     setLoadErr(null)
+    setTops(null)
     flow.markStale()
-    tokenFetch(`/api/lists/inforank?top=${n}`)
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}))
-        if (seq !== loadSeq.current) return
-        if (!r.ok || j.ok === false) throw new Error(j.error || `HTTP ${r.status}`)
-        const day = String(j.date || '').slice(0, 10)
-        setLoaded({ domains: j.domains, bad: [], note: `The ${plural(j.domains.length, 'most popular site')} from Infoblox's InfoRank list${day ? ` of ${day}` : ''}.` })
-      })
-      .catch((e) => { if (seq === loadSeq.current) { setLoaded(null); setLoadErr(`Could not get the InfoRank list: ${e.message}`) } })
-      .finally(() => { if (seq === loadSeq.current) setLoading(false) })
+    const get = (url) => authFetch(url).then((r) => (r.ok && r.data?.ok !== false ? r.data : { error: r.data?.error || `HTTP ${r.status}` }))
+    Promise.all([get(`/api/lists/inforank?top=${n}`), get(`/api/lists/busiest?top=${n}`)]).then(([inforank, network]) => {
+      if (seq !== loadSeq.current) return
+      setTops({ n, inforank, network })
+      setUse((u) => (inforank.error && !network.error ? 'network' : network.error && !inforank.error ? 'inforank' : u))
+      setLoading(false)
+    })
   }
 
   function loadFile(file) {
@@ -184,8 +278,10 @@ export default function SiteLists() {
 
   const isRedirect = action.startsWith('action_redirect')
   const listReady = listMode === 'new' ? listName.trim() !== '' : listId !== ''
+  // Every candidate goes to the server, which leaves out the never-add sites
+  // itself and says how many in the preview.
   const body = () => ({
-    domains,
+    domains: ready?.domains ?? [],
     list: listMode === 'new' ? { name: listName.trim() } : { id: Number(listId) },
     policy_id: Number(policyId),
     action,
@@ -199,7 +295,8 @@ export default function SiteLists() {
     stale: flow.stale,
     disabled: domains.length === 0 || domains.length > MAX || !listReady || !policyId,
     needs: [
-      domains.length === 0 && (source === 'inforank' ? 'press Get the list' : source === 'csv' ? 'choose a CSV file' : 'paste some sites'),
+      domains.length === 0 && split.left.length > 0 && 'every site is on the never-add list',
+      domains.length === 0 && !split.left.length && (source === 'top' ? 'press Get both lists' : source === 'csv' ? 'choose a CSV file' : 'paste some sites'),
       domains.length > MAX && `use at most ${MAX.toLocaleString()} sites`,
       !listReady && (listMode === 'new' ? 'name the new list' : 'pick a list'),
       !policyId && 'pick a policy',
@@ -222,22 +319,25 @@ export default function SiteLists() {
 
           <fieldset className="flex flex-col gap-2">
             <legend className="text-note text-muted mb-1">Where the sites come from</legend>
-            <Choice name="sl-source" value="inforank" checked={source === 'inforank'} onChange={pickSource}>Most popular sites (Infoblox InfoRank)</Choice>
+            <Choice name="sl-source" value="top" checked={source === 'top'} onChange={pickSource}>Top sites: the most popular, and your network's busiest</Choice>
             <Choice name="sl-source" value="csv" checked={source === 'csv'} onChange={pickSource}>A CSV file</Choice>
             <Choice name="sl-source" value="paste" checked={source === 'paste'} onChange={pickSource}>Paste them in</Choice>
             <div className="pl-6 flex flex-col gap-2">
-              {source === 'inforank' && (
-                <div className="flex items-end gap-2">
-                  <Field label="How many, from the top">
-                    <input {...MACHINE_TEXT} className={`${FIELD_CLS} w-32`} type="number" min="1" max={MAX} value={top}
-                      onChange={(e) => { setTop(e.target.value); setLoaded(null); flow.markStale() }} />
-                  </Field>
-                  <button type="button" onClick={loadTop} disabled={loading}
-                    className="px-3 py-1.5 rounded-control border text-copy"
-                    style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
-                    {loading ? 'Getting…' : 'Get the list'}
-                  </button>
-                </div>
+              {source === 'top' && (
+                <>
+                  <div className="flex items-end gap-2">
+                    <Field label="How many, from the top">
+                      <input {...MACHINE_TEXT} className={`${FIELD_CLS} w-32`} type="number" min="1" max={MAX} value={top}
+                        onChange={(e) => { loadSeq.current++; setTop(e.target.value); setTops(null); setLoading(false); flow.markStale() }} />
+                    </Field>
+                    <button type="button" onClick={loadTop} disabled={loading}
+                      className="px-3 py-1.5 rounded-control border text-copy"
+                      style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+                      {loading ? 'Getting…' : 'Get both lists'}
+                    </button>
+                  </div>
+                  {tops && <TopCompare tops={tops} cmp={cmp} use={use} onUse={(v) => { setUse(v); flow.markStale() }} />}
+                </>
               )}
               {source === 'csv' && (
                 <Field label="CSV file: one site per row, in the first column">
@@ -252,7 +352,7 @@ export default function SiteLists() {
               )}
               {loadErr && <p role="alert" className="text-note" style={{ color: COLORS.crit }}>{loadErr}</p>}
               {ready && (ready.note || ready.domains.length > 0) && (
-                <p className="text-note text-muted">{ready.note || `${plural(ready.domains.length, 'site')} ready.`}</p>
+                <p className="text-note text-muted">{ready.note || `${plural(domains.length, 'site')} ready.`}</p>
               )}
               {ready?.bad?.length > 0 && (
                 <p className="text-note" style={{ color: COLORS.warn }}>
@@ -261,6 +361,27 @@ export default function SiteLists() {
               )}
             </div>
           </fieldset>
+
+          <div className="flex flex-col gap-2">
+            <Field label="Sites never to add, one per line (kept for this tenant)">
+              <textarea {...MACHINE_TEXT} className={FIELD_CLS} rows={3} value={neverText ?? savedNever.join('\n')}
+                onChange={(e) => { setNeverText(e.target.value); setNeverMsg(null) }} placeholder="example.com" />
+            </Field>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={saveNever} disabled={neverBusy || neverText === null}
+                className="px-3 py-1.5 rounded-control border text-copy"
+                style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+                {neverBusy ? 'Saving…' : 'Save never-add list'}
+              </button>
+              {neverMsg && <span role={neverMsg.err ? 'alert' : 'status'} className="text-note" style={{ color: neverMsg.err ? COLORS.crit : undefined }}>{neverMsg.text}</span>}
+            </div>
+            {split.left.length > 0 && (
+              <p className="text-note text-muted">
+                {plural(split.left.length, 'site')} on the never-add list will be left out: {split.left.slice(0, 5).join(', ')}{split.left.length > 5 ? ', …' : ''}
+              </p>
+            )}
+            <FetchError error={neverApi.error} />
+          </div>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="text-note text-muted mb-1">The list they go into</legend>

@@ -28,6 +28,7 @@ import (
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
 	"bloxsmith/internal/runs"
+	"bloxsmith/internal/sitelists"
 	"bloxsmith/internal/store"
 	"bloxsmith/internal/vault"
 )
@@ -54,6 +55,10 @@ type Deps struct {
 	// Opened from StateDir on first use when nil; see Deps.ledger.
 	Runs     *runs.Ledger
 	runsOnce sync.Once
+	// SiteLists is what Site lists remembers per tenant (internal/sitelists).
+	// Opened from StateDir on first use when nil; see Deps.siteState.
+	SiteLists     *sitelists.State
+	siteListsOnce sync.Once
 	// UnlockThrottle rate limits POST /api/vault/unlock — the one route that
 	// spends a 128 MiB scrypt derive for an unauthenticated caller. main.go
 	// builds it; New() supplies one when this is nil, so the route can never

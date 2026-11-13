@@ -391,10 +391,11 @@ Drift never fixes anything. To close a gap, provision the site again (missing), 
 **Writes to Infoblox.** Puts a list of websites into a security policy, with the action you pick. It uses the [Preview and Apply flow](#the-write-flow).
 
 1. Pick where the sites come from:
-   - **Most popular sites (Infoblox InfoRank)**: type how many from the top (up to 50,000) and press **Get the list**. Infoblox updates its InfoRank list every day; the page says which day's list you got.
+   - **Top sites**: type how many from the top (up to 50,000) and press **Get both lists**. The page gets two lists and compares them: Infoblox's InfoRank list of the most popular sites on the internet (updated daily; the page says which day), and your network's busiest sites, the sites looked up most here in the last 7 days. Names are counted by site, so www.google.com and mail.google.com both count for google.com. It shows how many are on both lists, only on InfoRank and only on your network; open each to see the sites. Then pick which go in: InfoRank's, your network's, only those on both, or those on either. If one list cannot be read, you can still use the other.
    - **A CSV file**: one site per row, in the first column. A header row is skipped.
    - **Paste them in**: one per line, or separated by commas.
    Anything that is not a site name is listed and left out.
+   **Sites never to add** holds sites to leave out whatever the source, kept for this tenant. Press **Save never-add list** after changing it; saving works on read-only tenants too. A site is also left out when it is under a never-add site, or would cover one: google.com is left out if www.google.com is on the list, because a list entry covers the names under it. The page says how many are left out, and so does the preview.
 2. Pick the list: **Make a new list** and name it, or **Add to a list I have**. Adding never removes what the list already holds.
 3. Pick the **policy**, what it does with the sites (**Block**, **Allow**, **Log only**, **Redirect**, **Block without logging** or **Redirect without logging**), and where the rule goes. Rules are checked from the top, so a rule higher up wins.
 4. **Preview** says what will change and shows the policy's rules in their new order, with the new one marked. It also warns when the list is used by other policies, because new sites take effect there too.
