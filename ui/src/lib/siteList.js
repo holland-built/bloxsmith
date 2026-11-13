@@ -44,3 +44,24 @@ export function parseCsv(text) {
   if (cells.length && !isDomain(cells[0])) cells.shift()
   return collect(cells)
 }
+
+// Split domains into those to keep and those on the never-add list, the same
+// rule as the server (go/internal/dashboard/busiest.go NeverAdd): a domain is
+// left out when it is a never-add site, is under one, or has one under it,
+// because a list entry also covers the names under it.
+export function neverAdd(domains, never) {
+  const nv = never.map((n) => n.trim().toLowerCase().replace(/\.$/, '')).filter(Boolean)
+  const under = (a, b) => a === b || a.endsWith(`.${b}`)
+  const keep = []
+  const left = []
+  for (const d of domains) (nv.some((n) => under(d, n) || under(n, d)) ? left : keep).push(d)
+  return { keep, left }
+}
+
+// The two top lists side by side: in both, only in the first, only in the second,
+// each in the order of the list it came from.
+export function compareTop(a, b) {
+  const inA = new Set(a)
+  const inB = new Set(b)
+  return { both: a.filter((d) => inB.has(d)), onlyA: a.filter((d) => !inB.has(d)), onlyB: b.filter((d) => !inA.has(d)) }
+}

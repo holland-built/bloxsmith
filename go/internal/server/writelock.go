@@ -131,6 +131,8 @@ var tenantWritePrefixes = []string{
 //	/api/desk/plan       turns a sentence into Automate job answers with one
 //	                     AI call and no tools. It never calls Infoblox; the
 //	                     person still presses Build, which is gated.
+//	/api/lists/never-add saves Site lists' never-add sites in Bloxsmith's own
+//	                     site_lists.json. It never calls Infoblox.
 var nonTenantWritePaths = map[string]bool{
 	"/api/views":              true,
 	"/api/views/import":       true,
@@ -143,6 +145,7 @@ var nonTenantWritePaths = map[string]bool{
 	"/api/drift/check":        true,
 	"/api/query":              true,
 	"/api/desk/plan":          true,
+	"/api/lists/never-add":    true,
 }
 
 var nonTenantWritePrefixes = []string{

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isDomain, parseCsv, parsePasted } from './siteList.js'
+import { compareTop, isDomain, neverAdd, parseCsv, parsePasted } from './siteList.js'
 
 test('isDomain matches the server rule', () => {
   for (const ok of ['google.com', 'a.b.example.co', 'xn--bcher-kva.de']) assert.ok(isDomain(ok), ok)
@@ -26,4 +26,15 @@ test('csv with no header keeps the first row', () => {
 test('csv reads only the first column', () => {
   const r = parseCsv('a.com,x\n,b.com\n')
   assert.deepEqual(r.domains, ['a.com'])
+})
+
+test('never-add leaves out the site, anything under it, and anything that would cover it', () => {
+  const r = neverAdd(['google.com', 'www.facebook.com', 'facebook.com.au', 'apple.com'], ['www.google.com', 'Facebook.com.'])
+  assert.deepEqual(r.keep, ['facebook.com.au', 'apple.com'])
+  assert.deepEqual(r.left, ['google.com', 'www.facebook.com'])
+})
+
+test('compareTop splits two lists into in both and only in each, keeping each order', () => {
+  assert.deepEqual(compareTop(['a.com', 'b.com', 'c.com'], ['c.com', 'd.com', 'a.com']),
+    { both: ['a.com', 'c.com'], onlyA: ['b.com'], onlyB: ['d.com'] })
 })
