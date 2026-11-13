@@ -467,6 +467,7 @@ function SubnetMode() {
             status={flow.status}
             stale={flow.stale}
             disabled={!space}
+            needs={[!space && 'pick an IP space']}
             onPreview={() => flow.run(qs(true), true)}
             onApply={() => flow.run(qs(false), false)}
             applyLabel="Provision"
@@ -599,6 +600,7 @@ function SiteMode({ isAdmin }) {
             status={build.status}
             stale={build.stale}
             disabled={!siteTemplate}
+            needs={[!siteTemplate && 'pick a site template']}
             onPreview={() => build.run(baseQs(true).toString(), true)}
             onApply={() => build.run(baseQs(false).toString(), false)}
             applyLabel="Provision site"
@@ -666,6 +668,7 @@ function SiteMode({ isAdmin }) {
             status={teardown.status}
             stale={teardown.stale}
             disabled={!siteTemplate}
+            needs={[!siteTemplate && 'pick a site template']}
             applyDisabled={!isAdmin || !tdConfirm.trim()}
             applyNote={isAdmin ? 'type the site name to confirm' : 'admin required'}
             onPreview={() => teardown.run(tdQs(true), true)}
@@ -784,6 +787,7 @@ function SeedMode({ isAdmin }) {
             status={seed.status}
             stale={seed.stale}
             disabled={!regionList.length}
+            needs={[!regionList.length && 'pick at least one region']}
             onPreview={() => seed.run(baseQs(true).toString(), true)}
             onApply={() => seed.run(baseQs(false).toString(), false)}
             applyLabel="Seed demo data"
@@ -841,6 +845,7 @@ function SeedMode({ isAdmin }) {
             status={teardown.status}
             stale={teardown.stale}
             disabled={!regionList.length}
+            needs={[!regionList.length && 'pick at least one region']}
             applyDisabled={!isAdmin || tdConfirm.trim() !== 'DELETE'}
             applyNote={isAdmin ? 'type DELETE to confirm' : 'admin required'}
             onPreview={() => teardown.run(tdQs(true), true)}

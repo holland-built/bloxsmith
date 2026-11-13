@@ -1,6 +1,9 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -201,7 +204,8 @@ var dryPreviewStreams = map[string]bool{
 }
 
 // isDryPreview reports whether this request is a Preview: a GET or HEAD to one
-// of dryPreviewStreams whose dry flag is on. The lock lets these through on a
+// of dryPreviewStreams whose dry flag is on, or a form request
+// (isDryPreviewForm) whose body says "dry": true. The lock lets these through on a
 // read-only tenant, because a preview only reads the tenant to show the plan.
 //
 // The flag is parsed EXACTLY as the handlers parse it, queryM (first value
@@ -209,10 +213,68 @@ var dryPreviewStreams = map[string]bool{
 // Any other parse would open a gap: a request this function called dry that
 // the handler then ran live.
 func isDryPreview(r *http.Request, path string) bool {
+	if isDryPreviewForm(r.Method, path) {
+		return bodyDryTrue(r)
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
 	return dryPreviewStreams[path] && provision.TruthyDry(queryM(r)["dry"])
+}
+
+// dryPreviewPosts are the form POSTs whose Preview (a JSON body with "dry":
+// true) is known to only read the tenant. Traced handler by handler on
+// 2026-11-13: SelfserviceAllocate and reserveForDevice return before any
+// Rest.Write; DNSRecordCreate returns before its POST; ApplyList returns after
+// plan(), which only reads; desk/run calls the same builders with dry true
+// (allocate, DNS record, SubnetCreate, the site provisioner the preview streams
+// already use) and records nothing; desk/remove only GETs each object. Like
+// dryPreviewStreams, a route is added here by name once someone has checked
+// its dry path.
+var dryPreviewPosts = map[string]bool{
+	"/api/selfservice/allocate": true,
+	"/api/dns/records":          true,
+	"/api/lists/apply":          true,
+	"/api/desk/run":             true,
+	"/api/desk/remove":          true,
+}
+
+// isDryPreviewForm reports whether a request at this method and path is one
+// whose "dry": true body is a Preview. Besides dryPreviewPosts, the Editor's
+// create (POST /api/edit/<type>) and update (PATCH /api/edit/<type>/<id>,
+// PATCH /api/dns/records): every Create and Update in edit.Resources, and
+// DNSRecordUpdate, return their preview before any Rest.Write (traced the same
+// day). DELETE never passes: no delete route has a preview.
+func isDryPreviewForm(method, path string) bool {
+	switch method {
+	case http.MethodPost:
+		return dryPreviewPosts[path] || strings.HasPrefix(path, "/api/edit/")
+	case http.MethodPatch:
+		return path == "/api/dns/records" || strings.HasPrefix(path, "/api/edit/")
+	}
+	return false
+}
+
+// bodyDryTrue reports whether the JSON body says "dry": true, as a JSON
+// boolean. Every handler isDryPreviewForm names treats exactly that as a preview,
+// whatever else it accepts, so nothing this calls dry can run live. It decodes
+// the same bytes with the same decoder the handler uses (Deps.body), so a
+// repeated "dry" key resolves the same way in both. The body is put back for
+// the handler. A body over maxBody is never called dry; the handler refuses it.
+func bodyDryTrue(r *http.Request) bool {
+	if r.Body == nil {
+		return false
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
+	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(raw), r.Body))
+	if err != nil || len(raw) > maxBody {
+		return false
+	}
+	b := map[string]any{}
+	if json.Unmarshal(raw, &b) != nil {
+		return false
+	}
+	return b["dry"] == true
 }
 
 // requestChangesTenant reports whether THIS request — verb and path together —

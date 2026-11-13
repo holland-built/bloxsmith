@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -210,6 +211,74 @@ func TestDryPreviewPassesReadOnlyLock(t *testing.T) {
 		t.Run("refused "+tc.method+" "+tc.path, func(t *testing.T) {
 			if !refusedByLock(tc.method, tc.path) {
 				t.Fatalf("a live run got past the write lock on a read-only tenant: %s %s", tc.method, tc.path)
+			}
+		})
+	}
+}
+
+// TestDryFormPreviewPassesReadOnlyLock: Preview on the form pages (Get an
+// address, DNS record, Site lists, Automate, Editor) sends "dry": true in a POST body.
+// It only reads the tenant, so a read-only tenant allows it, which is what lets
+// the owner demo Preview on a tenant nobody may change. Anything that is not a
+// JSON true stays refused.
+func TestDryFormPreviewPassesReadOnlyLock(t *testing.T) {
+	h, _, _ := lockedTestServer(t)
+	send := func(method, path, body string) *httptest.ResponseRecorder {
+		r := lockReq(method, path)
+		r.Body = io.NopCloser(strings.NewReader(body))
+		r.ContentLength = int64(len(body))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, r)
+		return rr
+	}
+	refusedByLock := func(rr *httptest.ResponseRecorder) bool {
+		if rr.Code != http.StatusForbidden {
+			return false
+		}
+		reason, _ := bodyOf(t, rr)["reason"].(string)
+		return reason == "tenant-read-only"
+	}
+
+	for _, tc := range []struct{ method, path string }{
+		{"POST", "/api/selfservice/allocate"}, {"POST", "/api/dns/records"},
+		{"POST", "/api/lists/apply"}, {"POST", "/api/desk/run"}, {"POST", "/api/desk/remove"},
+		{"POST", "/api/edit/dns_zone"}, {"PATCH", "/api/edit/subnet/some-id"},
+		{"PATCH", "/api/dns/records"},
+	} {
+		t.Run("allowed "+tc.method+" "+tc.path, func(t *testing.T) {
+			if rr := send(tc.method, tc.path, `{"dry":true}`); refusedByLock(rr) {
+				t.Fatalf("a dry Preview was refused by the write lock: %s %s", tc.method, tc.path)
+			}
+		})
+	}
+
+	// The body the lock read must still reach the handler: allocate answers its
+	// own "subnet_id ... required", not "invalid JSON body".
+	rr := send("POST", "/api/selfservice/allocate", `{"dry":true}`)
+	if msg, _ := bodyOf(t, rr)["error"].(string); !strings.Contains(msg, "subnet_id") {
+		t.Fatalf("the handler did not get the body the lock read: %d %s", rr.Code, rr.Body.String())
+	}
+
+	for _, tc := range []struct{ method, path, body string }{
+		{"POST", "/api/selfservice/allocate", `{}`},
+		{"POST", "/api/selfservice/allocate", `{"dry":false}`},
+		{"POST", "/api/selfservice/allocate", `{"dry":"true"}`},
+		{"POST", "/api/selfservice/allocate", `{"dry":1}`},
+		{"POST", "/api/selfservice/allocate", `{"dry":true,"dry":false}`}, // last key wins in the handler too
+		{"POST", "/api/selfservice/allocate", `not json`},
+		{"POST", "/api/lists/apply", `{"dry":false}`},
+		{"POST", "/api/desk/run", `{"dry":false}`},
+		{"PATCH", "/api/edit/subnet/some-id", `{"dry":false}`},
+		// Deletes, the block routes and blocking a domain stay locked.
+		{"DELETE", "/api/edit/subnet/some-id", `{"dry":true}`},
+		{"DELETE", "/api/dns/records/some-id", `{"dry":true}`},
+		{"POST", "/api/provision/block", `{"dry":true}`},
+		{"POST", "/api/teardown/block", `{"dry":true}`},
+		{"POST", "/api/block-domain", `{"dry":true}`},
+	} {
+		t.Run("refused "+tc.method+" "+tc.path+" "+tc.body, func(t *testing.T) {
+			if !refusedByLock(send(tc.method, tc.path, tc.body)) {
+				t.Fatalf("a live run got past the write lock on a read-only tenant: %s %s %s", tc.method, tc.path, tc.body)
 			}
 		})
 	}

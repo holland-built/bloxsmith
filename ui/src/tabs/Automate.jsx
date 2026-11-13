@@ -186,6 +186,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!subnetId}
+        needs={[!subnetId && 'pick a network']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -306,6 +307,7 @@ function DnsJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!zoneId || !nameInZone.trim() || !value.trim()}
+        needs={[!zoneId && 'pick a zone', !nameInZone.trim() && 'type a name', !value.trim() && 'type where it points']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -383,6 +385,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!template || site.length < 2 || !space.id}
+        needs={[!template && 'pick a site template', site.length < 2 && 'type the site name (2 letters or more)', !space.id && 'pick an IP space']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -441,6 +444,7 @@ function DemoJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!space.id || customer.length < 2}
+        needs={[!space.id && 'pick an IP space', customer.length < 2 && 'type the customer or call name (2 letters or more)']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -511,6 +515,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!blockId}
+        needs={[!blockId && 'pick an address block']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}

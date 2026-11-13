@@ -168,6 +168,16 @@ function AllocatePanel() {
     status: flow.status,
     stale: flow.stale,
     disabled: !target || dnsIncomplete || (device && !macOk),
+    needs: [
+      !space && 'pick an IP space',
+      space && !target && !subnetsApi.loading && (subnets.length === 0
+        ? (block ? 'pick another block (this one has no subnets)' : 'pick another IP space (this one has no subnets)')
+        : `pick a subnet (none has room for ${want})`),
+      dnsIncomplete && !name.trim() && 'type a Name (it becomes the DNS name)',
+      dnsIncomplete && !zone && 'pick a DNS zone',
+      device && !mac.trim() && "type the device's MAC address",
+      device && mac.trim() && !macOk && 'fix the MAC address',
+    ],
     onPreview: () => { if (!subnetId && target) setSubnetId(target); flow.runPreview(body(false), device ? 'Reserve' : 'Allocate') },
     onApply: () => flow.runApply(body(true), (j) => { saveLast(tenant, space, target); return allocatedMsg(j, dnsName) }),
     applyLabel: device ? 'Reserve' : 'Allocate',
@@ -340,6 +350,7 @@ function DnsPanel() {
     status: flow.status,
     stale: flow.stale,
     disabled: !zoneId || !value,
+    needs: [!zoneId && 'pick a zone', !value && 'type a value'],
     onPreview: () => flow.runPreview(body(), 'Create'),
     onApply: () => flow.runApply(body(), () => `Done. ${owner} now points to ${value.trim()}${canPtr && ptr ? ', and its reverse record is made' : ''}.`),
     applyLabel: 'Create',
