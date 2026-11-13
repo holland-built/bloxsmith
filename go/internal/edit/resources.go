@@ -12,6 +12,26 @@ import (
 // /api/selfservice/allocate. Delete is uniform (DELETE /api/ddi/v1/{id}) and
 // lives in the route layer, not here.
 
+// MadeTagKey and MadeTagValue are the tag Bloxsmith puts on what it creates,
+// where Infoblox allows tags, so the Portal shows who made it. A label only:
+// the record of exact ids (internal/runs) decides what Bloxsmith made, because
+// Infoblox can pass tags down from a parent.
+const (
+	MadeTagKey   = "made_by"
+	MadeTagValue = "bloxsmith"
+)
+
+// withMadeTag is tags plus the made_by tag, as a new map. Added at the live
+// write only, so a Preview shows exactly what the person asked for.
+func withMadeTag(tags any) M {
+	out := M{}
+	for k, v := range asMap(tags) {
+		out[k] = v
+	}
+	out[MadeTagKey] = MadeTagValue
+	return out
+}
+
 // tagsOf returns body["tags"] as a JSON object (nil-safe), matching Python's
 // `body.get("tags") or {}`.
 func tagsOf(v any) M {
@@ -42,6 +62,7 @@ func (c *Client) ZoneCreate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": zoneBody}, 200
 	}
+	zoneBody["tags"] = withMadeTag(zoneBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone", zoneBody, nil)
 	if writeUnreadable(resp, status) {
 		return createdUnreadable("DNS zone", status, ""), status
@@ -186,7 +207,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		return M{"ok": false, "error": "no free subnet available in block"}, 502
 	}
 
-	patchBody := M{"tags": tags}
+	patchBody := M{"tags": withMadeTag(tags)}
 	if name != "" {
 		patchBody["name"] = name
 	}
@@ -309,6 +330,7 @@ func (c *Client) RangeCreate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": rangeBody}, 200
 	}
+	rangeBody["tags"] = withMadeTag(rangeBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
 	if writeUnreadable(resp, status) {
 		return createdUnreadable("DHCP range", status, ""), status
@@ -373,6 +395,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": hostBody}, 200
 	}
+	hostBody["tags"] = withMadeTag(hostBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)
 	if writeUnreadable(resp, status) {
 		return createdUnreadable("host", status, ""), status

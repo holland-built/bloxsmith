@@ -24,6 +24,7 @@ const Provision = lazy(() => import('./tabs/Provision.jsx'))
 const Editor = lazy(() => import('./tabs/Editor.jsx'))
 const Drift = lazy(() => import('./tabs/Drift.jsx'))
 const SiteLists = lazy(() => import('./tabs/SiteLists.jsx'))
+const Made = lazy(() => import('./tabs/Made.jsx'))
 const BestPractices = lazy(() => import('./tabs/BestPractices.jsx'))
 const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
 const Ai = lazy(() => import('./tabs/Ai.jsx'))
@@ -79,6 +80,7 @@ const TABS = [
   { id: 'editor', label: 'Editor', el: Editor },
   { id: 'drift', label: 'Drift', el: Drift },
   { id: 'lists', label: 'Site lists', el: SiteLists },
+  { id: 'made', label: 'Made with Bloxsmith', el: Made },
   { id: 'demo', label: 'Demo server', el: DemoServer },
   { id: 'ai', label: 'AI', el: Ai },
   { id: 'chart', label: 'Build a chart', el: ChartBuilder },
@@ -121,7 +123,7 @@ const GROUPS = [
   { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily', 'best-practices'] },
   { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
   { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
-  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'lists', 'demo'] },
+  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'lists', 'made', 'demo'] },
   { id: 'ask', label: 'Ask', question: '', tabIds: ['ai', 'chart'] },
 ]
 

@@ -186,7 +186,7 @@ test.describe('palette: indicator search', () => {
     const dialog = await openPalette(page);
     // 20 tabs — the palette still receives TABS,
     // never PAGES, so the hidden dossier page must not be in this list.
-    await expect(dialog.getByRole('option')).toHaveCount(20);
+    await expect(dialog.getByRole('option')).toHaveCount(21);
     await expect(dialog.getByText(/Search everything for/)).toHaveCount(0);
     await expect(dialog.getByRole('option', { name: /^Dossier$/ })).toHaveCount(0);
   });

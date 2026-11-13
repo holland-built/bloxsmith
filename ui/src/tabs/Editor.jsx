@@ -4,6 +4,8 @@ import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntr
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
+import MadeList from '../components/MadeList.jsx'
+import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -313,6 +315,8 @@ export default function Editor() {
 
   // Two-click arm instead of window.confirm — blocking dialogs freeze browser automation
   const [delArmed, setDelArmed] = useState(false)
+  const [delSay, setDelSay] = useState('')
+  const delConfirmRef = useRef('')
   const delArmTimerRef = useRef(null)
   useEffect(() => () => clearTimeout(delArmTimerRef.current), [])
   // A Delete armed for one item must never fire on another.
@@ -322,18 +326,38 @@ export default function Editor() {
   }
   function del() {
     if (!spec || !editId.trim() || status === 'busy') return
+    const id = editId.trim()
+    // Kinds Made with Bloxsmith deletes go through it, so the one "are you
+    // sure" says whether Bloxsmith made the item and the delete is recorded.
+    const tracked = madeKind(type)
     if (!delArmed) {
-      setDelArmed(true)
-      clearTimeout(delArmTimerRef.current)
-      delArmTimerRef.current = setTimeout(() => setDelArmed(false), 4000)
+      const arm = () => {
+        setDelArmed(true)
+        clearTimeout(delArmTimerRef.current)
+        delArmTimerRef.current = setTimeout(() => setDelArmed(false), 4000)
+      }
+      if (!tracked) { setDelSay(''); arm(); return }
+      setResult(null)
+      checkDelete(type, id).then((c) => {
+        if (!c.ok || c.data?.blocked || c.data?.gone) {
+          setResult({ ok: false, msg: c.data?.blocked || (c.data?.gone ? 'That item is already gone.' : c.data?.error || 'could not check it, so nothing was deleted') })
+          return
+        }
+        delConfirmRef.current = c.data.confirm
+        setDelSay(whoMade(c.data))
+        arm()
+      })
       return
     }
     clearTimeout(delArmTimerRef.current)
     setDelArmed(false)
     setStatus('busy')
     setResult(null)
-    tokenFetch(`${spec.endpoint}/${encodeURIComponent(editId.trim())}`, { method: 'DELETE' })
-      .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+    const sent = tracked
+      ? confirmDelete(type, id, delConfirmRef.current)
+      : tokenFetch(`${spec.endpoint}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+    sent
       .catch(() => ({ ok: false, data: { error: 'network error' } }))
       .then(({ ok, data }) => {
         const j = data || {}
@@ -453,6 +477,9 @@ export default function Editor() {
               </button>
             </div>
           )}
+          {canDelete && delArmed && delSay && (
+            <p className="text-note text-right" style={{ color: COLORS.warn }} data-delete-say="">{delSay}</p>
+          )}
         </div>
         </section>
       } result={
@@ -474,6 +501,11 @@ export default function Editor() {
           </PreviewApply>
         </section>
       } /> : <Empty>unknown type</Empty>}
+      <section className="mt-8" aria-labelledby="editor-made-h">
+        <ColumnHeading id="editor-made-h">Made here</ColumnHeading>
+        <p className="text-note text-muted mb-2">Made in the Editor, newest first. Each delete asks first.</p>
+        <MadeList sources={['editor']} ro={ro.readOnly} empty="Nothing made here yet." />
+      </section>
     </div>
   )
 }

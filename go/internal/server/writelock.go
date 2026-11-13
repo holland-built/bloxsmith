@@ -79,6 +79,9 @@ var tenantWritePaths = map[string]bool{
 	"/api/desk/run":    true,
 	"/api/desk/remove": true,
 
+	// Made with Bloxsmith: deletes one object after its preview.
+	"/api/made/delete": true,
+
 	// Security policy: adds and removes entries on a live block list.
 	"/api/block-domain":   true,
 	"/api/unblock-domain": true,
@@ -228,7 +231,8 @@ func isDryPreview(r *http.Request, path string) bool {
 // Rest.Write; DNSRecordCreate returns before its POST; ApplyList returns after
 // plan(), which only reads; desk/run calls the same builders with dry true
 // (allocate, DNS record, SubnetCreate, the site provisioner the preview streams
-// already use) and records nothing; desk/remove only GETs each object. Like
+// already use) and records nothing; desk/remove only GETs each object;
+// made/delete only reads the object (server/made.go inspect). Like
 // dryPreviewStreams, a route is added here by name once someone has checked
 // its dry path.
 var dryPreviewPosts = map[string]bool{
@@ -237,6 +241,7 @@ var dryPreviewPosts = map[string]bool{
 	"/api/lists/apply":          true,
 	"/api/desk/run":             true,
 	"/api/desk/remove":          true,
+	"/api/made/delete":          true,
 }
 
 // isDryPreviewForm reports whether a request at this method and path is one

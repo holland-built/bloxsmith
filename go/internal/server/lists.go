@@ -61,6 +61,13 @@ func (d *Deps) listsApply(w http.ResponseWriter, r *http.Request, b map[string]a
 	}
 	res, status := d.dash(r).ApplyList(p)
 	d.json(w, r, status, res)
+	if !p.Dry {
+		name := p.ListName
+		if lst, _ := res["list"].(map[string]any); lst != nil && anyStr(lst["name"]) != "" {
+			name = anyStr(lst["name"])
+		}
+		d.recordMade(r, "lists", "Site list "+name, listsMade(res, p.PolicyID, p.Action), anyStr(res["error"]), res["ok"] == true)
+	}
 	if p.Dry || res["outcome"] == nil || res["nothing_to_do"] == true {
 		return
 	}

@@ -358,6 +358,16 @@ export const PANEL_HELP = {
     look: 'Remove lists what is still there first. Delete these then deletes exactly those items, and nothing Bloxsmith did not make here. If something cannot be deleted, Remove again retries only that.',
   },
 
+  // ---- Made with Bloxsmith ----
+  'made-all': {
+    what: 'Everything Bloxsmith made and deleted on any page, newest first.',
+    look: 'Delete asks once first and says whether Bloxsmith made the item. "Safe to delete" means Bloxsmith made it and it has not changed since.',
+  },
+  'made-find': {
+    what: 'Find any item of these kinds by name or address, whoever made it.',
+    look: 'Each result says whether Bloxsmith made it. Delete asks once first; for items Bloxsmith did not make, it asks "Are you sure?".',
+  },
+
   // ---- Best practices ----
   'bp-checks': {
     what: 'Design rules checked against this account: hosts down, Grid Masters with no backup, and DHCP HA groups in a deprecated mode.',

@@ -574,6 +574,8 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/ipam/spaces', body: SPACES, required: true },
     { method: 'GET', path: '/api/desk/spaces', body: DESK_SPACES, required: true },
     { method: 'GET', path: '/api/dns/zones', body: DNS_ZONES_PICKER, required: true },
+    // The "Made here" list under the form (MadeList.jsx), 2026-11-13.
+    { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
   ],
   provision: [
     { method: 'GET', path: '/api/ipam/spaces', body: SPACES, required: true },
@@ -584,7 +586,10 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/whoami', body: WHOAMI, required: true },
     { method: 'GET', path: '/api/templates', body: TEMPLATES },
   ],
-  editor: [],
+  editor: [
+    // The "Made here" list under the form (MadeList.jsx), 2026-11-13.
+    { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
+  ],
   overview: [
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
     { method: 'GET', path: '/api/csp/license-alerts', body: LICENSE_ALERTS, required: true },

@@ -675,6 +675,24 @@
     "why": "it is a list, not a chart"
   },
   {
+    "id": "made-all",
+    "page": "Made with Bloxsmith",
+    "name": "What Bloxsmith made and deleted",
+    "kind": "local",
+    "source": "the app's own run records",
+    "builder": "no",
+    "why": "it is a list, not a chart"
+  },
+  {
+    "id": "made-find",
+    "page": "Made with Bloxsmith",
+    "name": "Delete something else",
+    "kind": "rest",
+    "source": "the Infoblox API",
+    "builder": "no",
+    "why": "it is a form, not a chart"
+  },
+  {
     "id": "bp-checks",
     "page": "Best practices",
     "name": "Checks",

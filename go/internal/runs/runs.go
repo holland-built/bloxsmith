@@ -11,8 +11,10 @@
 // the two, the run still shows up, marked failed, so nobody believes nothing
 // happened.
 //
-// Changes made on the older pages are not recorded here, and Remove cannot
-// undo them.
+// Get an address, Site lists, the DNS card and the Editor record what they make
+// here too (Source says which page), and every delete made through Bloxsmith
+// is recorded as a run of its own, so the Made with Bloxsmith page can show
+// both. Changes made before 2026-11-13 on those pages are not recorded.
 package runs
 
 import (
@@ -48,19 +50,29 @@ const (
 // Object is one thing a run made.
 type Object struct {
 	ID    string `json:"id"`
-	Kind  string `json:"kind"`  // "address", "dns_record" or "subnet"
+	Kind  string `json:"kind"`  // "address", "dns_record", "subnet", "fixed_address", "custom_list", "policy_rule", ...
 	Label string `json:"label"` // what a person recognises: the IP, or the name
 	State string `json:"state"`
 	Error string `json:"error,omitempty"`
+	// Look is what the object looked like when it was made (server/made.go
+	// lookOf). A delete compares it with the object now, so something someone
+	// else has since changed is not called safe. Empty on older records.
+	Look string `json:"look,omitempty"`
 }
 
 // Run is one Build from the desk.
 type Run struct {
-	ID      string   `json:"id"`
-	Job     string   `json:"job"`
-	Title   string   `json:"title"`
-	Created string   `json:"created"`
-	Space   string   `json:"space,omitempty"` // the IP space it was built in, for "Yours" on the desk
+	ID      string `json:"id"`
+	Job     string `json:"job"`
+	Title   string `json:"title"`
+	Created string `json:"created"`
+	Space   string `json:"space,omitempty"` // the IP space it was built in, for "Yours" on the desk
+	// Source is the page that made it: "" (Automate, older runs), "address",
+	// "dns", "lists", "editor", or "delete" for a recorded delete.
+	Source string `json:"source,omitempty"`
+	// Tenant is where it was made (vault.WriteID). Empty on runs recorded
+	// before 2026-11-13, whose tenant is unknown.
+	Tenant  string   `json:"tenant,omitempty"`
 	Status  string   `json:"status"`
 	Error   string   `json:"error,omitempty"`
 	Note    string   `json:"note,omitempty"`
@@ -213,5 +225,41 @@ func (l *Ledger) Change(id string, fn func(*Run) error) error {
 			}
 		}
 		return nil, ErrNotFound
+	})
+}
+
+// Find returns the run that made the object kind/id, if any. Infoblox DNS and
+// IP ids are UUIDs, so an id match is enough there, even on older runs with
+// no tenant. List and policy-rule ids are small numbers that repeat across
+// tenants, so for those the tenant must match too. Recorded deletes are not
+// makers and are skipped.
+func (l *Ledger) Find(kind, id, tenant string) (Run, Object, bool) {
+	rs, err := l.List()
+	if err != nil {
+		return Run{}, Object{}, false
+	}
+	numeric := kind == "custom_list" || kind == "policy_rule"
+	for _, r := range rs {
+		if r.Source == "delete" || (numeric && r.Tenant != tenant) {
+			continue
+		}
+		for _, o := range r.Objects {
+			if o.Kind == kind && o.ID == id {
+				return r, o, true
+			}
+		}
+	}
+	return Run{}, Object{}, false
+}
+
+// MarkObject sets the state of one object in one run.
+func (l *Ledger) MarkObject(runID, kind, id, state string) error {
+	return l.Change(runID, func(r *Run) error {
+		for i := range r.Objects {
+			if r.Objects[i].Kind == kind && r.Objects[i].ID == id {
+				r.Objects[i].State = state
+			}
+		}
+		return nil
 	})
 }

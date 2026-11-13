@@ -223,11 +223,15 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 // already_gone — a delete that removed something vs one that found nothing
 // ---------------------------------------------------------------------------
 
-/** Answer only the DELETE on `glob`; every other method passes through. */
-function stubDelete(page: Page, glob: string, body: Json) {
-  return page.route(glob, (route: Route) =>
-    route.request().method() === 'DELETE' ? route.fulfill({ json: body }) : route.continue(),
-  );
+/** Since 2026-11-13 deletes go through Made with Bloxsmith: a check, then the
+ *  delete. The check passes; the delete answers with `body`. */
+function stubDelete(page: Page, body: Json) {
+  return page.route('**/api/made/delete', (route: Route) => {
+    const b = route.request().postDataJSON();
+    return b.dry
+      ? route.fulfill({ json: { ok: true, dry_run: true, label: b.id, made: false, changed: false, gone: false, blocked: '', confirm: 'c' } })
+      : route.fulfill({ json: body });
+  });
 }
 
 test.describe('Editor delete — already_gone must not read as "deleted"', () => {
@@ -239,7 +243,7 @@ test.describe('Editor delete — already_gone must not read as "deleted"', () =>
   }
 
   test('already_gone:false says the zone was deleted', async ({ page }) => {
-    await stubDelete(page, '**/api/edit/dns_zone/**', { ok: true, already_gone: false });
+    await stubDelete(page, { ok: true, already_gone: false });
     await armAndDelete(page);
 
     await expect(page.getByText('DNS Zone deleted.', { exact: true })).toBeVisible();
@@ -247,7 +251,7 @@ test.describe('Editor delete — already_gone must not read as "deleted"', () =>
   });
 
   test('already_gone:true says it was already gone, not that we deleted it', async ({ page }) => {
-    await stubDelete(page, '**/api/edit/dns_zone/**', { ok: true, already_gone: true });
+    await stubDelete(page, { ok: true, already_gone: true });
     await armAndDelete(page);
 
     await expect(page.getByText(/DNS Zone was already gone — nothing was deleted\./)).toBeVisible();
@@ -263,11 +267,8 @@ test.describe('SelfService delete — already_gone must not read as "deleted"', 
     await stub(page, '**/api/dns/zones*', { zones: [ZONE] });
     await stub(page, SPACES, { spaces: [SPACE] });
     await stub(page, '**/api/ipam/subnets*', { subnets: [] });
-    await page.route('**/api/dns/records**', (route: Route) =>
-      route.request().method() === 'DELETE'
-        ? route.fulfill({ json: { ok: true, already_gone: alreadyGone } })
-        : route.fulfill({ json: { records: [RECORD] } }),
-    );
+    await page.route('**/api/dns/records**', (route: Route) => route.fulfill({ json: { records: [RECORD] } }));
+    await stubDelete(page, { ok: true, already_gone: alreadyGone });
 
     await page.goto('/#selfservice');
     const manage = await openTask(page, 'records');

@@ -1,40 +1,40 @@
 # Plan
 
-**Goal:** reserve an address for a device (DHCP), and build a domain list from InfoRank, a CSV or pasted text and attach it to a security policy with any action. Started 2026-11-12.
+**Goal:** Bloxsmith keeps a record of everything it creates and deletes, can delete it again, and can delete other items of the same kinds, always after one "are you sure" step. Started 2026-11-13.
 
 ## What the owner decided
 
-- DHCP reservation is a choice on Get an address (2026-11-12, "1 ok").
-- Lists: "pull from info ranks push to a policy but dont lock me in to log block allow etc give me all the options and upload a csv for the same thing". All six actions, any position.
-- Live tests on Infoblox SE AMS with scratch items named bloxsmith-test, removed afterwards.
+- "the app should be able to see what was created with the app so some breadcrumb when we create and delete and it should also be able to delete other things if so desired. all deletes need a one step are you sure: this was created with the tool so it's safe / this was not, are you sure, for both".
+- Both a new page "Made with Bloxsmith" (Change menu) and a short list on each page that creates things.
+- Tag `made_by=bloxsmith` in Infoblox where tags exist (DNS and IP items). Lists and policy rules carry it in their description.
+- "Other things" = the kinds Bloxsmith makes: DNS names, IP addresses, DHCP reservations, networks, zones, hosts, DHCP ranges, custom lists, policy rules. Not policies, IP spaces or address blocks.
+- Automate's earlier history counts as made by Bloxsmith; earlier Get an address and Site lists items do not.
 
-## Approach (Fable's plan, picked over Astra's for less code; Codex's nine attacks folded in)
+## Approach (Fable's plan, plus Astra's tenant field)
 
-1. **DHCP** (PR 1): `dhcp:{mac,name}` on `/api/selfservice/allocate`, count must be 1. Preview checks the MAC has no reservation yet. Live: next free IP, then `POST /api/ddi/v1/dhcp/fixed_address`, then DNS if asked. A failed reservation releases the IP; an unreadable one keeps it and says "not confirmed".
-2. **Lists** (PR 2): Security tab card. Source InfoRank top X (`/tide/api/data/set/inforank`, cached 24 h) | CSV | paste. New list or add to an existing one, never replace. Policy, action, position. Preview returns a fingerprint of the policy rules; Apply refuses if they changed, checks for an existing rule BEFORE writing the list, looks a new list up by name before creating it, re-reads the policy after the PUT and reports any lost rule.
+1. **Record:** extend the runs ledger (`go/internal/runs`). Run gets `Source` and `Tenant`; Object gets kinds `fixed_address`, `custom_list`, `policy_rule` (with policy id and action). A delete is recorded too.
+2. **Creates:** Get an address and Site lists write a run, like Automate does. Dry runs record nothing. Adding sites to an existing list is not a create.
+3. **Made by Bloxsmith** = the exact id is in the ledger. The tag is a label only, because tags can be inherited.
+4. **Delete:** `POST /api/made/delete {kind,id,dry}`. Preview says whether Bloxsmith made it, and what blocks it. Live needs `confirm` equal to what the preview found, so the one confirm step cannot be skipped. A list in use by a policy is refused. A rule is dropped only if the policy is unchanged since the preview.
+5. **UI:** one shared confirm step (also on Automate's Remove), the new page with a finder for other items, and a short list on Get an address, Site lists and Automate.
 
 ## Done when
 
-- Get an address: preview says which address and MAC; Allocate creates the reservation, and it shows in Infoblox with that MAC. A MAC already reserved is refused in the preview.
-- Lists: top 100 InfoRank, a 3-line CSV and a pasted list each preview the exact domains, rule and rule order; Apply creates the list and the rule in the chosen place with the chosen action, and the policy keeps every other rule.
-- Unit and browser tests cover preview, apply, partial failure and refusals; Codex reviewed each final diff; scratch items deleted from SE AMS.
-
-## Done
- when
-
-- Searching `172.16.0.210` shows about 6 kb/s out and 52 b/s in, top destination 10.67.70.10 UDP/9995, and BGP peers 172.16.0.221/.222 on TCP/179.
-- No key set: the section says Kentik is not set up and where to set it. A failed read says unavailable. Neither ever says "no traffic".
-- A hostname search shows the section as not applicable and sends nothing to Kentik.
-- Unit and browser tests cover all of those states; Codex reviewed the final diff.
+- Creating a reservation, list and rule on SE AMS shows each on the new page and on its own page, with the tag or description in Infoblox.
+- Deleting each one asks once, says "made by Bloxsmith", and removes only that item; the policy keeps every other rule.
+- Deleting an item Bloxsmith did not make asks once with the "not made by Bloxsmith" wording.
+- Each delete leaves a record. Unit and browser tests cover it; Codex reviewed the final diff; the bloxsmith-test items are gone from SE AMS.
 
 ## What happened
 
-- Built as planned. Codex asked for two guards, both added with tests: all four answers must come back, and every row must carry a rate, or the read is a failure.
-- Live check 2026-11-10: 172.16.0.210 showed 5.5 kb/s out, 48 b/s in, NetFlow to 10.67.70.10 UDP 9995 and BGP with .221/.222 on TCP 179.
-- Next: the four MCP items (host config viewer, setup check, chart anything, search everything), then the page restyles.
+- Codex round 1: the confirm code now also binds Infoblox's updated_at (or a hash of a list's items), so an edit between the preview and the click is refused; a rule is not removed when the policy has no ETag. Declined: closing the old API delete routes (the app no longer uses them for these kinds) and treating older history as unproven (owner chose to count it).
+- Codex round 2, declined as follow-ups: the milliseconds between the last read and the DELETE, and a confirm code a signed-in operator could compute.
+- The "Made here" list on Get an address, Editor and Site lists is a headed section under the form, not a panel, because those pages have no panels since 2026-11-11.
+- Known limits: addresses from next-free-IP carry no made_by tag; whether Infoblox honours If-Match on a policy save is unverified.
 
 ## Done
 
+- 2026-11-13 Preview works on read-only tenants and says why it is greyed out (v3.159.1); Site lists name check fixed (v3.159.2).
+- 2026-11-12 DHCP reservation on Get an address (v3.158.0) and Site lists (v3.159.0).
 - 2026-11-10 Kentik traffic row on the search result page.
-
 - 2026-11-06 Best practices page, batch 1.
