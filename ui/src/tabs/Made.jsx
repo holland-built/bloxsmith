@@ -10,7 +10,7 @@ import { Card, COLORS, FIELD_CLS, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import MadeList from '../components/MadeList.jsx'
 import DeleteCheck from '../components/DeleteCheck.jsx'
-import { KIND_WORDS, when } from '../lib/madeDelete.js'
+import { FIND_KINDS, KIND_WORDS, when } from '../lib/madeDelete.js'
 
 const HINTS = {
   dns_record: 'part of the name, like printer',
@@ -49,7 +49,7 @@ function FindOther({ ro }) {
         <label className="flex flex-col gap-1 text-note text-muted">
           What
           <select className={FIELD_CLS} value={kind} onChange={(e) => { setKind(e.target.value); setFound(null) }}>
-            {Object.entries(KIND_WORDS).map(([k, w]) => <option key={k} value={k}>{w[0].toUpperCase() + w.slice(1)}</option>)}
+            {FIND_KINDS.map((k) => <option key={k} value={k}>{KIND_WORDS[k][0].toUpperCase() + KIND_WORDS[k].slice(1)}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-note text-muted flex-1 min-w-[12rem]">

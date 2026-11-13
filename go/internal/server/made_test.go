@@ -17,14 +17,15 @@ import (
 // madeFake is a small Infoblox: DDI objects by id, custom lists and one policy.
 // It records every write so a test can say "nothing was deleted".
 type madeFake struct {
-	mu     sync.Mutex
-	objs   map[string]map[string]any // "dns/record/r-1" -> object
-	lists  map[string]map[string]any // "42" -> {name, policies}
-	policy map[string]any            // policy 7
-	writes []string
-	ver    int  // the policy's ETag version
-	race   bool // someone saves the policy just before Bloxsmith's PUT lands
-	noETag bool // the policy read comes back without an ETag
+	mu        sync.Mutex
+	objs      map[string]map[string]any // "dns/record/r-1" -> object
+	lists     map[string]map[string]any // "42" -> {name, policies}
+	policy    map[string]any            // policy 7
+	writes    []string
+	ver       int  // the policy's ETag version
+	race      bool // someone saves the policy just before Bloxsmith's PUT lands
+	noETag    bool // the policy read comes back without an ETag
+	keepItems bool // a site removal answers yes but leaves the site in
 }
 
 func newMadeFake() *madeFake {
@@ -64,6 +65,29 @@ func (f *madeFake) handler(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		f.policy["rules"] = body["rules"]
 		out(map[string]any{"results": f.policy})
+	case strings.HasPrefix(p, "/api/atcfw/v1/named_lists/") && strings.HasSuffix(p, "/items") && r.Method == "PATCH":
+		id := strings.TrimSuffix(strings.TrimPrefix(p, "/api/atcfw/v1/named_lists/"), "/items")
+		l, ok := f.lists[id]
+		if !ok {
+			w.WriteHeader(404)
+			return
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if !f.keepItems {
+			drop := map[string]bool{}
+			for _, x := range body["deleted_items_described"].([]any) {
+				drop[x.(map[string]any)["item"].(string)] = true
+			}
+			keep := []any{}
+			for _, it := range l["items"].([]any) {
+				if !drop[it.(string)] {
+					keep = append(keep, it)
+				}
+			}
+			l["items"] = keep
+		}
+		out(map[string]any{})
 	case strings.HasPrefix(p, "/api/atcfw/v1/named_lists/"):
 		id := strings.TrimPrefix(p, "/api/atcfw/v1/named_lists/")
 		l, ok := f.lists[id]
@@ -393,5 +417,77 @@ func TestMadeDelete_NoPolicyETagMeansNoSave(t *testing.T) {
 	}
 	if w := f.wrote(); len(w) != 0 {
 		t.Fatalf("writes = %v, want none", w)
+	}
+}
+
+func listWithSites() map[string]any {
+	return map[string]any{"id": 42, "name": "bloxsmith-test", "type": "custom_list",
+		"items": []any{"a.com", "b.com"}, "policies": []any{"main"}}
+}
+
+// A site in a list Bloxsmith made: the check says so, and only that site goes.
+func TestMadeDelete_ASiteInAListBloxsmithMadeGoesAlone(t *testing.T) {
+	d, f := newMadeDeps(t)
+	f.lists["42"] = listWithSites()
+	tenant, _ := d.writeIdentity()
+	_ = d.ledger().Add(runs.Run{ID: "r-1", Source: "lists", Tenant: tenant, Created: "2026-11-13T10:00:00Z",
+		Objects: []runs.Object{{ID: "42", Kind: "custom_list", Label: "bloxsmith-test", State: runs.Created}}})
+
+	_, pre := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": true})
+	if pre["made"] != true || pre["made_why"] != "list" || pre["gone"] != false || !strings.Contains(anyStr(pre["label"]), "used by main") {
+		t.Fatalf("preview = %v", pre)
+	}
+	code, res := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": false, "confirm": pre["confirm"]})
+	if code != 200 || res["ok"] != true {
+		t.Fatalf("delete = %d %v", code, res)
+	}
+	if items := f.lists["42"]["items"].([]any); len(items) != 1 || items[0] != "b.com" {
+		t.Fatalf("items = %v, want only b.com", items)
+	}
+	if w := f.wrote(); len(w) != 1 || w[0] != "PATCH /api/atcfw/v1/named_lists/42/items" {
+		t.Fatalf("writes = %v", w)
+	}
+	// The site is gone now, and the next check says so.
+	_, again := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": true})
+	if again["gone"] != true {
+		t.Fatalf("second preview = %v", again)
+	}
+}
+
+// A site in someone else's list is "not made", and a list edited after the
+// preview stops the delete.
+func TestMadeDelete_ASiteInAnotherListAsksAndAnEditStopsIt(t *testing.T) {
+	d, f := newMadeDeps(t)
+	f.lists["42"] = listWithSites()
+	_, pre := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": true})
+	if pre["made"] != false || pre["made_why"] != nil {
+		t.Fatalf("preview = %v", pre)
+	}
+	f.lists["42"]["items"] = []any{"a.com", "b.com", "c.com"}
+	if code, _ := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": false, "confirm": pre["confirm"]}); code != 409 {
+		t.Fatalf("code %d, want 409 after the list changed", code)
+	}
+	if w := f.wrote(); len(w) != 0 {
+		t.Fatalf("writes = %v", w)
+	}
+}
+
+// Infoblox saying yes is not enough: the list is read back.
+func TestMadeDelete_ASiteStillThereAfterTheRemoveIsAnError(t *testing.T) {
+	d, f := newMadeDeps(t)
+	f.lists["42"] = listWithSites()
+	f.keepItems = true
+	_, pre := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": true})
+	code, res := madePost(t, d, map[string]any{"kind": "list_item", "id": "42/a.com", "dry": false, "confirm": pre["confirm"]})
+	if code == 200 || res["ok"] != false || !strings.Contains(anyStr(res["error"]), "still in the list") {
+		t.Fatalf("delete = %d %v", code, res)
+	}
+}
+
+func TestParseItemID(t *testing.T) {
+	for id, ok := range map[string]bool{"42/a.com": true, "42/": false, "/a.com": false, "x/a.com": false, "42/not a site": false, "0/a.com": false} {
+		if _, _, got := parseItemID(id); got != ok {
+			t.Errorf("parseItemID(%q) = %v, want %v", id, got, ok)
+		}
 	}
 }

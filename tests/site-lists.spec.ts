@@ -203,3 +203,34 @@ test('a site on a threat list is shown, left out, and goes in only when ticked a
   await expect.poll(() => sent.length).toBe(3);
   expect(sent[2]).toMatchObject({ dry: false, risky_ok: ['bad.example'], fingerprint: 'fp-2' });
 });
+
+test('a single site can be taken out of a list, after one check', async ({ page }) => {
+  const live: Record<string, any>[] = [];
+  let items = ['a.com', 'b.com'];
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill(json({ known: true, tenant: 'tenant-a/-', label: 'T', writable: true })));
+  await page.route('**/api/lists/targets', (r) => r.fulfill(json(TARGETS)));
+  await page.route('**/api/lists/never-add', (r) => r.fulfill(json({ ok: true, sites: [] })));
+  await page.route('**/api/lists/items*', (r) => r.fulfill(json({ ok: true, id: 5, name: 'vip', items, policies: ['Office'] })));
+  await page.route('**/api/made/delete', (r) => {
+    const b = r.request().postDataJSON();
+    if (b.dry) return r.fulfill(json({ ok: true, dry_run: true, kind: b.kind, id: b.id, label: 'a.com, in list vip, used by Office', made: true, made_why: 'list', made_on: '2026-11-13T10:00:00Z', gone: false, blocked: '', confirm: 'c-1' }));
+    live.push(b);
+    items = ['b.com'];
+    return r.fulfill(json({ ok: true }));
+  });
+  await page.goto('/#lists');
+  await page.getByRole('radio', { name: 'Add to a list I have' }).check();
+  await page.getByRole('combobox', { name: 'List', exact: true }).selectOption('5');
+
+  const sites = page.locator('[data-list-sites]');
+  await expect(sites.getByRole('heading', { name: 'Sites in vip' })).toBeVisible();
+  await expect(sites).toContainText('2 sites. Delete takes one site out of the list; it asks first. The change takes effect in Office.');
+  const row = sites.locator('[data-delete-check="5/a.com"]');
+  await row.getByRole('button', { name: 'Delete a.com' }).click();
+  await expect(row).toContainText(/In a list Bloxsmith made on .+\. Safe to delete\./);
+  expect(live).toHaveLength(0);
+  await row.getByRole('button', { name: 'Delete it' }).click();
+  await expect.poll(() => live.length).toBe(1);
+  expect(live[0]).toEqual({ kind: 'list_item', id: '5/a.com', dry: false, confirm: 'c-1' });
+  await expect(sites.locator('li')).toHaveCount(1);
+});
