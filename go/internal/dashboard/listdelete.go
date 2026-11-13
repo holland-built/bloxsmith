@@ -22,9 +22,15 @@ func (s *Service) ListState(id int) (name string, usedBy []string, ver string, s
 	for _, p := range asSlice(l["policies"]) {
 		usedBy = append(usedBy, fmt.Sprint(p))
 	}
+	return fmt.Sprint(l["name"]), usedBy, listVer(l), 200, nil
+}
+
+// listVer is a short hash of what is in a list, so a delete can tell the list
+// was edited since the preview.
+func listVer(l map[string]any) string {
 	b, _ := json.Marshal([]any{l["items"], l["items_described"]})
 	sum := sha256.Sum256(b)
-	return fmt.Sprint(l["name"]), usedBy, hex.EncodeToString(sum[:8]), 200, nil
+	return hex.EncodeToString(sum[:8])
 }
 
 // DeleteList deletes one custom list by id. A list that is already gone counts
@@ -134,4 +140,60 @@ func statusOr(st int) int {
 		return 502
 	}
 	return st
+}
+
+// ListItems is one custom list with its sites, in the order Infoblox keeps
+// them, for Site lists' "Sites in this list".
+func (s *Service) ListItems(id int) (map[string]any, int, error) {
+	l, st, err := s.readList(id)
+	if err != nil {
+		return nil, st, err
+	}
+	if fmt.Sprint(l["type"]) != "custom_list" {
+		return nil, 400, fmt.Errorf("that list is not a custom list")
+	}
+	items := []string{}
+	for _, it := range asSlice(l["items"]) {
+		if x, ok := it.(string); ok {
+			items = append(items, canonDomain(x))
+		}
+	}
+	return map[string]any{"id": id, "name": l["name"], "items": items, "policies": asSlice(l["policies"])}, 200, nil
+}
+
+// ListItemState reads one site in a custom list before it is removed: the
+// list's name, whether the site is in it, the policies using the list, and
+// ver, the same hash of the list's contents ListState gives. status is
+// Infoblox's (404 when the list is gone).
+func (s *Service) ListItemState(id int, domain string) (name string, present bool, usedBy []string, ver string, status int, err error) {
+	l, st, err := s.readList(id)
+	if err != nil {
+		return "", false, nil, "", st, err
+	}
+	for _, p := range asSlice(l["policies"]) {
+		usedBy = append(usedBy, fmt.Sprint(p))
+	}
+	return fmt.Sprint(l["name"]), itemSet(l)[canonDomain(domain)], usedBy, listVer(l), 200, nil
+}
+
+// RemoveListItem takes one site out of a custom list and reads the list back
+// to see that it went. A list that is already gone counts as done.
+func (s *Service) RemoveListItem(id int, domain string) (map[string]any, int) {
+	d := canonDomain(domain)
+	resp, st, _ := s.Rest.Write("PATCH", fmt.Sprintf("%s/named_lists/%d/items", atcfw, id),
+		map[string]any{"deleted_items_described": []any{map[string]any{"item": d}}}, nil)
+	switch {
+	case st == 404:
+		return map[string]any{"ok": true, "already_gone": true}, 200
+	case st < 200 || st > 299:
+		return map[string]any{"ok": false, "error": fmt.Sprintf("Infoblox refused to remove the site (%s): %v", httpWord(st), resp)}, statusOr(st)
+	}
+	l, st, err := s.readList(id)
+	if err != nil {
+		return map[string]any{"ok": false, "error": "Infoblox took the change but the list could not be read back to check it: " + err.Error()}, 502
+	}
+	if itemSet(l)[d] {
+		return map[string]any{"ok": false, "error": "Infoblox answered yes, but " + d + " is still in the list"}, 502
+	}
+	return map[string]any{"ok": true}, 200
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bloxsmith/internal/dashboard"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -42,7 +43,20 @@ func (d *Deps) registerMadeRoutes(mux router) {
 var madeKinds = map[string]string{
 	"dns_record": "dns/record", "address": "ipam/address", "fixed_address": "dhcp/fixed_address",
 	"subnet": "ipam/subnet", "dns_zone": "dns/auth_zone", "host": "ipam/host", "dhcp_range": "ipam/range",
-	"custom_list": "", "policy_rule": "",
+	"custom_list": "", "policy_rule": "", "list_item": "",
+}
+
+// parseItemID reads a list_item id, "<list id>/<site>".
+func parseItemID(id string) (int, string, bool) {
+	i := strings.Index(id, "/")
+	if i <= 0 || i == len(id)-1 {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(id[:i])
+	if err != nil || n <= 0 || !dashboard.IsDomain(id[i+1:]) {
+		return 0, "", false
+	}
+	return n, strings.ToLower(id[i+1:]), true
 }
 
 // lookOf is a short description of an Infoblox object: what a person would
@@ -222,6 +236,23 @@ func (d *Deps) inspect(r *http.Request, kind, id string) (madeState, int, error)
 			m.blocked = "Policy " + strings.Join(usedBy, ", ") + " still uses this list. Delete its rule first."
 		}
 		return m, 200, nil
+	case "list_item":
+		n, site, ok := parseItemID(id)
+		if !ok {
+			return madeState{}, 400, fmt.Errorf("not a site in a list")
+		}
+		name, present, usedBy, ver, st, err := d.dash(r).ListItemState(n, site)
+		if st == 404 {
+			return madeState{gone: true, label: site}, 200, nil
+		}
+		if err != nil {
+			return madeState{}, 502, err
+		}
+		label := site + ", in list " + name
+		if len(usedBy) > 0 {
+			label += ", used by " + strings.Join(usedBy, ", ")
+		}
+		return madeState{gone: !present, label: label, look: site, ver: ver}, 200, nil
 	case "policy_rule":
 		pid, list, action, ok := parseRuleID(id)
 		if !ok {
@@ -322,6 +353,16 @@ func (d *Deps) madeDelete(w http.ResponseWriter, r *http.Request, b map[string]a
 	if found {
 		out["made_on"], out["made_page"] = run.Created, run.Source
 	}
+	// A site is not recorded on its own; one in a list Bloxsmith made counts
+	// as made, and the page says it is the list that was made.
+	if kind == "list_item" && !found && d.ledger() != nil {
+		n, _, _ := parseItemID(id)
+		if lrun, _, ok := d.ledger().Find("custom_list", strconv.Itoa(n), tenant); ok {
+			made = true
+			confirm = confirmCode(tenant, kind, id, st.look+"\x00"+st.ver, made)
+			out["made"], out["changed"], out["made_on"], out["made_page"], out["made_why"] = true, false, lrun.Created, lrun.Source, "list"
+		}
+	}
 
 	if dry, ok := b["dry"].(bool); !ok || dry {
 		out["ok"], out["dry_run"], out["confirm"] = true, true, confirm
@@ -380,6 +421,9 @@ func (d *Deps) deleteOne(r *http.Request, kind, id, look string) (map[string]any
 	case "policy_rule":
 		pid, list, action, _ := parseRuleID(id)
 		return d.dash(r).RemoveRule(pid, list, action, look)
+	case "list_item":
+		n, site, _ := parseItemID(id)
+		return d.dash(r).RemoveListItem(n, site)
 	}
 	cli := d.editFor(r)
 	p, _ := edit.ObjectPath(madeKinds[kind], id)

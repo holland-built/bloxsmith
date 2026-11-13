@@ -18,6 +18,7 @@ import { COLORS, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../compon
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import MadeList from '../components/MadeList.jsx'
+import DeleteCheck from '../components/DeleteCheck.jsx'
 
 // The six actions a policy takes for a list, in the order people reach for
 // them, each with what it means for someone visiting one of the sites.
@@ -155,6 +156,43 @@ function doneMsg(j) {
   if (j.nothing_to_do) return `Nothing to change: every site is already in ${l.name}, and ${p.name} already uses it.`
   const rule = p.adds_rule ? `, and ${p.name} now uses it (rule ${j.steps?.policy?.position})` : ''
   return `Done. ${l.name} gained ${plural(added, 'site')}${rule}.`
+}
+
+// The sites in the list picked under "Add to a list I have", each with Delete
+// and its one check (owner, 2026-11-13: remove single sites from a list).
+// Lists can hold thousands, so a filter narrows them and 100 are shown at once.
+const SHOW_SITES = 100
+function ListSites({ listId, ro }) {
+  const api = useApi(`/api/lists/items?id=${encodeURIComponent(listId)}`)
+  const [q, setQ] = useState('')
+  const items = api.data?.items ?? []
+  const needle = q.trim().toLowerCase()
+  const match = needle ? items.filter((d) => d.includes(needle)) : items
+  return (
+    <section className="mt-8" aria-labelledby="sl-sites-h" data-list-sites="">
+      <ColumnHeading id="sl-sites-h">Sites in {api.data?.name ?? 'this list'}</ColumnHeading>
+      <p className="text-note text-muted mb-2">
+        {api.data ? `${plural(items.length, 'site')}. ` : ''}Delete takes one site out of the list; it asks first.
+        {api.data?.policies?.length > 0 && ` The change takes effect in ${api.data.policies.join(', ')}.`}
+      </p>
+      {(items.length > SHOW_SITES || q) && (
+        <Field label="Find a site in this list">
+          <input {...MACHINE_TEXT} type="search" className={`${FIELD_CLS} max-w-sm`} value={q} onChange={(e) => setQ(e.target.value)} />
+        </Field>
+      )}
+      <ul className="mt-2">
+        {match.slice(0, SHOW_SITES).map((d) => (
+          <li key={d} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-3 py-2 border-t border-border text-note">
+            <span className="flex-1 min-w-[12rem] break-words">{d}</span>
+            <DeleteCheck kind="list_item" id={`${listId}/${d}`} what={d} ro={ro} onDone={api.refetch} />
+          </li>
+        ))}
+      </ul>
+      {match.length > SHOW_SITES && <p className="text-note text-muted mt-1">Showing {SHOW_SITES} of {match.length.toLocaleString()}. Type above to find others.</p>}
+      {api.data && needle && match.length === 0 && <p className="text-note text-muted mt-1">No site in this list matches.</p>}
+      <FetchError error={api.error} stale={items.length > 0} />
+    </section>
+  )
 }
 
 // Which sites the Top sites choice gives, or null until both lists are in.
@@ -494,6 +532,7 @@ export default function SiteLists() {
           </PreviewApply>
         </section>
       } />
+      {listMode === 'existing' && listId && <ListSites key={listId} listId={listId} ro={ro.readOnly} />}
       <section className="mt-8" aria-labelledby="lists-made-h">
         <ColumnHeading id="lists-made-h">Lists and rules made here</ColumnHeading>
         <p className="text-note text-muted mb-2">Newest first. Delete a rule before its list. Each delete asks first.</p>

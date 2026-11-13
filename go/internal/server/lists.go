@@ -19,6 +19,7 @@ func (d *Deps) registerListRoutes(mux router) {
 	mux.HandleFunc("GET /api/lists/never-add", d.listsNeverAddGet)
 	mux.HandleFunc("POST /api/lists/never-add", d.body(d.listsNeverAddSet))
 	mux.HandleFunc("GET /api/lists/targets", d.listsTargets)
+	mux.HandleFunc("GET /api/lists/items", d.listsItems)
 	mux.HandleFunc("POST /api/lists/apply", d.body(d.listsApply))
 }
 
@@ -194,4 +195,22 @@ func (d *Deps) listsNeverAddSet(w http.ResponseWriter, r *http.Request, b map[st
 		return
 	}
 	d.json(w, r, 200, map[string]any{"ok": true, "sites": saved})
+}
+
+// listsItems is GET /api/lists/items?id=N: one custom list's sites, for
+// removing them one at a time through the Made with Bloxsmith delete check.
+func (d *Deps) listsItems(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/lists/items")
+	n, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil || n <= 0 {
+		d.json(w, r, 400, map[string]any{"ok": false, "error": "pick a list"})
+		return
+	}
+	res, st, err := d.dash(r).ListItems(n)
+	if err != nil {
+		d.json(w, r, statusOr502(st), map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	res["ok"] = true
+	d.json(w, r, 200, res)
 }

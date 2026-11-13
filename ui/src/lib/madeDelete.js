@@ -15,7 +15,12 @@ export const KIND_WORDS = {
   dhcp_range: 'DHCP range',
   custom_list: 'custom list',
   policy_rule: 'policy rule',
+  list_item: 'site in a list',
 }
+
+// Kinds the "Delete something else" finder offers. A site in a list is found
+// on Site lists instead, under the list.
+export const FIND_KINDS = Object.keys(KIND_WORDS).filter((k) => k !== 'list_item')
 
 export const canDelete = (kind) => Object.hasOwn(KIND_WORDS, kind)
 
@@ -37,6 +42,7 @@ export function when(iso) {
 export function whoMade(p) {
   if (p.gone) return 'It is already gone.'
   const on = p.made_on ? ` on ${when(p.made_on)}` : ''
+  if (p.made && p.made_why === 'list') return `In a list Bloxsmith made${on}. Safe to delete.`
   if (p.made) return `Made by Bloxsmith${on}. Safe to delete.`
   if (p.changed) return `Made by Bloxsmith${on}, but it has changed since. Are you sure?`
   return 'Not made by Bloxsmith. Are you sure?'

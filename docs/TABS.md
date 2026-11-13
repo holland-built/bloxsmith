@@ -404,6 +404,8 @@ Drift never fixes anything. To close a gap, provision the site again (missing), 
 
 Some things are refused before anything changes: a new list name that is already taken, and a policy that already uses the list with a different action. If the policy already uses the list with the same action, only the list gets the new sites.
 
+**Sites in this list** appears under the form once you pick a list under **Add to a list I have**. It lists the list's sites, 100 at a time, with a search box when there are more. **Delete** takes one site out of the list after one check, the same check as on [Made with Bloxsmith](#made-with-bloxsmith): a site in a list Bloxsmith made says "In a list Bloxsmith made", any other asks "Are you sure?". The change takes effect in every policy that uses the list. Afterwards Bloxsmith reads the list back to see the site went.
+
 If someone changes the policy between your Preview and **Add to policy**, nothing is written to the policy and you preview again. After the change, the page reads the policy back and tells you if any rule it had before is missing.
 
 ## Made with Bloxsmith
