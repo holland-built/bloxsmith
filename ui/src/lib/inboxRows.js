@@ -23,7 +23,7 @@ const FIX = {
 
 const fmt = (n) => Number(n).toLocaleString()
 
-export function inboxRows({ hosts, incidents, signals, sec }) {
+export function inboxRows({ hosts, incidents, signals, sec, sitelists }) {
   const rows = []
   const offline = hosts ? hosts.filter((h) => isOffline(h.status)).length : 0
   if (offline) {
@@ -42,6 +42,15 @@ export function inboxRows({ hosts, incidents, signals, sec }) {
     // one that does not still gets it, so the row never loses the number.
     if (text !== own[0]?.message && !/^\d/.test(text)) text = `${i.count} ${text}`
     rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : i.severity === 'info' ? 'note' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
+  }
+  // Site lists' daily proposals wait here for approval (owner, 2026-11-13).
+  // The "security" key puts them on the board's Security row.
+  for (const p of sitelists ?? []) {
+    const pr = p.proposal ?? {}
+    const title = pr.error
+      ? `Site list ${p.list_name}: could not work out today's changes`
+      : `Site list ${p.list_name}: ${fmt(pr.add?.length ?? 0)} to add, ${fmt(pr.drop?.length ?? 0)} to drop`
+    rows.push({ key: `security-sitelist-${p.list_id}`, sev: 'note', title, sub: pr.error ? pr.error : 'waiting for you to approve', href: '#lists', ask: '' })
   }
   // Critical first, then warnings, then notes (minor items such as unsigned
   // public zones, which the owner rates as low priority).

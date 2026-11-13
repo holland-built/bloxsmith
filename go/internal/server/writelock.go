@@ -72,7 +72,8 @@ var tenantWritePaths = map[string]bool{
 	"/api/dns/records":          true,
 
 	// Site lists: a custom list and a security-policy rule.
-	"/api/lists/apply": true,
+	"/api/lists/apply":          true,
+	"/api/lists/proposal/apply": true,
 
 	// The job desk: Build and Remove (server/desk.go). Previews too, like the
 	// Self-Service POSTs they wrap.
@@ -133,6 +134,8 @@ var tenantWritePrefixes = []string{
 //	                     person still presses Build, which is gated.
 //	/api/lists/never-add saves Site lists' never-add sites in Bloxsmith's own
 //	                     site_lists.json. It never calls Infoblox.
+//	/api/lists/watch     turns a list's daily proposal on or off, in the same
+//	                     file. It never calls Infoblox; approving is gated.
 var nonTenantWritePaths = map[string]bool{
 	"/api/views":              true,
 	"/api/views/import":       true,
@@ -146,6 +149,7 @@ var nonTenantWritePaths = map[string]bool{
 	"/api/query":              true,
 	"/api/desk/plan":          true,
 	"/api/lists/never-add":    true,
+	"/api/lists/watch":        true,
 }
 
 var nonTenantWritePrefixes = []string{
@@ -242,6 +246,7 @@ var dryPreviewPosts = map[string]bool{
 	"/api/selfservice/allocate": true,
 	"/api/dns/records":          true,
 	"/api/lists/apply":          true,
+	"/api/lists/proposal/apply": true,
 	"/api/desk/run":             true,
 	"/api/desk/remove":          true,
 	"/api/made/delete":          true,

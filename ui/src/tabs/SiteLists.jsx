@@ -195,6 +195,96 @@ function ListSites({ listId, ro }) {
   )
 }
 
+// The daily proposal (owner, 2026-11-13): once a day, while the app is in use,
+// the server works out which top sites a list is missing and which sites it
+// added earlier have left the top. Nothing changes until the owner approves.
+// Overview shows the same proposals under Security.
+const USE_WORDS = { inforank: 'the most popular sites', network: "your network's busiest sites", both: 'sites on both lists', either: 'sites on either list' }
+
+function Proposal({ p }) {
+  const flow = useWriteFlow('/api/lists/proposal/apply')
+  const pr = p.proposal
+  const body = () => ({ list_id: p.list_id, at: pr.at, fingerprint: flow.previewReply?.fingerprint })
+  const left = (pr.risky?.length ?? 0) + (pr.unchecked ?? 0)
+  return (
+    <li className="flex flex-col gap-2 px-3 py-3 border-t border-border text-copy" data-proposal={p.list_id}>
+      <p className="font-medium">{p.list_name}: {plural(pr.add.length, 'site')} to add, {plural(pr.drop.length, 'site')} to drop</p>
+      {pr.error && <p role="alert" className="text-note" style={{ color: COLORS.crit }}>Could not work out today's changes: {pr.error}</p>}
+      {pr.add.length > 0 && <Names title="To add" list={pr.add} />}
+      {pr.drop.length > 0 && <Names title="To drop, added by an earlier proposal and no longer in the top" list={pr.drop} />}
+      {left > 0 && (
+        <p className="text-note" style={{ color: COLORS.warn }}>
+          {plural(left, 'site')} left out by the threat check
+          {pr.risky?.length ? `: ${pr.risky.map((r) => `${r.domain} (${r.class})`).join(', ')}` : ''}
+          {pr.unchecked ? `. ${pr.reason || 'Some could not be checked.'}` : ''}. To add one anyway, use the form above.
+        </p>
+      )}
+      {!pr.error && (
+        <PreviewApply status={flow.status} stale={flow.stale} error={flow.error} message={flow.message}
+          onPreview={() => flow.runPreview(body(), 'Approve')}
+          onApply={() => flow.runApply(body(), (j) => `Done. ${p.list_name}: ${plural(j.add?.to_add?.length ?? 0, 'site')} added, ${plural(j.drop?.length ?? 0, 'site')} dropped.${j.warning ? ` But ${j.warning}.` : ''}`)}
+          applyLabel="Approve" />
+      )}
+    </li>
+  )
+}
+
+function DailyProposals({ setup, why }) {
+  const props = useApi('/api/lists/proposals')
+  const watches = useApi('/api/lists/watches')
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const ws = Object.values(watches.data?.watches ?? {})
+  const waiting = props.data?.proposals ?? []
+
+  async function setWatch(b, done) {
+    setBusy(true)
+    const r = await authFetch('/api/lists/watch', { method: 'POST', body: JSON.stringify(b) })
+    setBusy(false)
+    if (!r.ok) { setMsg({ err: true, text: r.data?.error || `HTTP ${r.status}` }); return }
+    setMsg({ err: false, text: done })
+    watches.refetch()
+    props.refetch()
+  }
+
+  return (
+    <section className="mt-8" aria-labelledby="sl-daily-h" data-daily="">
+      <ColumnHeading id="sl-daily-h">Daily proposals</ColumnHeading>
+      <p className="text-note text-muted mb-2">
+        Once a day, while Bloxsmith is running, it proposes the top sites a list is missing, and drops the ones it added that have left the top. Nothing changes until you approve.
+      </p>
+      <div className="flex flex-wrap items-center gap-3 mb-2">
+        <button type="button" disabled={!setup || busy}
+          onClick={() => setWatch(setup, `Each day, Bloxsmith will propose changes to ${setup.list_name}.`)}
+          aria-describedby={setup ? undefined : 'sl-daily-why'}
+          className="px-3 py-1.5 rounded-control border text-copy"
+          style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+          {setup ? `Propose changes to ${setup.list_name} every day` : 'Propose changes every day'}
+        </button>
+        {!setup && <span id="sl-daily-why" className="text-note text-muted">To turn this on, {why}.</span>}
+        {msg && <span role={msg.err ? 'alert' : 'status'} className="text-note" style={{ color: msg.err ? COLORS.crit : undefined }}>{msg.text}</span>}
+      </div>
+      {ws.length > 0 && (
+        <ul className="mb-2">
+          {ws.map((w) => (
+            <li key={w.list_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-t border-border text-note">
+              <span className="flex-1 min-w-[12rem]">{w.list_name}: the top {Number(w.top).toLocaleString()} of {USE_WORDS[w.use] ?? w.use}, every day</span>
+              <button type="button" disabled={busy} className="underline"
+                onClick={() => setWatch({ list_id: w.list_id, on: false }, `Stopped the daily proposal for ${w.list_name}.`)}>
+                Stop
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {waiting.length > 0
+        ? <ul>{waiting.map((p) => <Proposal key={`${p.list_id}-${p.proposal.at}`} p={p} />)}</ul>
+        : ws.length > 0 && !props.loading && <p className="text-note text-muted">No changes waiting.</p>}
+      <FetchError error={props.error || watches.error} />
+    </section>
+  )
+}
+
 // Which sites the Top sites choice gives, or null until both lists are in.
 function topPick(tops, cmp, use) {
   if (!tops) return null
@@ -377,6 +467,19 @@ export default function SiteLists() {
     onUnchecked: (on) => { setUncheckedOk(on); flow.markStale() },
   }
 
+  // What a daily proposal for the list picked here would use.
+  const dailyList = lists.find((l) => String(l.id) === listId)
+  const dailyWhy = [
+    source !== 'top' && 'pick Top sites',
+    source === 'top' && !tops && 'press Get both lists',
+    (listMode !== 'existing' || !dailyList) && 'pick a list under Add to a list I have (make a new list first)',
+    !policyId && 'pick a policy',
+  ].filter(Boolean).join(', ')
+  const dailySetup = dailyWhy ? null : {
+    list_id: dailyList.id, list_name: dailyList.name, use, top: Number(top), policy_id: Number(policyId), action,
+    ...(isRedirect ? { redirect_name: redirect } : {}),
+  }
+
   const applyProps = {
     status: flow.status,
     stale: flow.stale,
@@ -533,6 +636,7 @@ export default function SiteLists() {
         </section>
       } />
       {listMode === 'existing' && listId && <ListSites key={listId} listId={listId} ro={ro.readOnly} />}
+      <DailyProposals setup={dailySetup} why={dailyWhy} />
       <section className="mt-8" aria-labelledby="lists-made-h">
         <ColumnHeading id="lists-made-h">Lists and rules made here</ColumnHeading>
         <p className="text-note text-muted mb-2">Newest first. Delete a rule before its list. Each delete asks first.</p>

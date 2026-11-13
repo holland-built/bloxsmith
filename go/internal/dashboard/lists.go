@@ -136,6 +136,9 @@ type ListPlan struct {
 	// anyway; UncheckedOK adds sites the check could not look up.
 	RiskyOK     []string
 	UncheckedOK bool
+	// WantSites puts every site that will be added in the result as
+	// "to_add", for the daily sync, which records them.
+	WantSites bool
 	// checked is what the threat check found, set by screen, so the
 	// fingerprint covers it.
 	checked string
@@ -460,6 +463,9 @@ func (s *Service) ApplyList(p ListPlan) (map[string]any, int) {
 		"policy":  map[string]any{"id": p.PolicyID, "name": pl.policy["name"], "adds_rule": pl.needsRule, "existing_rule": pl.ruleAt + 1, "before": views(pl.rules), "after": views(pl.after(p))},
 		"sample":  sample,
 		"threats": threats,
+	}
+	if p.WantSites {
+		summary["to_add"] = pl.toAdd
 	}
 	if p.Dry {
 		summary["ok"], summary["dry_run"], summary["fingerprint"] = true, true, fp
