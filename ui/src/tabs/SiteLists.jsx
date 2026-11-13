@@ -197,6 +197,12 @@ export default function SiteLists() {
     status: flow.status,
     stale: flow.stale,
     disabled: domains.length === 0 || domains.length > MAX || !listReady || !policyId,
+    needs: [
+      domains.length === 0 && (source === 'inforank' ? 'press Get the list' : source === 'csv' ? 'choose a CSV file' : 'paste some sites'),
+      domains.length > MAX && `use at most ${MAX.toLocaleString()} sites`,
+      !listReady && (listMode === 'new' ? 'name the new list' : 'pick a list'),
+      !policyId && 'pick a policy',
+    ],
     onPreview: () => flow.runPreview(body(), 'Add to policy'),
     onApply: () => flow.runApply(body(), doneMsg),
     applyLabel: 'Add to policy',

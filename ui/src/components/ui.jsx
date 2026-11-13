@@ -1,4 +1,4 @@
-import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
+import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -2908,6 +2908,17 @@ const PA_BTN = 'px-3.5 py-1.5 rounded-control text-copy font-medium disabled:opa
 // Preview button and the stale warning, under the inputs; 'outcome' is Apply,
 // the messages and the preview, beside them, so Apply sits under what it
 // applies. Render both with the same props. 'all' keeps them together.
+//
+// `needs` says why Preview is greyed out, as short steps ("pick a subnet"),
+// shown beside the button while it is disabled. A greyed-out button with no
+// reason left the owner guessing which field was missing (2026-11-13).
+export function needsSentence(needs) {
+  const n = (needs || []).filter(Boolean)
+  if (!n.length) return ''
+  const list = n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`
+  return `To preview, ${list}.`
+}
+
 export function PreviewApply({
   status = 'idle', // 'idle' | 'busy' | 'previewed' | 'applied'
   stale = false,
@@ -2923,16 +2934,20 @@ export function PreviewApply({
   error,
   message,
   part = 'all',
+  needs,
   children,
 }) {
   const busy = status === 'busy'
   const showApply = status === 'previewed' && !stale && !busy
+  const needsId = useId()
+  const why = disabled && !busy ? needsSentence(needs) : ''
 
   const previewBtn = (
     <button
       type="button"
       onClick={onPreview}
       disabled={busy || disabled}
+      aria-describedby={why ? needsId : undefined}
       className={PA_BTN}
       style={{ background: COLORS.accent, color: COLORS.onAccent }}
     >
@@ -2954,6 +2969,9 @@ export function PreviewApply({
         <span className="text-note" style={{ color: COLORS.warn }}>{applyNote}</span>
       )}
     </>
+  )
+  const whyNote = why && (
+    <span id={needsId} className="text-note" style={{ color: COLORS.warn }}>{why}</span>
   )
   const staleNote = status === 'previewed' && stale && (
     <span className="text-note" style={{ color: COLORS.warn }}>
@@ -2990,7 +3008,7 @@ export function PreviewApply({
   )
 
   if (part === 'start') {
-    return <div className="flex items-center gap-2">{previewBtn}{staleNote}</div>
+    return <div className="flex items-center gap-2 flex-wrap">{previewBtn}{whyNote}{staleNote}</div>
   }
   if (part === 'outcome') {
     return (
@@ -3002,8 +3020,9 @@ export function PreviewApply({
   }
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {previewBtn}
+        {whyNote}
         {applyBits}
         {staleNote}
       </div>
