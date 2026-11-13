@@ -59,6 +59,7 @@ type Deps struct {
 	// Opened from StateDir on first use when nil; see Deps.siteState.
 	SiteLists     *sitelists.State
 	siteListsOnce sync.Once
+	syncMu        sync.Mutex
 	// UnlockThrottle rate limits POST /api/vault/unlock — the one route that
 	// spends a 128 MiB scrypt derive for an unauthenticated caller. main.go
 	// builds it; New() supplies one when this is nil, so the route can never
@@ -171,6 +172,7 @@ func (d *Deps) registerAll(mux router) {
 	d.registerBrandRoutes(mux)
 	d.registerSecurityWriteRoutes(mux)
 	d.registerListRoutes(mux)
+	d.registerSyncRoutes(mux)
 	d.registerDemoRoutes(mux)
 	// The container's own health probe. Registered last of the named routes and
 	// deliberately NOT under /api/, so no gate in this file — the vault lock, the

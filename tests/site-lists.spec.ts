@@ -234,3 +234,50 @@ test('a single site can be taken out of a list, after one check', async ({ page 
   expect(live[0]).toEqual({ kind: 'list_item', id: '5/a.com', dry: false, confirm: 'c-1' });
   await expect(sites.locator('li')).toHaveCount(1);
 });
+
+test('a daily proposal is turned on from the form, then previewed and approved', async ({ page }) => {
+  const watched: Record<string, any>[] = [];
+  const applied: Record<string, any>[] = [];
+  let on = false;
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill(json({ known: true, tenant: 'tenant-a/-', label: 'T', writable: true })));
+  await page.route('**/api/lists/targets', (r) => r.fulfill(json(TARGETS)));
+  await page.route('**/api/lists/never-add', (r) => r.fulfill(json({ ok: true, sites: [] })));
+  await page.route('**/api/lists/items*', (r) => r.fulfill(json({ ok: true, id: 5, name: 'vip', items: ['a.com'], policies: ['Office'] })));
+  await page.route('**/api/lists/inforank*', (r) => r.fulfill(json({ ok: true, date: '2026-11-12', domains: ['apple.com', 'gstatic.com'] })));
+  await page.route('**/api/lists/busiest*', (r) => r.fulfill(json({ ok: true, domains: ['apple.com'], queries: [9], total: 9, names: 1, estimate: false, days: 7 })));
+  await page.route('**/api/lists/watch', (r) => { watched.push(r.request().postDataJSON()); on = true; return r.fulfill(json({ ok: true, on: true })); });
+  await page.route('**/api/lists/watches', (r) => r.fulfill(json({ ok: true, watches: on ? { 5: { list_id: 5, list_name: 'vip', use: 'inforank', top: 2, policy_id: 7, action: 'action_allow' } } : {} })));
+  await page.route('**/api/lists/proposals', (r) => r.fulfill(json({ ok: true, proposals: on ? [{ list_id: 5, list_name: 'vip',
+    proposal: { at: 't-1', add: ['apple.com', 'gstatic.com'], drop: ['old.com'], risky: [{ domain: 'bad.com', class: 'Scam', level: 100 }], unchecked: 0 } }] : [] })));
+  await page.route('**/api/lists/proposal/apply', (r) => {
+    const b = r.request().postDataJSON();
+    applied.push(b);
+    return r.fulfill(json(b.dry
+      ? { ok: true, dry_run: true, fingerprint: 'fp-9', drop: ['old.com'] }
+      : { ok: true, add: { to_add: ['apple.com', 'gstatic.com'] }, drop: ['old.com'] }));
+  });
+  await page.goto('/#lists');
+
+  const daily = page.locator('[data-daily]');
+  await expect(daily.getByRole('button', { name: 'Propose changes every day' })).toBeDisabled();
+  await expect(daily).toContainText('To turn this on, press Get both lists, pick a list under Add to a list I have (make a new list first), pick a policy.');
+
+  await page.getByRole('spinbutton', { name: 'How many, from the top' }).fill('2');
+  await page.getByRole('button', { name: 'Get both lists' }).click();
+  await page.getByRole('radio', { name: 'Add to a list I have' }).check();
+  await page.getByRole('combobox', { name: 'List', exact: true }).selectOption('5');
+  await page.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('7');
+  await page.getByRole('combobox', { name: 'What the policy does with these sites' }).selectOption('action_allow');
+  await daily.getByRole('button', { name: 'Propose changes to vip every day' }).click();
+  await expect.poll(() => watched.length).toBe(1);
+  expect(watched[0]).toEqual({ list_id: 5, list_name: 'vip', use: 'inforank', top: 2, policy_id: 7, action: 'action_allow' });
+
+  await expect(daily).toContainText('vip: the top 2 of the most popular sites, every day');
+  const prop = daily.locator('[data-proposal="5"]');
+  await expect(prop).toContainText('vip: 2 sites to add, 1 site to drop');
+  await expect(prop).toContainText('1 site left out by the threat check: bad.com (Scam)');
+  await prop.getByRole('button', { name: 'Preview' }).click();
+  await prop.getByRole('button', { name: 'Approve' }).click();
+  await expect(prop).toContainText('Done. vip: 2 sites added, 1 site dropped.');
+  expect(applied).toEqual([{ list_id: 5, at: 't-1', dry: true }, { list_id: 5, at: 't-1', fingerprint: 'fp-9', dry: false }]);
+});

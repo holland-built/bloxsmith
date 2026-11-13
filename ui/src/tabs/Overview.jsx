@@ -107,6 +107,7 @@ function useBoard(dns) {
   const sec = useApi('/api/hub/security', { poll: 30000 })
   const inc = useApi('/api/incidents', { poll: 60000 })
   const health = useApi('/api/hub/health', { poll: 30000 })
+  const sitelists = useApi('/api/lists/proposals', { poll: 3600000 })
 
   const totals = data.data?._totals ?? {}
   const meta = data.data?._meta ?? {}
@@ -125,7 +126,7 @@ function useBoard(dns) {
   const incidents = incOk ? inc.data.incidents : []
   const firstSeen = Object.fromEntries(incidents.map((i) => [i.key || i.category, i.first_detected_at]))
   const now = Date.now() / 1000
-  const issues = inboxRows({ hosts: sliceOk('hosts') ? hosts : undefined, incidents, signals: inc.data?.signals, sec: secCounts }).map((r) => {
+  const issues = inboxRows({ hosts: sliceOk('hosts') ? hosts : undefined, incidents, signals: inc.data?.signals, sec: secCounts, sitelists: sitelists.data?.proposals }).map((r) => {
     const t = firstSeen[r.key]
     return { ...r, seen: typeof t === 'number' ? t : null, fresh: typeof t === 'number' && now - t < DAY_S }
   })

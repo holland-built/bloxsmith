@@ -406,6 +406,8 @@ Some things are refused before anything changes: a new list name that is already
 
 **Sites in this list** appears under the form once you pick a list under **Add to a list I have**. It lists the list's sites, 100 at a time, with a search box when there are more. **Delete** takes one site out of the list after one check, the same check as on [Made with Bloxsmith](#made-with-bloxsmith): a site in a list Bloxsmith made says "In a list Bloxsmith made", any other asks "Are you sure?". The change takes effect in every policy that uses the list. Afterwards Bloxsmith reads the list back to see the site went.
 
+**Daily proposals** keeps a list in step with the top sites. Set the form up with **Top sites**, a list under **Add to a list I have** and a policy, then press **Propose changes to (list) every day**. Once a day, while Bloxsmith is running, it works out which of the top sites the list is missing, and which sites it added earlier have left the top. It never proposes dropping a site it did not add. Sites on the never-add list are left out, and so are sites the threat check flags or cannot look up; the proposal names them, and you can add one with the form. A waiting proposal shows here and on **Overview**, under Security. Nothing changes until you press **Preview** and then **Approve**. **Stop** turns a list's daily proposal off. Turning it on or off works on read-only tenants; **Approve** does not.
+
 If someone changes the policy between your Preview and **Add to policy**, nothing is written to the policy and you preview again. After the change, the page reads the policy back and tells you if any rule it had before is missing.
 
 ## Made with Bloxsmith

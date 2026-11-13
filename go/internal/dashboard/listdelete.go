@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Deleting a custom list or one policy rule, for the Made with Bloxsmith page
@@ -179,21 +180,43 @@ func (s *Service) ListItemState(id int, domain string) (name string, present boo
 // RemoveListItem takes one site out of a custom list and reads the list back
 // to see that it went. A list that is already gone counts as done.
 func (s *Service) RemoveListItem(id int, domain string) (map[string]any, int) {
-	d := canonDomain(domain)
-	resp, st, _ := s.Rest.Write("PATCH", fmt.Sprintf("%s/named_lists/%d/items", atcfw, id),
-		map[string]any{"deleted_items_described": []any{map[string]any{"item": d}}}, nil)
-	switch {
-	case st == 404:
-		return map[string]any{"ok": true, "already_gone": true}, 200
-	case st < 200 || st > 299:
-		return map[string]any{"ok": false, "error": fmt.Sprintf("Infoblox refused to remove the site (%s): %v", httpWord(st), resp)}, statusOr(st)
+	return s.RemoveListItems(id, []string{domain})
+}
+
+// RemoveListItems takes sites out of a custom list, in chunks, and reads the
+// list back to see that they went.
+func (s *Service) RemoveListItems(id int, domains []string) (map[string]any, int) {
+	ds := make([]string, 0, len(domains))
+	for _, d := range domains {
+		ds = append(ds, canonDomain(d))
 	}
-	l, st, err := s.readList(id)
+	for _, c := range chunk(ds, listChunk) {
+		items := make([]any, 0, len(c))
+		for _, d := range c {
+			items = append(items, map[string]any{"item": d})
+		}
+		resp, st, _ := s.Rest.Write("PATCH", fmt.Sprintf("%s/named_lists/%d/items", atcfw, id),
+			map[string]any{"deleted_items_described": items}, nil)
+		switch {
+		case st == 404:
+			return map[string]any{"ok": true, "already_gone": true}, 200
+		case st < 200 || st > 299:
+			return map[string]any{"ok": false, "error": fmt.Sprintf("Infoblox refused to remove the sites (%s): %v", httpWord(st), resp)}, statusOr(st)
+		}
+	}
+	l, _, err := s.readList(id)
 	if err != nil {
 		return map[string]any{"ok": false, "error": "Infoblox took the change but the list could not be read back to check it: " + err.Error()}, 502
 	}
-	if itemSet(l)[d] {
-		return map[string]any{"ok": false, "error": "Infoblox answered yes, but " + d + " is still in the list"}, 502
+	have := itemSet(l)
+	var still []string
+	for _, d := range ds {
+		if have[d] {
+			still = append(still, d)
+		}
+	}
+	if len(still) > 0 {
+		return map[string]any{"ok": false, "still": still, "error": fmt.Sprintf("Infoblox answered yes, but %s is still in the list", strings.Join(still, ", "))}, 502
 	}
 	return map[string]any{"ok": true}, 200
 }

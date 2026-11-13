@@ -597,6 +597,8 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true },
     { method: 'GET', path: '/api/hub/health', body: HUB_HEALTH, required: true },
     { method: 'GET', path: '/api/incidents', body: INCIDENTS, required: true },
+    // Site lists' daily proposals waiting on the Security row (2026-11-13).
+    { method: 'GET', path: '/api/lists/proposals', body: { ok: true, proposals: [] }, required: true },
   ],
   daily: [{ method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true }],
   network: [

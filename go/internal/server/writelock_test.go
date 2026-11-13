@@ -241,7 +241,7 @@ func TestDryFormPreviewPassesReadOnlyLock(t *testing.T) {
 
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/api/selfservice/allocate"}, {"POST", "/api/dns/records"},
-		{"POST", "/api/lists/apply"}, {"POST", "/api/desk/run"}, {"POST", "/api/desk/remove"},
+		{"POST", "/api/lists/apply"}, {"POST", "/api/lists/proposal/apply"}, {"POST", "/api/desk/run"}, {"POST", "/api/desk/remove"},
 		{"POST", "/api/edit/dns_zone"}, {"PATCH", "/api/edit/subnet/some-id"},
 		{"PATCH", "/api/dns/records"},
 	} {
@@ -267,6 +267,7 @@ func TestDryFormPreviewPassesReadOnlyLock(t *testing.T) {
 		{"POST", "/api/selfservice/allocate", `{"dry":true,"dry":false}`}, // last key wins in the handler too
 		{"POST", "/api/selfservice/allocate", `not json`},
 		{"POST", "/api/lists/apply", `{"dry":false}`},
+		{"POST", "/api/lists/proposal/apply", `{"dry":false}`},
 		{"POST", "/api/desk/run", `{"dry":false}`},
 		{"PATCH", "/api/edit/subnet/some-id", `{"dry":false}`},
 		// Deletes, the block routes and blocking a domain stay locked.
