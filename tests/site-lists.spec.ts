@@ -168,3 +168,38 @@ test('the preview warns when other policies use the list', async ({ page }) => {
   await expect(page.getByText('This will add 1 site to vip (1 site already there is left as it is). Office already uses it (rule 2), so the policy does not change.')).toBeVisible();
   await expect(page.getByText('vip is also used by Lab. The new sites take effect there too.')).toBeVisible();
 });
+
+test('a site on a threat list is shown, left out, and goes in only when ticked and previewed again', async ({ page }) => {
+  const sent: Record<string, any>[] = [];
+  await page.route('**/api/lists/targets', (r) => r.fulfill(json(TARGETS)));
+  await page.route('**/api/lists/never-add', (r) => r.fulfill(json({ ok: true, sites: [] })));
+  await page.route('**/api/lists/apply', (r) => {
+    const b = r.request().postDataJSON();
+    sent.push(b);
+    const ok = (b.risky_ok ?? []).includes('bad.example');
+    return r.fulfill(json({ ...PLAN, fingerprint: ok ? 'fp-2' : 'fp-1',
+      list: { ...PLAN.list, will_add: ok ? 2 : 1 },
+      threats: { checked: 2, risky: [{ domain: 'bad.example', class: 'MalwareC2', level: 100, added: ok }], unchecked: 1, reason: 'Infoblox did not answer the threat lookup (http 503)', left_out: ok ? 1 : 2 } }));
+  });
+  await page.goto('/#lists');
+  await page.getByRole('radio', { name: 'Paste them in' }).check();
+  await page.getByRole('textbox', { name: 'One site per line, or separated by commas' }).fill('zoom.us bad.example other.example');
+  await page.getByRole('textbox', { name: 'New list name' }).fill('top-sites');
+  await page.getByRole('combobox', { name: 'Policy', exact: true }).selectOption('7');
+  await page.getByRole('button', { name: 'Preview' }).click();
+
+  const threats = page.getByRole('group', { name: 'Threat check' });
+  await expect(threats).toContainText("1 site is on Infoblox's threat lists, so it is left out unless you tick it:");
+  await expect(threats).toContainText('bad.example: MalwareC2, threat level 100. Add anyway');
+  await expect(threats).toContainText('1 site could not be checked (Infoblox did not answer the threat lookup (http 503)), so it is left out.');
+  expect(sent[0]).toMatchObject({ risky_ok: [], unchecked_ok: false });
+
+  await threats.getByRole('checkbox', { name: /bad\.example/ }).check();
+  await expect(page.getByRole('button', { name: 'Add to policy' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]).toMatchObject({ dry: true, risky_ok: ['bad.example'] });
+  await page.getByRole('button', { name: 'Add to policy' }).click();
+  await expect.poll(() => sent.length).toBe(3);
+  expect(sent[2]).toMatchObject({ dry: false, risky_ok: ['bad.example'], fingerprint: 'fp-2' });
+});

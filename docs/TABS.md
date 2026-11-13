@@ -399,6 +399,7 @@ Drift never fixes anything. To close a gap, provision the site again (missing), 
 2. Pick the list: **Make a new list** and name it, or **Add to a list I have**. Adding never removes what the list already holds.
 3. Pick the **policy**, what it does with the sites (**Block**, **Allow**, **Log only**, **Redirect**, **Block without logging** or **Redirect without logging**), and where the rule goes. Rules are checked from the top, so a rule higher up wins.
 4. **Preview** says what will change and shows the policy's rules in their new order, with the new one marked. It also warns when the list is used by other policies, because new sites take effect there too.
+   Preview also checks every site about to be added against Infoblox's threat data, 100 at a time. A site listed as a threat is shown with its threat type and level and left out; tick **Add anyway** and preview again to put it in. If the check cannot look sites up, they are left out too and the preview says why; tick **Add them without the check** to add them anyway. **Add to policy** checks again, and if the answer changed since the preview, nothing is written and you preview again.
 5. **Add to policy** makes the change.
 
 Some things are refused before anything changes: a new list name that is already taken, and a policy that already uses the list with a different action. If the policy already uses the list with the same action, only the list gets the new sites.

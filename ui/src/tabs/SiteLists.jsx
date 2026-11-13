@@ -64,8 +64,45 @@ function plural(n, one, many = `${one}s`) {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
+// What the threat check found, with a tick box on each flagged site to add it
+// anyway, and one for sites that could not be checked. Ticking means previewing
+// again, because Apply adds only what the preview showed.
+function ThreatView({ threats, riskyOk, onRisky, uncheckedOk, onUnchecked }) {
+  if (!threats) return null
+  const { risky = [], unchecked = 0, reason, checked = 0 } = threats
+  if (!risky.length && !unchecked) {
+    return checked > 0 ? <p className="text-note text-muted">Checked {plural(checked, 'site')} against Infoblox's threat data: none is listed.</p> : null
+  }
+  const box = { background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }
+  return (
+    <div role="group" aria-label="Threat check" className="flex flex-col gap-2 rounded-control px-3 py-2" style={box} data-threats="">
+      {risky.length > 0 && (
+        <>
+          <p>{plural(risky.length, 'site')} {risky.length === 1 ? 'is' : 'are'} on Infoblox's threat lists, so {risky.length === 1 ? 'it is' : 'they are'} left out unless you tick it:</p>
+          <ul className="flex flex-col gap-1">
+            {risky.map((r) => (
+              <li key={r.domain}>
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={riskyOk.includes(r.domain)} onChange={(e) => onRisky(r.domain, e.target.checked)} />
+                  <span><span className="font-medium">{r.domain}</span>: {String(r.class || 'threat').replace(/_/g, ' ')}, threat level {r.level}. Add anyway</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {unchecked > 0 && (
+        <label className="flex items-start gap-2">
+          <input type="checkbox" checked={uncheckedOk} onChange={(e) => onUnchecked(e.target.checked)} />
+          <span>{plural(unchecked, 'site')} could not be checked ({reason}), so {unchecked === 1 ? 'it is' : 'they are'} left out. Add them without the check</span>
+        </label>
+      )}
+    </div>
+  )
+}
+
 // The preview, as sentences and the policy's rule order after the change.
-function PlanView({ plan }) {
+function PlanView({ plan, threatProps }) {
   const { list, policy, sample } = plan
   const added = list.will_add
   const what = list.new
@@ -85,6 +122,7 @@ function PlanView({ plan }) {
   return (
     <div className="flex flex-col gap-3 text-copy">
       <p>{what}{kept}.{rule}{never}</p>
+      <ThreatView threats={plan.threats} {...threatProps} />
       {list.also_used_by?.length > 0 && (
         <p role="note" className="rounded-control px-3 py-2" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>
           {list.name} is also used by {list.also_used_by.join(', ')}. The new sites take effect there too.
@@ -207,6 +245,9 @@ export default function SiteLists() {
   const [redirect, setRedirect] = useState('')
   const [position, setPosition] = useState('0')
 
+  const [riskyOk, setRiskyOk] = useState([])
+  const [uncheckedOk, setUncheckedOk] = useState(false)
+
   const flow = useWriteFlow('/api/lists/apply')
   const edit = (set) => (v) => { set(v); flow.markStale() }
 
@@ -287,8 +328,16 @@ export default function SiteLists() {
     action,
     ...(isRedirect ? { redirect_name: redirect } : {}),
     position: Number(position),
+    risky_ok: riskyOk,
+    unchecked_ok: uncheckedOk,
     fingerprint: flow.stale ? undefined : flow.previewReply?.fingerprint,
   })
+  const threatProps = {
+    riskyOk,
+    uncheckedOk,
+    onRisky: (d, on) => { setRiskyOk((xs) => (on ? [...xs, d] : xs.filter((x) => x !== d))); flow.markStale() },
+    onUnchecked: (on) => { setUncheckedOk(on); flow.markStale() },
+  }
 
   const applyProps = {
     status: flow.status,
@@ -440,7 +489,7 @@ export default function SiteLists() {
           <ColumnHeading id="sl-result-h">Preview</ColumnHeading>
           <PreviewApply {...applyProps} part="outcome">
             {flow.previewReply && flow.status === 'previewed'
-              ? <PlanView plan={flow.previewReply} />
+              ? <PlanView plan={flow.previewReply} threatProps={threatProps} />
               : !flow.message && <p className="text-copy text-muted">Pick the sites, the list and the policy, then press Preview. Nothing changes in Infoblox until you press Add to policy.</p>}
           </PreviewApply>
         </section>
