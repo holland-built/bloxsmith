@@ -144,6 +144,10 @@ type ListPlan struct {
 	checked string
 }
 
+// MaxCustomLists is Infoblox's limit on custom lists in one tenant. Seen live
+// on 2026-11-13: "List limit 100 is exceeded for the list type 'custom_list'".
+const MaxCustomLists = 100
+
 // ParseListPlan reads a request body. Errors are for the person, not a log.
 func ParseListPlan(b map[string]any) (ListPlan, error) {
 	p := ListPlan{Action: strings.TrimSpace(fmt.Sprint(b["action"]))}
@@ -268,21 +272,27 @@ func (s *Service) readList(id int) (map[string]any, int, error) {
 }
 
 // listByName finds a custom list by its exact name; nil when there is none.
-func (s *Service) listByName(name string) (map[string]any, error) {
+func (s *Service) listByName(name string) (map[string]any, int, error) {
 	// Infoblox refuses name as a filter field on named lists ("Invalid filter
 	// field: name"), so read them all, every type, and match here. A name is
 	// taken whatever type the list holding it is.
 	rows, err := s.Rest.GetStrict(atcfw+"/named_lists", map[string]string{
 		"_fields": "id,name,type,policies", "_limit": "1000"})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	var found map[string]any
+	custom := 0
 	for _, r := range rows {
-		if m := asMap(r); fmt.Sprint(m["name"]) == name {
-			return m, nil
+		m := asMap(r)
+		if fmt.Sprint(m["type"]) == "custom_list" {
+			custom++
+		}
+		if found == nil && fmt.Sprint(m["name"]) == name {
+			found = m
 		}
 	}
-	return nil, nil
+	return found, custom, nil
 }
 
 func httpWord(status int) string {
@@ -333,12 +343,15 @@ func (s *Service) plan(p ListPlan) (*planned, int, error) {
 		}
 		pl.list, pl.listName = l, fmt.Sprint(l["name"])
 	} else {
-		existing, err := s.listByName(p.ListName)
+		existing, custom, err := s.listByName(p.ListName)
 		if err != nil {
 			return nil, 502, fmt.Errorf("could not check whether the list name is free")
 		}
 		if existing != nil {
 			return nil, 409, fmt.Errorf("a list called %q already exists. Pick it under Add to a list I have", p.ListName)
+		}
+		if custom >= MaxCustomLists {
+			return nil, 409, fmt.Errorf("this tenant already has %d site lists, the most Infoblox allows. Add to a list you have, or delete one you no longer need", MaxCustomLists)
 		}
 		pl.listName = p.ListName
 	}

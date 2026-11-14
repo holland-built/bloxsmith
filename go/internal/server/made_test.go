@@ -337,6 +337,22 @@ func TestListsMade_NewListAndPlacedRuleAreRecordedAnExistingListIsNot(t *testing
 	}
 }
 
+// Seen live 2026-11-13: a site added to a list the owner already had was not
+// recorded, so its delete check said "not made by Bloxsmith", while the same
+// site added by a daily proposal was recorded.
+func TestListsMade_SitesAddedToAnExistingListAreRecorded(t *testing.T) {
+	res := map[string]any{"list": map[string]any{"name": "mine", "new": false}, "to_add": []string{"a.com", "b.com"},
+		"steps": map[string]any{"list": map[string]any{"ok": true, "id": 42}}}
+	objs := listsMade(res, 7, "action_log")
+	if len(objs) != 2 || objs[0].Kind != "list_item" || objs[0].ID != "42/a.com" || objs[1].ID != "42/b.com" {
+		t.Fatalf("objects = %+v, want both sites as list items", objs)
+	}
+	res["steps"].(map[string]any)["list"].(map[string]any)["ok"] = false
+	if objs := listsMade(res, 7, "action_log"); len(objs) != 0 {
+		t.Fatalf("a list step that did not finish: objects = %+v, want none claimed", objs)
+	}
+}
+
 func TestMadeFind_NameContainsAndExactAddress(t *testing.T) {
 	var got []string
 	d, _ := newListsDeps(t, func(w http.ResponseWriter, r *http.Request) {

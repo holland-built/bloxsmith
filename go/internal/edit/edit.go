@@ -870,18 +870,33 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		return M{"ok": false, "error": fmt.Sprintf("invalid dns payload: %s", err.Error())}, 400
 	}
 
-	var bodyExtra any
-	if name != "" {
-		bodyExtra = M{"name": name}
-	}
+	// Infoblox refuses any body on this POST ("body is not allowed", seen live
+	// 2026-11-13), so the name and the made-by tag go on each address after.
 	resp, status, _ := c.Rest.Write("POST", objPath+"/nextavailableip",
-		bodyExtra, map[string]string{"count": strconv.Itoa(count)})
+		nil, map[string]string{"count": strconv.Itoa(count)})
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("allocation failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 
 	addresses := respAddresses(resp)
 	out := M{"ok": true, "addresses": addressSummaries(addresses)}
+	unset := 0
+	for _, a := range addresses {
+		patch := M{"tags": withMadeTag(nil)}
+		if name != "" {
+			patch["names"] = []any{M{"name": name, "type": "user"}}
+		}
+		path, err := ObjectPath("ipam/address", pyStr(asMap(a)["id"]))
+		if err == nil {
+			if _, st, _ := c.Rest.Write("PATCH", path, patch, nil); st == 200 || st == 201 {
+				continue
+			}
+		}
+		unset++
+	}
+	if unset > 0 && name != "" {
+		out["warning"] = fmt.Sprintf("the address is reserved, but the name %q could not be set on %d of them. Set it in the Editor", name, unset)
+	}
 
 	if dns != nil && len(addresses) > 0 {
 		rresp, rstatus := c.createAddressRecord(dns, pyStr(asMap(addresses[0])["address"]))

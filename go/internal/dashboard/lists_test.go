@@ -388,3 +388,22 @@ func TestApplyRefusesDomainsThePreviewDidNotShow(t *testing.T) {
 		t.Fatalf("different domains after the preview must be refused before any write: %d %v %v", status, res, f.writes)
 	}
 }
+
+// Seen live on 2026-11-13: a tenant with 100 custom lists passed the preview,
+// then Infoblox refused the new list on Apply ("List limit 100 is exceeded for
+// the list type 'custom_list'"). The preview has to say so first.
+func TestPreviewRefusesANewListWhenTheTenantIsFull(t *testing.T) {
+	f := newFakeTenant()
+	for i := 1; len(f.lists) < MaxCustomLists; i++ {
+		f.lists[1000+i] = map[string]any{"id": float64(1000 + i), "name": fmt.Sprintf("l%d", i), "type": "custom_list"}
+	}
+	res, status := f.serve(t).ApplyList(plan(t, newListBody(true)))
+	if status != 409 || !strings.Contains(fmt.Sprint(res["error"]), "100 site lists") {
+		t.Fatalf("want a 409 saying the tenant has 100 site lists, got %d %v", status, res)
+	}
+	// One fewer list, or adding to a list it has, still works.
+	delete(f.lists, 1001)
+	if _, status := f.serve(t).ApplyList(plan(t, newListBody(true))); status != 200 {
+		t.Fatalf("99 lists should leave room for one more, got %d", status)
+	}
+}

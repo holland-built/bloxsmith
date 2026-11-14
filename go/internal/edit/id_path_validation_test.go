@@ -62,10 +62,12 @@ func TestAllocatePathIsNotDoubledForRealIDs(t *testing.T) {
 				t.Fatalf("SelfserviceAllocate = (%v, %d), want ok:true 200", res, status)
 			}
 			calls := f.calls()
-			if len(calls) != 1 {
-				t.Fatalf("%d upstream requests, want exactly 1: %+v", len(calls), calls)
+			// The reservation, then the made-by tag on the address it returned.
+			if len(calls) != 2 {
+				t.Fatalf("%d upstream requests, want 2: %+v", len(calls), calls)
 			}
 			builderWantMethodPath(t, calls[0], http.MethodPost, wantPath)
+			builderWantMethodPath(t, calls[1], http.MethodPatch, "/api/ddi/v1/ipam/address/a-1")
 		})
 	}
 }
