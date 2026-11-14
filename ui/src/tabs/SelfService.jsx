@@ -51,6 +51,11 @@ function Field({ label, group = false, children }) {
 
 // Name the address the server actually reserved; it can differ from the preview.
 function allocatedMsg(j, dnsName) {
+  const msg = allocatedText(j, dnsName)
+  return j?.warning ? `${msg} Note: ${j.warning}.` : msg
+}
+
+function allocatedText(j, dnsName) {
   const got = (j?.addresses || []).map((a) => a?.address).filter(Boolean)
   const fixed = j?.fixed_address
   if (fixed?.ok) return `Done. ${fixed.address} is reserved for the device ${fixed.mac}${dnsName && j?.record?.ok ? `, and ${dnsName} now points to it` : ''}.`

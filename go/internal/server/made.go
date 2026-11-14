@@ -175,6 +175,17 @@ func listsMade(res map[string]any, policyID int, action string) []runs.Object {
 		}
 	}
 	steps, _ := res["steps"].(map[string]any)
+	// Sites added to a list the owner already had are recorded one by one, as
+	// a daily proposal records them. Only when the list step finished, so no
+	// site is claimed that may not have gone in.
+	if ls, _ := steps["list"].(map[string]any); lst != nil && lst["new"] != true && ls != nil && ls["ok"] == true {
+		if id, ok := ls["id"].(int); ok && id > 0 {
+			sites, _ := res["to_add"].([]string)
+			for _, s := range sites {
+				out = append(out, runs.Object{ID: strconv.Itoa(id) + "/" + s, Kind: "list_item", Label: s + ", in list " + name, State: runs.Created})
+			}
+		}
+	}
 	if pol, _ := steps["policy"].(map[string]any); pol != nil {
 		pos, _ := pol["position"].(int)
 		if pos > 0 || pol["checked"] == false {

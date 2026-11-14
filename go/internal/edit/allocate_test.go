@@ -56,6 +56,7 @@ type allocConfig struct {
 	listStatus  int    // status for GET .../nextavailableip, the preview (0 => 200)
 	allocBody   string // its JSON body
 	dnsStatus   int    // status for POST /api/ddi/v1/dns/record (0 => 201)
+	nameStatus  int    // status for PATCH /api/ddi/v1/ipam/address/<id> (0 => 200)
 	dnsBody     string // its JSON body
 	// deleteStatuses answers the release DELETEs in call order. A call past
 	// the end of the slice gets 204. Per-call control is what lets one release
@@ -118,6 +119,13 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 		case http.MethodPost:
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/nextavailableip"):
+				// Live Infoblox refuses any body here, seen 2026-11-13:
+				// {"error":[{"message":"body is not allowed"}]}.
+				if raw, _ := json.Marshal(f.reqs[len(f.reqs)-1].body); f.reqs[len(f.reqs)-1].body != nil {
+					w.WriteHeader(400)
+					_, _ = io.WriteString(w, `{"error":[{"message":"body is not allowed"}],"sent":`+string(raw)+`}`)
+					return
+				}
 				w.WriteHeader(allocStatusOr(cfg.allocStatus, 200))
 				_, _ = io.WriteString(w, allocStringOr(cfg.allocBody, allocTwoAddresses))
 			case strings.HasSuffix(r.URL.Path, "/dns/record"):
@@ -127,6 +135,15 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 				t.Errorf("fake received an unexpected POST path: %s", r.URL.Path)
 				w.WriteHeader(500)
 			}
+		case http.MethodPatch:
+			// naming each reserved address after the reservation
+			if !strings.HasPrefix(r.URL.Path, "/api/ddi/v1/ipam/address/") {
+				t.Errorf("fake received an unexpected PATCH path: %s", r.URL.Path)
+				w.WriteHeader(500)
+				return
+			}
+			w.WriteHeader(allocStatusOr(cfg.nameStatus, 200))
+			_, _ = io.WriteString(w, `{"result":{}}`)
 		case http.MethodDelete:
 			st := 204
 			if nDelete < len(cfg.deleteStatuses) {
@@ -215,7 +232,8 @@ func allocIDs(t *testing.T, label string, v any) []string {
 
 // TestAllocateSendsCountAndNameOnTheWire proves the reservation request itself
 // is correct. count is a query parameter, not a body field; getting it wrong
-// reserves the wrong number of real addresses.
+// reserves the wrong number of real addresses. Infoblox refuses a body on the
+// reservation (seen live 2026-11-13), so the name goes on each address after.
 func TestAllocateSendsCountAndNameOnTheWire(t *testing.T) {
 	f := newAllocFake(t, allocConfig{})
 
@@ -239,8 +257,37 @@ func TestAllocateSendsCountAndNameOnTheWire(t *testing.T) {
 	if got := posts[0].query.Get("count"); got != "2" {
 		t.Fatalf("count query = %q, want \"2\" — a wrong count reserves the wrong number of real IPs", got)
 	}
-	if got := pyStr(posts[0].body["name"]); got != "web-vip" {
-		t.Fatalf("body name = %q, want \"web-vip\"; body=%v", got, posts[0].body)
+	if posts[0].body != nil {
+		t.Fatalf("reservation body = %v, want none: Infoblox refuses one", posts[0].body)
+	}
+	patches := f.byMethod(http.MethodPatch)
+	if len(patches) != 2 {
+		t.Fatalf("PATCHes = %d, want one per reserved address", len(patches))
+	}
+	for i, id := range []string{"a-1111", "a-2222"} {
+		p := patches[i]
+		names, _ := p.body["names"].([]any)
+		if p.path != "/api/ddi/v1/ipam/address/"+id || len(names) != 1 || pyStr(asMap(names[0])["name"]) != "web-vip" {
+			t.Fatalf("PATCH %d = %s %v, want the name web-vip on %s", i, p.path, p.body, id)
+		}
+		if pyStr(asMap(p.body["tags"])[MadeTagKey]) != MadeTagValue {
+			t.Fatalf("PATCH %d should tag the address as made by Bloxsmith: %v", i, p.body)
+		}
+	}
+}
+
+// A refused name leaves the addresses reserved, so the run still reports
+// them, and says the name did not stick.
+func TestAllocateNameRefusedStillReportsTheAddresses(t *testing.T) {
+	f := newAllocFake(t, allocConfig{nameStatus: 400})
+
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": float64(2), "name": "web-vip", "dry": false})
+
+	if status != 200 || !resultOK(res) || len(res["addresses"].([]any)) != 2 {
+		t.Fatalf("want the 2 reserved addresses reported, got %d %v", status, res)
+	}
+	if !strings.Contains(pyStr(res["warning"]), "name") {
+		t.Fatalf("want a warning that the name was not set, got %v", res)
 	}
 }
 
@@ -261,6 +308,15 @@ func TestAllocateOmitsTheBodyWhenNoNameGiven(t *testing.T) {
 	}
 	if posts[0].body != nil {
 		t.Fatalf("body = %v, want none sent when name is omitted", posts[0].body)
+	}
+	// Still tagged as made by Bloxsmith, with no name invented.
+	for _, p := range f.byMethod(http.MethodPatch) {
+		if _, named := p.body["names"]; named || pyStr(asMap(p.body["tags"])[MadeTagKey]) != MadeTagValue {
+			t.Fatalf("PATCH = %v, want only the made-by tag", p.body)
+		}
+	}
+	if n := len(f.byMethod(http.MethodPatch)); n != 2 {
+		t.Fatalf("PATCHes = %d, want each address tagged", n)
 	}
 }
 

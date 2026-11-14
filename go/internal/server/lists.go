@@ -81,6 +81,7 @@ func (d *Deps) listsApply(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.json(w, r, 400, map[string]any{"ok": false, "error": "every site is on the never-add list"})
 		return
 	}
+	p.WantSites = !p.Dry // the sites that went in are recorded below
 	res, status := d.dash(r).ApplyList(p)
 	res["never_add_left_out"] = len(leftOut)
 	d.json(w, r, status, res)
