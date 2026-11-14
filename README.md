@@ -46,6 +46,8 @@ Every page is in the menu down the left side: the everyday ones on top, the rest
 | Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
 | Give someone an address or a DNS record | **Get an address** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
 | See who changed what today | **Changes** | Changes from the last 24 hours, grouped by what was touched. **Audit** goes further back |
+| Keep a block or allow list filled with the most popular sites | **Site lists** | Pick the top sites, press **Preview**, then **Add to policy**. **Daily proposals** suggests changes each day and changes nothing until you approve |
+| See what Bloxsmith made, and delete it | **Made with Bloxsmith** | Press **Delete** on an item. It asks once, and says whether Bloxsmith made it |
 | Show a customer what automation looks like | **Demo server** | Builds a NIOS-X server on Proxmox, then removes it. See [Demo server](#demo-server) below |
 
 ## Quick start
@@ -528,7 +530,8 @@ The files at the top level stay there because something reads them by that path.
 start downloads `docker-compose.yml` and the `update` files from there. The release build
 packs `LICENSE` and `NOTICE.md`. The release tool reads its steps from `SHIP.md`, and
 `package.json` and `playwright.config.ts` set up the browser tests. `.env.example` is the
-settings template for Docker Compose. `CLAUDE.md` holds the notes Claude Code loads for this repo.
+settings template for Docker Compose. `CLAUDE.md` holds the notes Claude Code loads for this repo, and
+`IMPROVE_TASKS.md` lists the tasks the design checks run on the Overview page.
 
 Full reference, including every setting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

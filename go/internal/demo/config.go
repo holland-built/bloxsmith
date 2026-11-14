@@ -23,7 +23,7 @@ type Config struct {
 	Subnet    string `json:"subnet"`    // the demo network on that bridge, e.g. 10.99.0.0/24
 	Gateway   string `json:"gateway"`   // the bridge's address, e.g. 10.99.0.1
 	Image     string `json:"image"`     // NIOS-X On-Prem qcow2 on this machine
-	Owner     string `json:"owner"`     // VM name prefix, e.g. sholland
+	Owner     string `json:"owner"`     // VM name prefix, e.g. jsmith
 	JoinToken string `json:"joinToken"` // NIOS-X join token; never shown back
 	RAM       int    `json:"ram"`       // MB
 	Cores     int    `json:"cores"`
