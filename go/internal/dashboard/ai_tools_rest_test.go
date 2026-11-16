@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"bloxsmith/internal/cache"
@@ -19,8 +20,13 @@ import (
 func newAIToolsTestService(t *testing.T, handler http.HandlerFunc) (*Service, *[]string) {
 	t.Helper()
 	var paths []string
+	// Locked because some reads run side by side (FetchOverlaps reads blocks,
+	// subnets and spaces at once), so requests arrive concurrently.
+	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
+		mu.Unlock()
 		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
