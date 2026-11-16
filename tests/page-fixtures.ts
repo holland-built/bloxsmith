@@ -334,6 +334,34 @@ const DHCP_LEASES = {
     { address: '10.20.0.9', ends: agoIso(1 * HOUR), hardware: '00:00:5e:00:53:02', hostname: 'baseline-host-b', state: 'expired' },
   ],
 };
+// GET /api/ipam/overlaps (go/internal/dashboard/overlaps.go): two ranges used
+// by more than one IP space.
+const IPAM_OVERLAPS = {
+  status: 'ok',
+  blocks: 3,
+  subnets: 2,
+  spaces: 3,
+  groups: [
+    {
+      range: '10.0.0.0/8',
+      spaces: 3,
+      members: [
+        { id: 'ipam/ip_space/a', name: 'Corp', prefixes: ['10.0.0.0/8'] },
+        { id: 'ipam/ip_space/b', name: 'Lab', prefixes: ['10.1.0.0/16'] },
+        { id: 'ipam/ip_space/c', name: 'Branch', prefixes: ['10.2.0.0/16'] },
+      ],
+    },
+    {
+      range: '192.168.0.0/16',
+      spaces: 2,
+      members: [
+        { id: 'ipam/ip_space/a', name: 'Corp', prefixes: ['192.168.0.0/16'] },
+        { id: 'ipam/ip_space/b', name: 'Lab', prefixes: ['192.168.1.0/24'] },
+      ],
+    },
+  ],
+};
+
 const IPAM_UTIL = {
   status: 'ok',
   count: 2,
@@ -604,6 +632,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   network: [
     { method: 'GET', path: '/api/csp/dhcp-leases', body: DHCP_LEASES, required: true },
     { method: 'GET', path: '/api/csp/ipam-util', body: IPAM_UTIL, required: true },
+    { method: 'GET', path: '/api/ipam/overlaps', body: IPAM_OVERLAPS, required: true },
     { method: 'GET', path: '/api/service-inventory', body: SERVICE_INVENTORY, required: true },
   ],
   dns: [

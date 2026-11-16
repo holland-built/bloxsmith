@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"sort"
 	"strconv"
-	"strings"
 
+	"bloxsmith/internal/dashboard"
 	"bloxsmith/internal/rest"
 )
 
@@ -78,29 +78,9 @@ func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block
 	return block, next, nil
 }
 
-// prefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair.
-func prefixOf(m map[string]any) (netip.Prefix, bool) {
-	a, _ := m["address"].(string)
-	addr, err := netip.ParseAddr(strings.TrimSpace(a))
-	if err != nil {
-		return netip.Prefix{}, false
-	}
-	var bits int
-	switch v := m["cidr"].(type) {
-	case float64:
-		bits = int(v)
-	case string:
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return netip.Prefix{}, false
-		}
-		bits = n
-	default:
-		return netip.Prefix{}, false
-	}
-	p, err := addr.Prefix(bits)
-	return p, err == nil
-}
+// prefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. The one
+// copy is dashboard.PrefixOf, which the overlapping-ranges read uses too.
+func prefixOf(m map[string]any) (netip.Prefix, bool) { return dashboard.PrefixOf(m) }
 
 // firstFreePrefix returns the lowest /bits inside block, aligned to its own
 // size, that overlaps none of used. Addresses are handled as big integers so

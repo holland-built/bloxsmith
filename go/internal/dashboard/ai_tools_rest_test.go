@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"bloxsmith/internal/cache"
@@ -19,8 +20,13 @@ import (
 func newAIToolsTestService(t *testing.T, handler http.HandlerFunc) (*Service, *[]string) {
 	t.Helper()
 	var paths []string
+	// Locked because some reads run side by side (FetchOverlaps reads blocks,
+	// subnets and spaces at once), so requests arrive concurrently.
+	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
+		mu.Unlock()
 		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
@@ -491,6 +497,7 @@ func TestRunAITool_UpstreamErrorIsNotReportedAsAbsence(t *testing.T) {
 		{"get_audit_logs", "No audit log data."},
 		{"get_dns_analytics", "No DNS analytics data."},
 		{"iq_insights", "No IQ actions recorded."},
+		{"get_overlapping_ranges", "No address range is used in more than one IP space."},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {

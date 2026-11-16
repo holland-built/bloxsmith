@@ -115,6 +115,11 @@ const toolsJSON = `[
       }}
   }},
   {"type": "function", "function": {
+    "name": "get_overlapping_ranges",
+    "description": "Address ranges used in more than one IP space (overlapping IP spaces), most spaces first. Read only. A group is ranges that touch, not the same range everywhere: 10.0.0.0/8 in space A, 10.1.0.0/16 in B and 10.2.0.0/16 in C is one group of 3 spaces although B and C do not overlap. Each space is listed with its own ranges in the group.",
+    "parameters": {"type": "object", "properties": {}}
+  }},
+  {"type": "function", "function": {
     "name": "get_hosts",
     "description": "Get infrastructure hosts with status (online/offline/error/degraded)",
     "parameters": {"type": "object",

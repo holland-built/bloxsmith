@@ -80,6 +80,7 @@ var panelSources = []PanelSource{
 	// ---- Network ----
 	restPanel("network-utilization-distribution", "Network", "Utilization Distribution", srcSubnets, whyFullness),
 	restPanel("network-ipam-spaces", "Network", "IPAM Spaces — Top Used", "the IP space tree", "it ranks spaces by addresses used, worked out in the app"),
+	restPanel("network-overlaps", "Network", "Overlapping ranges", "the address block list and the subnets not inside a block", "it groups ranges that touch across IP spaces, worked out in the app"),
 	restPanel("network-dhcp-leases", "Network", "DHCP Leases", "the DHCP lease list", "it is a searchable list, not a chart"),
 	restPanel("network-exhaustion", "Network", "Which Subnets Run Out First?", srcSubnets, whyFullness),
 
