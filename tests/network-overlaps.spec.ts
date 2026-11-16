@@ -15,22 +15,23 @@ test.beforeEach(async ({ page }) => {
 
 const panel = (page: import('@playwright/test').Page) => page.locator('[data-panel-id="network-overlaps"]');
 
+const r = (prefix: string, id: string, kind = 'subnet') => ({ prefix, id, kind });
 const groups = [
   {
     range: '192.168.0.0/16',
     spaces: 2,
     members: [
-      { id: 's/a', name: 'Corp', prefixes: ['192.168.0.0/16'] },
-      { id: 's/b', name: 'Lab', prefixes: ['192.168.1.0/24'] },
+      { id: 's/a', name: 'Corp', prefixes: ['192.168.0.0/16'], ranges: [r('192.168.0.0/16', 'ipam/address_block/a2', 'address_block')] },
+      { id: 's/b', name: 'Lab', prefixes: ['192.168.1.0/24'], ranges: [r('192.168.1.0/24', 'ipam/subnet/b2')] },
     ],
   },
   {
     range: '10.0.0.0/8',
     spaces: 3,
     members: [
-      { id: 's/a', name: 'Corp', prefixes: ['10.0.0.0/8'] },
-      { id: 's/b', name: 'Lab', prefixes: ['10.1.0.0/16'] },
-      { id: 's/c', name: 'Branch', prefixes: ['10.2.0.0/16', '10.3.0.0/16'] },
+      { id: 'ipam/ip_space/7cc1cfd4-aaaa', name: 'Corp Main', prefixes: ['10.0.0.0/8'], ranges: [r('10.0.0.0/8', 'ipam/address_block/a1', 'address_block')] },
+      { id: 's/b', name: 'Lab', prefixes: ['10.1.0.0/16'], ranges: [r('10.1.0.0/16', 'ipam/subnet/b1')] },
+      { id: 's/c', name: 'Branch', prefixes: ['10.2.0.0/16', '10.3.0.0/16'], ranges: [r('10.2.0.0/16', 'ipam/subnet/c1'), r('10.3.0.0/16', 'ipam/subnet/c2')] },
     ],
   },
 ];
@@ -50,7 +51,7 @@ test('rows come biggest first, and opening one lists each space with its own ran
   await expect(rows.nth(0)).toHaveAttribute('aria-expanded', 'true');
   const list = panel(page).locator('[data-overlap-spaces]');
   await expect(list).toBeVisible();
-  for (const name of ['Corp', 'Lab', 'Branch']) await expect(list).toContainText(name);
+  for (const name of ['Corp Main', 'Lab', 'Branch']) await expect(list).toContainText(name);
   await expect(list).toContainText('10.2.0.0/16, 10.3.0.0/16');
 
   await rows.nth(0).click();
@@ -71,4 +72,71 @@ test('no shared range says so in words', async ({ page }) => {
   await page.route('**/api/ipam/overlaps', (route) => route.fulfill({ json: { status: 'ok', groups: [] } }));
   await page.goto('/#network');
   await expect(panel(page)).toContainText('No address range is used in more than one IP space.', { timeout: 20_000 });
+});
+
+test('an open row links each space to the Infoblox Portal and each range to the Editor', async ({ page }) => {
+  await page.route('**/api/ipam/overlaps', (route) =>
+    route.fulfill({ json: { status: 'ok', groups, portal: 'https://csp.eu.infoblox.com' } }),
+  );
+  await page.goto('/#network');
+  const rows = panel(page).getByRole('button', { name: /spaces$/ });
+  await rows.nth(0).click();
+  const list = panel(page).locator('[data-overlap-spaces]');
+
+  // The space: this server's own Portal host, the name encoded, the id encoded twice.
+  const corp = list.getByRole('link', { name: 'Corp Main in Infoblox (opens in a new tab)' });
+  await expect(corp).toHaveAttribute(
+    'href',
+    'https://csp.eu.infoblox.com/#/ipam/ip_spaces/view/grid/space/object/Corp%20Main/Corp%20Main/object/ipam%252Fip_space%252F7cc1cfd4-aaaa',
+  );
+  await expect(corp).toHaveAttribute('target', '_blank');
+  await expect(corp).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(list.getByRole('link', { name: /in Infoblox/ })).toHaveCount(3);
+
+  // Each range: the Editor, that object's kind and id, searched by its address.
+  await expect(list.getByRole('link', { name: /^10\.0\.0\.0\/8, open this address block in the Editor$/ })).toHaveAttribute(
+    'href',
+    '#editor?type=address_block&id=ipam%2Faddress_block%2Fa1&q=10.0.0.0',
+  );
+  await expect(list.getByRole('link', { name: /^10\.3\.0\.0\/16, open this subnet in the Editor$/ })).toHaveAttribute(
+    'href',
+    '#editor?type=subnet&id=ipam%2Fsubnet%2Fc2&q=10.3.0.0',
+  );
+  await expect(list.getByRole('link', { name: /in the Editor$/ })).toHaveCount(4);
+  await expect(list.getByRole('link', { name: /in the Editor$/ }).first()).not.toHaveAttribute('target', /.+/);
+});
+
+test('with no portal from the server the space link uses csp.infoblox.com', async ({ page }) => {
+  await page.route('**/api/ipam/overlaps', (route) => route.fulfill({ json: { status: 'ok', groups } }));
+  await page.goto('/#network');
+  await panel(page).getByRole('button', { name: /spaces$/ }).nth(1).click();
+  await expect(panel(page).getByRole('link', { name: 'Lab in Infoblox (opens in a new tab)' })).toHaveAttribute(
+    'href',
+    'https://csp.infoblox.com/#/ipam/ip_spaces/view/grid/space/object/Lab/Lab/object/s%252Fb',
+  );
+});
+
+test('following a subnet link opens the Editor with that subnet picked', async ({ page }) => {
+  await page.route('**/api/ipam/overlaps', (route) => route.fulfill({ json: { status: 'ok', groups } }));
+  const finds: string[] = [];
+  await page.route('**/api/edit/subnet/find*', (route) => {
+    finds.push(new URL(route.request().url()).searchParams.get('q') || '');
+    return route.fulfill({ json: { items: [
+      { id: 'ipam/subnet/other', label: '10.3.0.0/16 — elsewhere', fields: { block_id: 'ipam/address_block/z', cidr: 16, name: 'elsewhere', comment: '', tags: '' } },
+      { id: 'ipam/subnet/c2', label: '10.3.0.0/16 — branch-lan', fields: { block_id: 'ipam/address_block/9', cidr: 16, name: 'branch-lan', comment: 'floor 2', tags: '' } },
+    ] } });
+  });
+  await page.goto('/#network');
+  await panel(page).getByRole('button', { name: /spaces$/ }).nth(0).click();
+  await panel(page).getByRole('link', { name: /^10\.3\.0\.0\/16, open this subnet/ }).click();
+
+  await expect(page.getByRole('heading', { name: 'Subnet — Update' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByPlaceholder('Find by name, comment or full network address')).toHaveValue('10.3.0.0');
+  await expect(page.getByRole('button', { name: '10.3.0.0/16 — branch-lan' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: '10.3.0.0/16 — elsewhere' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('branch-lan');
+  await expect(page.getByRole('textbox', { name: 'Comment' })).toHaveValue('floor 2');
+  await expect(page.getByRole('textbox', { name: 'Address block ID *' })).toHaveValue('ipam/address_block/9');
+  await expect(page.getByRole('button', { name: 'Delete Subnet' })).toBeVisible();
+  expect(finds).toEqual(['10.3.0.0']);
 });

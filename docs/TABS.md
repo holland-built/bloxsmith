@@ -144,7 +144,7 @@ IP addresses and DHCP in detail.
 
 - **Utilization Distribution**: how many subnets fall in each fullness band.
 - **IPAM Spaces — Top Used**: addresses used in each IP space.
-- **Overlapping ranges**: address ranges used in more than one IP space, the most spaces first. Click a row to see each space and its own ranges there. A row is ranges that touch, so two of its spaces need not overlap each other. Read once when the page opens; it changes nothing in Infoblox.
+- **Overlapping ranges**: address ranges used in more than one IP space, the most spaces first. Click a row to see each space and its own ranges there. Each space name opens that space in the Infoblox Portal in a new tab, and each range opens the Editor with that block or subnet picked. A row is ranges that touch, so two of its spaces need not overlap each other. Read once when the page opens; it changes nothing in Infoblox.
 - **DHCP Leases**: a lease table you can filter.
 - **Subnet table**: the full list, without /29 to /32 links unless you tick **/29–/32 links**. Those small links are nearly always full, so they would bury the real subnets. The ≥90% counts on Overview, Daily and the tile above include them, and clicking one of those counts opens the list with them ticked.
 

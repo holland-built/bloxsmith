@@ -155,3 +155,27 @@ test('two results with the same label show their IDs', async ({ page }) => {
   await expect(page.getByRole('button', { name: '10.0.0.0/24 — lab ipam/subnet/a1' })).toBeVisible();
   await expect(page.getByRole('button', { name: '10.0.0.0/24 — lab ipam/subnet/b2' })).toBeVisible();
 });
+
+// A deep link from Network's Overlapping ranges: #editor?type=&id=&q= behaves
+// as if q were typed into Find and the item with that id clicked.
+test('a deep link picks an address block for Delete only', async ({ page }) => {
+  await page.route('**/api/edit/address_block/find*', (r) =>
+    r.fulfill({ json: { items: [{ id: 'ipam/address_block/3', label: '10.20.0.0/16', fields: {} }] } }));
+  await page.goto('/#editor?type=address_block&id=ipam%2Faddress_block%2F3&q=10.20.0.0');
+  await expect(page.getByPlaceholder('Find by address or comment')).toHaveValue('10.20.0.0');
+  await expect(page.getByRole('button', { name: '10.20.0.0/16' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Delete Address Block' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Address *' })).toHaveValue('');
+  await expect(page.getByRole('heading', { name: 'Address Block — Create' })).toBeVisible();
+});
+
+test('a deep link whose id does not come back fills the search and picks nothing', async ({ page }) => {
+  await page.route('**/api/edit/subnet/find*', (r) =>
+    r.fulfill({ json: { items: [{ id: 'ipam/subnet/1', label: '10.1.0.0/16', fields: { block_id: 'b', cidr: 16, name: 'x', comment: '', tags: '' } }] } }));
+  await page.goto('/#editor?type=subnet&id=ipam%2Fsubnet%2Fgone&q=10.1.0.0');
+  await expect(page.getByPlaceholder('Find by name, comment or full network address')).toHaveValue('10.1.0.0');
+  await expect(page.getByRole('button', { name: '10.1.0.0/16' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('heading', { name: 'Subnet — Create' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete Subnet' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'ID of an existing one (leave blank to make a new one)' })).toHaveValue('');
+});
