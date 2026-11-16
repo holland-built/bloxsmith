@@ -16,13 +16,13 @@ func TestIPAMOverlaps_Handler(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
 			rows := []map[string]any{{"id": "n1", "space": "sB", "address": "10.1.0.0", "cidr": 16}}
 			if r.URL.Query().Get("_offset") != "0" {
-				rows = nil
+				rows = []map[string]any{} // what Infoblox sends past the end (seen live 2026-11-16)
 			}
 			body = map[string]any{"results": rows, "page": map[string]any{"total_size": "1"}}
 		case strings.HasSuffix(r.URL.Path, "/ipam/address_block"):
 			rows := []map[string]any{{"id": "b1", "space": "sA", "address": "10.0.0.0", "cidr": 8}}
 			if r.URL.Query().Get("_offset") != "0" {
-				rows = nil
+				rows = []map[string]any{} // what Infoblox sends past the end (seen live 2026-11-16)
 			}
 			body = map[string]any{"results": rows}
 		default:

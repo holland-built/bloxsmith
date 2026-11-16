@@ -230,3 +230,24 @@ func TestOverlapsForAI_CapsGroupsAndNames(t *testing.T) {
 		t.Fatalf("got %d names, more %d", len(p.Groups[0].Spaces), p.Groups[0].MoreSpaces)
 	}
 }
+
+func TestFetchOverlaps_BlockPageWithNoResultsIsAnError(t *testing.T) {
+	// The second block page answers {}: no results array at all. That is not
+	// the end of the list, so the read must fail rather than stop there.
+	base := overlapUpstream(nil, 0, nil)
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ipam/address_block") {
+			if r.URL.Query().Get("_offset") == "0" {
+				writeResults(w, []map[string]any{row("b1", "sA", "10.0.0.0", 8)})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		base(w, r)
+	})
+	if res := s.FetchOverlaps(); res["status"] != "error" || !strings.Contains(fmt.Sprint(res["error"]), "address block") {
+		t.Fatalf("got %v, want the every-address-block error", res)
+	}
+}

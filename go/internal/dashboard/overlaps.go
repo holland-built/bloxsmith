@@ -266,9 +266,16 @@ func readToEmpty(c *rest.Client, path string, params map[string]string, msg stri
 		for k, v := range params {
 			p[k] = v
 		}
-		rows, err := c.GetStrict(path, p)
+		rows, body, err := c.GetPageStrict(path, p)
 		if err != nil {
 			return nil, overlapFail(msg, "%s: %v", path, err)
+		}
+		// GetStrict-style unwrapping reads {} (or any body with no results
+		// array) as zero rows. Only a results array that is really empty is the
+		// end of the list; anything else would end the read early and hide
+		// overlaps.
+		if _, ok := body["results"].([]any); !ok {
+			return nil, overlapFail(msg, "%s: a page came back with no results list", path)
 		}
 		if len(rows) == 0 {
 			if n := distinctIDs(all); n != len(all) {
