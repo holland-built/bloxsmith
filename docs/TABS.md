@@ -144,6 +144,7 @@ IP addresses and DHCP in detail.
 
 - **Utilization Distribution**: how many subnets fall in each fullness band.
 - **IPAM Spaces — Top Used**: addresses used in each IP space.
+- **Overlapping ranges**: address ranges used in more than one IP space, the most spaces first. Click a row to see each space and its own ranges there. A row is ranges that touch, so two of its spaces need not overlap each other. Read once when the page opens; it changes nothing in Infoblox.
 - **DHCP Leases**: a lease table you can filter.
 - **Subnet table**: the full list, without /29 to /32 links unless you tick **/29–/32 links**. Those small links are nearly always full, so they would bury the real subnets. The ≥90% counts on Overview, Daily and the tile above include them, and clicking one of those counts opens the list with them ticked.
 
@@ -539,6 +540,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Daily | DNS Zone Issues | the DNS zone list | No | the zone problems are worked out in the app |
 | Network | Utilization Distribution | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
 | Network | IPAM Spaces — Top Used | the IP space tree | No | it ranks spaces by addresses used, worked out in the app |
+| Network | Overlapping ranges | the address block list and the subnets not inside a block | No | it groups ranges that touch across IP spaces, worked out in the app |
 | Network | DHCP Leases | the DHCP lease list | No | it is a searchable list, not a chart |
 | Network | Which Subnets Run Out First? | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
 | DNS | DNS Query Rate — 24h | Infoblox's DNS server metrics | As a copy | the latest-hour figure and the comparison beside it are worked out in the app |

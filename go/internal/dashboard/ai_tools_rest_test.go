@@ -491,6 +491,7 @@ func TestRunAITool_UpstreamErrorIsNotReportedAsAbsence(t *testing.T) {
 		{"get_audit_logs", "No audit log data."},
 		{"get_dns_analytics", "No DNS analytics data."},
 		{"iq_insights", "No IQ actions recorded."},
+		{"get_overlapping_ranges", "No address range is used in more than one IP space."},
 	}
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {

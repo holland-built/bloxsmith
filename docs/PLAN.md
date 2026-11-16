@@ -1,6 +1,18 @@
 # Plan
 
-**Goal:** none in hand. Pick the next job with the owner.
+**Goal:** "Overlapping ranges" on the Network page, and an AI tool for it. The owner asked "do we show overlapping address spaces?" and approved:
+
+1. One row per shared range, how many IP spaces use it, biggest first; clicking a row lists the space names.
+2. Only each space's outermost blocks and subnets count, so nested ranges in one space are not double counted.
+3. A new read-only card on the Network page. Nothing in Infoblox changes.
+4. The in-app AI assistant gets a tool (`get_overlapping_ranges`) that returns the same list.
+
+**Done when:**
+
+1. Go unit tests for the grouping, written to fail first, pass: equal-start /8 and /16 in one space keeps only the /8; A /8, B /16, C /16 is one group of 3; one space only is no group; IPv4 and IPv6 never group; a total that doesn't match the rows is an error; an unreadable cidr is an error. Plus a handler test and an AI tool test. `go test ./...` and `go vet ./...` are clean.
+2. An e2e spec for the card (stubbed API) passes with E2E_SKIP_LIVE=1: rows biggest first, a click shows the spaces, the error state shows the plain message. The existing Network specs still pass.
+3. The server, run from the branch against the live tenant, answers `/api/ipam/overlaps` with its time, group count and top 3 rows recorded, with screenshots at 1440x900 and 390 wide.
+4. `scripts/needs-tag.sh` says what it says, pasted in the report.
 
 ## Done
 

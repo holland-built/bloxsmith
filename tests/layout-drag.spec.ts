@@ -692,7 +692,7 @@ test('a grid whose DOM holds a panel its children cannot name says so, loudly', 
 const TAB_PANEL_COUNTS: Record<string, number> = {
   overview: 2,
   daily: 5,
-  network: 4,
+  network: 5, // 4 until 2026-11-16, when Overlapping ranges joined
   dns: 8,
   // security and infra each gained one on 2026-08-20 (#152): "Security
   // Inventory" from /api/hub/domains and "Service Health" from /api/hub/health,
@@ -857,6 +857,7 @@ const TAB_CASES: TabCase[] = [
     declared: [
       'network-utilization-distribution',
       'network-ipam-spaces',
+      'network-overlaps',
       'network-exhaustion',
       'network-dhcp-leases', // inside hiddenPanelGroup({...SERVICE_GROUPS.dhcp})
     ],

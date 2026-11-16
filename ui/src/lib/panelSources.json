@@ -88,6 +88,15 @@
     "why": "it ranks spaces by addresses used, worked out in the app"
   },
   {
+    "id": "network-overlaps",
+    "page": "Network",
+    "name": "Overlapping ranges",
+    "kind": "rest",
+    "source": "the address block list and the subnets not inside a block",
+    "builder": "no",
+    "why": "it groups ranges that touch across IP spaces, worked out in the app"
+  },
+  {
     "id": "network-dhcp-leases",
     "page": "Network",
     "name": "DHCP Leases",

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sortRows } from '../lib/sortCompare.js'
@@ -46,6 +46,9 @@ export default function Network() {
   const data = useApi('/api/data', { poll: 30000 })
   const ipam = useApi('/api/csp/ipam-util', { poll: 30000 })
   const dhcp = useApi('/api/csp/dhcp-leases', { poll: 30000 })
+  // Read once per page load, no poll: it reads every address block and every
+  // top-level subnet (about 7 s on an 11,000-subnet tenant), hence the slow budget.
+  const overlaps = useApi('/api/ipam/overlaps', { coldMs: SLOW_COLD_TIMEOUT_MS })
   const hp = useHashParams()
   // One shared read of /api/service-inventory per page load — see Security.jsx.
   const owned = useOwnedServices()
@@ -94,6 +97,7 @@ export default function Network() {
       <CardGrid layoutKey="network">
         <UtilBands panelId="network-utilization-distribution" subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
         <IpamSpaces panelId="network-ipam-spaces" ipam={ipam} />
+        <Overlaps panelId="network-overlaps" overlaps={overlaps} />
         {/* Leases are issued by a deployed DHCP service. The IPAM panels above
             and the subnet table below read address-space config, which exists
             with no DHCP service at all — so neither is mapped.
@@ -312,6 +316,69 @@ function IpamSpaces({ panelId, ipam }) {
             </p>
           )}
         </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- overlapping ranges ----------
+
+// One row per address range used by 2 or more IP spaces, the most spaces
+// first. A row is ranges that TOUCH, not one range shared everywhere, so an
+// opened row lists every space with its own ranges in it. The server
+// (go/internal/dashboard/overlaps.go) answers status:"error" with a plain
+// sentence when it could not read every block and subnet, and then sends no
+// rows at all: a partial list could hide an overlap.
+function Overlaps({ panelId, overlaps }) {
+  const [open, setOpen] = useState(null)
+  const listId = useId()
+  // The server already sends the most spaces first; sorted here too so the
+  // order on screen never depends on that.
+  const groups = useMemo(() => [...(overlaps.data?.groups ?? NO_ROWS)].sort((a, b) => b.spaces - a.spaces), [overlaps.data])
+  const failed = !!overlaps.error || (!overlaps.loading && overlaps.data?.status !== 'ok')
+  const maxSpaces = Math.max(1, ...groups.map((g) => g.spaces))
+
+  return (
+    <Card panelId={panelId} span={2} title="Overlapping ranges" right={<span className="text-note text-muted">IP spaces using each range</span>}>
+      {overlaps.loading ? (
+        <Skeleton h={220} />
+      ) : failed ? (
+        <FeedUnavailable label="Overlapping ranges unavailable" reason={overlaps.data?.error || "Couldn't read every subnet, so the list could be wrong."} />
+      ) : groups.length === 0 ? (
+        <Empty>No address range is used in more than one IP space.</Empty>
+      ) : (
+        <ul className="flex flex-col gap-1 mt-1 max-h-[420px] overflow-auto">
+          {groups.map((g, i) => {
+            const isOpen = open === g.range
+            return (
+              <li key={g.range}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={isOpen ? `${listId}-${i}` : undefined}
+                  onClick={() => setOpen(isOpen ? null : g.range)}
+                  className="w-full flex items-center gap-2 text-note text-left py-0.5 px-1 rounded-control cursor-pointer hover:bg-line"
+                >
+                  <span className="w-[120px] truncate text-muted font-mono" title={g.range}>{g.range}</span>
+                  <span className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
+                    <span className="block h-full" style={{ width: `${(g.spaces / maxSpaces) * 100}%`, background: 'var(--color-series)' }} />
+                  </span>
+                  <span className="w-[72px] text-right text-muted tabular-nums">{g.spaces.toLocaleString()} spaces</span>
+                </button>
+                {isOpen && (
+                  <ul id={`${listId}-${i}`} data-overlap-spaces="" className="ml-2 mt-1 mb-2 pl-2 border-l border-line flex flex-col gap-0.5 text-note">
+                    {g.members.map((m) => (
+                      <li key={m.id} className="flex flex-wrap gap-x-2">
+                        <span className="text-txt">{m.name}</span>
+                        <span className="text-muted font-mono">{m.prefixes.join(', ')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
     </Card>
   )

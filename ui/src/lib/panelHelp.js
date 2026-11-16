@@ -85,6 +85,10 @@ export const PANEL_HELP = {
     what: 'The twelve busiest address spaces among those read. Past 500 spaces only the first 500 are read, and a line under the list says so.',
     look: 'Bar length is how full a space is, and its colour follows: amber from 70% full, red from 90%. The number on the right is addresses in use, not the percentage.',
   },
+  'network-overlaps': {
+    what: 'Address ranges shared between IP spaces, the most spaces first. Only each space\'s outermost blocks and subnets count.',
+    look: 'Click a row to list its spaces and each one\'s own ranges. A row is ranges that touch, so its spaces need not all overlap each other.',
+  },
   'network-dhcp-leases': {
     what: 'Every address DHCP has leased out, the machine holding it, its hardware address, and when the lease runs out.',
     look: 'Search by address, name or MAC, or narrow to one lease state; the leases ending furthest away come first. Hidden when no DHCP service is detected.',

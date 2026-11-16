@@ -136,6 +136,9 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		}
 		return jstr(cappedPayloadWithTotal(data, aiSampleCap, pageTotalSize(body, len(data)), noun))
 
+	case "get_overlapping_ranges":
+		return s.overlapsTool()
+
 	case "get_hosts":
 		// _is_total_size_needed mirrors get_subnets: detail_hosts is a second
 		// instance of the same truncation-as-total bug (500 fetched vs a real
