@@ -329,15 +329,14 @@ function IpamSpaces({ panelId, ipam }) {
 // (go/internal/dashboard/overlaps.go) answers status:"error" with a plain
 // sentence when it could not read every block and subnet, and then sends no
 // rows at all: a partial list could hide an overlap.
-// An IP space in the Infoblox Portal. The shape is copied from real Portal
-// links: the name once encoded, twice in the path, and the full id
-// (ipam/ip_space/<uuid>) encoded twice, so its slashes become %252F. base is
-// the server's own Infoblox address (it sends `portal`), so another region
-// opens its own Portal.
-function spacePortalUrl(base, name, id) {
+// An IP space in the Infoblox Portal's IPAM page. Shape checked in a
+// signed-in browser on 2026-11-16: the space's uuid, the part of its id after
+// "ipam/ip_space/". base is the server's own Infoblox address (it sends
+// `portal`), so another region opens its own Portal.
+function spacePortalUrl(base, id) {
   const host = typeof base === 'string' && /^https:\/\/[^/?#]+$/.test(base) ? base : 'https://csp.infoblox.com'
-  const n = encodeURIComponent(name)
-  return `${host}/#/ipam/ip_spaces/view/grid/space/object/${n}/${n}/object/${encodeURIComponent(encodeURIComponent(id))}`
+  const uuid = String(id).split('/').pop()
+  return `${host}/#/perspective/ipam/address_space/ipam/ip_space/${encodeURIComponent(uuid)}`
 }
 
 // A range in Bloxsmith's Editor, with its block or subnet picked.
@@ -387,7 +386,7 @@ function Overlaps({ panelId, overlaps }) {
                     {g.members.map((m) => (
                       <li key={m.id} className="flex flex-wrap gap-x-2">
                         <a
-                          href={spacePortalUrl(overlaps.data?.portal, m.name, m.id)}
+                          href={spacePortalUrl(overlaps.data?.portal, m.id)}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`${m.name} in Infoblox (opens in a new tab)`}

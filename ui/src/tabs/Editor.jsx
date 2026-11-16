@@ -128,26 +128,33 @@ function hostAddresses(raw, spaces) {
 function FindExisting({ type, label, picked, busy, onPick, onClear, initialQ = '', pickId = '' }) {
   const [text, setText] = useState(initialQ)
   const [state, setState] = useState({ q: '', items: null, error: null })
+  // The deep link's pick happens once, and only on the search it asked for.
+  const autoPick = useRef(pickId)
   useEffect(() => {
     const q = text.trim()
     if (!q) { setState({ q: '', items: null, error: null }); return }
     let live = true
-    const id = setTimeout(() => {
-      fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}`)
+    // The deep link's own search asks for its item by id, because q alone can
+    // match more than the 25 find returns. No such item: the plain q search.
+    const byId = autoPick.current && q === initialQ.trim() ? autoPick.current : ''
+    const get = (itemId) =>
+      fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`)
         .then(async (r) => {
           const j = await r.json().catch(() => ({}))
           if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
-          if (live) setState({ q, items: j.items ?? [], error: null })
+          return j.items ?? []
         })
+    const id = setTimeout(() => {
+      get(byId)
+        .then((items) => (byId && items.length === 0 ? get('') : items))
+        .then((items) => { if (live) setState({ q, items, error: null }) })
         .catch((e) => { if (live) setState({ q, items: null, error: String(e?.message || e) }) })
     }, 300)
     return () => { live = false; clearTimeout(id) }
-  }, [text, type])
+  }, [text, type, initialQ])
   // Results for an older search are hidden until the current one answers, so
   // a click cannot pick an item the box no longer asks for.
   const fresh = state.items && state.q === text.trim()
-  // The deep link's pick happens once, and only on the search it asked for.
-  const autoPick = useRef(pickId)
   useEffect(() => {
     if (!autoPick.current || state.q !== initialQ.trim() || (!state.items && !state.error)) return
     const it = state.items?.find((x) => x.id === autoPick.current)

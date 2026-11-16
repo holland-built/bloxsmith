@@ -179,3 +179,36 @@ test('a deep link whose id does not come back fills the search and picks nothing
   await expect(page.getByRole('button', { name: 'Delete Subnet' })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'ID of an existing one (leave blank to make a new one)' })).toHaveValue('');
 });
+
+// q alone can match more than the 25 find returns (98 blocks at 10.0.0.0 on
+// one tenant), so the deep link asks for its item by id as well.
+test('a deep link picks its item even when q alone matches more than 25', async ({ page }) => {
+  const asked: { q: string | null; id: string | null }[] = [];
+  await page.route('**/api/edit/address_block/find*', (r) => {
+    const u = new URL(r.request().url()).searchParams;
+    asked.push({ q: u.get('q'), id: u.get('id') });
+    if (u.get('id') === 'ipam/address_block/far')
+      return r.fulfill({ json: { items: [{ id: 'ipam/address_block/far', label: '10.0.0.0/8 — far', fields: {} }] } });
+    return r.fulfill({ json: { items: Array.from({ length: 25 }, (_, i) => ({ id: `ipam/address_block/n${i}`, label: `10.0.0.0/8 — n${i}`, fields: {} })) } });
+  });
+  await page.goto('/#editor?type=address_block&id=ipam%2Faddress_block%2Ffar&q=10.0.0.0');
+  await expect(page.getByPlaceholder('Find by address or comment')).toHaveValue('10.0.0.0');
+  await expect(page.getByRole('button', { name: '10.0.0.0/8 — far' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('textbox', { name: 'ID of an existing one (leave blank to make a new one)' })).toHaveValue('ipam/address_block/far');
+  await expect(page.getByRole('button', { name: 'Delete Address Block' })).toBeVisible();
+  expect(asked).toEqual([{ q: '10.0.0.0', id: 'ipam/address_block/far' }]);
+});
+
+test('a deep link whose id finds nothing falls back to the plain search', async ({ page }) => {
+  const asked: (string | null)[] = [];
+  await page.route('**/api/edit/subnet/find*', (r) => {
+    const id = new URL(r.request().url()).searchParams.get('id');
+    asked.push(id);
+    if (id) return r.fulfill({ json: { items: [] } });
+    return r.fulfill({ json: { items: [{ id: 'ipam/subnet/1', label: '10.1.0.0/16', fields: { block_id: 'b', cidr: 16, name: 'x', comment: '', tags: '' } }] } });
+  });
+  await page.goto('/#editor?type=subnet&id=ipam%2Fsubnet%2Fgone&q=10.1.0.0');
+  await expect(page.getByRole('button', { name: '10.1.0.0/16' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('heading', { name: 'Subnet — Create' })).toBeVisible();
+  expect(asked).toEqual(['ipam/subnet/gone', null]);
+});

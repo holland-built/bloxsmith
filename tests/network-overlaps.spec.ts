@@ -83,11 +83,11 @@ test('an open row links each space to the Infoblox Portal and each range to the 
   await rows.nth(0).click();
   const list = panel(page).locator('[data-overlap-spaces]');
 
-  // The space: this server's own Portal host, the name encoded, the id encoded twice.
+  // The space: this server's own Portal host and the space's uuid.
   const corp = list.getByRole('link', { name: 'Corp Main in Infoblox (opens in a new tab)' });
   await expect(corp).toHaveAttribute(
     'href',
-    'https://csp.eu.infoblox.com/#/ipam/ip_spaces/view/grid/space/object/Corp%20Main/Corp%20Main/object/ipam%252Fip_space%252F7cc1cfd4-aaaa',
+    'https://csp.eu.infoblox.com/#/perspective/ipam/address_space/ipam/ip_space/7cc1cfd4-aaaa',
   );
   await expect(corp).toHaveAttribute('target', '_blank');
   await expect(corp).toHaveAttribute('rel', 'noopener noreferrer');
@@ -112,7 +112,7 @@ test('with no portal from the server the space link uses csp.infoblox.com', asyn
   await panel(page).getByRole('button', { name: /spaces$/ }).nth(1).click();
   await expect(panel(page).getByRole('link', { name: 'Lab in Infoblox (opens in a new tab)' })).toHaveAttribute(
     'href',
-    'https://csp.infoblox.com/#/ipam/ip_spaces/view/grid/space/object/Lab/Lab/object/s%252Fb',
+    'https://csp.infoblox.com/#/perspective/ipam/address_space/ipam/ip_space/b',
   );
 });
 
