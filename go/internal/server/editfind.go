@@ -6,9 +6,12 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+
+	"bloxsmith/internal/edit"
+	"bloxsmith/internal/rest"
 )
 
-// GET /api/edit/{type}/find?q= lists up to 25 existing items of one Editor
+// GET /api/edit/{type}/find?q=&id= lists up to 25 existing items of one Editor
 // type, each with the form's own field values, so Editor can offer "find the
 // one to change" instead of asking for a pasted ID.
 //
@@ -16,6 +19,11 @@ import (
 // expression and answers 500 for ~ on some address fields (checked live on
 // 2026-11-06: subnet address, range start), so a full IP is matched exactly
 // there instead.
+//
+// With id, the find returns just that item, in the same shape: a deep link
+// (Network's Overlapping ranges) names the exact item, and q alone can match
+// more than 25 (98 blocks at 10.0.0.0 on one tenant, 2026-11-16). The id must
+// be this type's own kind, checked by edit.ObjectPath, or the answer is 400.
 type editFindSpec struct {
 	path   string
 	text   []string // fields searched with ~
@@ -84,7 +92,17 @@ func (d *Deps) editFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params := map[string]string{"_limit": "25"}
-	if f := editFindFilter(spec, searchTerm(r.URL.Query().Get("q"))); f != "" {
+	if id := strings.TrimSpace(r.URL.Query().Get("id")); id != "" {
+		// Full-form ids only ("ipam/subnet/<uuid>"), as every list returns.
+		kind := strings.TrimPrefix(spec.path, "/api/ddi/v1/")
+		_, err := edit.ObjectPath(kind, id)
+		qid, qerr := rest.CSPQ(id)
+		if err != nil || qerr != nil || !strings.HasPrefix(id, kind+"/") {
+			d.json(w, r, 400, map[string]any{"error": "invalid object id"})
+			return
+		}
+		params["_filter"] = `id=="` + qid + `"`
+	} else if f := editFindFilter(spec, searchTerm(r.URL.Query().Get("q"))); f != "" {
 		params["_filter"] = f
 	}
 	rows, ok := d.getStrictOrErr(w, r, spec.path, params)

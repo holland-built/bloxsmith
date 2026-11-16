@@ -122,27 +122,45 @@ function hostAddresses(raw, spaces) {
 }
 
 // Find an existing item by name, address or comment, instead of pasting its ID.
-function FindExisting({ type, label, picked, busy, onPick, onClear }) {
-  const [text, setText] = useState('')
+// A deep link (#editor?type=&id=&q=) passes initialQ and pickId: the box starts
+// with q typed in, and when that search answers, the item with that id is
+// picked as if clicked. No such item: the results stay up and nothing is picked.
+function FindExisting({ type, label, picked, busy, onPick, onClear, initialQ = '', pickId = '' }) {
+  const [text, setText] = useState(initialQ)
   const [state, setState] = useState({ q: '', items: null, error: null })
+  // The deep link's pick happens once, and only on the search it asked for.
+  const autoPick = useRef(pickId)
   useEffect(() => {
     const q = text.trim()
     if (!q) { setState({ q: '', items: null, error: null }); return }
     let live = true
-    const id = setTimeout(() => {
-      fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}`)
+    // The deep link's own search asks for its item by id, because q alone can
+    // match more than the 25 find returns. No such item: the plain q search.
+    const byId = autoPick.current && q === initialQ.trim() ? autoPick.current : ''
+    const get = (itemId) =>
+      fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`)
         .then(async (r) => {
           const j = await r.json().catch(() => ({}))
           if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
-          if (live) setState({ q, items: j.items ?? [], error: null })
+          return j.items ?? []
         })
+    const id = setTimeout(() => {
+      get(byId)
+        .then((items) => (byId && items.length === 0 ? get('') : items))
+        .then((items) => { if (live) setState({ q, items, error: null }) })
         .catch((e) => { if (live) setState({ q, items: null, error: String(e?.message || e) }) })
     }, 300)
     return () => { live = false; clearTimeout(id) }
-  }, [text, type])
+  }, [text, type, initialQ])
   // Results for an older search are hidden until the current one answers, so
   // a click cannot pick an item the box no longer asks for.
   const fresh = state.items && state.q === text.trim()
+  useEffect(() => {
+    if (!autoPick.current || state.q !== initialQ.trim() || (!state.items && !state.error)) return
+    const it = state.items?.find((x) => x.id === autoPick.current)
+    autoPick.current = ''
+    if (it) onPick(it)
+  }, [state, initialQ, onPick])
   // "DNS Zone" reads "DNS zone": lower case except acronyms.
   const noun = label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
   const seen = {}
@@ -199,7 +217,12 @@ export default function Editor() {
   const initialType = EDITOR_TYPES.some((t) => t.key === params.type) ? params.type : 'dns_zone'
 
   const [type, setType] = useState(initialType)
-  const [editId, setEditId] = useState(params.id || '')
+  // #editor?type=&id=&q= from another page (Network's Overlapping ranges):
+  // search for q and pick id, exactly as typing q and clicking the item would.
+  // Until that search answers nothing is picked, so an id that does not come
+  // back leaves nothing picked. Dropped once the person picks another type.
+  const [deep, setDeep] = useState(() => (params.q ? { type: initialType, q: params.q, id: params.id || '' } : null))
+  const [editId, setEditId] = useState(params.q ? '' : params.id || '')
   // The values an item had when it was picked from Find. Update then sends
   // only what was changed, so it never overwrites someone else's newer edit
   // to a field this person didn't touch.
@@ -388,7 +411,7 @@ export default function Editor() {
         {EDITOR_TYPES.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setType(t.key); setEditId(''); setLoaded(null) }}
+            onClick={() => { setType(t.key); setEditId(''); setLoaded(null); setDeep(null) }}
             // Not mid-request: the answer would land on the new type's form.
             disabled={status === 'busy'}
             className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
@@ -414,6 +437,8 @@ export default function Editor() {
               label={spec.label}
               picked={editId}
               busy={status === 'busy'}
+              initialQ={deep?.type === type ? deep.q : ''}
+              pickId={deep?.type === type ? deep.id : ''}
               onPick={(item) => {
                 disarmDelete()
                 setPreview(null); setStale(false); setStatus('idle'); setResult(null)

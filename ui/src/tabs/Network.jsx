@@ -329,6 +329,21 @@ function IpamSpaces({ panelId, ipam }) {
 // (go/internal/dashboard/overlaps.go) answers status:"error" with a plain
 // sentence when it could not read every block and subnet, and then sends no
 // rows at all: a partial list could hide an overlap.
+// An IP space in the Infoblox Portal's IPAM page. Shape checked in a
+// signed-in browser on 2026-11-16: the space's uuid, the part of its id after
+// "ipam/ip_space/". base is the server's own Infoblox address (it sends
+// `portal`), so another region opens its own Portal.
+function spacePortalUrl(base, id) {
+  const host = typeof base === 'string' && /^https:\/\/[^/?#]+$/.test(base) ? base : 'https://csp.infoblox.com'
+  const uuid = String(id).split('/').pop()
+  return `${host}/#/perspective/ipam/address_space/ipam/ip_space/${encodeURIComponent(uuid)}`
+}
+
+// A range in Bloxsmith's Editor, with its block or subnet picked.
+const editorUrl = (r) =>
+  `#editor?type=${r.kind}&id=${encodeURIComponent(r.id)}&q=${encodeURIComponent(r.prefix.split('/')[0])}`
+const KIND_WORD = { address_block: 'address block', subnet: 'subnet' }
+
 function Overlaps({ panelId, overlaps }) {
   const [open, setOpen] = useState(null)
   const listId = useId()
@@ -359,6 +374,7 @@ function Overlaps({ panelId, overlaps }) {
                   onClick={() => setOpen(isOpen ? null : g.range)}
                   className="w-full flex items-center gap-2 text-note text-left py-0.5 px-1 rounded-control cursor-pointer hover:bg-line"
                 >
+                  <span aria-hidden="true" className="w-3 text-muted">{isOpen ? '−' : '+'}</span>
                   <span className="w-[120px] truncate text-muted font-mono" title={g.range}>{g.range}</span>
                   <span className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
                     <span className="block h-full" style={{ width: `${(g.spaces / maxSpaces) * 100}%`, background: 'var(--color-series)' }} />
@@ -369,8 +385,23 @@ function Overlaps({ panelId, overlaps }) {
                   <ul id={`${listId}-${i}`} data-overlap-spaces="" className="ml-2 mt-1 mb-2 pl-2 border-l border-line flex flex-col gap-0.5 text-note">
                     {g.members.map((m) => (
                       <li key={m.id} className="flex flex-wrap gap-x-2">
-                        <span className="text-txt">{m.name}</span>
-                        <span className="text-muted font-mono">{m.prefixes.join(', ')}</span>
+                        <a
+                          href={spacePortalUrl(overlaps.data?.portal, m.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${m.name} in Infoblox (opens in a new tab)`}
+                          className="text-link underline"
+                        >
+                          {m.name}<span className="text-muted"> in Infoblox</span>
+                        </a>
+                        <span className="font-mono">
+                          {m.ranges.map((r, j) => (
+                            <span key={r.id || r.prefix}>
+                              {j > 0 && <span className="text-muted">, </span>}
+                              <a href={editorUrl(r)} aria-label={`${r.prefix}, open this ${KIND_WORD[r.kind] || 'range'} in the Editor`} className="text-link underline">{r.prefix}</a>
+                            </span>
+                          ))}
+                        </span>
                       </li>
                     ))}
                   </ul>

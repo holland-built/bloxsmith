@@ -42,17 +42,31 @@ const overlapMaxPages = 200
 // overlapParallel is how many subnet pages are read at once.
 const overlapParallel = 4
 
-// SpacePrefix is one block or top-level subnet: the IP space it is in and its range.
+// SpacePrefix is one block or top-level subnet: the IP space it is in and its
+// range, and the object's own id and kind ("address_block" or "subnet") so the
+// card can open it in the Editor.
 type SpacePrefix struct {
 	Space  string
 	Prefix netip.Prefix
+	ID     string
+	Kind   string
 }
 
-// OverlapMember is one IP space in a group, with its own outermost ranges in it.
+// OverlapRange is one of a member's ranges and the object it came from.
+type OverlapRange struct {
+	Prefix string `json:"prefix"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+}
+
+// OverlapMember is one IP space in a group, with its own outermost ranges in
+// it. Prefixes is the ranges alone (the AI tool reads it); Ranges is the same
+// ranges in the same order, each with its object.
 type OverlapMember struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Prefixes []string `json:"prefixes"`
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Prefixes []string       `json:"prefixes"`
+	Ranges   []OverlapRange `json:"ranges"`
 }
 
 // OverlapGroup is a run of ranges that touch, used by 2 or more IP spaces.
@@ -135,12 +149,14 @@ func GroupOverlaps(items []SpacePrefix, names map[string]string) []OverlapGroup 
 	var groups []OverlapGroup
 	flush := func(run []SpacePrefix) {
 		bySpace := map[string][]string{}
+		ranges := map[string][]OverlapRange{}
 		var order []string
 		for _, it := range run {
 			if _, seen := bySpace[it.Space]; !seen {
 				order = append(order, it.Space)
 			}
 			bySpace[it.Space] = append(bySpace[it.Space], it.Prefix.String())
+			ranges[it.Space] = append(ranges[it.Space], OverlapRange{Prefix: it.Prefix.String(), ID: it.ID, Kind: it.Kind})
 		}
 		if len(order) < 2 {
 			return
@@ -151,7 +167,7 @@ func GroupOverlaps(items []SpacePrefix, names map[string]string) []OverlapGroup 
 			if strings.TrimSpace(name) == "" {
 				name = id
 			}
-			g.Members = append(g.Members, OverlapMember{ID: id, Name: name, Prefixes: bySpace[id]})
+			g.Members = append(g.Members, OverlapMember{ID: id, Name: name, Prefixes: bySpace[id], Ranges: ranges[id]})
 		}
 		sort.SliceStable(g.Members, func(i, j int) bool {
 			if a, b := strings.ToLower(g.Members[i].Name), strings.ToLower(g.Members[j].Name); a != b {
@@ -299,7 +315,7 @@ func distinctIDs(rows []any) int {
 // spacePrefixes turns rows into SpacePrefix values. A row with no readable
 // range, or no space, is an error, never skipped: skipping it could hide an
 // overlap.
-func spacePrefixes(rows []any, noun, msg string) ([]SpacePrefix, error) {
+func spacePrefixes(rows []any, kind, noun, msg string) ([]SpacePrefix, error) {
 	out := make([]SpacePrefix, 0, len(rows))
 	for _, r := range rows {
 		m := asMap(r)
@@ -311,13 +327,13 @@ func spacePrefixes(rows []any, noun, msg string) ([]SpacePrefix, error) {
 		if space == "" {
 			return nil, overlapFail(msg, "a %s (%s) has no IP space", noun, getStr(m["id"]))
 		}
-		out = append(out, SpacePrefix{Space: space, Prefix: p})
+		out = append(out, SpacePrefix{Space: space, Prefix: p, ID: getStr(m["id"]), Kind: kind})
 	}
 	return out, nil
 }
 
 // FetchOverlaps reads blocks, top-level subnets and space names at once and
-// groups them. It answers {"status":"ok","groups":[]OverlapGroup,...} or
+// groups them. It answers {"status":"ok","groups":[]OverlapGroup,"portal":...} or
 // {"status":"error","error":"<plain sentence>"} with no groups at all. The
 // answer is shared for TileTTL across callers (the card and the AI tool) and a
 // failure is not kept.
@@ -355,11 +371,11 @@ func (s *Service) FetchOverlaps() map[string]any {
 				return fail(err)
 			}
 		}
-		items, err := spacePrefixes(blocks, "address block", msgBlocks)
+		items, err := spacePrefixes(blocks, "address_block", "address block", msgBlocks)
 		if err != nil {
 			return fail(err)
 		}
-		more, err := spacePrefixes(subnets, "subnet", msgSubnets)
+		more, err := spacePrefixes(subnets, "subnet", "subnet", msgSubnets)
 		if err != nil {
 			return fail(err)
 		}
@@ -373,8 +389,10 @@ func (s *Service) FetchOverlaps() map[string]any {
 		if groups == nil {
 			groups = []OverlapGroup{}
 		}
+		// portal is this server's Infoblox address (INFOBLOX_URL), so a space
+		// link opens the tenant's own region, as Build a chart's links do.
 		return map[string]any{"status": "ok", "groups": groups,
-			"blocks": len(blocks), "subnets": len(subnets), "spaces": len(spaces)}
+			"blocks": len(blocks), "subnets": len(subnets), "spaces": len(spaces), "portal": s.Rest.BaseURL()}
 	})
 }
 

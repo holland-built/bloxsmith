@@ -251,3 +251,32 @@ func TestFetchOverlaps_BlockPageWithNoResultsIsAnError(t *testing.T) {
 		t.Fatalf("got %v, want the every-address-block error", res)
 	}
 }
+
+func TestFetchOverlaps_EachRangeCarriesItsIDAndKind(t *testing.T) {
+	// The card links each range to the Editor with that object picked, so
+	// every range names the block or subnet it came from. The portal base
+	// rides along so the space links open this tenant's own Infoblox.
+	s, _ := newAIToolsTestService(t, overlapUpstream(
+		[]map[string]any{row("ipam/subnet/n1", "sB", "10.1.0.0", 16)}, 1,
+		[]map[string]any{row("ipam/address_block/b1", "sA", "10.0.0.0", 8)}))
+	res := s.FetchOverlaps()
+	groups, _ := res["groups"].([]OverlapGroup)
+	if res["status"] != "ok" || len(groups) != 1 {
+		t.Fatalf("got %v", res)
+	}
+	want := map[string]OverlapRange{
+		"sA": {Prefix: "10.0.0.0/8", ID: "ipam/address_block/b1", Kind: "address_block"},
+		"sB": {Prefix: "10.1.0.0/16", ID: "ipam/subnet/n1", Kind: "subnet"},
+	}
+	for _, m := range groups[0].Members {
+		if len(m.Ranges) != 1 || m.Ranges[0] != want[m.ID] {
+			t.Fatalf("space %s ranges = %+v, want [%+v]", m.ID, m.Ranges, want[m.ID])
+		}
+		if strings.Join(m.Prefixes, ",") != want[m.ID].Prefix {
+			t.Fatalf("space %s prefixes = %v", m.ID, m.Prefixes)
+		}
+	}
+	if p, _ := res["portal"].(string); !strings.HasPrefix(p, "http") {
+		t.Fatalf("portal = %v, want this server's Infoblox address", res["portal"])
+	}
+}
