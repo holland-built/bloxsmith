@@ -335,23 +335,37 @@ const maxSkips = 20
 // that CheckPrefix calls free, with the candidates passed over on the way. ok
 // is false when none is left.
 func (s *Snapshot) NextFreePrefix(space string, parent netip.Prefix, bits int) (pick netip.Prefix, skipped []Skip, ok bool) {
-	parent = parent.Masked()
+	pick, skipped, ok, _ = s.nextFreeWithin(space, parent, parent, bits, nil)
+	return pick, skipped, ok
+}
+
+// nextFreeWithin is NextFreePrefix searching only the candidates inside
+// within (a piece of parent), starting at from (nil: within's start). The
+// clash rule still uses parent, so a block inside parent is never mistaken
+// for the parent. When nothing in within is free, resume is where the search
+// would go on: past every clash met, so a clash that covers the pieces after
+// within is stepped over without reading them.
+func (s *Snapshot) nextFreeWithin(space string, parent, within netip.Prefix, bits int, from *big.Int) (pick netip.Prefix, skipped []Skip, ok bool, resume *big.Int) {
+	parent, within = parent.Masked(), within.Masked()
 	total := parent.Addr().BitLen()
-	if !parent.IsValid() || bits < parent.Bits() || bits > total {
-		return netip.Prefix{}, nil, false
+	if !parent.IsValid() || bits < parent.Bits() || bits > total || bits < within.Bits() {
+		return netip.Prefix{}, nil, false, nil
 	}
 	size := new(big.Int).Lsh(big.NewInt(1), uint(total-bits))
-	cand, end := PrefixRange(parent)
+	cand, end := PrefixRange(within)
+	if from != nil && from.Cmp(cand) > 0 {
+		cand = new(big.Int).Set(from)
+	}
 	one := big.NewInt(1)
 	for {
 		candEnd := new(big.Int).Sub(new(big.Int).Add(cand, size), one)
 		if candEnd.Cmp(end) > 0 {
-			return netip.Prefix{}, skipped, false
+			return netip.Prefix{}, skipped, false, cand
 		}
 		p := netip.PrefixFrom(addrFromInt(cand, total), bits)
 		c := s.prefixClashes(space, p, parent)
 		if len(c) == 0 {
-			return p, skipped, true
+			return p, skipped, true, nil
 		}
 		if len(skipped) < maxSkips {
 			skipped = append(skipped, Skip{Candidate: p.String(), Reason: s.reason(c[0])})
