@@ -4,16 +4,23 @@
 // with what already exists.
 //
 // The rule (the owner's, 2026-11-16): a candidate is NOT free if it overlaps,
-// in ANY IP space, an address block or subnet at any depth, a DHCP range, a
+// in its own IP space, an address block or subnet at any depth, a DHCP range, a
 // reservation (fixed address) or a host address. The one exception is
 // containment: a new network may sit inside its own parent block in the same
 // space, and so inside that block's own parents. Only blocks contain: a new
 // network inside or over a subnet is a clash.
 //
+// Overlap with something only in ANOTHER IP space (the owner's, 2026-11-17) is
+// not a clash: the candidate is offered with Warnings naming the space and the
+// object, because spaces kept apart, like a lab, may reuse addresses. A search
+// prefers a candidate with no warnings and offers a warned one only when no
+// clean one exists. An item whose space is not known (one a run made itself)
+// and a candidate checked with no space count as the same space: a clash.
+//
 // Addresses and DHCP ranges are checked against ranges, reservations and host
-// addresses in every space, and never against networks: an address always sits
-// inside a subnet, and a subnet that another space also uses was already there
-// before the address, so refusing on it would refuse every address on a tenant
+// addresses, and never against networks: an address always sits inside a
+// subnet, and a subnet that another space also uses was already there before
+// the address, so even a warning on it would be on every address of a tenant
 // whose spaces overlap.
 //
 // NEVER A PARTIAL ANSWER. Load refuses (returns an error) when any list cannot
@@ -107,6 +114,47 @@ func (c Counts) Age() string {
 	}
 }
 
+// Warning is one thing in ANOTHER IP space that overlaps a candidate on offer.
+// It is not a clash: the spaces may be kept apart, like a separate lab. Space
+// is the space's name, Object the thing's addresses ("10.0.0.0/8"), and
+// Contains says whether it holds the whole candidate ("sits inside").
+type Warning struct {
+	Candidate string `json:"candidate"`
+	Space     string `json:"space"`
+	Object    string `json:"object"`
+	Kind      string `json:"kind"`
+	Contains  bool   `json:"contains"`
+}
+
+// WarnList turns warnings into the []any the untyped result maps hold, never
+// nil, like SkipList.
+func WarnList(ws []Warning) []any {
+	out := []any{}
+	for _, w := range ws {
+		out = append(out, map[string]any{"candidate": w.Candidate, "space": w.Space, "object": w.Object,
+			"kind": w.Kind, "contains": w.Contains})
+	}
+	return out
+}
+
+// Shared is how many candidates on offer carry a warning: the "shared" count
+// of a preview's checked field.
+func Shared(ws []Warning) int {
+	seen := map[string]bool{}
+	for _, w := range ws {
+		seen[w.Candidate] = true
+	}
+	return len(seen)
+}
+
+// MapWith is Map with "shared" added: how many candidates on offer overlap
+// something in another IP space (Shared).
+func (c Counts) MapWith(ws []Warning) map[string]any {
+	m := c.Map()
+	m["shared"] = Shared(ws)
+	return m
+}
+
 // Skip is one candidate passed over, and why, in plain words.
 type Skip struct {
 	Candidate string `json:"candidate"`
@@ -124,9 +172,12 @@ func SkipList(skips []Skip) []any {
 }
 
 // Result is a single check's answer. Reason is empty when Free is true.
+// Warnings lists what overlaps the candidate in other IP spaces only: not a
+// clash, but said under the offer.
 type Result struct {
-	Free   bool
-	Reason string
+	Free     bool
+	Reason   string
+	Warnings []Warning
 }
 
 // Snapshot is everything that was read, ready to check candidates against.
@@ -243,20 +294,53 @@ func (s *Snapshot) spaceName(id string) string {
 	return id
 }
 
+// what is u's addresses in plain words: "10.0.0.0/8", "10.0.0.5" or
+// "10.0.0.10 to 10.0.0.200".
+func what(u Used) string {
+	switch {
+	case u.isNetwork():
+		return u.Prefix.String()
+	case u.Lo != u.Hi:
+		return u.Lo.String() + " to " + u.Hi.String()
+	}
+	return u.Lo.String()
+}
+
 // reason says, in plain words, what already uses the addresses.
 func (s *Snapshot) reason(u Used) string {
 	article := "a"
 	if u.Kind == KindBlock {
 		article = "an"
 	}
-	what := u.Lo.String()
-	switch {
-	case u.isNetwork():
-		what = u.Prefix.String()
-	case u.Lo != u.Hi:
-		what = u.Lo.String() + " to " + u.Hi.String()
+	return fmt.Sprintf("%s %s in %s already uses %s", article, u.Kind, s.spaceName(u.Space), what(u))
+}
+
+// maxWarnings caps the warnings one candidate carries.
+const maxWarnings = 5
+
+// warnings turns the other-space items overlapping candidate (lo..hi) into
+// Warnings.
+func (s *Snapshot) warnings(candidate string, others []Used, lo, hi netip.Addr) []Warning {
+	var out []Warning
+	for _, u := range others {
+		if len(out) == maxWarnings {
+			break
+		}
+		out = append(out, Warning{Candidate: candidate, Space: s.spaceName(u.Space), Object: what(u), Kind: u.Kind,
+			Contains: u.Lo.Compare(lo) <= 0 && hi.Compare(u.Hi) <= 0})
 	}
-	return fmt.Sprintf("%s %s in %s already uses %s", article, u.Kind, s.spaceName(u.Space), what)
+	return out
+}
+
+// sameSpace says whether u counts as being in space: the same space, or one
+// not known on either side (see the package doc).
+func sameSpace(space string, u Used) bool { return space == "" || u.Space == "" || u.Space == space }
+
+func spanLabel(lo, hi netip.Addr) string {
+	if lo == hi {
+		return lo.String()
+	}
+	return lo.String() + " to " + hi.String()
 }
 
 func overlaps(u Used, lo, hi netip.Addr) bool {
@@ -266,8 +350,9 @@ func overlaps(u Used, lo, hi netip.Addr) bool {
 	return u.Lo.Compare(hi) <= 0 && lo.Compare(u.Hi) <= 0
 }
 
-// clashes lists every item that makes the candidate not free, lowest first.
-func (s *Snapshot) prefixClashes(space string, p, parent netip.Prefix) []Used {
+// prefixClashes lists every item that makes the candidate not free, and every
+// item in another space that overlaps it (others), each lowest first.
+func (s *Snapshot) prefixClashes(space string, p, parent netip.Prefix) (clash, others []Used) {
 	p = p.Masked()
 	lo, hi := Bounds(p)
 	// anchor is what an allowed container must hold: the chosen parent and so
@@ -278,30 +363,39 @@ func (s *Snapshot) prefixClashes(space string, p, parent netip.Prefix) []Used {
 	if parent.IsValid() {
 		anchor = parent.Masked()
 	}
-	var out []Used
 	for _, u := range s.items {
 		if !overlaps(u, lo, hi) {
+			continue
+		}
+		if !sameSpace(space, u) {
+			others = append(others, u)
 			continue
 		}
 		if u.Kind == KindBlock && u.Space == space && u.Prefix != p &&
 			u.Prefix.Bits() <= anchor.Bits() && u.Prefix.Contains(anchor.Addr()) {
 			continue // its own parent block, or a parent of that
 		}
-		out = append(out, u)
+		clash = append(clash, u)
 	}
-	sortUsed(out)
-	return out
+	sortUsed(clash)
+	sortUsed(others)
+	return clash, others
 }
 
-func (s *Snapshot) spanClashes(lo, hi netip.Addr) []Used {
-	var out []Used
+func (s *Snapshot) spanClashes(space string, lo, hi netip.Addr) (clash, others []Used) {
 	for _, u := range s.items {
-		if !u.isNetwork() && overlaps(u, lo, hi) {
-			out = append(out, u)
+		if u.isNetwork() || !overlaps(u, lo, hi) {
+			continue
+		}
+		if sameSpace(space, u) {
+			clash = append(clash, u)
+		} else {
+			others = append(others, u)
 		}
 	}
-	sortUsed(out)
-	return out
+	sortUsed(clash)
+	sortUsed(others)
+	return clash, others
 }
 
 func sortUsed(us []Used) {
@@ -311,45 +405,69 @@ func sortUsed(us []Used) {
 // CheckPrefix answers whether network p, to be made in space inside parent
 // (the zero Prefix when no parent was chosen), is free.
 func (s *Snapshot) CheckPrefix(space string, p, parent netip.Prefix) Result {
-	if c := s.prefixClashes(space, p, parent); len(c) > 0 {
+	c, o := s.prefixClashes(space, p, parent)
+	if len(c) > 0 {
 		return Result{Reason: s.reason(c[0])}
 	}
-	return Result{Free: true}
+	lo, hi := Bounds(p.Masked())
+	return Result{Free: true, Warnings: s.warnings(p.Masked().String(), o, lo, hi)}
 }
 
-// CheckSpan answers whether addresses lo to hi (a DHCP range) are free.
-func (s *Snapshot) CheckSpan(lo, hi netip.Addr) Result {
-	if c := s.spanClashes(lo, hi); len(c) > 0 {
+// CheckSpan answers whether addresses lo to hi (a DHCP range), to be made in
+// space, are free.
+func (s *Snapshot) CheckSpan(space string, lo, hi netip.Addr) Result {
+	c, o := s.spanClashes(space, lo, hi)
+	if len(c) > 0 {
 		return Result{Reason: s.reason(c[0])}
 	}
-	return Result{Free: true}
+	return Result{Free: true, Warnings: s.warnings(spanLabel(lo, hi), o, lo, hi)}
 }
 
 // CheckAddr answers whether one address is free.
-func (s *Snapshot) CheckAddr(a netip.Addr) Result { return s.CheckSpan(a, a) }
+func (s *Snapshot) CheckAddr(space string, a netip.Addr) Result { return s.CheckSpan(space, a, a) }
 
 // maxSkips caps the skipped list a preview carries; the pick is still exact.
 const maxSkips = 20
 
 // NextFreePrefix is the lowest /bits inside parent, aligned to its own size,
-// that CheckPrefix calls free, with the candidates passed over on the way. ok
-// is false when none is left.
-func (s *Snapshot) NextFreePrefix(space string, parent netip.Prefix, bits int) (pick netip.Prefix, skipped []Skip, ok bool) {
-	pick, skipped, ok, _ = s.nextFreeWithin(space, parent, parent, bits, nil)
-	return pick, skipped, ok
+// that CheckPrefix calls free and that nothing in another IP space overlaps,
+// with the candidates passed over on the way. When every free one overlaps
+// something in another space, it is the lowest free one, with its warnings.
+// ok is false when none is left.
+func (s *Snapshot) NextFreePrefix(space string, parent netip.Prefix, bits int) (pick netip.Prefix, warn []Warning, skipped []Skip, ok bool) {
+	pick, ok, shared, skipped, _ := s.nextFreeWithin(space, parent, parent, bits, nil, false)
+	switch {
+	case ok:
+		return pick, nil, skipped, true
+	case shared != nil:
+		return shared.pick, shared.warn, skipped[:shared.skips], true
+	}
+	return netip.Prefix{}, nil, skipped, false
+}
+
+// sharedPick is the first free candidate met that something in another IP
+// space overlaps, kept in case no clean one turns up. skips is how many skips
+// had been listed then: the ones after it are dropped if it is offered.
+type sharedPick struct {
+	pick  netip.Prefix
+	warn  []Warning
+	skips int
 }
 
 // nextFreeWithin is NextFreePrefix searching only the candidates inside
 // within (a piece of parent), starting at from (nil: within's start). The
 // clash rule still uses parent, so a block inside parent is never mistaken
-// for the parent. When nothing in within is free, resume is where the search
-// would go on: past every clash met, so a clash that covers the pieces after
-// within is stepped over without reading them.
-func (s *Snapshot) nextFreeWithin(space string, parent, within netip.Prefix, bits int, from *big.Int) (pick netip.Prefix, skipped []Skip, ok bool, resume *big.Int) {
+// for the parent. ok is true for a clean pick; otherwise shared is the first
+// warned candidate met, unless haveShared says the caller already has one.
+// When nothing in within is clean, resume is where the search would go on:
+// past every clash met (and, once a warned one is in hand, past every
+// other-space overlap too), so a clash that covers the pieces after within is
+// stepped over without reading them.
+func (s *Snapshot) nextFreeWithin(space string, parent, within netip.Prefix, bits int, from *big.Int, haveShared bool) (pick netip.Prefix, ok bool, shared *sharedPick, skipped []Skip, resume *big.Int) {
 	parent, within = parent.Masked(), within.Masked()
 	total := parent.Addr().BitLen()
 	if !parent.IsValid() || bits < parent.Bits() || bits > total || bits < within.Bits() {
-		return netip.Prefix{}, nil, false, nil
+		return netip.Prefix{}, false, nil, nil, nil
 	}
 	size := new(big.Int).Lsh(big.NewInt(1), uint(total-bits))
 	cand, end := PrefixRange(within)
@@ -360,20 +478,37 @@ func (s *Snapshot) nextFreeWithin(space string, parent, within netip.Prefix, bit
 	for {
 		candEnd := new(big.Int).Sub(new(big.Int).Add(cand, size), one)
 		if candEnd.Cmp(end) > 0 {
-			return netip.Prefix{}, skipped, false, cand
+			return netip.Prefix{}, false, shared, skipped, cand
 		}
 		p := netip.PrefixFrom(addrFromInt(cand, total), bits)
-		c := s.prefixClashes(space, p, parent)
+		c, o := s.prefixClashes(space, p, parent)
+		if len(c) == 0 && len(o) == 0 {
+			return p, true, shared, skipped, nil
+		}
+		past := c
+		reason := ""
 		if len(c) == 0 {
-			return p, skipped, true, nil
+			lo, hi := Bounds(p)
+			w := s.warnings(p.String(), o, lo, hi)
+			if shared == nil && !haveShared {
+				shared = &sharedPick{pick: p, warn: w, skips: len(skipped)}
+			}
+			reason = SharedReason(w)
+			past = o
+		} else {
+			reason = s.reason(c[0])
+			if shared != nil || haveShared {
+				past = append(append([]Used(nil), c...), o...)
+			}
 		}
 		if len(skipped) < maxSkips {
-			skipped = append(skipped, Skip{Candidate: p.String(), Reason: s.reason(c[0])})
+			skipped = append(skipped, Skip{Candidate: p.String(), Reason: reason})
 		}
-		// Step past every clash, then up to the next aligned start. Each
-		// step passes at least one item, so the loop ends.
+		// Step past every clash (and every other-space overlap, once a
+		// warned one is held), then up to the next aligned start. Each step
+		// passes at least the candidate, so the loop ends.
 		next := new(big.Int).Add(candEnd, one)
-		for _, u := range c {
+		for _, u := range past {
 			if h := new(big.Int).Add(intOf(u.Hi), one); h.Cmp(next) > 0 {
 				next = h
 			}
@@ -386,9 +521,11 @@ func (s *Snapshot) nextFreeWithin(space string, parent, within netip.Prefix, bit
 }
 
 // NextFreeAddr is the first address at or after from, inside within, that
-// CheckAddr calls free, with the addresses passed over on the way. For IPv4 it
+// CheckAddr calls free in space and that nothing in another IP space uses,
+// with the addresses passed over on the way. When every free one is used in
+// another space, it is the first free one, with its warnings. For IPv4 it
 // never offers within's own network or broadcast address.
-func (s *Snapshot) NextFreeAddr(within netip.Prefix, from netip.Addr) (pick netip.Addr, skipped []Skip, ok bool) {
+func (s *Snapshot) NextFreeAddr(space string, within netip.Prefix, from netip.Addr) (pick netip.Addr, warn []Warning, skipped []Skip, ok bool) {
 	within = within.Masked()
 	lo, hi := Bounds(within)
 	if within.Addr().Is4() && within.Bits() <= 30 {
@@ -398,24 +535,44 @@ func (s *Snapshot) NextFreeAddr(within netip.Prefix, from netip.Addr) (pick neti
 	if a.Compare(lo) < 0 {
 		a = lo
 	}
+	var shared netip.Addr
+	var sharedWarn []Warning
+	sharedSkips := 0
 	for a.IsValid() && within.Contains(a) && a.Compare(hi) <= 0 {
-		c := s.spanClashes(a, a)
+		c, o := s.spanClashes(space, a, a)
+		if len(c) == 0 && len(o) == 0 {
+			return a, nil, skipped, true
+		}
+		past := c
+		reason := ""
 		if len(c) == 0 {
-			return a, skipped, true
+			w := s.warnings(a.String(), o, a, a)
+			if !shared.IsValid() {
+				shared, sharedWarn, sharedSkips = a, w, len(skipped)
+			}
+			reason, past = SharedReason(w), o
+		} else {
+			reason = s.reason(c[0])
+			if shared.IsValid() {
+				past = append(append([]Used(nil), c...), o...)
+			}
 		}
 		if len(skipped) < maxSkips {
-			skipped = append(skipped, Skip{Candidate: a.String(), Reason: s.reason(c[0])})
+			skipped = append(skipped, Skip{Candidate: a.String(), Reason: reason})
 		}
-		// Past the widest clash in one step, so a 200-address range is one skip.
+		// Past the widest one in one step, so a 200-address range is one skip.
 		next := a
-		for _, u := range c {
+		for _, u := range past {
 			if u.Hi.Compare(next) > 0 {
 				next = u.Hi
 			}
 		}
 		a = next.Next()
 	}
-	return netip.Addr{}, skipped, false
+	if shared.IsValid() {
+		return shared, sharedWarn, skipped[:sharedSkips], true
+	}
+	return netip.Addr{}, nil, skipped, false
 }
 
 // PrefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. It is
@@ -454,7 +611,7 @@ func FirstFreePrefix(block netip.Prefix, used []netip.Prefix, bits int) (netip.P
 	for _, u := range used {
 		items = append(items, Network(KindSubnet, "other", "", u))
 	}
-	p, _, ok := NewSnapshot(nil, items...).NextFreePrefix("", block, bits)
+	p, _, _, ok := NewSnapshot(nil, items...).NextFreePrefix("", block, bits)
 	return p, ok
 }
 
@@ -480,4 +637,14 @@ func addrFromInt(n *big.Int, bitLen int) netip.Addr {
 	n.FillBytes(b)
 	a, _ := netip.AddrFromSlice(b)
 	return a
+}
+
+// SharedReason is the skip reason for a candidate passed over only because
+// something in another IP space overlaps it, for one that is not shared.
+func SharedReason(ws []Warning) string {
+	if len(ws) == 0 {
+		return ""
+	}
+	w := ws[0]
+	return fmt.Sprintf("it is also used in IP space %s (%s %s), and one used in no other space was found", w.Space, w.Kind, w.Object)
 }

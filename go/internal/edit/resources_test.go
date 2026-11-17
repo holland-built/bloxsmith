@@ -1,10 +1,13 @@
 package edit
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -151,13 +154,17 @@ func TestSubnetCreate_DryRun_FailedPreviewNeverMatchesSuccess(t *testing.T) {
 // SubnetCreate reads), a subnet 10.0.5.0/24 in ANOTHER space sp-2, a DHCP
 // range 10.1.0.10 to 10.1.0.50 and a reservation 10.1.0.60. Infoblox's
 // nextavailablesubnet offers 10.0.5.0, the address sp-2 already uses. Every
-// write is recorded; route answers writes.
-func inventoryServer(t *testing.T, writes *[]string) *httptest.Server {
+// write is recorded; route answers writes. ownSubnets adds subnet rows.
+func inventoryServer(t *testing.T, writes *[]string, ownSubnets ...string) *httptest.Server {
 	t.Helper()
+	subnets := `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`
+	for _, row := range ownSubnets {
+		subnets += "," + row
+	}
 	inv := map[string]string{
 		"ipam/ip_space":      `{"id":"ipam/ip_space/sp-1","name":"corp"},{"id":"ipam/ip_space/sp-2","name":"lab"}`,
 		"ipam/address_block": `{"id":"ipam/address_block/block-1","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":8}`,
-		"ipam/subnet":        `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`,
+		"ipam/subnet":        subnets,
 		"ipam/range":         `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.1.0.10","end":"10.1.0.50"}`,
 		"dhcp/fixed_address": `{"id":"dhcp/fixed_address/f-1","ip_space":"ipam/ip_space/sp-1","address":"10.1.0.60"}`,
 	}
@@ -182,6 +189,11 @@ func inventoryServer(t *testing.T, writes *[]string) *httptest.Server {
 		case r.Method == http.MethodDelete:
 			*writes = append(*writes, r.Method+" "+r.URL.Path)
 			w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			b, _ := io.ReadAll(r.Body)
+			*writes = append(*writes, r.Method+" "+r.URL.Path+" "+string(b))
+			w.WriteHeader(201)
+			w.Write([]byte(`{"result":{"id":"ipam/subnet/clean-1"}}`))
 		default:
 			*writes = append(*writes, r.Method+" "+r.URL.Path)
 			w.WriteHeader(201)
@@ -198,8 +210,8 @@ func TestCreates_RefuseWhatIsAlreadyInUse(t *testing.T) {
 		call func(*Client, bool) (M, int)
 		want string
 	}{
-		{"block over another space's subnet", func(c *Client, dry bool) (M, int) {
-			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-1", "dry": dry})
+		{"block over its own space's subnet", func(c *Client, dry bool) (M, int) {
+			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-2", "dry": dry})
 		}, "10.0.4.0/22 is not free: a subnet in lab already uses 10.0.5.0/24"},
 		{"range over a reservation", func(c *Client, dry bool) (M, int) {
 			return c.RangeCreate(M{"start": "10.1.0.55", "end": "10.1.0.70", "space": "ipam/ip_space/sp-1", "dry": dry})
@@ -232,33 +244,233 @@ func TestBlockCreate_InsideItsOwnSpaceBlockIsFree(t *testing.T) {
 	}
 }
 
-// Infoblox's preview pick is used in another space: the preview offers the
+// Overlap only with something in ANOTHER IP space is not a clash: each create
+// goes ahead, in the preview and live, and the preview carries the warning.
+func TestCreates_AnotherSpaceOnlyIsOfferedWithAWarning(t *testing.T) {
+	cases := []struct {
+		name   string
+		call   func(*Client, bool) (M, int)
+		object string
+	}{
+		{"block over another space's subnet", func(c *Client, dry bool) (M, int) {
+			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-1", "dry": dry})
+		}, "10.0.5.0/24"},
+		{"range over another space's range and reservation", func(c *Client, dry bool) (M, int) {
+			return c.RangeCreate(M{"start": "10.1.0.45", "end": "10.1.0.65", "space": "ipam/ip_space/sp-2", "dry": dry})
+		}, "10.1.0.10 to 10.1.0.50"},
+		{"host inside another space's DHCP range", func(c *Client, dry bool) (M, int) {
+			return c.HostCreate(M{"name": "web", "addresses": []any{M{"address": "10.1.0.20", "space": "ipam/ip_space/sp-2"}}, "dry": dry})
+		}, "10.1.0.10 to 10.1.0.50"},
+	}
+	for _, tc := range cases {
+		for _, dry := range []bool{true, false} {
+			var writes []string
+			res, status := tc.call(newTestClient(inventoryServer(t, &writes)), dry)
+			if status != 200 && status != 201 {
+				t.Fatalf("%s dry=%v: = %d %v, want it to go ahead", tc.name, dry, status, res)
+			}
+			if !dry {
+				if len(writes) != 1 || !strings.HasPrefix(writes[0], "POST ") {
+					t.Fatalf("%s: writes = %v, want the create", tc.name, writes)
+				}
+				continue
+			}
+			ws, _ := res["warnings"].([]any)
+			if len(ws) == 0 || asMap(ws[0])["object"] != tc.object && asMap(ws[len(ws)-1])["object"] != tc.object {
+				t.Fatalf("%s: warnings = %v, want %s named", tc.name, res["warnings"], tc.object)
+			}
+			if asMap(res["checked"])["shared"] != 1 {
+				t.Fatalf("%s: checked = %v, want shared 1", tc.name, res["checked"])
+			}
+		}
+	}
+}
+
+// Infoblox's preview pick is used in its own space: the preview offers the
 // next free /24 instead and names the one it passed over.
-func TestSubnetCreate_DryRunSwapsAPickAnotherSpaceUses(t *testing.T) {
+func TestSubnetCreate_DryRunSwapsAPickItsOwnSpaceUses(t *testing.T) {
 	var writes []string
-	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+	res, status := newTestClient(inventoryServer(t, &writes, ownSubnet)).SubnetCreate(
 		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": true})
 	would, _ := res["would_create"].(M)
 	if status != 200 || would["address"] != "10.0.0.0" {
 		t.Fatalf("= %d %v, want 10.0.0.0 offered", status, res)
 	}
 	sk, _ := res["skipped"].([]any)
-	if len(sk) == 0 || pyStr(asMap(sk[0])["reason"]) != "a subnet in lab already uses 10.0.5.0/24" {
+	if len(sk) == 0 || pyStr(asMap(sk[0])["reason"]) != "a subnet in corp already uses 10.0.5.0/24" {
 		t.Fatalf("skipped = %v", res["skipped"])
 	}
 }
 
-// On the live run Infoblox picks again, and a pick another space uses is
-// removed rather than left on the network.
-func TestSubnetCreate_LiveRemovesAPickAnotherSpaceUses(t *testing.T) {
+// ownSubnet is a subnet in the block's own space, on Infoblox's pick.
+const ownSubnet = `{"id":"ipam/subnet/ours","space":"ipam/ip_space/sp-1","address":"10.0.5.0","cidr":24}`
+
+// Infoblox's preview pick is used only in another space, and 10.0.0.0/24 is
+// clean: the clean one is offered (the owner's rule: a warned one only when
+// none is clean), and Infoblox's pick is listed as passed over.
+func TestSubnetCreate_DryRunOffersACleanOneOverInfobloxsWarnedPick(t *testing.T) {
 	var writes []string
 	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": true})
+	would, _ := res["would_create"].(M)
+	ws, _ := res["warnings"].([]any)
+	if status != 200 || would["address"] != "10.0.0.0" || len(ws) != 0 {
+		t.Fatalf("= %d %v, want the clean 10.0.0.0 offered", status, res)
+	}
+	sk, _ := res["skipped"].([]any)
+	if len(sk) == 0 || asMap(sk[0])["candidate"] != "10.0.5.0/24" ||
+		!strings.HasPrefix(pyStr(asMap(sk[0])["reason"]), "it is also used in IP space lab") {
+		t.Fatalf("skipped = %v, want Infoblox's shared pick named", res["skipped"])
+	}
+}
+
+// labEverywhere is a network in another space over the whole block: no /24 in
+// it is clean.
+const labEverywhere = `{"id":"ipam/subnet/lab8","space":"ipam/ip_space/sp-2","address":"10.0.0.0","cidr":8}`
+
+// With no clean one anywhere, Infoblox's warned pick stands, with its warnings.
+func TestSubnetCreate_DryRunKeepsInfobloxsWarnedPickWhenNoneIsClean(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes, labEverywhere)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": true})
+	would, _ := res["would_create"].(M)
+	ws, _ := res["warnings"].([]any)
+	if status != 200 || would["address"] != "10.0.5.0" || len(ws) == 0 || asMap(ws[0])["space"] != "lab" {
+		t.Fatalf("= %d %v, want 10.0.5.0 offered with lab's warning", status, res)
+	}
+}
+
+// On the live run Infoblox picks again, and a pick its own space uses is
+// removed rather than left on the network.
+func TestSubnetCreate_LiveRemovesAPickItsOwnSpaceUses(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes, ownSubnet)).SubnetCreate(
 		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
-	if status != 409 || !strings.Contains(pyStr(res["error"]), "Infoblox picked 10.0.5.0/24, but a subnet in lab already uses 10.0.5.0/24, so it was removed") {
+	if status != 409 || !strings.Contains(pyStr(res["error"]), "Infoblox picked 10.0.5.0/24, but a subnet in corp already uses 10.0.5.0/24, so it was removed") {
 		t.Fatalf("= %d %v, want the pick refused and removed", status, res)
 	}
 	want := []string{"POST /api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet", "DELETE /api/ddi/v1/ipam/subnet/new-1"}
 	if !reflect.DeepEqual(writes, want) {
 		t.Fatalf("writes = %v, want %v (no tagging PATCH)", writes, want)
+	}
+}
+
+// Live: Infoblox's pick is shared with another space and a clean one exists.
+// The shared pick is removed and the clean one the preview offered is created
+// by its address, then tagged.
+func TestSubnetCreate_LiveReplacesAWarnedPickWithTheCleanOne(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status != 200 || res["ok"] != true {
+		t.Fatalf("= %d %v, want the clean subnet made", status, res)
+	}
+	want := []string{"POST /api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet",
+		"DELETE /api/ddi/v1/ipam/subnet/new-1",
+		`POST /api/ddi/v1/ipam/subnet {"address":"10.0.0.0","cidr":24,"space":"ipam/ip_space/sp-1"}`,
+		"PATCH /api/ddi/v1/ipam/subnet/clean-1"}
+	if !reflect.DeepEqual(writes, want) {
+		t.Fatalf("writes = %v, want %v", writes, want)
+	}
+}
+
+// replaceServer is a tenant where Infoblox picks 10.0.5.0/24, which only the
+// lab space uses, so the clean 10.0.0.0/24 is created in its place. That create
+// answers createStatus with createBody; late is a subnet row that appears only
+// after it ("" for none).
+func replaceServer(t *testing.T, writes *[]string, createStatus int, createBody, late string) *httptest.Server {
+	t.Helper()
+	var mu sync.Mutex
+	created := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && q.Get("_order_by") != "":
+			rows := map[string]string{
+				"ipam/ip_space":      `{"id":"ipam/ip_space/sp-1","name":"corp"},{"id":"ipam/ip_space/sp-2","name":"lab"}`,
+				"ipam/address_block": `{"id":"ipam/address_block/block-1","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":8}`,
+				"ipam/subnet":        `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`,
+			}[strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")]
+			if created && late != "" && strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+				rows += "," + late
+			}
+			if q.Get("_offset") != "0" {
+				rows = ""
+			}
+			w.Write([]byte(`{"results":[` + rows + `]}`))
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/ipam/address_block/block-1"):
+			w.Write([]byte(`{"result":{"address":"10.0.0.0","cidr":8,"space":"ipam/ip_space/sp-1"}}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"results":[{"id":"ipam/subnet/new-1","address":"10.0.5.0","cidr":24}]}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			created = true
+			w.WriteHeader(createStatus)
+			w.Write([]byte(createBody))
+		default:
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			w.WriteHeader(200)
+			w.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// Live: the clean subnet is checked against a fresh read once made. A subnet
+// in its own space that appeared since is a clash: it is removed, and the
+// create fails instead of tagging it.
+func TestSubnetCreate_LiveRemovesACleanPickThatClashesOnAFreshRead(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 201, `{"result":{"id":"ipam/subnet/clean-1"}}`,
+		`{"id":"ipam/subnet/late","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":25}`)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status != 409 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "10.0.0.0/24") {
+		t.Fatalf("= %d %v, want the clean 10.0.0.0/24 refused", status, res)
+	}
+	if !slices.Contains(writes, "DELETE /api/ddi/v1/ipam/subnet/clean-1") || slices.Contains(writes, "PATCH /api/ddi/v1/ipam/subnet/clean-1") {
+		t.Fatalf("writes = %v, want clean-1 removed and never tagged", writes)
+	}
+}
+
+// Live: once the shared pick is removed, a refused create of the clean one is
+// a failure, not a success with nothing made.
+func TestSubnetCreate_LiveFailsWhenTheCleanCreateIsRefused(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 400, `{"error":[{"message":"refused"}]}`, "")).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status < 400 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "10.0.0.0/24") {
+		t.Fatalf("= %d %v, want the refused create of 10.0.0.0/24 reported", status, res)
+	}
+}
+
+// Live: when the answer to the clean create is lost (a gateway error), the
+// subnet may exist, and the error says so.
+func TestSubnetCreate_LiveSaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 504, `{}`, "")).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status < 400 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "may have been created") {
+		t.Fatalf("= %d %v, want 10.0.0.0/24 named as possibly made", status, res)
+	}
+}
+
+// Live: with no clean one anywhere, Infoblox's shared pick is kept.
+func TestSubnetCreate_LiveKeepsAWarnedPickWhenNoneIsClean(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes, labEverywhere)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status != 200 && status != 201 || res["ok"] != true {
+		t.Fatalf("= %d %v, want the pick kept", status, res)
+	}
+	for _, w := range writes {
+		if strings.HasPrefix(w, "DELETE") {
+			t.Fatalf("writes = %v, want no DELETE", writes)
+		}
 	}
 }

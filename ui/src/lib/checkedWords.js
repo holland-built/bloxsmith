@@ -5,6 +5,10 @@
 // skipped_picks, because "skipped" there already says whether the site was
 // skipped. Null when there is nothing to say, including a check that failed,
 // which shows its own message.
+//
+// shared is one warning per offered network or address that something only
+// in ANOTHER IP space overlaps (the response's "warnings"): it is offered, not
+// hidden, and the warning says why it may still be the wrong pick.
 
 const MAX_SKIPS = 3
 // Under this many seconds the read is fresh, so no age is given; the same line
@@ -23,6 +27,7 @@ export function checkedWords(res) {
   if (Number(c.networks) > 0) parts.push(`networks in ${count(c.spaces, 'IP space', 'IP spaces')}`)
   parts.push(count(c.ranges, 'DHCP range', 'DHCP ranges'))
   parts.push(count(Number(c.reservations || 0) + Number(c.hosts || 0), 'reservation or host', 'reservations and hosts'))
+  if (Number(c.shared) > 0) parts.push(`${fmt(c.shared)} shared with other IP spaces`)
 
   const list = Array.isArray(res.skipped) ? res.skipped : Array.isArray(res.skipped_picks) ? res.skipped_picks : []
   const skips = list.slice(0, MAX_SKIPS).map((s) => sentence(`Skipped ${s?.candidate} because ${s?.reason}`))
@@ -39,5 +44,28 @@ export function checkedWords(res) {
     skips,
     more: extra > 0 ? `And ${extra} more.` : '',
     age,
+    shared: sharedWords(res.warnings),
   }
+}
+
+// "a", "a and b", "a, b and c"
+const listOf = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+const unique = (xs) => [...new Set(xs)]
+
+function sharedWords(warnings) {
+  const byCandidate = new Map()
+  for (const w of Array.isArray(warnings) ? warnings : []) {
+    if (!w?.candidate) continue
+    if (!byCandidate.has(w.candidate)) byCandidate.set(w.candidate, [])
+    byCandidate.get(w.candidate).push(w)
+  }
+  return [...byCandidate].map(([candidate, ws]) => {
+    const verb = ws.every((w) => w.contains) ? 'sits inside' : 'overlaps'
+    const spaces = unique(ws.map((w) => w.space))
+    const thing = String(candidate).includes('/') ? 'network' : 'address'
+    return `Also used in another IP space. ${candidate} ${verb} ${listOf(unique(ws.map((w) => w.object)))} ` +
+      `in ${spaces.length > 1 ? 'IP spaces' : 'IP space'} ${listOf(spaces)}. ` +
+      "That's fine if the two spaces are kept apart, like a separate lab. " +
+      `If devices in one can reach the other, pick a different ${thing}.`
+  })
 }

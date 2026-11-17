@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -223,7 +224,10 @@ func TestSubnetStream_DryRun_SecondPreviewReusesTheRead(t *testing.T) {
 
 // A subnet in ANOTHER IP space over the block's first /24 is not one of the
 // block's children, and the old preview, which read only those, offered it.
-func TestSubnetStream_DryRun_SkipsAnOverlapInAnotherSpace(t *testing.T) {
+// It is not a clash either (the owner's rule of 2026-11-17), but a /24 no
+// other space uses is preferred, so the next one is offered and the first is
+// listed as passed over.
+func TestSubnetStream_DryRun_PrefersOneNoOtherSpaceUses(t *testing.T) {
 	d, _ := newInventoryDeps(t, previewBlockUpstream(t,
 		`{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`],"page":{"total_size":"1"}}`))
 	rr := httptest.NewRecorder()
@@ -233,10 +237,37 @@ func TestSubnetStream_DryRun_SkipsAnOverlapInAnotherSpace(t *testing.T) {
 		t.Fatalf("want 172.16.129.0/24 offered, got %s", body)
 	}
 	for _, want := range []string{`"candidate":"172.16.128.0/24"`,
-		`"reason":"a subnet in ipam/ip_space/sp-2 already uses 172.16.128.0/24"`, `"networks":1`} {
+		`"reason":"it is also used in IP space ipam/ip_space/sp-2`, `"networks":1`, `"warnings":[]`, `"shared":0`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("preview lacks %s: %s", want, body)
 		}
+	}
+}
+
+// The live tenant's shape: another IP space holds a network around the whole
+// block, so no /24 in it is clean. The first free one is offered, with the
+// warning next to it, rather than nothing.
+func TestSubnetStream_DryRun_OffersAWarnedOneWhenNoneIsClean(t *testing.T) {
+	lab := `{"id":"ipam/subnet/lab","address":"172.16.0.0","cidr":16,"space":"ipam/ip_space/sp-2"}`
+	d, _ := newInventoryDeps(t, previewBlockUpstream(t, `{"results":[`+lab+`],"page":{"total_size":"1"}}`))
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+	body := rr.Body.String()
+	if !strings.Contains(body, "Would create 172.16.128.0/24") {
+		t.Fatalf("want 172.16.128.0/24 offered, got %s", body)
+	}
+	done := terminalFrameOf(t, parseSSEFrames(t, body))
+	ws, _ := done["warnings"].([]any)
+	if len(ws) != 1 {
+		t.Fatalf("warnings = %v, want one", done["warnings"])
+	}
+	w, _ := ws[0].(map[string]any)
+	if w["candidate"] != "172.16.128.0/24" || w["object"] != "172.16.0.0/16" || w["space"] != "ipam/ip_space/sp-2" ||
+		w["kind"] != "subnet" || w["contains"] != true {
+		t.Fatalf("warning = %v", w)
+	}
+	if c, _ := done["checked"].(map[string]any); c["shared"] != float64(1) {
+		t.Fatalf("checked = %v, want shared 1", done["checked"])
 	}
 }
 
@@ -262,11 +293,171 @@ func emptyInventory(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Apply: Infoblox picks the subnet inside the block's own space only. A pick
-// another space already uses is checked against a fresh read around it (which
-// also sees the new subnet itself: that is not a clash), removed, and refused
-// with the reason. Before, the live run kept it and reported done.
-func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
+// Apply: Infoblox's pick is checked against a fresh read around it (which
+// also sees the new subnet itself: that is not a clash). A pick something else
+// in the same space already uses is removed and refused with the reason.
+// Before, the live run kept it and reported done.
+func TestSubnetStream_Apply_RemovesAPickItsOwnSpaceUses(t *testing.T) {
+	applyPickTest(t, subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-1"), true)
+}
+
+// A pick that only ANOTHER space uses is not refused. With no clean /24
+// anywhere in the block (another space holds all of it), it is kept.
+func TestSubnetStream_Apply_KeepsASharedPickWhenNoneIsClean(t *testing.T) {
+	applyPickTest(t, `{"id":"ipam/subnet/lab","address":"172.16.0.0","cidr":16,"space":"ipam/ip_space/sp-2"}`, false)
+}
+
+// Apply makes what the clean-first preview offered: Infoblox picks
+// 172.16.128.0/24, which only another space uses, while 172.16.129.0/24 is
+// clean. The shared pick is removed and the clean one created by its address,
+// with the name and comment asked for.
+func TestSubnetStream_Apply_ReplacesASharedPickWithTheCleanOne(t *testing.T) {
+	var mu sync.Mutex
+	var deletes, creates []string
+	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			deletes = append(deletes, r.URL.Path)
+			mu.Unlock()
+			io.WriteString(w, `{}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24}]}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			b, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			creates = append(creates, string(b))
+			mu.Unlock()
+			w.WriteHeader(201)
+			io.WriteString(w, `{"result":{"id":"ipam/subnet/clean-1","address":"172.16.129.0","cidr":24}}`)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"172.16.128.0","cidr":21,"space":"ipam/ip_space/sp-1"}}`)
+		case q.Get("_order_by") != "" && q.Get("_offset") != "0":
+			io.WriteString(w, `{"results":[]}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`],"page":{"total_size":"1"}}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0&name=web"))
+	done := terminalFrameOf(t, parseSSEFrames(t, rr.Body.String()))
+	if sub, _ := done["subnet"].(map[string]any); sub["address"] != "172.16.129.0" {
+		t.Fatalf("done = %v, want the clean 172.16.129.0 made; body %s", done, rr.Body.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(deletes) != 1 || deletes[0] != "/api/ddi/v1/ipam/subnet/new-1" {
+		t.Fatalf("deletes = %v, want Infoblox's shared pick removed", deletes)
+	}
+	if len(creates) != 1 || !strings.Contains(creates[0], `"address":"172.16.129.0"`) ||
+		!strings.Contains(creates[0], `"cidr":24`) || !strings.Contains(creates[0], `"space":"ipam/ip_space/sp-1"`) ||
+		!strings.Contains(creates[0], `"name":"web"`) {
+		t.Fatalf("creates = %v, want 172.16.129.0/24 in sp-1 named web", creates)
+	}
+	rows := auditEntries(t, logPath, "provision-subnet")
+	if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
+		t.Fatalf("provision-subnet rows = %v, want one naming 172.16.129.0", rows)
+	}
+}
+
+// replaceRun runs a live Apply where Infoblox picks the shared 172.16.128.0/24
+// and the clean 172.16.129.0/24 is created in its place. The create answers
+// createStatus with createBody; late is a row that appears in the inventory
+// only after that create ("" for none).
+func replaceRun(t *testing.T, createStatus int, createBody, late string) (body string, deletes []string, logPath string) {
+	t.Helper()
+	var mu sync.Mutex
+	created := false
+	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			deletes = append(deletes, r.URL.Path)
+			mu.Unlock()
+			io.WriteString(w, `{}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24}]}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			mu.Lock()
+			created = true
+			mu.Unlock()
+			w.WriteHeader(createStatus)
+			io.WriteString(w, createBody)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"172.16.128.0","cidr":21,"space":"ipam/ip_space/sp-1"}}`)
+		case q.Get("_order_by") != "" && q.Get("_offset") != "0":
+			io.WriteString(w, `{"results":[]}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			rows := subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")
+			mu.Lock()
+			if created && late != "" {
+				rows += "," + late
+			}
+			mu.Unlock()
+			io.WriteString(w, `{"results":[`+rows+`]}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0"))
+	mu.Lock()
+	defer mu.Unlock()
+	return rr.Body.String(), append([]string(nil), deletes...), logPath
+}
+
+const cleanCreated = `{"result":{"id":"ipam/subnet/clean-1","address":"172.16.129.0","cidr":24}}`
+
+// The clean subnet is checked against a fresh read once made: a subnet in the
+// block's own space that appeared since is a clash, so it is removed and the
+// run fails.
+func TestSubnetStream_Apply_RemovesACleanPickThatClashesOnAFreshRead(t *testing.T) {
+	body, deletes, _ := replaceRun(t, 201, cleanCreated,
+		`{"id":"ipam/subnet/late","address":"172.16.129.0","cidr":25,"space":"ipam/ip_space/sp-1"}`)
+	noDoneFrame(t, parseSSEFrames(t, body))
+	if !slices.Contains(deletes, "/api/ddi/v1/ipam/subnet/clean-1") {
+		t.Fatalf("deletes = %v, want the clean subnet removed; body %s", deletes, body)
+	}
+}
+
+// Once the shared pick is removed, a refused create of the clean one fails the
+// run, and says nothing was made.
+func TestSubnetStream_Apply_FailsWhenTheCleanCreateIsRefused(t *testing.T) {
+	body, _, _ := replaceRun(t, 400, `{"error":[{"message":"refused"}]}`, "")
+	noDoneFrame(t, parseSSEFrames(t, body))
+	if !strings.Contains(body, "172.16.129.0/24") || !strings.Contains(body, "Nothing was created") {
+		t.Fatalf("want the refused create of 172.16.129.0/24 reported, got %s", body)
+	}
+}
+
+// When Infoblox's answer to the clean create is lost (a gateway error) or names
+// no subnet, the subnet may exist: the run fails without saying nothing was
+// made, and the log names the subnet that may exist.
+func TestSubnetStream_Apply_SaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+	}{{504, `{}`}, {201, `{"result":{}}`}} {
+		body, _, logPath := replaceRun(t, tc.status, tc.body, "")
+		noDoneFrame(t, parseSSEFrames(t, body))
+		if strings.Contains(body, "Nothing was created") || !strings.Contains(body, "may have been created") {
+			t.Fatalf("status %d: want 172.16.129.0/24 named as possibly made, got %s", tc.status, body)
+		}
+		rows := auditEntries(t, logPath, "provision-subnet")
+		if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
+			t.Fatalf("status %d: provision-subnet rows = %v, want one naming 172.16.129.0", tc.status, rows)
+		}
+	}
+}
+
+func applyPickTest(t *testing.T, otherRow string, refused bool) {
+	t.Helper()
 	var mu sync.Mutex
 	var deletes, filters []string
 	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +479,7 @@ func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
 			mu.Lock()
 			filters = append(filters, q.Get("_filter"))
 			mu.Unlock()
-			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`,`+
+			io.WriteString(w, `{"results":[`+otherRow+`,`+
 				`{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24,"space":"ipam/ip_space/sp-1"}],"page":{"total_size":"2"}}`)
 		default:
 			io.WriteString(w, `{"results":[]}`)
@@ -297,8 +488,19 @@ func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
 	rr := httptest.NewRecorder()
 	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0"))
 	body := rr.Body.String()
+	if !refused {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(deletes) != 0 || strings.Contains(body, "so it was removed") {
+			t.Fatalf("deletes = %v, body %s: want the pick kept", deletes, body)
+		}
+		if n := len(auditEntries(t, logPath, "provision-subnet")); n != 1 {
+			t.Fatalf("%d provision-subnet rows, want 1", n)
+		}
+		return
+	}
 	noDoneFrame(t, parseSSEFrames(t, body))
-	if !strings.Contains(body, "Infoblox picked 172.16.128.0/24, but a subnet in ipam/ip_space/sp-2 already uses 172.16.128.0/24, so it was removed") {
+	if !strings.Contains(body, "Infoblox picked 172.16.128.0/24, but a subnet in ipam/ip_space/sp-1 already uses 172.16.128.0/24, so it was removed") {
 		t.Fatalf("want the pick refused and removed, got %s", body)
 	}
 	mu.Lock()

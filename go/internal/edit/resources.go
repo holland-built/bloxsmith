@@ -173,6 +173,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""
 		var skipped []freecheck.Skip
+		var warns []freecheck.Warning
 		would := M{"cidr": cidr, "name": name, "comment": comment, "tags": tags}
 		switch {
 		case err != nil:
@@ -198,21 +199,33 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			if perr != nil {
 				break
 			}
-			if r := snap.CheckPrefix(space, pick, block); !r.Free {
-				skipped = append(skipped, freecheck.Skip{Candidate: pick.String(), Reason: r.Reason})
-				ours, more, ok := snap.NextFreePrefix(space, block, cidr)
-				skipped = append(skipped, more...)
-				if !ok {
-					subnetAddr = ""
-					would["address_preview"] = "none-available"
-					break
+			// Infoblox's pick when it is free here and nothing in another IP
+			// space overlaps it. Otherwise the clean-first search's pick: a
+			// clean one whenever one exists (the live run then replaces a
+			// warned pick of Infoblox's with it), else the warned one.
+			r := snap.CheckPrefix(space, pick, block)
+			warns = r.Warnings
+			if !r.Free || len(r.Warnings) > 0 {
+				// With no clean one, Infoblox's warned pick stands.
+				if ours, w, more, ok := snap.NextFreePrefix(space, block, cidr); !r.Free || (ok && len(w) == 0) {
+					reason := r.Reason
+					if r.Free {
+						reason = freecheck.SharedReason(r.Warnings)
+					}
+					skipped = append(skipped, freecheck.Skip{Candidate: pick.String(), Reason: reason})
+					skipped = append(skipped, more...)
+					if !ok {
+						subnetAddr = ""
+						would["address_preview"] = "none-available"
+						break
+					}
+					subnetAddr, warns = ours.Addr().String(), w
 				}
-				subnetAddr = ours.Addr().String()
 			}
 		}
 		would["address"] = subnetAddr
 		return M{"ok": true, "dry_run": true, "would_create": would,
-			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 200
+			"checked": snap.Counts.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)}, 200
 	}
 
 	resp, status, _ := c.Rest.Write("POST", blockPath+"/nextavailablesubnet",
@@ -249,16 +262,19 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	// cannot be checked, was made a moment ago by this request and is removed
 	// rather than left on the network.
 	made, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr))
-	var reason string
 	out := M{"ok": false}
-	if perr != nil {
-		reason = "its address cannot be checked"
-	} else if snap, err := freecheck.AroundPrefix(c.Rest, freecheck.All, made); err != nil {
-		reason = "what is already in use could not be read (" + freecheck.Public(err) + ")"
-	} else if r := snap.Without(sid).CheckPrefix(space, made, block); !r.Free {
-		reason = r.Reason
-		out["checked"] = snap.Counts.Map()
-		out["skipped"] = freecheck.SkipList([]freecheck.Skip{{Candidate: made.String(), Reason: r.Reason}})
+	reason, warns := c.recheckSubnet(out, space, made, perr, sid, block)
+	if reason == "" && len(warns) > 0 {
+		// Infoblox's pick is shared with another IP space. When a clean one
+		// exists (the one the preview offered), it is made instead: Infoblox
+		// would pick the same shared one again, so the clean one is created
+		// by its address, and the shared pick is removed first.
+		if res, st, done := c.replaceSharedSubnet(space, block, made, sid); done {
+			if st != 0 {
+				return res, st
+			}
+			subnet, sid = res, pyStr(res["id"])
+		}
 	}
 	if reason != "" {
 		label := fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr)
@@ -315,6 +331,83 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		subnet = asMap(r["result"])
 	}
 	return M{"ok": true, "subnet": subnet}, 200
+}
+
+// recheckSubnet checks made, the subnet sid just created in space inside block,
+// against a fresh read around it. reason is why it must be removed, or "";
+// warns is what overlaps it only in another IP space. out gets checked and
+// skipped when it clashes.
+func (c *Client) recheckSubnet(out M, space string, made netip.Prefix, perr error, sid string, block netip.Prefix) (reason string, warns []freecheck.Warning) {
+	if perr != nil {
+		return "its address cannot be checked", nil
+	}
+	snap, err := freecheck.AroundPrefix(c.Rest, freecheck.All, made)
+	if err != nil {
+		return "what is already in use could not be read (" + freecheck.Public(err) + ")", nil
+	}
+	r := snap.Without(sid).CheckPrefix(space, made, block)
+	if !r.Free {
+		out["checked"] = snap.Counts.Map()
+		out["skipped"] = freecheck.SkipList([]freecheck.Skip{{Candidate: made.String(), Reason: r.Reason}})
+		return r.Reason, nil
+	}
+	return "", r.Warnings
+}
+
+// replaceSharedSubnet swaps made (sid), a subnet Infoblox picked that another
+// IP space also uses, for the lowest clean one in block, when one exists. done
+// is false when nothing changed: no clean one, it could not be looked for, or
+// the shared pick could not be removed; the shared pick then stands, warned.
+// Otherwise the shared pick is gone and res is the clean subnet (status 0), or
+// the failure (status set) with nothing left behind except where it says so.
+func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid string) (res M, status int, done bool) {
+	clean, w, _, _, ok, err := freecheck.NextFreePrefixIn(c.Rest, false, space, block, made.Bits())
+	if err != nil || !ok || len(w) > 0 || clean == made {
+		return nil, 0, false
+	}
+	dpath, derr := ObjectPath("ipam/subnet", sid)
+	if derr != nil {
+		return nil, 0, false
+	}
+	if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
+		return nil, 0, false
+	}
+	label := clean.String()
+	resp, st, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/subnet",
+		M{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": space}, nil)
+	if writeUnreadable(resp, st) {
+		return createdUnreadable("subnet", st, "Its teardown tags could not be applied either, so no tag filter will find it"), st, true
+	}
+	if outcomeUnknown(st) {
+		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
+			"%s may have been created, but Infoblox's answer was lost (%s). Check for it in the Editor before trying again",
+			made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true
+	}
+	if st != 200 && st != 201 {
+		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
+			"creating %s instead failed (%s). Preview again", made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true
+	}
+	sub := asMap(resultOrSelf(resp))
+	nid := pyStr(sub["id"])
+	out := M{"ok": false}
+	reason, _ := c.recheckSubnet(out, space, clean, nil, nid, block)
+	if nid == "" {
+		reason = "its id did not come back"
+	}
+	if reason != "" {
+		out["error"] = fmt.Sprintf("%s was made in place of %s, but %s, so it was removed. Preview again", label, made, reason)
+		if dp, e := ObjectPath("ipam/subnet", nid); e != nil {
+			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s. Remove it in the Editor", label, made, reason)
+		} else if _, dst, _ := c.Rest.Write("DELETE", dp, nil, nil); dst != 200 && dst != 204 && dst != 404 {
+			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s, and it could not be removed (%s). Remove it in the Editor",
+				label, made, reason, statusPhrase(dst))
+		}
+		return out, 409, true
+	}
+	if sub["address"] == nil {
+		sub["address"], sub["cidr"] = clean.Addr().String(), clean.Bits()
+	}
+	return sub, 0, true
 }
 
 func (c *Client) SubnetUpdate(body M) (M, int) {
@@ -401,12 +494,13 @@ func (c *Client) BlockCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	if r := snap.CheckPrefix(space, pfx, netip.Prefix{}); !r.Free {
+	r := snap.CheckPrefix(space, pfx, netip.Prefix{})
+	if !r.Free {
 		return notFree(snap, pfx.String(), r.Reason, truthyDry(body["dry"])), 409
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": blockBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(r.Warnings), "skipped": []any{}, "warnings": freecheck.WarnList(r.Warnings)}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", blockBody, nil)
 	if writeUnreadable(resp, status) {
@@ -446,12 +540,13 @@ func (c *Client) RangeCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	if r := snap.CheckSpan(lo, hi); !r.Free {
+	r := snap.CheckSpan(space, lo, hi)
+	if !r.Free {
 		return notFree(snap, start+" to "+end, r.Reason, truthyDry(body["dry"])), 409
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": rangeBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(r.Warnings), "skipped": []any{}, "warnings": freecheck.WarnList(r.Warnings)}, 200
 	}
 	rangeBody["tags"] = withMadeTag(rangeBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
@@ -518,6 +613,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 	// Checked in the preview and again on the live run: an address inside a
 	// DHCP range, reserved, or already a host's, in any IP space, is refused.
 	var ips []netip.Addr
+	var spaces []string
 	var lo, hi netip.Addr
 	for _, a := range addresses {
 		raw := strings.TrimSpace(pyStr(asMap(a)["address"]))
@@ -526,6 +622,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 			return M{"ok": false, "error": fmt.Sprintf("%q is not an address", raw)}, 400
 		}
 		ips = append(ips, ip)
+		spaces = append(spaces, strings.TrimSpace(pyStr(asMap(a)["space"])))
 		if !lo.IsValid() || ip.Less(lo) {
 			lo = ip
 		}
@@ -537,14 +634,17 @@ func (c *Client) HostCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	for _, ip := range ips {
-		if r := snap.CheckAddr(ip); !r.Free {
+	var warns []freecheck.Warning
+	for i, ip := range ips {
+		r := snap.CheckAddr(spaces[i], ip)
+		if !r.Free {
 			return notFree(snap, ip.String(), r.Reason, truthyDry(body["dry"])), 409
 		}
+		warns = append(warns, r.Warnings...)
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": hostBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(warns), "skipped": []any{}, "warnings": freecheck.WarnList(warns)}, 200
 	}
 	hostBody["tags"] = withMadeTag(hostBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)

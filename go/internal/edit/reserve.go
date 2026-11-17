@@ -67,13 +67,15 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		return fail, fstatus
 	}
 	var skipped []freecheck.Skip
+	var warns []freecheck.Warning
 	address := strings.TrimSpace(pyStr(dhcp["address"]))
 	if address != "" {
 		ip, perr := netip.ParseAddr(address)
 		if perr != nil || !prefix.Contains(ip) {
 			return M{"ok": false, "error": fmt.Sprintf("%s is not an address in this subnet (%s)", address, prefix)}, 400
 		}
-		r := snap.CheckAddr(ip)
+		r := snap.CheckAddr(space, ip)
+		warns = r.Warnings
 		if r.Free {
 			var err error
 			if r, err = snap.CheckAddrRecord(c.Rest, space, ip); err != nil {
@@ -89,8 +91,8 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: address, Reason: r.Reason}})}, 409
 		}
 	} else {
-		picks, sk, offered, ferr := c.freePicks(objPath, 1, snap)
-		skipped = sk
+		picks, w, sk, offered, ferr := c.freePicks(objPath, 1, snap, space)
+		skipped, warns = sk, w
 		if ferr != nil {
 			return M{"ok": false, "error": "could not list free addresses: " + publicErr(ferr)}, 502
 		}
@@ -109,7 +111,7 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		fixed["dry_run"] = true
 		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": 1,
 			"addresses": []any{M{"address": address}}, "fixed_address": fixed,
-			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}
+			"checked": snap.Counts.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)}
 		if name != "" {
 			result["name"] = name
 		}
@@ -195,37 +197,59 @@ func (c *Client) subnetSpace(objPath string) (space string, prefix netip.Prefix,
 // are checked rather than trusted, and when some are passed over it is asked
 // again for more, up to pickRounds times. offered is how many it offered last.
 // Only the first ask failing is an error.
-func (c *Client) freePicks(objPath string, want int, snap *freecheck.Snapshot) (picks []any, skipped []freecheck.Skip, offered int, err error) {
+//
+// space is the subnet's IP space: an address that something only in another
+// space uses is offered with warnings, but an address free in every space is
+// preferred, and only when too few are clean are warned ones taken (in
+// Infoblox's order) to make up the count. Warned ones passed over for a clean
+// one are listed as skipped.
+func (c *Client) freePicks(objPath string, want int, snap *freecheck.Snapshot, space string) (picks []any, warns []freecheck.Warning, skipped []freecheck.Skip, offered int, err error) {
+	type warned struct {
+		row  any
+		ws   []freecheck.Warning
+		skip freecheck.Skip
+	}
 	ask := want
 	for round := 0; round < pickRounds; round++ {
 		rows, gerr := c.Rest.GetStrict(objPath+"/nextavailableip", map[string]string{"count": strconv.Itoa(ask)})
 		if gerr != nil {
 			if round == 0 {
-				return nil, nil, 0, gerr
+				return nil, nil, nil, 0, gerr
 			}
 			break
 		}
-		picks, skipped, offered = nil, nil, len(rows)
+		var shared []warned
+		picks, warns, skipped, offered = nil, nil, nil, len(rows)
 		for _, row := range rows {
 			a := pyStr(asMap(row)["address"])
 			ip, perr := netip.ParseAddr(a)
 			if perr != nil {
 				continue
 			}
-			if r := snap.CheckAddr(ip); !r.Free {
+			r := snap.CheckAddr(space, ip)
+			switch {
+			case !r.Free:
 				skipped = append(skipped, freecheck.Skip{Candidate: a, Reason: r.Reason})
-				continue
-			}
-			if len(picks) < want {
+			case len(r.Warnings) > 0:
+				shared = append(shared, warned{row, r.Warnings, freecheck.Skip{Candidate: a, Reason: freecheck.SharedReason(r.Warnings)}})
+			case len(picks) < want:
 				picks = append(picks, row)
 			}
 		}
-		if len(picks) == want || len(rows) < ask {
-			break // enough, or the subnet has no more
+		clean := len(picks)
+		for _, w := range shared {
+			if len(picks) < want {
+				picks, warns = append(picks, w.row), append(warns, w.ws...)
+			} else {
+				skipped = append(skipped, w.skip)
+			}
 		}
-		ask += len(skipped)
+		if clean == want || len(rows) < ask {
+			break // enough clean ones, or the subnet has no more
+		}
+		ask += len(skipped) + len(shared)
 	}
-	return picks, skipped, offered, nil
+	return picks, warns, skipped, offered, nil
 }
 
 // pickRounds bounds how often freePicks asks Infoblox again.

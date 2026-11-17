@@ -110,6 +110,9 @@ type BlockProvisioner struct {
 	// free is everything already in use, read by Provision before the first
 	// block; each block is checked against it and added once made.
 	free *freecheck.Snapshot
+	// warnings is what overlaps a block only in another IP space: made
+	// anyway, with this said under it.
+	warnings []freecheck.Warning
 }
 
 func (e *Engine) NewBlockProvisioner(cfg *BlockConfig, emit Emitter) *BlockProvisioner {
@@ -205,6 +208,7 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 		appendTo(result, "skipped_picks", M{"candidate": pfx.String(), "reason": clash.Reason})
 		return perr("Block %s is not free: %s", pfx, clash.Reason)
 	}
+	p.warnings = append(p.warnings, clash.Warnings...)
 	p.free.Add(freecheck.Network(freecheck.KindBlock, p.spaceID, "", pfx))
 
 	if p.cfg.DryRun {
@@ -408,6 +412,8 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		}
 		return nil
 	}()
+	result["warnings"] = freecheck.WarnList(p.warnings)
+	result["checked"] = free.Counts.MapWith(p.warnings)
 	if runErr != nil {
 		report := M{"outcome": "skipped_dry_run", "attempted": 0, "deleted": 0, "residual": []any{}}
 		if !p.cfg.DryRun {

@@ -191,6 +191,9 @@ type SiteProvisioner struct {
 	freeFor netip.Prefix // the block p.free was read around
 	block   netip.Prefix
 	skipped []freecheck.Skip
+	// warnings is what overlaps an offered network or address only in
+	// another IP space: offered anyway, with this said under it.
+	warnings []freecheck.Warning
 }
 
 // skip records a candidate passed over, and says so in the run's steps.
@@ -333,7 +336,7 @@ func (p *SiteProvisioner) planFits(block netip.Prefix) string {
 	trial := p.free.Clone()
 	for _, sdef := range p.cfg.SubnetPlan {
 		cidr := p.planCidr(sdef)
-		pick, _, ok := trial.NextFreePrefix(p.spaceID, block, cidr)
+		pick, _, _, ok := trial.NextFreePrefix(p.spaceID, block, cidr)
 		if !ok {
 			return fmt.Sprintf("no free /%d left in it for %s", cidr, sdef.Name)
 		}
@@ -402,16 +405,29 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 			if pickErr != nil {
 				break
 			}
-			if r := p.free.CheckPrefix(p.spaceID, pick, p.block); !r.Free {
-				p.skip(pick.String(), r.Reason)
-				ours, _, ok := p.free.NextFreePrefix(p.spaceID, p.block, cidr)
-				if !ok {
-					subnetAddr = ""
-					extra["address_preview"] = "none-available"
-					break
+			// Infoblox's pick when it is free here and nothing in another IP
+			// space overlaps it. Otherwise the clean-first search's pick: a
+			// clean one whenever one exists (the live run then replaces a
+			// warned pick of Infoblox's with it), else the warned one.
+			r := p.free.CheckPrefix(p.spaceID, pick, p.block)
+			warns := r.Warnings
+			if !r.Free || len(r.Warnings) > 0 {
+				// With no clean one, Infoblox's warned pick stands.
+				if ours, w, _, ok := p.free.NextFreePrefix(p.spaceID, p.block, cidr); !r.Free || (ok && len(w) == 0) {
+					reason := r.Reason
+					if r.Free {
+						reason = freecheck.SharedReason(r.Warnings)
+					}
+					p.skip(pick.String(), reason)
+					if !ok {
+						subnetAddr = ""
+						extra["address_preview"] = "none-available"
+						break
+					}
+					pick, subnetAddr, warns = ours, ours.Addr().String(), w
 				}
-				pick, subnetAddr = ours, ours.Addr().String()
 			}
+			p.warnings = append(p.warnings, warns...)
 			p.free.Add(freecheck.Network(freecheck.KindSubnet, p.spaceID, "", pick))
 		}
 		appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", subnetAddr, cidr), "name": sdef.Name, "id": "(dry-run)"})
@@ -454,10 +470,55 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 		return nil, perr("Subnet %s was created at %s/%d, which cannot be checked; nothing more was created",
 			sdef.Name, pyStr(subnet["address"]), scidr)
 	}
-	if r := p.free.CheckPrefix(p.spaceID, made, p.block); !r.Free {
+	r := p.free.CheckPrefix(p.spaceID, made, p.block)
+	if !r.Free {
 		p.skip(made.String(), r.Reason)
 		return nil, perr("Infoblox picked %s for %s, but %s; nothing more was created. Preview again", made, sdef.Name, r.Reason)
 	}
+	if len(r.Warnings) > 0 {
+		// Shared with another IP space. When a clean one exists (the one the
+		// preview offered), it is made instead: Infoblox would pick the same
+		// shared one again, so the shared pick is removed and the clean one is
+		// created by its address.
+		if clean, w, _, ok := p.free.NextFreePrefix(p.spaceID, p.block, scidr); ok && len(w) == 0 && clean != made {
+			if _, dst, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+sid, nil, nil); dst != 200 && dst != 204 && dst != 404 {
+				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, and it could not be removed "+
+					"to make the clean %s instead (status %d); nothing more was created", made, sdef.Name, clean, dst)
+			}
+			subs := getList(result, "subnets")
+			result["subnets"] = subs[:len(subs)-1]
+			p.skip(made.String(), freecheck.SharedReason(r.Warnings))
+			resp, st, _ := p.e.Rest.Write("POST", "/api/ddi/v1/ipam/subnet",
+				M{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": p.spaceID}, nil)
+			nsub := asMap(asMap(resp)["result"])
+			if st == 0 || st == 502 || st == 503 || st == 504 || ((st == 200 || st == 201) && pyStr(nsub["id"]) == "") {
+				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
+					"the clean %s may have been created, but Infoblox's answer was lost (status %d). "+
+					"Check for it in the Editor before running again", made, sdef.Name, clean, st)
+			}
+			if st != 200 && st != 201 {
+				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
+					"creating the clean %s instead failed: status %d %v", made, sdef.Name, clean, st, resp)
+			}
+			subnet, sid, made = nsub, pyStr(nsub["id"]), clean
+			subnet["address"], subnet["cidr"] = clean.Addr().String(), clean.Bits()
+			// Recorded first, so rollback removes it if the check below fails.
+			appendTo(result, "subnets", M{"address": clean.String(), "name": sdef.Name, "id": sid})
+			// Checked against a fresh read, not the run's earlier one: something
+			// may have been made since that read.
+			snap, ferr := freecheck.AroundPrefix(p.e.Rest, freecheck.All, made)
+			if ferr != nil {
+				return nil, perr("The clean %s was made for %s, but what is already in use could not be read (%s); "+
+					"nothing more was created", made, sdef.Name, freecheck.Public(ferr))
+			}
+			if r = snap.Without(sid).CheckPrefix(p.spaceID, made, p.block); !r.Free {
+				p.skip(made.String(), r.Reason)
+				return nil, perr("The clean %s was made for %s, but %s; nothing more was created. Preview again",
+					made, sdef.Name, r.Reason)
+			}
+		}
+	}
+	p.warnings = append(p.warnings, r.Warnings...)
 	p.free.Add(freecheck.Network(freecheck.KindSubnet, p.spaceID, sid, made))
 	patchBody := M{"name": sdef.Name,
 		"comment": fmt.Sprintf("%s site - %s network", capitalize(p.cfg.Site), sdef.Purpose), "tags": tags}
@@ -560,10 +621,12 @@ func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) er
 	}
 	lo, _ := netip.ParseAddr(start)
 	hi, _ := netip.ParseAddr(end)
-	if r := p.free.CheckSpan(lo, hi); !r.Free {
+	r := p.free.CheckSpan(p.spaceID, lo, hi)
+	if !r.Free {
 		p.skipped = append(p.skipped, freecheck.Skip{Candidate: start + " to " + end, Reason: r.Reason})
 		return p.rangeSkipped(result, sdef, cidrStr(n), start, end, r.Reason)
 	}
+	p.warnings = append(p.warnings, r.Warnings...)
 	p.free.Add(freecheck.Span(freecheck.KindRange, p.spaceID, "", lo, hi))
 	mode := dryPrefix(p.cfg.DryRun)
 	p.emit(M{"step": fmt.Sprintf("%sCreating DHCP range %s-%s  subnet=%s", mode, start, end, sdef.Name)})
@@ -817,7 +880,7 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 			from = a
 		}
 		within, _ := netip.ParsePrefix(cidrStr(n))
-		pick, skipped, ok := p.free.NextFreeAddr(within, from)
+		pick, warns, skipped, ok := p.free.NextFreeAddr(p.spaceID, within, from)
 		for _, sk := range skipped {
 			p.skip(sk.Candidate, sk.Reason)
 		}
@@ -825,6 +888,7 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 			p.emit(M{"step": fmt.Sprintf("Host %s: no free address left in subnet %s — skipping", hdef.Hostname, cidrStr(n))})
 			continue
 		}
+		p.warnings = append(p.warnings, warns...)
 		nextFrom[hdef.Subnet] = pick.Next()
 		p.free.Add(freecheck.Span(freecheck.KindHost, p.spaceID, "", pick, pick))
 		hostIP := pick.String()
@@ -1176,6 +1240,10 @@ func (p *SiteProvisioner) Provision() (M, error) {
 	// skipped_picks, not skipped: "skipped" already says whether the site was
 	// skipped as already provisioned.
 	result["skipped_picks"] = freecheck.SkipList(p.skipped)
+	result["warnings"] = freecheck.WarnList(p.warnings)
+	if p.free != nil {
+		result["checked"] = p.free.Counts.MapWith(p.warnings)
+	}
 	if runErr != nil {
 		report := M{"outcome": "skipped_dry_run", "attempted": 0, "deleted": 0, "residual": []any{}}
 		if !p.cfg.DryRun {
