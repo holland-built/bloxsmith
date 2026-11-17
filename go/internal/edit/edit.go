@@ -839,8 +839,15 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 
 	if dry {
 		// What is already in use: an offered address inside a DHCP range, or
-		// one a reservation or host holds, is never offered.
-		snap, fail, fstatus := c.inUse(freecheck.Addresses, true, netip.Addr{}, netip.Addr{})
+		// one a reservation or host holds, is never offered. Only what overlaps
+		// the subnet is read (every IP space), not the whole tenant's ~105k
+		// addresses (about a minute cold). If the subnet's own address cannot
+		// be read, the full read is the fallback.
+		var lo, hi netip.Addr
+		if _, prefix, _, st := c.subnetSpace(objPath); st == 0 {
+			lo, hi = freecheck.Bounds(prefix.Masked())
+		}
+		snap, fail, fstatus := c.inUse(freecheck.Addresses, true, lo, hi)
 		if fail != nil {
 			return fail, fstatus
 		}

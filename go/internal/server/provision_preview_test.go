@@ -344,3 +344,44 @@ func TestSubnetStream_DryRun_ReadsOnlyAroundTheBlock(t *testing.T) {
 		t.Fatalf("subnet read filters = %v, want one read scoped to the block", filters)
 	}
 }
+
+// A preview in a block as big as 10.0.0.0/8 reads a /16 at a time and stops
+// at the first /16 with room. Before, it read everything overlapping the /8,
+// which on a large tenant is most of it (about 40 s cold).
+func TestSubnetStream_DryRun_ReadsAHugeBlockOnePieceAtATime(t *testing.T) {
+	var mu sync.Mutex
+	var filters []string
+	d, _ := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method != http.MethodGet:
+			t.Errorf("a preview must not write, got %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(500)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"10.0.0.0","cidr":8,"space":"ipam/ip_space/sp-1"}}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			mu.Lock()
+			filters = append(filters, q.Get("_filter"))
+			mu.Unlock()
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/a","address":"10.0.0.0","cidr":24,"space":"ipam/ip_space/sp-2"}],"page":{"total_size":"1"}}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+	body := rr.Body.String()
+	if !strings.Contains(body, "Would create 10.0.1.0/24") {
+		t.Fatalf("want 10.0.1.0/24 offered, got %s", body)
+	}
+	done := terminalFrameOf(t, parseSSEFrames(t, body))
+	if checked, _ := done["checked"].(map[string]any); checked["around"] != "10.0.0.0 to 10.0.255.255" {
+		t.Fatalf("checked = %v, want only the first /16 read", done["checked"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(filters) != 1 || !strings.Contains(filters[0], `address>="10.0.0.0" and address<="10.0.255.255"`) {
+		t.Fatalf("subnet read filters = %v, want one read of the first /16", filters)
+	}
+}

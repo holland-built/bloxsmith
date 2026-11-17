@@ -52,12 +52,14 @@ type allocReq struct {
 // point of this fixture is a run where the allocation POST SUCCEEDS and the DNS
 // record POST FAILS — that is the only way the compensating release executes.
 type allocConfig struct {
-	allocStatus int    // status for POST .../nextavailableip (0 => 200)
-	listStatus  int    // status for GET .../nextavailableip, the preview (0 => 200)
-	allocBody   string // its JSON body
-	dnsStatus   int    // status for POST /api/ddi/v1/dns/record (0 => 201)
-	nameStatus  int    // status for PATCH /api/ddi/v1/ipam/address/<id> (0 => 200)
-	dnsBody     string // its JSON body
+	allocStatus int // status for POST .../nextavailableip (0 => 200)
+	listStatus  int // status for GET .../nextavailableip, the preview (0 => 200)
+	// subnetStatus answers the preview's read of the subnet (0 => 200, 10.7.0.0/24)
+	subnetStatus int
+	allocBody    string // its JSON body
+	dnsStatus    int    // status for POST /api/ddi/v1/dns/record (0 => 201)
+	nameStatus   int    // status for PATCH /api/ddi/v1/ipam/address/<id> (0 => 200)
+	dnsBody      string // its JSON body
 	// deleteStatuses answers the release DELETEs in call order. A call past
 	// the end of the slice gets 204. Per-call control is what lets one release
 	// succeed and the next fail, splitting released from orphaned.
@@ -77,6 +79,8 @@ type allocFake struct {
 	mu          sync.Mutex
 	reqs        []allocReq
 	deleteCalls int
+	// inventoryReads is each freecheck list read, "path filter".
+	inventoryReads []string
 }
 
 // allocTwoAddresses is a two-reservation nextavailableip response. Ids are bare
@@ -95,6 +99,9 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 	f := &allocFake{t: t}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if q := r.URL.Query(); r.Method == http.MethodGet && q.Get("_order_by") != "" {
+			f.mu.Lock()
+			f.inventoryReads = append(f.inventoryReads, strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")+" "+q.Get("_filter"))
+			f.mu.Unlock()
 			rows := cfg.inventory[strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")]
 			if q.Get("_offset") != "0" {
 				rows = ""
@@ -123,6 +130,13 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 
 		switch r.Method {
 		case http.MethodGet:
+			// the preview's read of the subnet's own address, so what is in
+			// use is read only around it
+			if strings.HasPrefix(r.URL.Path, "/api/ddi/v1/ipam/subnet/") && r.URL.Query().Get("_fields") == "space,address,cidr" {
+				w.WriteHeader(allocStatusOr(cfg.subnetStatus, 200))
+				_, _ = io.WriteString(w, `{"result":{"address":"10.7.0.0","cidr":24,"space":"ipam/ip_space/sp-1"}}`)
+				return
+			}
 			// the preview's look-only listing of the next free addresses
 			if !strings.HasSuffix(r.URL.Path, "/nextavailableip") {
 				t.Errorf("fake received an unexpected GET path: %s", r.URL.Path)
@@ -951,8 +965,63 @@ func TestAllocatePreviewListsTheNextFreeAddressesWithoutTakingThem(t *testing.T)
 		t.Fatalf("want both free addresses in the preview, got %s", got)
 	}
 	reqs := f.all()
-	if len(reqs) != 1 || reqs[0].method != http.MethodGet || reqs[0].query.Get("count") != "2" {
-		t.Fatalf("want exactly one GET with count=2, got %+v", reqs)
+	if len(reqs) != 2 || reqs[0].path != "/api/ddi/v1/ipam/subnet/s-42" || reqs[1].method != http.MethodGet ||
+		!strings.HasSuffix(reqs[1].path, "/nextavailableip") || reqs[1].query.Get("count") != "2" {
+		t.Fatalf("want a GET of the subnet, then one GET with count=2, got %+v", reqs)
+	}
+}
+
+// The preview reads only what overlaps the chosen subnet (every IP space), not
+// the whole tenant's ~105k addresses, which took about a minute cold.
+func TestAllocatePreviewReadsOnlyAroundTheSubnet(t *testing.T) {
+	f := newAllocFake(t, allocConfig{})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-42", "count": float64(1), "dry": true})
+	if status != 200 {
+		t.Fatalf("= %d %v", status, res)
+	}
+	want := map[string]string{
+		"ipam/range":         `start<="10.7.0.255" and end>="10.7.0.0"`,
+		"dhcp/fixed_address": `address>="10.7.0.0" and address<="10.7.0.255"`,
+		"ipam/address":       `(address>="10.7.0.0" and address<="10.7.0.255") and host!=null`,
+	}
+	f.mu.Lock()
+	reads := append([]string(nil), f.inventoryReads...)
+	f.mu.Unlock()
+	for path, filter := range want {
+		found := false
+		for _, r := range reads {
+			if r == path+" "+filter {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s was not read with filter %s; reads: %q", path, filter, reads)
+		}
+	}
+	if around := asMap(res["checked"])["around"]; around != "10.7.0.0 to 10.7.0.255" {
+		t.Errorf("checked.around = %v, want the subnet's span", around)
+	}
+}
+
+// When the subnet's own address cannot be read, the preview falls back to the
+// full read rather than check against nothing, and still answers.
+func TestAllocatePreviewFallsBackToAFullReadWhenTheSubnetCannotBeRead(t *testing.T) {
+	f := newAllocFake(t, allocConfig{subnetStatus: 500, inventory: map[string]string{
+		"ipam/range": `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.7.0.4","end":"10.7.0.4"}`}})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-1", "count": 1, "dry": true})
+	addrs, _ := res["addresses"].([]any)
+	if status != 200 || len(addrs) != 1 || pyStr(asMap(addrs[0])["address"]) != "10.7.0.5" {
+		t.Fatalf("= %d %v, want 10.7.0.5 offered past the range", status, res)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.inventoryReads {
+		if !strings.HasSuffix(r, " ") && r != "ipam/address host!=null" {
+			t.Errorf("read %q is scoped, want the full read", r)
+		}
+	}
+	if _, ok := asMap(res["checked"])["around"]; ok {
+		t.Errorf("checked = %v, want no around: the whole tenant was read", res["checked"])
 	}
 }
 

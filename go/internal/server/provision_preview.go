@@ -28,15 +28,14 @@ func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block
 	if err != nil {
 		return block, next, checked, nil, err
 	}
-	// A preview: a read of only what overlaps the block, in every IP space,
-	// shared for up to PreviewTTL.
-	lo, hi := freecheck.Bounds(block.Masked())
-	snap, err := freecheck.For(c, freecheck.All, true, lo, hi)
+	// A preview: reads of only what overlaps the block, in every IP space, a
+	// piece of it at a time (a /8 can hold most of the tenant), stopping at
+	// the first piece with room. Each read is shared for up to PreviewTTL.
+	next, skipped, checked, _, err = freecheck.NextFreePrefixIn(c, true, space, block, bits)
 	if err != nil {
-		return block, next, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
+		return block, netip.Prefix{}, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
 	}
-	next, skipped, _ = snap.NextFreePrefix(space, block, bits)
-	return block, next, snap.Counts, skipped, nil
+	return block, next, checked, skipped, nil
 }
 
 // prefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. The one
