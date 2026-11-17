@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ColumnHeading, DevicesInput, FormColumns, PrefixInput, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, DevicesInput, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { PrefixInput } from '../components/PrefixInput.jsx'
 import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'

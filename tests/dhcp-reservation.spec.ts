@@ -45,7 +45,7 @@ test('Get an address can reserve the address for one device', async ({ page }) =
   await mac.fill('AA:BB:CC:DD:EE:01');
 
   await panel.getByRole('button', { name: 'Preview' }).click();
-  await expect(panel.getByText(/This will take 10\.0\.42\.7 in subnet 10\.0\.42\.0\/24 — site-42, named printer-3\. Only the device aa:bb:cc:dd:ee:01 will get it from DHCP\./)).toBeVisible();
+  await expect(panel.getByText(/This will take 10\.0\.42\.7 in subnet 10\.0\.42\.0\/24 \(256 addresses\) — site-42, named printer-3\. Only the device aa:bb:cc:dd:ee:01 will get it from DHCP\./)).toBeVisible();
   expect(sent.at(-1)).toMatchObject({ dry: true, count: 1, dhcp: { mac: 'AA:BB:CC:DD:EE:01', name: 'printer-3' } });
   expect(sent.at(-1)!.dhcp.address).toBeUndefined();
 
