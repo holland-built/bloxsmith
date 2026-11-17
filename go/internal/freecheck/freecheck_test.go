@@ -7,8 +7,10 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
+	"bloxsmith/internal/cache"
 	"bloxsmith/internal/rest"
 )
 
@@ -53,6 +55,13 @@ func TestCheckPrefix(t *testing.T) {
 			"an address block in corp-amer already uses 10.16.0.0/16"},
 		{"exact match is a clash", "sp-a", "10.16.0.0/20", "", false,
 			"an address block in corp-amer already uses 10.16.0.0/20"},
+		// A block may sit inside its parent blocks, never inside a subnet:
+		// with no parent chosen, a subnet around the candidate is a clash.
+		{"no parent chosen: a same-space subnet around it is a clash", "sp-a", "10.16.8.224/27", "", false,
+			"a subnet in corp-amer already uses 10.16.8.0/24"},
+		// With a parent chosen, only that block and its own parents are allowed.
+		{"chosen parent: a subnet between it and the candidate is a clash", "sp-a", "10.16.8.224/27", "10.16.0.0/20", false,
+			"a subnet in corp-amer already uses 10.16.8.0/24"},
 		{"a network over a DHCP range", "sp-b", "10.16.8.0/26", "", false,
 			"an address block in corp-amer already uses 10.16.0.0/16"},
 	}
@@ -231,13 +240,13 @@ func goodTenant() fakeTenant {
 				`{"id":"s2","space":"sp-b","address":"10.16.32.0","cidr":24}`},
 			"ipam/range":         {`{"id":"r1","space":"sp-a","start":"10.16.8.10","end":"10.16.8.200"}`},
 			"dhcp/fixed_address": {`{"id":"f1","ip_space":"sp-a","address":"10.16.8.5"}`},
-			"ipam/host":          {`{"id":"h1","addresses":[{"address":"10.16.8.6","space":"sp-a"}]}`},
+			"ipam/address":       {`{"id":"a1","address":"10.16.8.6","space":"sp-a","host":"h1"}`},
 		},
 		withTotal: map[string]bool{"ipam/subnet": true},
 	}
 }
 
-func load(t *testing.T, f fakeTenant, scope Scope) (*Snapshot, error) {
+func loadFake(t *testing.T, f fakeTenant, scope Scope) (*Snapshot, error) {
 	t.Helper()
 	srv := httptest.NewServer(f.handler(t))
 	t.Cleanup(srv.Close)
@@ -245,12 +254,12 @@ func load(t *testing.T, f fakeTenant, scope Scope) (*Snapshot, error) {
 }
 
 func TestLoad_ReadsEveryKind(t *testing.T) {
-	s, err := load(t, goodTenant(), All)
+	s, err := loadFake(t, goodTenant(), All)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	want := Counts{Spaces: 2, Networks: 3, Ranges: 1, Reservations: 1, Hosts: 1}
-	if s.Counts != want {
+	want := Counts{Spaces: 2, Networks: 3, Ranges: 1, Reservations: 1, Hosts: 1, ReadAt: s.Counts.ReadAt}
+	if s.Counts != want || s.Counts.ReadAt.IsZero() {
 		t.Fatalf("Counts = %+v, want %+v", s.Counts, want)
 	}
 	if r := s.CheckPrefix("sp-a", pfx("10.16.32.0/24"), pfx("10.16.0.0/16")); r.Free ||
@@ -265,7 +274,7 @@ func TestLoad_ReadsEveryKind(t *testing.T) {
 func TestLoad_AddressesScopeSkipsNetworks(t *testing.T) {
 	f := goodTenant()
 	f.fail = "ipam/subnet" // never read in this scope
-	s, err := load(t, f, Addresses)
+	s, err := loadFake(t, f, Addresses)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -287,14 +296,14 @@ func TestLoad_IncompleteListIsAnError(t *testing.T) {
 			f.lists["ipam/address_block"] = []string{`{"id":"b1","address":"10.16.0.0","cidr":16}`}
 		}, "address block"},
 		{"a host address that cannot be read", func(f *fakeTenant) {
-			f.lists["ipam/host"] = []string{`{"id":"h1","addresses":[{"address":"nope","space":"sp-a"}]}`}
+			f.lists["ipam/address"] = []string{`{"id":"a1","address":"nope","space":"sp-a","host":"h1"}`}
 		}, "host"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := goodTenant()
 			tc.edit(&f)
-			s, err := load(t, f, All)
+			s, err := loadFake(t, f, All)
 			if err == nil {
 				t.Fatalf("Load = %+v, want an error", s.Counts)
 			}
@@ -312,11 +321,122 @@ func TestLoad_PagesUntilEmpty(t *testing.T) {
 		blocks = append(blocks, fmt.Sprintf(`{"id":"b%d","space":"sp-a","address":"10.%d.%d.0","cidr":24}`, i, 100+i/256, i%256))
 	}
 	f.lists["ipam/address_block"] = blocks
-	s, err := load(t, f, All)
+	s, err := loadFake(t, f, All)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if s.Counts.Networks != pageSize+5+2 {
 		t.Fatalf("Networks = %d, want every block and subnet", s.Counts.Networks)
+	}
+}
+
+// --- Cached and Around ---------------------------------------------------------
+
+// countingTenant wraps goodTenant and records each request's path and filter.
+func countingTenant(t *testing.T, f fakeTenant) (*rest.Client, *[]string) {
+	t.Helper()
+	var mu sync.Mutex
+	var seen []string
+	h := f.handler(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")+" "+r.URL.Query().Get("_filter"))
+		mu.Unlock()
+		h(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	return rest.New(srv.URL, rest.NewAuth("k", nil)), &seen
+}
+
+// A second preview within PreviewTTL reads nothing, and gets its own copy.
+func TestCached_SecondPreviewReadsNothing(t *testing.T) {
+	UseCache(cache.New())
+	t.Cleanup(func() { UseCache(nil) })
+	c, seen := countingTenant(t, goodTenant())
+	a, err := Cached(c, All)
+	if err != nil {
+		t.Fatalf("Cached: %v", err)
+	}
+	first := len(*seen)
+	a.Add(Network(KindSubnet, "sp-a", "", pfx("10.99.0.0/24")))
+	b, err := Cached(c, All)
+	if err != nil {
+		t.Fatalf("Cached again: %v", err)
+	}
+	if len(*seen) != first {
+		t.Fatalf("second preview made %d more reads, want none", len(*seen)-first)
+	}
+	if r := b.CheckPrefix("sp-a", pfx("10.99.0.0/24"), netip.Prefix{}); !r.Free {
+		t.Fatalf("a preview's Add leaked into the shared snapshot: %+v", r)
+	}
+	if b.Counts.ReadAt != a.Counts.ReadAt || b.Counts.Age() == "" {
+		t.Fatalf("ReadAt = %v / %v, want the one read's time and an age", a.Counts.ReadAt, b.Counts.ReadAt)
+	}
+}
+
+// A failed read is not kept: the next preview reads again.
+func TestCached_FailureIsNotKept(t *testing.T) {
+	UseCache(cache.New())
+	t.Cleanup(func() { UseCache(nil) })
+	f := goodTenant()
+	f.fail = "ipam/range"
+	c, seen := countingTenant(t, f)
+	if _, err := Cached(c, All); err == nil {
+		t.Fatal("want an error")
+	}
+	n := len(*seen)
+	if _, err := Cached(c, All); err == nil || len(*seen) == n {
+		t.Fatalf("second call err=%v reads=%d, want it to read again and fail", err, len(*seen)-n)
+	}
+}
+
+// Apply reads only around the candidate: every list is filtered to it, and
+// networks include each prefix that could contain it.
+func TestAround_ReadsOnlyAroundTheCandidate(t *testing.T) {
+	c, seen := countingTenant(t, goodTenant())
+	s, err := AroundPrefix(c, All, pfx("10.16.32.0/24"))
+	if err != nil {
+		t.Fatalf("Around: %v", err)
+	}
+	want := map[string]string{
+		"ipam/range":         `start<="10.16.32.255" and end>="10.16.32.0"`,
+		"dhcp/fixed_address": `address>="10.16.32.0" and address<="10.16.32.255"`,
+		"ipam/address":       `(address>="10.16.32.0" and address<="10.16.32.255") and host!=null`,
+		"ipam/subnet":        `(address>="10.16.32.0" and address<="10.16.32.255") or (address=="0.0.0.0" and cidr==0)`,
+		"ipam/address_block": `or (address=="10.16.0.0" and cidr==16) or`,
+	}
+	for path, frag := range want {
+		found := false
+		for _, s := range *seen {
+			if strings.HasPrefix(s, path+" ") && strings.Contains(s, frag) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s was not read with a filter containing %s; reads: %v", path, frag, *seen)
+		}
+	}
+	if s.Counts.Around != "10.16.32.0 to 10.16.32.255" {
+		t.Errorf("Around = %q", s.Counts.Around)
+	}
+}
+
+// A scoped list that cannot be proven complete falls back to a full read.
+func TestAround_FallsBackToAFullRead(t *testing.T) {
+	f := goodTenant()
+	f.claimTotal = map[string]int{"ipam/subnet": 9} // the scoped subnet read looks short
+	c, seen := countingTenant(t, f)
+	_, err := AroundPrefix(c, All, pfx("10.16.32.0/24"))
+	if err == nil {
+		t.Fatal("want an error: the full read is short too")
+	}
+	full := false
+	for _, s := range *seen {
+		if s == "ipam/subnet " {
+			full = true
+		}
+	}
+	if !full {
+		t.Fatalf("no unfiltered subnet read after the scoped one failed: %v", *seen)
 	}
 }

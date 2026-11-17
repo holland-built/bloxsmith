@@ -7,7 +7,8 @@
 // in ANY IP space, an address block or subnet at any depth, a DHCP range, a
 // reservation (fixed address) or a host address. The one exception is
 // containment: a new network may sit inside its own parent block in the same
-// space, and so inside that block's own parents.
+// space, and so inside that block's own parents. Only blocks contain: a new
+// network inside or over a subnet is a clash.
 //
 // Addresses and DHCP ranges are checked against ranges, reservations and host
 // addresses in every space, and never against networks: an address always sits
@@ -26,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Kinds of thing that can hold an address, in the words the reasons use.
@@ -61,20 +63,48 @@ func Span(kind, space, id string, lo, hi netip.Addr) Used {
 
 func (u Used) isNetwork() bool { return u.Kind == KindBlock || u.Kind == KindSubnet }
 
-// Counts is what was read, for the "checked" field of every preview.
+// Counts is what was read, for the "checked" field of every preview. ReadAt is
+// when; a preview's snapshot can be up to PreviewTTL old. Around, when set,
+// says the read covered only those addresses (Apply's fresh read).
 type Counts struct {
-	Spaces       int `json:"spaces"`
-	Networks     int `json:"networks"`
-	Ranges       int `json:"ranges"`
-	Reservations int `json:"reservations"`
-	Hosts        int `json:"hosts"`
+	Spaces       int       `json:"spaces"`
+	Networks     int       `json:"networks"`
+	Ranges       int       `json:"ranges"`
+	Reservations int       `json:"reservations"`
+	Hosts        int       `json:"hosts"`
+	ReadAt       time.Time `json:"read_at"`
+	Around       string    `json:"around,omitempty"`
 }
 
 // Map is Counts as a plain map, for the untyped result maps edit and provision
-// build.
+// build. age_seconds is how old the data is now; read_at is when it was read.
 func (c Counts) Map() map[string]any {
-	return map[string]any{"spaces": c.Spaces, "networks": c.Networks, "ranges": c.Ranges,
+	m := map[string]any{"spaces": c.Spaces, "networks": c.Networks, "ranges": c.Ranges,
 		"reservations": c.Reservations, "hosts": c.Hosts}
+	if !c.ReadAt.IsZero() {
+		m["read_at"] = c.ReadAt.UTC().Format(time.RFC3339)
+		m["age_seconds"] = int(time.Since(c.ReadAt).Seconds())
+	}
+	if c.Around != "" {
+		m["around"] = c.Around
+	}
+	return m
+}
+
+// Age says in plain words how old the data is, for a preview's steps.
+func (c Counts) Age() string {
+	if c.ReadAt.IsZero() {
+		return ""
+	}
+	n := int(time.Since(c.ReadAt).Seconds())
+	switch {
+	case n < 5:
+		return "checked just now"
+	case n < 120:
+		return fmt.Sprintf("checked against what was read %d seconds ago", n)
+	default:
+		return fmt.Sprintf("checked against what was read %d minutes ago", n/60)
+	}
 }
 
 // Skip is one candidate passed over, and why, in plain words.
@@ -147,6 +177,19 @@ func (s *Snapshot) Has(kind, space string, p netip.Prefix) bool {
 	return false
 }
 
+// Without is a copy leaving out the item with this id: the object a run just
+// made, read back by an Apply check, is not a clash with itself.
+func (s *Snapshot) Without(id string) *Snapshot {
+	c := *s
+	c.items = nil
+	for _, u := range s.items {
+		if id == "" || u.ID != id {
+			c.items = append(c.items, u)
+		}
+	}
+	return &c
+}
+
 // Clone is a copy that Add on one does not change the other, for trying a
 // plan before committing to it.
 func (s *Snapshot) Clone() *Snapshot {
@@ -192,9 +235,10 @@ func overlaps(u Used, lo, hi netip.Addr) bool {
 func (s *Snapshot) prefixClashes(space string, p, parent netip.Prefix) []Used {
 	p = p.Masked()
 	lo, hi := Bounds(p)
-	// anchor is what an allowed container must hold: the chosen parent, or,
-	// with none chosen, the candidate itself (Infoblox nests a new network in
-	// the smallest same-space network around it).
+	// anchor is what an allowed container must hold: the chosen parent and so
+	// its own parents, or, with none chosen (a block made inside an existing
+	// chain of blocks), the candidate itself. Only a block can contain: a new
+	// network inside or over a subnet is always a clash.
 	anchor := p
 	if parent.IsValid() {
 		anchor = parent.Masked()
@@ -204,9 +248,9 @@ func (s *Snapshot) prefixClashes(space string, p, parent netip.Prefix) []Used {
 		if !overlaps(u, lo, hi) {
 			continue
 		}
-		if u.isNetwork() && u.Space == space && u.Prefix != p &&
+		if u.Kind == KindBlock && u.Space == space && u.Prefix != p &&
 			u.Prefix.Bits() <= anchor.Bits() && u.Prefix.Contains(anchor.Addr()) {
-			continue // its own parent, or a parent of that
+			continue // its own parent block, or a parent of that
 		}
 		out = append(out, u)
 	}

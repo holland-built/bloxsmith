@@ -837,14 +837,13 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		return c.reserveForDevice(objPath, subnetID, name, dns, dhcp, dry)
 	}
 
-	// What is already in use: an offered address inside a DHCP range, or one
-	// a reservation or host holds, is never offered or kept.
-	snap, fail, fstatus := c.inUse(freecheck.Addresses)
-	if fail != nil {
-		return fail, fstatus
-	}
-
 	if dry {
+		// What is already in use: an offered address inside a DHCP range, or
+		// one a reservation or host holds, is never offered.
+		snap, fail, fstatus := c.inUse(freecheck.Addresses, true, netip.Addr{}, netip.Addr{})
+		if fail != nil {
+			return fail, fstatus
+		}
 		// GET on nextavailableip lists the next free addresses without
 		// reserving them (operation subnetListNextAvailableIP; POST is the one
 		// that allocates). Until 2026-10-21 the preview answered an empty list
@@ -894,7 +893,33 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 
 	addresses := respAddresses(resp)
 	// Infoblox picked these itself. One that a DHCP range, reservation or host
-	// already uses is not kept: every address just made is released.
+	// already uses is not kept, and neither is any when that cannot be
+	// checked: every address just made is released. The check is a fresh read
+	// of only the addresses handed out.
+	var lo, hi netip.Addr
+	for _, a := range addresses {
+		ip, perr := netip.ParseAddr(pyStr(asMap(a)["address"]))
+		if perr != nil {
+			continue
+		}
+		if !lo.IsValid() || ip.Less(lo) {
+			lo = ip
+		}
+		if !hi.IsValid() || hi.Less(ip) {
+			hi = ip
+		}
+	}
+	snap, fail, fstatus := c.inUse(freecheck.Addresses, false, lo, hi)
+	if fail != nil {
+		released, orphaned := c.releaseAddresses(addresses)
+		fail["released"] = released
+		fail["error"] = pyStr(fail["error"]) + " The address(es) Infoblox handed out were released."
+		if len(orphaned) > 0 {
+			fail["orphaned"] = orphaned
+			fail["error"] = pyStr(fail["error"]) + fmt.Sprintf(" %d could not be released; remove them in the Editor.", len(orphaned))
+		}
+		return fail, fstatus
+	}
 	for _, a := range addresses {
 		ip, perr := netip.ParseAddr(pyStr(asMap(a)["address"]))
 		if perr != nil {

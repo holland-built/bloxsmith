@@ -1076,8 +1076,14 @@ func (p *SiteProvisioner) Provision() (M, error) {
 		}
 		// Everything already in use, read in full before anything is picked.
 		// A read that cannot be shown to be whole stops the run here, before
-		// anything is created.
-		free, err := freecheck.Load(p.e.Rest, freecheck.All)
+		// anything is created. A preview may reuse a read up to PreviewTTL old;
+		// the live run reads afresh, in full, because the block it will use is
+		// not known until it has looked at them all.
+		read := freecheck.Load
+		if p.cfg.DryRun {
+			read = freecheck.Cached
+		}
+		free, err := read(p.e.Rest, freecheck.All)
 		if err != nil {
 			return perr("%s", freecheck.Public(err))
 		}

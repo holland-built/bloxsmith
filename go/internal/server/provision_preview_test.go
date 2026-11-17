@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bloxsmith/internal/cache"
+	"bloxsmith/internal/freecheck"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -68,7 +71,7 @@ func previewBlockUpstream(t *testing.T, subnets string) http.HandlerFunc {
 			io.WriteString(w, filterByParent(t, subnets, r.URL.Query().Get("_filter")))
 		case strings.HasSuffix(r.URL.Path, "/ipam/address_block"), strings.HasSuffix(r.URL.Path, "/ipam/ip_space"),
 			strings.HasSuffix(r.URL.Path, "/ipam/range"), strings.HasSuffix(r.URL.Path, "/dhcp/fixed_address"),
-			strings.HasSuffix(r.URL.Path, "/ipam/host"):
+			strings.HasSuffix(r.URL.Path, "/ipam/address"):
 			io.WriteString(w, `{"results":[]}`) // Infoblox sends no page object for an empty list
 		default:
 			t.Errorf("unexpected read %s", r.URL.Path)
@@ -147,23 +150,74 @@ func TestSubnetStream_DryRun_SaysWhenTheBlockIsFull(t *testing.T) {
 	}
 }
 
-// A list that may be incomplete, or a child that cannot be read, must not
-// produce a guess: the preview falls back to naming only the size and block.
-func TestSubnetStream_DryRun_FallsBackWhenTheBlockCannotBeReadInFull(t *testing.T) {
+// A list that may be incomplete, a child that cannot be read, or an inventory
+// read that fails outright must not produce a guess, nor a "Would create":
+// the done frame says the check could not run and carries no subnet, so there
+// is nothing to apply.
+func TestSubnetStream_DryRun_RefusesWhenTheCheckCannotRun(t *testing.T) {
 	for name, subnets := range map[string]string{
 		"more rows than returned": `{"results":[` + subnetRow("a", "172.16.128.0", "") + `],"page":{"total_size":"3"}}`,
 		"unreadable child":        `{"results":[{"id":"ipam/subnet/x","address":"","cidr":24}],"page":{"total_size":"1"}}`,
 		// The same page at every offset: the list never reaches an empty page.
 		"no total and a list that never ends": `{"results":[` + subnetRow("a", "172.16.128.0", "") + `]}`,
+		"the subnet list answers 503":         "503",
 	} {
-		d, _ := newInventoryDeps(t, previewBlockUpstream(t, subnets))
+		up := previewBlockUpstream(t, subnets)
+		if subnets == "503" {
+			inner := up
+			up = func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+					w.WriteHeader(503)
+					return
+				}
+				inner(w, r)
+			}
+		}
+		d, _ := newInventoryDeps(t, up)
 		rr := httptest.NewRecorder()
 		d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
 		body := rr.Body.String()
-		if strings.Contains(body, "probably") || !strings.Contains(body, "could not work out which one") {
-			t.Errorf("%s: want the fallback wording, got %s", name, body)
+		if strings.Contains(body, "Would create") || strings.Contains(body, "probably") {
+			t.Errorf("%s: a preview that could not check offered a subnet: %s", name, body)
 		}
-		terminalFrameOf(t, parseSSEFrames(t, body))
+		done := terminalFrameOf(t, parseSSEFrames(t, body))
+		msg, _ := done["message"].(string)
+		if done["check_failed"] != true || done["subnet"] != nil ||
+			!strings.Contains(msg, "Couldn't check which addresses are free, so no subnet is offered") {
+			t.Errorf("%s: done frame = %v, want check_failed, no subnet and the plain reason", name, done)
+		}
+	}
+}
+
+// Previews within PreviewTTL share one read of what is in use, and say how
+// old it is. Before, every preview read the whole tenant again (about 30 s on
+// a large one).
+func TestSubnetStream_DryRun_SecondPreviewReusesTheRead(t *testing.T) {
+	freecheck.UseCache(cache.New())
+	t.Cleanup(func() { freecheck.UseCache(nil) })
+	var mu sync.Mutex
+	inventory := 0
+	inner := previewBlockUpstream(t, `{"results":[`+subnetRow("a", "172.16.128.0", "")+`],"page":{"total_size":"1"}}`)
+	d, _ := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("_order_by") != "" {
+			mu.Lock()
+			inventory++
+			mu.Unlock()
+		}
+		inner(w, r)
+	})
+	for i := 0; i < 2; i++ {
+		rr := httptest.NewRecorder()
+		d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+		if !strings.Contains(rr.Body.String(), "Would create 172.16.129.0/24") ||
+			!strings.Contains(rr.Body.String(), `"age_seconds"`) {
+			t.Fatalf("preview %d = %s", i+1, rr.Body.String())
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if inventory != 6 { // spaces, blocks, subnets, ranges, reservations, hosts: once
+		t.Fatalf("%d inventory reads over two previews, want 6 (one read, shared)", inventory)
 	}
 }
 
@@ -205,5 +259,60 @@ func emptyInventory(h http.HandlerFunc) http.HandlerFunc {
 		default:
 			h(w, r)
 		}
+	}
+}
+
+// Apply: Infoblox picks the subnet inside the block's own space only. A pick
+// another space already uses is checked against a fresh read around it (which
+// also sees the new subnet itself: that is not a clash), removed, and refused
+// with the reason. Before, the live run kept it and reported done.
+func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
+	var mu sync.Mutex
+	var deletes, filters []string
+	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			deletes = append(deletes, r.URL.Path)
+			mu.Unlock()
+			io.WriteString(w, `{}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24}]}`)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"172.16.128.0","cidr":21,"space":"ipam/ip_space/sp-1"}}`)
+		case q.Get("_order_by") != "" && q.Get("_offset") != "0":
+			io.WriteString(w, `{"results":[]}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			mu.Lock()
+			filters = append(filters, q.Get("_filter"))
+			mu.Unlock()
+			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`,`+
+				`{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24,"space":"ipam/ip_space/sp-1"}],"page":{"total_size":"2"}}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0"))
+	body := rr.Body.String()
+	noDoneFrame(t, parseSSEFrames(t, body))
+	if !strings.Contains(body, "Infoblox picked 172.16.128.0/24, but a subnet in ipam/ip_space/sp-2 already uses 172.16.128.0/24, so it was removed") {
+		t.Fatalf("want the pick refused and removed, got %s", body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(deletes) != 1 || deletes[0] != "/api/ddi/v1/ipam/subnet/new-1" {
+		t.Fatalf("deletes = %v, want the new subnet removed", deletes)
+	}
+	if len(filters) == 0 || !strings.Contains(filters[0], `address>="172.16.128.0" and address<="172.16.128.255"`) {
+		t.Fatalf("subnet read filters = %v, want a read scoped to the pick", filters)
+	}
+	if n := len(auditEntries(t, logPath, "provision-subnet")); n != 0 {
+		t.Fatalf("%d provision-subnet rows, want none: the subnet was removed", n)
+	}
+	if n := len(auditEntries(t, logPath, "provision-subnet-error")); n != 1 {
+		t.Fatalf("%d provision-subnet-error rows, want 1", n)
 	}
 }

@@ -145,7 +145,17 @@ func (d *Deps) buildKit(r *http.Request, in map[string]any, dry bool) (map[strin
 	base := firstSubnetBase(res)
 	var addrs []netip.Addr
 	if base.IsValid() {
-		snap, err := freecheck.Load(d.restFor(r), freecheck.Addresses)
+		// A preview checks against the shared read; the live run reads afresh
+		// only the network the samples come from.
+		within := netip.PrefixFrom(base, base.BitLen())
+		for _, s := range asList(res["subnets"]) {
+			m, _ := s.(map[string]any)
+			if p, err := netip.ParsePrefix(anyStr(m["address"])); err == nil && p.Masked().Contains(base) {
+				within = p.Masked()
+				break
+			}
+		}
+		snap, err := freecheck.ForPrefix(d.restFor(r), freecheck.Addresses, dry, within)
 		if err != nil {
 			res["sample_note"] = "The sample DNS names were not added. " + freecheck.Public(err)
 			if dry {

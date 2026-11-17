@@ -278,7 +278,7 @@ func TestReserveRefusesATypedAddressAlreadyInUse(t *testing.T) {
 			"dhcp/fixed_address": `{"id":"dhcp/fixed_address/f-9","ip_space":"ipam/ip_space/sp-1","address":"10.7.0.20"}`}},
 			"10.7.0.20 is not free: a reservation in corp-amer already uses 10.7.0.20"},
 		{"a host's address", resvConfig{inventory: map[string]string{
-			"ipam/host": `{"id":"ipam/host/h-1","addresses":[{"address":"10.7.0.20","space":"ipam/ip_space/sp-1"}]}`}},
+			"ipam/address": `{"id":"ipam/address/a-1","address":"10.7.0.20","space":"ipam/ip_space/sp-1","host":"ipam/host/h-1"}`}},
 			"10.7.0.20 is not free: a host in ipam/ip_space/sp-1 already uses 10.7.0.20"},
 		{"in use in Infoblox's address records", resvConfig{
 			addrRecord: `{"results":[{"id":"ipam/address/a-1","address":"10.7.0.20","state":"used"}]}`},

@@ -24,17 +24,12 @@ import (
 // nil error means the block is full. If the inventory cannot be read in full
 // it is an error: nothing is suggested.
 func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block, next netip.Prefix, checked freecheck.Counts, skipped []freecheck.Skip, err error) {
-	_, body, err := c.GetPageStrict(blockPath, map[string]string{"_fields": "address,cidr,space"})
+	block, space, err := blockOf(c, blockPath)
 	if err != nil {
 		return block, next, checked, nil, err
 	}
-	res, _ := body["result"].(map[string]any)
-	block, ok := prefixOf(res)
-	space, _ := res["space"].(string)
-	if !ok || space == "" {
-		return block, next, checked, nil, fmt.Errorf("the block has no readable address or IP space")
-	}
-	snap, err := freecheck.Load(c, freecheck.All)
+	// A preview: the shared read of what is in use, up to PreviewTTL old.
+	snap, err := freecheck.Cached(c, freecheck.All)
 	if err != nil {
 		return block, next, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
 	}

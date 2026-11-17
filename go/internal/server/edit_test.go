@@ -236,7 +236,7 @@ func TestEditCreate_SubnetTaggingFailure_AuditsTheOrphanId(t *testing.T) {
 	d := newEditTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
-			w.Write([]byte(`{"results":[{"id":"ipam/subnet/s-orphan"}]}`))
+			w.Write([]byte(`{"results":[{"id":"ipam/subnet/s-orphan","address":"10.0.5.0","cidr":24}]}`))
 			return
 		}
 		patches++

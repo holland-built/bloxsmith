@@ -370,7 +370,13 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 	// Everything already in use, read in full before the first block. Like
 	// the IP-space lookup above, a failure here comes before anything is
 	// created, so there is no rollback report to carry.
-	free, err := freecheck.Load(p.e.Rest, freecheck.All)
+	// A preview may reuse a read up to PreviewTTL old; the live run reads
+	// afresh, in full, because a template's blocks can lie anywhere.
+	read := freecheck.Load
+	if p.cfg.DryRun {
+		read = freecheck.Cached
+	}
+	free, err := read(p.e.Rest, freecheck.All)
 	if err != nil {
 		return nil, perr("%s", freecheck.Public(err))
 	}

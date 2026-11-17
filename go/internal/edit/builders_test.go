@@ -575,7 +575,7 @@ func TestSubnetCreate_LiveCreateThenTagsForTeardown(t *testing.T) {
 func TestSubnetCreate_CallerTagsWinOverNameDefault(t *testing.T) {
 	f := builderFakeServer(t, func(r builderReq) (int, string) {
 		if r.Method == http.MethodPost {
-			return 201, `{"results":[{"id":"ipam/subnet/s1"}]}`
+			return 201, `{"results":[{"id":"ipam/subnet/s1","address":"10.0.5.0","cidr":24}]}`
 		}
 		return 200, `{"result":{"id":"ipam/subnet/s1"}}`
 	})
@@ -604,7 +604,7 @@ func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
 	patches := 0
 	f := builderFakeServer(t, func(r builderReq) (int, string) {
 		if r.Method == http.MethodPost {
-			return 201, `{"results":[{"id":"ipam/subnet/s1"}]}`
+			return 201, `{"results":[{"id":"ipam/subnet/s1","address":"10.0.5.0","cidr":24}]}`
 		}
 		patches++
 		if patches == 1 {
@@ -651,7 +651,7 @@ func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
 func TestSubnetCreate_TaggingFailureNamesTheId(t *testing.T) {
 	f := builderFakeServer(t, func(r builderReq) (int, string) {
 		if r.Method == http.MethodPost {
-			return 201, `{"results":[{"id":"ipam/subnet/s1"}]}`
+			return 201, `{"results":[{"id":"ipam/subnet/s1","address":"10.0.5.0","cidr":24}]}`
 		}
 		return 500, `{"error":"tag write rejected"}`
 	})
@@ -1020,7 +1020,7 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 		}, "update failed (could not reach the tenant — no request completed)"},
 		{"SubnetCreate", func(c *Client) (M, int) {
 			return c.SubnetCreate(M{"block_id": "ipam/address_block/b1", "cidr": 24.0, "dry": false})
-		}, freecheckUnreachable},
+		}, "could not read the address block: could not reach the tenant — no request completed"},
 		{"SubnetUpdate", func(c *Client) (M, int) {
 			return c.SubnetUpdate(M{"id": "ipam/subnet/s1", "name": "n", "dry": false})
 		}, "update failed (could not reach the tenant — no request completed)"},
@@ -1043,11 +1043,9 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 			return c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "h",
 				"type": "A", "value": "10.0.0.5", "dry": false})
 		}, "create failed (could not reach the tenant — no request completed)"},
-		// Allocation reads what is already in use first, so that read is
-		// what an unreachable tenant fails.
 		{"SelfserviceAllocate", func(c *Client) (M, int) {
 			return c.SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
-		}, freecheckUnreachable},
+		}, "allocation failed (could not reach the tenant — no request completed)"},
 		{"Delete", func(c *Client) (M, int) {
 			return c.Delete("/api/ddi/v1/ipam/host/h-1")
 		}, "delete failed (could not reach the tenant — no request completed)"},

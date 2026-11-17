@@ -61,7 +61,8 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 	// What is already in use, so the address is never one a DHCP range, a
 	// reservation or a host already holds. Read again on the live run, so a
 	// previewed address taken since is refused, not reserved twice.
-	snap, fail, fstatus := c.inUse(freecheck.Addresses)
+	lo, hi := freecheck.Bounds(prefix.Masked())
+	snap, fail, fstatus := c.inUse(freecheck.Addresses, dry, lo, hi)
 	if fail != nil {
 		return fail, fstatus
 	}
@@ -233,8 +234,11 @@ const pickRounds = 3
 // inUse reads everything already in use (see freecheck). A read that cannot
 // be shown to be complete refuses, with the plain reason, rather than check
 // against a partial list.
-func (c *Client) inUse(scope freecheck.Scope) (*freecheck.Snapshot, M, int) {
-	snap, err := freecheck.Load(c.Rest, scope)
+//
+// A preview (dry) checks against the shared read, up to PreviewTTL old; the
+// live run reads afresh only what overlaps lo to hi.
+func (c *Client) inUse(scope freecheck.Scope, dry bool, lo, hi netip.Addr) (*freecheck.Snapshot, M, int) {
+	snap, err := freecheck.For(c.Rest, scope, dry, lo, hi)
 	if err != nil {
 		return nil, M{"ok": false, "error": freecheck.Public(err)}, 502
 	}
