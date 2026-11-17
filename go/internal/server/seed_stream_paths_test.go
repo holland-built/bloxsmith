@@ -22,7 +22,7 @@ import (
 // plus two broken amer site templates, one of each kind.
 func seedPathsDeps(t *testing.T, upstream http.HandlerFunc) *Deps {
 	t.Helper()
-	d, closeSrv := newTestDeps(t, upstream)
+	d, closeSrv := newTestDeps(t, emptyInventory(upstream))
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
 	dir := t.TempDir()

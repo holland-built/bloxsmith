@@ -62,6 +62,12 @@ type allocConfig struct {
 	// the end of the slice gets 204. Per-call control is what lets one release
 	// succeed and the next fail, splitting released from orphaned.
 	deleteStatuses []int
+
+	// inventory is the rows freecheck's full read of each list sees, keyed by
+	// path under /api/ddi/v1/ ("ipam/range"); a list not named is empty. Those
+	// reads are answered before anything is recorded, so every count below is
+	// of allocate's own calls.
+	inventory map[string]string
 }
 
 type allocFake struct {
@@ -88,6 +94,15 @@ func newAllocFake(t *testing.T, cfg allocConfig) *allocFake {
 	t.Helper()
 	f := &allocFake{t: t}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query(); r.Method == http.MethodGet && q.Get("_order_by") != "" {
+			rows := cfg.inventory[strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")]
+			if q.Get("_offset") != "0" {
+				rows = ""
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"results":[`+rows+`]}`)
+			return
+		}
 		var body M
 		if raw, _ := io.ReadAll(r.Body); len(raw) > 0 {
 			if err := json.Unmarshal(raw, &body); err != nil {
@@ -946,5 +961,39 @@ func TestAllocatePreviewSaysWhenTheListingFails(t *testing.T) {
 	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-42", "count": float64(2), "dry": true})
 	if status == 200 || res["ok"] != false {
 		t.Fatalf("a failed listing must not look like an empty preview: %d %v", status, res)
+	}
+}
+
+// Infoblox picks the addresses on a live allocation. One that a DHCP range
+// already holds is not kept: every address just made is released, and the
+// answer names the range.
+func TestAllocateReleasesAPickInsideADHCPRange(t *testing.T) {
+	f := newAllocFake(t, allocConfig{inventory: map[string]string{
+		"ipam/range": `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.7.0.5","end":"10.7.0.9"}`}})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-1", "count": 2, "dry": false})
+	if status != 409 || !strings.Contains(pyStr(res["error"]),
+		"Infoblox handed out 10.7.0.5, but a DHCP range in ipam/ip_space/sp-1 already uses 10.7.0.5 to 10.7.0.9") {
+		t.Fatalf("= %d %v, want 409 naming the range", status, res)
+	}
+	if got := len(f.byMethod(http.MethodDelete)); got != 2 {
+		t.Fatalf("%d release(s), want both addresses released", got)
+	}
+	if n := len(f.byMethod(http.MethodPatch)); n != 0 {
+		t.Fatalf("%d PATCH(es), want none: nothing kept is named", n)
+	}
+}
+
+// The preview passes over an offer inside a DHCP range and asks Infoblox for
+// more.
+func TestAllocatePreviewPassesOverAnOfferInsideARange(t *testing.T) {
+	f := newAllocFake(t, allocConfig{inventory: map[string]string{
+		"ipam/range": `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.7.0.4","end":"10.7.0.4"}`}})
+	res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s-1", "count": 1, "dry": true})
+	addrs, _ := res["addresses"].([]any)
+	if status != 200 || len(addrs) != 1 || pyStr(asMap(addrs[0])["address"]) != "10.7.0.5" {
+		t.Fatalf("= %d %v, want 10.7.0.5 offered", status, res)
+	}
+	if sk, _ := res["skipped"].([]any); len(sk) != 1 {
+		t.Fatalf("skipped = %v, want 10.7.0.4 named", res["skipped"])
 	}
 }

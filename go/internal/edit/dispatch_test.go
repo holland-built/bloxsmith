@@ -62,6 +62,9 @@ func dispatchServer(t *testing.T, route func(dispatchReq) (int, string)) *dispat
 	t.Helper()
 	f := &dispatchFake{}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if answerFreecheckReads(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		req := dispatchReq{
 			Method: r.Method,

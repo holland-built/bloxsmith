@@ -258,6 +258,12 @@ function useStreamFlow(path) {
       // unknown answer, held as null so it renders as nothing at all rather
       // than as a confident all-clear.
       if (j?.error && !j.template) { setError(j.error); setRollback(j.rollback ?? null); stop('idle') }
+      // A done frame with check_failed is a preview that could not check what
+      // is free: a failed preview, so its message shows and Apply stays off.
+      else if (j?.done && j.check_failed) {
+        setError(j.message || "Couldn't check which addresses are free, so nothing is offered.")
+        stop('idle')
+      }
       else if (j?.done) {
         setResult(j)
         setStale(false)

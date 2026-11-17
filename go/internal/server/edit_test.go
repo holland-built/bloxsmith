@@ -17,7 +17,7 @@ import (
 // file, and an edit.Client bound to the same Rest client as the upstream.
 func newEditTestDeps(t *testing.T, upstream http.HandlerFunc) *Deps {
 	t.Helper()
-	d, closeSrv := newTestDeps(t, upstream)
+	d, closeSrv := newTestDeps(t, emptyInventory(upstream)) // the free-address check reads see an empty tenant
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
 	d.Audit = audit.New(filepath.Join(t.TempDir(), "audit_log.jsonl"), "app-v-test", "test-instance",
@@ -236,7 +236,7 @@ func TestEditCreate_SubnetTaggingFailure_AuditsTheOrphanId(t *testing.T) {
 	d := newEditTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
-			w.Write([]byte(`{"results":[{"id":"ipam/subnet/s-orphan"}]}`))
+			w.Write([]byte(`{"results":[{"id":"ipam/subnet/s-orphan","address":"10.0.5.0","cidr":24}]}`))
 			return
 		}
 		patches++

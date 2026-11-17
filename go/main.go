@@ -29,6 +29,7 @@ import (
 	"bloxsmith/internal/config"
 	"bloxsmith/internal/dashboard"
 	"bloxsmith/internal/edit"
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/mcp"
 	"bloxsmith/internal/provision"
@@ -547,6 +548,10 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// same rest proxy. The MCP client is built for the later search (1e) / AI
 	// (1h) phases; /api/data itself uses REST (the parquet path is broken).
 	sharedCache := cache.New()
+	// Previews of new networks and addresses reuse one read of what is in use
+	// for a short time (freecheck.PreviewTTL); a tenant switch rotates this
+	// cache and so drops it.
+	freecheck.UseCache(sharedCache)
 
 	// Multi-account switcher, plus the coordinated auth reset the vault runs on a
 	// tenant mutation (SetActive/add-first/remove-active/update-active-key/

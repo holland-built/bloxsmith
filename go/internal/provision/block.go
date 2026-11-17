@@ -2,9 +2,12 @@ package provision
 
 import (
 	"fmt"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
+
+	"bloxsmith/internal/freecheck"
 )
 
 // BlockConfig is server.py's BlockConfig dataclass (1311).
@@ -103,6 +106,10 @@ type BlockProvisioner struct {
 	emit      Emitter
 	spaceID   string
 	resilient bool
+
+	// free is everything already in use, read by Provision before the first
+	// block; each block is checked against it and added once made.
+	free *freecheck.Snapshot
 }
 
 func (e *Engine) NewBlockProvisioner(cfg *BlockConfig, emit Emitter) *BlockProvisioner {
@@ -183,6 +190,22 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 	tags := p.blockTags(bdef)
 	mode := dryPrefix(p.cfg.DryRun)
 	p.emit(M{"step": fmt.Sprintf("%sCreating address block %s  status=%s", mode, cidrStr(n), pyStr(bdef["status"]))})
+
+	// Not only the same block (exists, below, skips that one): anything in
+	// any IP space that overlaps it, except its own parent. Checked in the
+	// preview too, so a preview never promises a block the live run refuses.
+	pfx, _ := netip.ParsePrefix(cidrStr(n))
+	var parentPfx netip.Prefix
+	if parent != nil {
+		parentPfx, _ = netip.ParsePrefix(cidrStr(parent))
+	}
+	clash := p.free.CheckPrefix(p.spaceID, pfx, parentPfx)
+	same := p.free.Has(freecheck.KindBlock, p.spaceID, pfx)
+	if !clash.Free && !same {
+		appendTo(result, "skipped_picks", M{"candidate": pfx.String(), "reason": clash.Reason})
+		return perr("Block %s is not free: %s", pfx, clash.Reason)
+	}
+	p.free.Add(freecheck.Network(freecheck.KindBlock, p.spaceID, "", pfx))
 
 	if p.cfg.DryRun {
 		appendTo(result, "blocks_created", M{"address": networkAddr(n), "cidr": cidr,
@@ -344,6 +367,33 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		return nil, perr("IP space not found: %s", p.cfg.IPSpace)
 	}
 	p.spaceID = pyStr(asMap(spaceResults[0])["id"])
+	// What is already in use, read before the first block, but only around
+	// each top-level block of the template (in every IP space): their child
+	// blocks lie inside them. Like the IP-space lookup above, a failure here
+	// comes before anything is created, so there is no rollback report to
+	// carry. A preview may reuse each read for PreviewTTL; the live run reads
+	// afresh. A block whose address cannot be read is refused by createBlock.
+	var reads []*freecheck.Snapshot
+	for _, b := range p.cfg.Blocks {
+		bdef := asMap(b)
+		cidr, ok := intCoerce(bdef["cidr"])
+		if !ok {
+			continue
+		}
+		pfx, perr2 := netip.ParsePrefix(fmt.Sprintf("%s/%d", pyStr(bdef["address"]), cidr))
+		if perr2 != nil {
+			continue
+		}
+		snap, err := freecheck.ForPrefix(p.e.Rest, freecheck.All, p.cfg.DryRun, pfx)
+		if err != nil {
+			return nil, perr("%s", freecheck.Public(err))
+		}
+		reads = append(reads, snap)
+	}
+	free := freecheck.Merge(reads...)
+	p.free = free
+	result["checked"] = free.Counts.Map()
+	result["skipped_picks"] = []any{}
 
 	runErr := func() error {
 		for _, b := range p.cfg.Blocks {

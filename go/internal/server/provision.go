@@ -1,14 +1,17 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"maps"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 
 	"bloxsmith/internal/edit"
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
@@ -139,17 +142,17 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
 					return nil
 				}
-				blockNet, next, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
+				blockNet, next, checked, skipped, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
 				if gerr != nil {
-					// Not knowing which subnet is no reason to fail the preview: the
-					// live run asks Infoblox, which picks one itself.
+					// The check could not run, so nothing is offered: the done frame
+					// carries no subnet, only check_failed and the plain reason.
 					msg := gerr.Error()
 					if ue, ok := gerr.(*rest.UpstreamError); ok {
 						msg = ue.Public()
 					}
-					emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create a /%d in block %s "+
-						"(could not work out which one: %s)", cidrN, block, msg)})
-					emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": nil, "cidr": cidrN}})
+					msg = "Couldn't check which addresses are free, so no subnet is offered. " + msg
+					emit(map[string]any{"step": "[DRY-RUN] " + msg})
+					emit(map[string]any{"done": true, "check_failed": true, "message": msg, "subnet": nil})
 					return nil
 				}
 				if cidrN < blockNet.Bits() || cidrN > blockNet.Addr().BitLen() {
@@ -157,12 +160,13 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					return nil
 				}
 				if !next.IsValid() {
-					emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet)})
+					emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet),
+						"checked": checked.Map(), "skipped": freecheck.SkipList(skipped)})
 					return nil
 				}
 				addr := next.Addr().String()
 				emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create %s (probably; Infoblox makes the "+
-					"final pick) in block %s", next, blockNet)})
+					"final pick) in block %s; %s", next, blockNet, checked.Age())})
 				if makeZone {
 					if fqdn, ferr := provision.CidrToReverseZone(addr, cidrN); ferr == nil {
 						emit(map[string]any{"step": "[DRY-RUN] Would create DNS zone " + fqdn})
@@ -171,7 +175,8 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 						return nil
 					}
 				}
-				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN}})
+				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN},
+					"checked": checked.Map(), "skipped": freecheck.SkipList(skipped)})
 				return nil
 			}
 			cidrN, ok := parseIntStr(cidr)
@@ -188,6 +193,12 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					bm["comment"] = comment
 				}
 				body = bm
+			}
+			// The block's range and space, for checking Infoblox's pick below.
+			blockNet, space, berr := blockOf(d.restFor(r), blockPath)
+			if berr != nil {
+				errDetail = map[string]any{"phase": "allocate"}
+				return fmt.Errorf("the block could not be read, so nothing was created: %v", berr)
 			}
 			result, status, werr := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
 				body, map[string]string{"cidr": strconv.Itoa(cidrN)})
@@ -228,6 +239,17 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 				errDetail = map[string]any{"phase": "allocate"}
 				return fmt.Errorf("the subnet allocation returned HTTP %d but no subnet address, "+
 					"so nothing usable was created", status)
+			}
+			// Infoblox picked inside the block's own space only. A pick that
+			// clashes with anything in any space, or that cannot be checked, is
+			// removed again before anything is built on it.
+			if err := verifySubnetPick(d.restFor(r), subnet, addr, cidrN, space, blockNet); err != nil {
+				errDetail = map[string]any{"phase": "verify", "subnet": addr}
+				if errors.Is(err, errPickKept) {
+					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
+						"block": block, "cidr": cidr, "subnet": addr})
+				}
+				return err
 			}
 
 			if makeZone {
@@ -291,6 +313,53 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			emit(map[string]any{"error": err.Error()})
 		}
 	})
+}
+
+// blockOf reads a block's range and IP space.
+func blockOf(c *rest.Client, blockPath string) (netip.Prefix, string, error) {
+	_, body, err := c.GetPageStrict(blockPath, map[string]string{"_fields": "address,cidr,space"})
+	if err != nil {
+		return netip.Prefix{}, "", err
+	}
+	res, _ := body["result"].(map[string]any)
+	block, ok := prefixOf(res)
+	space, _ := res["space"].(string)
+	if !ok || space == "" {
+		return netip.Prefix{}, "", fmt.Errorf("the block has no readable address or IP space")
+	}
+	return block, space, nil
+}
+
+// errPickKept marks a verify failure that left the subnet on the network
+// (its removal failed), so the caller records that it exists.
+var errPickKept = errors.New("the subnet is still there")
+
+// verifySubnetPick checks the subnet Infoblox just made against a fresh read
+// of everything around it. A clash, or a check that cannot run, removes it.
+func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN int, space string, block netip.Prefix) error {
+	if n, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
+		cidrN = n
+	}
+	made, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", addr, cidrN))
+	id := provision.PyStr(subnet["id"])
+	var reason string
+	if perr != nil {
+		reason = "its address cannot be checked"
+	} else if snap, err := freecheck.AroundPrefix(c, freecheck.All, made); err != nil {
+		reason = "what is already in use could not be read (" + freecheck.Public(err) + ")"
+	} else if res := snap.Without(id).CheckPrefix(space, made, block); !res.Free {
+		reason = res.Reason
+	} else {
+		return nil
+	}
+	path, oerr := edit.ObjectPath("ipam/subnet", id)
+	if oerr == nil {
+		if _, st, _ := c.Write("DELETE", path, nil, nil); st == 200 || st == 204 || st == 404 {
+			return fmt.Errorf("Infoblox picked %s/%d, but %s, so it was removed. Preview again", addr, cidrN, reason)
+		}
+	}
+	return fmt.Errorf("Infoblox picked %s/%d, but %s, and it could not be removed: remove it in the Editor (%w)",
+		addr, cidrN, reason, errPickKept)
 }
 
 // upstreamDetail turns a rest.Write failure into the tail of one sentence:

@@ -34,7 +34,17 @@ import (
 // newResidualDeps wires a Deps with the repo's real bundled templates, a
 // tokenless Guard (loopback -> admin, satisfying the "operator" gate) and a real
 // audit.Log on a scratch file, whose path it returns for on-disk assertions.
+//
+// The upstream sees none of freecheck's inventory reads: they are answered as
+// an empty tenant (emptyInventory). newInventoryDeps passes them through.
 func newResidualDeps(t *testing.T, upstream http.HandlerFunc) (*Deps, string) {
+	t.Helper()
+	return newInventoryDeps(t, emptyInventory(upstream))
+}
+
+// newInventoryDeps is newResidualDeps for an upstream that answers the
+// inventory reads itself.
+func newInventoryDeps(t *testing.T, upstream http.HandlerFunc) (*Deps, string) {
 	t.Helper()
 	d, closeSrv := newTestDeps(t, upstream)
 	t.Cleanup(closeSrv)

@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"bloxsmith/internal/freecheck"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -38,6 +39,7 @@ func TestCreateSubnet_DryRun_PreviewSucceeds_NoMarker(t *testing.T) {
 
 	e := newTestEngine(srv)
 	p := e.NewSiteProvisioner(testSiteConfig(), func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	result := M{}
 
 	out, err := p.createSubnet("block-1", testSubnetDef(), result)
@@ -66,6 +68,7 @@ func TestCreateSubnet_DryRun_PreviewGenuinelyEmpty_NoneAvailableMarker(t *testin
 
 	e := newTestEngine(srv)
 	p := e.NewSiteProvisioner(testSiteConfig(), func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	result := M{}
 
 	out, err := p.createSubnet("block-1", testSubnetDef(), result)
@@ -95,6 +98,7 @@ func TestCreateSubnet_DryRun_PreviewLookupFails_UnavailableMarkerNoAbort(t *test
 
 	e := newTestEngine(srv)
 	p := e.NewSiteProvisioner(testSiteConfig(), func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	result := M{}
 
 	out, err := p.createSubnet("block-1", testSubnetDef(), result)
@@ -144,18 +148,21 @@ func TestCreateSubnet_DryRun_FailedPreviewNeverMatchesSuccess(t *testing.T) {
 	}))
 	defer emptySrv.Close()
 
-	successOut, err := newTestEngine(successSrv).NewSiteProvisioner(testSiteConfig(), func(M) {}).
-		createSubnet("block-1", testSubnetDef(), M{})
+	successP := newTestEngine(successSrv).NewSiteProvisioner(testSiteConfig(), func(M) {})
+	successP.free = freecheck.NewSnapshot(nil)
+	successOut, err := successP.createSubnet("block-1", testSubnetDef(), M{})
 	if err != nil {
 		t.Fatalf("success path: unexpected error %v", err)
 	}
-	failOut, err := newTestEngine(failSrv).NewSiteProvisioner(testSiteConfig(), func(M) {}).
-		createSubnet("block-1", testSubnetDef(), M{})
+	failP := newTestEngine(failSrv).NewSiteProvisioner(testSiteConfig(), func(M) {})
+	failP.free = freecheck.NewSnapshot(nil)
+	failOut, err := failP.createSubnet("block-1", testSubnetDef(), M{})
 	if err != nil {
 		t.Fatalf("failure path: unexpected error %v (must still succeed as a dry run)", err)
 	}
-	emptyOut, err := newTestEngine(emptySrv).NewSiteProvisioner(testSiteConfig(), func(M) {}).
-		createSubnet("block-1", testSubnetDef(), M{})
+	emptyP := newTestEngine(emptySrv).NewSiteProvisioner(testSiteConfig(), func(M) {})
+	emptyP.free = freecheck.NewSnapshot(nil)
+	emptyOut, err := emptyP.createSubnet("block-1", testSubnetDef(), M{})
 	if err != nil {
 		t.Fatalf("empty path: unexpected error %v", err)
 	}

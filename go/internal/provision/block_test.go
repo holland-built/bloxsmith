@@ -52,6 +52,9 @@ type blockRollbackFake struct {
 
 func (f *blockRollbackFake) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if answerFreecheckRead(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method {
@@ -345,6 +348,9 @@ type blockAPIFake struct {
 
 func (f *blockAPIFake) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if answerFreecheckRead(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method {

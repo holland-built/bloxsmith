@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/rest"
 )
 
@@ -80,30 +81,9 @@ type OverlapGroup struct {
 	Members []OverlapMember `json:"members"`
 }
 
-// PrefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. It is
-// the one copy; server's prefixOf (provision_preview.go) calls it.
-func PrefixOf(m map[string]any) (netip.Prefix, bool) {
-	a, _ := m["address"].(string)
-	addr, err := netip.ParseAddr(strings.TrimSpace(a))
-	if err != nil {
-		return netip.Prefix{}, false
-	}
-	var bits int
-	switch v := m["cidr"].(type) {
-	case float64:
-		bits = int(v)
-	case string:
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return netip.Prefix{}, false
-		}
-		bits = n
-	default:
-		return netip.Prefix{}, false
-	}
-	p, err := addr.Prefix(bits)
-	return p, err == nil
-}
+// PrefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. The
+// one copy is freecheck.PrefixOf.
+func PrefixOf(m map[string]any) (netip.Prefix, bool) { return freecheck.PrefixOf(m) }
 
 // prefixLess orders by family (IPv4 first, netip.Addr.Compare does that), then
 // start address, then widest first, so an equal-start /8 comes before its /16.

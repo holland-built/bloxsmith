@@ -175,3 +175,23 @@ test('site teardown uses /api/teardown/site/stream and surfaces a failure', asyn
   // the run aborted rather than left on a spinner.
   await expect(page.getByText(/run aborted/i).first()).toBeVisible();
 });
+
+// A preview whose "is it free" check could not run (the server read of what is
+// in use answered 503) ends with a done frame carrying check_failed and no
+// subnet. That is a failed preview: its message shows and Provision stays off.
+// Before, every done frame counted as a good preview and enabled Provision.
+test('Subnet mode: a preview that could not check keeps Provision off', async ({ page }) => {
+  const msg = "Couldn't check which addresses are free, so no subnet is offered. Couldn't read every subnet, so nothing is offered: a missing one could already use the addresses.";
+  const seen = await stubStream(page, '/api/provision/stream', sse(
+    { step: 'Resolving block ipam/address_block/blk-1…' },
+    { step: '[DRY-RUN] ' + msg },
+    { done: true, check_failed: true, message: msg, subnet: null },
+  ));
+  await openMode(page, 'Subnet');
+  await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
+  await expect.poll(() => seen.length).toBeGreaterThan(0);
+  // PreviewApply shows the apply button only after a good preview.
+  await expect(page.getByRole('alert').filter({ hasText: msg })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Provision', exact: true })).toHaveCount(0);
+  expect(seen.length, 'nothing may be applied').toBe(1);
+});

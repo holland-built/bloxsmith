@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"bloxsmith/internal/freecheck"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,9 @@ func dhcpProvisioner(t *testing.T, subnetSize int, dry bool) (*SiteProvisioner, 
 	cfg := testSiteConfig()
 	cfg.SubnetSize = subnetSize
 	cfg.DryRun = dry
-	return New(nil, "").NewSiteProvisioner(cfg, func(M) {}), M{}
+	p := New(nil, "").NewSiteProvisioner(cfg, func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // these tests run one step, not Provision
+	return p, M{}
 }
 
 func skippedRows(t *testing.T, result M) []M {
@@ -205,6 +208,7 @@ func TestCreateDHCPRange_LiveSkipIssuesNoRequest(t *testing.T) {
 	cfg.SubnetSize = 25
 	cfg.DryRun = false
 	p := newTestEngine(srv).NewSiteProvisioner(cfg, func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	result := M{}
 	sdef := SubnetDef{Name: "test-lan", Purpose: "user-lan", Dhcp: "true"}
 

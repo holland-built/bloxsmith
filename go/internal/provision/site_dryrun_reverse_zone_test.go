@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"bloxsmith/internal/freecheck"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,6 +50,7 @@ func runCreateSubnets(t *testing.T, cfg *SiteConfig, h http.HandlerFunc) (M, []s
 			steps = append(steps, pyStr(s))
 		}
 	})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	result := M{}
 	_, err := p.createSubnets(M{"id": "ipam/address_block/b-1"}, result)
 	return result, steps, err
