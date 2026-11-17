@@ -316,3 +316,31 @@ func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
 		t.Fatalf("%d provision-subnet-error rows, want 1", n)
 	}
 }
+
+// A subnet preview reads only what overlaps the chosen block (every IP space),
+// not the whole tenant: 63 s cold on a large one. checked.around names the span.
+func TestSubnetStream_DryRun_ReadsOnlyAroundTheBlock(t *testing.T) {
+	var mu sync.Mutex
+	var filters []string
+	inner := previewBlockUpstream(t, `{"results":[`+subnetRow("a", "172.16.128.0", "")+`],"page":{"total_size":"1"}}`)
+	d, _ := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query(); q.Get("_order_by") != "" && strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+			mu.Lock()
+			filters = append(filters, q.Get("_filter"))
+			mu.Unlock()
+		}
+		inner(w, r)
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+	done := terminalFrameOf(t, parseSSEFrames(t, rr.Body.String()))
+	checked, _ := done["checked"].(map[string]any)
+	if checked["around"] != "172.16.128.0 to 172.16.135.255" {
+		t.Fatalf("checked = %v, want a read around the block 172.16.128.0/21", done["checked"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(filters) != 1 || !strings.Contains(filters[0], `address>="172.16.128.0" and address<="172.16.135.255"`) {
+		t.Fatalf("subnet read filters = %v, want one read scoped to the block", filters)
+	}
+}

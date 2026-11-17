@@ -157,7 +157,8 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	}
 
 	if truthyDry(body["dry"]) {
-		snap, fail, fstatus := c.inUse(freecheck.All, true, netip.Addr{}, netip.Addr{})
+		blo, bhi := freecheck.Bounds(block.Masked())
+		snap, fail, fstatus := c.inUse(freecheck.All, true, blo, bhi)
 		if fail != nil {
 			return fail, fstatus
 		}

@@ -28,8 +28,10 @@ func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block
 	if err != nil {
 		return block, next, checked, nil, err
 	}
-	// A preview: the shared read of what is in use, up to PreviewTTL old.
-	snap, err := freecheck.Cached(c, freecheck.All)
+	// A preview: a read of only what overlaps the block, in every IP space,
+	// shared for up to PreviewTTL.
+	lo, hi := freecheck.Bounds(block.Masked())
+	snap, err := freecheck.For(c, freecheck.All, true, lo, hi)
 	if err != nil {
 		return block, next, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
 	}

@@ -188,6 +188,7 @@ type SiteProvisioner struct {
 	// checked against it, and added to it once offered. block is the chosen
 	// block's range. skipped is what was passed over, and why.
 	free    *freecheck.Snapshot
+	freeFor netip.Prefix // the block p.free was read around
 	block   netip.Prefix
 	skipped []freecheck.Skip
 }
@@ -297,7 +298,11 @@ func (p *SiteProvisioner) findAvailableBlock() (M, error) {
 		return nil, perr("No available address block found for Region=%s Environment=%s", p.cfg.Region, p.cfg.Environment)
 	}
 	// Lowest first (server.py:1682's key), and the first with room for every
-	// network in the plan once what is already in use is left out.
+	// network in the plan once what is already in use is left out. The blocks
+	// are chosen by tag above; what is in use is then read only around each
+	// candidate (every IP space), not across the whole tenant. A preview may
+	// reuse that read for PreviewTTL; the live run reads afresh. A read that
+	// cannot be shown to be whole stops the run before anything is created.
 	sort.SliceStable(results, func(i, j int) bool { return less(blockSortKey(asMap(results[i])), blockSortKey(asMap(results[j]))) })
 	for _, r := range results {
 		b := asMap(r)
@@ -305,6 +310,13 @@ func (p *SiteProvisioner) findAvailableBlock() (M, error) {
 		if !ok {
 			p.skip(fmt.Sprintf("%s/%s", pyStr(b["address"]), pyStr(b["cidr"])), "its address cannot be read")
 			continue
+		}
+		if p.free == nil || p.freeFor != pfx {
+			free, err := freecheck.ForPrefix(p.e.Rest, freecheck.All, p.cfg.DryRun, pfx)
+			if err != nil {
+				return nil, perr("%s", freecheck.Public(err))
+			}
+			p.free, p.freeFor = free, pfx
 		}
 		if why := p.planFits(pfx); why != "" {
 			p.skip(pfx.String(), why)
@@ -1074,25 +1086,13 @@ func (p *SiteProvisioner) Provision() (M, error) {
 			}
 			return nil
 		}
-		// Everything already in use, read in full before anything is picked.
-		// A read that cannot be shown to be whole stops the run here, before
-		// anything is created. A preview may reuse a read up to PreviewTTL old;
-		// the live run reads afresh, in full, because the block it will use is
-		// not known until it has looked at them all.
-		read := freecheck.Load
-		if p.cfg.DryRun {
-			read = freecheck.Cached
-		}
-		free, err := read(p.e.Rest, freecheck.All)
-		if err != nil {
-			return perr("%s", freecheck.Public(err))
-		}
-		p.free = free
-		result["checked"] = free.Counts.Map()
+		// findAvailableBlock reads what is in use around each candidate block
+		// and leaves the chosen block's read in p.free.
 		block, err := p.findAvailableBlock()
 		if err != nil {
 			return err
 		}
+		result["checked"] = p.free.Counts.Map()
 		p.block, _ = freecheck.PrefixOf(block)
 		result["block_id"] = pyStr(block["id"])
 		result["block_address"] = fmt.Sprintf("%s/%s", pyStr(block["address"]), pyStr(block["cidr"]))

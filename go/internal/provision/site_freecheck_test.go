@@ -124,3 +124,58 @@ func TestBlockProvision_RefusesABlockAnotherSpaceOverlaps(t *testing.T) {
 		}
 	}
 }
+
+// Site and block provisioning read what is in use only around the block they
+// use (every IP space), not across the whole tenant: about 60 s on a large one.
+// checked.around names the span read; a whole-tenant read has none.
+func TestSiteProvision_ReadsOnlyAroundTheChosenBlock(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		e, _ := newSiteRollbackHarness(t)
+		cfg := siteRollbackConfig(dry)
+		cfg.CreateReverseZone = false
+		result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+		if err != nil {
+			t.Fatalf("dry=%v: Provision: %v", dry, err)
+		}
+		block := pyStr(result["block_address"])
+		if got := pyStr(asMap(result["checked"])["around"]); block != "10.10.0.0/16" || got != "10.10.0.0 to 10.10.255.255" {
+			t.Fatalf("dry=%v: block %s read around %q, want 10.10.0.0 to 10.10.255.255", dry, block, got)
+		}
+	}
+}
+
+func TestBlockProvision_ReadsOnlyAroundEachTopLevelBlock(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		var filters []string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			q := r.URL.Query()
+			switch {
+			case r.Method == http.MethodPost:
+				w.WriteHeader(201)
+				w.Write([]byte(`{"result":{"id":"ipam/address_block/new"}}`))
+			case q.Get("_offset") != "" && q.Get("_offset") != "0":
+				w.Write([]byte(`{"results":[]}`))
+			case strings.HasSuffix(r.URL.Path, "/ipam/ip_space"):
+				w.Write([]byte(`{"results":[{"id":"ipam/ip_space/space-1","name":"default"}]}`))
+			default:
+				if q.Get("_order_by") != "" && strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+					filters = append(filters, q.Get("_filter"))
+				}
+				w.Write([]byte(`{"results":[]}`))
+			}
+		}))
+		defer srv.Close()
+		cfg := &BlockConfig{Name: "pool", IPSpace: "default", DryRun: dry, ExtraTags: M{},
+			Blocks: []any{M{"address": "10.20.0.0", "cidr": 16, "status": "deployed"},
+				M{"address": "10.40.0.0", "cidr": 16, "status": "deployed"}}}
+		result, err := newTestEngine(srv).NewBlockProvisioner(cfg, func(M) {}).Provision(false)
+		if err != nil {
+			t.Fatalf("dry=%v: Provision: %v", dry, err)
+		}
+		got := pyStr(asMap(result["checked"])["around"])
+		if got != "10.20.0.0 to 10.20.255.255, 10.40.0.0 to 10.40.255.255" || len(filters) != 2 {
+			t.Fatalf("dry=%v: read around %q with subnet filters %v, want one read per top-level block", dry, got, filters)
+		}
+	}
+}

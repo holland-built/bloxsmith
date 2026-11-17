@@ -204,11 +204,33 @@ func AroundPrefix(c *rest.Client, scope Scope, p netip.Prefix) (*Snapshot, error
 	return Around(c, scope, lo, hi)
 }
 
-// For is the one entry point for callers: a preview (dry) gets the cached
-// snapshot, Apply a fresh read around lo..hi.
+// CachedAround is Around for previews: the scoped read for lo..hi is shared
+// for PreviewTTL, like Cached, and each caller gets its own copy.
+func CachedAround(c *rest.Client, scope Scope, lo, hi netip.Addr) (*Snapshot, error) {
+	if shared == nil {
+		return Around(c, scope, lo, hi)
+	}
+	key := fmt.Sprintf("freecheck|%s|%d|%s-%s", c.TenantTag(), scope, lo, hi)
+	v, err := shared.DoTTL(key, PreviewTTL, func() (any, error) { return Around(c, scope, lo, hi) })
+	if err != nil {
+		return nil, err
+	}
+	snap, ok := v.(*Snapshot)
+	if !ok {
+		return Around(c, scope, lo, hi)
+	}
+	return snap.Clone(), nil
+}
+
+// For is the one entry point for callers. Both read only what overlaps lo..hi
+// (in every IP space): a preview (dry) may reuse that read for PreviewTTL,
+// Apply reads afresh. With no lo..hi, a preview gets the cached full read.
 func For(c *rest.Client, scope Scope, dry bool, lo, hi netip.Addr) (*Snapshot, error) {
 	if dry {
-		return Cached(c, scope)
+		if !lo.IsValid() || !hi.IsValid() {
+			return Cached(c, scope)
+		}
+		return CachedAround(c, scope, lo, hi)
 	}
 	return Around(c, scope, lo, hi)
 }

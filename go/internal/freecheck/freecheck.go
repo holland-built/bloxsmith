@@ -160,6 +160,41 @@ func NewSnapshot(names map[string]string, items ...Used) *Snapshot {
 	return s
 }
 
+// Merge is one snapshot holding everything the given reads saw, each item
+// once (reads around neighbouring addresses can both see the same network).
+// ReadAt is the oldest read's; Around lists every span read.
+func Merge(snaps ...*Snapshot) *Snapshot {
+	names := map[string]string{}
+	seen := map[Used]bool{}
+	var items []Used
+	var at time.Time
+	var around []string
+	for _, s := range snaps {
+		if s == nil {
+			continue
+		}
+		for k, v := range s.names {
+			names[k] = v
+		}
+		for _, u := range s.items {
+			if !seen[u] {
+				seen[u] = true
+				items = append(items, u)
+			}
+		}
+		if at.IsZero() || (!s.Counts.ReadAt.IsZero() && s.Counts.ReadAt.Before(at)) {
+			at = s.Counts.ReadAt
+		}
+		if s.Counts.Around != "" {
+			around = append(around, s.Counts.Around)
+		}
+	}
+	m := NewSnapshot(names, items...)
+	m.Counts.ReadAt = at
+	m.Counts.Around = strings.Join(around, ", ")
+	return m
+}
+
 // Add records something this run made (or would make, in a preview), so the
 // next pick in the same run steps past it. It does not change Counts, which
 // say what was read.

@@ -367,19 +367,30 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		return nil, perr("IP space not found: %s", p.cfg.IPSpace)
 	}
 	p.spaceID = pyStr(asMap(spaceResults[0])["id"])
-	// Everything already in use, read in full before the first block. Like
-	// the IP-space lookup above, a failure here comes before anything is
-	// created, so there is no rollback report to carry.
-	// A preview may reuse a read up to PreviewTTL old; the live run reads
-	// afresh, in full, because a template's blocks can lie anywhere.
-	read := freecheck.Load
-	if p.cfg.DryRun {
-		read = freecheck.Cached
+	// What is already in use, read before the first block, but only around
+	// each top-level block of the template (in every IP space): their child
+	// blocks lie inside them. Like the IP-space lookup above, a failure here
+	// comes before anything is created, so there is no rollback report to
+	// carry. A preview may reuse each read for PreviewTTL; the live run reads
+	// afresh. A block whose address cannot be read is refused by createBlock.
+	var reads []*freecheck.Snapshot
+	for _, b := range p.cfg.Blocks {
+		bdef := asMap(b)
+		cidr, ok := intCoerce(bdef["cidr"])
+		if !ok {
+			continue
+		}
+		pfx, perr2 := netip.ParsePrefix(fmt.Sprintf("%s/%d", pyStr(bdef["address"]), cidr))
+		if perr2 != nil {
+			continue
+		}
+		snap, err := freecheck.ForPrefix(p.e.Rest, freecheck.All, p.cfg.DryRun, pfx)
+		if err != nil {
+			return nil, perr("%s", freecheck.Public(err))
+		}
+		reads = append(reads, snap)
 	}
-	free, err := read(p.e.Rest, freecheck.All)
-	if err != nil {
-		return nil, perr("%s", freecheck.Public(err))
-	}
+	free := freecheck.Merge(reads...)
 	p.free = free
 	result["checked"] = free.Counts.Map()
 	result["skipped_picks"] = []any{}

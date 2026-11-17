@@ -440,3 +440,18 @@ func TestAround_FallsBackToAFullRead(t *testing.T) {
 		t.Fatalf("no unfiltered subnet read after the scoped one failed: %v", *seen)
 	}
 }
+
+// Merge keeps each item once and names every span read.
+func TestMerge(t *testing.T) {
+	a := NewSnapshot(map[string]string{"sp-a": "corp"}, Network(KindSubnet, "sp-a", "s1", pfx("10.0.0.0/8")))
+	a.Counts.Around = "10.1.0.0 to 10.1.255.255"
+	b := NewSnapshot(nil, Network(KindSubnet, "sp-a", "s1", pfx("10.0.0.0/8")), Network(KindBlock, "sp-a", "b2", pfx("10.2.0.0/16")))
+	b.Counts.Around = "10.2.0.0 to 10.2.255.255"
+	m := Merge(a, b)
+	if m.Counts.Networks != 2 || m.Counts.Spaces != 1 || m.Counts.Around != "10.1.0.0 to 10.1.255.255, 10.2.0.0 to 10.2.255.255" {
+		t.Fatalf("Merge counts = %+v", m.Counts)
+	}
+	if r := m.CheckPrefix("sp-a", pfx("10.2.3.0/24"), netip.Prefix{}); r.Free {
+		t.Fatal("the merged subnet 10.0.0.0/8 should clash")
+	}
+}
