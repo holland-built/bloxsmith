@@ -56,3 +56,49 @@ test('the Editor asks for devices and still sends the prefix', async ({ page }) 
   await expect.poll(() => posted.length).toBeGreaterThan(0);
   expect(posted[0]).toMatchObject({ block_id: 'ipam/address_block/9', cidr: 26, dry: true });
 });
+
+test('Editor: after picking an existing subnet and going back to a new one, the devices box is empty', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/edit/subnet/find*', (r) => r.fulfill({ json: { items: [
+    { id: 'ipam/subnet/c2', label: '10.3.0.0/16 — branch-lan', fields: { block_id: 'ipam/address_block/9', cidr: 16, name: 'branch-lan', comment: '', tags: '' } } ] } }));
+  const posted: Record<string, unknown>[] = [];
+  await page.route('**/api/edit/subnet', (route) => {
+    posted.push(JSON.parse(route.request().postData() || '{}'));
+    return json(route, { ok: true, dry_run: true });
+  });
+  await page.goto('/#editor?type=subnet');
+  await page.getByRole('spinbutton', { name: 'How many devices need an address? *' }).fill('50');
+  await page.getByPlaceholder('Find by name, comment or full network address').fill('branch');
+  await page.getByRole('button', { name: '10.3.0.0/16 — branch-lan' }).click();
+  await expect(page.getByRole('button', { name: 'Delete Subnet' })).toBeVisible();
+  await page.getByRole('button', { name: 'Make a new one instead' }).click();
+  const devices = page.getByRole('spinbutton', { name: 'How many devices need an address? *' });
+  await expect(devices).toHaveValue('');
+  await expect(page.locator('[data-size-words]')).toHaveCount(0);
+});
+
+test('Editor: an IPv6 address block takes a prefix, not a device count', async ({ page }) => {
+  await installBaselineWorld(page);
+  const posted: Record<string, unknown>[] = [];
+  await page.route('**/api/edit/address_block', (route) => {
+    posted.push(JSON.parse(route.request().postData() || '{}'));
+    return json(route, { ok: true, dry_run: true });
+  });
+  await page.goto('/#editor?type=address_block');
+  await page.getByRole('textbox', { name: 'Address *' }).fill('2001:db8::');
+  await expect(page.getByRole('spinbutton', { name: /How many devices/ })).toHaveCount(0);
+  await page.getByRole('spinbutton', { name: 'Size: the number after the slash *' }).fill('56');
+  await expect(page.getByText('/56 is 4,722,366,482,869,645,213,696 addresses')).toBeVisible();
+  await page.getByRole('textbox', { name: 'IP Space *' }).fill('my-ip-space');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => posted.length).toBeGreaterThan(0);
+  expect(posted[0]).toMatchObject({ address: '2001:db8::', cidr: 56, space: 'my-ip-space' });
+});
+
+test('Editor: Tags finds an existing block by its exact size, not a device count', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.goto('/#editor?type=tags');
+  await expect(page.getByRole('spinbutton', { name: /How many devices/ })).toHaveCount(0);
+  await page.getByRole('spinbutton', { name: 'Block size: the number after the slash' }).fill('31');
+  await expect(page.getByText('/31 is 2 addresses')).toBeVisible();
+});

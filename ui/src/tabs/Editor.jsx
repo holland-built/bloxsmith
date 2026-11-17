@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ColumnHeading, DevicesInput, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, DevicesInput, FormColumns, PrefixInput, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -56,7 +56,7 @@ const FIELD_SPECS = {
       { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
       { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
       { key: 'address', label: 'Block address', kind: 'text', placeholder: '10.20.0.0' },
-      { key: 'cidr', label: 'Block size: how many devices need an address?', kind: 'devices' },
+      { key: 'cidr', label: 'Block size: the number after the slash', kind: 'prefix' },
       { key: 'status', label: 'Status', kind: 'text', placeholder: 'available' },
       { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space' },
     ],
@@ -249,6 +249,7 @@ export default function Editor() {
   const spec = FIELD_SPECS[type]
   const isUpdate = !!editId.trim() && EDIT_UPDATE_TYPES.includes(type)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
+  const isV6 = String(fields.address || '').includes(':')
 
   // Any input edit invalidates a preview taken before it — Apply must never
   // submit a body the user has not seen.
@@ -275,7 +276,7 @@ export default function Editor() {
       } else if (raw == null || raw === '') return
       if (f.key === 'tags') body.tags = parseTags(raw)
       else if (f.key === 'addresses') body.addresses = hostAddresses(raw, fields.spaces)
-      else if (f.kind === 'devices') body[f.key] = Number(raw)
+      else if (f.kind === 'devices' || f.kind === 'prefix') body[f.key] = Number(raw)
       else body[f.key] = raw
     })
     return body
@@ -462,12 +463,18 @@ export default function Editor() {
             <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { disarmDelete(); setEditId(e.target.value); setLoaded(null); markStale() }} />
           </label>
 
-          {spec.fields.map((f) => (f.kind === 'devices' ? (
+          {spec.fields.map((f) => (f.kind === 'devices' || f.kind === 'prefix' ? (
             <div key={`${type}-${f.key}`} data-field="">
-              <DevicesInput label={f.label} required={f.required} prefix={fields[f.key] ?? ''}
-                onPrefix={(p) => setField(f.key, p)}
-                disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
-                title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />
+              {/* A device count is only for making a new IPv4 network. A size
+                  that names an existing one, or an IPv6 size, is typed exactly. */}
+              {f.kind === 'devices' && !isUpdate && !isV6
+                ? <DevicesInput label={f.label} required={f.required} prefix={fields[f.key] ?? ''}
+                    onPrefix={(p) => setField(f.key, p)} />
+                : <PrefixInput label={f.kind === 'prefix' ? f.label : 'Size: the number after the slash'} required={f.required}
+                    prefix={fields[f.key] ?? ''} family={isV6 ? 6 : 4}
+                    onPrefix={(p) => setField(f.key, p)}
+                    disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
+                    title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />}
             </div>
           ) : (
             <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">

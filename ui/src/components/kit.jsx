@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FIELD_CLS, FOCUS_RING } from './ui.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
-import { prefixForDevices, sizeLine, usableCount } from '../lib/sizes.js'
+import { prefixForDevices, sizeLine, sizeWords, usableCount } from '../lib/sizes.js'
 
 const TONE = {
   crit: { dot: 'var(--color-crit)' },
@@ -212,14 +212,24 @@ export function ColumnHeading({ id, children }) {
 // payloads stay the same; the line under the box says what that size gives.
 // A count too small for the smallest size offered gets that smallest size; a
 // count too big for the largest says so instead of picking a size.
-export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 32, label = 'How many devices need an address?', required = false, disabled, title }) {
+export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, label = 'How many devices need an address?', required = false, disabled, title }) {
   const [typed, setTyped] = useState(null)
+  // The size this box last handed the form. When the form empties the size
+  // itself (a reset), what was typed goes too, so the box never shows a count
+  // the form is not holding.
+  const sent = useRef('')
+  const current = String(prefix ?? '')
+  useEffect(() => {
+    if (current === '' && sent.current !== '') {
+      sent.current = ''
+      setTyped(null)
+    }
+  }, [current])
   const fit = (d) => {
     const p = prefixForDevices(d)
     if (p == null || p < minPrefix) return null
     return Math.min(p, maxPrefix)
   }
-  const current = String(prefix ?? '')
   // Keep what was typed while it still matches the size the form holds;
   // a size set from outside (a link, a loaded record) shows as its device count.
   const shown = typed !== null && (current === '' || String(fit(typed)) === current)
@@ -246,10 +256,31 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 32, 
             const v = e.target.value
             setTyped(v)
             const p = fit(v)
-            onPrefix(p == null ? '' : String(p))
+            sent.current = p == null ? '' : String(p)
+            onPrefix(sent.current)
           }} />
       </label>
       {note && <p data-size-words="" aria-live="polite" className={`text-note ${tooMany || tooBig ? 'text-warn' : 'text-muted'}`}>{note}</p>}
+    </div>
+  )
+}
+
+// A network size typed as the number after the slash, for sizes that must be
+// exact: finding an existing network, or an IPv6 one. The line under it says
+// how many addresses that is.
+export function PrefixInput({ prefix, onPrefix, family = 4, label = 'Size: the number after the slash', required = false, disabled, title }) {
+  const current = String(prefix ?? '')
+  const words = current ? sizeWords(current, family) : ''
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1 text-note text-muted">
+        <span>{label}{required ? ' *' : ''}</span>
+        <input {...MACHINE_TEXT} type="number" min="1" max={family === 6 ? 128 : 32} step="1" inputMode="numeric"
+          className={`${FIELD_CLS} w-full disabled:opacity-60`} placeholder={family === 6 ? '64' : '24'}
+          value={current} disabled={disabled} title={title} data-prefix-input=""
+          onChange={(e) => onPrefix(e.target.value)} />
+      </label>
+      {words && <p data-size-words="" aria-live="polite" className="text-note text-muted">/{current} is {words}</p>}
     </div>
   )
 }

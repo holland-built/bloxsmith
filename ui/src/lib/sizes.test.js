@@ -30,8 +30,9 @@ test('prefixForDevices picks the smallest network with room for that many', () =
   assert.equal(prefixForDevices(180), 24)
   assert.equal(prefixForDevices(254), 24)
   assert.equal(prefixForDevices(255), 23)
-  assert.equal(prefixForDevices(1), 32)
-  assert.equal(prefixForDevices(2), 31)
+  // Device counts never pick /31 or /32: the smallest is /30, with 2 usable.
+  assert.equal(prefixForDevices(1), 30)
+  assert.equal(prefixForDevices(2), 30)
   assert.equal(prefixForDevices(3), 29)
   assert.equal(prefixForDevices(6), 29)
   assert.equal(prefixForDevices(7), 28)
@@ -41,6 +42,12 @@ test('prefixForDevices picks the smallest network with room for that many', () =
   assert.equal(prefixForDevices(2.5), null)
   assert.equal(prefixForDevices(''), null)
   assert.equal(prefixForDevices(2 ** 32), null)
+})
+
+test('sizeWords counts IPv6 prefixes too', () => {
+  assert.equal(sizeWords(64, 6), '18,446,744,073,709,551,616 addresses')
+  assert.equal(sizeWords(128, 6), '1 address')
+  assert.equal(sizeWords(129, 6), '')
 })
 
 test('withSize adds the address count to a network', () => {

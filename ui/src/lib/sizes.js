@@ -22,19 +22,21 @@ export function usableCount(prefix) {
 }
 
 // prefixForDevices is the smallest IPv4 network with room for that many
-// devices: 180 -> 24. Null when the count is not a whole number from 1 up.
+// devices: 180 -> 24. It never picks /31 or /32, so 1 or 2 devices get a /30.
+// Null when the count is not a whole number from 1 up.
 export function prefixForDevices(devices) {
   const d = n(devices)
   if (!Number.isInteger(d) || d < 1) return null
-  for (let p = 32; p >= 1; p--) if (usableCount(p) >= d) return p
+  for (let p = 30; p >= 1; p--) if (usableCount(p) >= d) return p
   return null
 }
 
 const count = (total) => (total === 1 || total === 1n ? '1 address' : `${total.toLocaleString('en-US')} addresses`)
 
 // sizeWords is a prefix length in plain words: 24 -> "256 addresses".
-export function sizeWords(prefix) {
-  const total = addressCount(prefix)
+// Pass family 6 for an IPv6 prefix.
+export function sizeWords(prefix, family = 4) {
+  const total = addressCount(prefix, family)
   return total == null ? '' : count(total)
 }
 
