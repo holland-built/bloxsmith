@@ -539,7 +539,7 @@ const CLAIMS = [
         re: /const critReal = critSubnets\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28\)/,
         expect: 'the count without /29-/32 links keeps prefixes of /28 or shorter',
       },
-      { re: /detail: `\$\{critReal\.length\.toLocaleString\(\)\} without \/29–\/32 links\.`/, expect: 'that count is shown underneath' },
+      { re: /detail: `\$\{critReal\.length\.toLocaleString\(\)\} without tiny networks \(8 addresses or fewer\)\.`/, expect: 'that count is shown underneath' },
       { re: /hash: `network\?minUtil=\$\{UTIL_CRIT\}&links=1`/, expect: 'the row links to the same threshold with the links included, so the list matches the count' },
     ],
   },

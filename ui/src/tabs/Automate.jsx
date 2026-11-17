@@ -8,11 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { ReadOnlyNote } from '../components/kit.jsx'
+import { DevicesInput, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { playbookFor } from '../lib/ansible.js'
+import { sizeWords, withSize } from '../lib/sizes.js'
 
 const JOBS = [
   { id: 'ip', title: 'Get an IP address', says: 'The next free address in a network you pick' },
@@ -31,8 +32,9 @@ const REGIONS = [
 // Site and customer names become a DNS label, so the box lowercases as you type.
 const siteText = (v) => v.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 
-// Network sizes the Make a new network job offers, in plain words.
-const SIZES = [24, 25, 26, 27, 28, 29].map((c) => ({ value: String(c), label: `/${c}, ${2 ** (32 - c)} addresses` }))
+// The Make a new network job offers /24 (254 devices) down to /29 (6 devices).
+const SIZE_MIN = 24
+const SIZE_MAX = 29
 
 const DNS_TYPES = [
   { value: 'A', label: 'A: points at an IPv4 address', hint: '10.1.2.3' },
@@ -41,7 +43,7 @@ const DNS_TYPES = [
   { value: 'TXT', label: 'TXT: holds a line of text', hint: 'v=spf1 -all' },
 ]
 
-const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? `, ${s.name}` : '')
+const subnetLabel = (s) => withSize((s.address || '') + (s.cidr ? `/${s.cidr}` : '')) + (s.name ? `, ${s.name}` : '')
 
 // Preview and Build for one job. Preview posts dry:true and records nothing;
 // Build posts the same input with dry:false. Changing any answer clears the
@@ -472,7 +474,7 @@ function DemoJob({ onBuilt, ro, start = {} }) {
   )
 }
 
-const blockLabel = (b) => (b.address || '') + (b.cidr ? `/${b.cidr}` : '') + (b.name ? `, ${b.name}` : '')
+const blockLabel = (b) => withSize((b.address || '') + (b.cidr ? `/${b.cidr}` : '')) + (b.name ? `, ${b.name}` : '')
 
 function NetworkJob({ onBuilt, ro, start = {} }) {
   const [space, setSpace] = useState('')
@@ -501,12 +503,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
           disabled={!space}
         />
       </Field>
-      <label className="flex flex-col gap-1 text-note text-muted">
-        Size
-        <select className={FIELD_CLS} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.reset() }}>
-          {SIZES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </label>
+      <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={SIZE_MAX} onPrefix={(p) => { setCidr(p); flow.reset() }} />
       <label className="flex flex-col gap-1 text-note text-muted">
         Name (optional)
         <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="demo-lab"
@@ -514,8 +511,8 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
       </label>
       <PreviewApply
         status={flow.status}
-        disabled={!blockId}
-        needs={[!blockId && 'pick an address block']}
+        disabled={!blockId || !cidr}
+        needs={[!blockId && 'pick an address block', !cidr && 'enter how many devices need an address']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -530,7 +527,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
         {flow.status === 'previewed' && (
           <PreviewBox>
             {would?.address && would.address_preview == null
-              ? <p>This will make <strong>{would.address}/{cidr}</strong> ({2 ** (32 - Number(cidr))} addresses){block ? ` in ${blockLabel(block)}` : ''}{name.trim() ? `, named ${name.trim()}` : ''}.</p>
+              ? <p>This will make <strong>{would.address}/{cidr}</strong> ({sizeWords(cidr)}){block ? ` in ${blockLabel(block)}` : ''}{name.trim() ? `, named ${name.trim()}` : ''}.</p>
               : would?.address_preview === 'none-available'
                 ? <p>This block has no free network of that size. Pick a smaller size or another block.</p>
                 : <p>Infoblox could not say which network it would make{would?.reason ? ` (${would.reason})` : ''}. Try Preview again.</p>}

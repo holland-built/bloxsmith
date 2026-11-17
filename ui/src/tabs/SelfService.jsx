@@ -12,6 +12,7 @@ import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
+import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
@@ -73,7 +74,7 @@ const zoneName = (z) => String(z.fqdn || z.name || z.id || '')
 const isReverseZone = (z) => /(^|\.)(in-addr|ip6)\.arpa\.?$/i.test(zoneName(z))
 const zoneOptions = (zones, reverse) => zones.filter((z) => isReverseZone(z) === reverse).map((z) => ({ value: z.id, label: zoneName(z) }))
 
-const subnetLabel = (s) => (s.address || '') + (s.cidr ? `/${s.cidr}` : '') + (s.name ? ` — ${s.name}` : '')
+const subnetLabel = (s) => withSize((s.address || '') + (s.cidr ? `/${s.cidr}` : '')) + (s.name ? ` — ${s.name}` : '')
 
 // The preview said what it would do as raw JSON. Say it as a sentence; the
 // JSON stays under Details for anyone checking the ids.
@@ -212,7 +213,7 @@ function AllocatePanel() {
             label="Block"
             value={block}
             onChange={(v) => { setBlock(v); setSubnetId(''); flow.markStale() }}
-            options={blocks.map((b) => ({ value: b.id, label: b.address ? `${b.address}${b.cidr ? `/${b.cidr}` : ''}${b.name ? ` — ${b.name}` : ''}` : b.name || b.id }))}
+            options={blocks.map((b) => ({ value: b.id, label: b.address ? `${withSize(`${b.address}${b.cidr ? `/${b.cidr}` : ''}`)}${b.name ? ` — ${b.name}` : ''}` : b.name || b.id }))}
             placeholder="Any block"
             disabled={!space}
           />

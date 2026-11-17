@@ -67,7 +67,7 @@ test('a successful Allocate is what gets remembered, not a pick', async ({ page 
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
   await panel.getByRole('combobox', { name: 'IP Space' }).selectOption({ label: 'Berlin Office' });
-  await panel.getByRole('combobox', { name: 'Subnet' }).selectOption({ label: '10.2.1.0/24 — office-b' });
+  await panel.getByRole('combobox', { name: 'Subnet' }).selectOption({ label: '10.2.1.0/24 (256 addresses) — office-b' });
   expect(await page.evaluate(() => localStorage.getItem('bloxsmith.allocate.last'))).toBeNull();
   await panel.getByRole('button', { name: 'Preview' }).click();
   await panel.getByRole('button', { name: 'Allocate', exact: true }).click();

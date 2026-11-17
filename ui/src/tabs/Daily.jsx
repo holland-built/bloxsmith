@@ -145,7 +145,7 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
     {
       key: 'subnets', name: 'Subnets', unit: `≥${UTIL_CRIT}% full`, value: critSubnets.length, sev: 'warn', hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
       of: typeof totals?.subnets === 'number' ? totals.subnets : null,
-      detail: `${critReal.length.toLocaleString()} without /29–/32 links.`,
+      detail: `${critReal.length.toLocaleString()} without tiny networks (8 addresses or fewer).`,
     },
     {
       key: 'hosts', name: 'Hosts', unit: 'not online', value: badHosts.length, sev: 'crit', hash: 'infra?status=offline', status: meta.hosts,
@@ -330,7 +330,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       panelId={panelId}
       title="Top Capacity Risks"
       note="least room left"
-      right={<Tip tip="The 10 with the fewest free addresses. /29–/32 links are left out." prefix="dy" className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
+      right={<Tip tip="The 10 with the fewest free addresses. Tiny networks (8 addresses or fewer) are left out." prefix="dy" className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
     >
       {!loading && stale && !feedDead && <StaleNote />}
       {loading ? (

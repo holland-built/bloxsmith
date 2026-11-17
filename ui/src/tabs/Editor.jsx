@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, DevicesInput, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -21,7 +21,7 @@ const FIELD_SPECS = {
   subnet: {
     label: 'Subnet', endpoint: '/api/edit/subnet', fields: [
       { key: 'block_id', label: 'Address block ID', kind: 'text', placeholder: 'block id', required: true },
-      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '24', required: true },
+      { key: 'cidr', label: 'How many devices need an address?', kind: 'devices', required: true },
       { key: 'name', label: 'Name', kind: 'text' },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
@@ -30,7 +30,7 @@ const FIELD_SPECS = {
   address_block: {
     label: 'Address Block', endpoint: '/api/edit/address_block', fields: [
       { key: 'address', label: 'Address', kind: 'text', placeholder: '10.20.0.0', required: true },
-      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '16', required: true },
+      { key: 'cidr', label: 'How many devices need an address?', kind: 'devices', required: true },
       { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
@@ -56,7 +56,7 @@ const FIELD_SPECS = {
       { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
       { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
       { key: 'address', label: 'Block address', kind: 'text', placeholder: '10.20.0.0' },
-      { key: 'cidr', label: 'Size (prefix: 24 = 256 addresses)', kind: 'number', placeholder: '16' },
+      { key: 'cidr', label: 'Block size: how many devices need an address?', kind: 'devices' },
       { key: 'status', label: 'Status', kind: 'text', placeholder: 'available' },
       { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space' },
     ],
@@ -275,7 +275,7 @@ export default function Editor() {
       } else if (raw == null || raw === '') return
       if (f.key === 'tags') body.tags = parseTags(raw)
       else if (f.key === 'addresses') body.addresses = hostAddresses(raw, fields.spaces)
-      else if (f.kind === 'number') body[f.key] = Number(raw)
+      else if (f.kind === 'devices') body[f.key] = Number(raw)
       else body[f.key] = raw
     })
     return body
@@ -462,7 +462,14 @@ export default function Editor() {
             <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { disarmDelete(); setEditId(e.target.value); setLoaded(null); markStale() }} />
           </label>
 
-          {spec.fields.map((f) => (
+          {spec.fields.map((f) => (f.kind === 'devices' ? (
+            <div key={`${type}-${f.key}`} data-field="">
+              <DevicesInput label={f.label} required={f.required} prefix={fields[f.key] ?? ''}
+                onPrefix={(p) => setField(f.key, p)}
+                disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
+                title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />
+            </div>
+          ) : (
             <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">
               <span>{f.label}{f.required ? ' *' : ''}</span>
               <input {...(f.key === 'comment' ? null : MACHINE_TEXT)}
@@ -475,7 +482,7 @@ export default function Editor() {
                 onChange={(e) => setField(f.key, e.target.value)}
               />
             </label>
-          ))}
+          )))}
 
           <PreviewApply
             part="start"

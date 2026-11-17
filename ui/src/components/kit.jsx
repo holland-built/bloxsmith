@@ -5,8 +5,10 @@
 // tests cover them. Red means critical, amber means warning and green means
 // healthy, the same meaning the charts already use.
 import { useEffect, useRef, useState } from 'react'
-import { FOCUS_RING } from './ui.jsx'
+import { FIELD_CLS, FOCUS_RING } from './ui.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
+import { MACHINE_TEXT } from '../lib/machineText.js'
+import { prefixForDevices, sizeLine, usableCount } from '../lib/sizes.js'
 
 const TONE = {
   crit: { dot: 'var(--color-crit)' },
@@ -203,4 +205,51 @@ export function FormColumns({ form, result, below, cols = 'lg:grid-cols-[minmax(
 // The heading over each column of a form page.
 export function ColumnHeading({ id, children }) {
   return <h2 id={id} className="text-copy font-semibold mb-3">{children}</h2>
+}
+
+// A network size asked as "how many devices need an address?". It hands the
+// form a prefix number (as a string, '' when there is no usable answer), so
+// payloads stay the same; the line under the box says what that size gives.
+// A count too small for the smallest size offered gets that smallest size; a
+// count too big for the largest says so instead of picking a size.
+export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 32, label = 'How many devices need an address?', required = false, disabled, title }) {
+  const [typed, setTyped] = useState(null)
+  const fit = (d) => {
+    const p = prefixForDevices(d)
+    if (p == null || p < minPrefix) return null
+    return Math.min(p, maxPrefix)
+  }
+  const current = String(prefix ?? '')
+  // Keep what was typed while it still matches the size the form holds;
+  // a size set from outside (a link, a loaded record) shows as its device count.
+  const shown = typed !== null && (current === '' || String(fit(typed)) === current)
+    ? typed
+    : current ? String(usableCount(current) ?? '') : ''
+  const d = Number(shown)
+  const tooMany = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d) !== null && fit(d) === null
+  const tooBig = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d) === null
+  let note = ''
+  if (tooMany || tooBig) {
+    note = `That is more than this form can make. The biggest network here holds ${usableCount(minPrefix).toLocaleString('en-US')} devices (/${minPrefix}).`
+  } else if (shown !== '' && !(Number.isInteger(d) && d >= 1)) {
+    note = 'Enter a whole number of devices, 1 or more.'
+  } else if (current) {
+    note = sizeLine(current)
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1 text-note text-muted">
+        <span>{label}{required ? ' *' : ''}</span>
+        <input {...MACHINE_TEXT} type="number" min="1" step="1" inputMode="numeric" className={`${FIELD_CLS} w-full disabled:opacity-60`}
+          value={shown} disabled={disabled} title={title} data-devices-input=""
+          onChange={(e) => {
+            const v = e.target.value
+            setTyped(v)
+            const p = fit(v)
+            onPrefix(p == null ? '' : String(p))
+          }} />
+      </label>
+      {note && <p data-size-words="" aria-live="polite" className={`text-note ${tooMany || tooBig ? 'text-warn' : 'text-muted'}`}>{note}</p>}
+    </div>
+  )
 }

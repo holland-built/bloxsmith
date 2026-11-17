@@ -52,7 +52,7 @@ test('rows come biggest first, and opening one lists each space with its own ran
   const list = panel(page).locator('[data-overlap-spaces]');
   await expect(list).toBeVisible();
   for (const name of ['Corp Main', 'Lab', 'Branch']) await expect(list).toContainText(name);
-  await expect(list).toContainText('10.2.0.0/16, 10.3.0.0/16');
+  await expect(list).toContainText('10.2.0.0/16 (65,536 addresses), 10.3.0.0/16 (65,536 addresses)');
 
   await rows.nth(0).click();
   await expect(list).toHaveCount(0);
@@ -94,11 +94,11 @@ test('an open row links each space to the Infoblox Portal and each range to the 
   await expect(list.getByRole('link', { name: /in Infoblox/ })).toHaveCount(3);
 
   // Each range: the Editor, that object's kind and id, searched by its address.
-  await expect(list.getByRole('link', { name: /^10\.0\.0\.0\/8, open this address block in the Editor$/ })).toHaveAttribute(
+  await expect(list.getByRole('link', { name: /^10\.0\.0\.0\/8 \(16,777,216 addresses\), open this address block in the Editor$/ })).toHaveAttribute(
     'href',
     '#editor?type=address_block&id=ipam%2Faddress_block%2Fa1&q=10.0.0.0',
   );
-  await expect(list.getByRole('link', { name: /^10\.3\.0\.0\/16, open this subnet in the Editor$/ })).toHaveAttribute(
+  await expect(list.getByRole('link', { name: /^10\.3\.0\.0\/16 \(65,536 addresses\), open this subnet in the Editor$/ })).toHaveAttribute(
     'href',
     '#editor?type=subnet&id=ipam%2Fsubnet%2Fc2&q=10.3.0.0',
   );
@@ -128,7 +128,7 @@ test('following a subnet link opens the Editor with that subnet picked', async (
   });
   await page.goto('/#network');
   await panel(page).getByRole('button', { name: /spaces$/ }).nth(0).click();
-  await panel(page).getByRole('link', { name: /^10\.3\.0\.0\/16, open this subnet/ }).click();
+  await panel(page).getByRole('link', { name: /^10\.3\.0\.0\/16 \(65,536 addresses\), open this subnet/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Subnet — Update' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByPlaceholder('Find by name, comment or full network address')).toHaveValue('10.3.0.0');

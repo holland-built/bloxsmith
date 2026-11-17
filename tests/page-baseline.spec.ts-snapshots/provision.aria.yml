@@ -29,9 +29,9 @@
     - status
     - combobox "Block" [disabled]:
       - option "Pick a space first" [selected]
-  - text: "/Size \\(prefix: \\d+ = \\d+ addresses\\)/"
-  - 'spinbutton /Size \(prefix: \d+ = \d+ addresses\)/'
-  - paragraph: /\/\d+ is \d+ addresses/
+  - text: How many devices need an address?
+  - spinbutton "How many devices need an address?": /\d+/
+  - paragraph: "/\\/\\d+: \\d+ addresses, \\d+ usable by devices/"
   - text: Name
   - textbox "Name":
     - /placeholder: subnet name
