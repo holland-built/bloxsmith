@@ -945,7 +945,9 @@ for (const tab of TAB_CASES) {
       await expect.poll(async () => (await inlineSpans(page))[tab.resizeSubject]).toBe('span 4 / span 4');
       expectEverySpanWellFormed(await inlineSpans(page));
       expect(await strayDragStyles(page)).toEqual([]);
-      expect(await tableOverflow(page)).toEqual([]);
+      // A table re-measures on the frame after its panel narrows, so read it once
+      // layout has settled rather than on the first frame after the drag.
+      await expect.poll(() => tableOverflow(page), { timeout: 1_000 }).toEqual([]);
 
       const blob = await savedBlobFor(request, view);
       expect(blob.layout.spans[tab.resizeSubject]).toBe(4);

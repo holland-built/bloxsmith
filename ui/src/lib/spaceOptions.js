@@ -15,10 +15,5 @@ export function useSpaceOptions() {
   return { options, loading: plain.loading && !list, error: list ? null : plain.error, top: list?.[0]?.yours ? list[0].id : '' }
 }
 
-// sizeWords is a prefix length in plain words: 24 -> "256 addresses".
-export function sizeWords(prefix) {
-  const n = Number(prefix)
-  if (!Number.isInteger(n) || n < 1 || n > 32) return ''
-  const total = 2 ** (32 - n)
-  return total === 1 ? '1 address' : `${total.toLocaleString()} addresses`
-}
+// sizeWords now lives in sizes.js with the other size helpers.
+export { sizeWords } from './sizes.js'

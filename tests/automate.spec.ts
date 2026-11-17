@@ -59,7 +59,7 @@ test('get an IP address: preview, build, then remove it', async ({ page }) => {
 
   const preview = job.locator('[data-desk-preview]');
   await expect(preview).toContainText('Nothing has been made yet.');
-  await expect(preview).toContainText('This will reserve 10.2.1.7 in 10.2.1.0/24, office-b, for printer-02.');
+  await expect(preview).toContainText('This will reserve 10.2.1.7 in 10.2.1.0/24 (256 addresses), office-b, for printer-02.');
   expect(posted[0]).toEqual({ job: 'ip', input: { space: 'ipam/ip_space/a', subnet_id: 'ipam/subnet/s2', name: 'printer-02' }, dry: true });
 
   await job.getByRole('button', { name: 'Build it' }).click();
@@ -174,7 +174,7 @@ test('add a DNS name: preview says the full name, build sends the answers', asyn
   expect(posted[1]).toEqual({ job: 'dns', dry: false, input: { zone_id: 'dns/auth_zone/z1', zone_name: 'lab.example.', name_in_zone: 'www', type: 'A', value: '10.1.2.3' } });
 });
 
-test('make a new network: pick a block and a size in plain words', async ({ page }) => {
+test('make a new network: pick a block and say how many devices need an address', async ({ page }) => {
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [] }));
   await page.route('**/api/ipam/blocks*', (route) => json(route, { blocks: [
     { id: 'ipam/address_block/b1', address: '10.9.0.0', cidr: 16, name: 'lab-block' } ] }));
@@ -189,9 +189,23 @@ test('make a new network: pick a block and a size in plain words', async ({ page
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
   await job.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/b1');
-  await job.getByRole('combobox', { name: 'Size' }).selectOption({ label: '/26, 64 addresses' });
+  await expect(job.getByRole('option', { name: '10.9.0.0/16 (65,536 addresses), lab-block' })).toBeAttached();
+  const devices = job.getByRole('spinbutton', { name: 'How many devices need an address?' });
+  // 300 devices is more than the biggest network this form makes (/24), so it
+  // says so and there is nothing to preview.
+  await devices.fill('300');
+  await expect(job.locator('[data-size-words]')).toHaveText('That is more than this form can make. The biggest network here holds 254 devices (/24).');
+  await expect(job.getByRole('button', { name: 'Preview' })).toBeDisabled();
+  // 180 devices needs a /24.
+  await devices.fill('180');
+  await expect(job.locator('[data-size-words]')).toHaveText('/24: 256 addresses, 254 usable by devices');
+  // 1 device still gets the smallest network offered, a /29.
+  await devices.fill('1');
+  await expect(job.locator('[data-size-words]')).toHaveText('/29: 8 addresses, 6 usable by devices');
+  await devices.fill('50');
+  await expect(job.locator('[data-size-words]')).toHaveText('/26: 64 addresses, 62 usable by devices');
   await job.getByRole('button', { name: 'Preview' }).click();
-  await expect(job.locator('[data-desk-preview]')).toContainText('This will make 10.9.4.0/26 (64 addresses) in 10.9.0.0/16, lab-block.');
+  await expect(job.locator('[data-desk-preview]')).toContainText('This will make 10.9.4.0/26 (64 addresses) in 10.9.0.0/16 (65,536 addresses), lab-block.');
   expect(posted[0]).toEqual({ job: 'network', dry: true, input: { space: 'ipam/ip_space/a', block_id: 'ipam/address_block/b1', cidr: 26, name: '' } });
 });
 

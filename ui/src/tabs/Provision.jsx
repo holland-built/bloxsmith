@@ -7,8 +7,9 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 // falls back to its placeholder and Apply sits disabled with no reason given.
 import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
-import { sizeWords, useSpaceOptions } from '../lib/spaceOptions.js'
-import { PageRail } from '../components/kit.jsx'
+import { useSpaceOptions } from '../lib/spaceOptions.js'
+import { withSize } from '../lib/sizes.js'
+import { DevicesInput, PageRail } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
@@ -448,13 +449,10 @@ function SubnetMode() {
               onChange={(v) => { setBlock(v); flow.markStale() }}
               disabled={!space || blocksApi.loading || !!blocksApi.error}
               placeholder={!space ? 'Pick a space first' : blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
-              options={blocks.map((b) => ({ value: b.id, label: b.name || b.cidr || b.address }))}
+              options={blocks.map((b) => ({ value: b.id, label: b.name || (b.address ? withSize(b.address + (b.cidr ? `/${b.cidr}` : '')) : String(b.cidr ?? '')) }))}
             />
           </Field>
-          <Field label="Size (prefix: 24 = 256 addresses)">
-            <input {...MACHINE_TEXT} type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
-          </Field>
-          {sizeWords(cidr) && <p data-size-words="" aria-live="polite" className="text-note text-muted -mt-2">/{cidr} is {sizeWords(cidr)}</p>}
+          <DevicesInput prefix={cidr} onPrefix={(p) => { setCidr(p); flow.markStale() }} />
           <Field label="Name">
             <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
           </Field>
@@ -473,8 +471,8 @@ function SubnetMode() {
           <PreviewApply
             status={flow.status}
             stale={flow.stale}
-            disabled={!space}
-            needs={[!space && 'pick an IP space']}
+            disabled={!space || !cidr}
+            needs={[!space && 'pick an IP space', !cidr && 'enter how many devices need an address']}
             onPreview={() => flow.run(qs(true), true)}
             onApply={() => flow.run(qs(false), false)}
             applyLabel="Provision"
@@ -498,7 +496,7 @@ function SubnetMode() {
       {flow.status === 'applied' && subnet && (
         <Card key="provision-subnet-result" title="Result" panelId="provision-subnet-result" span={6}>
           <div className="font-mono text-note">
-            Subnet id: {subnet.id ?? '—'} · {subnet.address || ''}{subnet.cidr ? `/${subnet.cidr}` : ''}
+            Subnet id: {subnet.id ?? '—'} · {withSize((subnet.address || '') + (subnet.cidr ? `/${subnet.cidr}` : ''))}
           </div>
         </Card>
       )}

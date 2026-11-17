@@ -85,7 +85,7 @@ test('Get an address can give the address its DNS name in the same step', async 
   await expect(panel.getByText('It will be printer-3.example.com.')).toBeVisible();
   await panel.getByRole('checkbox', { name: 'Also create the reverse (PTR) record' }).check();
   await panel.getByRole('button', { name: 'Preview' }).click();
-  await expect(panel.getByText(/This will take 10\.0\.42\.1 in subnet 10\.0\.42\.0\/24 — site-42, named printer-3\. It will also point printer-3\.example\.com to it, with a reverse record\./)).toBeVisible();
+  await expect(panel.getByText(/This will take 10\.0\.42\.1 in subnet 10\.0\.42\.0\/24 \(256 addresses\) — site-42, named printer-3\. It will also point printer-3\.example\.com to it, with a reverse record\./)).toBeVisible();
   expect(sent.at(-1)).toMatchObject({ dns: { zone_id: 'dns/auth_zone/z1', name: 'printer-3', type: 'A', create_ptr: true } });
 });
 

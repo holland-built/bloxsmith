@@ -5,6 +5,7 @@ import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sortRows } from '../lib/sortCompare.js'
+import { withSize } from '../lib/sizes.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
@@ -155,9 +156,9 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
     { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null),
       tip: 'Every subnet, all sizes.' },
     { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit'),
-      tip: `Subnets ${UTIL_CRIT}% full or more, tiny /29–/32 links included.${loadedWord}` },
+      tip: `Subnets ${UTIL_CRIT}% full or more, tiny networks of 8 addresses or fewer included.${loadedWord}` },
     { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn'),
-      tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny /29–/32 links included.${loadedWord}` },
+      tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny networks of 8 addresses or fewer included.${loadedWord}` },
     { panelId: 'network-dhcp-leases', label: 'Leases', value: fmt(leasesOk ? leases : null), tip: 'Leases on record from DHCP, in every state.' },
   ]
 }
@@ -406,7 +407,7 @@ function Overlaps({ panelId, overlaps }) {
                           {m.ranges.map((r, j) => (
                             <span key={r.id || r.prefix}>
                               {j > 0 && <span className="text-muted">, </span>}
-                              <a href={editorUrl(r)} aria-label={`${r.prefix}, open this ${KIND_WORD[r.kind] || 'range'} in the Editor`} className="text-link underline">{r.prefix}</a>
+                              <a href={editorUrl(r)} aria-label={`${withSize(r.prefix)}, open this ${KIND_WORD[r.kind] || 'range'} in the Editor`} className="text-link underline">{withSize(r.prefix)}</a>
                             </span>
                           ))}
                         </span>
@@ -630,7 +631,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
         util: num(s.util),
         used: num(s.used),
         free: freeOf(s),
-        network: s.addr || s.cidr || '—',
+        network: (s.addr ? withSize(s.cidr ? `${s.addr}/${s.cidr}` : s.addr) : s.cidr) || '—',
       })),
     [sorted],
   )
@@ -716,7 +717,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
           )}
         </>
       }
-      note={links ? 'incl. /29–/32 infra links' : 'excl. /29–/32 infra links'}
+      note={links ? 'incl. tiny networks (8 addresses or fewer)' : 'excl. tiny networks (8 addresses or fewer)'}
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
           <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
@@ -725,7 +726,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
               checked={links}
               onChange={(e) => setHashParams('network', { ...hp, links: e.target.checked ? '1' : undefined })}
             />
-            /29–/32 links
+            Tiny networks
           </label>
           <input {...MACHINE_TEXT}
             aria-label="Filter networks"
