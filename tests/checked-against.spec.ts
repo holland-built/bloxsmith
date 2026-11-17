@@ -96,3 +96,49 @@ test('Get an address: the preview says what it checked, and a fresh read gives n
   await expect(box).not.toContainText('ago');
   await expect(box).toContainText('Skipped 10.0.42.5 because a reservation in acme-systems already uses 10.0.42.5.');
 });
+
+// A network or address that something only in ANOTHER IP space uses is offered
+// with an amber warning under it (go/internal/freecheck Warning), and the
+// checked line counts it as shared.
+const LAB_TAIL = "That's fine if the two spaces are kept apart, like a separate lab. If devices in one can reach the other,";
+
+test('Provision subnet preview warns when another IP space also uses the network', async ({ page }) => {
+  await page.route('**/api/desk/spaces*', (route) => route.fulfill({ status: 404, body: '{}' }));
+  await page.route('**/api/provision/stream*', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream',
+    body: sse({ step: 'Resolving block…' }, { done: true, subnet: { id: null, address: '10.4.0.0', cidr: 24 },
+      checked: { ...CHECKED, shared: 1 }, skipped: [],
+      warnings: [{ candidate: '10.4.0.0/24', space: 'default-TK-lab', object: '10.0.0.0/8', kind: 'address block', contains: true }] }) }));
+  await page.goto('/#provision');
+  await page.getByRole('button', { name: 'Subnet', exact: true }).click();
+  await page.getByRole('combobox').first().selectOption({ label: 'Baseline Space' });
+  await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
+  const panel = page.locator('[data-panel-id="provision-subnet-request"]');
+  const warn = panel.locator('[data-shared-warning]');
+  await expect(warn).toHaveText('Also used in another IP space. 10.4.0.0/24 sits inside 10.0.0.0/8 in IP space default-TK-lab. ' +
+    `${LAB_TAIL} pick a different network.`);
+  await expect(warn).toHaveClass(/text-warn/);
+  await expect(panel.locator('[data-checked-against]')).toContainText(
+    'Checked against: networks in 3 IP spaces, 14 DHCP ranges, 212 reservations and hosts, 1 shared with other IP spaces.');
+});
+
+test('Get an address preview warns when another IP space also uses the address', async ({ page }) => {
+  await page.route('**/api/desk/spaces*', (route) => route.fulfill({ status: 404, body: '{}' }));
+  await page.route('**/api/ipam/spaces*', (r) => json(r, { spaces: [{ id: 'ipam/ip_space/1', name: 'acme-systems' }] }));
+  await page.route('**/api/ipam/blocks*', (r) => json(r, { blocks: [] }));
+  await page.route('**/api/ipam/subnets*', (r) =>
+    json(r, { subnets: [{ id: 'ipam/subnet/1', address: '10.0.42.0', cidr: 24, name: 'site-42', utilization: { free: 200 } }] }));
+  await page.route('**/api/selfservice/allocate', (r) => json(r, { ok: true, dry_run: true, addresses: [{ address: '10.0.42.7' }],
+    checked: { ...CHECKED, networks: 0, age_seconds: 1, shared: 1 }, skipped: [],
+    warnings: [
+      { candidate: '10.0.42.7', space: 'lab', object: '10.0.42.1 to 10.0.42.99', kind: 'DHCP range', contains: true },
+      { candidate: '10.0.42.7', space: 'dev', object: '10.0.42.7', kind: 'reservation', contains: true },
+    ] }));
+  await page.goto('/#selfservice');
+  const panel = await openTask(page, 'address');
+  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('button', { name: 'Preview' }).click();
+  await expect(panel.locator('[data-shared-warning]')).toHaveText('Also used in another IP space. 10.0.42.7 sits inside ' +
+    `10.0.42.1 to 10.0.42.99 and 10.0.42.7 in IP spaces lab and dev. ${LAB_TAIL} pick a different address.`);
+  await expect(panel.locator('[data-checked-against]')).toContainText(
+    'Checked against: 14 DHCP ranges, 212 reservations and hosts, 1 shared with other IP spaces.');
+});

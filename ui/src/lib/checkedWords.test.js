@@ -64,3 +64,50 @@ test('a reason that already ends in a full stop is not given two', () => {
   const w = checkedWords({ checked: MOCK.checked, skipped: [{ candidate: '10.1.1.5', reason: 'a host in lab already uses it.' }] })
   assert.equal(w.skips[0], 'Skipped 10.1.1.5 because a host in lab already uses it.')
 })
+
+// Overlap only with something in ANOTHER IP space is offered with a warning
+// (go/internal/freecheck Warning). The owner's wording, exactly.
+const SHARED_TAIL = "That's fine if the two spaces are kept apart, like a separate lab. If devices in one can reach the other,"
+
+test('a network inside another space\'s block: "sits inside", "pick a different network"', () => {
+  const w = checkedWords({ checked: { ...MOCK.checked, shared: 1 }, skipped: [],
+    warnings: [{ candidate: '10.4.0.0/24', space: 'default-TK-lab', object: '10.0.0.0/8', kind: 'address block', contains: true }] })
+  assert.deepEqual(w.shared, ['Also used in another IP space. 10.4.0.0/24 sits inside 10.0.0.0/8 in IP space default-TK-lab. ' +
+    SHARED_TAIL + ' pick a different network.'])
+  assert.equal(w.checked, 'Checked against: networks in 3 IP spaces, 14 DHCP ranges, 212 reservations and hosts, 1 shared with other IP spaces.')
+})
+
+test('a network that only overlaps: "overlaps"', () => {
+  const w = checkedWords({ checked: MOCK.checked,
+    warnings: [{ candidate: '10.4.0.0/16', space: 'lab', object: '10.4.5.0/24', kind: 'subnet', contains: false }] })
+  assert.deepEqual(w.shared, ['Also used in another IP space. 10.4.0.0/16 overlaps 10.4.5.0/24 in IP space lab. ' +
+    SHARED_TAIL + ' pick a different network.'])
+})
+
+test('an address: "pick a different address"', () => {
+  const w = checkedWords({ checked: MOCK.checked,
+    warnings: [{ candidate: '10.4.0.9', space: 'lab', object: '10.4.0.9', kind: 'reservation', contains: true }] })
+  assert.deepEqual(w.shared, ['Also used in another IP space. 10.4.0.9 sits inside 10.4.0.9 in IP space lab. ' +
+    SHARED_TAIL + ' pick a different address.'])
+})
+
+test('several spaces: one sentence listing them', () => {
+  const w = checkedWords({ checked: MOCK.checked, warnings: [
+    { candidate: '10.4.0.0/24', space: 'lab', object: '10.0.0.0/8', kind: 'address block', contains: true },
+    { candidate: '10.4.0.0/24', space: 'dev', object: '10.0.0.0/8', kind: 'address block', contains: true },
+    { candidate: '10.4.0.0/24', space: 'test', object: '10.4.0.0/16', kind: 'subnet', contains: true },
+  ] })
+  assert.deepEqual(w.shared, ['Also used in another IP space. 10.4.0.0/24 sits inside 10.0.0.0/8 and 10.4.0.0/16 in IP spaces lab, dev and test. ' +
+    SHARED_TAIL + ' pick a different network.'])
+})
+
+test('one warning block per candidate; none when there are no warnings or no shared count', () => {
+  const w = checkedWords({ checked: MOCK.checked, warnings: [
+    { candidate: '10.4.0.0/24', space: 'lab', object: '10.0.0.0/8', kind: 'address block', contains: true },
+    { candidate: '10.4.1.0/24', space: 'lab', object: '10.0.0.0/8', kind: 'address block', contains: true },
+  ] })
+  assert.equal(w.shared.length, 2)
+  assert.deepEqual(checkedWords(MOCK).shared, [])
+  assert.equal(checkedWords({ checked: { ...MOCK.checked, shared: 0 } }).checked,
+    'Checked against: networks in 3 IP spaces, 14 DHCP ranges, 212 reservations and hosts.')
+})
