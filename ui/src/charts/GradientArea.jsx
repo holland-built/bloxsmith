@@ -1,6 +1,7 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
+import { AREA_HOVER } from './hoverCursor.js'
 
 // The gradient-filled area chart Dns draws twice — queries per second, and
 // query volume by day — in its own module so recharts stays off that tab's
@@ -51,7 +52,7 @@ export default function GradientArea({
           minTickGap={40}
         />
         <YAxis hide domain={yDomain} />
-        <Tooltip content={<ChartTip name={unit} />} />
+        <Tooltip content={<ChartTip name={unit} />} cursor={AREA_HOVER} />
         <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.8} fill={`url(#${gradientId})`} isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>

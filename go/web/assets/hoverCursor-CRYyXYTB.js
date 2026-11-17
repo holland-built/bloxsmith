@@ -1,0 +1,1 @@
+var e={fill:`var(--color-grid)`,fillOpacity:.35},t={stroke:`var(--color-grid)`,strokeWidth:1};export{e as n,t};

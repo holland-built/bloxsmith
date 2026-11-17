@@ -1,6 +1,7 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
+import { BAR_HOVER } from './hoverCursor.js'
 
 // Security's blocked/allowed-per-day chart, in its own module so recharts stays
 // off that tab's critical path. See charts/HostStatusDonut.jsx for the
@@ -33,7 +34,7 @@ export default function StackedDayBars({ label, data, blockedColor, allowedColor
             the tooltip and the totals above it read the same. */}
         <Tooltip
           content={<ChartTip names={{ blocked: 'Blocked', allowed: 'Allowed' }} />}
-          cursor={{ fill: 'var(--color-grid)', fillOpacity: 0.35 }}
+          cursor={BAR_HOVER}
         />
         {/* Stacked, so the column height is the day's whole matched
             volume and the split is visible inside it. Allowed sits on
