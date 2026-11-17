@@ -7,10 +7,9 @@
 // on the clipboard). Nothing here writes to Infoblox: every job still shows
 // Preview and waits for the person to press Apply or Build.
 import { classifyIndicator } from './indicator.js'
-import { itemHref } from './itemHref.js'
+import { blockHref, itemHref, MENU_KINDS } from './itemHref.js'
 
-// The kinds a name opens a menu on. A site keeps its plain link.
-export const MENU_KINDS = ['space', 'block', 'network', 'address', 'zone']
+export { MENU_KINDS }
 
 const clean = (v) => (v == null ? '' : String(v).trim())
 const BLANKS = new Set(['', '—', '–', '-'])
@@ -50,7 +49,7 @@ export function itemActions({ kind, q, id, space } = {}) {
     // "Build a site here" is left out: a site build takes its address block
     // from the site template, so no job can be told to use this one.
     return [
-      { key: 'open', label: 'Open', href: hashFor('editor', { type: 'address_block', id, q: bareAddress(value) }) },
+      { key: 'open', label: 'Open', href: blockHref({ value, id }) },
       { key: 'network', label: 'Add a network inside', href: hashFor('automate', { job: 'network', space, block: clean(id) || value }) },
       copy,
     ]

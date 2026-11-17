@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useRef, useState } from 'react'
-import { itemHref } from '../lib/itemHref.js'
-import { itemActions, MENU_KINDS } from '../lib/itemActions.js'
+import { blockHref, itemHref, MENU_KINDS } from '../lib/itemHref.js'
 
 // Loaded on the first right-click, so pages that never open one do not pay for it.
 const ItemMenu = lazy(() => import('./ItemMenu.jsx'))
@@ -17,7 +16,7 @@ const LONG_PRESS_MS = 550
 // or a long press on a touch screen. Shift+right-click keeps the browser's own
 // menu, for "open in new tab" and the like.
 export default function ItemLink({ kind, value, id, space, view, className = '', title, label, children }) {
-  const href = itemHref({ kind, value, id, space, view }) ?? (kind === 'block' ? itemActions({ kind, q: value, id, space })[0]?.href : null)
+  const href = itemHref({ kind, value, id, space, view }) ?? (kind === 'block' ? blockHref({ value, id }) : null)
   const text = children ?? (value == null || value === '' ? '—' : value)
   const [menuAt, setMenuAt] = useState(null)
   const linkRef = useRef(null)
