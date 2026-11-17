@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { itemActions } from '../lib/itemActions.js'
+import { copyText, itemActions } from '../lib/itemActions.js'
 import { pageState } from '../lib/itemPaging.js'
 import { ITEM_WORDS, itemHref } from '../lib/itemHref.js'
 import { DASH } from '../lib/measured.js'
@@ -73,15 +73,23 @@ function details(kind, r) {
   ]
 }
 
-function Actions({ kind, q, id }) {
-  const [copied, setCopied] = useState(false)
-  const actions = itemActions({ kind, q, id })
+// The same list the right-click menu offers (lib/itemActions.js), less Open:
+// this is the page Open goes to.
+function Actions({ kind, q, id, space }) {
+  const [copied, setCopied] = useState('')
+  const actions = itemActions({ kind, q, id, space }).filter((a) => a.key !== 'open')
   if (!actions.length) return null
   return (
     <div data-item-actions className="flex flex-wrap items-center gap-3 mt-4">
-      {actions.map((a) =>
+      {actions.map((a, i) =>
         a.href ? (
-          <a key={a.key} href={a.href} className="px-3 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium no-underline">
+          <a
+            key={a.key}
+            href={a.href}
+            className={i === 0
+              ? 'px-3 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium no-underline'
+              : 'text-copy text-link underline underline-offset-2'}
+          >
             {a.label}
           </a>
         ) : (
@@ -89,15 +97,13 @@ function Actions({ kind, q, id }) {
             key={a.key}
             type="button"
             className="text-copy text-link underline underline-offset-2"
-            onClick={() => {
-              navigator.clipboard?.writeText(a.copy).then(() => setCopied(true), () => setCopied(false))
-            }}
+            onClick={() => copyText(a.copy).then((ok) => setCopied(ok ? 'Copied' : 'Could not copy'))}
           >
-            {copied ? 'Copied' : a.label}
+            {copied || a.label}
           </button>
         ),
       )}
-      <span role="status" className="sr-only">{copied ? `Copied ${q}` : ''}</span>
+      <span role="status" className="sr-only">{copied === 'Copied' ? `Copied ${q}` : copied}</span>
     </div>
   )
 }
@@ -212,7 +218,7 @@ export default function ItemPage({ kind, q, space, view, id }) {
     content = (
       <>
         <DetailList rows={details(kind, r)} />
-        <Actions kind={kind} q={rowName(kind, r) || q} id={r.id} />
+        <Actions kind={kind} q={rowName(kind, r) || q} id={r.id} space={kind === 'network' ? r.space : undefined} />
       </>
     )
   }

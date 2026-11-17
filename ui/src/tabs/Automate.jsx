@@ -14,6 +14,8 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { playbookFor } from '../lib/ansible.js'
 import { sizeWords, withSize } from '../lib/sizes.js'
+import { useHashParams } from '../lib/hash.js'
+import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 
 const JOBS = [
   { id: 'ip', title: 'Get an IP address', says: 'The next free address in a network you pick' },
@@ -113,18 +115,29 @@ function Field({ label, children }) {
 // The IP space question, shared by the jobs that need one. The server orders
 // the spaces (yours first, then the most room) and gives each a reason; the
 // top three are offered as one-click suggestions above the full list.
-function SpacePicker({ value, onChange }) {
+function SpacePicker({ value, onChange, want }) {
   const api = useApi('/api/desk/spaces')
   const spaces = useMemo(() => api.data?.spaces ?? [], [api.data])
   const picked = useRef(false)
+  // A job opened from a name's menu starts on that name's space (by id or
+  // name). `want` is '' while that space is still being looked up, and then
+  // nothing is picked for the person.
+  useEffect(() => {
+    if (picked.current || want === undefined || !want) return
+    const s = findSpace(spaces, want)
+    if (s) {
+      picked.current = true
+      onChange(s.id, s.name)
+    }
+  }, [spaces, want, onChange])
   // Start on the first of your spaces, once, so the common case is one click
   // fewer. Never overrides a choice already made.
   useEffect(() => {
-    if (!picked.current && !value && spaces[0]?.yours) {
+    if (want === undefined && !picked.current && !value && spaces[0]?.yours) {
       picked.current = true
       onChange(spaces[0].id, spaces[0].name)
     }
-  }, [spaces, value, onChange])
+  }, [spaces, value, onChange, want])
   const suggested = spaces.slice(0, 3)
   return (
     <Field label="IP space">
@@ -159,9 +172,19 @@ function IpJob({ onBuilt, ro, start = {} }) {
   const [subnetId, setSubnetId] = useState('')
   const [name, setName] = useState(start.name || '')
   const flow = useDeskFlow('ip', onBuilt)
+  const pre = useNetworkPrefill(start)
+  const opened = !!(start.space || start.subnet || start.network)
 
   const subnets = subnetsApi.data?.subnets ?? []
   const subnet = subnets.find((s) => s.id === subnetId)
+  // The network it was opened on is picked once its space's list arrives.
+  const preDone = useRef(false)
+  useEffect(() => {
+    if (preDone.current || subnetId || !opened) return
+    const list = subnetsApi.data?.subnets
+    const s = findRange(list, pre.subnet) || findRange(list, start.network)
+    if (s) { preDone.current = true; setSubnetId(s.id) }
+  }, [subnetsApi.data, subnetId, opened, pre.subnet, start.network])
   const input = () => ({ space, subnet_id: subnetId, name: name.trim() })
   const { reset } = flow
   const pickSpace = useCallback((v) => { setSpace(v); setSubnetId(''); reset() }, [reset])
@@ -169,7 +192,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <SpacePicker value={space} onChange={pickSpace} />
+      <SpacePicker value={space} onChange={pickSpace} want={opened ? (pre.pending ? '' : pre.space) : undefined} />
       <Field label="Network">
         <FilterSelect
           label="Network"
@@ -267,12 +290,13 @@ function DnsJob({ onBuilt, ro, start = {} }) {
   const zones = useMemo(() => zonesApi.data?.zones ?? [], [zonesApi.data])
   const zone = zones.find((z) => z.id === zoneId)
   // A zone named in a planned sentence is picked once the zones have loaded.
+  // A zone's menu also sends its id, which tells two views' same-named zones apart.
   const wantZone = (start.zone_name || '').replace(/\.$/, '').toLowerCase()
   useEffect(() => {
-    if (!wantZone || zoneId) return
-    const z = zones.find((x) => (x.fqdn || '').replace(/\.$/, '').toLowerCase() === wantZone)
+    if ((!wantZone && !start.zone_id) || zoneId) return
+    const z = zones.find((x) => start.zone_id && x.id === start.zone_id) || zones.find((x) => wantZone && (x.fqdn || '').replace(/\.$/, '').toLowerCase() === wantZone)
     if (z) setZoneId(z.id)
-  }, [zones, wantZone, zoneId])
+  }, [zones, wantZone, zoneId, start.zone_id])
   const zoneName = (zone?.fqdn || '').replace(/\.$/, '')
   const full = nameInZone.trim() === '@' ? zoneName : `${nameInZone.trim()}${zoneName ? `.${zoneName}` : ''}`
   const input = () => ({ zone_id: zoneId, zone_name: zone?.fqdn || '', name_in_zone: nameInZone.trim(), type, value: value.trim() })
@@ -383,7 +407,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
         <input {...MACHINE_TEXT} className={FIELD_CLS} value={site} placeholder="branch-boston"
           onChange={(e) => { setSite(siteText(e.target.value)); reset() }} />
       </label>
-      <SpacePicker value={space.id} onChange={pickSpace} />
+      <SpacePicker value={space.id} onChange={pickSpace} want={start.space || undefined} />
       <PreviewApply
         status={flow.status}
         disabled={!template || site.length < 2 || !space.id}
@@ -485,6 +509,13 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
   const flow = useDeskFlow('network', onBuilt)
   const blocks = blocksApi.data?.blocks ?? []
   const block = blocks.find((b) => b.id === blockId)
+  // The block it was opened on (by id or address) is picked once its space's list arrives.
+  const preDone = useRef(false)
+  useEffect(() => {
+    if (preDone.current || blockId || !start.block) return
+    const b = findRange(blocksApi.data?.blocks, start.block)
+    if (b) { preDone.current = true; setBlockId(b.id) }
+  }, [blocksApi.data, blockId, start.block])
   const input = () => ({ space, block_id: blockId, cidr: Number(cidr), name: name.trim() })
   const { reset } = flow
   const pickSpace = useCallback((v) => { setSpace(v); setBlockId(''); reset() }, [reset])
@@ -492,7 +523,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <SpacePicker value={space} onChange={pickSpace} />
+      <SpacePicker value={space} onChange={pickSpace} want={start.space || undefined} />
       <Field label="Address block">
         <FilterSelect
           label="Address block"
@@ -781,12 +812,30 @@ function PlanBox({ onOpen }) {
   )
 }
 
+// The answers a name's menu sends in the hash, in each job's own words.
+function hashAnswers(hp) {
+  const a = { space: hp.space, subnet: hp.subnet, network: hp.network, block: hp.block, zone_name: hp.zone, zone_id: hp.zone_id }
+  return Object.fromEntries(Object.entries(a).filter(([, v]) => v))
+}
+
 export default function Automate() {
   const ro = useReadOnly()
-  const [job, setJob] = useState('ip')
+  // #automate?job=…&space=… (a name's menu) opens that job filled in, and so
+  // does a later change to the hash while the page is open.
+  const hp = useHashParams()
+  const fromHash = JOBS.some((j) => j.id === hp.job) ? hashAnswers(hp) : null
+  const [job, setJob] = useState(fromHash ? hp.job : 'ip')
   // Answers from Plan it, and a counter so a newly opened job starts fresh.
-  const [start, setStart] = useState({ n: 0, answers: {} })
+  const [start, setStart] = useState({ n: 0, answers: fromHash || {} })
   const pick = (id, answers = {}) => { setJob(id); setStart((s) => ({ n: s.n + 1, answers })) }
+  const hashKey = fromHash ? `${hp.job}|${JSON.stringify(fromHash)}` : ''
+  const lastHash = useRef(hashKey)
+  useEffect(() => {
+    if (!hashKey || hashKey === lastHash.current) return
+    lastHash.current = hashKey
+    pick(hp.job, fromHash)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hashKey])
   const runsApi = useApi('/api/desk/runs')
   const current = JOBS.find((j) => j.id === job)
 

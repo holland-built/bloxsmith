@@ -77,7 +77,8 @@ export default function Network() {
   // Needs a look's "See full subnets" lands on the table, not two charts above it.
   const subnetsRef = useRef(null)
   useEffect(() => {
-    const el = hp.focus === 'leases' ? leasesRef.current : hp.focus === 'subnets' ? subnetsRef.current : null
+    const el = hp.focus === 'leases' ? leasesRef.current : hp.focus === 'subnets' ? subnetsRef.current
+      : hp.focus === 'overlaps' ? document.querySelector('[data-panel-id="network-overlaps"]') : null
     el?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [hp.focus])
 
@@ -100,7 +101,7 @@ export default function Network() {
       <CardGrid layoutKey="network">
         <UtilBands panelId="network-utilization-distribution" subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
         <IpamSpaces panelId="network-ipam-spaces" ipam={ipam} />
-        <Overlaps panelId="network-overlaps" overlaps={overlaps} />
+        <Overlaps panelId="network-overlaps" overlaps={overlaps} only={hp.overlaps} hp={hp} />
         {/* Leases are issued by a deployed DHCP service. The IPAM panels above
             and the subnet table below read address-space config, which exists
             with no DHCP service at all — so neither is mapped.
@@ -353,12 +354,22 @@ const editorUrl = (r) =>
   `#editor?type=${r.kind}&id=${encodeURIComponent(r.id)}&q=${encodeURIComponent(r.prefix.split('/')[0])}`
 const KIND_WORD = { address_block: 'address block', subnet: 'subnet' }
 
-function Overlaps({ panelId, overlaps }) {
+// Does this space (by id or name) use a range in the group?
+const usesSpace = (g, want) => {
+  const w = String(want).toLowerCase()
+  return g.members.some((m) => m.id === want || String(m.name || '').toLowerCase() === w)
+}
+
+function Overlaps({ panelId, overlaps, only, hp }) {
   const [open, setOpen] = useState(null)
   const listId = useId()
   // The server already sends the most spaces first; sorted here too so the
   // order on screen never depends on that.
-  const groups = useMemo(() => [...(overlaps.data?.groups ?? NO_ROWS)].sort((a, b) => b.spaces - a.spaces), [overlaps.data])
+  const all = useMemo(() => [...(overlaps.data?.groups ?? NO_ROWS)].sort((a, b) => b.spaces - a.spaces), [overlaps.data])
+  // #network?overlaps=<space>, from an IP space's Show overlaps: only the
+  // ranges that space shares with another.
+  const groups = useMemo(() => (only ? all.filter((g) => usesSpace(g, only)) : all), [all, only])
+  const onlyName = only ? (all.flatMap((g) => g.members).find((m) => m.id === only)?.name || only) : ''
   const failed = !!overlaps.error || (!overlaps.loading && overlaps.data?.status !== 'ok')
   const maxSpaces = Math.max(1, ...groups.map((g) => g.spaces))
 
@@ -368,8 +379,18 @@ function Overlaps({ panelId, overlaps }) {
         <Skeleton h={220} />
       ) : failed ? (
         <FeedUnavailable label="Overlapping ranges unavailable" reason={overlaps.data?.error || "Couldn't read every subnet, so the list could be wrong."} />
-      ) : groups.length === 0 ? (
-        <Empty>No address range is used in more than one IP space.</Empty>
+      ) : (
+        <>
+        {only && (
+          <p data-overlaps-only="" className="flex flex-wrap items-center gap-x-3 text-note text-muted mb-1">
+            <span>Only ranges {onlyName} shares with another IP space.</span>
+            <button type="button" className="text-link underline" onClick={() => setHashParams('network', { ...hp, overlaps: undefined, focus: undefined })}>
+              Show all
+            </button>
+          </p>
+        )}
+        {groups.length === 0 ? (
+        <Empty>{only ? `${onlyName} shares no address range with another IP space.` : 'No address range is used in more than one IP space.'}</Empty>
       ) : (
         <ul className="flex flex-col gap-1 mt-1 max-h-[420px] overflow-auto">
           {groups.map((g, i) => {
@@ -407,7 +428,12 @@ function Overlaps({ panelId, overlaps }) {
                           {m.ranges.map((r, j) => (
                             <span key={r.id || r.prefix}>
                               {j > 0 && <span className="text-muted">, </span>}
-                              <a href={editorUrl(r)} aria-label={`${withSize(r.prefix)}, open this ${KIND_WORD[r.kind] || 'range'} in the Editor`} className="text-link underline">{withSize(r.prefix)}</a>
+                              {r.kind === 'address_block' ? (
+                                // An address block has its own menu (right-click or Shift+F10).
+                                <ItemLink kind="block" value={r.prefix} id={r.id} space={m.id} label={`${withSize(r.prefix)}, open this address block in the Editor`} className="underline">{withSize(r.prefix)}</ItemLink>
+                              ) : (
+                                <a href={editorUrl(r)} aria-label={`${withSize(r.prefix)}, open this ${KIND_WORD[r.kind] || 'range'} in the Editor`} className="text-link underline">{withSize(r.prefix)}</a>
+                              )}
                             </span>
                           ))}
                         </span>
@@ -419,6 +445,8 @@ function Overlaps({ panelId, overlaps }) {
             )
           })}
         </ul>
+        )}
+        </>
       )}
     </Card>
   )

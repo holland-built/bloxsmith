@@ -22,6 +22,7 @@ import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
 import { setHashParams, useHashParams } from '../lib/hash.js'
+import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 import MadeList from '../components/MadeList.jsx'
 import { checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
@@ -126,6 +127,31 @@ function AllocatePanel() {
   // to one space, so a list for any other space never fills it.
   const tried = useRef(false)
   const pending = useRef(null)
+  // #selfservice?space=…&subnet=…&network=…&reserve=1, from a network's menu:
+  // that space and network, locked to a device when it was Reserve an address.
+  // It wins over the remembered pick, and is read once, as the page opens.
+  const [hp] = useState(() => {
+    const h = window.location.hash || ''
+    return Object.fromEntries(new URLSearchParams(h.includes('?') ? h.slice(h.indexOf('?') + 1) : ''))
+  })
+  const opened = !!(hp.space || hp.subnet || hp.network)
+  const pre = useNetworkPrefill(opened ? hp : {})
+  const preStep = useRef(opened ? 'space' : 'done')
+  if (opened) tried.current = true
+  useEffect(() => {
+    if (preStep.current !== 'space' || pre.pending || !spacesApi.data) return
+    preStep.current = 'subnet'
+    const sp = findSpace(spacesApi.data.spaces, pre.space)
+    if (sp) setSpace(sp.id)
+    else preStep.current = 'done'
+    if (hp.reserve === '1') setDeviceOn(true)
+  }, [pre.pending, pre.space, spacesApi.data, hp.reserve])
+  useEffect(() => {
+    if (preStep.current !== 'subnet' || !subnetsApi.data) return
+    preStep.current = 'done'
+    const sn = findRange(subnetsApi.data.subnets, pre.subnet) || findRange(subnetsApi.data.subnets, hp.network)
+    if (sn) setSubnetId(sn.id)
+  }, [subnetsApi.data, pre.subnet, hp.network])
   useEffect(() => {
     if (tried.current || !tenant || !spacesApi.data) return
     tried.current = true
