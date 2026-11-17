@@ -3,6 +3,7 @@ package freecheck
 import (
 	"fmt"
 	"net/netip"
+	"strings"
 	"testing"
 )
 
@@ -147,13 +148,27 @@ func TestShared_PiecesFindACleanOneInALaterPiece(t *testing.T) {
 	}
 }
 
-// The search for a clean one is bounded: once a warned one is in hand, at
-// most maxSharedPieces more pieces are read.
-func TestShared_PiecesBoundTheSearchForACleanOne(t *testing.T) {
+// A warned candidate does not stop the search: other-space networks over the
+// first pieces are stepped over, and the clean 10.4.0.0/24 behind them wins.
+func TestShared_PiecesKeepLookingPastOtherSpaceNetworks(t *testing.T) {
+	r := &pieceReader{items: eightBlock(
+		Network(KindSubnet, "sp-lab", "a", pfx("10.0.0.0/16")),
+		Network(KindSubnet, "sp-lab", "b", pfx("10.1.0.0/16")),
+		Network(KindSubnet, "sp-lab", "c", pfx("10.2.0.0/15")))}
+	pick, warns, _, _, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
+	if err != nil || !ok || pick != pfx("10.4.0.0/24") || len(warns) != 0 {
+		t.Fatalf("= %s %v %+v %v, want the clean 10.4.0.0/24", pick, ok, warns, err)
+	}
+	if len(r.reads) > 4 {
+		t.Fatalf("reads = %v, want at most 4: each other-space network is stepped over", r.reads)
+	}
+}
+
+// With no clean one anywhere, the whole block is searched and the first warned
+// one is offered, in few reads: the pieces grow after each one with no room.
+func TestShared_PiecesSearchTheWholeBlockForACleanOne(t *testing.T) {
 	var items []Used
 	for i := 0; i < 256; i++ {
-		// Every /16 shared with the lab, one /16 at a time: no object covers
-		// the rest of the block, so only the bound stops the reads.
 		items = append(items, Network(KindSubnet, "sp-lab", fmt.Sprint(i), pfx(fmt.Sprintf("10.%d.0.0/16", i))))
 	}
 	r := &pieceReader{items: eightBlock(items...)}
@@ -161,8 +176,11 @@ func TestShared_PiecesBoundTheSearchForACleanOne(t *testing.T) {
 	if err != nil || !ok || pick != pfx("10.0.0.0/24") || len(warns) != 1 {
 		t.Fatalf("= %s %v %+v %v, want the first warned 10.0.0.0/24", pick, ok, warns, err)
 	}
-	if len(r.reads) > 1+maxSharedPieces {
-		t.Fatalf("%d reads, want at most %d", len(r.reads), 1+maxSharedPieces)
+	if len(r.reads) > 10 {
+		t.Fatalf("%d reads, want at most 10", len(r.reads))
+	}
+	if last := r.reads[len(r.reads)-1]; !strings.HasSuffix(last, "10.255.255.255") {
+		t.Fatalf("reads = %v, want the block read to its end", r.reads)
 	}
 }
 
