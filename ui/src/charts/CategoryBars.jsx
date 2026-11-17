@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
+import { BAR_HOVER } from './hoverCursor.js'
 
 // The bar chart three tabs draw — Audit's "Activity Summary", Network's subnet
 // utilisation buckets, Incidents' IQ action trend — in its own module so
@@ -96,7 +97,7 @@ export default function CategoryBars({
             axisLine={{ stroke: 'var(--color-grid)' }}
             tickLine={false}
           />
-          <Tooltip content={<ChartTip name={unit} />} />
+          <Tooltip content={<ChartTip name={unit} />} cursor={BAR_HOVER} />
           <Bar dataKey={yKey} fill={fill} radius={[0, 3, 3, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0} onClick={barHref ? open : undefined}>
             {data.map((d) => <Cell key={d[xKey]} fill={fill ?? d.color} style={cellStyle(d)} />)}
             {valueLabel}
@@ -124,7 +125,7 @@ export default function CategoryBars({
         )}
         {/* The bar's own category is the hover's first line, so the number
             underneath only needs its unit. */}
-        <Tooltip content={<ChartTip name={unit} />} />
+        <Tooltip content={<ChartTip name={unit} />} cursor={BAR_HOVER} />
         <Bar dataKey={yKey} fill={fill} radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={values ? 3 : 0} onClick={barHref ? open : undefined}>
           {data.map((d) => <Cell key={d[xKey]} fill={fill ?? d.color} style={cellStyle(d)} />)}
           {valueLabel}
