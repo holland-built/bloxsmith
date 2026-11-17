@@ -12,6 +12,7 @@ import { DevicesInput, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
+import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { playbookFor } from '../lib/ansible.js'
 import { sizeWords, withSize } from '../lib/sizes.js'
 import { useHashParams } from '../lib/hash.js'
@@ -248,6 +249,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
             {next
               ? <p>This will reserve <strong>{next}</strong>{subnet ? ` in ${subnetLabel(subnet)}` : ''}{name.trim() ? `, for ${name.trim()}` : ''}.</p>
               : <p>Infoblox found no free address in this network.</p>}
+            <CheckedAgainst res={flow.preview} />
           </PreviewBox>
         )}
       </PreviewApply>
@@ -450,6 +452,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
           <PreviewBox>
             <p>This will make, for <strong>{site}</strong>{space.name ? ` in ${space.name}` : ''}:</p>
             <SitePlan res={flow.preview} />
+            <CheckedAgainst res={flow.preview} />
           </PreviewBox>
         )}
       </PreviewApply>
@@ -517,6 +520,7 @@ function DemoJob({ onBuilt, ro, start = {} }) {
             {server && p?.server && (p.server.ready
               ? <p>Then a demo DNS server that joins the Infoblox Portal.</p>
               : <p style={{ color: COLORS.warn }}>The demo server cannot start yet: {p.server.why} Turn it off above, or fix that on the <a className="underline" href="#demo">Demo server</a> page.</p>)}
+            <CheckedAgainst res={p} />
           </PreviewBox>
         )}
       </PreviewApply>
@@ -593,6 +597,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
               : would?.address_preview === 'none-available'
                 ? <p>This block has no free network of that size. Pick a smaller size or another block.</p>
                 : <p>Infoblox could not say which network it would make{would?.reason ? ` (${would.reason})` : ''}. Try Preview again.</p>}
+            <CheckedAgainst res={flow.preview} />
           </PreviewBox>
         )}
       </PreviewApply>

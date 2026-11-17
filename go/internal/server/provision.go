@@ -518,13 +518,14 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			run.fail(blocksTemplate, err)
 		} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": run.dryParam, "ip_space": override}); err != nil {
 			run.fail(blocksTemplate, err)
-		} else if _, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
+		} else if bres, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
 			// Every provisioning error here is a *provision.Error (IsError is
 			// almost always true), so the old "only tally when !IsError" branch
 			// left this failure permanently invisible to the summary — the same
 			// "0 succeeded reads as done" bug this fix targets. Tally it.
 			run.fail(blocksTemplate, err)
 		} else {
+			run.saw(bres)
 			run.done(blocksTemplate, "succeeded")
 		}
 
@@ -572,6 +573,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 					emit(frame)
 					return
 				}
+				run.saw(result)
 				if b, _ := result["skipped"].(bool); b {
 					run.done(rel, "skipped")
 				} else {
@@ -723,6 +725,47 @@ type seedRun struct {
 	dry      bool
 	dryParam string
 	summary  map[string]any
+	// checked and picks are what every block and site read saw, for the final
+	// frame. checked stays nil until something was read.
+	checked map[string]any
+	picks   []any
+}
+
+// saw adds one block or site result's checked counts and skipped picks to the
+// run's. Counts are added up across reads, so a network two reads both saw is
+// counted twice; spaces and age take the largest, read_at the oldest.
+func (s *seedRun) saw(result map[string]any) {
+	c, ok := result["checked"].(map[string]any)
+	if ok {
+		if s.checked == nil {
+			s.checked = map[string]any{"spaces": 0, "networks": 0, "ranges": 0, "reservations": 0, "hosts": 0}
+		}
+		for _, k := range []string{"networks", "ranges", "reservations", "hosts"} {
+			s.checked[k] = s.checked[k].(int) + countOf(c[k])
+		}
+		if n := countOf(c["spaces"]); n > s.checked["spaces"].(int) {
+			s.checked["spaces"] = n
+		}
+		if a, has := c["age_seconds"]; has {
+			if old, had := s.checked["age_seconds"]; !had || countOf(a) > countOf(old) {
+				s.checked["age_seconds"] = countOf(a)
+				s.checked["read_at"] = c["read_at"]
+			}
+		}
+	}
+	if p, ok := result["skipped_picks"].([]any); ok {
+		s.picks = append(s.picks, p...)
+	}
+}
+
+func countOf(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case float64:
+		return int(n)
+	}
+	return 0
 }
 
 func (d *Deps) newSeedRun(r *http.Request, emit sse.Emit, dry bool) *seedRun {
@@ -781,7 +824,16 @@ func (s *seedRun) sites(regions []string, unreadableFmt string,
 
 // finish sends the terminal frame and, on a real run, the aggregate audit entry.
 func (s *seedRun) finish(event string, regions []string) {
-	s.emit(terminalFrame(s.summary))
+	frame := terminalFrame(s.summary)
+	if s.checked != nil {
+		frame["checked"] = s.checked
+		picks := s.picks
+		if picks == nil {
+			picks = []any{}
+		}
+		frame["skipped_picks"] = picks
+	}
+	s.emit(frame)
 	if !s.dry {
 		// regions is a []string, which canonicalJSON's closed type switch does NOT
 		// accept — and auditAppend only LOGS that rejection, so passing it raw

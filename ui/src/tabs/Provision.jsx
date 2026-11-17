@@ -1,5 +1,5 @@
 import ItemLink from '../components/ItemLink.jsx'
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses. /api/ipam/spaces
 // and /api/ipam/blocks answer 502 on an upstream failure and /api/templates
 // answers 500 — and `data?.spaces ?? []` collapses every one of those into the
@@ -15,6 +15,10 @@ import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
+// Lazy: #provision has almost no room left under tests/bundle-budget.spec.ts,
+// and this line is only needed once a preview has finished.
+const LazyChecked = lazy(() => import('../components/CheckedAgainst.jsx'))
+const CheckedAgainst = ({ res }) => <Suspense fallback={null}><LazyChecked res={res} /></Suspense>
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -484,6 +488,7 @@ function SubnetMode() {
                 : null
             }
           >
+            {flow.status === 'previewed' && <CheckedAgainst res={flow.result} />}
             <RollbackReport report={flow.rollback} />
           </PreviewApply>
         </div>
@@ -617,6 +622,7 @@ function SiteMode({ isAdmin }) {
                 : null
             }
           >
+            {build.status === 'previewed' && <CheckedAgainst res={built} />}
             <RollbackReport report={build.rollback} />
           </PreviewApply>
         </div>
@@ -811,6 +817,7 @@ function SeedMode({ isAdmin }) {
                 : null
             }
           >
+            {seed.status === 'previewed' && <CheckedAgainst res={seed.result} />}
             <RollbackReport report={seed.rollback} />
           </PreviewApply>
         </div>
