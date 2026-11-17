@@ -223,7 +223,10 @@ func TestSubnetStream_DryRun_SecondPreviewReusesTheRead(t *testing.T) {
 
 // A subnet in ANOTHER IP space over the block's first /24 is not one of the
 // block's children, and the old preview, which read only those, offered it.
-func TestSubnetStream_DryRun_SkipsAnOverlapInAnotherSpace(t *testing.T) {
+// It is not a clash either (the owner's rule of 2026-11-17), but a /24 no
+// other space uses is preferred, so the next one is offered and the first is
+// listed as passed over.
+func TestSubnetStream_DryRun_PrefersOneNoOtherSpaceUses(t *testing.T) {
 	d, _ := newInventoryDeps(t, previewBlockUpstream(t,
 		`{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`],"page":{"total_size":"1"}}`))
 	rr := httptest.NewRecorder()
@@ -233,10 +236,37 @@ func TestSubnetStream_DryRun_SkipsAnOverlapInAnotherSpace(t *testing.T) {
 		t.Fatalf("want 172.16.129.0/24 offered, got %s", body)
 	}
 	for _, want := range []string{`"candidate":"172.16.128.0/24"`,
-		`"reason":"a subnet in ipam/ip_space/sp-2 already uses 172.16.128.0/24"`, `"networks":1`} {
+		`"reason":"it is also used in IP space ipam/ip_space/sp-2`, `"networks":1`, `"warnings":[]`, `"shared":0`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("preview lacks %s: %s", want, body)
 		}
+	}
+}
+
+// The live tenant's shape: another IP space holds a network around the whole
+// block, so no /24 in it is clean. The first free one is offered, with the
+// warning next to it, rather than nothing.
+func TestSubnetStream_DryRun_OffersAWarnedOneWhenNoneIsClean(t *testing.T) {
+	lab := `{"id":"ipam/subnet/lab","address":"172.16.0.0","cidr":16,"space":"ipam/ip_space/sp-2"}`
+	d, _ := newInventoryDeps(t, previewBlockUpstream(t, `{"results":[`+lab+`],"page":{"total_size":"1"}}`))
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=1"))
+	body := rr.Body.String()
+	if !strings.Contains(body, "Would create 172.16.128.0/24") {
+		t.Fatalf("want 172.16.128.0/24 offered, got %s", body)
+	}
+	done := terminalFrameOf(t, parseSSEFrames(t, body))
+	ws, _ := done["warnings"].([]any)
+	if len(ws) != 1 {
+		t.Fatalf("warnings = %v, want one", done["warnings"])
+	}
+	w, _ := ws[0].(map[string]any)
+	if w["candidate"] != "172.16.128.0/24" || w["object"] != "172.16.0.0/16" || w["space"] != "ipam/ip_space/sp-2" ||
+		w["kind"] != "subnet" || w["contains"] != true {
+		t.Fatalf("warning = %v", w)
+	}
+	if c, _ := done["checked"].(map[string]any); c["shared"] != float64(1) {
+		t.Fatalf("checked = %v, want shared 1", done["checked"])
 	}
 }
 
@@ -262,11 +292,21 @@ func emptyInventory(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Apply: Infoblox picks the subnet inside the block's own space only. A pick
-// another space already uses is checked against a fresh read around it (which
-// also sees the new subnet itself: that is not a clash), removed, and refused
-// with the reason. Before, the live run kept it and reported done.
-func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
+// Apply: Infoblox's pick is checked against a fresh read around it (which
+// also sees the new subnet itself: that is not a clash). A pick something else
+// in the same space already uses is removed and refused with the reason.
+// Before, the live run kept it and reported done.
+func TestSubnetStream_Apply_RemovesAPickItsOwnSpaceUses(t *testing.T) {
+	applyPickTest(t, "ipam/ip_space/sp-1", true)
+}
+
+// A pick that only ANOTHER space uses is not refused: it is kept.
+func TestSubnetStream_Apply_KeepsAPickOnlyAnotherSpaceUses(t *testing.T) {
+	applyPickTest(t, "ipam/ip_space/sp-2", false)
+}
+
+func applyPickTest(t *testing.T, otherSpace string, refused bool) {
+	t.Helper()
 	var mu sync.Mutex
 	var deletes, filters []string
 	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +328,7 @@ func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
 			mu.Lock()
 			filters = append(filters, q.Get("_filter"))
 			mu.Unlock()
-			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`,`+
+			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", otherSpace)+`,`+
 				`{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24,"space":"ipam/ip_space/sp-1"}],"page":{"total_size":"2"}}`)
 		default:
 			io.WriteString(w, `{"results":[]}`)
@@ -297,8 +337,19 @@ func TestSubnetStream_Apply_RemovesAPickAnotherSpaceUses(t *testing.T) {
 	rr := httptest.NewRecorder()
 	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0"))
 	body := rr.Body.String()
+	if !refused {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(deletes) != 0 || strings.Contains(body, "so it was removed") {
+			t.Fatalf("deletes = %v, body %s: want the pick kept", deletes, body)
+		}
+		if n := len(auditEntries(t, logPath, "provision-subnet")); n != 1 {
+			t.Fatalf("%d provision-subnet rows, want 1", n)
+		}
+		return
+	}
 	noDoneFrame(t, parseSSEFrames(t, body))
-	if !strings.Contains(body, "Infoblox picked 172.16.128.0/24, but a subnet in ipam/ip_space/sp-2 already uses 172.16.128.0/24, so it was removed") {
+	if !strings.Contains(body, "Infoblox picked 172.16.128.0/24, but a subnet in ipam/ip_space/sp-1 already uses 172.16.128.0/24, so it was removed") {
 		t.Fatalf("want the pick refused and removed, got %s", body)
 	}
 	mu.Lock()

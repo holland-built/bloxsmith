@@ -46,8 +46,8 @@ func eightBlock(extra ...Used) []Used {
 // A /8 is searched a /16 at a time, and the search stops at the first piece
 // with room: only 10.0.0.0/16 is read, not the whole /8.
 func TestPieces_StopAtTheFirstPieceWithRoom(t *testing.T) {
-	r := &pieceReader{items: eightBlock(Network(KindSubnet, "sp-b", "s", pfx("10.0.0.0/24")))}
-	pick, skipped, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
+	r := &pieceReader{items: eightBlock(Network(KindSubnet, "sp-a", "s", pfx("10.0.0.0/24")))}
+	pick, _, skipped, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
 	if err != nil || !ok || pick != pfx("10.0.1.0/24") {
 		t.Fatalf("= %s %v %v, want 10.0.1.0/24", pick, ok, err)
 	}
@@ -63,9 +63,9 @@ func TestPieces_StopAtTheFirstPieceWithRoom(t *testing.T) {
 // covers many pieces is stepped over without reading the pieces under it.
 func TestPieces_FindACandidateInALaterPiece(t *testing.T) {
 	r := &pieceReader{items: eightBlock(
-		Network(KindSubnet, "sp-b", "big", pfx("10.0.0.0/9")),
+		Network(KindSubnet, "sp-a", "big", pfx("10.0.0.0/9")),
 		Network(KindSubnet, "sp-a", "s", pfx("10.128.0.0/24")))}
-	pick, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
+	pick, _, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
 	if err != nil || !ok || pick != pfx("10.128.1.0/24") {
 		t.Fatalf("= %s %v %v, want 10.128.1.0/24", pick, ok, err)
 	}
@@ -84,10 +84,10 @@ func TestPieces_FindACandidateInALaterPiece(t *testing.T) {
 func TestPieces_AFullBlockReadsEveryPiece(t *testing.T) {
 	var items []Used
 	for i := 0; i < 4; i++ {
-		items = append(items, Network(KindSubnet, "sp-b", fmt.Sprint(i), pfx(fmt.Sprintf("10.%d.0.0/16", i))))
+		items = append(items, Network(KindSubnet, "sp-a", fmt.Sprint(i), pfx(fmt.Sprintf("10.%d.0.0/16", i))))
 	}
 	r := &pieceReader{items: items}
-	_, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/14"), 24)
+	_, _, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/14"), 24)
 	if err != nil || ok {
 		t.Fatalf("ok %v err %v, want none free", ok, err)
 	}
@@ -98,11 +98,11 @@ func TestPieces_AFullBlockReadsEveryPiece(t *testing.T) {
 	// A /8 packed with /24s: no piece has room, and no clash spans a piece.
 	var packed []Used
 	for i := 0; i < 256; i++ {
-		packed = append(packed, Network(KindSubnet, "sp-b", fmt.Sprint(i), pfx(fmt.Sprintf("10.%d.0.0/17", i))),
-			Network(KindSubnet, "sp-b", fmt.Sprint(i)+"b", pfx(fmt.Sprintf("10.%d.128.0/17", i))))
+		packed = append(packed, Network(KindSubnet, "sp-a", fmt.Sprint(i), pfx(fmt.Sprintf("10.%d.0.0/17", i))),
+			Network(KindSubnet, "sp-a", fmt.Sprint(i)+"b", pfx(fmt.Sprintf("10.%d.128.0/17", i))))
 	}
 	r = &pieceReader{items: packed}
-	if _, _, _, ok, _ := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24); ok || len(r.reads) > 10 {
+	if _, _, _, _, ok, _ := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24); ok || len(r.reads) > 10 {
 		t.Fatalf("ok %v after %d reads, want none free in at most 10", ok, len(r.reads))
 	}
 }
@@ -111,9 +111,9 @@ func TestPieces_AFullBlockReadsEveryPiece(t *testing.T) {
 // the block from that one read; checked.around is then empty (everything).
 func TestPieces_AFullReadAnswersForTheRest(t *testing.T) {
 	r := &pieceReader{full: map[int]bool{0: true}, items: eightBlock(
-		Network(KindSubnet, "sp-b", "a", pfx("10.0.0.0/16")),
-		Network(KindSubnet, "sp-b", "b", pfx("10.1.0.0/24")))}
-	pick, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
+		Network(KindSubnet, "sp-a", "a", pfx("10.0.0.0/16")),
+		Network(KindSubnet, "sp-a", "b", pfx("10.1.0.0/24")))}
+	pick, _, _, checked, ok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), 24)
 	if err != nil || !ok || pick != pfx("10.1.1.0/24") {
 		t.Fatalf("= %s %v %v, want 10.1.1.0/24", pick, ok, err)
 	}
@@ -135,10 +135,10 @@ func TestPieces_PickWhatAWholeReadPicks(t *testing.T) {
 	}
 	for i, items := range cases {
 		for _, bits := range []int{8, 12, 16, 24, 30} {
-			want, _, wok := NewSnapshot(nil, items...).NextFreePrefix("sp-a", pfx("10.0.0.0/8"), bits)
+			want, wantW, _, wok := NewSnapshot(nil, items...).NextFreePrefix("sp-a", pfx("10.0.0.0/8"), bits)
 			r := &pieceReader{items: items}
-			got, _, _, gok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), bits)
-			if err != nil || got != want || gok != wok {
+			got, gotW, _, _, gok, err := nextFreeInPieces(r.read, "sp-a", pfx("10.0.0.0/8"), bits)
+			if err != nil || got != want || gok != wok || len(gotW) != len(wantW) {
 				t.Errorf("case %d /%d: pieces %s %v, whole %s %v (%v)", i, bits, got, gok, want, wok, err)
 			}
 		}
@@ -151,7 +151,7 @@ func TestPieces_PickWhatAWholeReadPicks(t *testing.T) {
 func TestNextFreePrefixIn_FallsBackToAFullReadWhenAPieceIsIncomplete(t *testing.T) {
 	f := goodTenant()
 	f.lists["ipam/address_block"] = []string{`{"id":"b8","space":"sp-a","address":"10.0.0.0","cidr":8}`}
-	f.lists["ipam/subnet"] = []string{`{"id":"s0","space":"sp-b","address":"10.0.0.0","cidr":16}`,
+	f.lists["ipam/subnet"] = []string{`{"id":"s0","space":"sp-a","address":"10.0.0.0","cidr":16}`,
 		`{"id":"s1","space":"sp-a","address":"10.1.0.0","cidr":24}`}
 	h := f.handler(t)
 	var mu sync.Mutex
@@ -171,7 +171,7 @@ func TestNextFreePrefixIn_FallsBackToAFullReadWhenAPieceIsIncomplete(t *testing.
 	}))
 	t.Cleanup(srv.Close)
 	c := rest.New(srv.URL, rest.NewAuth("k", nil))
-	pick, _, checked, ok, err := NextFreePrefixIn(c, false, "sp-a", pfx("10.0.0.0/8"), 24)
+	pick, _, _, checked, ok, err := NextFreePrefixIn(c, false, "sp-a", pfx("10.0.0.0/8"), 24)
 	if err != nil || !ok || pick != pfx("10.1.1.0/24") {
 		t.Fatalf("= %s %v %v, want 10.1.1.0/24", pick, ok, err)
 	}

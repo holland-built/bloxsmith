@@ -23,19 +23,19 @@ import (
 // plain numbers, and what was checked and skipped. An empty next prefix with a
 // nil error means the block is full. If the inventory cannot be read in full
 // it is an error: nothing is suggested.
-func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block, next netip.Prefix, checked freecheck.Counts, skipped []freecheck.Skip, err error) {
+func guessNextSubnet(c *rest.Client, blockPath, blockID string, bits int) (block, next netip.Prefix, warns []freecheck.Warning, checked freecheck.Counts, skipped []freecheck.Skip, err error) {
 	block, space, err := blockOf(c, blockPath)
 	if err != nil {
-		return block, next, checked, nil, err
+		return block, next, nil, checked, nil, err
 	}
 	// A preview: reads of only what overlaps the block, in every IP space, a
 	// piece of it at a time (a /8 can hold most of the tenant), stopping at
 	// the first piece with room. Each read is shared for up to PreviewTTL.
-	next, skipped, checked, _, err = freecheck.NextFreePrefixIn(c, true, space, block, bits)
+	next, warns, skipped, checked, _, err = freecheck.NextFreePrefixIn(c, true, space, block, bits)
 	if err != nil {
-		return block, netip.Prefix{}, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
+		return block, netip.Prefix{}, nil, checked, nil, fmt.Errorf("%s", freecheck.Public(err))
 	}
-	return block, next, checked, skipped, nil
+	return block, next, warns, checked, skipped, nil
 }
 
 // prefixOf reads Infoblox's {"address": "10.0.0.0", "cidr": 24} pair. The one

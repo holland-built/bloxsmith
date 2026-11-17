@@ -151,13 +151,17 @@ func TestSubnetCreate_DryRun_FailedPreviewNeverMatchesSuccess(t *testing.T) {
 // SubnetCreate reads), a subnet 10.0.5.0/24 in ANOTHER space sp-2, a DHCP
 // range 10.1.0.10 to 10.1.0.50 and a reservation 10.1.0.60. Infoblox's
 // nextavailablesubnet offers 10.0.5.0, the address sp-2 already uses. Every
-// write is recorded; route answers writes.
-func inventoryServer(t *testing.T, writes *[]string) *httptest.Server {
+// write is recorded; route answers writes. ownSubnets adds subnet rows.
+func inventoryServer(t *testing.T, writes *[]string, ownSubnets ...string) *httptest.Server {
 	t.Helper()
+	subnets := `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`
+	for _, row := range ownSubnets {
+		subnets += "," + row
+	}
 	inv := map[string]string{
 		"ipam/ip_space":      `{"id":"ipam/ip_space/sp-1","name":"corp"},{"id":"ipam/ip_space/sp-2","name":"lab"}`,
 		"ipam/address_block": `{"id":"ipam/address_block/block-1","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":8}`,
-		"ipam/subnet":        `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`,
+		"ipam/subnet":        subnets,
 		"ipam/range":         `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.1.0.10","end":"10.1.0.50"}`,
 		"dhcp/fixed_address": `{"id":"dhcp/fixed_address/f-1","ip_space":"ipam/ip_space/sp-1","address":"10.1.0.60"}`,
 	}
@@ -198,8 +202,8 @@ func TestCreates_RefuseWhatIsAlreadyInUse(t *testing.T) {
 		call func(*Client, bool) (M, int)
 		want string
 	}{
-		{"block over another space's subnet", func(c *Client, dry bool) (M, int) {
-			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-1", "dry": dry})
+		{"block over its own space's subnet", func(c *Client, dry bool) (M, int) {
+			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-2", "dry": dry})
 		}, "10.0.4.0/22 is not free: a subnet in lab already uses 10.0.5.0/24"},
 		{"range over a reservation", func(c *Client, dry bool) (M, int) {
 			return c.RangeCreate(M{"start": "10.1.0.55", "end": "10.1.0.70", "space": "ipam/ip_space/sp-1", "dry": dry})
@@ -232,33 +236,106 @@ func TestBlockCreate_InsideItsOwnSpaceBlockIsFree(t *testing.T) {
 	}
 }
 
-// Infoblox's preview pick is used in another space: the preview offers the
+// Overlap only with something in ANOTHER IP space is not a clash: each create
+// goes ahead, in the preview and live, and the preview carries the warning.
+func TestCreates_AnotherSpaceOnlyIsOfferedWithAWarning(t *testing.T) {
+	cases := []struct {
+		name   string
+		call   func(*Client, bool) (M, int)
+		object string
+	}{
+		{"block over another space's subnet", func(c *Client, dry bool) (M, int) {
+			return c.BlockCreate(M{"address": "10.0.4.0", "cidr": 22.0, "space": "ipam/ip_space/sp-1", "dry": dry})
+		}, "10.0.5.0/24"},
+		{"range over another space's range and reservation", func(c *Client, dry bool) (M, int) {
+			return c.RangeCreate(M{"start": "10.1.0.45", "end": "10.1.0.65", "space": "ipam/ip_space/sp-2", "dry": dry})
+		}, "10.1.0.10 to 10.1.0.50"},
+		{"host inside another space's DHCP range", func(c *Client, dry bool) (M, int) {
+			return c.HostCreate(M{"name": "web", "addresses": []any{M{"address": "10.1.0.20", "space": "ipam/ip_space/sp-2"}}, "dry": dry})
+		}, "10.1.0.10 to 10.1.0.50"},
+	}
+	for _, tc := range cases {
+		for _, dry := range []bool{true, false} {
+			var writes []string
+			res, status := tc.call(newTestClient(inventoryServer(t, &writes)), dry)
+			if status != 200 && status != 201 {
+				t.Fatalf("%s dry=%v: = %d %v, want it to go ahead", tc.name, dry, status, res)
+			}
+			if !dry {
+				if len(writes) != 1 || !strings.HasPrefix(writes[0], "POST ") {
+					t.Fatalf("%s: writes = %v, want the create", tc.name, writes)
+				}
+				continue
+			}
+			ws, _ := res["warnings"].([]any)
+			if len(ws) == 0 || asMap(ws[0])["object"] != tc.object && asMap(ws[len(ws)-1])["object"] != tc.object {
+				t.Fatalf("%s: warnings = %v, want %s named", tc.name, res["warnings"], tc.object)
+			}
+			if asMap(res["checked"])["shared"] != 1 {
+				t.Fatalf("%s: checked = %v, want shared 1", tc.name, res["checked"])
+			}
+		}
+	}
+}
+
+// Infoblox's preview pick is used in its own space: the preview offers the
 // next free /24 instead and names the one it passed over.
-func TestSubnetCreate_DryRunSwapsAPickAnotherSpaceUses(t *testing.T) {
+func TestSubnetCreate_DryRunSwapsAPickItsOwnSpaceUses(t *testing.T) {
 	var writes []string
-	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+	res, status := newTestClient(inventoryServer(t, &writes, ownSubnet)).SubnetCreate(
 		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": true})
 	would, _ := res["would_create"].(M)
 	if status != 200 || would["address"] != "10.0.0.0" {
 		t.Fatalf("= %d %v, want 10.0.0.0 offered", status, res)
 	}
 	sk, _ := res["skipped"].([]any)
-	if len(sk) == 0 || pyStr(asMap(sk[0])["reason"]) != "a subnet in lab already uses 10.0.5.0/24" {
+	if len(sk) == 0 || pyStr(asMap(sk[0])["reason"]) != "a subnet in corp already uses 10.0.5.0/24" {
 		t.Fatalf("skipped = %v", res["skipped"])
 	}
 }
 
-// On the live run Infoblox picks again, and a pick another space uses is
-// removed rather than left on the network.
-func TestSubnetCreate_LiveRemovesAPickAnotherSpaceUses(t *testing.T) {
+// ownSubnet is a subnet in the block's own space, on Infoblox's pick.
+const ownSubnet = `{"id":"ipam/subnet/ours","space":"ipam/ip_space/sp-1","address":"10.0.5.0","cidr":24}`
+
+// Infoblox's preview pick is used only in another space: it is kept, with a
+// warning, because the live run makes that pick and it will not be refused.
+func TestSubnetCreate_DryRunKeepsAPickOnlyAnotherSpaceUses(t *testing.T) {
 	var writes []string
 	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": true})
+	would, _ := res["would_create"].(M)
+	ws, _ := res["warnings"].([]any)
+	if status != 200 || would["address"] != "10.0.5.0" || len(ws) != 1 || asMap(ws[0])["space"] != "lab" {
+		t.Fatalf("= %d %v, want 10.0.5.0 offered with lab's warning", status, res)
+	}
+}
+
+// On the live run Infoblox picks again, and a pick its own space uses is
+// removed rather than left on the network.
+func TestSubnetCreate_LiveRemovesAPickItsOwnSpaceUses(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes, ownSubnet)).SubnetCreate(
 		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
-	if status != 409 || !strings.Contains(pyStr(res["error"]), "Infoblox picked 10.0.5.0/24, but a subnet in lab already uses 10.0.5.0/24, so it was removed") {
+	if status != 409 || !strings.Contains(pyStr(res["error"]), "Infoblox picked 10.0.5.0/24, but a subnet in corp already uses 10.0.5.0/24, so it was removed") {
 		t.Fatalf("= %d %v, want the pick refused and removed", status, res)
 	}
 	want := []string{"POST /api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet", "DELETE /api/ddi/v1/ipam/subnet/new-1"}
 	if !reflect.DeepEqual(writes, want) {
 		t.Fatalf("writes = %v, want %v (no tagging PATCH)", writes, want)
+	}
+}
+
+// A live pick that only another space uses is kept, not removed.
+func TestSubnetCreate_LiveKeepsAPickOnlyAnotherSpaceUses(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(inventoryServer(t, &writes)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status != 200 && status != 201 || res["ok"] != true {
+		t.Fatalf("= %d %v, want the pick kept", status, res)
+	}
+	for _, w := range writes {
+		if strings.HasPrefix(w, "DELETE") {
+			t.Fatalf("writes = %v, want no DELETE", writes)
+		}
 	}
 }

@@ -173,6 +173,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""
 		var skipped []freecheck.Skip
+		var warns []freecheck.Warning
 		would := M{"cidr": cidr, "name": name, "comment": comment, "tags": tags}
 		switch {
 		case err != nil:
@@ -198,21 +199,25 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			if perr != nil {
 				break
 			}
-			if r := snap.CheckPrefix(space, pick, block); !r.Free {
+			// Infoblox's pick is what the live run makes, so it is kept when it
+			// is free here, warnings and all: other IP spaces never refuse.
+			r := snap.CheckPrefix(space, pick, block)
+			warns = r.Warnings
+			if !r.Free {
 				skipped = append(skipped, freecheck.Skip{Candidate: pick.String(), Reason: r.Reason})
-				ours, more, ok := snap.NextFreePrefix(space, block, cidr)
+				ours, w, more, ok := snap.NextFreePrefix(space, block, cidr)
 				skipped = append(skipped, more...)
 				if !ok {
 					subnetAddr = ""
 					would["address_preview"] = "none-available"
 					break
 				}
-				subnetAddr = ours.Addr().String()
+				subnetAddr, warns = ours.Addr().String(), w
 			}
 		}
 		would["address"] = subnetAddr
 		return M{"ok": true, "dry_run": true, "would_create": would,
-			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 200
+			"checked": snap.Counts.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)}, 200
 	}
 
 	resp, status, _ := c.Rest.Write("POST", blockPath+"/nextavailablesubnet",
@@ -401,12 +406,13 @@ func (c *Client) BlockCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	if r := snap.CheckPrefix(space, pfx, netip.Prefix{}); !r.Free {
+	r := snap.CheckPrefix(space, pfx, netip.Prefix{})
+	if !r.Free {
 		return notFree(snap, pfx.String(), r.Reason, truthyDry(body["dry"])), 409
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": blockBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(r.Warnings), "skipped": []any{}, "warnings": freecheck.WarnList(r.Warnings)}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", blockBody, nil)
 	if writeUnreadable(resp, status) {
@@ -446,12 +452,13 @@ func (c *Client) RangeCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	if r := snap.CheckSpan(lo, hi); !r.Free {
+	r := snap.CheckSpan(space, lo, hi)
+	if !r.Free {
 		return notFree(snap, start+" to "+end, r.Reason, truthyDry(body["dry"])), 409
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": rangeBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(r.Warnings), "skipped": []any{}, "warnings": freecheck.WarnList(r.Warnings)}, 200
 	}
 	rangeBody["tags"] = withMadeTag(rangeBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
@@ -518,6 +525,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 	// Checked in the preview and again on the live run: an address inside a
 	// DHCP range, reserved, or already a host's, in any IP space, is refused.
 	var ips []netip.Addr
+	var spaces []string
 	var lo, hi netip.Addr
 	for _, a := range addresses {
 		raw := strings.TrimSpace(pyStr(asMap(a)["address"]))
@@ -526,6 +534,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 			return M{"ok": false, "error": fmt.Sprintf("%q is not an address", raw)}, 400
 		}
 		ips = append(ips, ip)
+		spaces = append(spaces, strings.TrimSpace(pyStr(asMap(a)["space"])))
 		if !lo.IsValid() || ip.Less(lo) {
 			lo = ip
 		}
@@ -537,14 +546,17 @@ func (c *Client) HostCreate(body M) (M, int) {
 	if fail != nil {
 		return fail, fstatus
 	}
-	for _, ip := range ips {
-		if r := snap.CheckAddr(ip); !r.Free {
+	var warns []freecheck.Warning
+	for i, ip := range ips {
+		r := snap.CheckAddr(spaces[i], ip)
+		if !r.Free {
 			return notFree(snap, ip.String(), r.Reason, truthyDry(body["dry"])), 409
 		}
+		warns = append(warns, r.Warnings...)
 	}
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "would_create": hostBody,
-			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
+			"checked": snap.Counts.MapWith(warns), "skipped": []any{}, "warnings": freecheck.WarnList(warns)}, 200
 	}
 	hostBody["tags"] = withMadeTag(hostBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)

@@ -844,7 +844,8 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		// addresses (about a minute cold). If the subnet's own address cannot
 		// be read, the full read is the fallback.
 		var lo, hi netip.Addr
-		if _, prefix, _, st := c.subnetSpace(objPath); st == 0 {
+		space, prefix, _, st := c.subnetSpace(objPath)
+		if st == 0 {
 			lo, hi = freecheck.Bounds(prefix.Masked())
 		}
 		snap, fail, fstatus := c.inUse(freecheck.Addresses, true, lo, hi)
@@ -856,7 +857,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		// that allocates). Until 2026-10-21 the preview answered an empty list
 		// without asking, so it showed nothing and could not tell a full subnet
 		// from a free one.
-		free, skipped, offered, err := c.freePicks(objPath, count, snap)
+		free, warns, skipped, offered, err := c.freePicks(objPath, count, snap, space)
 		if err != nil {
 			msg := "lookup failed"
 			if ue, ok := err.(*rest.UpstreamError); ok {
@@ -867,10 +868,10 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		if len(skipped) > 0 && len(free) < count {
 			return M{"ok": false, "error": fmt.Sprintf("only %d of the %d addresses Infoblox offered are free of DHCP ranges, "+
 				"reservations and hosts, and %d were asked for", len(free), offered, count),
-				"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 409
+				"checked": snap.Counts.MapWith(nil), "skipped": freecheck.SkipList(skipped), "warnings": []any{}}, 409
 		}
 		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": addressSummaries(free),
-			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}
+			"checked": snap.Counts.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)}
 		if name != "" {
 			result["name"] = name
 		}
@@ -916,6 +917,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			hi = ip
 		}
 	}
+	// The IP space Infoblox handed each address out in, so an address another
+	// space also uses is not refused (only a warning). Unread, every space
+	// counts as this one.
 	snap, fail, fstatus := c.inUse(freecheck.Addresses, false, lo, hi)
 	if fail != nil {
 		released, orphaned := c.releaseAddresses(addresses)
@@ -932,7 +936,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		if perr != nil {
 			continue
 		}
-		if r := snap.CheckAddr(ip); !r.Free {
+		if r := snap.CheckAddr(pyStr(asMap(a)["space"]), ip); !r.Free {
 			released, orphaned := c.releaseAddresses(addresses)
 			out := M{"ok": false, "released": released, "checked": snap.Counts.Map(),
 				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: ip.String(), Reason: r.Reason}}),

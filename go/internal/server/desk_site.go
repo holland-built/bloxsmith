@@ -259,7 +259,9 @@ func sampleAddrs(snap *freecheck.Snapshot, res map[string]any, base netip.Addr) 
 	var out []netip.Addr
 	var skipped []freecheck.Skip
 	for range sampleNames {
-		a, sk, ok := snap.NextFreeAddr(within, from)
+		// No space: the sample names are checked as before, against every
+		// IP space, so another space's address is never used for one.
+		a, _, sk, ok := snap.NextFreeAddr("", within, from)
 		skipped = append(skipped, sk...)
 		if !ok {
 			break

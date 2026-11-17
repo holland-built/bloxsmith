@@ -15,6 +15,9 @@ import (
 const (
 	pieceBits4 = 16
 	pieceBits6 = 48
+	// maxSharedPieces bounds the search for a clean candidate once a warned
+	// one is in hand (see nextFreeInPieces).
+	maxSharedPieces = 2
 )
 
 // NextFreePrefixIn is NextFreePrefix over fresh reads: the lowest free /bits
@@ -25,17 +28,17 @@ const (
 // rest of parent. checked says what was read: Around covers only the pieces
 // read, or is empty after a full read. ok is false when parent is full, and
 // then every piece has been read.
-func NextFreePrefixIn(c *rest.Client, dry bool, space string, parent netip.Prefix, bits int) (pick netip.Prefix, skipped []Skip, checked Counts, ok bool, err error) {
+func NextFreePrefixIn(c *rest.Client, dry bool, space string, parent netip.Prefix, bits int) (pick netip.Prefix, warn []Warning, skipped []Skip, checked Counts, ok bool, err error) {
 	return nextFreeInPieces(func(lo, hi netip.Addr) (*Snapshot, error) {
 		return For(c, All, dry, lo, hi)
 	}, space, parent, bits)
 }
 
-func nextFreeInPieces(read func(lo, hi netip.Addr) (*Snapshot, error), space string, parent netip.Prefix, bits int) (pick netip.Prefix, skipped []Skip, checked Counts, ok bool, err error) {
+func nextFreeInPieces(read func(lo, hi netip.Addr) (*Snapshot, error), space string, parent netip.Prefix, bits int) (pick netip.Prefix, warn []Warning, skipped []Skip, checked Counts, ok bool, err error) {
 	parent = parent.Masked()
 	total := parent.Addr().BitLen()
 	if !parent.IsValid() || bits < parent.Bits() || bits > total {
-		return netip.Prefix{}, nil, checked, false, nil
+		return netip.Prefix{}, nil, nil, checked, false, nil
 	}
 	piece := pieceBits4
 	if total == 128 {
@@ -46,6 +49,16 @@ func nextFreeInPieces(read func(lo, hi netip.Addr) (*Snapshot, error), space str
 
 	var reads []*Snapshot
 	var readLo, readHi netip.Addr // the first piece read, and the last
+	// shared is the first free candidate that something in another IP space
+	// overlaps. It does not stop the search for a clean one, but that search
+	// is bounded: after the piece it was found in, at most maxSharedPieces
+	// more pieces are read (each up to twice the size of the one before).
+	// Once one is held, an other-space object is stepped over like a clash,
+	// so one that covers the rest of parent (another space's 10.0.0.0/8, say)
+	// ends the search at once.
+	var shared *sharedPick
+	var sharedSkipped []Skip
+	since := 0
 	from, end := PrefixRange(parent)
 	for misses := 0; from.Cmp(end) <= 0; misses++ {
 		// Each piece after one with no room is up to twice as big, so a
@@ -63,7 +76,7 @@ func nextFreeInPieces(read func(lo, hi netip.Addr) (*Snapshot, error), space str
 		lo, hi := Bounds(within)
 		snap, rerr := read(lo, hi)
 		if rerr != nil {
-			return netip.Prefix{}, nil, checked, false, rerr
+			return netip.Prefix{}, nil, nil, checked, false, rerr
 		}
 		reads = append(reads, snap)
 		if !readLo.IsValid() {
@@ -74,22 +87,38 @@ func nextFreeInPieces(read func(lo, hi netip.Addr) (*Snapshot, error), space str
 		if full {
 			within = parent // a full read holds everything, so it answers for the rest
 		}
-		p, sk, found, resume := snap.nextFreeWithin(space, parent, within, bits, from)
+		held := shared != nil
+		p, found, sh, sk, resume := snap.nextFreeWithin(space, parent, within, bits, from, held)
+		if sh != nil {
+			shared = sh
+			sharedSkipped = append(append([]Skip(nil), skipped...), sk[:sh.skips]...)
+			if len(sharedSkipped) > maxSkips {
+				sharedSkipped = sharedSkipped[:maxSkips]
+			}
+		}
 		for _, s := range sk {
 			if len(skipped) < maxSkips {
 				skipped = append(skipped, s)
 			}
 		}
 		if found {
-			return p, skipped, pieceCounts(reads, readLo, readHi), true, nil
+			return p, nil, skipped, pieceCounts(reads, readLo, readHi), true, nil
 		}
 		if full || resume == nil {
 			break
 		}
+		if held {
+			if since++; since >= maxSharedPieces {
+				break
+			}
+		}
 		// Past every clash met, so a piece a big subnet covers is not read.
 		from = new(big.Int).Set(resume)
 	}
-	return netip.Prefix{}, skipped, pieceCounts(reads, readLo, readHi), false, nil
+	if shared != nil {
+		return shared.pick, shared.warn, sharedSkipped, pieceCounts(reads, readLo, readHi), true, nil
+	}
+	return netip.Prefix{}, nil, skipped, pieceCounts(reads, readLo, readHi), false, nil
 }
 
 // pieceCounts is what the piece reads saw together. Around names the span

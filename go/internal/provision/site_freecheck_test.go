@@ -55,13 +55,13 @@ func TestSiteProvision_HostsSkipTheSiteOwnDHCPRange(t *testing.T) {
 }
 
 // Infoblox's nextavailablesubnet knows only the block's own space. A pick that
-// another space already uses is refused at Apply, and rollback removes it.
-func TestSiteProvision_RefusesInfobloxPickUsedInAnotherSpace(t *testing.T) {
+// the same space already uses is refused at Apply, and rollback removes it.
+func TestSiteProvision_RefusesInfobloxPickUsedInItsOwnSpace(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
-	f.inventorySubnets = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
+	f.inventorySubnets = `{"id":"ipam/subnet/ours","space":"ipam/ip_space/space-1","address":"10.10.1.0","cidr":24}`
 	cfg := siteRollbackConfig(false)
 	_, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
-	if err == nil || !strings.Contains(err.Error(), "Infoblox picked 10.10.1.0/24 for hq-mgmt, but a subnet in ipam/ip_space/space-2 already uses 10.10.1.0/24") {
+	if err == nil || !strings.Contains(err.Error(), "Infoblox picked 10.10.1.0/24 for hq-mgmt, but a subnet in default already uses 10.10.1.0/24") {
 		t.Fatalf("Provision error = %v, want the clashing pick refused", err)
 	}
 	if len(f.deletePaths) != 1 || !strings.Contains(f.deletePaths[0], "ipam/subnet/") {
@@ -69,8 +69,39 @@ func TestSiteProvision_RefusesInfobloxPickUsedInAnotherSpace(t *testing.T) {
 	}
 }
 
-// The preview never offers a subnet another space uses: it offers the next one.
+// A pick that only ANOTHER space uses is not refused at Apply: it is kept, and
+// the result carries the warning.
+func TestSiteProvision_KeepsInfobloxPickUsedOnlyInAnotherSpace(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
+	cfg := siteRollbackConfig(false)
+	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err != nil {
+		t.Fatalf("Provision error = %v, want the pick kept", err)
+	}
+	if len(f.deletePaths) != 0 {
+		t.Fatalf("deletes = %v, want none", f.deletePaths)
+	}
+	assertSharedWarning(t, result, "10.10.1.0/24")
+}
+
+// The preview never offers a subnet its own space uses: it offers the next one.
 func TestSiteProvision_DryRunOffersTheNextFreeSubnet(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = `{"id":"ipam/subnet/ours","space":"ipam/ip_space/space-1","address":"10.10.1.0","cidr":24}`
+	cfg := siteRollbackConfig(true)
+	cfg.CreateReverseZone = false
+	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	if got := subnetAddrs(result); got != "10.10.0.0/24 10.10.2.0/24" {
+		t.Fatalf("subnets = %v, want 10.10.1.0/24 passed over", got)
+	}
+}
+
+// A subnet only another space uses is offered in the preview, with a warning.
+func TestSiteProvision_DryRunOffersASubnetAnotherSpaceUsesWithAWarning(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
 	f.inventorySubnets = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
 	cfg := siteRollbackConfig(true)
@@ -79,48 +110,100 @@ func TestSiteProvision_DryRunOffersTheNextFreeSubnet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
+	if got := subnetAddrs(result); got != "10.10.1.0/24 10.10.2.0/24" {
+		t.Fatalf("subnets = %v, want Infoblox's pick 10.10.1.0/24 kept", got)
+	}
+	assertSharedWarning(t, result, "10.10.1.0/24")
+}
+
+func subnetAddrs(result M) string {
 	var got []string
 	for _, s := range getList(result, "subnets") {
 		got = append(got, pyStr(asMap(s)["address"]))
 	}
-	if strings.Join(got, " ") != "10.10.0.0/24 10.10.2.0/24" {
-		t.Fatalf("subnets = %v, want 10.10.1.0/24 passed over", got)
+	return strings.Join(got, " ")
+}
+
+// assertSharedWarning checks result carries one warning, for candidate, about
+// space-2's 10.10.1.0/24, and that checked counts it as shared.
+func assertSharedWarning(t *testing.T, result M, candidate string) {
+	t.Helper()
+	ws := getList(result, "warnings")
+	if len(ws) != 1 {
+		t.Fatalf("warnings = %v, want one", result["warnings"])
+	}
+	w := asMap(ws[0])
+	if w["candidate"] != candidate || w["object"] != "10.10.1.0/24" || w["space"] != "ipam/ip_space/space-2" ||
+		w["kind"] != "subnet" || w["contains"] != true {
+		t.Fatalf("warning = %v", w)
+	}
+	if c := asMap(result["checked"]); c == nil || c["shared"] != 1 {
+		t.Fatalf("checked = %v, want shared 1", result["checked"])
 	}
 }
 
-// A template block that overlaps a subnet in another IP space is not created,
+// blockServer answers a block template's reads with one subnet, subnetRow, and
+// counts the POSTs.
+func blockServer(t *testing.T, subnetRow string, posts *int) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodPost:
+			*posts++
+			w.WriteHeader(201)
+			w.Write([]byte(`{"result":{"id":"ipam/address_block/new"}}`))
+		case q.Get("_offset") != "" && q.Get("_offset") != "0":
+			w.Write([]byte(`{"results":[]}`))
+		case strings.HasSuffix(r.URL.Path, "/ipam/ip_space"):
+			w.Write([]byte(`{"results":[{"id":"ipam/ip_space/space-1","name":"default"},{"id":"ipam/ip_space/space-2","name":"lab"}]}`))
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet") && q.Get("_order_by") != "":
+			w.Write([]byte(`{"results":[` + subnetRow + `]}`))
+		default:
+			w.Write([]byte(`{"results":[]}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// A template block that overlaps a subnet in its own IP space is not created,
 // in the preview or live; the old existence check matched only the exact same
 // block in the same space.
-func TestBlockProvision_RefusesABlockAnotherSpaceOverlaps(t *testing.T) {
+func TestBlockProvision_RefusesABlockItsOwnSpaceOverlaps(t *testing.T) {
 	for _, dry := range []bool{true, false} {
 		var posts int
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			q := r.URL.Query()
-			switch {
-			case r.Method == http.MethodPost:
-				posts++
-				w.WriteHeader(201)
-				w.Write([]byte(`{"result":{"id":"ipam/address_block/new"}}`))
-			case q.Get("_offset") != "" && q.Get("_offset") != "0":
-				w.Write([]byte(`{"results":[]}`))
-			case strings.HasSuffix(r.URL.Path, "/ipam/ip_space"):
-				w.Write([]byte(`{"results":[{"id":"ipam/ip_space/space-1","name":"default"},{"id":"ipam/ip_space/space-2","name":"lab"}]}`))
-			case strings.HasSuffix(r.URL.Path, "/ipam/subnet") && q.Get("_order_by") != "":
-				w.Write([]byte(`{"results":[{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.20.5.0","cidr":24}]}`))
-			default:
-				w.Write([]byte(`{"results":[]}`))
-			}
-		}))
-		defer srv.Close()
+		srv := blockServer(t, `{"id":"ipam/subnet/ours","space":"ipam/ip_space/space-1","address":"10.20.5.0","cidr":24}`, &posts)
 		cfg := &BlockConfig{Name: "pool", IPSpace: "default", DryRun: dry, ExtraTags: M{},
 			Blocks: []any{M{"address": "10.20.0.0", "cidr": 16, "status": "deployed"}}}
 		_, err := newTestEngine(srv).NewBlockProvisioner(cfg, func(M) {}).Provision(false)
-		if err == nil || !strings.Contains(err.Error(), "Block 10.20.0.0/16 is not free: a subnet in lab already uses 10.20.5.0/24") {
+		if err == nil || !strings.Contains(err.Error(), "Block 10.20.0.0/16 is not free: a subnet in default already uses 10.20.5.0/24") {
 			t.Fatalf("dry=%v: Provision error = %v, want the overlap named", dry, err)
 		}
 		if posts != 0 {
 			t.Fatalf("dry=%v: %d POST(s), want none", dry, posts)
+		}
+	}
+}
+
+// A template block that overlaps only a subnet in ANOTHER IP space is made,
+// in the preview and live, with a warning.
+func TestBlockProvision_MakesABlockOnlyAnotherSpaceOverlaps(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		var posts int
+		srv := blockServer(t, `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.20.5.0","cidr":24}`, &posts)
+		cfg := &BlockConfig{Name: "pool", IPSpace: "default", DryRun: dry, ExtraTags: M{},
+			Blocks: []any{M{"address": "10.20.0.0", "cidr": 16, "status": "deployed"}}}
+		result, err := newTestEngine(srv).NewBlockProvisioner(cfg, func(M) {}).Provision(false)
+		if err != nil {
+			t.Fatalf("dry=%v: Provision error = %v, want the block made", dry, err)
+		}
+		if want := map[bool]int{true: 0, false: 1}[dry]; posts != want {
+			t.Fatalf("dry=%v: %d POST(s), want %d", dry, posts, want)
+		}
+		ws := getList(result, "warnings")
+		if len(ws) != 1 || asMap(ws[0])["space"] != "lab" || asMap(ws[0])["contains"] != false {
+			t.Fatalf("dry=%v: warnings = %v, want lab's subnet, inside the block", dry, result["warnings"])
 		}
 	}
 }

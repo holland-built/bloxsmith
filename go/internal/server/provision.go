@@ -142,7 +142,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
 					return nil
 				}
-				blockNet, next, checked, skipped, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
+				blockNet, next, warns, checked, skipped, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
 				if gerr != nil {
 					// The check could not run, so nothing is offered: the done frame
 					// carries no subnet, only check_failed and the plain reason.
@@ -176,7 +176,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN},
-					"checked": checked.Map(), "skipped": freecheck.SkipList(skipped)})
+					"checked": checked.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)})
 				return nil
 			}
 			cidrN, ok := parseIntStr(cidr)

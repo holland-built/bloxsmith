@@ -46,13 +46,12 @@ func TestCheckPrefix(t *testing.T) {
 			"a subnet in corp-amer already uses 10.16.8.0/24"},
 		{"grandchild subnet overlap, parent is the top block", "sp-a", "10.16.8.0/22", "10.16.0.0/16", false,
 			"an address block in corp-amer already uses 10.16.0.0/20"},
-		{"cross-space overlap", "sp-a", "10.16.32.0/24", "10.16.0.0/16", false,
-			"a subnet in corp-emea already uses 10.16.32.0/24"},
+		// Another space only: not a clash (shared_test.go checks the warning).
+		{"cross-space overlap", "sp-a", "10.16.32.0/24", "10.16.0.0/16", true, ""},
 		{"containment in own parent allowed", "sp-a", "10.16.1.0/24", "10.16.0.0/20", true, ""},
 		{"containment in the parent's parent allowed", "sp-a", "10.16.64.0/24", "10.16.0.0/16", true, ""},
 		{"no parent chosen: same-space container allowed", "sp-a", "10.16.64.0/24", "", true, ""},
-		{"same-space container is a clash in another space", "sp-b", "10.16.64.0/24", "", false,
-			"an address block in corp-amer already uses 10.16.0.0/16"},
+		{"another space's container is not a clash", "sp-b", "10.16.64.0/24", "", true, ""},
 		{"exact match is a clash", "sp-a", "10.16.0.0/20", "", false,
 			"an address block in corp-amer already uses 10.16.0.0/20"},
 		// A block may sit inside its parent blocks, never inside a subnet:
@@ -62,8 +61,8 @@ func TestCheckPrefix(t *testing.T) {
 		// With a parent chosen, only that block and its own parents are allowed.
 		{"chosen parent: a subnet between it and the candidate is a clash", "sp-a", "10.16.8.224/27", "10.16.0.0/20", false,
 			"a subnet in corp-amer already uses 10.16.8.0/24"},
-		{"a network over a DHCP range", "sp-b", "10.16.8.0/26", "", false,
-			"an address block in corp-amer already uses 10.16.0.0/16"},
+		{"a network over a DHCP range", "sp-a", "10.16.8.0/26", "10.16.0.0/20", false,
+			"a subnet in corp-amer already uses 10.16.8.0/24"},
 	}
 	s := tenant()
 	for _, tc := range cases {
@@ -97,7 +96,7 @@ func TestCheckAddr(t *testing.T) {
 	s := tenant()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := s.CheckAddr(addr(tc.a))
+			got := s.CheckAddr("sp-a", addr(tc.a))
 			if got.Free != (tc.wantReason == "") || got.Reason != tc.wantReason {
 				t.Fatalf("CheckAddr(%s) = %+v, want reason %q", tc.a, got, tc.wantReason)
 			}
@@ -106,7 +105,7 @@ func TestCheckAddr(t *testing.T) {
 }
 
 func TestCheckSpan_RangeOverReservation(t *testing.T) {
-	got := tenant().CheckSpan(addr("10.16.8.1"), addr("10.16.8.9"))
+	got := tenant().CheckSpan("sp-a", addr("10.16.8.1"), addr("10.16.8.9"))
 	if got.Free || got.Reason != "a reservation in corp-amer already uses 10.16.8.5" {
 		t.Fatalf("CheckSpan = %+v, want the reservation named", got)
 	}
@@ -116,7 +115,7 @@ func TestNextFreePrefix(t *testing.T) {
 	s := tenant()
 	// Inside the top block: the child block covers 10.16.0.0/20, so the first
 	// free /24 is 10.16.16.0/24, and the skip names the child block.
-	pick, skipped, ok := s.NextFreePrefix("sp-a", pfx("10.16.0.0/16"), 24)
+	pick, _, skipped, ok := s.NextFreePrefix("sp-a", pfx("10.16.0.0/16"), 24)
 	if !ok || pick.String() != "10.16.16.0/24" {
 		t.Fatalf("pick = %s (%v), want 10.16.16.0/24", pick, ok)
 	}
@@ -125,28 +124,28 @@ func TestNextFreePrefix(t *testing.T) {
 		t.Fatalf("skipped = %+v", skipped)
 	}
 	// Inside the child block: the grandchild subnet is skipped.
-	pick, _, ok = s.NextFreePrefix("sp-a", pfx("10.16.8.0/21"), 24)
+	pick, _, _, ok = s.NextFreePrefix("sp-a", pfx("10.16.8.0/21"), 24)
 	if !ok || pick.String() != "10.16.9.0/24" {
 		t.Fatalf("pick in child = %s (%v), want 10.16.9.0/24", pick, ok)
 	}
 	// After the run adds its own pick, the next pick moves on.
 	s.Add(Network(KindSubnet, "sp-a", "", pick))
-	pick, _, _ = s.NextFreePrefix("sp-a", pfx("10.16.8.0/21"), 24)
+	pick, _, _, _ = s.NextFreePrefix("sp-a", pfx("10.16.8.0/21"), 24)
 	if pick.String() != "10.16.10.0/24" {
 		t.Fatalf("pick after Add = %s, want 10.16.10.0/24", pick)
 	}
 	// Full.
-	if _, _, ok := s.NextFreePrefix("sp-a", pfx("10.16.8.0/24"), 24); ok {
+	if _, _, _, ok := s.NextFreePrefix("sp-a", pfx("10.16.8.0/24"), 24); ok {
 		t.Fatal("a block holding only the grandchild subnet has no free /24")
 	}
 }
 
 func TestNextFreeAddr_SkipsTheRangeInOneStep(t *testing.T) {
-	pick, skipped, ok := tenant().NextFreeAddr(pfx("10.16.8.0/24"), addr("10.16.8.5"))
+	pick, _, skipped, ok := tenant().NextFreeAddr("sp-a", pfx("10.16.8.0/24"), addr("10.16.8.5"))
 	if !ok || pick.String() != "10.16.8.7" {
 		t.Fatalf("pick = %s (%v), want 10.16.8.7", pick, ok)
 	}
-	pick, skipped, _ = tenant().NextFreeAddr(pfx("10.16.8.0/24"), addr("10.16.8.10"))
+	pick, _, skipped, _ = tenant().NextFreeAddr("sp-a", pfx("10.16.8.0/24"), addr("10.16.8.10"))
 	if pick.String() != "10.16.8.201" || len(skipped) != 1 {
 		t.Fatalf("pick = %s skipped = %+v, want 10.16.8.201 after one skip", pick, skipped)
 	}
@@ -262,11 +261,11 @@ func TestLoad_ReadsEveryKind(t *testing.T) {
 	if s.Counts != want || s.Counts.ReadAt.IsZero() {
 		t.Fatalf("Counts = %+v, want %+v", s.Counts, want)
 	}
-	if r := s.CheckPrefix("sp-a", pfx("10.16.32.0/24"), pfx("10.16.0.0/16")); r.Free ||
-		r.Reason != "a subnet in corp-emea already uses 10.16.32.0/24" {
-		t.Fatalf("cross-space after Load = %+v", r)
+	if r := s.CheckPrefix("sp-a", pfx("10.16.32.0/24"), pfx("10.16.0.0/16")); !r.Free ||
+		len(r.Warnings) != 1 || r.Warnings[0].Space != "corp-emea" {
+		t.Fatalf("cross-space after Load = %+v, want free with a corp-emea warning", r)
 	}
-	if r := s.CheckAddr(addr("10.16.8.5")); r.Free {
+	if r := s.CheckAddr("sp-a", addr("10.16.8.5")); r.Free {
 		t.Fatal("reservation after Load not seen")
 	}
 }
