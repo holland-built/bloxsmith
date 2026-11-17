@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, FeedUnavailable, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
@@ -673,29 +672,14 @@ export function DataTable({
     const wrapper = wrapperRef.current
     if (!wrapper || typeof ResizeObserver === 'undefined') return undefined
     let raf = null
-    const remeasure = (now) => {
-      const w = measureRef.current()
-      if (w && !widthsEqual(w, prevWidthsRef.current)) {
-        prevWidthsRef.current = w
-        if (now) flushSync(() => setColWidths(w))
-        else setColWidths(w)
-      }
-    }
     const ro = new ResizeObserver(() => {
       if (raf) cancelAnimationFrame(raf)
-      raf = null
-      // The box just got narrower than the table it holds (a panel dragged or
-      // laid out narrower). Fit it now, before this frame paints: waiting for
-      // the next frame showed one frame of the table spilling sideways out of
-      // its panel, which is also what layout-drag.spec.ts caught on slower CI.
-      const table = wrapper.firstElementChild
-      if (table && table.scrollWidth > wrapper.clientWidth) {
-        remeasure(true)
-        return
-      }
       raf = requestAnimationFrame(() => {
-        raf = null
-        remeasure(false)
+        const w = measureRef.current()
+        if (w && !widthsEqual(w, prevWidthsRef.current)) {
+          prevWidthsRef.current = w
+          setColWidths(w)
+        }
       })
     })
     ro.observe(wrapper)
