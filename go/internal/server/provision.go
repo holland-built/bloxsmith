@@ -243,7 +243,24 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			// Infoblox picked inside the block's own space only. A pick that
 			// clashes with anything in any space, or that cannot be checked, is
 			// removed again before anything is built on it.
-			if err := verifySubnetPick(d.restFor(r), subnet, addr, cidrN, space, blockNet); err != nil {
+			warns, err := verifySubnetPick(d.restFor(r), subnet, addr, cidrN, space, blockNet)
+			if err == nil && len(warns) > 0 {
+				// Shared with another IP space only. When a clean /cidr exists
+				// (the one the preview offered), it is made instead.
+				var nsub map[string]any
+				var naddr string
+				var replaced bool
+				nsub, naddr, replaced, err = replaceSharedPick(d.restFor(r), subnet, addr, cidrN, space, blockNet, body)
+				if naddr != "" {
+					emit(map[string]any{"step": fmt.Sprintf("%s/%d is also used in another IP space, so the clean %s/%d was made instead",
+						addr, cidrN, naddr, cidrN)})
+					addr = naddr
+				}
+				if replaced {
+					subnet = nsub
+				}
+			}
+			if err != nil {
 				errDetail = map[string]any{"phase": "verify", "subnet": addr}
 				if errors.Is(err, errPickKept) {
 					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
@@ -336,7 +353,8 @@ var errPickKept = errors.New("the subnet is still there")
 
 // verifySubnetPick checks the subnet Infoblox just made against a fresh read
 // of everything around it. A clash, or a check that cannot run, removes it.
-func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN int, space string, block netip.Prefix) error {
+// warns is what overlaps it only in another IP space (not a clash).
+func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN int, space string, block netip.Prefix) (warns []freecheck.Warning, err error) {
 	if n, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
 		cidrN = n
 	}
@@ -350,16 +368,67 @@ func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN 
 	} else if res := snap.Without(id).CheckPrefix(space, made, block); !res.Free {
 		reason = res.Reason
 	} else {
-		return nil
+		return res.Warnings, nil
 	}
 	path, oerr := edit.ObjectPath("ipam/subnet", id)
 	if oerr == nil {
 		if _, st, _ := c.Write("DELETE", path, nil, nil); st == 200 || st == 204 || st == 404 {
-			return fmt.Errorf("Infoblox picked %s/%d, but %s, so it was removed. Preview again", addr, cidrN, reason)
+			return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, so it was removed. Preview again", addr, cidrN, reason)
 		}
 	}
-	return fmt.Errorf("Infoblox picked %s/%d, but %s, and it could not be removed: remove it in the Editor (%w)",
+	return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, and it could not be removed: remove it in the Editor (%w)",
 		addr, cidrN, reason, errPickKept)
+}
+
+// replaceSharedPick swaps the subnet Infoblox just made at addr, which another
+// IP space also uses, for the lowest clean /cidrN in block, when one exists:
+// what the clean-first preview offered. Infoblox would pick the same shared one
+// again, so the shared pick is removed and the clean one is created by its
+// address, with the name and comment in extra, then checked like any pick.
+//
+// replaced is false with a nil error when nothing changed (no clean one, it
+// could not be looked for, or the shared pick could not be removed): the
+// shared pick then stands, warned. naddr is set once the clean one exists, so
+// a failed check after it names the right subnet.
+func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN int, space string, block netip.Prefix, extra any) (nsub map[string]any, naddr string, replaced bool, err error) {
+	if n, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
+		cidrN = n
+	}
+	made, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", addr, cidrN))
+	if perr != nil {
+		return nil, "", false, nil
+	}
+	clean, w, _, _, ok, ferr := freecheck.NextFreePrefixIn(c, false, space, block, cidrN)
+	if ferr != nil || !ok || len(w) > 0 || clean == made {
+		return nil, "", false, nil
+	}
+	path, oerr := edit.ObjectPath("ipam/subnet", provision.PyStr(subnet["id"]))
+	if oerr != nil {
+		return nil, "", false, nil
+	}
+	if _, st, _ := c.Write("DELETE", path, nil, nil); st != 200 && st != 204 && st != 404 {
+		return nil, "", false, nil
+	}
+	create := map[string]any{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": space}
+	if m, ok := extra.(map[string]any); ok {
+		for k, v := range m {
+			create[k] = v
+		}
+	}
+	result, status, werr := c.Write("POST", "/api/ddi/v1/ipam/subnet", create, nil)
+	if res, ok := result.(map[string]any); ok {
+		nsub, _ = res["result"].(map[string]any)
+	}
+	if werr != nil || status < 200 || status > 299 || provision.PyStr(nsub["id"]) == "" {
+		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
+			"creating the clean %s instead failed%s. Nothing was created; preview again", made, clean, upstreamDetail(status, result))
+	}
+	naddr = clean.Addr().String()
+	nsub["address"], nsub["cidr"] = naddr, clean.Bits()
+	if _, verr := verifySubnetPick(c, nsub, naddr, clean.Bits(), space, block); verr != nil {
+		return nil, naddr, false, verr
+	}
+	return nsub, naddr, true, nil
 }
 
 // upstreamDetail turns a rest.Write failure into the tail of one sentence:

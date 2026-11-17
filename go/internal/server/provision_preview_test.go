@@ -297,15 +297,73 @@ func emptyInventory(h http.HandlerFunc) http.HandlerFunc {
 // in the same space already uses is removed and refused with the reason.
 // Before, the live run kept it and reported done.
 func TestSubnetStream_Apply_RemovesAPickItsOwnSpaceUses(t *testing.T) {
-	applyPickTest(t, "ipam/ip_space/sp-1", true)
+	applyPickTest(t, subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-1"), true)
 }
 
-// A pick that only ANOTHER space uses is not refused: it is kept.
-func TestSubnetStream_Apply_KeepsAPickOnlyAnotherSpaceUses(t *testing.T) {
-	applyPickTest(t, "ipam/ip_space/sp-2", false)
+// A pick that only ANOTHER space uses is not refused. With no clean /24
+// anywhere in the block (another space holds all of it), it is kept.
+func TestSubnetStream_Apply_KeepsASharedPickWhenNoneIsClean(t *testing.T) {
+	applyPickTest(t, `{"id":"ipam/subnet/lab","address":"172.16.0.0","cidr":16,"space":"ipam/ip_space/sp-2"}`, false)
 }
 
-func applyPickTest(t *testing.T, otherSpace string, refused bool) {
+// Apply makes what the clean-first preview offered: Infoblox picks
+// 172.16.128.0/24, which only another space uses, while 172.16.129.0/24 is
+// clean. The shared pick is removed and the clean one created by its address,
+// with the name and comment asked for.
+func TestSubnetStream_Apply_ReplacesASharedPickWithTheCleanOne(t *testing.T) {
+	var mu sync.Mutex
+	var deletes, creates []string
+	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			deletes = append(deletes, r.URL.Path)
+			mu.Unlock()
+			io.WriteString(w, `{}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24}]}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			b, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			creates = append(creates, string(b))
+			mu.Unlock()
+			w.WriteHeader(201)
+			io.WriteString(w, `{"result":{"id":"ipam/subnet/clean-1","address":"172.16.129.0","cidr":24}}`)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"172.16.128.0","cidr":21,"space":"ipam/ip_space/sp-1"}}`)
+		case q.Get("_order_by") != "" && q.Get("_offset") != "0":
+			io.WriteString(w, `{"results":[]}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")+`],"page":{"total_size":"1"}}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0&name=web"))
+	done := terminalFrameOf(t, parseSSEFrames(t, rr.Body.String()))
+	if sub, _ := done["subnet"].(map[string]any); sub["address"] != "172.16.129.0" {
+		t.Fatalf("done = %v, want the clean 172.16.129.0 made; body %s", done, rr.Body.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(deletes) != 1 || deletes[0] != "/api/ddi/v1/ipam/subnet/new-1" {
+		t.Fatalf("deletes = %v, want Infoblox's shared pick removed", deletes)
+	}
+	if len(creates) != 1 || !strings.Contains(creates[0], `"address":"172.16.129.0"`) ||
+		!strings.Contains(creates[0], `"cidr":24`) || !strings.Contains(creates[0], `"space":"ipam/ip_space/sp-1"`) ||
+		!strings.Contains(creates[0], `"name":"web"`) {
+		t.Fatalf("creates = %v, want 172.16.129.0/24 in sp-1 named web", creates)
+	}
+	rows := auditEntries(t, logPath, "provision-subnet")
+	if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
+		t.Fatalf("provision-subnet rows = %v, want one naming 172.16.129.0", rows)
+	}
+}
+
+func applyPickTest(t *testing.T, otherRow string, refused bool) {
 	t.Helper()
 	var mu sync.Mutex
 	var deletes, filters []string
@@ -328,7 +386,7 @@ func applyPickTest(t *testing.T, otherSpace string, refused bool) {
 			mu.Lock()
 			filters = append(filters, q.Get("_filter"))
 			mu.Unlock()
-			io.WriteString(w, `{"results":[`+subnetRow("other", "172.16.128.0", otherSpace)+`,`+
+			io.WriteString(w, `{"results":[`+otherRow+`,`+
 				`{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24,"space":"ipam/ip_space/sp-1"}],"page":{"total_size":"2"}}`)
 		default:
 			io.WriteString(w, `{"results":[]}`)
