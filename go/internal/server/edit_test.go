@@ -17,7 +17,7 @@ import (
 // file, and an edit.Client bound to the same Rest client as the upstream.
 func newEditTestDeps(t *testing.T, upstream http.HandlerFunc) *Deps {
 	t.Helper()
-	d, closeSrv := newTestDeps(t, upstream)
+	d, closeSrv := newTestDeps(t, emptyInventory(upstream)) // the free-address check reads see an empty tenant
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
 	d.Audit = audit.New(filepath.Join(t.TempDir(), "audit_log.jsonl"), "app-v-test", "test-instance",

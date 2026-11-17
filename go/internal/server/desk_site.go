@@ -11,6 +11,7 @@ import (
 
 	"bloxsmith/internal/demo"
 	"bloxsmith/internal/edit"
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
@@ -142,10 +143,25 @@ func (d *Deps) buildKit(r *http.Request, in map[string]any, dry bool) (map[strin
 		return res, status
 	}
 	base := firstSubnetBase(res)
+	var addrs []netip.Addr
+	if base.IsValid() {
+		snap, err := freecheck.Load(d.restFor(r), freecheck.Addresses)
+		if err != nil {
+			res["sample_note"] = "The sample DNS names were not added. " + freecheck.Public(err)
+			if dry {
+				res["sample_names"] = []any{}
+			}
+			return res, status
+		}
+		var skipped []freecheck.Skip
+		addrs, skipped = sampleAddrs(snap, res, base)
+		picks, _ := res["skipped_picks"].([]any)
+		res["skipped_picks"] = append(picks, freecheck.SkipList(skipped)...)
+	}
 	if dry {
 		names := []any{}
 		for i, n := range sampleNames {
-			names = append(names, map[string]any{"label": sampleLabel(n, res, base, i)})
+			names = append(names, map[string]any{"label": sampleLabel(n, res, sampleAt(addrs, i))})
 		}
 		res["sample_names"] = names
 		if in["include_server"] == true {
@@ -155,7 +171,7 @@ func (d *Deps) buildKit(r *http.Request, in map[string]any, dry bool) (map[strin
 	}
 
 	zone := anyStr(res["dns_zone_id"])
-	if zone == "" || zone == "(unknown-id)" || !base.IsValid() {
+	if zone == "" || zone == "(unknown-id)" || len(addrs) < len(sampleNames) {
 		res["sample_note"] = "The sample DNS names were not added, because the zone or a network with room for them did not come back from Infoblox."
 		return res, status
 	}
@@ -164,10 +180,10 @@ func (d *Deps) buildKit(r *http.Request, in map[string]any, dry bool) (map[strin
 	failed := 0
 	for i, n := range sampleNames {
 		rec, _ := cli.DNSRecordCreate(map[string]any{"zone_id": zone, "name_in_zone": n, "type": "A",
-			"value": sampleIP(base, i), "dry": false})
+			"value": addrs[i].String(), "dry": false})
 		m, _ := rec["record"].(map[string]any)
 		if id := anyStr(m["id"]); resultOK(rec) && id != "" {
-			made = append(made, map[string]any{"id": id, "label": sampleLabel(n, res, base, i)})
+			made = append(made, map[string]any{"id": id, "label": sampleLabel(n, res, addrs[i])})
 		} else {
 			failed++
 		}
@@ -180,8 +196,8 @@ func (d *Deps) buildKit(r *http.Request, in map[string]any, dry bool) (map[strin
 }
 
 // firstSubnetBase is the network address of the site's first IPv4 network,
-// when the five sample addresses (.10 to .14 above it) fit inside it.
-// Otherwise it is the zero address and no sample names are added.
+// when it has room for the five sample addresses (.10 up). Otherwise it is the
+// zero address and no sample names are added.
 func firstSubnetBase(res map[string]any) netip.Addr {
 	for _, s := range asList(res["subnets"]) {
 		m, _ := s.(map[string]any)
@@ -198,21 +214,70 @@ func firstSubnetBase(res map[string]any) netip.Addr {
 	return netip.Addr{}
 }
 
-func sampleIP(base netip.Addr, i int) string {
+// sampleAddrs picks the five sample addresses: the first free ones from .10
+// up in the network at base, never one the site's own DHCP range or hosts use,
+// nor one anything else already uses. It returns fewer when the network runs
+// out.
+func sampleAddrs(snap *freecheck.Snapshot, res map[string]any, base netip.Addr) ([]netip.Addr, []freecheck.Skip) {
+	var within netip.Prefix
+	for _, s := range asList(res["subnets"]) {
+		m, _ := s.(map[string]any)
+		if p, err := netip.ParsePrefix(anyStr(m["address"])); err == nil && p.Masked().Addr() == base {
+			within = p.Masked()
+			break
+		}
+	}
+	// The run's own range and hosts: a preview made neither, so the tenant
+	// read cannot have seen them.
+	for _, x := range asList(res["dhcp_ranges"]) {
+		m, _ := x.(map[string]any)
+		lo, e1 := netip.ParseAddr(anyStr(m["start"]))
+		hi, e2 := netip.ParseAddr(anyStr(m["end"]))
+		if e1 == nil && e2 == nil {
+			snap.Add(freecheck.Span(freecheck.KindRange, "", "", lo, hi))
+		}
+	}
+	for _, x := range asList(res["hosts"]) {
+		m, _ := x.(map[string]any)
+		if a, err := netip.ParseAddr(anyStr(m["ip"])); err == nil {
+			snap.Add(freecheck.Span(freecheck.KindHost, "", "", a, a))
+		}
+	}
 	b := base.As4()
-	b[3] += byte(10 + i)
-	return netip.AddrFrom4(b).String()
+	b[3] += 10
+	from := netip.AddrFrom4(b)
+	var out []netip.Addr
+	var skipped []freecheck.Skip
+	for range sampleNames {
+		a, sk, ok := snap.NextFreeAddr(within, from)
+		skipped = append(skipped, sk...)
+		if !ok {
+			break
+		}
+		out = append(out, a)
+		snap.Add(freecheck.Span(freecheck.KindHost, "", "", a, a))
+		from = a.Next()
+	}
+	return out, skipped
 }
 
-func sampleLabel(name string, res map[string]any, base netip.Addr, i int) string {
+// sampleAt is the i-th sample address, or the zero address when there is none.
+func sampleAt(addrs []netip.Addr, i int) netip.Addr {
+	if i < len(addrs) {
+		return addrs[i]
+	}
+	return netip.Addr{}
+}
+
+func sampleLabel(name string, res map[string]any, a netip.Addr) string {
 	fqdn := name
 	if z := strings.TrimSuffix(anyStr(res["dns_zone_fqdn"]), "."); z != "" {
 		fqdn += "." + z
 	}
-	if !base.IsValid() {
+	if !a.IsValid() {
 		return fqdn + " A"
 	}
-	return fqdn + " A " + sampleIP(base, i)
+	return fqdn + " A " + a.String()
 }
 
 // siteObjects reads what a site result proves this run made, mirroring the

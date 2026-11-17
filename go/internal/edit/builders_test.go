@@ -59,6 +59,11 @@ func builderFakeServer(t *testing.T, route func(builderReq) (int, string)) *buil
 	t.Helper()
 	f := &builderFake{t: t}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The free-address check's reads are answered first and not
+		// recorded, so every count and route below is the builder's own.
+		if answerFreecheckReads(w, r) {
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		req := builderReq{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Raw: string(raw)}
 		if len(raw) > 0 {
@@ -997,6 +1002,10 @@ func TestBuilders_TransportErrorReturns502(t *testing.T) {
 //
 // Every builder is driven against an already-closed httptest server, so no
 // packet leaves loopback and no tenant is involved.
+// freecheckUnreachable is what a create that first reads what is already in
+// use says when the tenant cannot be reached: that read is what fails.
+const freecheckUnreachable = "Couldn't read every IP space, so nothing is offered: a missing one could already use the addresses."
+
 func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 	cases := []struct {
 		name string
@@ -1011,22 +1020,22 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 		}, "update failed (could not reach the tenant — no request completed)"},
 		{"SubnetCreate", func(c *Client) (M, int) {
 			return c.SubnetCreate(M{"block_id": "ipam/address_block/b1", "cidr": 24.0, "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, freecheckUnreachable},
 		{"SubnetUpdate", func(c *Client) (M, int) {
 			return c.SubnetUpdate(M{"id": "ipam/subnet/s1", "name": "n", "dry": false})
 		}, "update failed (could not reach the tenant — no request completed)"},
 		{"BlockCreate", func(c *Client) (M, int) {
 			return c.BlockCreate(M{"address": "10.0.0.0", "cidr": 16.0, "space": "sp", "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, freecheckUnreachable},
 		{"RangeCreate", func(c *Client) (M, int) {
 			return c.RangeCreate(M{"start": "10.0.0.10", "end": "10.0.0.20", "space": "sp", "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, freecheckUnreachable},
 		{"RangeUpdate", func(c *Client) (M, int) {
 			return c.RangeUpdate(M{"id": "ipam/range/r1", "comment": "c", "dry": false})
 		}, "update failed (could not reach the tenant — no request completed)"},
 		{"HostCreate", func(c *Client) (M, int) {
 			return c.HostCreate(M{"name": "h", "addresses": []any{M{"address": "10.0.0.5"}}, "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, freecheckUnreachable},
 		{"HostUpdate", func(c *Client) (M, int) {
 			return c.HostUpdate(M{"id": "ipam/host/h1", "name": "n", "dry": false})
 		}, "update failed (could not reach the tenant — no request completed)"},
@@ -1034,9 +1043,11 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 			return c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "h",
 				"type": "A", "value": "10.0.0.5", "dry": false})
 		}, "create failed (could not reach the tenant — no request completed)"},
+		// Allocation reads what is already in use first, so that read is
+		// what an unreachable tenant fails.
 		{"SelfserviceAllocate", func(c *Client) (M, int) {
 			return c.SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
-		}, "allocation failed (could not reach the tenant — no request completed)"},
+		}, freecheckUnreachable},
 		{"Delete", func(c *Client) (M, int) {
 			return c.Delete("/api/ddi/v1/ipam/host/h-1")
 		}, "delete failed (could not reach the tenant — no request completed)"},
@@ -1068,4 +1079,27 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 			}
 		})
 	}
+}
+
+// answerFreecheckReads answers the reads the free-address check makes before a
+// create, as a tenant holding only block 10.0.0.0/8 in ipam/ip_space/sp-1:
+// freecheck's full inventory reads (the only requests sending _order_by) see
+// an empty tenant, and SubnetCreate's read of its block (_fields
+// address,cidr,space) gets that block. It reports whether it answered.
+func answerFreecheckReads(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	q := r.URL.Query()
+	switch {
+	case q.Get("_order_by") != "":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[]}`)
+		return true
+	case strings.Contains(r.URL.Path, "/ipam/address_block/") && q.Get("_fields") == "address,cidr,space":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"result":{"address":"10.0.0.0","cidr":8,"space":"ipam/ip_space/sp-1"}}`)
+		return true
+	}
+	return false
 }

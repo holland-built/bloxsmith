@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"bloxsmith/internal/freecheck"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -146,6 +147,7 @@ func TestRBSiteProvisionFailureReportsIncompleteWithNamedResiduals(t *testing.T)
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	out, err := p.Provision()
 	if err == nil {
@@ -214,6 +216,7 @@ func TestRBSiteProvisionFailureCleanRollbackReportsComplete(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	out, err := p.Provision()
 	if err == nil {
@@ -253,6 +256,7 @@ func TestRBSiteProvisionDryRunFailureReportsSkipped(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(true), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	out, err := p.Provision()
 	if err == nil {
@@ -308,6 +312,7 @@ func TestRBSiteProvisionFailureBeforeAnyCreateReportsNotNeeded(t *testing.T) {
 
 	var steps []string
 	p := newTestEngine(srv).NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	out, err := p.Provision()
 	if err == nil {
@@ -386,6 +391,7 @@ func TestRBSubnetCreatedThenTaggingFailedIsStillRolledBack(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	out, err := p.Provision()
 	if err == nil {

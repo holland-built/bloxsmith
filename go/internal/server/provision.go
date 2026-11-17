@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/edit"
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
@@ -139,7 +140,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					emit(map[string]any{"error": fmt.Sprintf("invalid CIDR prefix %q", cidr)})
 					return nil
 				}
-				blockNet, next, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
+				blockNet, next, checked, skipped, gerr := guessNextSubnet(d.restFor(r), blockPath, block, cidrN)
 				if gerr != nil {
 					// Not knowing which subnet is no reason to fail the preview: the
 					// live run asks Infoblox, which picks one itself.
@@ -157,7 +158,8 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					return nil
 				}
 				if !next.IsValid() {
-					emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet)})
+					emit(map[string]any{"error": fmt.Sprintf("no free /%d left in block %s", cidrN, blockNet),
+						"checked": checked, "skipped": freecheck.SkipList(skipped)})
 					return nil
 				}
 				addr := next.Addr().String()
@@ -171,7 +173,8 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 						return nil
 					}
 				}
-				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN}})
+				emit(map[string]any{"done": true, "subnet": map[string]any{"id": nil, "address": addr, "cidr": cidrN},
+					"checked": checked, "skipped": freecheck.SkipList(skipped)})
 				return nil
 			}
 			cidrN, ok := parseIntStr(cidr)

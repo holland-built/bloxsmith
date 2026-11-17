@@ -119,7 +119,7 @@ func TestTerminalFrame_AllFailedNotByteIdenticalToAllSucceeded(t *testing.T) {
 // whose Rest client points at the given fake upstream.
 func newSeedStreamDeps(t *testing.T, upstream http.HandlerFunc) *Deps {
 	t.Helper()
-	d, closeSrv := newTestDeps(t, upstream)
+	d, closeSrv := newTestDeps(t, emptyInventory(upstream))
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
 	d.Provision = provision.New(d.Rest, "../../templates")

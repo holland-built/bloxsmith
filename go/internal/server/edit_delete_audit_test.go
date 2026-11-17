@@ -40,7 +40,7 @@ func deleteUpstream(wantPath string) http.HandlerFunc {
 // real audit.Log on a scratch file, whose path it returns for on-disk asserts.
 func newDeleteDeps(t *testing.T, upstream http.HandlerFunc) (*Deps, string) {
 	t.Helper()
-	d, closeSrv := newTestDeps(t, upstream)
+	d, closeSrv := newTestDeps(t, emptyInventory(upstream)) // the free-address check reads see an empty tenant
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"} // loopback -> SameOrigin -> admin
 	d.Edit = edit.New(d.Rest)

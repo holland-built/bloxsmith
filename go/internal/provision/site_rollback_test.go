@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"bloxsmith/internal/freecheck"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -94,6 +95,10 @@ type siteRollbackFake struct {
 	// distinguishes the two lookups on the wire.
 	existingForward map[string]string
 	existingReverse map[string]string
+
+	// inventorySubnets is the rows of the full subnet read freecheck makes
+	// (comma-joined JSON objects); "" is none.
+	inventorySubnets string
 }
 
 func (f *siteRollbackFake) handler() http.HandlerFunc {
@@ -182,6 +187,13 @@ func (f *siteRollbackFake) handler() http.HandlerFunc {
 		}
 
 		// GET only, past here.
+		//
+		// freecheck reads every list page after page until one comes back
+		// empty; the fixtures below are all one page long.
+		if off := r.URL.Query().Get("_offset"); off != "" && off != "0" {
+			w.Write([]byte(`{"results":[]}`))
+			return
+		}
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
 			// The dry-run preview reads the same endpoint it would POST to.
@@ -193,11 +205,16 @@ func (f *siteRollbackFake) handler() http.HandlerFunc {
 
 		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
 			// findExistingSite: the site is not provisioned yet, so the run
-			// proceeds instead of skipping or refusing.
+			// proceeds instead of skipping or refusing. freecheck's full read
+			// (no _tfilter) sees inventorySubnets.
+			if r.URL.Query().Get("_tfilter") == "" && f.inventorySubnets != "" {
+				w.Write([]byte(`{"results":[` + f.inventorySubnets + `]}`))
+				return
+			}
 			w.Write([]byte(`{"results":[]}`))
 
 		case strings.HasSuffix(r.URL.Path, "/ipam/address_block"):
-			w.Write([]byte(`{"results":[{"id":"ipam/address_block/blk-1","address":"10.10.0.0","cidr":16}]}`))
+			w.Write([]byte(`{"results":[{"id":"ipam/address_block/blk-1","address":"10.10.0.0","cidr":16,"space":"ipam/ip_space/space-1"}]}`))
 
 		case strings.HasSuffix(r.URL.Path, "/dns/view"):
 			w.Write([]byte(`{"results":[{"id":"dns/view/v-1","name":"default"}]}`))
@@ -326,6 +343,7 @@ func TestSiteRollbackNeverDeletesAReusedForwardZone(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	result, err := p.Provision()
 	if err == nil {
@@ -379,6 +397,7 @@ func TestSiteRollbackNeverDeletesAReusedReverseZone(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	if _, err := p.Provision(); err == nil {
 		t.Fatal("Provision() error = nil, want the host-create failure")
@@ -440,6 +459,7 @@ func TestSiteProvisionDryRunFailureNeverRollsBack(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(true), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	_, err := p.Provision()
 	if err == nil {
@@ -486,6 +506,7 @@ func TestSiteProvisionDryRunFailureNeverRollsBack(t *testing.T) {
 func TestSiteRollbackSkipsBlankDryRunAndExistsIDs(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), func(M) {})
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	result := M{"hosts": []any{
 		M{"id": "", "fqdn": "noid.site-hq.example.com"},
@@ -549,6 +570,7 @@ func TestSiteRollbackDeletesEverythingItCreatedInReverseOrder(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 	p.zoneCreated = true
 
 	result := M{
@@ -609,6 +631,7 @@ func TestSiteRollbackReportsAFailedDeleteAndKeepsGoing(t *testing.T) {
 	}
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	result := M{
 		"hosts": []any{
@@ -692,6 +715,7 @@ func TestSiteRollbackDeletesHostsCreatedBeforeAMidListFailure(t *testing.T) {
 
 	var steps []string
 	p := e.NewSiteProvisioner(cfg, collectSteps(&steps))
+	p.free = freecheck.NewSnapshot(nil) // this test runs one step, not Provision
 
 	_, err := p.Provision()
 	if err == nil {

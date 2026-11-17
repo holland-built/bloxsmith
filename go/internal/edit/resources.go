@@ -2,8 +2,11 @@ package edit
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
+	"strings"
 
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/rest"
 )
 
@@ -145,6 +148,18 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		return M{"ok": false, "error": "invalid block id"}, 400
 	}
 
+	// Infoblox's nextavailablesubnet looks only inside the block's own
+	// space, so its pick is checked against everything in use, in the
+	// preview and again on the live run.
+	snap, fail, fstatus := c.inUse(freecheck.All)
+	if fail != nil {
+		return fail, fstatus
+	}
+	block, space, msg, bstatus := c.blockOf(blockPath)
+	if bstatus != 0 {
+		return M{"ok": false, "error": msg}, bstatus
+	}
+
 	if truthyDry(body["dry"]) {
 		// GetStrict so a failed preview is DETECTABLE — but it must still
 		// never abort the dry run: the real creation path below uses
@@ -156,6 +171,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		preview, err := c.Rest.GetStrict(blockPath+"/nextavailablesubnet",
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""
+		var skipped []freecheck.Skip
 		would := M{"cidr": cidr, "name": name, "comment": comment, "tags": tags}
 		switch {
 		case err != nil:
@@ -174,11 +190,28 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			// "block is full", kept distinct from a broken lookup.
 			would["address_preview"] = "none-available"
 		default:
-			// Case 1: unchanged behavior, unchanged fields.
+			// Case 1: Infoblox's pick, if it is free in every space. If not,
+			// the lowest free one instead, and skipped says why.
 			subnetAddr = pyStr(asMap(preview[0])["address"])
+			pick, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", subnetAddr, cidr))
+			if perr != nil {
+				break
+			}
+			if r := snap.CheckPrefix(space, pick, block); !r.Free {
+				skipped = append(skipped, freecheck.Skip{Candidate: pick.String(), Reason: r.Reason})
+				ours, more, ok := snap.NextFreePrefix(space, block, cidr)
+				skipped = append(skipped, more...)
+				if !ok {
+					subnetAddr = ""
+					would["address_preview"] = "none-available"
+					break
+				}
+				subnetAddr = ours.Addr().String()
+			}
 		}
 		would["address"] = subnetAddr
-		return M{"ok": true, "dry_run": true, "would_create": would}, 200
+		return M{"ok": true, "dry_run": true, "would_create": would,
+			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 200
 	}
 
 	resp, status, _ := c.Rest.Write("POST", blockPath+"/nextavailablesubnet",
@@ -205,6 +238,26 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	}
 	if sid == "" {
 		return M{"ok": false, "error": "no free subnet available in block"}, 502
+	}
+	scidr := cidr
+	if v, ok := intCoerce(subnet["cidr"]); ok {
+		scidr = v
+	}
+	if made, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr)); perr == nil {
+		if r := snap.CheckPrefix(space, made, block); !r.Free {
+			// It was made a moment ago by this request and clashes, so it is
+			// removed rather than left on the network.
+			out := M{"ok": false, "checked": snap.Counts.Map(),
+				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: made.String(), Reason: r.Reason}}),
+				"error":   fmt.Sprintf("Infoblox picked %s, but %s, so it was removed. Preview again", made, r.Reason)}
+			if dpath, derr := ObjectPath("ipam/subnet", sid); derr != nil {
+				out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s. Remove it in the Editor", made, r.Reason)
+			} else if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
+				out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s, and it could not be removed (%s). Remove it in the Editor",
+					made, r.Reason, statusPhrase(dst))
+			}
+			return out, 409
+		}
 	}
 
 	patchBody := M{"tags": withMadeTag(tags)}
@@ -277,6 +330,33 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 	return c.applyUpdate(body, id, objPath, up, "name/comment/tags/disabled", "subnet", "subnet")
 }
 
+// blockOf reads a block's range and IP space. A non-zero status means the read
+// failed and msg says why.
+func (c *Client) blockOf(blockPath string) (block netip.Prefix, space, msg string, status int) {
+	resp, st, err := c.Rest.GetEx(blockPath, map[string]string{"_fields": "address,cidr,space"})
+	if err != nil || st != 200 {
+		return block, "", "could not read the address block: " + statusPhrase(st), statusOr(st, 502)
+	}
+	b := asMap(resultOrSelf(resp))
+	block, ok := freecheck.PrefixOf(b)
+	space = pyStr(b["space"])
+	if !ok || space == "" {
+		return block, "", "the address block's range or IP space could not be read", 502
+	}
+	return block, space, "", 0
+}
+
+// notFree is the refusal for a candidate something already uses. On a live
+// run the preview offered it, so the message asks for a new preview.
+func notFree(snap *freecheck.Snapshot, candidate, reason string, dry bool) M {
+	msg := fmt.Sprintf("%s is not free: %s", candidate, reason)
+	if !dry {
+		msg = fmt.Sprintf("%s is not free: %s. Nothing was created; preview again", candidate, reason)
+	}
+	return M{"ok": false, "error": msg, "checked": snap.Counts.Map(),
+		"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: candidate, Reason: reason}})}
+}
+
 // --- address_block (create only) ---------------------------------------------
 
 func (c *Client) BlockCreate(body M) (M, int) {
@@ -297,8 +377,23 @@ func (c *Client) BlockCreate(body M) (M, int) {
 	}
 	blockBody := M{"address": address, "cidr": cidr, "space": space,
 		"comment": strOr(body, "comment"), "tags": tagsOf(body["tags"])}
+	pfx, perr := netip.ParsePrefix(fmt.Sprintf("%s/%d", address, cidr))
+	if perr != nil {
+		return M{"ok": false, "error": fmt.Sprintf("%s/%d is not a network address", address, cidr)}, 400
+	}
+	// Checked in the preview and again on the live run: a block that overlaps
+	// anything in any IP space, other than a block of its own space around it,
+	// is refused.
+	snap, fail, fstatus := c.inUse(freecheck.All)
+	if fail != nil {
+		return fail, fstatus
+	}
+	if r := snap.CheckPrefix(space, pfx, netip.Prefix{}); !r.Free {
+		return notFree(snap, pfx.String(), r.Reason, truthyDry(body["dry"])), 409
+	}
 	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "would_create": blockBody}, 200
+		return M{"ok": true, "dry_run": true, "would_create": blockBody,
+			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", blockBody, nil)
 	if writeUnreadable(resp, status) {
@@ -327,8 +422,23 @@ func (c *Client) RangeCreate(body M) (M, int) {
 	}
 	rangeBody := M{"start": start, "end": end, "space": space,
 		"comment": strOr(body, "comment"), "tags": tagsOf(body["tags"])}
+	lo, e1 := netip.ParseAddr(start)
+	hi, e2 := netip.ParseAddr(end)
+	if e1 != nil || e2 != nil || lo.BitLen() != hi.BitLen() || hi.Less(lo) {
+		return M{"ok": false, "error": "start and end must be addresses, with start no higher than end"}, 400
+	}
+	// Checked in the preview and again on the live run: a range over another
+	// range, a reservation or a host's address, in any IP space, is refused.
+	snap, fail, fstatus := c.inUse(freecheck.Addresses)
+	if fail != nil {
+		return fail, fstatus
+	}
+	if r := snap.CheckSpan(lo, hi); !r.Free {
+		return notFree(snap, start+" to "+end, r.Reason, truthyDry(body["dry"])), 409
+	}
 	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "would_create": rangeBody}, 200
+		return M{"ok": true, "dry_run": true, "would_create": rangeBody,
+			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
 	}
 	rangeBody["tags"] = withMadeTag(rangeBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
@@ -392,8 +502,25 @@ func (c *Client) HostCreate(body M) (M, int) {
 	if !isFalsy(body["host_names"]) {
 		hostBody["host_names"] = body["host_names"]
 	}
+	// Checked in the preview and again on the live run: an address inside a
+	// DHCP range, reserved, or already a host's, in any IP space, is refused.
+	snap, fail, fstatus := c.inUse(freecheck.Addresses)
+	if fail != nil {
+		return fail, fstatus
+	}
+	for _, a := range addresses {
+		raw := strings.TrimSpace(pyStr(asMap(a)["address"]))
+		ip, perr := netip.ParseAddr(raw)
+		if perr != nil {
+			return M{"ok": false, "error": fmt.Sprintf("%q is not an address", raw)}, 400
+		}
+		if r := snap.CheckAddr(ip); !r.Free {
+			return notFree(snap, raw, r.Reason, truthyDry(body["dry"])), 409
+		}
+	}
 	if truthyDry(body["dry"]) {
-		return M{"ok": true, "dry_run": true, "would_create": hostBody}, 200
+		return M{"ok": true, "dry_run": true, "would_create": hostBody,
+			"checked": snap.Counts.Map(), "skipped": []any{}}, 200
 	}
 	hostBody["tags"] = withMadeTag(hostBody["tags"])
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)

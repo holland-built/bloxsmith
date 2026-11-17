@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bloxsmith/internal/freecheck"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -512,10 +513,11 @@ func TestDeskRun_SiteAndKitNamesAreChecked(t *testing.T) {
 func TestSampleNames(t *testing.T) {
 	res := map[string]any{"subnets": []any{map[string]any{"address": "10.9.0.0/25"}}, "dns_zone_fqdn": "acme.lab.example.com."}
 	base := firstSubnetBase(res)
-	if got := sampleLabel("www", res, base, 0); got != "www.acme.lab.example.com A 10.9.0.10" {
+	addrs, _ := sampleAddrs(freecheck.NewSnapshot(nil), res, base)
+	if got := sampleLabel("www", res, sampleAt(addrs, 0)); got != "www.acme.lab.example.com A 10.9.0.10" {
 		t.Fatalf("label = %q", got)
 	}
-	if got := sampleIP(base, 4); got != "10.9.0.14" {
+	if got := sampleAt(addrs, 4).String(); got != "10.9.0.14" {
 		t.Fatalf("ip = %q", got)
 	}
 	// A network too small for .10 to .14 gets no sample names.
@@ -555,5 +557,27 @@ func TestDeskRuns_ListsOlderDemoServersAndGuardsBuildingOnes(t *testing.T) {
 	}
 	if got, _ := st.Load("c-20261101-110000"); got.Status != "building" {
 		t.Fatalf("run = %+v, want it left alone", got)
+	}
+}
+
+// The sample names never point at an address the site's own DHCP range or
+// hosts use: a lab template whose first network hands out .10 up by DHCP got
+// sample A records inside its own range.
+func TestSampleNames_SkipTheSiteOwnRangeAndHosts(t *testing.T) {
+	res := map[string]any{
+		"subnets":     []any{map[string]any{"address": "10.9.0.0/24"}},
+		"dhcp_ranges": []any{map[string]any{"start": "10.9.0.10", "end": "10.9.0.12"}},
+		"hosts":       []any{map[string]any{"ip": "10.9.0.14"}},
+	}
+	addrs, skipped := sampleAddrs(freecheck.NewSnapshot(nil), res, firstSubnetBase(res))
+	var got []string
+	for _, a := range addrs {
+		got = append(got, a.String())
+	}
+	if strings.Join(got, " ") != "10.9.0.13 10.9.0.15 10.9.0.16 10.9.0.17 10.9.0.18" {
+		t.Fatalf("sample addresses = %v", got)
+	}
+	if len(skipped) != 2 {
+		t.Fatalf("skipped = %+v, want the range and the host", skipped)
 	}
 }

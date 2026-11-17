@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/pyconv"
 	"bloxsmith/internal/rest"
 )
@@ -836,13 +837,20 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		return c.reserveForDevice(objPath, subnetID, name, dns, dhcp, dry)
 	}
 
+	// What is already in use: an offered address inside a DHCP range, or one
+	// a reservation or host holds, is never offered or kept.
+	snap, fail, fstatus := c.inUse(freecheck.Addresses)
+	if fail != nil {
+		return fail, fstatus
+	}
+
 	if dry {
 		// GET on nextavailableip lists the next free addresses without
 		// reserving them (operation subnetListNextAvailableIP; POST is the one
 		// that allocates). Until 2026-10-21 the preview answered an empty list
 		// without asking, so it showed nothing and could not tell a full subnet
 		// from a free one.
-		free, err := c.Rest.GetStrict(objPath+"/nextavailableip", map[string]string{"count": strconv.Itoa(count)})
+		free, skipped, offered, err := c.freePicks(objPath, count, snap)
 		if err != nil {
 			msg := "lookup failed"
 			if ue, ok := err.(*rest.UpstreamError); ok {
@@ -850,7 +858,13 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			}
 			return M{"ok": false, "error": fmt.Sprintf("could not list free addresses: %s", msg)}, 502
 		}
-		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": addressSummaries(free)}
+		if len(skipped) > 0 && len(free) < count {
+			return M{"ok": false, "error": fmt.Sprintf("only %d of the %d addresses Infoblox offered are free of DHCP ranges, "+
+				"reservations and hosts, and %d were asked for", len(free), offered, count),
+				"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 409
+		}
+		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": addressSummaries(free),
+			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}
 		if name != "" {
 			result["name"] = name
 		}
@@ -879,6 +893,26 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	}
 
 	addresses := respAddresses(resp)
+	// Infoblox picked these itself. One that a DHCP range, reservation or host
+	// already uses is not kept: every address just made is released.
+	for _, a := range addresses {
+		ip, perr := netip.ParseAddr(pyStr(asMap(a)["address"]))
+		if perr != nil {
+			continue
+		}
+		if r := snap.CheckAddr(ip); !r.Free {
+			released, orphaned := c.releaseAddresses(addresses)
+			out := M{"ok": false, "released": released, "checked": snap.Counts.Map(),
+				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: ip.String(), Reason: r.Reason}}),
+				"error":   fmt.Sprintf("Infoblox handed out %s, but %s, so the address(es) were released. Preview again", ip, r.Reason)}
+			if len(orphaned) > 0 {
+				out["orphaned"] = orphaned
+				out["error"] = fmt.Sprintf("Infoblox handed out %s, but %s. %d address(es) could not be released; remove them in the Editor",
+					ip, r.Reason, len(orphaned))
+			}
+			return out, 409
+		}
+	}
 	out := M{"ok": true, "addresses": addressSummaries(addresses)}
 	unset := 0
 	for _, a := range addresses {
@@ -930,38 +964,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		} else {
 			// Compensating release (plan 016): the DNS step failed, so roll back
 			// the reservation(s) we just made — otherwise they exhaust the subnet.
-			released := []any{}
-			orphaned := []any{}
-			for _, a := range addresses {
-				aid := asMap(a)["id"]
-				if isFalsy(aid) {
-					continue
-				}
-				// Build the release path the same way every other delete in this
-				// repo does (see internal/server/edit.go's ipamAddressDelete).
-				// This used to be raw concatenation, "/api/ddi/v1/ipam/address/"
-				// + id. CSP ids are full-form ("ipam/address/<uuid>"), so that
-				// produced /api/ddi/v1/ipam/address/ipam/address/<uuid> — the
-				// doubled prefix CSP answers 501 (see ObjectPath's doc). Every
-				// rollback therefore failed against a real tenant: the addresses
-				// landed in `orphaned` and stayed reserved until the subnet was
-				// exhausted, which is exactly what this release exists to prevent.
-				// ObjectPath accepts both id shapes, so bare ids still work.
-				objPath, perr := ObjectPath("ipam/address", pyStr(aid))
-				if perr != nil {
-					// No path can be built for this id, so no DELETE is sent —
-					// the address is still reserved upstream and must be reported
-					// as orphaned, never as released.
-					orphaned = append(orphaned, aid)
-					continue
-				}
-				_, dstatus, _ := c.Rest.Write("DELETE", objPath, nil, nil)
-				if dstatus == 200 || dstatus == 204 || dstatus == 404 {
-					released = append(released, aid)
-				} else {
-					orphaned = append(orphaned, aid)
-				}
-			}
+			released, orphaned := c.releaseAddresses(addresses)
 			out["ok"] = false
 			out["record"] = M{"ok": false, "status": rstatus, "detail": rresp}
 			out["released"] = released
@@ -974,6 +977,43 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	}
 
 	return out, 200
+}
+
+// releaseAddresses deletes addresses an allocation just made, and says which
+// were released and which are still reserved (orphaned).
+func (c *Client) releaseAddresses(addresses []any) (released, orphaned []any) {
+	released, orphaned = []any{}, []any{}
+	for _, a := range addresses {
+		aid := asMap(a)["id"]
+		if isFalsy(aid) {
+			continue
+		}
+		// Build the release path the same way every other delete in this
+		// repo does (see internal/server/edit.go's ipamAddressDelete).
+		// This used to be raw concatenation, "/api/ddi/v1/ipam/address/"
+		// + id. CSP ids are full-form ("ipam/address/<uuid>"), so that
+		// produced /api/ddi/v1/ipam/address/ipam/address/<uuid> — the
+		// doubled prefix CSP answers 501 (see ObjectPath's doc). Every
+		// rollback therefore failed against a real tenant: the addresses
+		// landed in `orphaned` and stayed reserved until the subnet was
+		// exhausted, which is exactly what this release exists to prevent.
+		// ObjectPath accepts both id shapes, so bare ids still work.
+		objPath, perr := ObjectPath("ipam/address", pyStr(aid))
+		if perr != nil {
+			// No path can be built for this id, so no DELETE is sent —
+			// the address is still reserved upstream and must be reported
+			// as orphaned, never as released.
+			orphaned = append(orphaned, aid)
+			continue
+		}
+		_, dstatus, _ := c.Rest.Write("DELETE", objPath, nil, nil)
+		if dstatus == 200 || dstatus == 204 || dstatus == 404 {
+			released = append(released, aid)
+		} else {
+			orphaned = append(orphaned, aid)
+		}
+	}
+	return released, orphaned
 }
 
 // validateRecord checks an allocation's optional DNS payload before anything is

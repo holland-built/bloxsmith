@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 
+	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/rest"
 )
 
@@ -56,28 +58,57 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 			mac, pyStr(e["address"]), pyStr(e["name"]))}, 409
 	}
 
+	// What is already in use, so the address is never one a DHCP range, a
+	// reservation or a host already holds. Read again on the live run, so a
+	// previewed address taken since is refused, not reserved twice.
+	snap, fail, fstatus := c.inUse(freecheck.Addresses)
+	if fail != nil {
+		return fail, fstatus
+	}
+	var skipped []freecheck.Skip
 	address := strings.TrimSpace(pyStr(dhcp["address"]))
 	if address != "" {
 		ip, perr := netip.ParseAddr(address)
 		if perr != nil || !prefix.Contains(ip) {
 			return M{"ok": false, "error": fmt.Sprintf("%s is not an address in this subnet (%s)", address, prefix)}, 400
 		}
+		r := snap.CheckAddr(ip)
+		if r.Free {
+			var err error
+			if r, err = snap.CheckAddrRecord(c.Rest, space, ip); err != nil {
+				return M{"ok": false, "error": freecheck.Public(err)}, 502
+			}
+		}
+		if !r.Free {
+			msg := fmt.Sprintf("%s is not free: %s. Pick another address", address, r.Reason)
+			if !dry {
+				msg = fmt.Sprintf("%s is no longer free: %s. Nothing was reserved; preview again", address, r.Reason)
+			}
+			return M{"ok": false, "error": msg, "checked": snap.Counts.Map(),
+				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: address, Reason: r.Reason}})}, 409
+		}
 	} else {
-		free, ferr := c.Rest.GetStrict(objPath+"/nextavailableip", map[string]string{"count": "1"})
+		picks, sk, offered, ferr := c.freePicks(objPath, 1, snap)
+		skipped = sk
 		if ferr != nil {
 			return M{"ok": false, "error": "could not list free addresses: " + publicErr(ferr)}, 502
 		}
-		if len(free) == 0 {
-			return M{"ok": false, "error": "this subnet has no free address"}, 409
+		if len(picks) == 0 {
+			msg := "this subnet has no free address"
+			if offered > 0 {
+				msg = fmt.Sprintf("none of the %d addresses Infoblox offered is free of DHCP ranges, reservations and hosts; type an address instead", offered)
+			}
+			return M{"ok": false, "error": msg, "checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}, 409
 		}
-		address = pyStr(asMap(free[0])["address"])
+		address = pyStr(asMap(picks[0])["address"])
 	}
 
 	fixed := M{"address": address, "mac": mac, "name": devName}
 	if dry {
 		fixed["dry_run"] = true
 		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": 1,
-			"addresses": []any{M{"address": address}}, "fixed_address": fixed}
+			"addresses": []any{M{"address": address}}, "fixed_address": fixed,
+			"checked": snap.Counts.Map(), "skipped": freecheck.SkipList(skipped)}
 		if name != "" {
 			result["name"] = name
 		}
@@ -155,6 +186,59 @@ func (c *Client) subnetSpace(objPath string) (space string, prefix netip.Prefix,
 		return "", prefix, "the subnet's address or IP space could not be read", 502
 	}
 	return space, p, "", 0
+}
+
+// freePicks is Infoblox's next free addresses in the subnet at objPath, the
+// first want of them that nothing else uses (snap). Whether nextavailableip
+// already steps over DHCP ranges and reservations is not known, so its offers
+// are checked rather than trusted, and when some are passed over it is asked
+// again for more, up to pickRounds times. offered is how many it offered last.
+// Only the first ask failing is an error.
+func (c *Client) freePicks(objPath string, want int, snap *freecheck.Snapshot) (picks []any, skipped []freecheck.Skip, offered int, err error) {
+	ask := want
+	for round := 0; round < pickRounds; round++ {
+		rows, gerr := c.Rest.GetStrict(objPath+"/nextavailableip", map[string]string{"count": strconv.Itoa(ask)})
+		if gerr != nil {
+			if round == 0 {
+				return nil, nil, 0, gerr
+			}
+			break
+		}
+		picks, skipped, offered = nil, nil, len(rows)
+		for _, row := range rows {
+			a := pyStr(asMap(row)["address"])
+			ip, perr := netip.ParseAddr(a)
+			if perr != nil {
+				continue
+			}
+			if r := snap.CheckAddr(ip); !r.Free {
+				skipped = append(skipped, freecheck.Skip{Candidate: a, Reason: r.Reason})
+				continue
+			}
+			if len(picks) < want {
+				picks = append(picks, row)
+			}
+		}
+		if len(picks) == want || len(rows) < ask {
+			break // enough, or the subnet has no more
+		}
+		ask += len(skipped)
+	}
+	return picks, skipped, offered, nil
+}
+
+// pickRounds bounds how often freePicks asks Infoblox again.
+const pickRounds = 3
+
+// inUse reads everything already in use (see freecheck). A read that cannot
+// be shown to be complete refuses, with the plain reason, rather than check
+// against a partial list.
+func (c *Client) inUse(scope freecheck.Scope) (*freecheck.Snapshot, M, int) {
+	snap, err := freecheck.Load(c.Rest, scope)
+	if err != nil {
+		return nil, M{"ok": false, "error": freecheck.Public(err)}, 502
+	}
+	return snap, nil, 0
 }
 
 func publicErr(err error) string {

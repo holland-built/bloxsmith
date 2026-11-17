@@ -38,6 +38,9 @@ type blockUnknownIDFake struct {
 
 func (f *blockUnknownIDFake) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if answerFreecheckRead(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodDelete:

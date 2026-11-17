@@ -2,7 +2,11 @@ package provision
 
 import (
 	"fmt"
+	"net/netip"
+	"sort"
 	"strings"
+
+	"bloxsmith/internal/freecheck"
 )
 
 // SubnetDef is server.py's SubnetDef dataclass (1499). Cidr/DhcpStart/DhcpEnd
@@ -178,6 +182,31 @@ type SiteProvisioner struct {
 	viewID      string
 	zoneID      string
 	zoneCreated bool
+
+	// free is everything already in use, read by Provision before anything is
+	// picked; every network, DHCP range and host address this run offers is
+	// checked against it, and added to it once offered. block is the chosen
+	// block's range. skipped is what was passed over, and why.
+	free    *freecheck.Snapshot
+	block   netip.Prefix
+	skipped []freecheck.Skip
+}
+
+// skip records a candidate passed over, and says so in the run's steps.
+func (p *SiteProvisioner) skip(candidate, reason string) {
+	p.emit(M{"step": fmt.Sprintf("  Skipping %s: %s", candidate, reason)})
+	p.skipped = append(p.skipped, freecheck.Skip{Candidate: candidate, Reason: reason})
+}
+
+// planCidr is the prefix length sdef asks for.
+func (p *SiteProvisioner) planCidr(sdef SubnetDef) int {
+	cidr := p.cfg.SubnetSize
+	if sdef.Cidr != nil {
+		if c, ok := intCoerce(sdef.Cidr); ok {
+			cidr = c
+		}
+	}
+	return cidr
 }
 
 func (e *Engine) NewSiteProvisioner(cfg *SiteConfig, emit Emitter) *SiteProvisioner {
@@ -267,7 +296,38 @@ func (p *SiteProvisioner) findAvailableBlock() (M, error) {
 	if len(results) == 0 {
 		return nil, perr("No available address block found for Region=%s Environment=%s", p.cfg.Region, p.cfg.Environment)
 	}
-	return minByBlockSortKey(results), nil
+	// Lowest first (server.py:1682's key), and the first with room for every
+	// network in the plan once what is already in use is left out.
+	sort.SliceStable(results, func(i, j int) bool { return less(blockSortKey(asMap(results[i])), blockSortKey(asMap(results[j]))) })
+	for _, r := range results {
+		b := asMap(r)
+		pfx, ok := freecheck.PrefixOf(b)
+		if !ok {
+			p.skip(fmt.Sprintf("%s/%s", pyStr(b["address"]), pyStr(b["cidr"])), "its address cannot be read")
+			continue
+		}
+		if why := p.planFits(pfx); why != "" {
+			p.skip(pfx.String(), why)
+			continue
+		}
+		return b, nil
+	}
+	return nil, perr("No available address block for Region=%s Environment=%s has room for this site's %d network(s) "+
+		"without overlapping something already in use", p.cfg.Region, p.cfg.Environment, len(p.cfg.SubnetPlan))
+}
+
+// planFits says why block cannot hold every network in the plan, or "".
+func (p *SiteProvisioner) planFits(block netip.Prefix) string {
+	trial := p.free.Clone()
+	for _, sdef := range p.cfg.SubnetPlan {
+		cidr := p.planCidr(sdef)
+		pick, _, ok := trial.NextFreePrefix(p.spaceID, block, cidr)
+		if !ok {
+			return fmt.Sprintf("no free /%d left in it for %s", cidr, sdef.Name)
+		}
+		trial.Add(freecheck.Network(freecheck.KindSubnet, p.spaceID, "", pick))
+	}
+	return ""
 }
 
 func (p *SiteProvisioner) resolveDNSView() error {
@@ -288,12 +348,7 @@ func (p *SiteProvisioner) resolveDNSView() error {
 
 // createSubnet is _create_subnet (server.py:1691). Returns the subnet dict.
 func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M) (M, error) {
-	cidr := p.cfg.SubnetSize
-	if sdef.Cidr != nil {
-		if c, ok := intCoerce(sdef.Cidr); ok {
-			cidr = c
-		}
-	}
+	cidr := p.planCidr(sdef)
 	tags := M{"Site": p.cfg.Site, "Region": p.cfg.Region, "Environment": p.cfg.Environment,
 		"Owner": p.cfg.Owner, "Purpose": sdef.Purpose, "DHCP": sdef.Dhcp, "Name": sdef.Name}
 	for k, v := range p.cfg.ExtraTags {
@@ -328,8 +383,24 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 			// "block is full", kept distinct from a broken lookup.
 			extra["address_preview"] = "none-available"
 		default:
-			// Case 1: unchanged behavior, unchanged fields.
+			// Case 1: Infoblox's pick, if it is free in every space. If not,
+			// the lowest free one instead, and the skip says why.
 			subnetAddr = pyStr(asMap(preview[0])["address"])
+			pick, pickErr := netip.ParsePrefix(fmt.Sprintf("%s/%d", subnetAddr, cidr))
+			if pickErr != nil {
+				break
+			}
+			if r := p.free.CheckPrefix(p.spaceID, pick, p.block); !r.Free {
+				p.skip(pick.String(), r.Reason)
+				ours, _, ok := p.free.NextFreePrefix(p.spaceID, p.block, cidr)
+				if !ok {
+					subnetAddr = ""
+					extra["address_preview"] = "none-available"
+					break
+				}
+				pick, subnetAddr = ours, ours.Addr().String()
+			}
+			p.free.Add(freecheck.Network(freecheck.KindSubnet, p.spaceID, "", pick))
 		}
 		appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", subnetAddr, cidr), "name": sdef.Name, "id": "(dry-run)"})
 		out := M{"dry_run": true, "address": subnetAddr, "cidr": cidr, "name": sdef.Name, "tags": tags}
@@ -364,6 +435,18 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	}
 	appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr),
 		"name": sdef.Name, "id": sid})
+	// Infoblox picked within the block's own space only. Recorded above, so
+	// a pick that clashes elsewhere is refused here and rollback removes it.
+	made, madeErr := netip.ParsePrefix(fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr))
+	if madeErr != nil {
+		return nil, perr("Subnet %s was created at %s/%d, which cannot be checked; nothing more was created",
+			sdef.Name, pyStr(subnet["address"]), scidr)
+	}
+	if r := p.free.CheckPrefix(p.spaceID, made, p.block); !r.Free {
+		p.skip(made.String(), r.Reason)
+		return nil, perr("Infoblox picked %s for %s, but %s; nothing more was created. Preview again", made, sdef.Name, r.Reason)
+	}
+	p.free.Add(freecheck.Network(freecheck.KindSubnet, p.spaceID, sid, made))
 	patchBody := M{"name": sdef.Name,
 		"comment": fmt.Sprintf("%s site - %s network", capitalize(p.cfg.Site), sdef.Purpose), "tags": tags}
 	presp, pstatus, _ := p.e.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
@@ -463,6 +546,13 @@ func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) er
 		return p.rangeSkipped(result, sdef, cidrStr(n), start, end,
 			fmt.Sprintf("offsets %d-%d fall outside subnet %s", startOff, endOff, cidrStr(n)))
 	}
+	lo, _ := netip.ParseAddr(start)
+	hi, _ := netip.ParseAddr(end)
+	if r := p.free.CheckSpan(lo, hi); !r.Free {
+		p.skipped = append(p.skipped, freecheck.Skip{Candidate: start + " to " + end, Reason: r.Reason})
+		return p.rangeSkipped(result, sdef, cidrStr(n), start, end, r.Reason)
+	}
+	p.free.Add(freecheck.Span(freecheck.KindRange, p.spaceID, "", lo, hi))
 	mode := dryPrefix(p.cfg.DryRun)
 	p.emit(M{"step": fmt.Sprintf("%sCreating DHCP range %s-%s  subnet=%s", mode, start, end, sdef.Name)})
 	if p.cfg.DryRun {
@@ -676,6 +766,7 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 // saw them, and they stayed on the customer's network with no record of it.
 func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 	subnetOffsets := map[string]int{}
+	nextFrom := map[string]netip.Addr{}
 	var results []M
 	for _, hdef := range p.cfg.Hosts {
 		subnet, ok := subnets[hdef.Subnet]
@@ -707,7 +798,24 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 			p.emit(M{"step": fmt.Sprintf("Host %s offset %d falls outside subnet %s — skipping", hdef.Hostname, offset, cidrStr(n))})
 			continue
 		}
-		hostIP := hostAddr.String()
+		// The first free address from here: never one in the site's own DHCP
+		// range, nor one anything else already uses.
+		from, _ := netip.ParseAddr(hostAddr.String())
+		if a, seen := nextFrom[hdef.Subnet]; seen && a.Compare(from) > 0 {
+			from = a
+		}
+		within, _ := netip.ParsePrefix(cidrStr(n))
+		pick, skipped, ok := p.free.NextFreeAddr(within, from)
+		for _, sk := range skipped {
+			p.skip(sk.Candidate, sk.Reason)
+		}
+		if !ok {
+			p.emit(M{"step": fmt.Sprintf("Host %s: no free address left in subnet %s — skipping", hdef.Hostname, cidrStr(n))})
+			continue
+		}
+		nextFrom[hdef.Subnet] = pick.Next()
+		p.free.Add(freecheck.Span(freecheck.KindHost, p.spaceID, "", pick, pick))
+		hostIP := pick.String()
 		fqdn := fmt.Sprintf("%s.%s", hdef.Hostname, p.cfg.DNSZone())
 		mode := dryPrefix(p.cfg.DryRun)
 		p.emit(M{"step": fmt.Sprintf("%sProvisioning host: %s -> %s  (subnet=%s)", mode, fqdn, hostIP, hdef.Subnet)})
@@ -966,10 +1074,20 @@ func (p *SiteProvisioner) Provision() (M, error) {
 			}
 			return nil
 		}
+		// Everything already in use, read in full before anything is picked.
+		// A read that cannot be shown to be whole stops the run here, before
+		// anything is created.
+		free, err := freecheck.Load(p.e.Rest, freecheck.All)
+		if err != nil {
+			return perr("%s", freecheck.Public(err))
+		}
+		p.free = free
+		result["checked"] = free.Counts.Map()
 		block, err := p.findAvailableBlock()
 		if err != nil {
 			return err
 		}
+		p.block, _ = freecheck.PrefixOf(block)
 		result["block_id"] = pyStr(block["id"])
 		result["block_address"] = fmt.Sprintf("%s/%s", pyStr(block["address"]), pyStr(block["cidr"]))
 		if err := p.resolveDNSView(); err != nil {
@@ -1049,6 +1167,9 @@ func (p *SiteProvisioner) Provision() (M, error) {
 		return nil
 	}()
 
+	// skipped_picks, not skipped: "skipped" already says whether the site was
+	// skipped as already provisioned.
+	result["skipped_picks"] = freecheck.SkipList(p.skipped)
 	if runErr != nil {
 		report := M{"outcome": "skipped_dry_run", "attempted": 0, "deleted": 0, "residual": []any{}}
 		if !p.cfg.DryRun {
@@ -1103,20 +1224,6 @@ func firstRow(resp any) M {
 		}
 	}
 	return M{}
-}
-
-// minByBlockSortKey is min(results, key=_block_sort_key) (server.py:1682).
-func minByBlockSortKey(results []any) M {
-	best := asMap(results[0])
-	bestKey := blockSortKey(best)
-	for _, r := range results[1:] {
-		rm := asMap(r)
-		k := blockSortKey(rm)
-		if less(k, bestKey) {
-			best, bestKey = rm, k
-		}
-	}
-	return best
 }
 
 type sortKey struct {

@@ -177,6 +177,13 @@ func (f *unknownIDFake) handler() http.HandlerFunc {
 		}
 
 		// GET only, past here.
+		//
+		// freecheck reads every list page after page until one comes back
+		// empty; the fixtures below are all one page long.
+		if off := r.URL.Query().Get("_offset"); off != "" && off != "0" {
+			w.Write([]byte(`{"results":[]}`))
+			return
+		}
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/ipam/ip_space"):
 			w.Write([]byte(`{"results":[{"id":"ipam/ip_space/space-1","name":"default"}]}`))
@@ -184,7 +191,7 @@ func (f *unknownIDFake) handler() http.HandlerFunc {
 			// findExistingSite: not provisioned yet, so the run proceeds.
 			w.Write([]byte(`{"results":[]}`))
 		case strings.HasSuffix(r.URL.Path, "/ipam/address_block"):
-			w.Write([]byte(`{"results":[{"id":"ipam/address_block/blk-1","address":"10.10.0.0","cidr":16}]}`))
+			w.Write([]byte(`{"results":[{"id":"ipam/address_block/blk-1","address":"10.10.0.0","cidr":16,"space":"ipam/ip_space/space-1"}]}`))
 		case strings.HasSuffix(r.URL.Path, "/dns/view"):
 			w.Write([]byte(`{"results":[{"id":"dns/view/v-1","name":"default"}]}`))
 		case strings.HasSuffix(r.URL.Path, "/dns/auth_zone"):

@@ -23,6 +23,13 @@ type resvConfig struct {
 	existing    string // body for GET dhcp/fixed_address (the MAC check); "" => no results
 	fixedStatus int    // POST dhcp/fixed_address (0 => 201)
 	dnsStatus   int    // POST dns/record (0 => 201)
+
+	// inventory is the rows freecheck's full read of each list sees, keyed by
+	// path under /api/ddi/v1/ ("ipam/range"); a list not named is empty.
+	inventory map[string]string
+	// addrRecord is the body for GET ipam/address (Infoblox's own record of a
+	// typed address); "" => no record.
+	addrRecord string
 }
 
 type resvFake struct {
@@ -46,13 +53,23 @@ func newResvFake(t *testing.T, cfg resvConfig) *resvFake {
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
+		q := r.URL.Query()
 		switch {
+		case r.Method == "GET" && q.Get("_order_by") != "":
+			// freecheck's full read: one page, then an empty one.
+			rows := cfg.inventory[strings.TrimPrefix(p, "/api/ddi/v1/")]
+			if off := q.Get("_offset"); off != "0" {
+				rows = ""
+			}
+			_, _ = io.WriteString(w, `{"results":[`+rows+`]}`)
+		case r.Method == "GET" && p == "/api/ddi/v1/ipam/address":
+			_, _ = io.WriteString(w, allocStringOr(cfg.addrRecord, `{"results":[]}`))
 		case r.Method == "GET" && p == "/api/ddi/v1/"+resvSubnet:
 			_, _ = io.WriteString(w, `{"result":{"address":"10.7.0.0","cidr":24,"space":"ipam/ip_space/sp-1"}}`)
 		case r.Method == "GET" && p == "/api/ddi/v1/dhcp/fixed_address":
 			_, _ = io.WriteString(w, allocStringOr(cfg.existing, `{"results":[]}`))
 		case r.Method == "GET" && strings.HasSuffix(p, "/nextavailableip"):
-			_, _ = io.WriteString(w, `{"results":[{"address":"10.7.0.9"}]}`)
+			_, _ = io.WriteString(w, `{"results":[{"address":"10.7.0.9"},{"address":"10.7.0.10"}]}`)
 		case r.Method == "POST" && p == "/api/ddi/v1/dhcp/fixed_address":
 			st := allocStatusOr(cfg.fixedStatus, 201)
 			w.WriteHeader(st)
@@ -242,5 +259,59 @@ func TestReserveDNSTimeoutSaysTheRecordMayExist(t *testing.T) {
 	}
 	if strings.Contains(pyStr(res["error"]), "add the record on its own") {
 		t.Fatal("must not suggest adding a record that may already exist")
+	}
+}
+
+// A typed address that something already uses is refused with the reason, in
+// the preview and on the live run, and nothing is written.
+func TestReserveRefusesATypedAddressAlreadyInUse(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  resvConfig
+		want string
+	}{
+		{"inside a DHCP range", resvConfig{inventory: map[string]string{
+			"ipam/range": `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.7.0.5","end":"10.7.0.50"}`}},
+			"10.7.0.20 is not free: a DHCP range in ipam/ip_space/sp-1 already uses 10.7.0.5 to 10.7.0.50"},
+		{"already reserved", resvConfig{inventory: map[string]string{
+			"ipam/ip_space":      `{"id":"ipam/ip_space/sp-1","name":"corp-amer"}`,
+			"dhcp/fixed_address": `{"id":"dhcp/fixed_address/f-9","ip_space":"ipam/ip_space/sp-1","address":"10.7.0.20"}`}},
+			"10.7.0.20 is not free: a reservation in corp-amer already uses 10.7.0.20"},
+		{"a host's address", resvConfig{inventory: map[string]string{
+			"ipam/host": `{"id":"ipam/host/h-1","addresses":[{"address":"10.7.0.20","space":"ipam/ip_space/sp-1"}]}`}},
+			"10.7.0.20 is not free: a host in ipam/ip_space/sp-1 already uses 10.7.0.20"},
+		{"in use in Infoblox's address records", resvConfig{
+			addrRecord: `{"results":[{"id":"ipam/address/a-1","address":"10.7.0.20","state":"used"}]}`},
+			"10.7.0.20 is not free: an address in ipam/ip_space/sp-1 already uses 10.7.0.20"},
+	}
+	for _, tc := range cases {
+		for _, dry := range []bool{true, false} {
+			f := newResvFake(t, tc.cfg)
+			out, status := f.client().SelfserviceAllocate(reserveBody(dry, M{"mac": "aa:bb:cc:dd:ee:ff", "address": "10.7.0.20"}))
+			want := tc.want
+			if !dry {
+				want = strings.Replace(want, "is not free", "is no longer free", 1)
+			}
+			if status != 409 || !strings.Contains(pyStr(out["error"]), want) {
+				t.Fatalf("%s dry=%v: = %d %v, want 409 naming %q", tc.name, dry, status, out, want)
+			}
+			if w := f.writes(); len(w) != 0 {
+				t.Fatalf("%s dry=%v: wrote %+v, want nothing", tc.name, dry, w)
+			}
+		}
+	}
+}
+
+// With no typed address, Infoblox's first offer is passed over when a DHCP
+// range already holds it, and the preview says so.
+func TestReservePassesOverAnOfferInsideARange(t *testing.T) {
+	f := newResvFake(t, resvConfig{inventory: map[string]string{
+		"ipam/range": `{"id":"ipam/range/r-1","space":"ipam/ip_space/sp-1","start":"10.7.0.9","end":"10.7.0.9"}`}})
+	out, status := f.client().SelfserviceAllocate(reserveBody(true, M{"mac": "aa:bb:cc:dd:ee:ff"}))
+	if status != 200 || pyStr(asMap(out["fixed_address"])["address"]) != "10.7.0.10" {
+		t.Fatalf("= %d %v, want 10.7.0.10 offered", status, out)
+	}
+	if sk, _ := out["skipped"].([]any); len(sk) != 1 || pyStr(asMap(sk[0])["candidate"]) != "10.7.0.9" {
+		t.Fatalf("skipped = %v", out["skipped"])
 	}
 }
