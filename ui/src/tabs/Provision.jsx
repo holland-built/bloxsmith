@@ -18,7 +18,8 @@ import FilterSelect from '../components/FilterSelect.jsx'
 // Lazy: #provision has almost no room left under tests/bundle-budget.spec.ts,
 // and this line is only needed once a preview has finished.
 const LazyChecked = lazy(() => import('../components/CheckedAgainst.jsx'))
-const CheckedAgainst = ({ res }) => <Suspense fallback={null}><LazyChecked res={res} /></Suspense>
+// f is a stream flow; res is what to word, its done frame unless given.
+const CheckedAgainst = ({ f, res = f.result }) => f.status === 'previewed' && <Suspense><LazyChecked res={res} /></Suspense>
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -488,7 +489,7 @@ function SubnetMode() {
                 : null
             }
           >
-            {flow.status === 'previewed' && <CheckedAgainst res={flow.result} />}
+            <CheckedAgainst f={flow} />
             <RollbackReport report={flow.rollback} />
           </PreviewApply>
         </div>
@@ -622,7 +623,7 @@ function SiteMode({ isAdmin }) {
                 : null
             }
           >
-            {build.status === 'previewed' && <CheckedAgainst res={built} />}
+            <CheckedAgainst f={build} res={built} />
             <RollbackReport report={build.rollback} />
           </PreviewApply>
         </div>
@@ -817,7 +818,7 @@ function SeedMode({ isAdmin }) {
                 : null
             }
           >
-            {seed.status === 'previewed' && <CheckedAgainst res={seed.result} />}
+            <CheckedAgainst f={seed} />
             <RollbackReport report={seed.rollback} />
           </PreviewApply>
         </div>
