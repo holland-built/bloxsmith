@@ -36,7 +36,7 @@ test('a network name opens the network page, read by its id', async ({ page }) =
   await expect(item.locator('[data-item-details]')).toContainText('baseline-net-c');
   await expect(item.locator('[data-item-details]')).toContainText('Baseline Space');
   await expect(item.locator('[data-item-details]')).toContainText('98% used');
-  await expect(item.getByRole('link', { name: 'Open in Editor' })).toHaveAttribute('href', '#editor?type=subnet&id=ipam%2Fsubnet%2Fbaseline-3&q=10.30.0.0');
+  await expect(item.getByRole('link', { name: 'Edit', exact: true })).toHaveAttribute('href', '#editor?type=subnet&id=ipam%2Fsubnet%2Fbaseline-3&q=10.30.0.0');
   await expect(item.getByRole('button', { name: 'Copy' })).toBeVisible();
   expect(seen.some((u) => u.pathname === '/api/item/network' && u.searchParams.get('id') === 'ipam/subnet/baseline-3')).toBe(true);
 });
@@ -52,7 +52,7 @@ test('a zone name opens the zone page with its DNS view', async ({ page }) => {
   const details = page.locator('[data-item-page="zone"] [data-item-details]');
   await expect(details).toContainText('baseline-view');
   await expect(details).toContainText('baseline zone');
-  await expect(page.locator('[data-item-page="zone"]').getByRole('link', { name: 'Open in Editor' })).toHaveAttribute('href', /type=dns_zone&id=dns%2Fauth_zone%2Fbaseline-1/);
+  await expect(page.locator('[data-item-page="zone"]').getByRole('link', { name: 'Edit', exact: true })).toHaveAttribute('href', /type=dns_zone&id=dns%2Fauth_zone%2Fbaseline-1/);
   expect(seen.some((u) => u.pathname === '/api/item/zone' && u.searchParams.get('id') === 'dns/auth_zone/baseline-1')).toBe(true);
 });
 
@@ -67,8 +67,8 @@ test('an IP space name opens the space page', async ({ page }) => {
   const details = page.locator('[data-item-page="space"] [data-item-details]');
   await expect(details).toContainText('the main space');
   await expect(details).toContainText('42% used');
-  // A space has no Editor form, so Copy is the only action.
-  await expect(page.locator('[data-item-page="space"]').getByRole('link', { name: 'Open in Editor' })).toHaveCount(0);
+  // A space has no Editor form, so it offers no Edit.
+  await expect(page.locator('[data-item-page="space"]').getByRole('link', { name: 'Edit', exact: true })).toHaveCount(0);
   expect(seen.some((u) => u.pathname === '/api/item/space')).toBe(true);
 });
 

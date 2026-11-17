@@ -20,6 +20,11 @@ export const ITEM_WORDS = {
   address: 'Address',
 }
 
+// The kinds a name opens a right-click menu on (components/ItemMenu.jsx). A
+// site keeps its plain link. Here rather than in itemActions.js so ItemLink,
+// on every page, does not carry the whole action list the lazy menu loads.
+export const MENU_KINDS = ['space', 'block', 'network', 'address', 'zone']
+
 const clean = (v) => (v == null ? '' : String(v).trim())
 
 // A placeholder a table prints for "nothing here" is not a name to link.
@@ -36,6 +41,14 @@ export function itemHref({ kind, value, id, space, view } = {}) {
   if (clean(view)) p.set('view', clean(view))
   if (clean(id)) p.set('id', clean(id))
   return `#dossier?${p.toString()}`
+}
+
+/** An address block has no item page; its link opens it in the Editor. */
+export function blockHref({ value, id } = {}) {
+  const q = clean(value)
+  if (BLANKS.has(q)) return null
+  const p = [['type', 'address_block'], ['id', clean(id)], ['q', q.split('/')[0]]].filter(([, v]) => v)
+  return `#editor?${p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`
 }
 
 /**
