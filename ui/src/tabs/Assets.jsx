@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ItemLink from '../components/ItemLink.jsx'
 import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
 import { UNCLASSIFIED, parseSeen, rankTypes, seenAgo, shareText, typeTotal, unclassifiedCount } from '../lib/assetTypes.js'
@@ -482,9 +483,15 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
   const d = detail.data
   const unavailable = !!detail.error || d?.availability === 'error'
 
+  // Each address opens its own page.
+  const ipLinks = d?.detail?.ip_addresses
+    ? String(d.detail.ip_addresses).split(/[,\s]+/).filter(Boolean).map((ip, i) => (
+      <span key={ip}>{i > 0 && ', '}<ItemLink kind="address" value={ip} /></span>
+    ))
+    : null
   const fields = [
     ['OS', d?.detail?.os],
-    ['IP addresses', d?.detail?.ip_addresses],
+    ['IP addresses', ipLinks],
     ['MAC addresses', d?.detail?.mac_addresses],
     ['Model', d?.detail?.model],
     ['Location', d?.detail?.location],

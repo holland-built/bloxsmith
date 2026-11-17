@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
+import ItemLink from '../components/ItemLink.jsx'
+import { itemCell } from '../components/itemCell.jsx'
 import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -301,7 +303,7 @@ function IpamSpaces({ panelId, ipam }) {
             const status = utilStatus(r.pct)
             return (
               <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-note">
-                <span className="w-[110px] truncate text-muted" title={r.label}>{r.label || r.id || '—'}</span>
+                <span className="w-[110px] truncate text-muted" title={r.label}>{r.label ? <ItemLink kind="space" value={r.label} id={String(r.id || '').startsWith('ipam/ip_space/') ? r.id : undefined} /> : r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
                   <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: barColor(status) }} />
                 </div>
@@ -468,8 +470,8 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
   }, [filtered])
 
   const columns = [
-    { key: 'address', label: 'Address', mono: true, sortable: true, comparator: ipCompare },
-    { key: 'hostname', label: 'Hostname', grow: true, sortable: true },
+    { key: 'address', label: 'Address', mono: true, sortable: true, comparator: ipCompare, render: itemCell('address', undefined, { mono: true }) },
+    { key: 'hostname', label: 'Hostname', grow: true, sortable: true, render: itemCell('address') },
     { key: 'endsLabel', label: 'Ends', mono: true, sortable: true, comparator: (a, b) => (a._endsMs || 0) - (b._endsMs || 0) },
     { key: 'hardware', label: 'Hardware', mono: true, priority: 'low', sortable: true },
     { key: 'state', label: 'State', sortable: true },
@@ -634,8 +636,8 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
   }
 
   const columns = [
-    { key: 'network', label: 'Network', mono: true, sortable: true },
-    { key: 'site', label: 'Site', sortable: true },
+    { key: 'network', label: 'Network', mono: true, sortable: true, render: itemCell('network', (r) => ({ id: r.id, value: r.addr && r.cidr != null && r.cidr !== '' ? `${r.addr}/${r.cidr}` : undefined }), { mono: true }) },
+    { key: 'site', label: 'Site', sortable: true, render: itemCell('site') },
     {
       key: 'util',
       label: 'Utilization',

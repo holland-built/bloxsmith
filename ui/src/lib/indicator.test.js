@@ -6,6 +6,7 @@ import {
   canAuditAnswer,
   classifyIndicator,
   isFQDN,
+  isCIDR,
   isIPQuery,
   isIPv4,
   isIPv6,
@@ -92,6 +93,24 @@ test('classifyIndicator names the kind the query bar prints', () => {
   assert.equal(classifyIndicator(''), null)
   assert.equal(classifyIndicator('   '), null)
   assert.equal(classifyIndicator(undefined), null)
+})
+
+// A network (address/size) is its own kind, so a link to one lands on the
+// network's item page rather than on a free-text search.
+test('classifyIndicator recognises a network written as address/size', () => {
+  assert.deepEqual(classifyIndicator('10.1.0.0/24'), { kind: 'cidr', label: 'Network' })
+  assert.deepEqual(classifyIndicator(' 2001:db8::/32 '), { kind: 'cidr', label: 'Network' })
+  assert.equal(isCIDR('10.0.0.0/0'), true)
+  assert.equal(isCIDR('10.0.0.0/32'), true)
+  assert.equal(isCIDR('10.0.0.0/33'), false)
+  assert.equal(isCIDR('fd00::/129'), false)
+  assert.equal(isCIDR('10.0.0.0/'), false)
+  assert.equal(isCIDR('10.0.0.0/24/8'), false)
+  assert.equal(isCIDR('/24'), false)
+  assert.equal(isCIDR('acme.corp/24'), false)
+  assert.equal(isCIDR('10.0.0.0/2x'), false)
+  // A network is not an address, so IPAM's address search is not asked.
+  assert.equal(isIPQuery('10.1.0.0/24'), false)
 })
 
 // The one caller is the dossier page's IPAM section. /api/search/ipam filters

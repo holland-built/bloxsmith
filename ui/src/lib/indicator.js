@@ -44,6 +44,24 @@ export function isIPv6(q) {
 }
 
 /**
+ * A network written as an address and a size: 10.0.0.0/24, 2001:db8::/32.
+ * The address half uses the same loose rules as above; the size must be a
+ * whole number the address family allows (0-32, or 0-128 for IPv6).
+ */
+export function isCIDR(q) {
+  if (typeof q !== 'string') return false
+  const slash = q.indexOf('/')
+  if (slash < 1 || slash !== q.lastIndexOf('/')) return false
+  const addr = q.slice(0, slash)
+  const bits = q.slice(slash + 1)
+  if (bits === '' || bits.length > 3 || !isDigits(bits)) return false
+  const n = Number(bits)
+  if (isIPv4(addr)) return n <= 32
+  if (isIPv6(addr)) return n <= 128
+  return false
+}
+
+/**
  * Two or more labels; an alphabetic TLD of 2-63 chars; every other label 1-63
  * chars of letters, digits, underscore, or an interior hyphen.
  */
@@ -86,6 +104,7 @@ export function classifyIndicator(input) {
   if (!q) return null
   if (isIPv4(q)) return { kind: 'ipv4', label: 'IPv4 address' }
   if (isIPv6(q)) return { kind: 'ipv6', label: 'IPv6 address' }
+  if (isCIDR(q)) return { kind: 'cidr', label: 'Network' }
   const bare = q.endsWith('.') ? q.slice(0, -1) : q
   if (isFQDN(bare)) return { kind: 'fqdn', label: 'Hostname' }
   return null

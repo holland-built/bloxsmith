@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { itemCell } from '../components/itemCell.jsx'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
@@ -327,7 +328,7 @@ function ipCompare(a, b) {
 
 const HOST_COLUMNS = [
   { key: 'name', label: 'Name', sortable: true, keep: true },
-  { key: 'ip', label: 'IP', mono: true, sortable: true, comparator: (a, b) => ipCompare(a.ip, b.ip) },
+  { key: 'ip', label: 'IP', mono: true, sortable: true, comparator: (a, b) => ipCompare(a.ip, b.ip), render: itemCell('address', undefined, { mono: true }) },
   // badge stays set so the column keeps its badge width measurement; render
   // takes precedence over it for the actual cell.
   { key: 'status', label: 'Status', badge: true, sortable: true, render: (v) => renderStatus(v), comparator: (a, b) => sevRank(a.status) - sevRank(b.status) },

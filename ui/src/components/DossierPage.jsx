@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { dossierHasVerdict, dossierVerdict } from '../lib/dossierVerdict.js'
 import DossierPanel from './DossierPanel.jsx'
+import ItemLink from './ItemLink.jsx'
+import ItemPage from './ItemPage.jsx'
+import { itemActions } from '../lib/itemActions.js'
+import { parseItem } from '../lib/itemHref.js'
 import { Empty, Skeleton } from './ui.jsx'
 import { abortAfter, useApi } from '../lib/api.js'
 import { dossierSummary } from '../lib/dossierSummary.js'
@@ -85,6 +89,15 @@ function shortId(v) {
   return tail.length > 12 ? tail.slice(0, 8) + '…' : tail
 }
 
+// A value as a link to its own item page, or null when there is no value. An
+// id is passed only when the row really carries one of that kind.
+function linkTo(kind, v, extra = {}) {
+  if (v == null) return null
+  return <ItemLink kind={kind} value={v} {...extra} />
+}
+
+const idOfKind = (v, prefix) => (typeof v === 'string' && v.startsWith(prefix) ? v : undefined)
+
 // ---------------------------------------------------------------------------
 // availability -> one of the four states
 // ---------------------------------------------------------------------------
@@ -156,11 +169,11 @@ const SOURCES = [
     shape: (body) =>
       rowsOf(body).map((r, i) => ({
         id: r.id ?? `dns-${i}`,
-        identity: fmt(r.absolute_name_spec) ?? fmt(r.name_in_zone),
+        identity: linkTo('address', fmt(r.absolute_name_spec)) ?? fmt(r.name_in_zone),
         fields: [
           ['Record', fmt(r.type)],
           ['TTL', fmt(r.ttl)],
-          ['Zone', fmt(r.absolute_zone_name)],
+          ['Zone', linkTo('zone', fmt(r.absolute_zone_name), { id: idOfKind(r.zone, 'dns/auth_zone/') }), fmt(r.absolute_zone_name)],
         ],
       })),
   },
@@ -184,12 +197,12 @@ const SOURCES = [
     shape: (body) =>
       rowsOf(body).map((r, i) => ({
         id: r.id ?? `ipam-${i}`,
-        identity: fmt(r.address),
+        identity: linkTo('address', fmt(r.address)),
         fields: [
           ['State', fmt(r.state)],
           // `space` is carried per row by the server precisely because results
           // can span spaces (server/search.go), so it is one of the three.
-          ['Space', shortId(r.space), fmt(r.space)],
+          ['Space', linkTo('space', shortId(r.space), { id: idOfKind(r.space, 'ipam/ip_space/') }), fmt(r.space)],
           ['Comment', fmt(r.comment) ?? fmt(r.name)],
         ],
       })),
@@ -279,7 +292,7 @@ const SOURCES = [
       },
       ...rowsOf(body).map((r, i) => ({
         id: `kentik-${i}`,
-        identity: fmt(r.peer),
+        identity: linkTo('address', fmt(r.peer)),
         fields: [
           ['Direction', r.direction === 'out' ? 'sent to' : 'received from'],
           ['To port', [protoWord(r.protocol), r.port].filter((x) => x != null && x !== '').join(' ') || null],
@@ -814,8 +827,36 @@ function useAnnouncer(q, results) {
 // the page
 // ---------------------------------------------------------------------------
 
+// One page per item. A network, IP space, DNS zone or site gets its own
+// details page (ItemPage); an address, a host name, and every old #dossier?q=
+// link that is not a network keep the search ledger below.
 export default function DossierPage() {
   const params = useHashParams()
+  const item = parseItem(params)
+  if (item.kind !== 'address') return <ItemPage key={`${item.kind}|${item.q}|${item.space}|${item.view}|${item.id}`} {...item} />
+  return <SearchPage params={params} />
+}
+
+// What you can do next with the thing searched for: the same actions an item
+// page offers. An address has no Editor form, so this is Copy.
+function SearchActions({ q }) {
+  const [copied, setCopied] = useState(false)
+  const copy = itemActions({ kind: 'address', q }).find((a) => a.key === 'copy')
+  if (!copy) return null
+  return (
+    <div data-item-actions className="ledger-cell px-[var(--sp-ledger-inset)] py-2 border-b border-line bg-card">
+      <button
+        type="button"
+        className="text-copy text-link underline underline-offset-2"
+        onClick={() => navigator.clipboard?.writeText(copy.copy).then(() => setCopied(true), () => setCopied(false))}
+      >
+        {copied ? 'Copied' : copy.label}
+      </button>
+    </div>
+  )
+}
+
+function SearchPage({ params }) {
   const q = (params.q || '').trim()
   const [draft, setDraft] = useState(q)
   const kind = classifyIndicator(q)
@@ -890,6 +931,8 @@ export default function DossierPage() {
           </span>
         </div>
       </div>
+
+      {q && <SearchActions q={q} />}
 
       {summary && (kind?.kind !== 'ipv4' || !subnetApi.loading) && (
         <p data-dossier-summary className="ledger-cell px-[var(--sp-ledger-inset)] py-4 border-b border-line bg-card text-copy font-semibold text-txt">
