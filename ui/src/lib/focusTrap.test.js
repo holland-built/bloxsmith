@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { trapTab, dialogKeyDown } from './focusTrap.js'
 
@@ -82,7 +83,7 @@ test('Escape closes and stops there', () => {
 // The trap was once copied into eight dialogs. A new copy of the selector
 // outside focusTrap.js means someone wrote a ninth instead of importing this.
 test('the focusable-controls selector lives only in focusTrap.js', () => {
-  const root = new URL('..', import.meta.url).pathname
+  const root = fileURLToPath(new URL('..', import.meta.url))
   const hits = []
   const walk = (dir) => {
     for (const f of readdirSync(dir)) {
