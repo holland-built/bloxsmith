@@ -132,3 +132,23 @@ func TestItemRouteIsAReadNotAWrite(t *testing.T) {
 		t.Fatal("isTenantWrite says /api/item changes the tenant")
 	}
 }
+
+// A failed read of the IP space name is "could not read", never a true
+// "no such network".
+func TestItemScopeReadFailureIsAnErrorNotNotFound(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ipam/ip_space") {
+			w.WriteHeader(503)
+			return
+		}
+		t.Errorf("asked %s after the space read failed", r.URL)
+	})
+	defer closeSrv()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/item/network?q=10.1.0.0/24&space=Corp", nil)
+	req.SetPathValue("kind", "network")
+	d.itemGet(rr, req)
+	if body := decodeBody(t, rr); body["availability"] != "error" {
+		t.Fatalf("want availability error, got %+v", body)
+	}
+}

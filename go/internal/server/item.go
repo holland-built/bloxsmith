@@ -120,7 +120,11 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 			params["_filter"] = "(" + f + ")"
 		}
 		if spec.scope != "" {
-			scope, found := d.itemScope(r, spec.scope, qs.Get(spec.scope))
+			scope, found, ue := d.itemScope(r, spec.scope, qs.Get(spec.scope))
+			if ue != nil {
+				d.json(w, r, 200, searchUnavailable(ue))
+				return
+			}
 			if !found {
 				d.json(w, r, 200, searchResponse([]any{}, nil))
 				return
@@ -152,24 +156,33 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 
 // itemScope turns ?space= or ?view= into a filter clause. An id is used as
 // given; a name is read first and becomes its ids. found is false when a name
-// was given and nothing carries it, so the answer is a true "no match".
-func (d *Deps) itemScope(r *http.Request, field, v string) (clause string, found bool) {
+// was given and nothing carries it, so the answer is a true "no match". A
+// failed read comes back as ue, so it is reported as "could not read", never
+// as "no such item".
+func (d *Deps) itemScope(r *http.Request, field, v string) (clause string, found bool, ue *rest.UpstreamError) {
 	v = strings.TrimSpace(v)
 	if v == "" {
-		return "", true
+		return "", true, nil
 	}
 	esc, err := rest.CSPQ(v)
 	if err != nil {
-		return "", false
+		return "", false, nil
 	}
 	prefix := map[string]string{"space": "ipam/ip_space/", "view": "dns/view/"}[field]
 	if strings.HasPrefix(v, prefix) {
-		return field + `=="` + esc + `"`, true
+		return field + `=="` + esc + `"`, true, nil
 	}
 	path := map[string]string{"space": "/api/ddi/v1/ipam/ip_space", "view": "/api/ddi/v1/dns/view"}[field]
 	rows, err := d.restFor(r).GetStrict(path, map[string]string{"_filter": `name=="` + esc + `"`, "_fields": "id"})
-	if err != nil || len(rows) == 0 {
-		return "", false
+	if err != nil {
+		e, isUE := err.(*rest.UpstreamError)
+		if !isUE {
+			e = &rest.UpstreamError{Path: path}
+		}
+		return "", false, e
+	}
+	if len(rows) == 0 {
+		return "", false, nil
 	}
 	var parts []string
 	for _, ri := range rows {
@@ -178,7 +191,7 @@ func (d *Deps) itemScope(r *http.Request, field, v string) (clause string, found
 			parts = append(parts, field+`=="`+idEsc+`"`)
 		}
 	}
-	return "(" + strings.Join(parts, " or ") + ")", true
+	return "(" + strings.Join(parts, " or ") + ")", true, nil
 }
 
 // itemNames adds the space's or view's name beside its id, so the page and
