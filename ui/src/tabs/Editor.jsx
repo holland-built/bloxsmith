@@ -7,6 +7,7 @@ import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import MadeList from '../components/MadeList.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
+import { useHashParams } from '../lib/hash.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
 const inputCls = `${FIELD_CLS} w-full`
@@ -252,13 +253,20 @@ export default function Editor() {
   // range: the range goes in that network's IP space, which Infoblox wants as
   // an id. A table row knows the network but not its space, so the network is
   // looked up (the same read its own page makes) and the space filled in.
-  const rangeNet = params.type === 'dhcp_range' ? params.network || '' : ''
-  const rangeLookup = useNetworkPrefill(params.type === 'dhcp_range' && !params.space ? { subnet: params.subnet, network: params.network } : {})
+  // It follows the hash, so a second network's link while the Editor is open
+  // replaces the space the first lookup filled in, but never one typed by hand.
+  const live = useHashParams()
+  const rangeOn = live.type === 'dhcp_range'
+  const rangeNet = rangeOn ? live.network || '' : ''
+  const rangeLookup = useNetworkPrefill(rangeOn && !live.space ? { subnet: live.subnet, network: live.network } : {})
+  const rangeFilled = useRef('')
   useEffect(() => {
     if (type !== 'dhcp_range' || rangeLookup.pending || !rangeLookup.space) return
-    setFields((prev) => (prev.space ? prev : { ...prev, space: rangeLookup.space }))
+    const was = rangeFilled.current
+    rangeFilled.current = rangeLookup.space
+    setFields((prev) => (prev.space && prev.space !== was ? prev : { ...prev, space: rangeLookup.space }))
   }, [type, rangeLookup.pending, rangeLookup.space])
-  const rangeSpaceMissed = type === 'dhcp_range' && !!(params.subnet || params.network) && !params.space &&
+  const rangeSpaceMissed = type === 'dhcp_range' && rangeOn && !!(live.subnet || live.network) && !live.space &&
     !rangeLookup.pending && !rangeLookup.space && !fields.space
 
   const spec = FIELD_SPECS[type]

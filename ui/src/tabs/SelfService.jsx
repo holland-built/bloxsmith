@@ -142,6 +142,7 @@ function AllocatePanel() {
   const pre = useNetworkPrefill(opened ? hp : {})
   const preStep = useRef(opened ? 'space' : 'done')
   const filled = useRef({})
+  const preSpace = useRef('')
   const lastKey = useRef(preKey)
   if (opened) tried.current = true
   useEffect(() => {
@@ -149,8 +150,10 @@ function AllocatePanel() {
     lastKey.current = preKey
     const f = filled.current
     filled.current = {}
-    const keptSubnet = subnetId && subnetId !== f.subnet
-    if (f.space && f.space === space && !keptSubnet) { setSpace(''); setBlock(''); setSubnetId('') }
+    // A link never fills Block. One picked by hand, or a subnet picked by
+    // hand, keeps the space it was picked in.
+    const keptPick = block || (subnetId && subnetId !== f.subnet)
+    if (f.space && f.space === space && !keptPick) { setSpace(''); setSubnetId('') }
     else if (f.subnet && f.subnet === subnetId) setSubnetId('')
     if (f.device && deviceOn) setDeviceOn(false)
     flow.markStale()
@@ -162,18 +165,18 @@ function AllocatePanel() {
     if (preStep.current !== 'space' || pre.pending || !spacesApi.data) return
     preStep.current = 'subnet'
     const sp = findSpace(spacesApi.data.spaces, pre.space)
-    if (sp) { filled.current.space = sp.id; setSpace(sp.id) }
+    if (sp) { filled.current.space = sp.id; preSpace.current = sp.id; setSpace(sp.id) }
     else preStep.current = 'done'
     if (hp.reserve === '1') { filled.current.device = true; setDeviceOn(true) }
   }, [preKey, pre.pending, pre.space, spacesApi.data, hp.reserve])
   useEffect(() => {
-    if (preStep.current !== 'subnet' || !subnetsApi.data) return
-    const sn = findRange(subnetsApi.data.subnets, pre.subnet) || findRange(subnetsApi.data.subnets, hp.network)
-    // The list for the space this link names; an older space's list waits.
-    if (!sn && subnetsApi.loading) return
+    // Only the list for the space this link set: one still showing for the
+    // space before it would not hold the link's subnet.
+    if (preStep.current !== 'subnet' || space !== preSpace.current || subnetsApi.loading || !subnetsApi.data) return
     preStep.current = 'done'
+    const sn = findRange(subnetsApi.data.subnets, pre.subnet) || findRange(subnetsApi.data.subnets, hp.network)
     if (sn) { filled.current.subnet = sn.id; setSubnetId(sn.id) }
-  }, [preKey, subnetsApi.data, subnetsApi.loading, pre.subnet, hp.network])
+  }, [preKey, space, subnetsApi.data, subnetsApi.loading, pre.subnet, hp.network])
   useEffect(() => {
     if (tried.current || !tenant || !spacesApi.data) return
     tried.current = true

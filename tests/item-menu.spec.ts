@@ -342,3 +342,67 @@ test('network: Add a DHCP range says so when the IP space cannot be found', asyn
   await expect(page.locator('[data-editor-form]')).toContainText('For network 10.30.0.0/24');
   await expect(page.locator('[data-editor-form]')).toContainText("The IP space of 10.30.0.0/24 could not be filled in. Type its ID, which starts ipam/ip_space/.");
 });
+
+test('Get an address: following a second link with another space picks that link\'s subnet', async ({ page }) => {
+  await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [
+    { id: 'ipam/ip_space/baseline-1', name: 'Baseline Space' },
+    { id: 'ipam/ip_space/a', name: 'Corp' },
+  ] })));
+  await page.route('**/api/ipam/subnets*', async (r) => {
+    const two = new URL(r.request().url()).searchParams.get('space') === 'ipam/ip_space/a';
+    // The second space's list answers late, as a real read can.
+    if (two) await new Promise((res) => setTimeout(res, 400));
+    return r.fulfill(json({ subnets: two
+      ? [{ id: 'ipam/subnet/two-0', address: '10.50.0.0', cidr: 24, utilization: { free: 9 } }, { id: 'ipam/subnet/two-1', address: '10.50.1.0', cidr: 24, utilization: { free: 9 } }]
+      : [{ id: 'ipam/subnet/baseline-3', address: '10.30.0.0', cidr: 24, utilization: { free: 5 } }] }));
+  });
+  await page.goto('/#selfservice?space=ipam%2Fip_space%2Fbaseline-1&subnet=ipam%2Fsubnet%2Fbaseline-3');
+  const panel = page.locator('[data-task="address"]');
+  await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/baseline-3');
+
+  await setHash(page, '#selfservice?space=ipam%2Fip_space%2Fa&subnet=ipam%2Fsubnet%2Ftwo-1');
+  await expect(panel.getByRole('combobox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/a');
+  await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/two-1');
+});
+
+test('Get an address: a Block picked by hand stays when a plain visit takes the link back', async ({ page }) => {
+  await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [{ id: 'ipam/ip_space/a', name: 'Corp' }] })));
+  await page.goto('/#selfservice?space=ipam%2Fip_space%2Fa');
+  const panel = page.locator('[data-task="address"]');
+  const space = panel.getByRole('combobox', { name: 'IP Space' });
+  const block = panel.getByRole('combobox', { name: 'Block' });
+  await expect(space).toHaveValue('ipam/ip_space/a');
+  await block.selectOption('ipam/address_block/a1');
+  await setHash(page, '#selfservice');
+  // The link filled the space only; the Block was picked by hand, on that space.
+  await expect(block).toHaveValue('ipam/address_block/a1');
+  await expect(space).toHaveValue('ipam/ip_space/a');
+});
+
+async function rangeLookups(page: Page) {
+  await page.route('**/api/item/network?**', (r) => {
+    const id = new URL(r.request().url()).searchParams.get('id');
+    const sp = id === 'ipam/subnet/b' ? 'ipam/ip_space/b' : 'ipam/ip_space/a';
+    return r.fulfill(json({ availability: 'ok', rows: [{ id, address: '10.9.0.0', cidr: 24, space: sp }] }));
+  });
+}
+
+test('Editor: a new subnet in the hash replaces the IP space the last lookup filled in', async ({ page }) => {
+  await rangeLookups(page);
+  await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fa');
+  const box = page.getByRole('textbox', { name: 'IP Space' });
+  await expect(box).toHaveValue('ipam/ip_space/a');
+  await setHash(page, '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fb');
+  await expect(box).toHaveValue('ipam/ip_space/b');
+});
+
+test('Editor: an IP space typed by hand stays when the subnet in the hash changes', async ({ page }) => {
+  await rangeLookups(page);
+  await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fa');
+  const box = page.getByRole('textbox', { name: 'IP Space' });
+  await expect(box).toHaveValue('ipam/ip_space/a');
+  await box.fill('ipam/ip_space/typed');
+  await setHash(page, '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fb');
+  await page.waitForTimeout(500);
+  await expect(box).toHaveValue('ipam/ip_space/typed');
+});
