@@ -53,7 +53,14 @@ import { test, expect } from './fixtures';
 // DevicesInput in kit.jsx, which several tabs share), Provision -152 B,
 // spaceOptions -156 B. Each change fit alone; together they passed by 1,684 B.
 // vendor-react did not move and no charts chunk is on the route.
-const BUDGET_BYTES = 392 * 1024; // 401,408 B
+//
+// RAISED 392 -> 396 KB on 2026-11-17, with the chunks that grew identified.
+// Right-click menus took #provision to 400,970 B (ItemLink 1,137 -> 3,031 B),
+// and the "Checked against" line in previews took it to 401,473 B: Provision
+// +458 B (the lazy import and its preload list), the entry chunk +45 B. The
+// CheckedAgainst chunk itself (1,261 B) loads only with a preview result.
+// vendor-react did not move and no charts chunk is on the route.
+const BUDGET_BYTES = 396 * 1024; // 405,504 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();

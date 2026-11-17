@@ -6,6 +6,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import MadeList from '../components/MadeList.jsx'
+import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
 import { useHashParams } from '../lib/hash.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
@@ -564,7 +565,7 @@ export default function Editor() {
             message={result && result.ok ? result.msg : null}
           >
             {previewBody
-              ? <PreviewBox data={previewBody} note={`preview — nothing has been ${isUpdate ? 'changed' : 'created'} yet`} />
+              ? <><PreviewBox data={previewBody} note={`preview — nothing has been ${isUpdate ? 'changed' : 'created'} yet`} /><CheckedAgainst res={preview} /></>
               : !result && <p className="text-copy text-muted">Press Preview to see what would be sent. Nothing changes in Infoblox until you press {isUpdate ? 'Update' : 'Create'}.</p>}
           </PreviewApply>
         </section>

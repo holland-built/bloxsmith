@@ -24,6 +24,7 @@ import { useWriteFlow } from '../lib/writeFlow.js'
 import { setHashParams, useHashParams } from '../lib/hash.js'
 import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 import MadeList from '../components/MadeList.jsx'
+import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
 const inputCls = FIELD_CLS
@@ -360,11 +361,14 @@ function AllocatePanel() {
       <ColumnHeading id="ss-allocate-result-h">Preview</ColumnHeading>
       <PreviewApply {...applyProps} part="outcome">
         {flow.preview ? (
-          <PreviewBox
-            data={flow.preview}
-            note="preview — no address has been taken yet"
-            summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr, device ? flow.previewReply?.fixed_address?.mac : '')}
-          />
+          <>
+            <PreviewBox
+              data={flow.preview}
+              note="preview — no address has been taken yet"
+              summary={flow.stale ? null : allocateSentence(flow.preview, targetSubnet, name, dnsName, ptr, device ? flow.previewReply?.fixed_address?.mac : '')}
+            />
+            <CheckedAgainst res={flow.previewReply} />
+          </>
         ) : !flow.message && <p className="text-copy text-muted">Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</p>}
       </PreviewApply>
     </section>
