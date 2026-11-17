@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -369,6 +371,92 @@ func TestSubnetCreate_LiveReplacesAWarnedPickWithTheCleanOne(t *testing.T) {
 		"PATCH /api/ddi/v1/ipam/subnet/clean-1"}
 	if !reflect.DeepEqual(writes, want) {
 		t.Fatalf("writes = %v, want %v", writes, want)
+	}
+}
+
+// replaceServer is a tenant where Infoblox picks 10.0.5.0/24, which only the
+// lab space uses, so the clean 10.0.0.0/24 is created in its place. That create
+// answers createStatus with createBody; late is a subnet row that appears only
+// after it ("" for none).
+func replaceServer(t *testing.T, writes *[]string, createStatus int, createBody, late string) *httptest.Server {
+	t.Helper()
+	var mu sync.Mutex
+	created := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && q.Get("_order_by") != "":
+			rows := map[string]string{
+				"ipam/ip_space":      `{"id":"ipam/ip_space/sp-1","name":"corp"},{"id":"ipam/ip_space/sp-2","name":"lab"}`,
+				"ipam/address_block": `{"id":"ipam/address_block/block-1","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":8}`,
+				"ipam/subnet":        `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/sp-2","address":"10.0.5.0","cidr":24}`,
+			}[strings.TrimPrefix(r.URL.Path, "/api/ddi/v1/")]
+			if created && late != "" && strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+				rows += "," + late
+			}
+			if q.Get("_offset") != "0" {
+				rows = ""
+			}
+			w.Write([]byte(`{"results":[` + rows + `]}`))
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/ipam/address_block/block-1"):
+			w.Write([]byte(`{"result":{"address":"10.0.0.0","cidr":8,"space":"ipam/ip_space/sp-1"}}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"results":[{"id":"ipam/subnet/new-1","address":"10.0.5.0","cidr":24}]}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			created = true
+			w.WriteHeader(createStatus)
+			w.Write([]byte(createBody))
+		default:
+			*writes = append(*writes, r.Method+" "+r.URL.Path)
+			w.WriteHeader(200)
+			w.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// Live: the clean subnet is checked against a fresh read once made. A subnet
+// in its own space that appeared since is a clash: it is removed, and the
+// create fails instead of tagging it.
+func TestSubnetCreate_LiveRemovesACleanPickThatClashesOnAFreshRead(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 201, `{"result":{"id":"ipam/subnet/clean-1"}}`,
+		`{"id":"ipam/subnet/late","space":"ipam/ip_space/sp-1","address":"10.0.0.0","cidr":25}`)).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status != 409 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "10.0.0.0/24") {
+		t.Fatalf("= %d %v, want the clean 10.0.0.0/24 refused", status, res)
+	}
+	if !slices.Contains(writes, "DELETE /api/ddi/v1/ipam/subnet/clean-1") || slices.Contains(writes, "PATCH /api/ddi/v1/ipam/subnet/clean-1") {
+		t.Fatalf("writes = %v, want clean-1 removed and never tagged", writes)
+	}
+}
+
+// Live: once the shared pick is removed, a refused create of the clean one is
+// a failure, not a success with nothing made.
+func TestSubnetCreate_LiveFailsWhenTheCleanCreateIsRefused(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 400, `{"error":[{"message":"refused"}]}`, "")).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status < 400 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "10.0.0.0/24") {
+		t.Fatalf("= %d %v, want the refused create of 10.0.0.0/24 reported", status, res)
+	}
+}
+
+// Live: when the answer to the clean create is lost (a gateway error), the
+// subnet may exist, and the error says so.
+func TestSubnetCreate_LiveSaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
+	var writes []string
+	res, status := newTestClient(replaceServer(t, &writes, 504, `{}`, "")).SubnetCreate(
+		M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if status < 400 || res["ok"] != false || !strings.Contains(pyStr(res["error"]), "may have been created") {
+		t.Fatalf("= %d %v, want 10.0.0.0/24 named as possibly made", status, res)
 	}
 }
 

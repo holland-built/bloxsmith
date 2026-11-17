@@ -378,6 +378,11 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 	if writeUnreadable(resp, st) {
 		return createdUnreadable("subnet", st, "Its teardown tags could not be applied either, so no tag filter will find it"), st, true
 	}
+	if outcomeUnknown(st) {
+		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
+			"%s may have been created, but Infoblox's answer was lost (%s). Check for it in the Editor before trying again",
+			made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true
+	}
 	if st != 200 && st != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
 			"creating %s instead failed (%s). Preview again", made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true

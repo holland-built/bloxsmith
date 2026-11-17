@@ -99,6 +99,12 @@ type siteRollbackFake struct {
 	// inventorySubnets is the rows of the full subnet read freecheck makes
 	// (comma-joined JSON objects); "" is none.
 	inventorySubnets string
+
+	// afterCreate is rows added to inventorySubnets once a subnet is created
+	// by its address: something made after the run's own read.
+	afterCreate string
+	// createStatus, when set, is the answer to a subnet created by its address.
+	createStatus int
 }
 
 func (f *siteRollbackFake) handler() http.HandlerFunc {
@@ -184,6 +190,15 @@ func (f *siteRollbackFake) handler() http.HandlerFunc {
 				// was replaced by a clean one).
 				body := decodeBody(r)
 				f.mu.Lock()
+				if f.afterCreate != "" {
+					f.inventorySubnets += "," + f.afterCreate
+				}
+				if f.createStatus != 0 {
+					w.WriteHeader(f.createStatus)
+					f.mu.Unlock()
+					w.Write([]byte(`{"error":[{"message":"refused"}]}`))
+					return
+				}
 				f.subnetSeq++
 				id := fmt.Sprintf("ipam/subnet/s-%d", f.subnetSeq)
 				f.subnets[id] = M{"id": id, "address": body["address"], "cidr": body["cidr"]}
@@ -219,8 +234,11 @@ func (f *siteRollbackFake) handler() http.HandlerFunc {
 			// findExistingSite: the site is not provisioned yet, so the run
 			// proceeds instead of skipping or refusing. freecheck's full read
 			// (no _tfilter) sees inventorySubnets.
-			if r.URL.Query().Get("_tfilter") == "" && f.inventorySubnets != "" {
-				w.Write([]byte(`{"results":[` + f.inventorySubnets + `]}`))
+			f.mu.Lock()
+			inv := f.inventorySubnets
+			f.mu.Unlock()
+			if r.URL.Query().Get("_tfilter") == "" && inv != "" {
+				w.Write([]byte(`{"results":[` + inv + `]}`))
 				return
 			}
 			w.Write([]byte(`{"results":[]}`))

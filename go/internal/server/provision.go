@@ -251,13 +251,13 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 				var naddr string
 				var replaced bool
 				nsub, naddr, replaced, err = replaceSharedPick(d.restFor(r), subnet, addr, cidrN, space, blockNet, body)
-				if naddr != "" {
+				if replaced {
 					emit(map[string]any{"step": fmt.Sprintf("%s/%d is also used in another IP space, so the clean %s/%d was made instead",
 						addr, cidrN, naddr, cidrN)})
-					addr = naddr
-				}
-				if replaced {
 					subnet = nsub
+				}
+				if naddr != "" {
+					addr = naddr
 				}
 			}
 			if err != nil {
@@ -388,8 +388,9 @@ func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN 
 //
 // replaced is false with a nil error when nothing changed (no clean one, it
 // could not be looked for, or the shared pick could not be removed): the
-// shared pick then stands, warned. naddr is set once the clean one exists, so
-// a failed check after it names the right subnet.
+// shared pick then stands, warned. naddr is set once the clean one may exist,
+// so a failure after it names the right subnet; an error wrapping
+// errPickKept means it may still be there.
 func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN int, space string, block netip.Prefix, extra any) (nsub map[string]any, naddr string, replaced bool, err error) {
 	if n, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
 		cidrN = n
@@ -419,7 +420,15 @@ func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN
 	if res, ok := result.(map[string]any); ok {
 		nsub, _ = res["result"].(map[string]any)
 	}
-	if werr != nil || status < 200 || status > 299 || provision.PyStr(nsub["id"]) == "" {
+	if status == 0 || status == 502 || status == 503 || status == 504 ||
+		(status >= 200 && status <= 299 && provision.PyStr(nsub["id"]) == "") {
+		// The create may have been applied: its answer was lost or names no
+		// subnet. It is not looked for or removed blind.
+		return nil, clean.Addr().String(), false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
+			"the clean %s may have been created, but Infoblox's answer was lost%s. Check for it in the Editor before trying again (%w)",
+			made, clean, upstreamDetail(status, result), errPickKept)
+	}
+	if werr != nil || status < 200 || status > 299 {
 		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
 			"creating the clean %s instead failed%s. Nothing was created; preview again", made, clean, upstreamDetail(status, result))
 	}

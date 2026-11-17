@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -360,6 +361,98 @@ func TestSubnetStream_Apply_ReplacesASharedPickWithTheCleanOne(t *testing.T) {
 	rows := auditEntries(t, logPath, "provision-subnet")
 	if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
 		t.Fatalf("provision-subnet rows = %v, want one naming 172.16.129.0", rows)
+	}
+}
+
+// replaceRun runs a live Apply where Infoblox picks the shared 172.16.128.0/24
+// and the clean 172.16.129.0/24 is created in its place. The create answers
+// createStatus with createBody; late is a row that appears in the inventory
+// only after that create ("" for none).
+func replaceRun(t *testing.T, createStatus int, createBody, late string) (body string, deletes []string, logPath string) {
+	t.Helper()
+	var mu sync.Mutex
+	created := false
+	d, logPath := newInventoryDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		q := r.URL.Query()
+		switch {
+		case r.Method == http.MethodDelete:
+			mu.Lock()
+			deletes = append(deletes, r.URL.Path)
+			mu.Unlock()
+			io.WriteString(w, `{}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/nextavailablesubnet"):
+			io.WriteString(w, `{"results":[{"id":"ipam/subnet/new-1","address":"172.16.128.0","cidr":24}]}`)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			mu.Lock()
+			created = true
+			mu.Unlock()
+			w.WriteHeader(createStatus)
+			io.WriteString(w, createBody)
+		case strings.HasSuffix(r.URL.Path, "/"+uaBlockID):
+			io.WriteString(w, `{"result":{"address":"172.16.128.0","cidr":21,"space":"ipam/ip_space/sp-1"}}`)
+		case q.Get("_order_by") != "" && q.Get("_offset") != "0":
+			io.WriteString(w, `{"results":[]}`)
+		case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+			rows := subnetRow("other", "172.16.128.0", "ipam/ip_space/sp-2")
+			mu.Lock()
+			if created && late != "" {
+				rows += "," + late
+			}
+			mu.Unlock()
+			io.WriteString(w, `{"results":[`+rows+`]}`)
+		default:
+			io.WriteString(w, `{"results":[]}`)
+		}
+	})
+	rr := httptest.NewRecorder()
+	d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0"))
+	mu.Lock()
+	defer mu.Unlock()
+	return rr.Body.String(), append([]string(nil), deletes...), logPath
+}
+
+const cleanCreated = `{"result":{"id":"ipam/subnet/clean-1","address":"172.16.129.0","cidr":24}}`
+
+// The clean subnet is checked against a fresh read once made: a subnet in the
+// block's own space that appeared since is a clash, so it is removed and the
+// run fails.
+func TestSubnetStream_Apply_RemovesACleanPickThatClashesOnAFreshRead(t *testing.T) {
+	body, deletes, _ := replaceRun(t, 201, cleanCreated,
+		`{"id":"ipam/subnet/late","address":"172.16.129.0","cidr":25,"space":"ipam/ip_space/sp-1"}`)
+	noDoneFrame(t, parseSSEFrames(t, body))
+	if !slices.Contains(deletes, "/api/ddi/v1/ipam/subnet/clean-1") {
+		t.Fatalf("deletes = %v, want the clean subnet removed; body %s", deletes, body)
+	}
+}
+
+// Once the shared pick is removed, a refused create of the clean one fails the
+// run, and says nothing was made.
+func TestSubnetStream_Apply_FailsWhenTheCleanCreateIsRefused(t *testing.T) {
+	body, _, _ := replaceRun(t, 400, `{"error":[{"message":"refused"}]}`, "")
+	noDoneFrame(t, parseSSEFrames(t, body))
+	if !strings.Contains(body, "172.16.129.0/24") || !strings.Contains(body, "Nothing was created") {
+		t.Fatalf("want the refused create of 172.16.129.0/24 reported, got %s", body)
+	}
+}
+
+// When Infoblox's answer to the clean create is lost (a gateway error) or names
+// no subnet, the subnet may exist: the run fails without saying nothing was
+// made, and the log names the subnet that may exist.
+func TestSubnetStream_Apply_SaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+	}{{504, `{}`}, {201, `{"result":{}}`}} {
+		body, _, logPath := replaceRun(t, tc.status, tc.body, "")
+		noDoneFrame(t, parseSSEFrames(t, body))
+		if strings.Contains(body, "Nothing was created") || !strings.Contains(body, "may have been created") {
+			t.Fatalf("status %d: want 172.16.129.0/24 named as possibly made, got %s", tc.status, body)
+		}
+		rows := auditEntries(t, logPath, "provision-subnet")
+		if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
+			t.Fatalf("status %d: provision-subnet rows = %v, want one naming 172.16.129.0", tc.status, rows)
+		}
 	}
 }
 

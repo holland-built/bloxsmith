@@ -491,14 +491,31 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 			resp, st, _ := p.e.Rest.Write("POST", "/api/ddi/v1/ipam/subnet",
 				M{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": p.spaceID}, nil)
 			nsub := asMap(asMap(resp)["result"])
-			if (st != 200 && st != 201) || pyStr(nsub["id"]) == "" {
+			if st == 0 || st == 502 || st == 503 || st == 504 || ((st == 200 || st == 201) && pyStr(nsub["id"]) == "") {
+				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
+					"the clean %s may have been created, but Infoblox's answer was lost (status %d). "+
+					"Check for it in the Editor before running again", made, sdef.Name, clean, st)
+			}
+			if st != 200 && st != 201 {
 				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
 					"creating the clean %s instead failed: status %d %v", made, sdef.Name, clean, st, resp)
 			}
 			subnet, sid, made = nsub, pyStr(nsub["id"]), clean
 			subnet["address"], subnet["cidr"] = clean.Addr().String(), clean.Bits()
+			// Recorded first, so rollback removes it if the check below fails.
 			appendTo(result, "subnets", M{"address": clean.String(), "name": sdef.Name, "id": sid})
-			r = p.free.CheckPrefix(p.spaceID, made, p.block)
+			// Checked against a fresh read, not the run's earlier one: something
+			// may have been made since that read.
+			snap, ferr := freecheck.AroundPrefix(p.e.Rest, freecheck.All, made)
+			if ferr != nil {
+				return nil, perr("The clean %s was made for %s, but what is already in use could not be read (%s); "+
+					"nothing more was created", made, sdef.Name, freecheck.Public(ferr))
+			}
+			if r = snap.Without(sid).CheckPrefix(p.spaceID, made, p.block); !r.Free {
+				p.skip(made.String(), r.Reason)
+				return nil, perr("The clean %s was made for %s, but %s; nothing more was created. Preview again",
+					made, sdef.Name, r.Reason)
+			}
 		}
 	}
 	p.warnings = append(p.warnings, r.Warnings...)

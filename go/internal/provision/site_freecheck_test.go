@@ -3,6 +3,7 @@ package provision
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -95,6 +96,56 @@ func TestSiteProvision_LiveReplacesASharedPickWithTheCleanOne(t *testing.T) {
 	}
 	if ws := getList(result, "warnings"); len(ws) != 0 {
 		t.Fatalf("warnings = %v, want none", ws)
+	}
+}
+
+// Live: the clean subnet is checked again against a fresh read once it is
+// made, not against the run's earlier read. Something in the site's own space
+// that appeared since (10.10.0.0/25 here) is a clash: the clean subnet is
+// removed and the step fails, instead of building the site on it.
+func TestSiteProvision_LiveRemovesACleanPickThatClashesOnAFreshRead(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedSubnet
+	f.afterCreate = `{"id":"ipam/subnet/late","space":"ipam/ip_space/space-1","address":"10.10.0.0","cidr":25}`
+	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
+	_, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err == nil || !strings.Contains(err.Error(), "10.10.0.0/24") {
+		t.Fatalf("Provision error = %v, want the clean 10.10.0.0/24 refused", err)
+	}
+	if d := f.deletes(); !slices.Contains(d, "/api/ddi/v1/ipam/subnet/s-2") {
+		t.Fatalf("deletes = %v, want the clean subnet s-2 removed", d)
+	}
+}
+
+// Live: once Infoblox's shared pick is removed, a failed create of the clean
+// one fails the step; it is not reported as a site with that subnet.
+func TestSiteProvision_LiveFailsWhenTheCleanCreateFails(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedSubnet
+	f.createStatus = 500
+	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
+	_, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err == nil || !strings.Contains(err.Error(), "10.10.0.0/24") {
+		t.Fatalf("Provision error = %v, want the failed create of 10.10.0.0/24 reported", err)
+	}
+	if f.hostPosts != 0 {
+		t.Fatalf("%d hosts made after the subnet failed", f.hostPosts)
+	}
+}
+
+// Live: when Infoblox's answer to the clean create is lost (a gateway error),
+// the subnet may exist, so the error must not say nothing was made.
+func TestSiteProvision_LiveSaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedSubnet
+	f.createStatus = 504
+	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
+	_, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err == nil || !strings.Contains(err.Error(), "may have been created") {
+		t.Fatalf("Provision error = %v, want it to say 10.10.0.0/24 may have been created", err)
 	}
 }
 
