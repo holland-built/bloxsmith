@@ -40,6 +40,13 @@ export function sizeWords(prefix, family = 4) {
   return total == null ? '' : count(total)
 }
 
+// validPrefix is the typed size if it is a whole number the family allows,
+// else ''. A size box must never hand 24.5 to the server, which would cut it to 24.
+export function validPrefix(v, family = 4) {
+  const p = n(v)
+  return Number.isInteger(p) && p >= 1 && p <= (family === 6 ? 128 : 32) ? String(p) : ''
+}
+
 // sizeLine says what a size gives you: "/24: 256 addresses, 254 usable by devices".
 export function sizeLine(prefix) {
   const total = addressCount(prefix)

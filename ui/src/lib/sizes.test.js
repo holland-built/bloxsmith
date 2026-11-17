@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addressCount, usableCount, prefixForDevices, withSize, sizeLine, sizeWords } from './sizes.js'
+import { addressCount, usableCount, prefixForDevices, withSize, sizeLine, sizeWords, validPrefix } from './sizes.js'
 import { sizeWords as reexported } from './spaceOptions.js'
 
 test('addressCount is the total for a prefix, IPv4 by default', () => {
@@ -73,4 +73,14 @@ test('sizeWords moved here and is still exported from spaceOptions', () => {
   assert.equal(sizeWords(32), '1 address')
   assert.equal(sizeWords(0), '')
   assert.equal(reexported, sizeWords)
+})
+
+test('validPrefix keeps only whole sizes in range, so 24.5 is never sent as 24', () => {
+  assert.equal(validPrefix('24'), '24')
+  assert.equal(validPrefix('24.5'), '')
+  assert.equal(validPrefix('0'), '')
+  assert.equal(validPrefix('33'), '')
+  assert.equal(validPrefix('64', 6), '64')
+  assert.equal(validPrefix('129', 6), '')
+  assert.equal(validPrefix(''), '')
 })
