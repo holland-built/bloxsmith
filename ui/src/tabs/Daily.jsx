@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import ItemLink from '../components/ItemLink.jsx'
+import { itemCell } from '../components/itemCell.jsx'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
@@ -302,8 +304,8 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
     .sort((a, b) => cmpMaybe(a.free, b.free, 'asc'))
 
   const columns = [
-    { key: 'network', label: 'Network', mono: true },
-    { key: 'site', label: 'Site', keep: true },
+    { key: 'network', label: 'Network', mono: true, render: itemCell('network', (r) => ({ id: r.id, value: r.addr && r.cidr != null && r.cidr !== '' ? `${r.addr}/${r.cidr}` : undefined }), { mono: true }) },
+    { key: 'site', label: 'Site', keep: true, render: itemCell('site') },
     {
       key: 'util',
       label: 'Util',
@@ -374,7 +376,7 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
         <span className="flex items-center gap-2 min-w-0">
           <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: dot[statusBucket(h.status)] ?? COLORS.other }} />
           <span className="font-mono truncate" style={{ maxWidth: 180 }} title={h.name || h.ip || ''}>
-            {h.name || h.ip || '—'}
+            <ItemLink kind="address" value={h.ip || h.name}>{h.name || h.ip || '—'}</ItemLink>
           </span>
         </span>
       ),
@@ -439,7 +441,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
         </span>
       ),
     },
-    { key: 'fqdn', label: 'Zone', mono: true, grow: true },
+    { key: 'fqdn', label: 'Zone', mono: true, grow: true, render: itemCell('zone', (r) => ({ id: r.id, view: r.view }), { mono: true }) },
     { key: 'issuesText', label: 'Issues' },
   ]
 

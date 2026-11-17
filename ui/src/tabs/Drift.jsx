@@ -1,3 +1,4 @@
+import ItemLink from '../components/ItemLink.jsx'
 import { useMemo, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses — /api/templates
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
@@ -129,7 +130,7 @@ export default function Drift() {
       ) : (
         <>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <span className="font-mono text-note">{result.site || template}</span>
+            <span className="font-mono text-note">{result.site ? <ItemLink kind="site" value={result.site} /> : template}</span>
             <span
               className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium"
               style={

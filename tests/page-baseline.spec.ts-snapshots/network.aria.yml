@@ -19,7 +19,10 @@
   - text: addresses used
   - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"
   - 'button "Options: IPAM Spaces — Top Used"'
-  - text: /Baseline Space \d+ Other Space \d+/
+  - link "Baseline Space"
+  - text: /\d+/
+  - link "Other Space"
+  - text: /\d+/
   - heading "Which Subnets Run Out First?" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links/
   - textbox "Filter networks":

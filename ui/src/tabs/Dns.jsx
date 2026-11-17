@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { itemCell } from '../components/itemCell.jsx'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme } from '../components/ui.jsx'
@@ -569,6 +570,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
     )
     const ttl = ttlValue(z.ttl)
     return {
+      id: z.id,
       fqdn: z.fqdn,
       view: z.view,
       records: (Number(z.records) || 0).toLocaleString(),
@@ -585,7 +587,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const anyFlag = zones.some((z) => hasIssues(z) || z.anomaly || !ttlChecked(z))
 
   const columns = [
-    { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true },
+    { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true, render: itemCell('zone', (r) => ({ id: r.id, view: r.view }), { mono: true }) },
     { key: 'view', label: 'View', sortable: true },
     { key: 'records', label: 'Records', align: 'right', mono: true, hideWhenConstant: true, sortable: true },
     // keep: DataTable auto-hides a column whose every cell is empty, and '—' is
@@ -685,6 +687,7 @@ function DnssecHealth({ panelId, dnssec }) {
   const shown = unsigned.slice(0, DNSSEC_CAP)
 
   const tableRows = shown.map((r, i) => ({
+    id: r.id,
     fqdn: r.fqdn,
     view: r.view,
     dnssec_status: r.dnssec_status,
@@ -693,7 +696,7 @@ function DnssecHealth({ panelId, dnssec }) {
   }))
 
   const columns = [
-    { key: 'fqdn', label: 'Zone', mono: true, grow: true },
+    { key: 'fqdn', label: 'Zone', mono: true, grow: true, render: itemCell('zone', (r) => ({ id: r.id }), { mono: true }) },
     { key: 'view', label: 'View', mono: true, maxCh: 22 }, // measured: opaque resource path overflows the card; cap it
     { key: 'dnssec_signing_policy', label: 'Signing Policy' },
   ]
@@ -809,7 +812,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   }))
 
   const columns = [
-    { key: 'name', label: 'Name', mono: true, grow: true },
+    { key: 'name', label: 'Name', mono: true, grow: true, render: itemCell('address', undefined, { mono: true }) },
     { key: 'dtc_policy', label: 'Policy' },
     { key: 'precedence', label: 'Precedence', align: 'right', mono: true },
     { key: 'ttl', label: 'TTL', mono: true, align: 'right' },

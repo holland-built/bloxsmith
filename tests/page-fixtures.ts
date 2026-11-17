@@ -363,6 +363,38 @@ const IPAM_OVERLAPS = {
   ],
 };
 
+// GET /api/item/{kind} (go/internal/server/item.go): one network, IP space,
+// DNS zone or site, for the item page a linked name opens. Each matches a row
+// the tables above already show, so a click lands on that row's own details.
+const ITEM_NETWORK = {
+  availability: 'ok',
+  rows: [{ id: 'ipam/subnet/baseline-3', address: '10.30.0.0', cidr: 24, name: 'baseline-net-c', comment: 'third floor', space: 'ipam/ip_space/baseline-1', space_name: 'Baseline Space', utilization: { utilization: 98 } }],
+};
+const ITEM_SPACE = {
+  availability: 'ok',
+  rows: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space', comment: 'the main space', utilization: { utilization: 42 } }],
+};
+const ITEM_ZONE = {
+  availability: 'ok',
+  rows: [{ id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', view: 'dns/view/baseline-1', view_name: 'baseline-view', comment: 'baseline zone', primary_type: 'cloud', disabled: false }],
+};
+const ITEM_SITE = {
+  availability: 'ok',
+  rows: [
+    { id: 'ipam/subnet/baseline-1', address: '10.10.0.0', cidr: 24, name: 'baseline-net-a', space: 'ipam/ip_space/baseline-1', space_name: 'Baseline Space' },
+    { id: 'ipam/subnet/baseline-2', address: '10.20.0.0', cidr: 24, name: 'baseline-net-b', space: 'ipam/ip_space/baseline-1', space_name: 'Baseline Space' },
+  ],
+};
+// An address's page asks IPAM about it, and which subnet holds it.
+const SEARCH_IPAM = {
+  availability: 'ok',
+  rows: [{ id: 'ipam/address/baseline-1', address: '10.10.0.5', name: 'baseline-host-a', comment: 'lease holder', state: 'used', space: 'ipam/ip_space/baseline-1' }],
+};
+const SEARCH_SUBNET = {
+  availability: 'ok',
+  rows: [{ id: 'ipam/subnet/baseline-1', address: '10.10.0.0', cidr: 24, name: 'baseline-net-a', space: 'ipam/ip_space/baseline-1' }],
+};
+
 const IPAM_UTIL = {
   status: 'ok',
   count: 2,
@@ -712,6 +744,14 @@ const PER_PAGE: Record<string, Handler[]> = {
     // Not required: the baseline query is a hostname, so the Kentik row is not
     // applicable and asks nothing. An IP query gets the e2e server's real
     // answer for a vault with no Kentik login saved.
+    // Not required: an item page or an address asks these, the baseline
+    // hostname search does not.
+    { method: 'GET', path: '/api/item/network', body: ITEM_NETWORK },
+    { method: 'GET', path: '/api/item/space', body: ITEM_SPACE },
+    { method: 'GET', path: '/api/item/zone', body: ITEM_ZONE },
+    { method: 'GET', path: '/api/item/site', body: ITEM_SITE },
+    { method: 'GET', path: '/api/search/ipam', body: SEARCH_IPAM },
+    { method: 'GET', path: '/api/search/subnet', body: SEARCH_SUBNET },
     {
       method: 'GET',
       path: '/api/kentik/traffic',

@@ -46,7 +46,7 @@
       - row /View details for \d+\.\d+\.0\.0/:
         - cell /View details for \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - link /\d+\.\d+\.0\.0/
         - cell "other-site"
         - cell /\d+%/
         - cell /\d+ \/ \d+/
@@ -54,7 +54,7 @@
       - row /View details for \d+\.\d+\.0\.0/:
         - cell /View details for \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - link /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
         - cell /\d+ \/ \d+/
@@ -62,7 +62,7 @@
       - row /View details for \d+\.\d+\.0\.0/:
         - cell /View details for \d+\.\d+\.0\.0/:
           - button /View details for \d+\.\d+\.0\.0/
-          - text: /\d+\.\d+\.0\.0/
+          - link /\d+\.\d+\.0\.0/
         - cell "baseline-site"
         - cell /\d+%/
         - cell /\d+ \/ \d+/
@@ -82,17 +82,17 @@
       - row /View details for baseline-host-c/:
         - cell /View details for baseline-host-c/:
           - button "View details for baseline-host-c"
-          - text: "baseline-host-c"
+          - link "baseline-host-c"
         - cell "offline"
       - row /View details for baseline-host-b/:
         - cell /View details for baseline-host-b/:
           - button "View details for baseline-host-b"
-          - text: "baseline-host-b"
+          - link "baseline-host-b"
         - cell "degraded"
       - row /View details for baseline-host-a/:
         - cell /View details for baseline-host-a/:
           - button "View details for baseline-host-a"
-          - text: "baseline-host-a"
+          - link "baseline-host-a"
         - cell "ok"
   - heading "DNS Zone Issues" [level=2]
   - link "Open DNS":

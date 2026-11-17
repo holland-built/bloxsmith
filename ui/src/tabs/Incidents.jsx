@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import ItemLink from '../components/ItemLink.jsx'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
@@ -416,6 +417,16 @@ function subjectOf(s) {
   return s.entity_id || '—'
 }
 
+// The subject as a link to its item page, when the signal names a zone or a
+// subnet by its real id. Anything else stays plain text.
+const SUBJECT_KIND = { zone: ['zone', 'dns/auth_zone/'], subnet: ['network', 'ipam/subnet/'] }
+function subjectLink(s) {
+  const name = subjectOf(s)
+  const [kind, prefix] = SUBJECT_KIND[s.entity_type] || []
+  if (!kind || !String(s.entity_id || '').startsWith(prefix)) return name
+  return <ItemLink kind={kind} value={name} id={s.entity_id} />
+}
+
 function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, severity, onSeverity, acks, onToggleAck, onClearAcks, panelId }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
@@ -454,7 +465,8 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
     { key: 'category', label: 'Category', sortable: true, render: (v) => categoryWord(v) },
     // What it is about, by name. The id stays on hover for anyone matching it
     // against Infoblox; a zone's name is the start of its message.
-    { key: 'entity_id', label: 'What', sortable: true, render: (v, s) => <span title={v || undefined}>{subjectOf(s)}</span> },
+    // A zone or a subnet opens its own page, read by its id.
+    { key: 'entity_id', label: 'What', sortable: true, render: (v, s) => <span title={v || undefined}>{subjectLink(s)}</span> },
     {
       key: 'severity',
       label: 'Severity',

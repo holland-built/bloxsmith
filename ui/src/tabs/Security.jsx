@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { itemCell } from '../components/itemCell.jsx'
 import { useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
@@ -421,7 +422,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
         )
       },
     },
-    { key: 'qname', label: 'Query', mono: true, grow: true, sortable: true },
+    { key: 'qname', label: 'Query', mono: true, grow: true, sortable: true, render: itemCell('address', undefined, { mono: true }) },
     // On a phone the domain was cut to three letters to make room for these
     // two, so they give way first there (DataTable hides priority:'low' below
     // 360px). The domain is what the row is about; these can wait for a wider
@@ -916,8 +917,8 @@ function AssetRiskPanel({ panelId, assetRisk }) {
   )
 
   const columns = [
-    { key: 'domain_name', label: 'Domain', mono: true, grow: true, sortable: true },
-    { key: 'ip_address', label: 'IP', mono: true, sortable: true },
+    { key: 'domain_name', label: 'Domain', mono: true, grow: true, sortable: true, render: itemCell('address', undefined, { mono: true }) },
+    { key: 'ip_address', label: 'IP', mono: true, sortable: true, render: itemCell('address', undefined, { mono: true }) },
     { key: 'asset_type', label: 'Type', sortable: true },
     { key: 'exposures', label: 'Exposures', align: 'right', mono: true, sortable: true },
     { key: 'ports_count', label: 'Ports', align: 'right', mono: true, sortable: true },
@@ -955,8 +956,8 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
   const bothDead = hDead && iDead
 
   const SAMPLE = 25
-  const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, grow: true }]
-  const iCols = [{ key: 'ip', label: 'IP', mono: true }]
+  const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, grow: true, render: itemCell('address', undefined, { mono: true }) }]
+  const iCols = [{ key: 'ip', label: 'IP', mono: true, render: itemCell('address', undefined, { mono: true }) }]
 
   // metadata-degraded feeds have rows but no verified total — never call it a total.
   function countLabel(count, avail) {

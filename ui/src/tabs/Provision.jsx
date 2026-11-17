@@ -1,3 +1,4 @@
+import ItemLink from '../components/ItemLink.jsx'
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses. /api/ipam/spaces
 // and /api/ipam/blocks answer 502 on an upstream failure and /api/templates
@@ -635,7 +636,7 @@ function SiteMode({ isAdmin }) {
           <div className="flex flex-col gap-0.5">
             {dhcpSkips(built).map((s) => (
               <div key={s.key} className="font-mono text-note" style={{ color: COLORS.crit }}>
-                ✕ {s.name}{s.subnet ? ` on ${s.subnet}` : ''}{s.range ? ` (${s.range})` : ''} — {s.reason}
+                ✕ {s.name}{s.subnet ? <> on <ItemLink kind="network" value={s.subnet} /></> : ''}{s.range ? ` (${s.range})` : ''} — {s.reason}
               </div>
             ))}
           </div>
@@ -700,9 +701,9 @@ function SiteMode({ isAdmin }) {
       {teardown.result?.result && (
         <Card key="provision-site-teardown-result" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
           <div className="font-mono text-note flex flex-col gap-0.5">
-            <div><span className="text-muted">Site: </span>{teardown.result.result.site || siteTemplate || '—'}</div>
+            <div><span className="text-muted">Site: </span><ItemLink kind="site" value={teardown.result.result.site || siteTemplate} /></div>
             <div>
-              <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_fqdn || '—'}{' '}
+              <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_deleted ? teardown.result.result.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={teardown.result.result.dns_zone_fqdn} />}{' '}
               {teardown.result.result.dns_zone_deleted ? '(deleted)' : '(kept)'}
             </div>
             <div>

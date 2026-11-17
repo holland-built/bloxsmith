@@ -1,3 +1,4 @@
+import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { PageRail } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, Empty, FetchError, TabIntro } from '../components/ui.jsx'
@@ -203,8 +204,8 @@ export default function DemoServer() {
                         <td className="py-2 pr-3 font-mono text-note">{r.change}</td>
                         <td className="py-2 pr-3">{r.status}{r.error && <div className="text-note" style={{ color: COLORS.crit }}>{r.error}</div>}
                           {r.proof?.length > 0 && <div className="text-note text-muted">{r.proof.join(' · ')}</div>}</td>
-                        <td className="py-2 pr-3 font-mono text-note">{r.ip || '—'}</td>
-                        <td className="py-2 pr-3 font-mono text-note">{r.zone || '—'}</td>
+                        <td className="py-2 pr-3 font-mono text-note"><ItemLink kind="address" value={r.ip} /></td>
+                        <td className="py-2 pr-3 font-mono text-note"><ItemLink kind="zone" value={r.zone} /></td>
                         <td className="py-2 pr-3 text-note">{r.vmid ? `${r.vmid} ${r.vmName || ''}` : '—'}</td>
                         <td className="py-2">
                           {r.status !== 'removed' && removing?.change !== r.change && (

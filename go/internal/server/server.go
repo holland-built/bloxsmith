@@ -168,6 +168,7 @@ func (d *Deps) registerAll(mux router) {
 	d.registerThreatIntelRoutes(mux)
 	d.registerIPAMReadRoutes(mux)
 	d.registerSearchRoutes(mux)
+	d.registerItemRoutes(mux)
 	d.registerNOCRoutes(mux)
 	d.registerBrandRoutes(mux)
 	d.registerSecurityWriteRoutes(mux)

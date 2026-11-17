@@ -8,6 +8,7 @@
 // attribution itself: this file is minified into go/web/, so nothing here reaches
 // a user. NOTICE.md ships inside the release archive and the container image, and
 // that is what carries the notice.
+import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
@@ -978,7 +979,7 @@ function ManageAddressesPanel() {
                 return (
                   <div key={row.id} className="rounded-control border border-border p-2">
                     <div className="flex items-center gap-2 text-copy">
-                      <span className="font-mono text-note w-[140px] shrink-0 truncate" title={row.address}>{row.address}</span>
+                      <span className="font-mono text-note w-[140px] shrink-0 truncate" title={row.address}><ItemLink kind="address" value={row.address} /></span>
                       <span className="text-note text-muted w-[80px] shrink-0 truncate" title={row.state}>{row.state}</span>
                       <span className="text-note flex-1 min-w-0 truncate" title={row.name}>{row.name}</span>
                       <span className="text-note text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
