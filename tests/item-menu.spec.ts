@@ -236,7 +236,7 @@ test('network: Edit and Add a DHCP range open the Editor, filled in from the ite
   const item = page.locator('[data-item-page="network"]');
   await expect(item.locator('[data-item-details]')).toContainText('baseline-net-c');
   await item.getByRole('link', { name: 'Add a DHCP range' }).click();
-  await expect(page).toHaveURL(/#editor\?type=dhcp_range&space=ipam%2Fip_space%2Fbaseline-1$/);
+  await expect(page).toHaveURL(/#editor\?type=dhcp_range&space=ipam%2Fip_space%2Fbaseline-1&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10\.30\.0\.0%2F24$/);
   await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/baseline-1');
 });
 
@@ -269,4 +269,76 @@ test('Copy puts the name on the clipboard and says Copied', async ({ page, conte
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('10.30.0.0/24');
   await expect(menu(page)).toHaveCount(0);
   await expect(networkLink(page)).toBeFocused();
+});
+
+// A link's prefill belongs to that link. Going on to the plain page takes back
+// what it filled in, but not what the person picked or typed since, and going
+// back to the link fills it in again.
+const setHash = (page: Page, h: string) => page.evaluate((x) => { location.hash = x; }, h);
+
+test('Automate: a plain visit after a prefilled link clears the prefill, keeps what was typed, and the link works again', async ({ page }) => {
+  await page.goto('/#automate?job=network&space=ipam%2Fip_space%2Fa&block=ipam%2Faddress_block%2Fa1');
+  const job = page.locator('[data-panel-id="automate-job"]');
+  const space = job.getByRole('combobox', { name: 'IP space' });
+  await expect(space).toHaveValue('ipam/ip_space/a');
+  await expect(job.getByRole('combobox', { name: 'Address block' })).toHaveValue('ipam/address_block/a1');
+  await job.getByRole('textbox', { name: /Name/ }).fill('lab-1');
+
+  await setHash(page, '#automate');
+  await expect(space).toHaveValue('');
+  await expect(job.getByRole('combobox', { name: 'Address block' })).toHaveValue('');
+  await expect(job.getByRole('textbox', { name: /Name/ })).toHaveValue('lab-1');
+
+  await setHash(page, '#automate?job=network&space=ipam%2Fip_space%2Fa&block=ipam%2Faddress_block%2Fa1');
+  await expect(space).toHaveValue('ipam/ip_space/a');
+  await expect(job.getByRole('combobox', { name: 'Address block' })).toHaveValue('ipam/address_block/a1');
+});
+
+test('Automate: a space picked by hand after the prefill stays when the prefill goes', async ({ page }) => {
+  await page.goto('/#automate?job=network&space=ipam%2Fip_space%2Fa');
+  const space = page.locator('[data-panel-id="automate-job"]').getByRole('combobox', { name: 'IP space' });
+  await expect(space).toHaveValue('ipam/ip_space/a');
+  await space.selectOption('ipam/ip_space/baseline-1');
+  await setHash(page, '#automate');
+  await expect(space).toHaveValue('ipam/ip_space/baseline-1');
+});
+
+test('Get an address: a plain visit after a prefilled link clears the prefill, keeps what was typed, and the link works again', async ({ page }) => {
+  const link = '#selfservice?space=ipam%2Fip_space%2Fbaseline-1&subnet=ipam%2Fsubnet%2Fbaseline-3&reserve=1';
+  await page.goto('/' + link);
+  const panel = page.locator('[data-task="address"]');
+  const space = panel.getByRole('combobox', { name: 'IP Space' });
+  const subnet = panel.getByRole('combobox', { name: 'Subnet' });
+  const lock = panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' });
+  await expect(space).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(subnet).toHaveValue('ipam/subnet/baseline-3');
+  await expect(lock).toBeChecked();
+  await panel.getByPlaceholder('host-01').fill('printer-3');
+
+  await setHash(page, '#selfservice');
+  await expect(space).toHaveValue('');
+  await expect(subnet).toHaveValue('');
+  await expect(lock).not.toBeChecked();
+  await expect(panel.getByPlaceholder('host-01')).toHaveValue('printer-3');
+
+  await setHash(page, link);
+  await expect(space).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(subnet).toHaveValue('ipam/subnet/baseline-3');
+  await expect(lock).toBeChecked();
+});
+
+test('network: Add a DHCP range from a table finds the IP space from the network', async ({ page }) => {
+  await page.goto('/#network');
+  await pick(page, networkLink(page), 'Add a DHCP range');
+  await expect(page).toHaveURL(/#editor\?type=dhcp_range&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10\.30\.0\.0%2F24$/);
+  await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(page.locator('[data-editor-form]')).toContainText('For network 10.30.0.0/24');
+});
+
+test('network: Add a DHCP range says so when the IP space cannot be found', async ({ page }) => {
+  await page.route('**/api/item/network?**', (r) => r.fulfill(json({ availability: 'error', reason: 'Infoblox did not answer.' })));
+  await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10.30.0.0%2F24');
+  await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('');
+  await expect(page.locator('[data-editor-form]')).toContainText('For network 10.30.0.0/24');
+  await expect(page.locator('[data-editor-form]')).toContainText("The IP space of 10.30.0.0/24 could not be filled in. Type its ID, which starts ipam/ip_space/.");
 });

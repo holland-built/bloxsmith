@@ -6,6 +6,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import MadeList from '../components/MadeList.jsx'
+import { useNetworkPrefill } from '../lib/prefill.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
 const inputCls = `${FIELD_CLS} w-full`
@@ -247,6 +248,19 @@ export default function Editor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type])
 
+  // #editor?type=dhcp_range&subnet=…&network=…, from a network's Add a DHCP
+  // range: the range goes in that network's IP space, which Infoblox wants as
+  // an id. A table row knows the network but not its space, so the network is
+  // looked up (the same read its own page makes) and the space filled in.
+  const rangeNet = params.type === 'dhcp_range' ? params.network || '' : ''
+  const rangeLookup = useNetworkPrefill(params.type === 'dhcp_range' && !params.space ? { subnet: params.subnet, network: params.network } : {})
+  useEffect(() => {
+    if (type !== 'dhcp_range' || rangeLookup.pending || !rangeLookup.space) return
+    setFields((prev) => (prev.space ? prev : { ...prev, space: rangeLookup.space }))
+  }, [type, rangeLookup.pending, rangeLookup.space])
+  const rangeSpaceMissed = type === 'dhcp_range' && !!(params.subnet || params.network) && !params.space &&
+    !rangeLookup.pending && !rangeLookup.space && !fields.space
+
   const spec = FIELD_SPECS[type]
   const isUpdate = !!editId.trim() && EDIT_UPDATE_TYPES.includes(type)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
@@ -464,6 +478,7 @@ export default function Editor() {
             <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { disarmDelete(); setEditId(e.target.value); setLoaded(null); markStale() }} />
           </label>
 
+          {type === 'dhcp_range' && rangeNet && <p className="text-note text-muted">For network {rangeNet}.</p>}
           {spec.fields.map((f) => (f.kind === 'devices' || f.kind === 'prefix' ? (
             <div key={`${type}-${f.key}`} data-field="">
               {/* A device count is only for making a new IPv4 network. A size
@@ -489,6 +504,11 @@ export default function Editor() {
                 placeholder={f.placeholder || ''}
                 onChange={(e) => setField(f.key, e.target.value)}
               />
+              {f.key === 'space' && rangeSpaceMissed && (
+                <span role="status" style={{ color: COLORS.warn }}>
+                  The IP space of {rangeNet || 'this network'} could not be filled in. Type its ID, which starts ipam/ip_space/.
+                </span>
+              )}
             </label>
           )))}
 

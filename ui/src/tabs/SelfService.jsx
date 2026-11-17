@@ -129,29 +129,51 @@ function AllocatePanel() {
   const pending = useRef(null)
   // #selfservice?space=…&subnet=…&network=…&reserve=1, from a network's menu:
   // that space and network, locked to a device when it was Reserve an address.
-  // It wins over the remembered pick, and is read once, as the page opens.
-  const [hp] = useState(() => {
-    const h = window.location.hash || ''
-    return Object.fromEntries(new URLSearchParams(h.includes('?') ? h.slice(h.indexOf('?') + 1) : ''))
-  })
+  // It wins over the remembered pick. A later hash without it (a plain
+  // #selfservice) takes back what it filled in, unless the person has changed
+  // that since, and following the link again fills it in again.
+  const hash = useHashParams()
+  const hp = useMemo(
+    () => ({ space: hash.space || '', subnet: hash.subnet || '', network: hash.network || '', reserve: hash.reserve || '' }),
+    [hash.space, hash.subnet, hash.network, hash.reserve],
+  )
+  const preKey = [hp.space, hp.subnet, hp.network, hp.reserve].join('|')
   const opened = !!(hp.space || hp.subnet || hp.network)
   const pre = useNetworkPrefill(opened ? hp : {})
   const preStep = useRef(opened ? 'space' : 'done')
+  const filled = useRef({})
+  const lastKey = useRef(preKey)
   if (opened) tried.current = true
+  useEffect(() => {
+    if (preKey === lastKey.current) return
+    lastKey.current = preKey
+    const f = filled.current
+    filled.current = {}
+    const keptSubnet = subnetId && subnetId !== f.subnet
+    if (f.space && f.space === space && !keptSubnet) { setSpace(''); setBlock(''); setSubnetId('') }
+    else if (f.subnet && f.subnet === subnetId) setSubnetId('')
+    if (f.device && deviceOn) setDeviceOn(false)
+    flow.markStale()
+    preStep.current = opened ? 'space' : 'done'
+    // Only a change of link matters here; the fields are read as they are now.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preKey])
   useEffect(() => {
     if (preStep.current !== 'space' || pre.pending || !spacesApi.data) return
     preStep.current = 'subnet'
     const sp = findSpace(spacesApi.data.spaces, pre.space)
-    if (sp) setSpace(sp.id)
+    if (sp) { filled.current.space = sp.id; setSpace(sp.id) }
     else preStep.current = 'done'
-    if (hp.reserve === '1') setDeviceOn(true)
-  }, [pre.pending, pre.space, spacesApi.data, hp.reserve])
+    if (hp.reserve === '1') { filled.current.device = true; setDeviceOn(true) }
+  }, [preKey, pre.pending, pre.space, spacesApi.data, hp.reserve])
   useEffect(() => {
     if (preStep.current !== 'subnet' || !subnetsApi.data) return
-    preStep.current = 'done'
     const sn = findRange(subnetsApi.data.subnets, pre.subnet) || findRange(subnetsApi.data.subnets, hp.network)
-    if (sn) setSubnetId(sn.id)
-  }, [subnetsApi.data, pre.subnet, hp.network])
+    // The list for the space this link names; an older space's list waits.
+    if (!sn && subnetsApi.loading) return
+    preStep.current = 'done'
+    if (sn) { filled.current.subnet = sn.id; setSubnetId(sn.id) }
+  }, [preKey, subnetsApi.data, subnetsApi.loading, pre.subnet, hp.network])
   useEffect(() => {
     if (tried.current || !tenant || !spacesApi.data) return
     tried.current = true

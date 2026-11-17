@@ -115,6 +115,21 @@ function Field({ label, children }) {
 // The IP space question, shared by the jobs that need one. The server orders
 // the spaces (yours first, then the most room) and gives each a reason; the
 // top three are offered as one-click suggestions above the full list.
+// What a name's menu filled in, kept so a later plain #automate can take it
+// back out (start.clear counts those visits). A field is cleared only while it
+// still holds the value that was filled in: anything picked since stays.
+function useUnfill(clear, undo) {
+  const filled = useRef({})
+  const undoRef = useRef(undo)
+  useEffect(() => { undoRef.current = undo })
+  useEffect(() => {
+    if (!clear) return
+    undoRef.current(filled.current)
+    filled.current = {}
+  }, [clear])
+  return filled
+}
+
 function SpacePicker({ value, onChange, want }) {
   const api = useApi('/api/desk/spaces')
   const spaces = useMemo(() => api.data?.spaces ?? [], [api.data])
@@ -127,7 +142,7 @@ function SpacePicker({ value, onChange, want }) {
     const s = findSpace(spaces, want)
     if (s) {
       picked.current = true
-      onChange(s.id, s.name)
+      onChange(s.id, s.name, true)
     }
   }, [spaces, want, onChange])
   // Start on the first of your spaces, once, so the common case is one click
@@ -177,17 +192,22 @@ function IpJob({ onBuilt, ro, start = {} }) {
 
   const subnets = subnetsApi.data?.subnets ?? []
   const subnet = subnets.find((s) => s.id === subnetId)
+  const filled = useUnfill(start.clear, (f) => {
+    const keptNet = subnetId && subnetId !== f.subnet
+    if (f.space && f.space === space && !keptNet) { setSpace(''); setSubnetId(''); flow.reset() }
+    else if (f.subnet && f.subnet === subnetId) { setSubnetId(''); flow.reset() }
+  })
   // The network it was opened on is picked once its space's list arrives.
   const preDone = useRef(false)
   useEffect(() => {
     if (preDone.current || subnetId || !opened) return
     const list = subnetsApi.data?.subnets
     const s = findRange(list, pre.subnet) || findRange(list, start.network)
-    if (s) { preDone.current = true; setSubnetId(s.id) }
-  }, [subnetsApi.data, subnetId, opened, pre.subnet, start.network])
+    if (s) { preDone.current = true; filled.current.subnet = s.id; setSubnetId(s.id) }
+  }, [subnetsApi.data, subnetId, opened, pre.subnet, start.network, filled])
   const input = () => ({ space, subnet_id: subnetId, name: name.trim() })
   const { reset } = flow
-  const pickSpace = useCallback((v) => { setSpace(v); setSubnetId(''); reset() }, [reset])
+  const pickSpace = useCallback((v, _name, pre) => { if (pre) filled.current.space = v; setSpace(v); setSubnetId(''); reset() }, [reset, filled])
   const next = flow.preview?.addresses?.[0]?.address
 
   return (
@@ -289,14 +309,17 @@ function DnsJob({ onBuilt, ro, start = {} }) {
   const views = Object.fromEntries((zonesApi.data?.views ?? []).map((v) => [v.id, v.name]))
   const zones = useMemo(() => zonesApi.data?.zones ?? [], [zonesApi.data])
   const zone = zones.find((z) => z.id === zoneId)
+  const filled = useUnfill(start.clear, (f) => {
+    if (f.zone && f.zone === zoneId) { setZoneId(''); flow.reset() }
+  })
   // A zone named in a planned sentence is picked once the zones have loaded.
   // A zone's menu also sends its id, which tells two views' same-named zones apart.
   const wantZone = (start.zone_name || '').replace(/\.$/, '').toLowerCase()
   useEffect(() => {
     if ((!wantZone && !start.zone_id) || zoneId) return
     const z = zones.find((x) => start.zone_id && x.id === start.zone_id) || zones.find((x) => wantZone && (x.fqdn || '').replace(/\.$/, '').toLowerCase() === wantZone)
-    if (z) setZoneId(z.id)
-  }, [zones, wantZone, zoneId, start.zone_id])
+    if (z) { filled.current.zone = z.id; setZoneId(z.id) }
+  }, [zones, wantZone, zoneId, start.zone_id, filled])
   const zoneName = (zone?.fqdn || '').replace(/\.$/, '')
   const full = nameInZone.trim() === '@' ? zoneName : `${nameInZone.trim()}${zoneName ? `.${zoneName}` : ''}`
   const input = () => ({ zone_id: zoneId, zone_name: zone?.fqdn || '', name_in_zone: nameInZone.trim(), type, value: value.trim() })
@@ -377,7 +400,10 @@ function BranchJob({ onBuilt, ro, start = {} }) {
   const [space, setSpace] = useState({ id: '', name: '' })
   const flow = useDeskFlow('branch', onBuilt)
   const { reset } = flow
-  const pickSpace = useCallback((id, name) => { setSpace({ id, name: name || '' }); reset() }, [reset])
+  const filled = useUnfill(start.clear, (f) => {
+    if (f.space && f.space === space.id) { setSpace({ id: '', name: '' }); reset() }
+  })
+  const pickSpace = useCallback((id, name, pre) => { if (pre) filled.current.space = id; setSpace({ id, name: name || '' }); reset() }, [reset, filled])
   const templates = useMemo(() => (Array.isArray(tplApi.data) ? tplApi.data : []).filter((t) => t.type === 'site' && t.valid), [tplApi.data])
   // A region from a planned sentence picks that region's lab template.
   useEffect(() => {
@@ -509,16 +535,21 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
   const flow = useDeskFlow('network', onBuilt)
   const blocks = blocksApi.data?.blocks ?? []
   const block = blocks.find((b) => b.id === blockId)
+  const filled = useUnfill(start.clear, (f) => {
+    const keptBlock = blockId && blockId !== f.block
+    if (f.space && f.space === space && !keptBlock) { setSpace(''); setBlockId(''); flow.reset() }
+    else if (f.block && f.block === blockId) { setBlockId(''); flow.reset() }
+  })
   // The block it was opened on (by id or address) is picked once its space's list arrives.
   const preDone = useRef(false)
   useEffect(() => {
     if (preDone.current || blockId || !start.block) return
     const b = findRange(blocksApi.data?.blocks, start.block)
-    if (b) { preDone.current = true; setBlockId(b.id) }
-  }, [blocksApi.data, blockId, start.block])
+    if (b) { preDone.current = true; filled.current.block = b.id; setBlockId(b.id) }
+  }, [blocksApi.data, blockId, start.block, filled])
   const input = () => ({ space, block_id: blockId, cidr: Number(cidr), name: name.trim() })
   const { reset } = flow
-  const pickSpace = useCallback((v) => { setSpace(v); setBlockId(''); reset() }, [reset])
+  const pickSpace = useCallback((v, _name, pre) => { if (pre) filled.current.space = v; setSpace(v); setBlockId(''); reset() }, [reset, filled])
   const would = flow.preview?.would_create
 
   return (
@@ -830,10 +861,14 @@ export default function Automate() {
   const pick = (id, answers = {}) => { setJob(id); setStart((s) => ({ n: s.n + 1, answers })) }
   const hashKey = fromHash ? `${hp.job}|${JSON.stringify(fromHash)}` : ''
   const lastHash = useRef(hashKey)
+  // A plain #automate afterwards takes the filled-in answers back out of the
+  // open job, and forgets the link, so following it again fills them in again.
   useEffect(() => {
-    if (!hashKey || hashKey === lastHash.current) return
+    if (hashKey === lastHash.current) return
+    const was = lastHash.current
     lastHash.current = hashKey
-    pick(hp.job, fromHash)
+    if (hashKey) pick(hp.job, fromHash)
+    else if (was) setStart((s) => ({ ...s, answers: { clear: (s.answers.clear || 0) + 1 } }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hashKey])
   const runsApi = useApi('/api/desk/runs')

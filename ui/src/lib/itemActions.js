@@ -60,8 +60,9 @@ export function itemActions({ kind, q, id, space } = {}) {
       { key: 'open', label: 'Open', href: itemHref({ kind, value, id, space }) },
       { key: 'ip', label: 'Get a free address', href: hashFor('automate', { job: 'ip', ...where }) },
       { key: 'reserve', label: 'Reserve an address', href: hashFor('selfservice', { ...where, reserve: '1' }) },
-      // The Editor sends its IP space box to Infoblox as typed, which needs an id.
-      { key: 'range', label: 'Add a DHCP range', href: hashFor('editor', { type: 'dhcp_range', space: isSpaceId(space) ? space : '' }) },
+      // The Editor sends its IP space box to Infoblox as typed, which needs an
+      // id. Without one, the network goes instead and the Editor looks it up.
+      { key: 'range', label: 'Add a DHCP range', href: hashFor('editor', { type: 'dhcp_range', space: isSpaceId(space) ? space : '', subnet: id, network: value }) },
       { key: 'edit', label: 'Edit', href: hashFor('editor', { type: 'subnet', id, q: bareAddress(value) }) },
       copy,
     ]

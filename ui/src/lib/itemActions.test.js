@@ -47,12 +47,14 @@ test('a network carries its id, address and space into each job', () => {
   const a = itemActions({ kind: 'network', q: '10.1.0.0/24', id: 'ipam/subnet/n1', space: 'ipam/ip_space/s1' })
   assert.equal(hrefOf(a, 'ip'), '#automate?job=ip&space=ipam%2Fip_space%2Fs1&subnet=ipam%2Fsubnet%2Fn1&network=10.1.0.0%2F24')
   assert.equal(hrefOf(a, 'reserve'), '#selfservice?space=ipam%2Fip_space%2Fs1&subnet=ipam%2Fsubnet%2Fn1&network=10.1.0.0%2F24&reserve=1')
-  assert.equal(hrefOf(a, 'range'), '#editor?type=dhcp_range&space=ipam%2Fip_space%2Fs1')
+  assert.equal(hrefOf(a, 'range'), '#editor?type=dhcp_range&space=ipam%2Fip_space%2Fs1&subnet=ipam%2Fsubnet%2Fn1&network=10.1.0.0%2F24')
 })
 
 test('a DHCP range only gets a space that is an id, because the Editor sends it as is', () => {
   const a = itemActions({ kind: 'network', q: '10.1.0.0/24', id: 'ipam/subnet/n1', space: 'Corp' })
-  assert.equal(hrefOf(a, 'range'), '#editor?type=dhcp_range')
+  // The network still goes, so the Editor can look its space up.
+  assert.equal(hrefOf(a, 'range'), '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fn1&network=10.1.0.0%2F24')
+  assert.equal(hrefOf(itemActions({ kind: 'network', q: '10.30.0.0/24', id: 'ipam/subnet/baseline-3' }), 'range'), '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10.30.0.0%2F24')
   assert.equal(hrefOf(a, 'ip'), '#automate?job=ip&space=Corp&subnet=ipam%2Fsubnet%2Fn1&network=10.1.0.0%2F24')
 })
 
