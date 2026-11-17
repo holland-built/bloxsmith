@@ -46,7 +46,14 @@ import { test, expect } from './fixtures';
 // Provision +1,290 B (plain template names, seed region site lists), the new
 // spaceOptions chunk +740 B (yours-first IP spaces), the entry chunk +40 B.
 // vendor-react did not move and no charts chunk is on the route.
-const BUDGET_BYTES = 388 * 1024; // 397,312 B
+//
+// RAISED 388 -> 392 KB on 2026-11-17, with the chunks that grew identified.
+// Plain sizes (address counts beside /NN, the devices box) on top of clickable
+// names took #provision to 398,996 B: the entry chunk +2,260 B (lib/sizes.js and
+// DevicesInput in kit.jsx, which several tabs share), Provision -152 B,
+// spaceOptions -156 B. Each change fit alone; together they passed by 1,684 B.
+// vendor-react did not move and no charts chunk is on the route.
+const BUDGET_BYTES = 392 * 1024; // 401,408 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();
