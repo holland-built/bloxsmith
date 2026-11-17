@@ -179,6 +179,18 @@ func (f *siteRollbackFake) handler() http.HandlerFunc {
 				}
 				w.Write([]byte(`{"error":"host create refused"}`))
 
+			case strings.HasSuffix(r.URL.Path, "/ipam/subnet"):
+				// A subnet created by its address (one another IP space shares
+				// was replaced by a clean one).
+				body := decodeBody(r)
+				f.mu.Lock()
+				f.subnetSeq++
+				id := fmt.Sprintf("ipam/subnet/s-%d", f.subnetSeq)
+				f.subnets[id] = M{"id": id, "address": body["address"], "cidr": body["cidr"]}
+				f.mu.Unlock()
+				w.WriteHeader(201)
+				json.NewEncoder(w).Encode(M{"result": M{"id": id}})
+
 			default:
 				w.WriteHeader(201)
 				w.Write([]byte(`{"result":{}}`))

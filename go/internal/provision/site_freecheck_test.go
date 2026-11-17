@@ -69,20 +69,51 @@ func TestSiteProvision_RefusesInfobloxPickUsedInItsOwnSpace(t *testing.T) {
 	}
 }
 
-// A pick that only ANOTHER space uses is not refused at Apply: it is kept, and
-// the result carries the warning.
-func TestSiteProvision_KeepsInfobloxPickUsedOnlyInAnotherSpace(t *testing.T) {
+const sharedSubnet = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
+
+// sharedEverywhere is another space's network over the whole block: no /24 in
+// it is clean.
+const sharedEverywhere = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.0.0","cidr":16}`
+
+// Live: Infoblox picks 10.10.1.0/24, which only another space uses, while
+// 10.10.0.0/24 is clean. The shared pick is not refused, but the clean one is
+// made instead (the owner's rule: a warned one only when none is clean).
+func TestSiteProvision_LiveReplacesASharedPickWithTheCleanOne(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
-	f.inventorySubnets = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
+	f.inventorySubnets = sharedSubnet
 	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
+	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err != nil {
+		t.Fatalf("Provision error = %v, want the clean subnet made", err)
+	}
+	if got := subnetAddrs(result); got != "10.10.0.0/24 10.10.2.0/24" {
+		t.Fatalf("subnets = %v, want the clean 10.10.0.0/24 in place of 10.10.1.0/24", got)
+	}
+	if d := f.deletes(); len(d) != 1 || d[0] != "/api/ddi/v1/ipam/subnet/s-1" {
+		t.Fatalf("deletes = %v, want only Infoblox's shared pick removed", d)
+	}
+	if ws := getList(result, "warnings"); len(ws) != 0 {
+		t.Fatalf("warnings = %v, want none", ws)
+	}
+}
+
+// Live: with no clean one anywhere, Infoblox's shared pick is kept, warned.
+func TestSiteProvision_LiveKeepsASharedPickWhenNoneIsClean(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedEverywhere
+	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
 	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
 	if err != nil {
 		t.Fatalf("Provision error = %v, want the pick kept", err)
 	}
-	if len(f.deletePaths) != 0 {
-		t.Fatalf("deletes = %v, want none", f.deletePaths)
+	if len(f.deletes()) != 0 || subnetAddrs(result) != "10.10.1.0/24 10.10.2.0/24" {
+		t.Fatalf("deletes %v, subnets %v: want Infoblox's picks kept", f.deletes(), subnetAddrs(result))
 	}
-	assertSharedWarning(t, result, "10.10.1.0/24")
+	if ws := getList(result, "warnings"); len(ws) != 2 {
+		t.Fatalf("warnings = %v, want one per subnet", ws)
+	}
 }
 
 // The preview never offers a subnet its own space uses: it offers the next one.
@@ -100,10 +131,34 @@ func TestSiteProvision_DryRunOffersTheNextFreeSubnet(t *testing.T) {
 	}
 }
 
-// A subnet only another space uses is offered in the preview, with a warning.
-func TestSiteProvision_DryRunOffersASubnetAnotherSpaceUsesWithAWarning(t *testing.T) {
+// Preview: Infoblox's pick is shared with another space and a clean one
+// exists, so the clean one is offered, and the shared pick is listed skipped.
+func TestSiteProvision_DryRunOffersTheCleanOneOverASharedPick(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
-	f.inventorySubnets = `{"id":"ipam/subnet/theirs","space":"ipam/ip_space/space-2","address":"10.10.1.0","cidr":24}`
+	f.inventorySubnets = sharedSubnet
+	cfg := siteRollbackConfig(true)
+	cfg.CreateReverseZone = false
+	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	if got := subnetAddrs(result); got != "10.10.0.0/24 10.10.2.0/24" {
+		t.Fatalf("subnets = %v, want the clean 10.10.0.0/24 offered", got)
+	}
+	if ws := getList(result, "warnings"); len(ws) != 0 {
+		t.Fatalf("warnings = %v, want none", ws)
+	}
+	sk := getList(result, "skipped_picks")
+	if len(sk) == 0 || asMap(sk[0])["candidate"] != "10.10.1.0/24" {
+		t.Fatalf("skipped_picks = %v, want the shared pick named", sk)
+	}
+}
+
+// Preview: with no clean one anywhere, Infoblox's shared pick is offered with
+// its warning.
+func TestSiteProvision_DryRunOffersASharedPickWhenNoneIsClean(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedEverywhere
 	cfg := siteRollbackConfig(true)
 	cfg.CreateReverseZone = false
 	result, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
@@ -111,9 +166,15 @@ func TestSiteProvision_DryRunOffersASubnetAnotherSpaceUsesWithAWarning(t *testin
 		t.Fatalf("Provision: %v", err)
 	}
 	if got := subnetAddrs(result); got != "10.10.1.0/24 10.10.2.0/24" {
-		t.Fatalf("subnets = %v, want Infoblox's pick 10.10.1.0/24 kept", got)
+		t.Fatalf("subnets = %v, want Infoblox's picks offered", got)
 	}
-	assertSharedWarning(t, result, "10.10.1.0/24")
+	ws := getList(result, "warnings")
+	if len(ws) != 2 || asMap(ws[0])["candidate"] != "10.10.1.0/24" || asMap(ws[0])["object"] != "10.10.0.0/16" {
+		t.Fatalf("warnings = %v, want 10.10.1.0/24 inside 10.10.0.0/16", ws)
+	}
+	if c := asMap(result["checked"]); c["shared"] != 2 {
+		t.Fatalf("checked = %v, want shared 2", result["checked"])
+	}
 }
 
 func subnetAddrs(result M) string {
@@ -122,24 +183,6 @@ func subnetAddrs(result M) string {
 		got = append(got, pyStr(asMap(s)["address"]))
 	}
 	return strings.Join(got, " ")
-}
-
-// assertSharedWarning checks result carries one warning, for candidate, about
-// space-2's 10.10.1.0/24, and that checked counts it as shared.
-func assertSharedWarning(t *testing.T, result M, candidate string) {
-	t.Helper()
-	ws := getList(result, "warnings")
-	if len(ws) != 1 {
-		t.Fatalf("warnings = %v, want one", result["warnings"])
-	}
-	w := asMap(ws[0])
-	if w["candidate"] != candidate || w["object"] != "10.10.1.0/24" || w["space"] != "ipam/ip_space/space-2" ||
-		w["kind"] != "subnet" || w["contains"] != true {
-		t.Fatalf("warning = %v", w)
-	}
-	if c := asMap(result["checked"]); c == nil || c["shared"] != 1 {
-		t.Fatalf("checked = %v, want shared 1", result["checked"])
-	}
 }
 
 // blockServer answers a block template's reads with one subnet, subnetRow, and
