@@ -133,22 +133,66 @@ func TestItemRouteIsAReadNotAWrite(t *testing.T) {
 	}
 }
 
-// A failed read of the IP space name is "could not read", never a true
-// "no such network".
+// A failed read of the IP space or DNS view name is "Infoblox did not
+// answer", never a true "no such network" or "no such zone".
 func TestItemScopeReadFailureIsAnErrorNotNotFound(t *testing.T) {
-	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/ipam/ip_space") {
-			w.WriteHeader(503)
-			return
+	for _, c := range []struct{ kind, query, scopePath string }{
+		{"network", "q=10.1.0.0/24&space=Corp", "/ipam/ip_space"},
+		{"zone", "q=acme.corp&view=default", "/dns/view"},
+	} {
+		for _, status := range []int{429, 503} {
+			d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, c.scopePath) {
+					w.WriteHeader(status)
+					return
+				}
+				t.Errorf("%s: asked %s after the scope read failed", c.kind, r.URL)
+			})
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "/api/item/"+c.kind+"?"+c.query, nil)
+			req.SetPathValue("kind", c.kind)
+			d.itemGet(rr, req)
+			closeSrv()
+			body := decodeBody(t, rr)
+			if body["availability"] != "error" {
+				t.Fatalf("%s %d: want availability error, got %+v", c.kind, status, body)
+			}
+			if reason, _ := body["reason"].(string); !strings.Contains(reason, "Infoblox did not answer") {
+				t.Fatalf("%s %d: reason %q is not in plain words", c.kind, status, reason)
+			}
 		}
-		t.Errorf("asked %s after the space read failed", r.URL)
+	}
+}
+
+// A site with more networks than one page holds says how many there are, and
+// the next page is asked for by offset.
+func TestItemPagesByOffsetAndReportsTheTotal(t *testing.T) {
+	var offset string
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		offset = r.URL.Query().Get("_offset")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[{"id":"ipam/subnet/n51","address":"10.0.51.0","cidr":24}],"total_size":73}`))
 	})
 	defer closeSrv()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/item/network?q=10.1.0.0/24&space=Corp", nil)
-	req.SetPathValue("kind", "network")
+	req := httptest.NewRequest("GET", "/api/item/site?q=dublin&offset=50", nil)
+	req.SetPathValue("kind", "site")
 	d.itemGet(rr, req)
-	if body := decodeBody(t, rr); body["availability"] != "error" {
-		t.Fatalf("want availability error, got %+v", body)
+	body := decodeBody(t, rr)
+	if offset != "50" {
+		t.Fatalf("upstream _offset = %q, want 50", offset)
+	}
+	if body["total"] != float64(73) || body["offset"] != float64(50) {
+		t.Fatalf("want total 73 and offset 50, got %+v", body)
+	}
+	for _, bad := range []string{"-1", "x", "100001"} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/item/site?q=dublin&offset="+bad, nil)
+		req.SetPathValue("kind", "site")
+		offset = "unset"
+		d.itemGet(rr, req)
+		if offset != "unset" || !strings.Contains(rr.Body.String(), `"availability":"empty"`) {
+			t.Fatalf("offset=%s: asked upstream (%q) or answered %s", bad, offset, rr.Body.String())
+		}
 	}
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { itemActions } from '../lib/itemActions.js'
+import { pageState } from '../lib/itemPaging.js'
 import { ITEM_WORDS, itemHref } from '../lib/itemHref.js'
 import { DASH } from '../lib/measured.js'
 import ItemLink from './ItemLink.jsx'
@@ -114,15 +115,45 @@ function DetailList({ rows }) {
   )
 }
 
+// The next page of a list, asked for by offset. Shown only while the list is
+// known to be cut off, and says when the next page could not be read.
+function ShowMore({ paging, busy, error, onMore }) {
+  if (!paging.more) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3 text-copy">
+      <button type="button" disabled={busy} onClick={onMore} className="text-link underline underline-offset-2 disabled:opacity-50">
+        {busy ? 'Loading…' : 'Show more'}
+      </button>
+      {error && <span role="status" className="text-note text-[var(--pill-warn-fg)]">{error}</span>}
+    </div>
+  )
+}
+
 export default function ItemPage({ kind, q, space, view, id }) {
   const qs = new URLSearchParams()
   if (q) qs.set('q', q)
   if (space) qs.set('space', space)
   if (view) qs.set('view', view)
   if (id) qs.set('id', id)
-  const api = useApi(q || id ? `/api/item/${kind}?${qs.toString()}` : null)
+  const url = q || id ? `/api/item/${kind}?${qs.toString()}` : null
+  const api = useApi(url)
   const body = api.data
-  const rows = Array.isArray(body?.rows) ? body.rows : []
+  // Pages after the first, added by Show more. The page is remounted for
+  // each item (DossierPage keys it), so these never carry over.
+  const [more, setMore] = useState({ rows: [], body: null, busy: false, error: null })
+  const rows = [...(Array.isArray(body?.rows) ? body.rows : []), ...more.rows]
+  const paging = pageState(more.body ?? body, rows.length)
+  const loadMore = () => {
+    setMore((m) => ({ ...m, busy: true, error: null }))
+    fetch(`${url}&offset=${rows.length}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((next) => {
+        if (next?.availability !== 'ok') throw new Error(next?.reason)
+        setMore((m) => ({ rows: [...m.rows, ...(next.rows || [])], body: next, busy: false, error: null }))
+      })
+      .catch((e) => setMore((m) => ({ ...m, busy: false, error: e?.message || 'Infoblox did not answer. Try again in a moment.' })))
+  }
+  const showMore = <ShowMore paging={paging} busy={more.busy} error={more.error} onMore={loadMore} />
   const word = ITEM_WORDS[kind]
   const scope = space || view
   const failed = !!api.error || (body && body.availability !== 'ok' && body.availability !== 'empty')
@@ -135,7 +166,7 @@ export default function ItemPage({ kind, q, space, view, id }) {
   else if (kind === 'site') {
     content = (
       <>
-        <DetailList rows={[['Site', q], ['Networks', String(rows.length)]]} />
+        <DetailList rows={[['Site', q], ['Networks', paging.count]]} />
         {rows.length > 0 && (
           <>
             <h2 className="text-copy font-semibold mt-5 mb-2">Networks at this site</h2>
@@ -148,6 +179,7 @@ export default function ItemPage({ kind, q, space, view, id }) {
                 </li>
               ))}
             </ul>
+            {showMore}
           </>
         )}
         <Actions kind={kind} q={q} />
@@ -155,10 +187,10 @@ export default function ItemPage({ kind, q, space, view, id }) {
     )
   } else if (rows.length === 0) {
     content = <Empty>No {word.toLowerCase()} called {q}{scope ? ` in ${scope}` : ''} was found in Infoblox.</Empty>
-  } else if (rows.length > 1) {
+  } else if (rows.length > 1 || paging.more) {
     content = (
       <div data-item-chooser>
-        <p className="text-copy mb-2">There is more than one {word.toLowerCase()} called {q}. Pick one:</p>
+        <p className="text-copy mb-2">There is more than one {word.toLowerCase()} called {q} ({paging.count}). Pick one:</p>
         <ul className="flex flex-col gap-1 text-copy">
           {rows.map((r) => (
             <li key={r.id}>
@@ -172,6 +204,7 @@ export default function ItemPage({ kind, q, space, view, id }) {
             </li>
           ))}
         </ul>
+        {showMore}
       </div>
     )
   } else {

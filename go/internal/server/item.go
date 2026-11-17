@@ -93,6 +93,18 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 	}
 	qs := r.URL.Query()
 	params := map[string]string{"_fields": strings.Join(spec.fields, ",")}
+	// A site or a chooser can hold more than one page (searchLimit rows);
+	// ?offset= asks for the next one.
+	offset := 0
+	if v := strings.TrimSpace(qs.Get("offset")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > itemOffsetMax {
+			d.json(w, r, 200, itemEmpty("that is not a page of this list"))
+			return
+		}
+		offset = n
+		params["_offset"] = v
+	}
 
 	if id := strings.TrimSpace(qs.Get("id")); id != "" && itemIDPrefix[kind] != "" {
 		prefix := itemIDPrefix[kind]
@@ -122,7 +134,7 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 		if spec.scope != "" {
 			scope, found, ue := d.itemScope(r, spec.scope, qs.Get(spec.scope))
 			if ue != nil {
-				d.json(w, r, 200, searchUnavailable(ue))
+				d.json(w, r, 200, itemUnavailable(ue))
 				return
 			}
 			if !found {
@@ -141,7 +153,7 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 
 	rows, extra, ue := d.searchFetch(r, spec.path, params)
 	if ue != nil {
-		d.json(w, r, 200, searchUnavailable(ue))
+		d.json(w, r, 200, itemUnavailable(ue))
 		return
 	}
 	rows = pick(rows, spec.fields...)
@@ -151,7 +163,25 @@ func (d *Deps) itemGet(w http.ResponseWriter, r *http.Request) {
 	case "view":
 		d.itemNames(r, rows, "view", "view_name", "/api/ddi/v1/dns/view")
 	}
-	d.json(w, r, 200, searchResponse(rows, extra))
+	resp := searchResponse(rows, extra)
+	resp["offset"] = offset
+	d.json(w, r, 200, resp)
+}
+
+// itemOffsetMax bounds ?offset=. CSP lists are far shorter than this; a larger
+// number is a mistyped link, not a page.
+const itemOffsetMax = 100000
+
+// itemUnavailable is searchUnavailable with the reason in plain words: the
+// item page shows it to people who are not programmers, and "status 503"
+// tells them nothing. A refused sign-in keeps its own wording, because what
+// to do about it is different.
+func itemUnavailable(ue *rest.UpstreamError) map[string]any {
+	resp := searchUnavailable(ue)
+	if resp["availability"] == "error" && ue.Status != 401 && ue.Status != 403 {
+		resp["reason"] = "Infoblox did not answer. Try again in a moment."
+	}
+	return resp
 }
 
 // itemScope turns ?space= or ?view= into a filter clause. An id is used as
