@@ -303,7 +303,13 @@ function IpamSpaces({ panelId, ipam }) {
             const status = utilStatus(r.pct)
             return (
               <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-note">
-                <span className="w-[110px] truncate text-muted" title={r.label}>{r.label ? <ItemLink kind="space" value={r.label} id={String(r.id || '').startsWith('ipam/ip_space/') ? r.id : undefined} /> : r.id || '—'}</span>
+                <span className="w-[110px] truncate text-muted" title={r.label}>{r.label ? (
+                  // inline-flex so a touch screen's 44px link height (index.css,
+                  // pointer: coarse) applies; an inline link ignores min-height.
+                  <ItemLink kind="space" value={r.label} id={String(r.id || '').startsWith('ipam/ip_space/') ? r.id : undefined} className="inline-flex items-center max-w-full">
+                    <span className="truncate">{r.label}</span>
+                  </ItemLink>
+                ) : r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
                   <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: barColor(status) }} />
                 </div>
