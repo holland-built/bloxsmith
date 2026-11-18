@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"bloxsmith/internal/cache"
@@ -29,12 +30,17 @@ type fakeRec struct {
 	ttl             int
 }
 
-func compareDeps(t *testing.T, zones map[string][]fakeRec, failAfter map[string]int) (*Deps, *[]url.Values) {
+func compareDeps(t *testing.T, zones map[string][]fakeRec, failAfter map[string]int) (*Deps, func() []url.Values) {
 	t.Helper()
+	// The two zones are read at the same time, so requests arrive on two
+	// goroutines; the log is guarded, and read back as a copy.
+	var mu sync.Mutex
 	var seen []url.Values
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		mu.Lock()
 		seen = append(seen, q)
+		mu.Unlock()
 		if r.URL.Path != "/api/ddi/v1/dns/record" {
 			w.WriteHeader(404)
 			return
@@ -61,7 +67,11 @@ func compareDeps(t *testing.T, zones map[string][]fakeRec, failAfter map[string]
 	}))
 	t.Cleanup(srv.Close)
 	c := rest.New(srv.URL, rest.NewAuth("test-key", nil))
-	return &Deps{Cfg: &config.Config{Port: "8080"}, Rest: c, Dashboard: dashboard.New(c, cache.New()), Store: store.New(t.TempDir())}, &seen
+	return &Deps{Cfg: &config.Config{Port: "8080"}, Rest: c, Dashboard: dashboard.New(c, cache.New()), Store: store.New(t.TempDir())}, func() []url.Values {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]url.Values(nil), seen...)
+	}
 }
 
 type compareOut struct {
@@ -113,7 +123,7 @@ func TestZoneCompare_ReadsEveryPage(t *testing.T) {
 		t.Fatalf("same %d onlyA %+v onlyB %+v", out.Same, out.OnlyA, out.OnlyB)
 	}
 	// Paged by zone id (view== is refused upstream), in a stable order.
-	for _, v := range *seen {
+	for _, v := range seen() {
 		if v.Get("_order_by") != "id" || !strings.HasPrefix(v.Get("_filter"), `zone=="`) {
 			t.Fatalf("request %v: want _order_by=id and a zone== filter", v)
 		}
