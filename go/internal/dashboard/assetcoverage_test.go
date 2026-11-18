@@ -250,3 +250,22 @@ func TestFetchAssetInventory_AGapItCannotWorkOutIsUnavailableNotEverything(t *te
 		t.Fatalf("payload %v; an unfiltered list would pass for the gap", got)
 	}
 }
+
+// Review finding: a count that is not a number used to read as 0, so a gap
+// showed 0 instead of "couldn't count".
+func TestAssembleCoverage_ACountThatIsNotANumberSaysCouldNotCount(t *testing.T) {
+	for _, bad := range []any{"unknown", "", nil, map[string]any{}} {
+		rows := []map[string]any{
+			comboRow(`["DHCP Logs"]`, "3"),
+			{assetsCube + ".providers_label": `["Infoblox Endpoint"]`, assetsMeasure: bad},
+		}
+		got := assembleCoverage(rows, nil)
+		gaps := gapsOf(t, got)
+		if len(gaps) != 1 || gaps[0]["count"] != nil || got["total"] != nil {
+			t.Errorf("count %#v: gaps %v total %v", bad, gaps, got["total"])
+		}
+		if _, ok := gapCombos(rows, "Infoblox Endpoint"); ok {
+			t.Errorf("count %#v: the list filter must not trust it either", bad)
+		}
+	}
+}

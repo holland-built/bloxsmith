@@ -22,8 +22,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"bloxsmith/internal/cache"
@@ -84,14 +86,45 @@ func parseCombos(rows []map[string]any) (combos []coverageCombo, readable bool) 
 		r := flattenCubeRow(raw)
 		text := getStr(r["providers_label"])
 		var labels []string
-		n, ok := firstPresent(r, "assetsCount", "count")
-		if err := json.Unmarshal([]byte(text), &labels); err != nil || !ok {
+		v, _ := firstPresent(r, "assetsCount", "count")
+		n, ok := comboCount(v)
+		if err := json.Unmarshal([]byte(text), &labels); err != nil {
 			readable = false
 			continue
 		}
-		combos = append(combos, coverageCombo{raw: text, labels: labels, count: int(toFloat(n))})
+		// A list with no readable count still names its sources, so their
+		// tiles show; readable false makes every count "couldn't count".
+		if !ok {
+			readable = false
+		}
+		combos = append(combos, coverageCombo{raw: text, labels: labels, count: n})
 	}
 	return combos, readable
+}
+
+// comboCount reads an asset count, which the cube sends as a string. Anything
+// that is not a whole number of zero or more is unreadable, never 0: toFloat
+// would turn "unknown" into 0 and a tile would show a gap of 0.
+func comboCount(v any) (int, bool) {
+	var f float64
+	switch t := v.(type) {
+	case string:
+		p, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		if err != nil {
+			return 0, false
+		}
+		f = p
+	case float64:
+		f = t
+	case int:
+		f = float64(t)
+	default:
+		return 0, false
+	}
+	if f < 0 || f != math.Trunc(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return int(f), true
 }
 
 func (c coverageCombo) hasNetwork() bool {
