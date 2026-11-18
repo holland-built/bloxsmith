@@ -52,8 +52,8 @@ func TestPanelSources_FactsHoldTogether(t *testing.T) {
 			t.Errorf("%s: a | would break the docs table", p.ID)
 		}
 	}
-	if len(seen) != 83 {
-		t.Errorf("%d panels, want 83: the 85 in panel-inventory.md (Overview dropped 5 on 2026-11-09, Infra merged 2 away on 2026-11-10, and Get an address, Editor, Drift and Build a chart dropped their 11 on 2026-11-11 for plain two-column forms), the 4 on Demo server, the 2 on Automate, the 1 on Best practices, the 2 on Made with Bloxsmith (2026-11-13), and Network's Overlapping ranges (2026-11-16), and Assets' Coverage gaps (2026-11-17)", len(seen))
+	if len(seen) != 84 {
+		t.Errorf("%d panels, want 84: the 85 in panel-inventory.md (Overview dropped 5 on 2026-11-09, Infra merged 2 away on 2026-11-10, and Get an address, Editor, Drift and Build a chart dropped their 11 on 2026-11-11 for plain two-column forms), the 4 on Demo server, the 2 on Automate, the 1 on Best practices, the 2 on Made with Bloxsmith (2026-11-13), and Network's Overlapping ranges (2026-11-16), and Assets' Coverage gaps and Discovery connections (2026-11-17)", len(seen))
 	}
 }
 

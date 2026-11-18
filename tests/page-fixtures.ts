@@ -511,6 +511,18 @@ export const ASSET_COVERAGE = {
   availability: 'ok', total: 2, network: ['DHCP Logs', 'NIOS Grid'],
   gaps: [{ source: 'Infoblox Endpoint', role: 'Infoblox agent', count: 1 }],
 };
+// Connection health (connectors.go): failing first, then partly working,
+// then the rest. The second message is two lines, the way the live API sends
+// a partial DNS sync.
+export const ASSET_CONNECTORS = {
+  availability: 'ok', truncated: false,
+  counts: { failing: 1, partial: 1, ok: 1 },
+  connectors: [
+    { name: 'baseline-aws', type: 'Amazon Web Services', status: 'Error', state: 'failing', word: 'Failing', last_sync: agoIso(12 * 60 * 1000), message: 'Access denied to resource. Please check your permissions.' },
+    { name: 'baseline-azure', type: 'Microsoft Azure', status: 'partiallysynced', state: 'partial', word: 'Partly working', last_sync: agoIso(2 * HOUR), message: 'Asset Discovery and sync completed successfully\nDNS sync has failed partially: errors occurred while reconciling records in view baseline-view' },
+    { name: 'baseline-gcp', type: 'Google Cloud Platform', status: 'Synced', state: 'ok', word: 'Working', last_sync: agoIso(5 * 60 * 1000), message: 'Sync completed successfully' },
+  ],
+};
 export const ASSETS_BY_ADDRESS_NONE = { ...ASSETS_BY_ADDRESS, address: '10.9.9.9', rows: [], total: 0 };
 const DOSSIER = {
   query: 'baseline.example',
@@ -721,6 +733,7 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/csp/asset-filters', body: ASSET_FILTERS, required: true },
     { method: 'GET', path: '/api/csp/assets', body: ASSETS, required: true },
     { method: 'GET', path: '/api/csp/asset-coverage', body: ASSET_COVERAGE, required: true },
+    { method: 'GET', path: '/api/csp/asset-connectors', body: ASSET_CONNECTORS, required: true },
   ],
   incidents: [
     { method: 'GET', path: '/api/actions', body: IQ_ACTIONS, required: true },

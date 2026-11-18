@@ -122,6 +122,13 @@ func (d *Deps) registerCSPRoutes(mux router) {
 		d.json(w, r, 200, d.dash(r).FetchAssetCoverage(r.Context()))
 	})
 
+	// Connection health: each discovery connection and whether its last sync
+	// worked (dashboard/connectors.go). Read-only.
+	mux.HandleFunc("GET /api/csp/asset-connectors", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp/asset-connectors")
+		d.json(w, r, 200, d.dash(r).FetchConnectorHealth(r.Context()))
+	})
+
 	mux.HandleFunc("GET /api/csp/asset-detail", func(w http.ResponseWriter, r *http.Request) {
 		defer d.recover500(w, r, "/api/csp/asset-detail")
 		d.json(w, r, 200, d.dash(r).FetchAssetDetail(r.Context(), r.URL.Query().Get("cqid")))

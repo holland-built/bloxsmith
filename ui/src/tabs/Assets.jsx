@@ -7,6 +7,7 @@ import { setHashParams, useHashParams } from '../lib/hash.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import AssetCoverage from '../components/AssetCoverage.jsx'
+import AssetConnectors from '../components/AssetConnectors.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
@@ -176,6 +177,7 @@ export default function Assets() {
             onClose={() => setSelected(null)}
           />
         )}
+        <AssetConnectors panelId="assets-connectors" />
       </CardGrid>
     </div>
   )

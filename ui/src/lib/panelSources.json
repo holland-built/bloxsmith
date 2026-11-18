@@ -396,6 +396,15 @@
     "why": "the gaps are worked out in the app from which sources reported each device"
   },
   {
+    "id": "assets-connectors",
+    "page": "Assets",
+    "name": "Discovery connections",
+    "kind": "rest",
+    "source": "the discovery connection list",
+    "builder": "no",
+    "why": "it is a list, not a chart"
+  },
+  {
     "id": "assets-filter-bar",
     "page": "Assets",
     "name": "Asset Inventory",
