@@ -481,7 +481,7 @@ function DnsPanel() {
       <ColumnHeading id="ss-record-result-h">Preview</ColumnHeading>
       <PreviewApply {...applyProps} part="outcome">
         {flow.preview
-          ? <PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />
+          ? <><PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />{!flow.stale && <CheckedAgainst res={flow.previewReply} />}</>
           : !flow.message && <p className="text-copy text-muted">Fill in the record and press Preview. Infoblox checks it first, and nothing is created until you press Create.</p>}
       </PreviewApply>
     </section>

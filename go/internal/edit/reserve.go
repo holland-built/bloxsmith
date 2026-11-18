@@ -121,6 +121,7 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 				rec[k] = v
 			}
 			result["record"] = rec
+			c.addPTRNote(result, dns, address)
 		}
 		return result, 200
 	}

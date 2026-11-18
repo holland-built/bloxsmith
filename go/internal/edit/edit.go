@@ -530,6 +530,11 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 		if !checked {
 			out["duplicate_check"] = "unavailable"
 		}
+		if truthy(body["create_ptr"], false) {
+			if note := c.ptrNote(zoneID, value); note != "" {
+				out["reverse_note"] = note
+			}
+		}
 		return out, 200
 	}
 
@@ -881,6 +886,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				rec[k] = v
 			}
 			result["record"] = rec
+			if len(free) > 0 {
+				c.addPTRNote(result, dns, pyStr(asMap(free[0])["address"]))
+			}
 		}
 		return result, 200
 	}
