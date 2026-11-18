@@ -261,6 +261,8 @@ Everything built here can be removed from **Your recent changes**. The full Prov
 
 **Run it from Ansible.** After Preview, Get an IP address, Add a DNS name and Make a new network show **Run this from Ansible instead**. It holds the same change as a playbook for Infoblox's `infoblox.universal_ddi` collection, with a button to copy it. Install the collection with `ansible-galaxy collection install infoblox.universal_ddi` and set `INFOBLOX_PORTAL_KEY` before running it. A change made from the playbook is not listed in Your recent changes. The branch office and demo jobs have no playbook, because they are many steps and a demo server uses Terraform.
 
+**Run it from Terraform.** The same three jobs also show **Run this from Terraform instead**, with a **Copy as Terraform** button. It holds the change as a `main.tf` for Infoblox's `infobloxopen/bloxone` Terraform provider. Set `INFOBLOX_PORTAL_KEY` to your API key and `INFOBLOX_PORTAL_URL` to your portal, then run `terraform init` and `terraform apply`. Terraform keeps the one address or network it made: running apply again does not take another. A change made this way is not listed in Your recent changes. The branch office and demo jobs have no Terraform file either.
+
 **Demo servers.** Get a demo ready builds the demo server with the settings saved on the Demo server page, including its join token. It takes about 15 minutes and keeps going if you close the page; Your recent changes shows how far it got. If the server never joins the Infoblox Portal, the join token may have expired: paste a new one on the Demo server page, then remove the demo and build it again. Demo servers made on the Demo server page are listed under Your recent changes too, and are removed only when you press Remove.
 
 **Find** at the top looks up an address, network or name across IPAM, DNS and the logs, and opens the search page. It changes nothing.
@@ -324,7 +326,7 @@ Take the next free address, or several, from a subnet.
 
 1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Every list has a search box above it; type part of a name or address to narrow it. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
-3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. If the DNS record cannot be made, the address is handed back.
+3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. Infoblox makes it only when a reverse zone covers the address, so Preview checks first and shows an amber note when none does, or when it could not check. If the DNS record cannot be made, the address is handed back.
 4. To keep a single address for one device, tick **Lock it to one device (DHCP reservation)** and type the device's MAC address, such as `aa:bb:cc:dd:ee:ff`. DHCP then gives that address to that device only. Preview refuses a device that already has a reservation. **Reserve** takes the exact address the preview showed; if someone took it meanwhile, nothing is made and you preview again. With a DNS name as well, the reservation is made first, and it stays even if the DNS record fails.
 5. **Preview** shows which addresses it would take, in a sentence. **Allocate** (or **Reserve**) takes them and names the address you got.
 
@@ -334,7 +336,7 @@ Add a record to a zone you already have.
 
 1. Pick the **zone** and record **type**. The common types (A, AAAA, CNAME, TXT) come first; MX, SRV, PTR, NS and CAA are under **More types**. The zone list shows forward zones, or only reverse zones when the type is PTR. Type in the search box above it to find a zone.
 2. Fill in the **name** (`@` for the zone itself) and the **value**. A TTL is under **More options** if you want one.
-3. For an A or AAAA record, tick **Also create the reverse (PTR) record** to make the matching reverse entry too. Infoblox makes it only if the reverse zone exists.
+3. For an A or AAAA record, tick **Also create the reverse (PTR) record** to make the matching reverse entry too. Infoblox makes it only if the reverse zone exists, so Preview checks and shows an amber note when no reverse zone covers the address.
 4. **Preview** sends it to the server to check and says in a sentence what it would make. If the same record (same name, type and value) is already there, it says so and nothing is created. **Create** writes it.
 
 The preview shows the record the way the *server* read it, which is often not how you typed it. For example, an SRV value of `10 5 5060 sip.example.com` comes back split into priority, weight, port and target. It is worth a look.
