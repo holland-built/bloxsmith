@@ -59,8 +59,9 @@ func TestRetagBlock_UpstreamErrorIs502NotBadIPSpace(t *testing.T) {
 	if body["error"] != "upstream request failed" {
 		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
 	}
-	if calls != 1 {
-		t.Fatalf("upstream calls = %d, want exactly 1", calls)
+	// 2: the failed read is asked once more on purpose (rest.doGet).
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (one retry)", calls)
 	}
 }
 

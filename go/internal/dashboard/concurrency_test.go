@@ -520,8 +520,9 @@ func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if deadPageHits != 2 {
-		t.Fatalf("failing subnet page was requested %d times, want 2 (one attempt + one retry) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
+	// 4 = the page's own retry here, times rest.doGet's one retry of a 5xx read.
+	if deadPageHits != 4 {
+		t.Fatalf("failing subnet page was requested %d times, want 4 (one attempt + one retry, each asked twice by rest) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
 	}
 }
 

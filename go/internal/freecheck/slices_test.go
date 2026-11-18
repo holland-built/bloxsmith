@@ -177,8 +177,10 @@ func TestNextFreePrefixIn_FallsBackToAFullReadWhenAPieceIsIncomplete(t *testing.
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(subnetReads) != 2 || !strings.Contains(subnetReads[0], `address<="10.0.255.255"`) || subnetReads[1] != "" {
-		t.Fatalf("subnet reads = %q, want the first piece's scoped read, then one full read", subnetReads)
+	// The scoped read is asked twice: rest asks a failed read once more.
+	if len(subnetReads) != 3 || !strings.Contains(subnetReads[0], `address<="10.0.255.255"`) ||
+		subnetReads[1] != subnetReads[0] || subnetReads[2] != "" {
+		t.Fatalf("subnet reads = %q, want the first piece's scoped read (and its retry), then one full read", subnetReads)
 	}
 	if checked.Around != "" {
 		t.Fatalf("checked.around = %q, want empty: the full read covered everything", checked.Around)
