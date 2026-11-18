@@ -29,16 +29,19 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"bloxsmith/internal/cache"
 )
 
 const (
 	assetSearchPath = "/api/v1/assets/search"
 	// assetSearchWindowDays is the search API's own window, not a setting.
 	assetSearchWindowDays = 7
-	// assetSearchPageSize: one address rarely belongs to more than a handful of
-	// devices (the busiest probe hit 3), so one page holds them all. More than
-	// this is reported as a cut-off list, never as a total.
-	assetSearchPageSize = 100
+	// assetSearchPageSize is the API's own largest page. Every hit for one
+	// address is read in this one call (the busiest probe hit 3), cached, and
+	// paged 50 at a time from there, so Next never asks the API again for rows
+	// it already sent. More hits than this is a cut-off list, never a total.
+	assetSearchPageSize = 1000
 )
 
 var assetSearchFields = []string{"id", "name", "type", "providers", "vendor", "last_seen"}
@@ -75,9 +78,43 @@ func addressFilter(field, value string) (string, error) {
 	return field + " = '" + value + "'", nil
 }
 
-// fetchAssetsByAddress is the address half of FetchAssetInventory. It shares
-// that function's cache, so it only runs on a miss.
+// fetchAssetsByAddress is the address half of FetchAssetInventory: every hit
+// is read once per address and cached, then one page of it is returned.
 func (s *Service) fetchAssetsByAddress(ctx context.Context, aq AssetQuery, field, value string) map[string]any {
+	ck := cache.Key("assets", "address", map[string]string{"field": field, "value": value}, false)
+	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
+		res := s.searchByAddress(ctx, aq, field, value)
+		if res["availability"] == "error" {
+			return res, errAssetFeedDegraded
+		}
+		return res, nil
+	})
+	all, ok := v.(map[string]any)
+	if !ok {
+		all = assetsUnavailable(aq, "the address search did not complete")
+	}
+	return addressPage(all, aq.Page)
+}
+
+// addressPage is pure: one page of a cached address search. It copies the
+// map, so the cached answer is never changed.
+func addressPage(all map[string]any, page int) map[string]any {
+	out := make(map[string]any, len(all)+1)
+	for k, v := range all {
+		out[k] = v
+	}
+	out["page"] = page
+	out["page_size"] = assetsPageSize
+	rows, _ := all["rows"].([]any)
+	from := min(page*assetsPageSize, len(rows))
+	to := min(from+assetsPageSize, len(rows))
+	out["rows"] = rows[from:to]
+	out["has_more"] = to < len(rows)
+	out["fetched"] = len(rows)
+	return out
+}
+
+func (s *Service) searchByAddress(ctx context.Context, aq AssetQuery, field, value string) map[string]any {
 	filter, err := addressFilter(field, value)
 	if err != nil {
 		return assetsUnavailable(aq, err.Error())

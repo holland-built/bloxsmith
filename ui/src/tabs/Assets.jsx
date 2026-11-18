@@ -449,7 +449,7 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
           {byAddress && (
             <p className="text-note text-muted mb-2">
               Devices with {d.address} seen in the last {d.window_days} days.
-              {d.truncated ? ` The first ${rows.length} are shown.` : ''}
+              {d.truncated ? ` Only the first ${(d.fetched ?? rows.length).toLocaleString()} found can be shown.` : ''}
             </p>
           )}
           <DataTable

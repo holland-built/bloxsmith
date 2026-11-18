@@ -278,20 +278,19 @@ func assetsUnavailable(aq AssetQuery, reason string) map[string]any {
 func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir string, page int, gap string) map[string]any {
 	aq := normalizeAssetQuery(q, typ, sort, dir, page)
 	aq.Gap = clampLen(strings.TrimSpace(gap), assetQueryMax)
+	// One IP or MAC goes to the address search (assetsearch.go); the cube
+	// cannot match an address. It keeps its own cache, read once per address
+	// and paged from there.
+	if field, value, ok := addressQuery(aq.Q); ok {
+		return s.fetchAssetsByAddress(ctx, aq, field, value)
+	}
 	ck := cache.Key("assets", "list", map[string]string{
 		"q": aq.Q, "type": aq.Type, "sort": aq.Sort, "dir": aq.Dir,
 		"page": strconv.Itoa(aq.Page), "gap": aq.Gap,
 	}, false)
 
 	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
-		var res map[string]any
-		// One IP or MAC goes to the address search (assetsearch.go); the cube
-		// cannot match an address. Anything else is the name search below.
-		if field, value, ok := addressQuery(aq.Q); ok {
-			res = s.fetchAssetsByAddress(ctx, aq, field, value)
-		} else {
-			res = s.assetInventoryUncached(ctx, aq)
-		}
+		res := s.assetInventoryUncached(ctx, aq)
 		if res["availability"] == "error" {
 			return res, errAssetFeedDegraded
 		}
