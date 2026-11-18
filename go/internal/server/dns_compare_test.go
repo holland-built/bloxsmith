@@ -200,3 +200,38 @@ func TestZoneCompare_SOAIgnoresSerial(t *testing.T) {
 		t.Fatalf("SOA with a different minimum TTL not flagged: %s", raw)
 	}
 }
+
+// A record added while the zone is being read shifts every later row along by
+// one, so offset paging hands one record back twice (or, for a delete, skips
+// one). Records are counted once by id, and the read is marked partial, never
+// "ok", because a page boundary that repeats a record cannot be trusted.
+func TestZoneCompare_ZoneChangedMidReadIsPartial(t *testing.T) {
+	recs := make([]map[string]any, 1500)
+	for i := range recs {
+		recs[i] = map[string]any{"id": fmt.Sprintf("dns/record/%05d", i), "name_in_zone": fmt.Sprintf("h%d", i), "type": "A", "dns_rdata": "10.0.0.1", "ttl": 60}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		off, _ := strconv.Atoi(q.Get("_offset"))
+		lim, _ := strconv.Atoi(q.Get("_limit"))
+		if strings.Contains(q.Get("_filter"), zoneB) && off > 0 {
+			off-- // a record was added before the cursor: row 999 comes back again
+		}
+		end := min(off+lim, len(recs))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": recs[off:end]})
+	}))
+	t.Cleanup(srv.Close)
+	c := rest.New(srv.URL, rest.NewAuth("test-key", nil))
+	d := &Deps{Cfg: &config.Config{Port: "8080"}, Rest: c, Dashboard: dashboard.New(c, cache.New()), Store: store.New(t.TempDir())}
+	code, out, raw := runCompare(t, d, q(zoneA, zoneB))
+	if code != 200 || out.Status != "partial" || out.B.Complete || !out.A.Complete {
+		t.Fatalf("want B partial: %s", raw[:min(len(raw), 300)])
+	}
+	if out.B.Records != 1500 || out.Same != 1500 {
+		t.Fatalf("B records %d same %d, want 1500 each (the repeat counted once)", out.B.Records, out.Same)
+	}
+	if !strings.Contains(out.B.Note, "changed while") {
+		t.Fatalf("note %q does not say the zone changed during the read", out.B.Note)
+	}
+}

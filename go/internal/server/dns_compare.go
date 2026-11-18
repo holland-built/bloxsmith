@@ -100,8 +100,15 @@ func (z zoneRead) summary() map[string]any {
 	return map[string]any{"records": len(z.recs), "complete": z.complete, "note": z.note}
 }
 
+// readZoneRecords pages a zone's records in id order. A record added or
+// removed during the read shifts the later pages by one, so paging can hand a
+// record back twice or skip one. Each record is kept once by id, and a repeated
+// id marks the read partial: a skip is invisible on its own, but it comes from
+// the same kind of change.
 func readZoneRecords(cli *rest.Client, zoneID string) zoneRead {
 	var out zoneRead
+	seen := map[string]bool{}
+	changed := false
 	for page := 0; page < comparePageCap; page++ {
 		rows, err := cli.GetStrict("/api/ddi/v1/dns/record", map[string]string{
 			"_filter":   `zone=="` + zoneID + `"`,
@@ -121,6 +128,13 @@ func readZoneRecords(cli *rest.Client, zoneID string) zoneRead {
 		}
 		for _, ri := range rows {
 			m := getMap(ri)
+			if id := str(m, "id"); id != "" {
+				if seen[id] {
+					changed = true
+					continue
+				}
+				seen[id] = true
+			}
 			out.recs = append(out.recs, zoneRec{
 				Name: str(m, "name_in_zone"),
 				Type: strings.ToUpper(str(m, "type")),
@@ -129,7 +143,10 @@ func readZoneRecords(cli *rest.Client, zoneID string) zoneRead {
 			})
 		}
 		if len(rows) < comparePageSize {
-			out.complete = true
+			out.complete = !changed
+			if changed {
+				out.note = "The zone changed while it was being read, so a record may be missing. Compare again for a full list."
+			}
 			return out
 		}
 	}
