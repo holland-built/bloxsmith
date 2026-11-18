@@ -172,7 +172,7 @@ func compareRecords(a, b []zoneRec) map[string]any {
 		values := func(rs []zoneRec) string {
 			v := make([]string, len(rs))
 			for i, r := range rs {
-				v[i] = r.Data
+				v[i] = compareData(r)
 			}
 			sort.Strings(v)
 			return strings.Join(v, "\n")
@@ -180,7 +180,7 @@ func compareRecords(a, b []zoneRec) map[string]any {
 		ttls := func(rs []zoneRec) string {
 			v := make([]string, len(rs))
 			for i, r := range rs {
-				v[i] = r.Data + "\x00" + fmt.Sprint(r.TTL)
+				v[i] = compareData(r) + "\x00" + fmt.Sprint(r.TTL)
 			}
 			sort.Strings(v)
 			return strings.Join(v, "\n")
@@ -200,4 +200,19 @@ func compareRecords(a, b []zoneRec) map[string]any {
 		}
 	}
 	return map[string]any{"same": same, "only_a": onlyA, "only_b": onlyB, "different": different}
+}
+
+// compareData is the value a record is compared on. For an SOA it leaves out
+// the serial (the third field: primary, contact, serial, refresh, retry,
+// expire, minimum), because every view keeps its own serial and a serial-only
+// difference would flag every zone. The full value is still what is shown.
+func compareData(r zoneRec) string {
+	if r.Type != "SOA" {
+		return r.Data
+	}
+	f := strings.Fields(r.Data)
+	if len(f) != 7 {
+		return r.Data
+	}
+	return strings.Join(append(f[:2:2], f[3:]...), " ")
 }

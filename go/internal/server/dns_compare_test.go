@@ -183,3 +183,20 @@ func TestZoneCompare_RejectsBadIDs(t *testing.T) {
 		}
 	}
 }
+
+// Every view keeps its own SOA serial, so a serial-only difference is not a
+// difference (live 2026-11-17 it flagged @ SOA on every compare). Any other
+// SOA field that differs still is.
+func TestZoneCompare_SOAIgnoresSerial(t *testing.T) {
+	a := []fakeRec{{"", "SOA", "ns.lab.local. user.infoblox.com. 7 10800 3600 2419200 900", 3600}}
+	b := []fakeRec{{"", "SOA", "ns.lab.local. user.infoblox.com. 42 10800 3600 2419200 900", 3600}}
+	d, _ := compareDeps(t, map[string][]fakeRec{zoneA: a, zoneB: b}, nil)
+	if _, out, raw := runCompare(t, d, q(zoneA, zoneB)); out.Same != 1 || len(out.Different) != 0 {
+		t.Fatalf("serial-only SOA difference counted: %s", raw)
+	}
+	b[0].data = "ns.lab.local. user.infoblox.com. 42 10800 3600 2419200 60"
+	d, _ = compareDeps(t, map[string][]fakeRec{zoneA: a, zoneB: b}, nil)
+	if _, out, raw := runCompare(t, d, q(zoneA, zoneB)); len(out.Different) != 1 || out.Different[0].What != "value" {
+		t.Fatalf("SOA with a different minimum TTL not flagged: %s", raw)
+	}
+}
