@@ -147,7 +147,9 @@ func TestFetchConnectorHealth_ReadsTheWholeRecordAndCachesOnlySuccess(t *testing
 		t.Fatalf("payload %v; a failure must not be cached", got)
 	}
 	s.FetchConnectorHealth(context.Background())
-	if n := calls.Load(); n != 2 {
-		t.Errorf("%d calls, want 2", n)
+	// 3: the failed read is asked twice (rest retries a 502 once), the
+	// success once, and the third call is served from the cache.
+	if n := calls.Load(); n != 3 {
+		t.Errorf("%d calls, want 3", n)
 	}
 }
