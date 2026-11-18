@@ -85,3 +85,32 @@ func TestNormCarriesCloud(t *testing.T) {
 		t.Fatalf("zone cloud = %v / %v", z[0]["cloud"], z[0]["cloud_detail"])
 	}
 }
+
+// Only real AWS name servers (…awsdns-NN.com/.net/.org/.co.uk) mean AWS; a
+// name that merely contains "awsdns" does not.
+func TestCloudOfZone_AWSNameServersMustBeReal(t *testing.T) {
+	for _, ns := range []string{`["ns1.myawsdns.example.com"]`, `["ns-1.awsdns-12.com.evil.net"]`, `["awsdns-12.example.org"]`} {
+		if cloud, _ := cloudOfZone(map[string]any{"external_provider_x/nameservers": ns}); cloud != "" {
+			t.Errorf("%s: got %q, want blank", ns, cloud)
+		}
+	}
+	for _, ns := range []string{`["ns-1684.awsdns-18.co.uk","ns-1337.awsdns-39.org"]`, `["ns-956.awsdns-55.net."]`} {
+		if cloud, _ := cloudOfZone(map[string]any{"external_provider_x/nameservers": ns}); cloud != "AWS" {
+			t.Errorf("%s: got %q, want AWS", ns, cloud)
+		}
+	}
+}
+
+// The hover comes from the same connection that decided the cloud, not from
+// whichever connection's tag sorts first.
+func TestCloudOfZone_DetailFromTheDecidingConnection(t *testing.T) {
+	cloud, detail := cloudOfZone(map[string]any{
+		"external_provider/msad":                      "true",
+		"external_provider_0ad/zone_id":               "0ad_lab.example",
+		"external_provider_team_aws/caller_reference": "ref-1",
+		"external_provider_team_aws/zone_id":          "Z111",
+	})
+	if cloud != "AWS" || detail != "Hosted zone Z111" {
+		t.Fatalf("got (%q, %q), want (AWS, Hosted zone Z111)", cloud, detail)
+	}
+}

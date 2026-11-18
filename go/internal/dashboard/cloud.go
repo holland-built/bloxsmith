@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"encoding/json"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -64,72 +66,98 @@ func cloudOfSubnet(s map[string]any) (string, string) {
 // cloudOfZone reads an auth_zone's tags. Cloud-synced zones carry
 // external_provider_<connection name>/<field> tags, and the connection name is
 // whatever the admin typed ("rcuadra_aws", "Azure_AMS"), so the cloud is read
-// from the fields: an Azure zone_id is a /subscriptions/... path, a GCP zone
-// has a project_id, an AWS zone has a caller_reference or awsdns name servers.
+// from each connection's fields: an Azure zone_id is a /subscriptions/... path,
+// a GCP zone has a project_id, an AWS zone has a caller_reference or real AWS
+// name servers. The hover detail comes from that same connection only, so a
+// second connection on the zone (an AD sync, say) cannot lend it its zone_id.
 func cloudOfZone(tags map[string]any) (string, string) {
-	for _, c := range []string{"aws", "azure", "gcp"} {
-		if hasKey(tags, "external_provider/"+c) {
-			return map[string]string{"aws": "AWS", "azure": "Azure", "gcp": "GCP"}[c], zoneDetail(tags, c)
-		}
-	}
-	keys := make([]string, 0, len(tags))
-	for k := range tags {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if !strings.HasPrefix(k, "external_provider_") {
+	conns := map[string]map[string]string{}
+	var names []string
+	for k, v := range tags {
+		tail, ok := strings.CutPrefix(k, "external_provider_")
+		conn, field, ok2 := strings.Cut(tail, "/")
+		if !ok || !ok2 {
 			continue
 		}
-		v := getStr(tags[k])
-		switch {
-		case strings.HasSuffix(k, "/zone_id") && strings.HasPrefix(v, "/subscriptions/"):
-			return "Azure", zoneDetail(tags, "azure")
-		case strings.HasSuffix(k, "/project_id"):
-			return "GCP", zoneDetail(tags, "gcp")
-		case strings.HasSuffix(k, "/caller_reference"):
-			return "AWS", zoneDetail(tags, "aws")
-		case strings.HasSuffix(k, "/nameservers"):
-			switch {
-			case strings.Contains(v, "awsdns"):
-				return "AWS", zoneDetail(tags, "aws")
-			case strings.Contains(v, "googledomains"):
-				return "GCP", zoneDetail(tags, "gcp")
-			case strings.Contains(v, "azure-dns"):
-				return "Azure", zoneDetail(tags, "azure")
+		if conns[conn] == nil {
+			conns[conn] = map[string]string{}
+			names = append(names, conn)
+		}
+		conns[conn][field] = getStr(v)
+	}
+	sort.Strings(names)
+	// A plain external_provider/<cloud> tag names the cloud but no connection;
+	// the detail then comes from a connection that reads as that cloud, or
+	// from the only connection there is.
+	for _, c := range []string{"AWS", "Azure", "GCP"} {
+		if !hasKey(tags, "external_provider/"+strings.ToLower(c)) {
+			continue
+		}
+		for _, n := range names {
+			if connCloud(conns[n]) == c {
+				return c, zoneDetail(conns[n], c)
 			}
+		}
+		if len(names) == 1 {
+			return c, zoneDetail(conns[names[0]], c)
+		}
+		return c, ""
+	}
+	for _, n := range names {
+		if c := connCloud(conns[n]); c != "" {
+			return c, zoneDetail(conns[n], c)
 		}
 	}
 	return "", ""
 }
 
-// zoneDetail builds the hover line from the first external_provider_* tag of
-// the field it needs. cloud is lower case: aws, azure or gcp.
-func zoneDetail(tags map[string]any, cloud string) string {
-	field := func(suffix string) string {
-		keys := make([]string, 0, len(tags))
-		for k := range tags {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			if strings.HasPrefix(k, "external_provider_") && strings.HasSuffix(k, "/"+suffix) {
-				if v := getStr(tags[k]); v != "" {
-					return v
-				}
-			}
-		}
-		return ""
+// connCloud reads one connection's fields as AWS, Azure, GCP or "".
+func connCloud(f map[string]string) string {
+	switch {
+	case strings.HasPrefix(f["zone_id"], "/subscriptions/"):
+		return "Azure"
+	case f["project_id"] != "":
+		return "GCP"
+	case f["caller_reference"] != "" || awsNameServers(f["nameservers"]):
+		return "AWS"
+	case strings.Contains(f["nameservers"], "googledomains"):
+		return "GCP"
+	case strings.Contains(f["nameservers"], "azure-dns"):
+		return "Azure"
 	}
+	return ""
+}
+
+// awsNS is a Route 53 name server: a host under awsdns-NN.com, .net, .org or
+// .co.uk, such as ns-1684.awsdns-18.co.uk.
+var awsNS = regexp.MustCompile(`(?i)^(?:[a-z0-9-]+\.)+awsdns-\d+\.(?:com|net|org|co\.uk)\.?$`)
+
+// awsNameServers reads the nameservers tag (a JSON list in a string) and says
+// whether any entry is a real Route 53 name server.
+func awsNameServers(v string) bool {
+	var hosts []string
+	if json.Unmarshal([]byte(v), &hosts) != nil {
+		hosts = strings.Split(v, ",")
+	}
+	for _, h := range hosts {
+		if awsNS.MatchString(strings.TrimSpace(h)) {
+			return true
+		}
+	}
+	return false
+}
+
+// zoneDetail builds the hover line from one connection's fields.
+func zoneDetail(f map[string]string, cloud string) string {
 	switch cloud {
-	case "aws":
-		if id := field("zone_id"); id != "" {
+	case "AWS":
+		if id := f["zone_id"]; id != "" {
 			return "Hosted zone " + id
 		}
-	case "azure":
-		return strings.Join(azurePath(field("zone_id")), " · ")
-	case "gcp":
-		if p := field("project_id"); p != "" {
+	case "Azure":
+		return strings.Join(azurePath(f["zone_id"]), " · ")
+	case "GCP":
+		if p := f["project_id"]; p != "" {
 			return "Project " + p
 		}
 	}
