@@ -3,13 +3,17 @@
 // network or address, not from kit.jsx, so it stays out of the entry chunk.
 // An offered network or address that another IP space also uses gets an amber
 // warning first, under the suggestion, in every preview that shows one.
+// A preview that asks for a reverse (PTR) record also gets the server's amber
+// note when no reverse zone covers the address (edit/reverse.go).
 import { checkedWords } from '../lib/checkedWords.js'
 
 export default function CheckedAgainst({ res }) {
   const w = checkedWords(res)
-  if (!w) return null
+  const rn = res?.reverse_note && <p data-reverse-note="" role="status" className="mt-2 text-note text-warn">{res.reverse_note}</p>
+  if (!w) return rn || null
   return (
     <>
+      {rn}
       {w.shared.map((s, i) => (
         <p key={i} data-shared-warning="" role="status" className="mt-2 text-note text-warn">{s}</p>
       ))}

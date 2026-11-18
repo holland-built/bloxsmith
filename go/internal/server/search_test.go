@@ -197,13 +197,15 @@ func TestSearchStatusToAvailability(t *testing.T) {
 // TestSearchUpstreamFailureIssuesExactlyOneRequest mirrors the same guard on
 // dnsRecordsGet: the typed error must come from the one GetPageStrict call
 // already made, never a second request to an upstream that is already failing.
+// It answers 400, not 500: a 5xx read is now asked once more on purpose
+// (rest.doGet), which is a retry, not a re-fetch to recover the error.
 func TestSearchUpstreamFailureIssuesExactlyOneRequest(t *testing.T) {
 	for _, h := range searchHandlers {
 		t.Run(h.name, func(t *testing.T) {
 			calls := 0
 			d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
 				calls++
-				w.WriteHeader(500)
+				w.WriteHeader(400)
 				w.Write([]byte(`{"error":"boom"}`))
 			})
 			defer closeSrv()

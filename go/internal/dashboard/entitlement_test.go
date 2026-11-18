@@ -113,8 +113,10 @@ func TestExposedHostnames429_NeverBacksOff(t *testing.T) {
 
 	_ = s.CSPExposedHostnames()
 	_ = s.CSPExposedHostnames()
-	if got := hits.Load(); got != 2 {
-		t.Fatalf("upstream hits = %d, want 2", got)
+	// 4 = two polls, each read asked once more on a plain 429 (rest.doGet).
+	// The size-cap 429 itself is never asked twice (rest retry_test.go).
+	if got := hits.Load(); got != 4 {
+		t.Fatalf("upstream hits = %d, want 4", got)
 	}
 }
 

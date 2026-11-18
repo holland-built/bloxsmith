@@ -253,7 +253,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
           </PreviewBox>
         )}
       </PreviewApply>
-      {showPlaybook(flow.status) && <CopyPlaybook job="ip" input={input()} />}
+      {showPlaybook(flow.status) && <><CopyPlaybook job="ip" input={input()} /><CopyTerraform job="ip" input={input()} /></>}
       <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
     </div>
   )
@@ -262,25 +262,40 @@ function IpJob({ onBuilt, ro, start = {} }) {
 // Copy as Ansible playbook: the same job written for Infoblox's
 // infoblox.universal_ddi collection (lib/ansible.js), for running it from a
 // pipeline instead. Shown once the answers have been previewed.
-function CopyPlaybook({ job, input }) {
+const CopyPlaybook = ({ job, input }) =>
+  <CopyBox text={playbookFor(job, input)} kind="ansible" tool="Ansible" label="Copy as Ansible playbook" file="a .yml file" what="playbook" />
+
+// Copy as Terraform: the same job for Infoblox's bloxone Terraform provider
+// (lib/terraform.js), loaded only once a preview is shown.
+function CopyTerraform({ job, input }) {
+  const [text, setText] = useState('')
+  const key = JSON.stringify(input)
+  useEffect(() => {
+    let live = true
+    import('../lib/terraform.js').then((m) => live && setText(m.terraformFor(job, JSON.parse(key)))).catch(() => {})
+    return () => { live = false }
+  }, [job, key])
+  return <CopyBox text={text} kind="terraform" tool="Terraform" label="Copy as Terraform" file="a main.tf file" what="Terraform" />
+}
+
+function CopyBox({ text, kind, tool, label, file, what }) {
   const [copied, setCopied] = useState(null)
-  const text = playbookFor(job, input)
   if (!text) return null
   async function copy() {
     try {
       await navigator.clipboard.writeText(text)
-      setCopied('Copied. Paste it into a .yml file.')
+      setCopied(`Copied. Paste it into ${file}.`)
     } catch {
-      setCopied('Could not copy. Select the playbook below and copy it by hand.')
+      setCopied(`Could not copy. Select the ${what} below and copy it by hand.`)
     }
   }
   return (
-    <details data-ansible="" className="text-note">
-      <summary className="cursor-pointer text-txt">Run this from Ansible instead</summary>
+    <details {...{ [`data-${kind}`]: '' }} className="text-note">
+      <summary className="cursor-pointer text-txt">Run this from {tool} instead</summary>
       <div className="flex flex-col gap-2 mt-2">
         <button type="button" onClick={copy} className="self-start text-note font-medium underline underline-offset-2"
           style={{ color: COLORS.accent }}>
-          Copy as Ansible playbook
+          {label}
         </button>
         {copied && <p role="status" className="text-muted">{copied}</p>}
         <pre className="rounded-control border border-border bg-field px-3 py-2 overflow-x-auto text-note">{text}</pre>
@@ -373,7 +388,7 @@ function DnsJob({ onBuilt, ro, start = {} }) {
           </PreviewBox>
         )}
       </PreviewApply>
-      {showPlaybook(flow.status) && <CopyPlaybook job="dns" input={input()} />}
+      {showPlaybook(flow.status) && <><CopyPlaybook job="dns" input={input()} /><CopyTerraform job="dns" input={input()} /></>}
       <FetchError error={zonesApi.error} stale={zones.length > 0} />
     </div>
   )
@@ -601,7 +616,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
           </PreviewBox>
         )}
       </PreviewApply>
-      {showPlaybook(flow.status) && <CopyPlaybook job="network" input={input()} />}
+      {showPlaybook(flow.status) && <><CopyPlaybook job="network" input={input()} /><CopyTerraform job="network" input={input()} /></>}
       <FetchError error={blocksApi.error} stale={blocks.length > 0} />
     </div>
   )

@@ -141,8 +141,10 @@ func TestDNSRecordsGet_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
 	}
-	if calls != 1 {
-		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	// 2, not 1: a failed read is asked once more on purpose (rest.doGet). A
+	// re-fetch to recover the error would make it 4.
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (one retry, no re-fetch to recover the error)", calls)
 	}
 }
 
@@ -477,8 +479,10 @@ func TestIPAMAddressesGet_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
 	}
-	if calls != 1 {
-		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	// 2, not 1: a failed read is asked once more on purpose (rest.doGet). A
+	// re-fetch to recover the error would make it 4.
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (one retry, no re-fetch to recover the error)", calls)
 	}
 }
 
@@ -1051,8 +1055,9 @@ func TestDNSZones_ZonesFetchUpstreamErrorIs502(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
 	}
-	if calls != 2 {
-		t.Fatalf("upstream calls = %d, want exactly 2 (views then zones)", calls)
+	// views, then zones asked twice (one retry by design, rest.doGet).
+	if calls != 3 {
+		t.Fatalf("upstream calls = %d, want exactly 3 (views, then zones and its one retry)", calls)
 	}
 }
 
@@ -1247,8 +1252,10 @@ func TestIPAMSpaces_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
 	}
-	if calls != 1 {
-		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	// 2, not 1: a failed read is asked once more on purpose (rest.doGet). A
+	// re-fetch to recover the error would make it 4.
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (one retry, no re-fetch to recover the error)", calls)
 	}
 }
 

@@ -413,8 +413,9 @@ func TestRunChart_UpstreamErrorIsNotEmpty(t *testing.T) {
 	}
 	// A failure is not cached, so the next pick tries again.
 	s.RunChart(context.Background(), p)
-	if atomic.LoadInt32(&calls) != 2 {
-		t.Fatalf("upstream calls = %d, want 2 (errors must not be cached)", calls)
+	// 4 = two picks, each read asked once more on a 502 (rest.doGet).
+	if atomic.LoadInt32(&calls) != 4 {
+		t.Fatalf("upstream calls = %d, want 4 (errors must not be cached)", calls)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,74 @@ import (
 
 // timeout matches server.py's 35-second urlopen timeout on every REST call.
 const timeout = 35 * time.Second
+
+// A read that fails for a reason that often clears by itself (429, 500, 502,
+// 503, 504 or a timeout) is asked once more after retryPause, or after the
+// server's Retry-After when it gives one, never longer than retryAfterCap.
+// Writes are never asked twice: a POST that timed out may already have run.
+const (
+	retryPause    = 500 * time.Millisecond
+	retryAfterCap = 3 * time.Second
+)
+
+// retrySleep is time.Sleep; tests swap it to record the pause.
+var retrySleep = time.Sleep
+
+// doGet sends one GET, and a second after a pause when the first failed for a
+// reason that often clears by itself. The caller reads and closes the
+// response it gets back.
+func (c *Client) doGet(path string, params map[string]string) (*http.Response, error) {
+	resp, err := c.getOnce(path, params)
+	wait, again := retryWait(resp, err)
+	if !again {
+		return resp, err
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+	retrySleep(wait)
+	return c.getOnce(path, params)
+}
+
+func (c *Client) getOnce(path string, params map[string]string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", c.url(path, params), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", c.authValue())
+	req.Header.Set("Accept", "application/json")
+	return c.http.Do(req)
+}
+
+// retryWait says whether a failed GET is worth one more try, and how long to
+// wait first. A 429 that is Infoblox's 4 MiB size cap ("grpc: trying to send
+// message larger than max", dashboard/csp.go CSPExposedHostnames) fails the
+// same way every time, so it is not retried; its body is put back for the
+// caller to read.
+func retryWait(resp *http.Response, err error) (time.Duration, bool) {
+	if err != nil {
+		var ne interface{ Timeout() bool }
+		return retryPause, errors.As(err, &ne) && ne.Timeout()
+	}
+	switch resp.StatusCode {
+	case 429:
+		head, _ := io.ReadAll(io.LimitReader(resp.Body, snippetCap))
+		resp.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(head), resp.Body), resp.Body}
+		if bytes.Contains(head, []byte("larger than max")) {
+			return 0, false
+		}
+	case 500, 502, 503, 504:
+	default:
+		return 0, false
+	}
+	if s, perr := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); perr == nil && s >= 0 {
+		return min(time.Duration(s)*time.Second, retryAfterCap), true
+	}
+	return retryPause, true
+}
 
 // maxIdleConnsPerHost raises http.DefaultTransport's default of 2. Every call
 // in this process goes to ONE host (the CSP API), so the default meant a
@@ -376,13 +445,7 @@ func (c *Client) GetEx(path string, params map[string]string) (any, int, error) 
 // GetETag is GetEx plus the response's ETag header, so a later WriteIfMatch
 // can refuse to save over a change someone else made in between.
 func (c *Client) GetETag(path string, params map[string]string) (any, int, string, error) {
-	req, err := http.NewRequest("GET", c.url(path, params), nil)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	req.Header.Set("Authorization", c.authValue())
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := c.doGet(path, params)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -474,13 +537,7 @@ func (c *Client) GetPageStrict(path string, params map[string]string) (rows []an
 // JSON object, else nil (a bare top-level array still populates rows via
 // Unwrap, but has no envelope to expose). On error, rows and body are nil.
 func (c *Client) getStrict(path string, params map[string]string) ([]any, map[string]any, error) {
-	req, err := http.NewRequest("GET", c.url(path, params), nil)
-	if err != nil {
-		return nil, nil, &UpstreamError{Path: path, Category: "network"}
-	}
-	req.Header.Set("Authorization", c.authValue())
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := c.doGet(path, params)
 	if err != nil {
 		return nil, nil, &UpstreamError{Path: path, Category: "network"}
 	}

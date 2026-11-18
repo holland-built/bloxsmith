@@ -72,16 +72,17 @@ func (f *pagingTenant) handler() http.HandlerFunc {
 		case strings.HasSuffix(r.URL.Path, "/ipam/host"):
 			q := r.URL.Query()
 			f.mu.Lock()
-			page := len(f.queries)
 			f.queries = append(f.queries, r.URL.RawQuery)
 			f.mu.Unlock()
-			if page == f.failPage {
+			limit, _ := strconv.Atoi(q.Get("_limit"))
+			offset, _ := strconv.Atoi(q.Get("_offset"))
+			// Chosen by offset, not by request count, so the page stays broken
+			// when rest asks for it a second time.
+			if f.failPage >= 0 && offset == f.failPage*limit {
 				w.WriteHeader(500)
 				w.Write([]byte(`{"error":"host read failed"}`))
 				return
 			}
-			limit, _ := strconv.Atoi(q.Get("_limit"))
-			offset, _ := strconv.Atoi(q.Get("_offset"))
 			var batch []any
 			if f.alwaysFull {
 				for i := 0; i < limit; i++ {

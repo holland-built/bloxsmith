@@ -488,8 +488,9 @@ func TestSelfserviceAllocate_TagLookupUpstreamError_Returns502NotFalse404(t *tes
 	if resultOK(res) {
 		t.Fatalf("ok = true, want false on upstream failure: %v", res)
 	}
-	if calls != 1 {
-		t.Fatalf("upstream calls = %d, want exactly 1", calls)
+	// 2: the failed read is asked once more on purpose (rest.doGet).
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (one retry)", calls)
 	}
 }
 
