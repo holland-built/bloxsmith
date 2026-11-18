@@ -45,6 +45,7 @@ func normSubnets(raw []any) []map[string]any {
 			totalV, usedV, utilV = total, used, pct
 		}
 		tags := asMap(s["tags"])
+		cloud, cloudDetail := cloudOfSubnet(s)
 		cidr := s["cidr"]
 		if cidr == nil {
 			cidr = 0
@@ -58,6 +59,9 @@ func normSubnets(raw []any) []map[string]any {
 			"used":  usedV,
 			"util":  utilV,
 			"site":  orStr(tags["site"], tags["location"], "–"),
+			// Which public cloud it was discovered in, if any (cloud.go).
+			"cloud":        cloud,
+			"cloud_detail": cloudDetail,
 		})
 	}
 	return out
@@ -92,6 +96,7 @@ func normZones(raw []any, viewMap map[string]string) []map[string]any {
 	for _, item := range raw {
 		z := asMap(item)
 		za := asMap(z["zone_authority"])
+		cloud, cloudDetail := cloudOfZone(asMap(z["tags"]))
 		fqdn := orStr(z["fqdn"], z["name"], "")
 		viewRef := getStr(z["view"])
 		view := viewMap[viewRef]
@@ -163,6 +168,8 @@ func normZones(raw []any, viewMap map[string]string) []map[string]any {
 			"issues":        issuesV,
 			"anomaly":       anomalyV,
 			"dnssec_status": getStr(z["dnssec_status"]),
+			"cloud":         cloud,
+			"cloud_detail":  cloudDetail,
 		})
 	}
 	return out

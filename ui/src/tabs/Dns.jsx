@@ -543,6 +543,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       let av, bv
       if (key === 'fqdn') { av = a.fqdn || ''; bv = b.fqdn || '' }
       else if (key === 'view') { av = a.view || ''; bv = b.view || '' }
+      else if (key === 'cloud') { av = a.cloud || ''; bv = b.cloud || '' }
       else if (key === 'records') { av = Number(a.records) || 0; bv = Number(b.records) || 0 }
       else { av = a.fqdn || ''; bv = b.fqdn || '' }
       if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
@@ -574,6 +575,8 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       fqdn: z.fqdn,
       view: z.view,
       records: (Number(z.records) || 0).toLocaleString(),
+      cloud: z.cloud || '',
+      cloud_detail: z.cloud_detail || '',
       // No TTL published => em-dash, never a number this zone does not have.
       ttl: ttl == null ? '—' : ttl,
       issues: issuesCell,
@@ -589,6 +592,10 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true, render: itemCell('zone', (r) => ({ id: r.id, view: r.view }), { mono: true }) },
     { key: 'view', label: 'View', sortable: true },
+    // Which public cloud the zone is synced from; the hover names the account
+    // where Infoblox has one (go/internal/dashboard/cloud.go).
+    { key: 'cloud', label: 'Cloud', sortable: true, hideWhenConstant: true,
+      render: (v, r) => (v ? <span title={r.cloud_detail || undefined}>{v}</span> : '') },
     { key: 'records', label: 'Records', align: 'right', mono: true, hideWhenConstant: true, sortable: true },
     // keep: DataTable auto-hides a column whose every cell is empty, and '—' is
     // an empty cell to it. A view where no zone publishes a TTL must still show

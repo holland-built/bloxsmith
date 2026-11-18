@@ -49,6 +49,12 @@ function unusedNote(loadedUnused, loaded, total) {
   return `Only the first and last address in use. ${here} /31, /32 and IPv6 networks were not checked.`
 }
 
+// A Cloud cell: AWS, Azure or GCP, with the account as its hover. Blank for
+// networks that did not come from a cloud.
+function cloudCell(v, r) {
+  return v ? <span title={r.cloud_detail || undefined}>{v}</span> : ''
+}
+
 // ---------- main ----------
 
 // Only the utilisation panel needs recharts, so only it waits for it.
@@ -599,6 +605,7 @@ function exhaustionSort(dir) {
   return {
     network: (r) => r.addr || r.cidr || '',
     site: (r) => r.site || '',
+    cloud: (r) => r.cloud || '',
     used: (r) => num(r.used) ?? unknown,
     free: (r) => freeOf(r) ?? unknown,
     util: (r) => num(r.util) ?? unknown,
@@ -693,6 +700,9 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
   const columns = [
     { key: 'network', label: 'Network', mono: true, sortable: true, render: itemCell('network', (r) => ({ id: r.id, value: r.addr && r.cidr != null && r.cidr !== '' ? `${r.addr}/${r.cidr}` : undefined }), { mono: true }) },
     { key: 'site', label: 'Site', sortable: true, render: itemCell('site') },
+    // Which public cloud the network was found in; the hover names the
+    // account where Infoblox has one (go/internal/dashboard/cloud.go).
+    { key: 'cloud', label: 'Cloud', sortable: true, hideWhenConstant: true, render: cloudCell },
     {
       key: 'util',
       label: 'Utilization',

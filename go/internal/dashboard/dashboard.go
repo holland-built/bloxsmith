@@ -144,7 +144,7 @@ const (
 // subnetFields is the shared _fields param for both the first-page subnet
 // fetch and the at-risk fetch, so normSubnets sees identically-shaped rows
 // from either source.
-const subnetFields = "id,name,address,cidr,utilization,tags"
+const subnetFields = "id,name,address,cidr,utilization,tags,discovery_metadata"
 
 // unusedSubnetFilter counts networks nobody uses across the whole tenant: only
 // the network and broadcast address in use (used==2), a /30 or larger
@@ -658,7 +658,7 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 	})
 	want("zones", func() {
 		zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
-			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
+			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status,tags", "_limit": "5000"})
 	})
 	want("feeds", func() {
 		feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})

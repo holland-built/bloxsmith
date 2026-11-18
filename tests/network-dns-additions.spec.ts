@@ -40,11 +40,47 @@ test('Show unused networks lists only IPv4 networks with nothing but network and
   await network(page);
   const box = table(page).getByRole('checkbox', { name: 'Show unused networks (47,661)' });
   await expect(box).toBeVisible({ timeout: 20_000 });
-  await box.check();
+  await box.click();
+  await expect(page).toHaveURL(/unused=1/);
   const rows = table(page).locator('tbody tr');
   await expect(rows).toHaveCount(2);
   await expect(rows.filter({ hasText: '10.0.0.0' })).toHaveCount(1);
   await expect(rows.filter({ hasText: '10.0.2.0' })).toHaveCount(1);
   await expect(table(page)).toContainText('/31, /32 and IPv6 networks were not checked')
   await expect(table(page)).toContainText('2 of them are in the 5 networks loaded here');
+});
+
+test('networks show which cloud they came from, with the account in the hover', async ({ page }) => {
+  await network(page);
+  const rows = table(page).locator('tbody tr');
+  await expect(rows.first()).toBeVisible({ timeout: 20_000 });
+  await expect(table(page).getByRole('columnheader', { name: /Cloud/ })).toBeVisible();
+  const aws = rows.filter({ hasText: '10.0.1.0' }).getByText('AWS', { exact: true });
+  await expect(aws).toHaveAttribute('title', 'Zone us-east-1a · subnet-0b9b8e950df11095c');
+  await table(page).getByRole('checkbox', { name: /Tiny networks/ }).click();
+  await expect(page).toHaveURL(/links=1/);
+  const azure = rows.filter({ hasText: '10.0.2.0' }).getByText('Azure', { exact: true });
+  await expect(azure).toHaveAttribute('title', /Subscription e4c1fa5d/);
+});
+
+const ZONES = [
+  { id: 'dns/auth_zone/a', fqdn: 'lab.example.', view: 'inside', records: 0, ttl: 3600, neg_ttl: 900, issues: [], anomaly: false,
+    cloud: 'GCP', cloud_detail: 'Project gcp-sa-coreddi' },
+  { id: 'dns/auth_zone/b', fqdn: 'lab.example.', view: 'outside', records: 0, ttl: 3600, neg_ttl: 900, issues: [], anomaly: false },
+  { id: 'dns/auth_zone/c', fqdn: 'solo.example.', view: 'inside', records: 0, ttl: 3600, neg_ttl: 900, issues: [], anomaly: false },
+];
+
+async function dns(page: import('@playwright/test').Page) {
+  await page.route('**/api/vault/status*', (route) => fulfillJson(route, { vaultMode: false, ready: true }));
+  await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({ zones: ZONES })));
+  await page.goto('/#dns');
+}
+
+const zoneCard = (page: import('@playwright/test').Page) => page.locator('[data-panel-id="dns-zones"]');
+
+test('zones show which cloud they came from', async ({ page }) => {
+  await dns(page);
+  await expect(zoneCard(page).getByRole('columnheader', { name: /Cloud/ })).toBeVisible({ timeout: 20_000 });
+  const gcp = zoneCard(page).locator('tbody tr').filter({ hasText: 'inside' }).getByText('GCP', { exact: true });
+  await expect(gcp.first()).toHaveAttribute('title', 'Project gcp-sa-coreddi');
 });
