@@ -577,6 +577,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Infra | Host Apps | the on-prem host list | No | it is a list, not a chart |
 | Infra | Jobs | the job list | No | it is a list, not a chart |
 | Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
+| Assets | Coverage gaps | Infoblox's asset records | No | the gaps are worked out in the app from which sources reported each device |
 | Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |
 | Assets | Assets | Infoblox's asset records | No | it is a searchable, paged table, not a chart |
 | Assets | Asset detail | Infoblox's asset records | No | it shows one asset's details, not a chart |

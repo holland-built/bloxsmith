@@ -100,7 +100,7 @@ func TestFetchAssetInventory_AnIPGoesToTheAddressSearch(t *testing.T) {
 		 "vendor":"Dell","last_seen":"2026-11-18T01:31:27Z","ip_addresses":["192.168.1.199"],"mac_addresses":["6c:56:97:9d:8c:bc"]}
 	],"pagination":{"next_page_token":null,"returned":1}}`)
 
-	got := s.FetchAssetInventory(context.Background(), " 2001:DB8::1 ", "", "", "", 3)
+	got := s.FetchAssetInventory(context.Background(), " 2001:DB8::1 ", "", "", "", 3, "")
 
 	b := bodies()
 	if len(b) != 1 {
@@ -136,7 +136,7 @@ func TestFetchAssetInventory_AnIPGoesToTheAddressSearch(t *testing.T) {
 
 func TestFetchAssetInventory_AMACGoesToTheAddressSearch(t *testing.T) {
 	s, bodies := searchServer(t, 200, `{"data":[],"pagination":{"next_page_token":null}}`)
-	got := s.FetchAssetInventory(context.Background(), "6C-56-97-9D-8C-BC", "", "", "", 0)
+	got := s.FetchAssetInventory(context.Background(), "6C-56-97-9D-8C-BC", "", "", "", 0, "")
 	if b := bodies(); len(b) != 1 || b[0]["filter"] != "mac_addresses = '6c:56:97:9d:8c:bc'" {
 		t.Fatalf("bodies %v", b)
 	}
@@ -152,7 +152,7 @@ func TestFetchAssetInventory_AMACGoesToTheAddressSearch(t *testing.T) {
 
 func TestFetchAssetInventory_ANameStaysOnTheNameSearch(t *testing.T) {
 	s, bodies := searchServer(t, 200, `{"data":[]}`)
-	got := s.FetchAssetInventory(context.Background(), "echo-master", "", "", "", 0)
+	got := s.FetchAssetInventory(context.Background(), "echo-master", "", "", "", 0, "")
 	if n := len(bodies()); n != 0 {
 		t.Errorf("%d address searches for a name", n)
 	}
@@ -165,14 +165,14 @@ func TestFetchAssetInventory_ANameStaysOnTheNameSearch(t *testing.T) {
 
 func TestFetchAssetInventory_AnAddressSearchFailureSaysSoAndIsNotCached(t *testing.T) {
 	s, bodies := searchServer(t, 500, `{"error":"boom"}`)
-	got := s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0)
+	got := s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0, "")
 	if got["availability"] != "error" || got["total"] != nil {
 		t.Fatalf("payload %v, want could-not-look with no total", got)
 	}
 	if r, _ := got["reason"].(string); r == "" {
 		t.Error("no reason")
 	}
-	s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0)
+	s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0, "")
 	if n := len(bodies()); n != 2 {
 		t.Errorf("%d calls, want 2: a failure must not be cached", n)
 	}
@@ -180,7 +180,7 @@ func TestFetchAssetInventory_AnAddressSearchFailureSaysSoAndIsNotCached(t *testi
 
 func TestFetchAssetInventory_MoreHitsThanOnePageSaysTheTotalIsUnknown(t *testing.T) {
 	s, _ := searchServer(t, 200, `{"data":[{"id":"a","name":"a"}],"pagination":{"next_page_token":"abc"}}`)
-	got := s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0)
+	got := s.FetchAssetInventory(context.Background(), "10.0.1.4", "", "", "", 0, "")
 	if got["total"] != nil || got["truncated"] != true {
 		t.Errorf("total %v truncated %v; a cut-off list must not claim a total", got["total"], got["truncated"])
 	}

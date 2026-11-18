@@ -107,12 +107,19 @@ func (d *Deps) registerCSPRoutes(mux router) {
 			page = 0
 		}
 		d.json(w, r, 200, d.dash(r).FetchAssetInventory(
-			r.Context(), q.Get("q"), q.Get("type"), q.Get("sort"), q.Get("dir"), page))
+			r.Context(), q.Get("q"), q.Get("type"), q.Get("sort"), q.Get("dir"), page, q.Get("gap")))
 	})
 
 	mux.HandleFunc("GET /api/csp/asset-filters", func(w http.ResponseWriter, r *http.Request) {
 		defer d.recover500(w, r, "/api/csp/asset-filters")
 		d.json(w, r, 200, d.dash(r).FetchAssetFilters(r.Context()))
+	})
+
+	// Coverage gaps: devices seen on the network but not by a tool meant to
+	// know every device (dashboard/assetcoverage.go).
+	mux.HandleFunc("GET /api/csp/asset-coverage", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp/asset-coverage")
+		d.json(w, r, 200, d.dash(r).FetchAssetCoverage(r.Context()))
 	})
 
 	mux.HandleFunc("GET /api/csp/asset-detail", func(w http.ResponseWriter, r *http.Request) {

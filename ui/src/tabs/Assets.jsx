@@ -6,6 +6,7 @@ import { UNCLASSIFIED, parseSeen, rankTypes, seenAgo, shareText, typeTotal, uncl
 import { setHashParams, useHashParams } from '../lib/hash.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import AssetCoverage from '../components/AssetCoverage.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
@@ -34,10 +35,11 @@ import './Assets.css'
 
 const PAGE_SIZE = 50
 
-function buildUrl({ q, type, sort, dir, page }) {
+function buildUrl({ q, type, gap, sort, dir, page }) {
   const p = new URLSearchParams()
   if (q) p.set('q', q)
   if (type) p.set('type', type)
+  if (gap) p.set('gap', gap)
   p.set('sort', sort)
   p.set('dir', dir)
   p.set('page', String(page))
@@ -73,14 +75,16 @@ export default function Assets() {
   // filtered view can be shared or bookmarked.
   const hp = useHashParams()
   const type = hp.type ?? ''
+  // A coverage-gap tile filters the list the same way (#assets?gap=<source>).
+  const gap = hp.gap ?? ''
   const setType = (t) => setHashParams('assets', { type: t })
   const [sort, setSort] = useState({ key: 'last_seen', dir: 'desc' })
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState(null)
 
   const url = useMemo(
-    () => buildUrl({ q, type, sort: sort.key, dir: sort.dir, page }),
-    [q, type, sort, page],
+    () => buildUrl({ q, type, gap, sort: sort.key, dir: sort.dir, page }),
+    [q, type, gap, sort, page],
   )
   // THE TWO SLOWEST READS IN THE APP, AND WHY THEY GET A LONGER LEASH.
   //
@@ -115,7 +119,7 @@ export default function Assets() {
   useEffect(() => {
     setPage(0)
     setSelected(null)
-  }, [q, type, sort])
+  }, [q, type, gap, sort])
 
   function refresh() {
     list.refetch()
@@ -132,6 +136,7 @@ export default function Assets() {
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="assets">
+        <AssetCoverage panelId="assets-coverage" gap={gap} />
         <FilterBar
           panelId="assets-filter-bar"
           filters={filters}
@@ -150,6 +155,7 @@ export default function Assets() {
           list={list}
           searched={q}
           type={type}
+          gap={gap}
           sort={sort}
           onSort={setSort}
           page={page}
@@ -331,7 +337,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 
 // ---------- the list ----------
 
-function AssetList({ list, searched, type, sort, onSort, page, onPage, selected, onSelect, panelId }) {
+function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
   const d = list.data
   const unavailable = !!list.error || d?.availability === 'error'
   const rows = d?.rows ?? []
@@ -353,7 +359,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   // visible header flicker on every page change. nextMergeState is idempotent
   // for a repeated page, so a StrictMode double-invoke lands on the same answer.
   const mergeRef = useRef(null)
-  mergeRef.current = nextMergeState(mergeRef.current, mergeStateKey({ q: searched, type, sort }), rows)
+  mergeRef.current = nextMergeState(mergeRef.current, mergeStateKey({ q: searched, type: gap ? `${type}|gap:${gap}` : type, sort }), rows)
   const merged = mergeRef.current.merged
 
   // keep: true on every column. DataTable auto-hides a column whose cells are
@@ -370,9 +376,9 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
     // by one of the two, and picking `provider` keeps the sort key stable when
     // a later page unmerges the column back into two.
     ...(merged
-      ? [{ key: 'provider', label: byAddress ? 'Seen by / Vendor' : 'Provider / Vendor', sortable: true, keep: true, render: textCell }]
+      ? [{ key: 'provider', label: 'Provider / Vendor', sortable: true, keep: true, render: textCell }]
       : [
-          { key: 'provider', label: byAddress ? 'Seen by' : 'Provider', sortable: true, keep: true, render: textCell },
+          { key: 'provider', label: 'Provider', sortable: true, keep: true, render: textCell },
           { key: 'vendor', label: 'Vendor', sortable: true, keep: true, render: textCell },
         ]),
     {
@@ -422,12 +428,22 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
         <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
       ) : rows.length === 0 ? (
         <Empty>
-          {byAddress
+          {gap && !byAddress
+            ? `every device seen on the network is in ${gap}`
+            : byAddress
             ? `No device with that address was seen in the last ${d.window_days} days`
             : searched || type ? 'no assets match' : 'no assets discovered for this tenant'}
         </Empty>
       ) : (
         <>
+          {gap && !byAddress && (
+            <p className="text-note text-muted mb-2">
+              Showing devices seen on the network but not in {gap}.{' '}
+              <button type="button" className="underline" onClick={() => setHashParams('assets', {})}>
+                Show all devices
+              </button>
+            </p>
+          )}
           {byAddress && (
             <p className="text-note text-muted mb-2">
               Devices with {d.address} seen in the last {d.window_days} days.
@@ -436,7 +452,8 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
           )}
           <DataTable
             rows={rows}
-            columns={columns}
+            // After an address search, Provider is which sources saw the device.
+            columns={byAddress ? columns.map((c) => (c.key === 'provider' ? { ...c, label: c.label.replace('Provider', 'Seen by') } : c)) : columns}
             rowCap={PAGE_SIZE}
             maxHeight={480}
             stickyHeader

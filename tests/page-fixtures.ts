@@ -505,6 +505,12 @@ export const ASSETS_BY_ADDRESS = {
   dir: 'desc', sort: 'last_seen', page: 0, page_size: 100, has_more: false, truncated: false, total: 1,
   rows: [{ cqid: 'cq/baseline-gm', last_seen: agoIso(2 * HOUR), name: 'baseline-gm-1', provider: 'DHCP Logs, NIOS Grid', type: 'Server', vendor: 'baseline-vendor' }],
 };
+// Coverage gaps (assetcoverage.go): one tile per tool meant to know every
+// device, counting devices the network sources saw and that tool did not.
+export const ASSET_COVERAGE = {
+  availability: 'ok', total: 2, network: ['DHCP Logs', 'NIOS Grid'],
+  gaps: [{ source: 'Infoblox Endpoint', role: 'Infoblox agent', count: 1 }],
+};
 export const ASSETS_BY_ADDRESS_NONE = { ...ASSETS_BY_ADDRESS, address: '10.9.9.9', rows: [], total: 0 };
 const DOSSIER = {
   query: 'baseline.example',
@@ -714,6 +720,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   assets: [
     { method: 'GET', path: '/api/csp/asset-filters', body: ASSET_FILTERS, required: true },
     { method: 'GET', path: '/api/csp/assets', body: ASSETS, required: true },
+    { method: 'GET', path: '/api/csp/asset-coverage', body: ASSET_COVERAGE, required: true },
   ],
   incidents: [
     { method: 'GET', path: '/api/actions', body: IQ_ACTIONS, required: true },

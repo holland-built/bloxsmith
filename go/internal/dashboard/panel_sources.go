@@ -124,6 +124,8 @@ var panelSources = []PanelSource{
 	restPanel("infra-dfp-services", "Infra", "DFP Services", "the DNS forwarding proxy list", whyList),
 
 	// ---- Assets ----
+	{ID: "assets-coverage", Page: "Assets", Name: "Coverage gaps", Kind: "cube", Source: "Infoblox's asset records", Builder: "no",
+		Why: "the gaps are worked out in the app from which sources reported each device"},
 	{ID: "assets-filter-bar", Page: "Assets", Name: "Asset Inventory", Kind: "cube", Source: "Infoblox's asset records", Builder: "no",
 		Why: "it is the search and filter controls, with a total and a count for each type"},
 	{ID: "assets-list", Page: "Assets", Name: "Assets", Kind: "cube", Source: "Infoblox's asset records", Builder: "no", Why: whyTable},

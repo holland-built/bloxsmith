@@ -167,6 +167,7 @@ type AssetQuery struct {
 	Sort string // a KEY of assetSortDims, never a raw dimension
 	Dir  string // "asc" or "desc", never anything else
 	Page int    // zero-based
+	Gap  string // a coverage-gap source (assetcoverage.go), or "" for none
 }
 
 // normalizeAssetQuery turns raw query-string values into an AssetQuery that
@@ -274,11 +275,12 @@ func assetsUnavailable(aq AssetQuery, reason string) map[string]any {
 // sync cycles, not second to second, so Security.jsx's 30s poll would spend
 // two upstream calls every 30 seconds per open tab to redraw identical rows.
 // The tab has a manual Refresh instead.
-func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir string, page int) map[string]any {
+func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir string, page int, gap string) map[string]any {
 	aq := normalizeAssetQuery(q, typ, sort, dir, page)
+	aq.Gap = clampLen(strings.TrimSpace(gap), assetQueryMax)
 	ck := cache.Key("assets", "list", map[string]string{
 		"q": aq.Q, "type": aq.Type, "sort": aq.Sort, "dir": aq.Dir,
-		"page": strconv.Itoa(aq.Page),
+		"page": strconv.Itoa(aq.Page), "gap": aq.Gap,
 	}, false)
 
 	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
@@ -314,6 +316,19 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 		return assetsUnavailable(aq, "the MCP session to Infoblox could not be opened")
 	}
 	filters := assetFilters(aq)
+	if aq.Gap != "" {
+		f, none, ok := s.gapFilter(ctx, aq.Gap)
+		if !ok {
+			return assetsUnavailable(aq, "couldn't work out which assets are missing from "+aq.Gap)
+		}
+		if none {
+			// Nothing is missing: an honest empty list, not a query.
+			out := assembleAssetInventory(aq, []map[string]any{}, []map[string]any{{"assetsCount": 0}})
+			out["gap"] = aq.Gap
+			return out
+		}
+		filters = append(filters, f)
+	}
 
 	listOpts := map[string]any{
 		"dimensions": assetListDims,
@@ -383,7 +398,11 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 			i, len(listRows), why, aq.Page, aq.Sort, aq.Dir, aq.Q, aq.Type)
 	}
 
-	return assembleAssetInventory(aq, listRows, countRows)
+	out := assembleAssetInventory(aq, listRows, countRows)
+	if aq.Gap != "" {
+		out["gap"] = aq.Gap
+	}
+	return out
 }
 
 // assembleAssetInventory is the pure assembler — no network, no clock, no
