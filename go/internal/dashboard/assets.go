@@ -282,7 +282,14 @@ func (s *Service) FetchAssetInventory(ctx context.Context, q, typ, sort, dir str
 	}, false)
 
 	v, _ := s.Cache.DoFresh(ck, func() (any, error) {
-		res := s.assetInventoryUncached(ctx, aq)
+		var res map[string]any
+		// One IP or MAC goes to the address search (assetsearch.go); the cube
+		// cannot match an address. Anything else is the name search below.
+		if field, value, ok := addressQuery(aq.Q); ok {
+			res = s.fetchAssetsByAddress(ctx, aq, field, value)
+		} else {
+			res = s.assetInventoryUncached(ctx, aq)
+		}
 		if res["availability"] == "error" {
 			return res, errAssetFeedDegraded
 		}

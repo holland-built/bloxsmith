@@ -496,6 +496,16 @@ const ASSETS = {
   total: 1,
   rows: [{ cqid: 'cq/baseline-1', last_seen: agoIso(5 * HOUR), name: 'baseline-asset-a', provider: 'baseline-provider', type: 'Server', vendor: 'baseline-vendor' }],
 };
+// An IP or MAC in the Assets search box goes to Infoblox's asset search
+// instead of the name search (go/internal/dashboard/assetsearch.go). The reply
+// carries mode "address" and the search's 7-day window, so the page can say
+// why an empty answer is empty. Specs serve it with page.route for one query.
+export const ASSETS_BY_ADDRESS = {
+  availability: 'ok', mode: 'address', matched: 'ip', address: '172.17.0.4', window_days: 7,
+  dir: 'desc', sort: 'last_seen', page: 0, page_size: 100, has_more: false, truncated: false, total: 1,
+  rows: [{ cqid: 'cq/baseline-gm', last_seen: agoIso(2 * HOUR), name: 'baseline-gm-1', provider: 'DHCP Logs, NIOS Grid', type: 'Server', vendor: 'baseline-vendor' }],
+};
+export const ASSETS_BY_ADDRESS_NONE = { ...ASSETS_BY_ADDRESS, address: '10.9.9.9', rows: [], total: 0 };
 const DOSSIER = {
   query: 'baseline.example',
   type: 'host',

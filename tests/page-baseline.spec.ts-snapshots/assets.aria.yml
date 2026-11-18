@@ -1,11 +1,11 @@
 - main "Assets tab":
   - heading "Assets" [level=1]
-  - paragraph: "Every asset discovery found: search by name, filter by type, or click a row for more."
+  - paragraph: "Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more."
   - button "Arrange panels"
   - heading "Asset Inventory" [level=2]
   - text: CSP discovery
-  - textbox "Search assets by name":
-    - /placeholder: Search by name…
+  - textbox "Search assets by name, IP or MAC address":
+    - /placeholder: Search by name, IP or MAC…
   - button "Search"
   - button "Refresh"
   - 'button "About: Asset Inventory"': "About: ⓘ"

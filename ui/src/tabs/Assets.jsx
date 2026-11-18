@@ -125,7 +125,7 @@ export default function Assets() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Assets</h1>
-      <TabIntro>Every asset discovery found: search by name, filter by type, or click a row for more.</TabIntro>
+      <TabIntro>Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(filters, type)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
@@ -243,8 +243,8 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
           {/* Shrinks on a phone: at a fixed 220px the box ran off the left
               edge of the card. */}
           <input {...MACHINE_TEXT}
-            placeholder="Search by name…"
-            aria-label="Search assets by name"
+            placeholder="Search by name, IP or MAC…"
+            aria-label="Search assets by name, IP or MAC address"
             value={input}
             onChange={(e) => onInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
@@ -337,6 +337,10 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   const rows = d?.rows ?? []
   const total = typeof d?.total === 'number' ? d.total : null
   const hasMore = d?.has_more === true
+  // An IP or MAC was searched (assetsearch.go). That search only sees devices
+  // synced in the last 7 days, so the page says so, and Provider becomes
+  // "Seen by": which sources reported the device.
+  const byAddress = d?.mode === 'address'
 
   // Provider and Vendor collapse into one column when they hold the same value
   // on every row. The decision lives in assetColumns.js, not here, because it
@@ -366,9 +370,9 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
     // by one of the two, and picking `provider` keeps the sort key stable when
     // a later page unmerges the column back into two.
     ...(merged
-      ? [{ key: 'provider', label: 'Provider / Vendor', sortable: true, keep: true, render: textCell }]
+      ? [{ key: 'provider', label: byAddress ? 'Seen by / Vendor' : 'Provider / Vendor', sortable: true, keep: true, render: textCell }]
       : [
-          { key: 'provider', label: 'Provider', sortable: true, keep: true, render: textCell },
+          { key: 'provider', label: byAddress ? 'Seen by' : 'Provider', sortable: true, keep: true, render: textCell },
           { key: 'vendor', label: 'Vendor', sortable: true, keep: true, render: textCell },
         ]),
     {
@@ -417,9 +421,19 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
         // that could not be read must never render as a tenant with no assets.
         <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
       ) : rows.length === 0 ? (
-        <Empty>{searched || type ? 'no assets match' : 'no assets discovered for this tenant'}</Empty>
+        <Empty>
+          {byAddress
+            ? `No device with that address was seen in the last ${d.window_days} days`
+            : searched || type ? 'no assets match' : 'no assets discovered for this tenant'}
+        </Empty>
       ) : (
         <>
+          {byAddress && (
+            <p className="text-note text-muted mb-2">
+              Devices with {d.address} seen in the last {d.window_days} days.
+              {d.truncated ? ` The first ${rows.length} are shown.` : ''}
+            </p>
+          )}
           <DataTable
             rows={rows}
             columns={columns}
