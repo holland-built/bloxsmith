@@ -701,8 +701,10 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
     { key: 'network', label: 'Network', mono: true, sortable: true, render: itemCell('network', (r) => ({ id: r.id, value: r.addr && r.cidr != null && r.cidr !== '' ? `${r.addr}/${r.cidr}` : undefined }), { mono: true }) },
     { key: 'site', label: 'Site', sortable: true, render: itemCell('site') },
     // Which public cloud the network was found in; the hover names the
-    // account where Infoblox has one (go/internal/dashboard/cloud.go).
-    { key: 'cloud', label: 'Cloud', sortable: true, hideWhenConstant: true, render: cloudCell },
+    // account where Infoblox has one (go/internal/dashboard/cloud.go). Only
+    // when some network has one: a column with its own render is never
+    // auto-hidden, so it would otherwise sit empty on tenants with no cloud.
+    ...(tableRows.some((r) => r.cloud) ? [{ key: 'cloud', label: 'Cloud', sortable: true, render: cloudCell }] : []),
     {
       key: 'util',
       label: 'Utilization',

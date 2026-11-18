@@ -605,9 +605,10 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
     { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true, render: itemCell('zone', (r) => ({ id: r.id, view: r.view }), { mono: true }) },
     { key: 'view', label: 'View', sortable: true },
     // Which public cloud the zone is synced from; the hover names the account
-    // where Infoblox has one (go/internal/dashboard/cloud.go).
-    { key: 'cloud', label: 'Cloud', sortable: true, hideWhenConstant: true,
-      render: (v, r) => (v ? <span title={r.cloud_detail || undefined}>{v}</span> : '') },
+    // where Infoblox has one (go/internal/dashboard/cloud.go). Only when some
+    // zone has one: a column with its own render is never auto-hidden.
+    ...(rows.some((r) => r.cloud) ? [{ key: 'cloud', label: 'Cloud', sortable: true,
+      render: (v, r) => (v ? <span title={r.cloud_detail || undefined}>{v}</span> : '') }] : []),
     { key: 'records', label: 'Records', align: 'right', mono: true, hideWhenConstant: true, sortable: true },
     // keep: DataTable auto-hides a column whose every cell is empty, and '—' is
     // an empty cell to it. A view where no zone publishes a TTL must still show
