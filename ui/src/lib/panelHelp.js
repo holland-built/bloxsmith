@@ -223,6 +223,14 @@ export const PANEL_HELP = {
   },
 
   // ---- Assets ----
+  'assets-coverage': {
+    what: 'Devices seen on the network (DHCP Logs, NIOS Grid, Network Insight) that a tool meant to know every device has never reported.',
+    look: "Click a tile to list those devices; click it again to show them all. \"couldn't count\" means the server could not be sure of the number.",
+  },
+  'assets-connectors': {
+    what: 'Each discovery connection (AWS, Azure, Active Directory and so on) and whether its last sync worked, failing ones first.',
+    look: 'Click a cut-short message to read all of it. Working and turned-off ones wait behind the button under the list. Nothing here changes a connection.',
+  },
   'assets-filter-bar': {
     what: 'The types of device discovery found, largest first, each with how many and its share of the total. Unclassified are the ones discovery could not name.',
     look: 'Click a type to show only it; click again to clear. The button under the list opens the smaller types. Nothing refreshes on a timer — Refresh asks the server again.',

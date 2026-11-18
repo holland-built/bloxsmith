@@ -207,14 +207,29 @@ The list behind the counts. Infra's **Asset Discovery** tile and Security's **As
 - **Asset Inventory**: the asset types, largest first, each with its count, its share and a bar. The biggest show first; **more** opens the rest. Click a type to show only that type, and click it again to clear it. Only the types *your tenant has* are listed, so a type never filters down to nothing.
 - **Assets**: the list itself, with name, type, provider, vendor and last seen. Last seen shows how long ago ("8h ago"); point at it for the exact time. Sort on any of the five columns. 50 rows to a page.
 - **Row detail**: click a row to see the fields that are too often empty for their own column: OS, IP addresses, MAC addresses, model and location. Only about a quarter of assets have an OS recorded, so a column for it would be mostly blank, but on the asset you picked it is often the first thing you want.
+- **Coverage gaps**: devices seen on the network (by DHCP Logs, NIOS Grid or Network Insight) that a tool meant to know every device has never reported. There is one tile for each such tool your account has: Infoblox Endpoint, a security agent (CrowdStrike, SentinelOne, Microsoft Defender), an asset register (ServiceNow) or device management (Intune, Jamf). Click a tile to list exactly the devices it counted, and click it again, or **Show all devices**, to go back. If the server can't be sure of a number, the tile says **couldn't count** instead of guessing. Cloud sources such as AWS, Azure and GCP aren't compared, because their assets aren't devices on your network. If your account has no such tool, the panel says there is nothing to compare.
+- **Discovery connections**: each discovery connection (AWS, Azure, GCP, Active Directory and so on) with its type, a status word (**Failing**, **Partly working**, **Syncing**, **Working** or **Turned off**), how long ago it last synced, and its message. Failing ones come first. A long message is cut short; click it to read all of it. Working and turned-off connections wait behind the button under the list. This panel only reads; nothing on it changes a connection.
 
 Search looks at the asset **name** and ignores upper and lower case. It searches every asset on the server, not just the page on screen. Searching from page 4 of 48 searches all 48 pages and takes you to page 1 of the results.
+
+Type an **IP address** (IPv4 or IPv6) or a **MAC address** instead, and the search finds the devices that carry it, with **Seen by** showing which sources reported each one. MAC addresses can be written with colons, dashes or dots, in upper or lower case. This search asks Infoblox's asset search, which only knows devices synced in the **last 7 days**, so a device that has been off the network longer than that is not found, and the page says "No device with that address was seen in the last 7 days". The type filter does not apply to an address search.
 
 The server does the searching, filtering, sorting and paging. Your browser is never sent 2,000 or more assets just to show you 50.
 
 **This tab doesn't refresh on a timer, on purpose.** The other read-only tabs refresh themselves because what they watch changes minute to minute. The asset list only changes when a discovery sync runs, so a timer would fetch the same rows again and again. It would also move the table while you were halfway down page 4, which is the one time a table must stay still. Press **Refresh** to ask the server to read the list again. The server keeps its own short cache, so two refreshes close together can return the same rows.
 
 A panel that says **unavailable** couldn't be read, and it names the reason. A list that is really empty says so in different words. The two never look the same, so an empty table here means your filter matched nothing. The total works the same way: if the count fails but the list loads, the total shows as unavailable, because a wrong total is worse than none.
+
+### Why is a device missing?
+
+A colleague's testing in October 2026, syncing a demo company's devices from nine vendors into Infoblox, found these reasons a real device can be missing or look wrong. They are Infoblox or vendor behaviour, not something this app does:
+
+- **Only managed devices seen in the last 7 days are listed** by the address search. A device Infoblox took in but marked unmanaged never comes back from it, and the reason isn't shown anywhere.
+- **CrowdStrike labels Windows servers as workstations**, so they show under the wrong type.
+- **CrowdStrike can show the location as "Unassigned"**, even when ServiceNow or the network knows the site.
+- **ServiceNow location needs a custom field called `u_region`.** A ServiceNow without it never gives a device a location, even when the city and country are filled in. Windows servers from ServiceNow weren't mapped at all in that testing, while Linux servers were.
+- **Very large Intune fleets can time out.** About 88,000 devices hit a one-hour limit and only 50,000 arrived. Intune and Jamf syncing at the same moment also failed together, and each worked when synced on its own.
+- **A device's detail can be a few hours old** after a sync, then catch up.
 
 ## Incidents
 
@@ -577,6 +592,8 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Infra | Host Apps | the on-prem host list | No | it is a list, not a chart |
 | Infra | Jobs | the job list | No | it is a list, not a chart |
 | Infra | DFP Services | the DNS forwarding proxy list | No | it is a list, not a chart |
+| Assets | Coverage gaps | Infoblox's asset records | No | the gaps are worked out in the app from which sources reported each device |
+| Assets | Discovery connections | the discovery connection list | No | it is a list, not a chart |
 | Assets | Asset Inventory | Infoblox's asset records | No | it is the search and filter controls, with a total and a count for each type |
 | Assets | Assets | Infoblox's asset records | No | it is a searchable, paged table, not a chart |
 | Assets | Asset detail | Infoblox's asset records | No | it shows one asset's details, not a chart |

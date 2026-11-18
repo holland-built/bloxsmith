@@ -703,7 +703,7 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   // AXUR_API_KEY is unset.
   security: 14,
   infra: 6, // 8 until 2026-11-10, when Host Health merged into Host Inventory and Asset Discovery became a tile
-  assets: 2,
+  assets: 4, // 2 until 2026-11-17, when Coverage gaps and Discovery connections joined
   incidents: 5,
   audit: 3,
   changes: 2,

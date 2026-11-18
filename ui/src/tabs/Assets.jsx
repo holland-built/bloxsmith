@@ -6,6 +6,8 @@ import { UNCLASSIFIED, parseSeen, rankTypes, seenAgo, shareText, typeTotal, uncl
 import { setHashParams, useHashParams } from '../lib/hash.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import AssetCoverage from '../components/AssetCoverage.jsx'
+import AssetConnectors from '../components/AssetConnectors.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
@@ -34,10 +36,11 @@ import './Assets.css'
 
 const PAGE_SIZE = 50
 
-function buildUrl({ q, type, sort, dir, page }) {
+function buildUrl({ q, type, gap, sort, dir, page }) {
   const p = new URLSearchParams()
   if (q) p.set('q', q)
   if (type) p.set('type', type)
+  if (gap) p.set('gap', gap)
   p.set('sort', sort)
   p.set('dir', dir)
   p.set('page', String(page))
@@ -73,14 +76,16 @@ export default function Assets() {
   // filtered view can be shared or bookmarked.
   const hp = useHashParams()
   const type = hp.type ?? ''
+  // A coverage-gap tile filters the list the same way (#assets?gap=<source>).
+  const gap = hp.gap ?? ''
   const setType = (t) => setHashParams('assets', { type: t })
   const [sort, setSort] = useState({ key: 'last_seen', dir: 'desc' })
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState(null)
 
   const url = useMemo(
-    () => buildUrl({ q, type, sort: sort.key, dir: sort.dir, page }),
-    [q, type, sort, page],
+    () => buildUrl({ q, type, gap, sort: sort.key, dir: sort.dir, page }),
+    [q, type, gap, sort, page],
   )
   // THE TWO SLOWEST READS IN THE APP, AND WHY THEY GET A LONGER LEASH.
   //
@@ -115,7 +120,7 @@ export default function Assets() {
   useEffect(() => {
     setPage(0)
     setSelected(null)
-  }, [q, type, sort])
+  }, [q, type, gap, sort])
 
   function refresh() {
     list.refetch()
@@ -125,13 +130,14 @@ export default function Assets() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-copy font-semibold tracking-tight mb-1">Assets</h1>
-      <TabIntro>Every asset discovery found: search by name, filter by type, or click a row for more.</TabIntro>
+      <TabIntro>Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(filters, type)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="assets">
+        <AssetCoverage panelId="assets-coverage" gap={gap} />
         <FilterBar
           panelId="assets-filter-bar"
           filters={filters}
@@ -150,6 +156,7 @@ export default function Assets() {
           list={list}
           searched={q}
           type={type}
+          gap={gap}
           sort={sort}
           onSort={setSort}
           page={page}
@@ -170,6 +177,7 @@ export default function Assets() {
             onClose={() => setSelected(null)}
           />
         )}
+        <AssetConnectors panelId="assets-connectors" />
       </CardGrid>
     </div>
   )
@@ -243,8 +251,8 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
           {/* Shrinks on a phone: at a fixed 220px the box ran off the left
               edge of the card. */}
           <input {...MACHINE_TEXT}
-            placeholder="Search by name…"
-            aria-label="Search assets by name"
+            placeholder="Search by name, IP or MAC…"
+            aria-label="Search assets by name, IP or MAC address"
             value={input}
             onChange={(e) => onInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
@@ -331,12 +339,16 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 
 // ---------- the list ----------
 
-function AssetList({ list, searched, type, sort, onSort, page, onPage, selected, onSelect, panelId }) {
+function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
   const d = list.data
   const unavailable = !!list.error || d?.availability === 'error'
   const rows = d?.rows ?? []
   const total = typeof d?.total === 'number' ? d.total : null
   const hasMore = d?.has_more === true
+  // An IP or MAC was searched (assetsearch.go). That search only sees devices
+  // synced in the last 7 days, so the page says so, and Provider becomes
+  // "Seen by": which sources reported the device.
+  const byAddress = d?.mode === 'address'
 
   // Provider and Vendor collapse into one column when they hold the same value
   // on every row. The decision lives in assetColumns.js, not here, because it
@@ -349,7 +361,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   // visible header flicker on every page change. nextMergeState is idempotent
   // for a repeated page, so a StrictMode double-invoke lands on the same answer.
   const mergeRef = useRef(null)
-  mergeRef.current = nextMergeState(mergeRef.current, mergeStateKey({ q: searched, type, sort }), rows)
+  mergeRef.current = nextMergeState(mergeRef.current, mergeStateKey({ q: searched, type: gap ? `${type}|gap:${gap}` : type, sort }), rows)
   const merged = mergeRef.current.merged
 
   // keep: true on every column. DataTable auto-hides a column whose cells are
@@ -417,12 +429,33 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
         // that could not be read must never render as a tenant with no assets.
         <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
       ) : rows.length === 0 ? (
-        <Empty>{searched || type ? 'no assets match' : 'no assets discovered for this tenant'}</Empty>
+        <Empty>
+          {gap && !byAddress
+            ? `every device seen on the network is in ${gap}`
+            : byAddress
+            ? `No device with that address was seen in the last ${d.window_days} days`
+            : searched || type ? 'no assets match' : 'no assets discovered for this tenant'}
+        </Empty>
       ) : (
         <>
+          {gap && !byAddress && (
+            <p className="text-note text-muted mb-2">
+              Showing devices seen on the network but not in {gap}.{' '}
+              <button type="button" className="underline" onClick={() => setHashParams('assets', {})}>
+                Show all devices
+              </button>
+            </p>
+          )}
+          {byAddress && (
+            <p className="text-note text-muted mb-2">
+              Devices with {d.address} seen in the last {d.window_days} days.
+              {d.truncated ? ` Only the first ${(d.fetched ?? rows.length).toLocaleString()} found can be shown.` : ''}
+            </p>
+          )}
           <DataTable
             rows={rows}
-            columns={columns}
+            // After an address search, Provider is which sources saw the device.
+            columns={byAddress ? columns.map((c) => (c.key === 'provider' ? { ...c, label: c.label.replace('Provider', 'Seen by') } : c)) : columns}
             rowCap={PAGE_SIZE}
             maxHeight={480}
             stickyHeader
