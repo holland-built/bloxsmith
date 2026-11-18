@@ -144,7 +144,15 @@ const (
 // subnetFields is the shared _fields param for both the first-page subnet
 // fetch and the at-risk fetch, so normSubnets sees identically-shaped rows
 // from either source.
-const subnetFields = "id,name,address,cidr,utilization,tags"
+const subnetFields = "id,name,address,cidr,utilization,tags,discovery_metadata"
+
+// unusedSubnetFilter counts networks nobody uses across the whole tenant: only
+// the network and broadcast address in use (used==2), a /30 or larger
+// (cidr<=30 leaves out /31 and /32, which report used 0-2 of 2 and 0-1 of 1),
+// and a measured total of 4 or more (every IPv6 row reports total 0, so IPv6 is
+// left out). Same rule as ui/src/lib/unusedNetworks.js. Live tenant
+// 2026-11-17: 47,661 of 72,599.
+const unusedSubnetFilter = "utilization.used==2 and cidr<=30 and utilization.total>=4"
 
 // subnetPageSize/subnetPageCount split the subnets first page into concurrent
 // _offset pages instead of one giant request.
@@ -166,7 +174,7 @@ const (
 	subnetPageCount = 10
 )
 
-// dashboardFanOut bounds how many of buildAggregate's 21 upstream calls are in
+// dashboardFanOut bounds how many of buildAggregate's 22 upstream calls are in
 // flight at once.
 //
 // WHY 12. The old value was 6, and the reason it was 6 was an explicit gap in
@@ -176,13 +184,13 @@ const (
 // returned HTTP 200, per-request 1.75-2.78s, wall 2.88s, no 429 and no
 // slowdown. 12 is the width actually measured safe.
 //
-// Task count is now 21 (10 subnet pages + at-risk + 6 other feeds + audit +
-// 3 counts), so the bound is no longer "everything at once": it genuinely
+// Task count is now 22 (10 subnet pages + at-risk + 6 other feeds + audit +
+// 4 counts), so the bound is no longer "everything at once": it genuinely
 // queues, and which tasks get the 12 slots at t=0 is decided by registration
 // order (see fanOut, whose admission is deterministic). buildAggregate
 // registers its long poles first for exactly that reason.
 //
-// Not higher than 12: 21-wide is still untested. The old comment's rule stands
+// Not higher than 12: 22-wide is still untested. The old comment's rule stands
 // unchanged — raise it only with a measurement, not a guess. rest.go's
 // maxIdleConnsPerHost is sized to this number and must be raised with it.
 const dashboardFanOut = 12
@@ -524,14 +532,14 @@ var errRotatedMidFetch = errors.New("dashboard: cache rotated during every aggre
 // Python does; the audit feed goes through GetEx so a 4xx (unavailable) is
 // distinguishable from a genuinely empty feed.
 //
-// ss narrows the attempt: a nil set runs all 21 tasks and returns all 8 data
+// ss narrows the attempt: a nil set runs all 22 tasks and returns all 8 data
 // keys, all 8 _meta keys and _totals (the historic shape). A non-nil set runs
 // ONLY the tasks its slices need and returns ONLY those slices' keys. A slice
 // that was not fetched is absent from both the data map and _meta — absence IS
 // the representation of "not asked for". There is no fourth status word, and
 // the client must never read absence as "you have none".
 func (s *Service) buildAggregate(ss sliceSet) map[string]any {
-	// All 21 upstream calls are independent of each other, and they were once
+	// All 22 upstream calls are independent of each other, and they were once
 	// measured running strictly sequentially: every call started at the exact
 	// millisecond the previous one ended, so the cold cost was the SUM of the
 	// latencies (~18.6s of medians) rather than the slowest one (~7.5s). They
@@ -561,6 +569,8 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 
 		subnetsTotal, subnetsCrit, hostsTotal       int
 		subnetsTotalOK, subnetsCritOK, hostsTotalOK bool
+		subnetsUnused                               int
+		subnetsUnusedOK                             bool
 
 		// One slot per concurrent subnet offset page. Pre-sized, never
 		// appended to, so each page task writes only to its own index and the
@@ -648,7 +658,7 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 	})
 	want("zones", func() {
 		zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
-			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
+			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status,tags", "_limit": "5000"})
 	})
 	want("feeds", func() {
 		feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
@@ -692,6 +702,10 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 					map[string]string{"_filter": "utilization.utilization>=90"})
 			},
 			func() { hostsTotal, hostsTotalOK = s.fetchCount("/api/infra/v1/detail_hosts", nil) },
+			func() {
+				subnetsUnused, subnetsUnusedOK = s.fetchCount("/api/ddi/v1/ipam/subnet",
+					map[string]string{"_filter": unusedSubnetFilter})
+			},
 		)
 	}
 
@@ -769,6 +783,12 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 		totals["subnetsCrit"] = subnetsCrit
 	} else {
 		degraded = true
+	}
+	// Not part of degraded: that flag says the at-risk bands may be short, and
+	// a missing unused count says nothing about them. A failed count is simply
+	// left out, so the screen shows no number rather than 0.
+	if subnetsUnusedOK {
+		totals["subnetsUnused"] = subnetsUnused
 	}
 	if atRiskTotalOK {
 		totals["subnetsWarn"] = atRiskTotal

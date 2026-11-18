@@ -147,14 +147,18 @@ IP addresses and DHCP in detail.
 - **Overlapping ranges**: address ranges used in more than one IP space, the most spaces first. Click a row to see each space and its own ranges there. Each space name opens that space in the Infoblox Portal in a new tab, and each range opens the Editor with that block or subnet picked. A row is ranges that touch, so two of its spaces need not overlap each other. Read once when the page opens; it changes nothing in Infoblox.
 - **DHCP Leases**: a lease table you can filter.
 - **Subnet table**: the full list, without /29 to /32 links unless you tick **/29–/32 links**. Those small links are nearly always full, so they would bury the real subnets. The ≥90% counts on Overview, Daily and the tile above include them, and clicking one of those counts opens the list with them ticked.
+- **Show unused networks**: ticking it lists only networks where nothing but the first and last address is taken (the network and broadcast address). The number next to it counts every network in Infoblox; the table lists the ones among the networks loaded on this page. Only IPv4 networks of 4 addresses or more are checked. /31, /32 and IPv6 networks report their usage differently, so they are left out.
+- **Cloud** column: AWS, Azure or GCP for networks found by cloud discovery, blank for the rest. Point at it to see the Azure subscription and resource group, the GCP project, or the AWS zone and subnet. AWS does not tell Infoblox the account number, so it is not shown.
 
-You can link straight to a view: `#network?subnet=10.0.0.0`, `#network?minUtil=90`, `#network?minUtil=90&links=1`, `#network?focus=leases`.
+You can link straight to a view: `#network?subnet=10.0.0.0`, `#network?minUtil=90`, `#network?minUtil=90&links=1`, `#network?unused=1`, `#network?focus=leases`.
 
 ## DNS
 
 Everything about DNS. Refreshes every 30 seconds.
 
 - **DNS Query Rate — 24h** and **Query Volume — 7d**.
+- **DNS Zones**: every zone and the view it is in. The **Cloud** column says AWS, Azure or GCP for zones copied in from a cloud, blank for the rest; point at it to see the Azure subscription, the GCP project or the AWS hosted zone.
+- **Compare views** (on DNS Zones, when a zone name is in two or more views): pick the zone and two of its views, then **Compare**. It reads every record in both and lists the records only in the first view, only in the second, and those whose value or cache time (TTL) differs. If Infoblox stops answering part-way, it says how many records were read and that the lists may be missing some. It changes nothing.
 - **DNS Services**: each DNS service and its state.
 - **DNSSEC Health**: which zones with public names (such as .com) are signed. Internal zones, like reverse zones or .local names, are counted apart and not flagged.
 - **RPZ Policy Zones**: how many response policy zones there are, and their state.

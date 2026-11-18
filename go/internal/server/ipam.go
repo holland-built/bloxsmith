@@ -28,6 +28,7 @@ func (d *Deps) registerIPAMReadRoutes(mux router) {
 	mux.HandleFunc("GET /api/ipam/availability", d.ipamAvailability)
 	mux.HandleFunc("GET /api/ipam/subnets", d.ipamSubnets)
 	mux.HandleFunc("GET /api/ipam/overlaps", d.ipamOverlaps)
+	mux.HandleFunc("GET /api/dns/zone-compare", d.dnsZoneCompare)
 }
 
 // getMap coerces a decoded JSON element to an object (Python row dict).

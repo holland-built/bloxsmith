@@ -13,6 +13,7 @@ import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import { isUnused } from '../lib/unusedNetworks.js'
 // The look the owner picked for dashboards (Overview's tokens and tiles), plus
 // this page's own few rules.
 import './Overview.css'
@@ -36,6 +37,22 @@ function ipCompare(a, b) {
     if ((av[i] || 0) !== (bv[i] || 0)) return (av[i] || 0) - (bv[i] || 0)
   }
   return 0
+}
+
+// The line under the table heading while "Show unused networks" is on. The
+// table only holds the networks loaded into the page, so it says how many of
+// the tenant-wide unused ones are here, and which sizes were not judged.
+function unusedNote(loadedUnused, loaded, total) {
+  const here = total == null
+    ? `${loadedUnused.toLocaleString()} of the ${loaded.toLocaleString()} networks loaded here.`
+    : `${total.toLocaleString()} unused across all networks; ${loadedUnused.toLocaleString()} of them are in the ${loaded.toLocaleString()} networks loaded here.`
+  return `Only the first and last address in use. ${here} /31, /32 and IPv6 networks were not checked.`
+}
+
+// A Cloud cell: AWS, Azure or GCP, with the account as its hover. Blank for
+// networks that did not come from a cloud.
+function cloudCell(v, r) {
+  return v ? <span title={r.cloud_detail || undefined}>{v}</span> : ''
 }
 
 // ---------- main ----------
@@ -112,7 +129,7 @@ export default function Network() {
             layout. The id lives here rather than on the <Card> inside
             DhcpLeases for the same reason it does on Overview: the grid reads
             it off this element. */}
-        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} innerRef={subnetsRef} />
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} totals={totals} hp={hp} subnetsStatus={subnetsStatus} innerRef={subnetsRef} />
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dhcp,
           state: owned,
@@ -588,6 +605,7 @@ function exhaustionSort(dir) {
   return {
     network: (r) => r.addr || r.cidr || '',
     site: (r) => r.site || '',
+    cloud: (r) => r.cloud || '',
     used: (r) => num(r.used) ?? unknown,
     free: (r) => freeOf(r) ?? unknown,
     util: (r) => num(r.util) ?? unknown,
@@ -601,7 +619,7 @@ function exhaustionSort(dir) {
 // it is a cap nothing can label.
 const EXHAUSTION_CAP = 150
 
-function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
+function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -616,7 +634,16 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
   // links=1 puts them back, so a "subnets ≥90%" count that includes them
   // (Overview, Daily, the tile above) opens a list of the same length.
   const links = hp.links === '1'
-  const base = useMemo(() => (links ? subnets : subnets.filter((s) => (Number(s.cidr) || 0) <= 28)), [subnets, links])
+  // "Show unused networks" (unused=1) lists the loaded networks that have
+  // nothing in use but their network and broadcast address. It covers every
+  // size the rule can judge (/30 and up), so the tiny-networks switch does not
+  // apply to it. The count in its label is the tenant-wide one from the server
+  // (_totals.subnetsUnused); without it, the loaded count is shown and says so.
+  const unused = hp.unused === '1'
+  const unusedLoaded = useMemo(() => subnets.filter((s) => isUnused(s) === true), [subnets])
+  const unusedTotal = Number.isFinite(totals?.subnetsUnused) ? totals.subnetsUnused : null
+  const base = useMemo(() => (unused ? unusedLoaded : links ? subnets : subnets.filter((s) => (Number(s.cidr) || 0) <= 28)),
+    [subnets, links, unused, unusedLoaded])
   const sites = useMemo(() => [...new Set(base.map((s) => s.site).filter(Boolean))].sort(), [base])
 
   const filtered = useMemo(() => {
@@ -673,6 +700,11 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
   const columns = [
     { key: 'network', label: 'Network', mono: true, sortable: true, render: itemCell('network', (r) => ({ id: r.id, value: r.addr && r.cidr != null && r.cidr !== '' ? `${r.addr}/${r.cidr}` : undefined }), { mono: true }) },
     { key: 'site', label: 'Site', sortable: true, render: itemCell('site') },
+    // Which public cloud the network was found in; the hover names the
+    // account where Infoblox has one (go/internal/dashboard/cloud.go). Only
+    // when some network has one: a column with its own render is never
+    // auto-hidden, so it would otherwise sit empty on tenants with no cloud.
+    ...(tableRows.some((r) => r.cloud) ? [{ key: 'cloud', label: 'Cloud', sortable: true, render: cloudCell }] : []),
     {
       key: 'util',
       label: 'Utilization',
@@ -745,17 +777,27 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus, innerRef }) {
           )}
         </>
       }
-      note={links ? 'incl. tiny networks (8 addresses or fewer)' : 'excl. tiny networks (8 addresses or fewer)'}
+      note={unused ? unusedNote(unusedLoaded.length, subnets.length, unusedTotal)
+        : links ? 'incl. tiny networks (8 addresses or fewer)' : 'excl. tiny networks (8 addresses or fewer)'}
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
-          <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
+          <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap"
+            title="Networks where nothing but the first and last address is taken">
+            <input
+              type="checkbox"
+              checked={unused}
+              onChange={(e) => setHashParams('network', { ...hp, unused: e.target.checked ? '1' : undefined })}
+            />
+            Show unused networks ({(unusedTotal ?? unusedLoaded.length).toLocaleString()}{unusedTotal == null ? ' loaded' : ''})
+          </label>
+          {!unused && <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
             <input
               type="checkbox"
               checked={links}
               onChange={(e) => setHashParams('network', { ...hp, links: e.target.checked ? '1' : undefined })}
             />
             Tiny networks
-          </label>
+          </label>}
           <input {...MACHINE_TEXT}
             aria-label="Filter networks"
             placeholder="Filter…"
