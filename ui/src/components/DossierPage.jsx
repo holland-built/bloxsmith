@@ -145,6 +145,11 @@ const SOURCES = [
     tabLabel: 'Assets',
     url: (q) => `/api/csp/assets?q=${encodeURIComponent(q)}`,
     noneText: 'no asset in the inventory carries this — we asked, and the inventory holds none',
+    // An IP or MAC is answered by Infoblox's asset search, which only sees
+    // devices synced in the last 7 days (go/internal/dashboard/assetsearch.go),
+    // so an empty answer there says only that. Same words as the Assets tab.
+    noneTextFor: (body) =>
+      body?.mode === 'address' ? `No device with that address was seen in the last ${body.window_days} days` : null,
     unknownText: 'whether any asset carries it',
     shape: (body) =>
       rowsOf(body).map((r, i) => ({
@@ -673,7 +678,7 @@ function SourceSection({ src, q, onResult }) {
           </>
         )}
 
-        {state === 'none' && <MessageCell tone="muted">{src.noneText}</MessageCell>}
+        {state === 'none' && <MessageCell tone="muted">{src.noneTextFor?.(res.body) ?? src.noneText}</MessageCell>}
         {state === 'na' && <MessageCell tone="muted">{src.naText}</MessageCell>}
         {state === 'noquery' && <MessageCell tone="muted">No query yet.</MessageCell>}
         {state === 'unsupported' && <MessageCell>{src.unsupportedText ?? <>This tenant&rsquo;s API can&rsquo;t be asked for this.</>}</MessageCell>}
