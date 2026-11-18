@@ -110,7 +110,7 @@ func slowAggregateHandler(p *probe, delay time.Duration) http.HandlerFunc {
 }
 
 // TestBuildAggregate_UpstreamCallsRunConcurrently is the concurrency proof. A
-// cold /api/data makes 21 upstream calls; measured live they ran strictly
+// cold /api/data makes 22 upstream calls; measured live they ran strictly
 // sequentially (every start == the previous end), costing the sum of all
 // latencies instead of the slowest one. The fake upstream here records peak
 // in-flight requests: sequential code can never exceed 1.
@@ -125,8 +125,8 @@ func TestBuildAggregate_UpstreamCallsRunConcurrently(t *testing.T) {
 	s.FetchDashboardData(nil)
 
 	peak, total := p.peakAndTotal()
-	if total != 21 {
-		t.Fatalf("upstream call count = %d, want 21 (%d subnet pages + 6 other strict feeds + at-risk page + audit + 3 counts)", total, subnetPageCount)
+	if total != 22 {
+		t.Fatalf("upstream call count = %d, want 22 (%d subnet pages + 6 other strict feeds + at-risk page + audit + 4 counts)", total, subnetPageCount)
 	}
 	if peak < 2 {
 		t.Fatalf("peak concurrent upstream requests = %d, want > 1 — the aggregate is still sequential", peak)
@@ -347,8 +347,8 @@ func TestFetchDashboardData_SingleFlightCollapsesConcurrentColdCallers(t *testin
 	if n := p.count("/api/ddi/v1/ipam/subnet"); n != subnetPageCount {
 		t.Fatalf("%d concurrent cold callers caused %d upstream subnet-page fetches, want exactly subnetPageCount=%d — Cache.Do is not wired in", callers, n, subnetPageCount)
 	}
-	if _, total := p.peakAndTotal(); total != 21 {
-		t.Fatalf("total upstream calls = %d, want 21 for one shared aggregate", total)
+	if _, total := p.peakAndTotal(); total != 22 {
+		t.Fatalf("total upstream calls = %d, want 22 for one shared aggregate", total)
 	}
 	for i, data := range results {
 		if data == nil {
