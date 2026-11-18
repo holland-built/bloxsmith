@@ -136,9 +136,19 @@ jobs:
       # --audit-level=moderate rather than the default: npm audit exits
       # non-zero on any advisory including "low", and a gate that reddens on
       # noise is a gate people learn to click past.
+      #
+      # 2026-11-18: GHSA-fc5q-39xc-vjpf (picomatch <=4.0.7, high) has no
+      # patched release, so plain `npm audit` turned every PR red. The step now
+      # reads the JSON and fails on everything at or above moderate except the
+      # advisories in scripts/ci/npm-audit-gate.mjs ACCEPTED, each of which
+      # stops being accepted on its own date. The level string below is still
+      # what security-scan.yml reads to check the floors agree.
       - name: UI dependency vulnerability scan (npm audit)
         working-directory: ui
-        run: npm audit --audit-level=moderate
+        run: |
+          node --test ../scripts/ci/npm-audit-gate.test.mjs
+          npm audit --audit-level=moderate --json > "$RUNNER_TEMP/npm-audit.json" || true
+          node ../scripts/ci/npm-audit-gate.mjs "$RUNNER_TEMP/npm-audit.json" moderate
 
       - name: Set up Go
         uses: actions/setup-go@v7
