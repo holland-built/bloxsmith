@@ -84,3 +84,40 @@ test('zones show which cloud they came from', async ({ page }) => {
   const gcp = zoneCard(page).locator('tbody tr').filter({ hasText: 'inside' }).getByText('GCP', { exact: true });
   await expect(gcp.first()).toHaveAttribute('title', 'Project gcp-sa-coreddi');
 });
+
+const COMPARE = {
+  status: 'partial',
+  a: { records: 4, complete: true, note: '' },
+  b: { records: 1000, complete: false, note: 'Infoblox stopped answering after 1,000 records, so the rest were not compared.' },
+  same: 2,
+  only_a: [{ name: 'old', type: 'CNAME', data: 'www.lab.example.', ttl: 300 }],
+  only_b: [{ name: 'new', type: 'TXT', data: '"hello"', ttl: 300 }],
+  different: [
+    { name: 'app', type: 'A', what: 'value', a: [{ name: 'app', type: 'A', data: '10.0.0.3', ttl: 3600 }], b: [{ name: 'app', type: 'A', data: '10.0.0.30', ttl: 3600 }] },
+    { name: 'mail', type: 'A', what: 'ttl', a: [{ name: 'mail', type: 'A', data: '10.0.0.2', ttl: 3600 }], b: [{ name: 'mail', type: 'A', data: '10.0.0.2', ttl: 60 }] },
+  ],
+};
+
+test('Compare views lists what differs for a zone in two views, and says when a read stopped early', async ({ page }) => {
+  let asked = '';
+  await page.route('**/api/dns/zone-compare*', (route) => { asked = route.request().url(); return fulfillJson(route, COMPARE); });
+  await dns(page);
+  await zoneCard(page).getByRole('button', { name: 'Compare views' }).click();
+  const box = page.getByRole('region', { name: 'Compare a zone in two views' });
+  await expect(box.getByLabel('Zone')).toHaveValue('lab.example.');
+  await expect(box.getByLabel('First view')).toHaveValue('dns/auth_zone/a');
+  await expect(box.getByLabel('Second view')).toHaveValue('dns/auth_zone/b');
+  await box.getByRole('button', { name: 'Compare', exact: true }).click();
+  await expect(box).toContainText('Same in both: 2');
+  await expect(box).toContainText('Only in inside: 1');
+  await expect(box).toContainText('Only in outside: 1');
+  await expect(box).toContainText('Different: 2');
+  await expect(box).toContainText('Infoblox stopped answering after 1,000 records');
+  await expect(box.getByRole('table', { name: 'Only in inside' })).toContainText('old');
+  await expect(box.getByRole('table', { name: 'Only in outside' })).toContainText('new');
+  const diff = box.getByRole('table', { name: 'Different' });
+  await expect(diff.locator('tbody tr').filter({ hasText: 'app' })).toContainText('10.0.0.30');
+  await expect(diff.locator('tbody tr').filter({ hasText: 'mail' })).toContainText('60');
+  expect(asked).toContain('a=dns%2Fauth_zone%2Fa');
+  expect(asked).toContain('b=dns%2Fauth_zone%2Fb');
+});

@@ -41,6 +41,8 @@ const SLICES = ['zones']
 
 // Both charts on this tab share one shape; only they wait for recharts.
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
+// "Compare views" loads only when it is opened.
+const ZoneCompare = lazy(() => import('../components/ZoneCompare.jsx'))
 
 // CSPDNSServices asks Infoblox for `_limit: 200` (go/internal/dashboard/csp.go),
 // so a list of exactly that many may have been cut there.
@@ -512,6 +514,16 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
+  const [comparing, setComparing] = useState(false)
+  // "Compare views" is offered only when some zone name is in two or more views.
+  const canCompare = useMemo(() => {
+    const seen = new Set()
+    for (const z of zones) {
+      if (seen.has(z.fqdn)) return true
+      seen.add(z.fqdn)
+    }
+    return false
+  }, [zones])
   // Issues first by default (zoneRank), A to Z within. A header click still
   // sorts by any column.
   const [sort, setSort] = useState({ key: 'issues', dir: 'desc' })
@@ -632,6 +644,13 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       }
       right={
         <div className="flex items-center gap-2.5">
+          {canCompare && (
+            <button type="button" aria-expanded={comparing} onClick={() => setComparing((v) => !v)}
+              title="The same zone name in two views: see which records differ"
+              className="text-copy text-accent underline whitespace-nowrap px-1 py-1.5">
+              Compare views
+            </button>
+          )}
           <span className="text-note text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
           <input {...MACHINE_TEXT}
             aria-label="Filter zones"
@@ -643,6 +662,11 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
         </div>
       }
     >
+      {comparing && canCompare && (
+        <Suspense fallback={<Skeleton h={80} />}>
+          <ZoneCompare zones={zones} onClose={() => setComparing(false)} />
+        </Suspense>
+      )}
       {loading ? (
         // Same reason as ZoneKpis: an unfinished read is neither "no zones"
         // nor "the feed is dead".

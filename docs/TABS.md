@@ -158,6 +158,7 @@ Everything about DNS. Refreshes every 30 seconds.
 
 - **DNS Query Rate — 24h** and **Query Volume — 7d**.
 - **DNS Zones**: every zone and the view it is in. The **Cloud** column says AWS, Azure or GCP for zones copied in from a cloud, blank for the rest; point at it to see the Azure subscription, the GCP project or the AWS hosted zone.
+- **Compare views** (on DNS Zones, when a zone name is in two or more views): pick the zone and two of its views, then **Compare**. It reads every record in both and lists the records only in the first view, only in the second, and those whose value or cache time (TTL) differs. If Infoblox stops answering part-way, it says how many records were read and that the lists may be missing some. It changes nothing.
 - **DNS Services**: each DNS service and its state.
 - **DNSSEC Health**: which zones with public names (such as .com) are signed. Internal zones, like reverse zones or .local names, are counted apart and not flagged.
 - **RPZ Policy Zones**: how many response policy zones there are, and their state.
