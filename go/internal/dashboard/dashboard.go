@@ -146,13 +146,13 @@ const (
 // from either source.
 const subnetFields = "id,name,address,cidr,utilization,tags,discovery_metadata"
 
-// unusedSubnetFilter counts networks nobody uses across the whole tenant: only
+// UnusedSubnetFilter counts networks nobody uses across the whole tenant: only
 // the network and broadcast address in use (used==2), a /30 or larger
 // (cidr<=30 leaves out /31 and /32, which report used 0-2 of 2 and 0-1 of 1),
 // and a measured total of 4 or more (every IPv6 row reports total 0, so IPv6 is
 // left out). Same rule as ui/src/lib/unusedNetworks.js. Live tenant
 // 2026-11-17: 47,661 of 72,599.
-const unusedSubnetFilter = "utilization.used==2 and cidr<=30 and utilization.total>=4"
+const UnusedSubnetFilter = "utilization.used==2 and cidr<=30 and utilization.total>=4"
 
 // subnetPageSize/subnetPageCount split the subnets first page into concurrent
 // _offset pages instead of one giant request.
@@ -705,7 +705,7 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 			func() { hostsTotal, hostsTotalOK = s.fetchCount("/api/infra/v1/detail_hosts", nil) },
 			func() {
 				subnetsUnused, subnetsUnusedOK = s.fetchCount("/api/ddi/v1/ipam/subnet",
-					map[string]string{"_filter": unusedSubnetFilter})
+					map[string]string{"_filter": UnusedSubnetFilter})
 			},
 		)
 	}

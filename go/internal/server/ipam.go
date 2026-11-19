@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/dashboard"
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/rest"
 )
@@ -27,6 +28,7 @@ func (d *Deps) registerIPAMReadRoutes(mux router) {
 	mux.HandleFunc("GET /api/ipam/addresses", d.ipamAddressesGet)
 	mux.HandleFunc("GET /api/ipam/availability", d.ipamAvailability)
 	mux.HandleFunc("GET /api/ipam/subnets", d.ipamSubnets)
+	mux.HandleFunc("GET /api/ipam/subnets/unused", d.ipamUnusedSubnets)
 	mux.HandleFunc("GET /api/ipam/overlaps", d.ipamOverlaps)
 	mux.HandleFunc("GET /api/dns/zone-compare", d.dnsZoneCompare)
 }
@@ -589,4 +591,50 @@ func (d *Deps) ipamSubnets(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, map[string]any{
 		"subnets": pick(subnets, "id", "address", "cidr", "name", "utilization"),
 	})
+}
+
+// ipamUnusedSubnets is one page of the tenant's unused networks, for "Show
+// unused networks" on the Network tab. It asks with the same filter as the
+// tenant-wide count (_totals.subnetsUnused), so the list and its count cannot
+// drift, in a stable order (address, then id: measured live 2026-11-18, pages
+// 1 and 2 repeat exactly and do not overlap, about 0.3 s a page). Rows get the
+// Network table's own normalisation. IPv6 rows report a total of 0, so the
+// filter already leaves them out; any that arrive are dropped. "more" follows
+// the upstream page being full, not a total, so a dropped row never ends
+// paging early. Contains-search on address or name is not offered: CSP
+// answered 500 to address~"..." on the live tenant.
+func (d *Deps) ipamUnusedSubnets(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/ipam/subnets/unused")
+	q := r.URL.Query()
+	offset, limit := 0, 50
+	var err error
+	if v := q.Get("offset"); v != "" {
+		if offset, err = strconv.Atoi(v); err != nil || offset < 0 {
+			d.json(w, r, 400, map[string]any{"error": "offset must be a whole number, 0 or more"})
+			return
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if limit, err = strconv.Atoi(v); err != nil || limit < 1 || limit > 100 {
+			d.json(w, r, 400, map[string]any{"error": "limit must be a whole number from 1 to 100"})
+			return
+		}
+	}
+	raw, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/ipam/subnet", map[string]string{
+		"_filter":   dashboard.UnusedSubnetFilter,
+		"_fields":   dashboard.SubnetFields,
+		"_order_by": "address,id",
+		"_offset":   strconv.Itoa(offset),
+		"_limit":    strconv.Itoa(limit),
+	})
+	if !ok {
+		return
+	}
+	rows := []map[string]any{}
+	for _, s := range dashboard.NormSubnets(raw) {
+		if a, _ := s["addr"].(string); !strings.Contains(a, ":") {
+			rows = append(rows, s)
+		}
+	}
+	d.json(w, r, 200, map[string]any{"subnets": rows, "offset": offset, "limit": limit, "more": len(raw) == limit})
 }
