@@ -486,7 +486,7 @@ const snippetCap = 8 << 10 // 8KiB
 type UpstreamError struct {
 	Path      string
 	Status    int    // 0 on a transport failure
-	Category  string // "network" | "status" | "decode" | "shape"
+	Category  string // "network" | "status" | "body" | "decode" | "shape"
 	Snippet   string // bounded copy of the upstream body, for logs only
 	Truncated bool   // Snippet was cut
 }
@@ -569,7 +569,9 @@ func (c *Client) getStrict(path string, params map[string]string) ([]any, map[st
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, &UpstreamError{Path: path, Category: "network"}
+		// The reply started (200) and stopped partway: not retried here,
+		// because the retry happens before the body is read.
+		return nil, nil, &UpstreamError{Path: path, Status: resp.StatusCode, Category: "body"}
 	}
 
 	var parsed any

@@ -869,13 +869,13 @@ func fetchStrict(c *rest.Client, path string, params map[string]string) ([]any, 
 }
 
 // fetchStrictCut is fetchStrict that also says whether the failure was a reply
-// cut off or garbled after a 200 (rest's "decode" category), which rest's own
-// retry never sees because it retries before reading the body.
+// cut off or garbled after it started (rest's "body" and "decode" categories),
+// which rest's own retry never sees because it retries before reading the body.
 func fetchStrictCut(c *rest.Client, path string, params map[string]string) ([]any, string, bool) {
 	rows, err := c.GetStrict(path, params)
 	if err != nil {
 		var ue *rest.UpstreamError
-		return []any{}, "error", errors.As(err, &ue) && ue.Category == "decode"
+		return []any{}, "error", errors.As(err, &ue) && (ue.Category == "body" || ue.Category == "decode")
 	}
 	if len(rows) == 0 {
 		return rows, "empty", false

@@ -554,6 +554,17 @@ func TestSubnetFirstPage_CutOffReplyIsAskedAgain(t *testing.T) {
 				w.Write([]byte(`{"results":[{"id":"cut`))
 				return
 			}
+			if hits == 3 {
+				// Promise 500 bytes, send 10, hang up: the connection drops
+				// after the 200, partway through the body.
+				w.Header().Set("Content-Length", "500")
+				w.WriteHeader(200)
+				w.Write([]byte(`{"results"`))
+				if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+					conn.Close()
+				}
+				return
+			}
 			fallthrough
 		default:
 			writeResults(w, []map[string]any{
@@ -565,12 +576,25 @@ func TestSubnetFirstPage_CutOffReplyIsAskedAgain(t *testing.T) {
 
 	data := s.FetchDashboardData(nil)
 	if meta, _ := data["_meta"].(map[string]any); meta["subnets"] != "ok" {
-		t.Fatalf("_meta[subnets] = %v, want ok — a cut-off reply on one page must be asked again, not blank the list", data["_meta"])
+		t.Fatalf("_meta[subnets] = %v, want ok — a garbled reply on one page must be asked again, not blank the list", data["_meta"])
+	}
+	mu.Lock()
+	if hits != 2 {
+		mu.Unlock()
+		t.Fatalf("garbled page asked %d times, want 2", hits)
+	}
+	// Second round: the reply hangs up partway through its body. hits is 2;
+	// the next ask is the 3rd (cut off), and the page's retry is the 4th.
+	mu.Unlock()
+	s.Cache.Invalidate()
+	data = s.FetchDashboardData(nil)
+	if meta, _ := data["_meta"].(map[string]any); meta["subnets"] != "ok" {
+		t.Fatalf("_meta[subnets] = %v, want ok — a reply cut off partway must be asked again, not blank the list", data["_meta"])
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if hits != 2 {
-		t.Fatalf("cut-off page asked %d times, want 2", hits)
+	if hits != 4 {
+		t.Fatalf("cut-off page asked %d times in total, want 4", hits)
 	}
 }
 
