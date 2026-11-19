@@ -527,6 +527,53 @@ func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	}
 }
 
+// A page whose reply arrives cut off (200, then a body that is not JSON) is
+// asked once more by the page itself: rest retries before it reads a body,
+// never after, so without this one bad page blanks the whole subnet list.
+func TestSubnetFirstPage_CutOffReplyIsAskedAgain(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path != "/api/ddi/v1/ipam/subnet" {
+			writeResults(w, nil)
+			return
+		}
+		switch {
+		case q.Get("_filter") != "":
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+		case q.Get("_limit") == "1":
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "9"})
+		case q.Get("_offset") == "2000":
+			mu.Lock()
+			hits++
+			first := hits == 1
+			mu.Unlock()
+			if first {
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"results":[{"id":"cut`))
+				return
+			}
+			fallthrough
+		default:
+			writeResults(w, []map[string]any{
+				{"id": "sub-" + q.Get("_offset"), "name": "s", "address": "10.0.0.0", "cidr": 24,
+					"utilization": map[string]any{"total": 100, "used": 10}},
+			})
+		}
+	})
+
+	data := s.FetchDashboardData(nil)
+	if meta, _ := data["_meta"].(map[string]any); meta["subnets"] != "ok" {
+		t.Fatalf("_meta[subnets] = %v, want ok — a cut-off reply on one page must be asked again, not blank the list", data["_meta"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 2 {
+		t.Fatalf("cut-off page asked %d times, want 2", hits)
+	}
+}
+
 // TestAssembleSubnetPages_DedupesAcrossPageBoundaries pins the id dedupe inside
 // assembleSubnetPages. The ten _offset pages are concurrent reads of a LIVE
 // table: a subnet created or deleted between two of them shifts every later

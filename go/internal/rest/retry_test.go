@@ -167,3 +167,28 @@ func TestGetRetriesOnceOnTimeout(t *testing.T) {
 		t.Fatalf("status=%d err=%v calls=%d, want 200, nil, 2", status, err, calls)
 	}
 }
+
+// A dropped connection (the server hangs up without answering) is as passing
+// as a timeout, and a GET is safe to ask again. The dashboard's subnet pages
+// relied on their own retry for this until v3.178.
+func TestGetRetriesOnceOnDroppedConnection(t *testing.T) {
+	recordSleeps(t)
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err == nil {
+				conn.Close()
+			}
+			return
+		}
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, NewAuth("key", nil))
+
+	_, status, err := c.GetEx("/x", nil)
+	if err != nil || status != 200 || atomic.LoadInt32(&calls) != 2 {
+		t.Fatalf("status=%d err=%v calls=%d, want 200, nil, 2", status, err, calls)
+	}
+}

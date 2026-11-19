@@ -610,10 +610,16 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 			}
 			// Splitting one request into ten means roughly ten times the
 			// chance that some page fails and, by assembleSubnetPages'
-			// all-or-nothing rule, zeroes the whole slice. rest.doGet's one
-			// retry of a 429/5xx/timeout read pays that back; this page used
-			// to retry itself as well, which asked a dead server 4 times.
-			subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			// all-or-nothing rule, zeroes the whole slice. rest.doGet asks a
+			// failed read once more before it reads a body; a reply that then
+			// arrives cut off is the one case left, so only that is asked
+			// again here. Retrying every failure here as well asked a dead
+			// server 4 times.
+			var cut bool
+			subnetPages[i], subnetPageStatus[i], cut = fetchStrictCut(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			if cut {
+				subnetPages[i], subnetPageStatus[i], _ = fetchStrictCut(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			}
 		})
 	}
 	// The at-risk pager belongs to the subnets slice (dedupeSubnets unions it
@@ -858,12 +864,21 @@ func projectFull(full map[string]any, ss sliceSet) map[string]any {
 // non-nil empty []any so every downstream norm* shaper and the handler keep
 // working — one dead feed must never blank the whole /api/data payload.
 func fetchStrict(c *rest.Client, path string, params map[string]string) ([]any, string) {
+	rows, status, _ := fetchStrictCut(c, path, params)
+	return rows, status
+}
+
+// fetchStrictCut is fetchStrict that also says whether the failure was a reply
+// cut off or garbled after a 200 (rest's "decode" category), which rest's own
+// retry never sees because it retries before reading the body.
+func fetchStrictCut(c *rest.Client, path string, params map[string]string) ([]any, string, bool) {
 	rows, err := c.GetStrict(path, params)
 	if err != nil {
-		return []any{}, "error"
+		var ue *rest.UpstreamError
+		return []any{}, "error", errors.As(err, &ue) && ue.Category == "decode"
 	}
 	if len(rows) == 0 {
-		return rows, "empty"
+		return rows, "empty", false
 	}
-	return rows, "ok"
+	return rows, "ok", false
 }

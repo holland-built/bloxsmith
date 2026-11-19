@@ -7,6 +7,7 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -70,8 +71,9 @@ func (c *Client) getOnce(path string, params map[string]string) (*http.Response,
 // caller to read.
 func retryWait(resp *http.Response, err error) (time.Duration, bool) {
 	if err != nil {
-		var ne interface{ Timeout() bool }
-		return retryPause, errors.As(err, &ne) && ne.Timeout()
+		// A timeout or a dropped connection: a GET is safe to ask again.
+		// A read this app cancelled itself is not asked again.
+		return retryPause, !errors.Is(err, context.Canceled)
 	}
 	switch resp.StatusCode {
 	case 429:
