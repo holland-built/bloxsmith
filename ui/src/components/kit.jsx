@@ -227,10 +227,23 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, 
     }
   }, [current])
   const fit = (d) => {
-    const p = prefixForDevices(Number(d) + held)
+    const want = Number(d)
+    if (String(d).trim() === '' || !Number.isInteger(want) || want < 1) return null
+    const p = prefixForDevices(want + held)
     if (p == null || p < minPrefix) return null
     return Math.min(p, maxPrefix)
   }
+  // A count typed before the form changed what the size must hold (a cloud's
+  // held addresses, its smallest size) is kept, and the size is worked out again.
+  useEffect(() => {
+    if (typed === null) return
+    const p = fit(typed)
+    const next = p == null ? '' : String(p)
+    if (next !== sent.current) {
+      sent.current = next
+      onPrefix(next)
+    }
+  }, [held, maxPrefix]) // eslint-disable-line react-hooks/exhaustive-deps
   // Keep what was typed while it still matches the size the form holds;
   // a size set from outside (a link, a loaded record) shows as its device count.
   const shown = typed !== null && (current === '' || String(fit(typed)) === current)

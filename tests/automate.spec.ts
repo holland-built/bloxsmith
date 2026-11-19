@@ -249,6 +249,17 @@ test('make a new network for AWS: preview lists the held addresses, fewer device
   await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
   await devices.fill('1');
   await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 11 usable by devices after 3 held back');
+  // An empty box is no size, cloud or not.
+  await devices.fill('');
+  await expect(job.getByRole('button', { name: 'Preview' })).toBeDisabled();
+  // A count typed before picking the cloud is kept, and the size grows to fit it.
+  await forWhat.getByRole('radio', { name: 'None' }).check();
+  await devices.fill('12');
+  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 14 usable by devices');
+  await forWhat.getByRole('radio', { name: 'AWS' }).check();
+  await expect(devices).toHaveValue('12');
+  await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
+  await devices.fill('1');
   await expect(job.getByText('AWS does not allow a network smaller than /28')).toBeVisible();
   await job.getByRole('button', { name: 'Preview' }).click();
   const held = job.locator('[data-held]');
