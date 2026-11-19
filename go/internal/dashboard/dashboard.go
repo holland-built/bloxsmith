@@ -150,7 +150,8 @@ const subnetFields = "id,name,address,cidr,utilization,tags,discovery_metadata"
 // the network and broadcast address in use (used==2), a /30 or larger
 // (cidr<=30 leaves out /31 and /32, which report used 0-2 of 2 and 0-1 of 1),
 // and a measured total of 4 or more (every IPv6 row reports total 0, so IPv6 is
-// left out). Same rule as ui/src/lib/unusedNetworks.js. Live tenant
+// left out). The list behind "Show unused networks" (GET
+// /api/ipam/subnets/unused) sends this same filter. Live tenant
 // 2026-11-17: 47,661 of 72,599.
 const UnusedSubnetFilter = "utilization.used==2 and cidr<=30 and utilization.total>=4"
 

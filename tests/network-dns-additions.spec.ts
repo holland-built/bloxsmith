@@ -2,8 +2,9 @@ import { test, expect } from './fixtures';
 
 // Network and DNS additions (2026-11-17), each pinned against the old code:
 //  1. "Show unused networks" on the Network table: IPv4 /30 or larger with
-//     only the network and broadcast address in use; /31, /32 and IPv6 are
-//     said to be not checked;
+//     only the network and broadcast address in use, paged from the server
+//     across the whole tenant (2026-11-18); /31, /32 and IPv6 are said to be
+//     not checked;
 //  4. a "Cloud" column on networks and zones (AWS / Azure / GCP);
 //  8. "Compare views" on the DNS tab for a zone that lives in two views.
 
@@ -36,18 +37,64 @@ async function network(page: import('@playwright/test').Page) {
 
 const table = (page: import('@playwright/test').Page) => page.locator('[data-panel-id="network-exhaustion"]');
 
-test('Show unused networks lists only IPv4 networks with nothing but network and broadcast in use', async ({ page }) => {
+// One page of the server's unused list (GET /api/ipam/subnets/unused), already
+// in the table's row shape. Page 1 is full (50 rows, more pages); page 2 is the
+// last (3 rows).
+const unusedRow = (i: number, page: number) => ({
+  id: `u${page}-${i}`, name: '', addr: `10.${50 + page}.${i}.0`, cidr: 24, total: 256, used: 2, util: 1, site: 'Lab', cloud: '',
+});
+async function unusedPages(page: import('@playwright/test').Page) {
+  const asked: string[] = [];
+  await page.route('**/api/ipam/subnets/unused*', (route) => {
+    const offset = Number(new URL(route.request().url()).searchParams.get('offset') || 0);
+    asked.push(String(offset));
+    const n = offset === 0 ? 50 : 3;
+    return fulfillJson(route, {
+      subnets: Array.from({ length: n }, (_, i) => unusedRow(i, offset / 50)), offset, limit: 50, more: offset === 0,
+    });
+  });
+  return asked;
+}
+
+test('Show unused networks pages through every unused network in the tenant, not just the loaded ones', async ({ page }) => {
+  const asked = await unusedPages(page);
   await network(page);
   const box = table(page).getByRole('checkbox', { name: 'Show unused networks (47,661)' });
   await expect(box).toBeVisible({ timeout: 20_000 });
   await box.click();
   await expect(page).toHaveURL(/unused=1/);
   const rows = table(page).locator('tbody tr');
+  await expect(table(page)).toContainText('Page 1');
+  await expect(rows).toHaveCount(50);
+  await expect(rows.first()).toContainText('10.50.0.0');
+  // The loaded networks are not what is listed: 10.0.0.0 is unused and loaded.
+  await expect(rows.filter({ hasText: '10.0.0.0/' })).toHaveCount(0);
+  await expect(table(page)).toContainText('47,661 unused across all networks');
+  await expect(table(page)).toContainText('Search, site and column sorting are off while this is on');
+  await expect(table(page)).toContainText('/31, /32 and IPv6 networks were not checked');
+  await expect(table(page).getByRole('textbox', { name: 'Filter networks' })).toBeDisabled();
+  await expect(table(page).getByRole('combobox', { name: 'Filter by site' })).toBeDisabled();
+  await expect(table(page).getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+  await table(page).getByRole('button', { name: 'Next' }).click();
+  await expect(table(page)).toContainText('Page 2');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.first()).toContainText('10.51.0.0');
+  await expect(table(page).getByRole('button', { name: 'Next' })).toBeDisabled();
+  expect(asked).toEqual(['0', '50']);
+
+  await table(page).getByRole('button', { name: 'Previous' }).click();
+  await expect(table(page)).toContainText('Page 1');
+  await expect(rows).toHaveCount(50);
+
+  // Box off: today's table of loaded networks comes back, search and all.
+  await box.click();
+  await expect(page).not.toHaveURL(/unused=1/);
   await expect(rows).toHaveCount(2);
   await expect(rows.filter({ hasText: '10.0.0.0' })).toHaveCount(1);
-  await expect(rows.filter({ hasText: '10.0.2.0' })).toHaveCount(1);
-  await expect(table(page)).toContainText('/31, /32 and IPv6 networks were not checked')
-  await expect(table(page)).toContainText('2 of them are in the 5 networks loaded here');
+  await expect(rows.filter({ hasText: '10.0.1.0' })).toHaveCount(1);
+  await expect(table(page).getByRole('textbox', { name: 'Filter networks' })).toBeEnabled();
+  await expect(table(page).getByRole('button', { name: 'Next' })).toHaveCount(0);
 });
 
 test('networks show which cloud they came from, with the account in the hover', async ({ page }) => {
