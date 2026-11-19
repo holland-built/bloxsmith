@@ -471,8 +471,8 @@ func TestSubnetFirstPage_SplitsIntoConcurrentOffsetPages(t *testing.T) {
 // union is unaffected — exactly today's observable failure shape.
 //
 // Mutations that must turn this RED: in assembleSubnetPages, change the error
-// short-circuit to `continue`; or drop the one-shot retry (offset 2000 is then
-// requested once, not twice).
+// short-circuit to `continue`; or drop rest's one-shot retry of a 5xx read
+// (offset 2000 is then requested once, not twice).
 func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	var mu sync.Mutex
 	deadPageHits := 0
@@ -520,9 +520,10 @@ func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	// 4 = the page's own retry here, times rest.doGet's one retry of a 5xx read.
-	if deadPageHits != 4 {
-		t.Fatalf("failing subnet page was requested %d times, want 4 (one attempt + one retry, each asked twice by rest) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
+	// 2 = one attempt plus rest.doGet's one retry of a 5xx read. Before
+	// v3.178 the page also retried itself, so a dead page was asked 4 times.
+	if deadPageHits != 2 {
+		t.Fatalf("failing subnet page was requested %d times, want 2 (one attempt + rest's one retry) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
 	}
 }
 

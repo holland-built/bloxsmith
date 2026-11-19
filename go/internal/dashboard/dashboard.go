@@ -608,17 +608,12 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 				"_limit":  strconv.Itoa(subnetPageSize),
 				"_offset": strconv.Itoa(i * subnetPageSize),
 			}
+			// Splitting one request into ten means roughly ten times the
+			// chance that some page fails and, by assembleSubnetPages'
+			// all-or-nothing rule, zeroes the whole slice. rest.doGet's one
+			// retry of a 429/5xx/timeout read pays that back; this page used
+			// to retry itself as well, which asked a dead server 4 times.
 			subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
-			// Retry ONCE on failure. Splitting one request into ten means
-			// roughly ten times today's chance that some page fails and, by
-			// assembleSubnetPages' all-or-nothing rule, zeroes the whole
-			// slice. One retry takes that amplification from ~10p to ~10p².
-			// No new status word, and no backoff: the failure modes measured
-			// here are transient per-request ones, not a tenant-wide outage
-			// that a sleep would help with.
-			if subnetPageStatus[i] == "error" {
-				subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
-			}
 		})
 	}
 	// The at-risk pager belongs to the subnets slice (dedupeSubnets unions it
