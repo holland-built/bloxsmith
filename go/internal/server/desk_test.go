@@ -21,20 +21,21 @@ import (
 // address, GET says whether an address still exists, DELETE removes it (or is
 // refused while refuseDelete is set).
 type fakeTenant struct {
-	mu           sync.Mutex
-	exists       map[string]bool
-	deletes      []string
-	refuseDelete bool
-	slowDelete   chan struct{}     // when set, each DELETE waits for a value
-	refusePatch  bool              // the tag PATCH after a new network fails
-	inSubnet     []string          // addresses listed inside the new network
-	ranges       int               // DHCP ranges listed inside the new network
-	zoneRecords  []string          // record types listed in a zone
-	subnet       string            // the network nextavailablesubnet makes; "" is 10.9.0.0/29
-	writes       []string          // every POST, PATCH and DELETE, in order
-	reserves     []map[string]any  // bodies of POST ipam/address
-	refuseHold   map[string]bool   // addresses whose POST ipam/address fails
-	held         map[string]string // reservation id -> address, while it exists
+	mu             sync.Mutex
+	exists         map[string]bool
+	deletes        []string
+	refuseDelete   bool
+	slowDelete     chan struct{}     // when set, each DELETE waits for a value
+	refusePatch    bool              // the tag PATCH after a new network fails
+	inSubnet       []string          // addresses listed inside the new network
+	ranges         int               // DHCP ranges listed inside the new network
+	zoneRecords    []string          // record types listed in a zone
+	subnet         string            // the network nextavailablesubnet makes; "" is 10.9.0.0/29
+	writes         []string          // every POST, PATCH and DELETE, in order
+	reserves       []map[string]any  // bodies of POST ipam/address
+	refuseHold     map[string]bool   // addresses whose POST ipam/address fails
+	held           map[string]string // reservation id -> address, while it exists
+	refuseDeleteOf map[string]bool   // ids whose DELETE fails
 }
 
 func (f *fakeTenant) subnetJSON() string {
@@ -134,7 +135,7 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 			<-f.slowDelete
 			f.mu.Lock()
 		}
-		if f.refuseDelete {
+		if f.refuseDelete || f.refuseDeleteOf[id] {
 			w.WriteHeader(500)
 			io.WriteString(w, `{"error":"refused"}`)
 			return
@@ -759,6 +760,19 @@ func TestDeskRemove_NetworkDeletesItsHeldAddressesFirst(t *testing.T) {
 	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+onlyRun(t, d).ID+`","dry":false}`)
 	if f.exists["ipam/subnet/s-9"] != true {
 		t.Fatal("a network holding someone else's address was deleted")
+	}
+}
+
+// A held address whose delete fails is still inside the network, so the
+// network must not be deleted with it.
+func TestDeskRemove_NetworkKeptWhenAHeldAddressWouldNotDelete(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	f.subnet = "10.9.0.32/28"
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 28)+`,"dry":false}`)
+	f.refuseDeleteOf = map[string]bool{"ipam/address/k-10-9-0-34": true}
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+onlyRun(t, d).ID+`","dry":false}`)
+	if f.exists["ipam/subnet/s-9"] != true {
+		t.Fatalf("the network was deleted while 10.9.0.34 was still held in it: %v", f.writes)
 	}
 }
 

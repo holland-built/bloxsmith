@@ -459,8 +459,10 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// Checked again right before the delete, because someone may have
 			// put something in the network since the preview. A small gap
 			// remains between this check and the DELETE; Infoblox offers no
-			// "delete only if empty".
-			if why := runBlocker(cli, *o, ours); why != "" {
+			// "delete only if empty". The run's own held addresses were deleted
+			// just before (removeOrder), so nothing is skipped here: one whose
+			// delete failed is still inside and must keep the network.
+			if why := runBlocker(cli, *o, nil); why != "" {
 				o.State, o.Error = runs.Error, why
 				failed++
 				continue

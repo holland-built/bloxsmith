@@ -548,9 +548,9 @@ function DemoJob({ onBuilt, ro, start = {} }) {
 // AWS allows no network smaller than /28.
 const CLOUDS = [
   { value: '', label: 'None' },
-  { value: 'aws', label: 'AWS', name: 'AWS', maxPrefix: 28 },
-  { value: 'azure', label: 'Azure', name: 'Azure' },
-  { value: 'gcp', label: 'Google Cloud', name: 'Google Cloud' },
+  { value: 'aws', label: 'AWS', name: 'AWS', maxPrefix: 28, held: 3 },
+  { value: 'azure', label: 'Azure', name: 'Azure', held: 3 },
+  { value: 'gcp', label: 'Google Cloud', name: 'Google Cloud', held: 2 },
 ]
 
 const blockLabel = (b) => withSize((b.address || '') + (b.cidr ? `/${b.cidr}` : '')) + (b.name ? `, ${b.name}` : '')
@@ -616,7 +616,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
         </div>
         {cloudDef.maxPrefix && <span>{cloudDef.name} does not allow a network smaller than /{cloudDef.maxPrefix} ({sizeWords(cloudDef.maxPrefix)}).</span>}
       </fieldset>
-      <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={sizeMax} onPrefix={(p) => { setCidr(p); flow.reset() }} />
+      <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={sizeMax} held={cloudDef.held ?? 0} onPrefix={(p) => { setCidr(p); flow.reset() }} />
       <label className="flex flex-col gap-1 text-note text-muted">
         Name (optional)
         <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="demo-lab"
