@@ -212,7 +212,8 @@ export function ColumnHeading({ id, children }) {
 // payloads stay the same; the line under the box says what that size gives.
 // A count too small for the smallest size offered gets that smallest size; a
 // count too big for the largest says so instead of picking a size.
-export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, label = 'How many devices need an address?', required = false, disabled, title }) {
+// held: addresses a cloud keeps in every network, counted on top of the devices.
+export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, held = 0, label = 'How many devices need an address?', required = false, disabled, title }) {
   const [typed, setTyped] = useState(null)
   // The size this box last handed the form. When the form empties the size
   // itself (a reset), what was typed goes too, so the box never shows a count
@@ -226,25 +227,38 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, 
     }
   }, [current])
   const fit = (d) => {
-    const p = prefixForDevices(d)
+    const want = Number(d)
+    if (String(d).trim() === '' || !Number.isInteger(want) || want < 1) return null
+    const p = prefixForDevices(want + held)
     if (p == null || p < minPrefix) return null
     return Math.min(p, maxPrefix)
   }
+  // A count typed before the form changed what the size must hold (a cloud's
+  // held addresses, its smallest size) is kept, and the size is worked out again.
+  useEffect(() => {
+    if (typed === null) return
+    const p = fit(typed)
+    const next = p == null ? '' : String(p)
+    if (next !== sent.current) {
+      sent.current = next
+      onPrefix(next)
+    }
+  }, [held, maxPrefix]) // eslint-disable-line react-hooks/exhaustive-deps
   // Keep what was typed while it still matches the size the form holds;
   // a size set from outside (a link, a loaded record) shows as its device count.
   const shown = typed !== null && (current === '' || String(fit(typed)) === current)
     ? typed
-    : current ? String(usableCount(current) ?? '') : ''
+    : current ? String((usableCount(current) ?? held) - held) : ''
   const d = Number(shown)
-  const tooMany = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d) !== null && fit(d) === null
-  const tooBig = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d) === null
+  const tooMany = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d + held) !== null && fit(d) === null
+  const tooBig = shown !== '' && Number.isInteger(d) && d >= 1 && prefixForDevices(d + held) === null
   let note = ''
   if (tooMany || tooBig) {
-    note = `That is more than this form can make. The biggest network here holds ${usableCount(minPrefix).toLocaleString('en-US')} devices (/${minPrefix}).`
+    note = `That is more than this form can make. The biggest network here holds ${(usableCount(minPrefix) - held).toLocaleString('en-US')} devices (/${minPrefix}).`
   } else if (shown !== '' && !(Number.isInteger(d) && d >= 1)) {
     note = 'Enter a whole number of devices, 1 or more.'
   } else if (current) {
-    note = sizeLine(current)
+    note = held ? sizeLine(current).replace(/[\d,]+ usable by devices$/, `${(usableCount(current) - held).toLocaleString('en-US')} usable by devices after ${held} held back`) : sizeLine(current)
   }
   return (
     <div className="flex flex-col gap-1">

@@ -209,6 +209,68 @@ test('make a new network: pick a block and say how many devices need an address'
   expect(posted[0]).toEqual({ job: 'network', dry: true, input: { space: 'ipam/ip_space/a', block_id: 'ipam/address_block/b1', cidr: 26, name: '' } });
 });
 
+test('make a new network for AWS: preview lists the held addresses, fewer devices, no /29', async ({ page }) => {
+  await page.route('**/api/desk/runs', (route) => json(route, { runs: [] }));
+  await page.route('**/api/ipam/blocks*', (route) => json(route, { blocks: [
+    { id: 'ipam/address_block/b1', address: '10.9.0.0', cidr: 16, name: 'lab-block' } ] }));
+  const posted: Record<string, unknown>[] = [];
+  await page.route('**/api/desk/run', async (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    posted.push(body);
+    const held = body.input.cloud === 'aws' ? [
+      { address: '10.9.4.33', label: 'Kept by AWS: router' },
+      { address: '10.9.4.34', label: 'Kept by AWS: DNS' },
+      { address: '10.9.4.35', label: 'Kept by AWS: future use' }] : undefined;
+    return json(route, { ok: true, dry_run: true, would_create: { address: '10.9.4.32', cidr: body.input.cidr, held } });
+  });
+  await page.goto('/#automate');
+  await page.getByRole('button', { name: /Make a new network/ }).click();
+  const job = page.locator('[data-panel-id="automate-job"]');
+  await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
+  await job.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/b1');
+  const devices = job.getByRole('spinbutton', { name: 'How many devices need an address?' });
+  const forWhat = job.getByRole('group', { name: 'This network is for' });
+  await expect(forWhat.getByRole('radio', { name: 'None' })).toBeChecked();
+
+  // None: 1 device still gets a /29 and nothing is held.
+  await devices.fill('1');
+  await expect(job.locator('[data-size-words]')).toHaveText('/29: 8 addresses, 6 usable by devices');
+  await job.getByRole('button', { name: 'Preview' }).click();
+  await expect(job.locator('[data-desk-preview]')).toContainText('This will make 10.9.4.32/29 (8 addresses)');
+  await expect(job.locator('[data-held]')).toHaveCount(0);
+  expect(posted[0].input).toEqual({ space: 'ipam/ip_space/a', block_id: 'ipam/address_block/b1', cidr: 29, name: '' });
+
+  // AWS: the /29 becomes a /28, the smallest AWS allows, and 1 device cannot get a /29.
+  // The size line counts the 3 addresses AWS keeps.
+  await forWhat.getByRole('radio', { name: 'AWS' }).check();
+  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 11 usable by devices after 3 held back');
+  // 12 devices plus AWS's 3 do not fit a /28 (14), so the size goes up to /27.
+  await devices.fill('12');
+  await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
+  await devices.fill('1');
+  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 11 usable by devices after 3 held back');
+  // An empty box is no size, cloud or not.
+  await devices.fill('');
+  await expect(job.getByRole('button', { name: 'Preview' })).toBeDisabled();
+  // A count typed before picking the cloud is kept, and the size grows to fit it.
+  await forWhat.getByRole('radio', { name: 'None' }).check();
+  await devices.fill('12');
+  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 14 usable by devices');
+  await forWhat.getByRole('radio', { name: 'AWS' }).check();
+  await expect(devices).toHaveValue('12');
+  await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
+  await devices.fill('1');
+  await expect(job.getByText('AWS does not allow a network smaller than /28')).toBeVisible();
+  await job.getByRole('button', { name: 'Preview' }).click();
+  const held = job.locator('[data-held]');
+  await expect(held).toContainText('AWS keeps 3 addresses in every network, so Build holds them back:');
+  await expect(held).toContainText('10.9.4.33 (router)');
+  await expect(held).toContainText('10.9.4.34 (DNS)');
+  await expect(held).toContainText('10.9.4.35 (future use)');
+  await expect(held).toContainText('That leaves 11 for devices.');
+  expect(posted[1].input).toEqual({ space: 'ipam/ip_space/a', block_id: 'ipam/address_block/b1', cidr: 28, name: '', cloud: 'aws' });
+});
+
 test('Remove says when a network will be kept because it holds other things', async ({ page }) => {
   const net = { ...RUN, job: 'network', title: 'Network demo', objects: [{ id: 'ipam/subnet/s9', kind: 'subnet', label: '10.9.4.0/26', state: 'created' }] };
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [net] }));

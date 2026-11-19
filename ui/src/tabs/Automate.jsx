@@ -14,7 +14,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { playbookFor } from '../lib/ansible.js'
-import { sizeWords, withSize } from '../lib/sizes.js'
+import { sizeWords, usableCount, withSize } from '../lib/sizes.js'
 import { useHashParams } from '../lib/hash.js'
 import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 
@@ -543,6 +543,16 @@ function DemoJob({ onBuilt, ro, start = {} }) {
   )
 }
 
+// "This network is for": a cloud keeps a few addresses of every network for
+// itself, and Build holds them back so nobody hands one out by mistake.
+// AWS allows no network smaller than /28.
+const CLOUDS = [
+  { value: '', label: 'None' },
+  { value: 'aws', label: 'AWS', name: 'AWS', maxPrefix: 28, held: 3 },
+  { value: 'azure', label: 'Azure', name: 'Azure', held: 3 },
+  { value: 'gcp', label: 'Google Cloud', name: 'Google Cloud', held: 2 },
+]
+
 const blockLabel = (b) => withSize((b.address || '') + (b.cidr ? `/${b.cidr}` : '')) + (b.name ? `, ${b.name}` : '')
 
 function NetworkJob({ onBuilt, ro, start = {} }) {
@@ -551,6 +561,9 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
   const [blockId, setBlockId] = useState('')
   const [cidr, setCidr] = useState(String(start.cidr || 28))
   const [name, setName] = useState(start.name || '')
+  const [cloud, setCloud] = useState('')
+  const cloudDef = CLOUDS.find((c) => c.value === cloud)
+  const sizeMax = cloudDef.maxPrefix ?? SIZE_MAX
   const flow = useDeskFlow('network', onBuilt)
   const blocks = blocksApi.data?.blocks ?? []
   const block = blocks.find((b) => b.id === blockId)
@@ -566,10 +579,17 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
     const b = findRange(blocksApi.data?.blocks, start.block)
     if (b) { preDone.current = true; filled.current.block = b.id; setBlockId(b.id) }
   }, [blocksApi.data, blockId, start.block, filled])
-  const input = () => ({ space, block_id: blockId, cidr: Number(cidr), name: name.trim() })
+  const input = () => ({ space, block_id: blockId, cidr: Number(cidr), name: name.trim(), ...(cloud ? { cloud } : {}) })
   const { reset } = flow
   const pickSpace = useCallback((v, _name, pre) => { if (pre) filled.current.space = v; setSpace(v); setBlockId(''); reset() }, [reset, filled])
   const would = flow.preview?.would_create
+  const held = would?.held ?? []
+  const pickCloud = (v) => {
+    setCloud(v)
+    const max = CLOUDS.find((c) => c.value === v).maxPrefix
+    if (max && Number(cidr) > max) setCidr(String(max))
+    flow.reset()
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -584,7 +604,19 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
           disabled={!space}
         />
       </Field>
-      <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={SIZE_MAX} onPrefix={(p) => { setCidr(p); flow.reset() }} />
+      <fieldset className="flex flex-col gap-1 text-note text-muted">
+        <legend>This network is for</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {CLOUDS.map((c) => (
+            <label key={c.value} className="flex items-center gap-1 text-copy text-txt">
+              <input type="radio" name="network-cloud" value={c.value} checked={cloud === c.value} onChange={() => pickCloud(c.value)} />
+              {c.label}
+            </label>
+          ))}
+        </div>
+        {cloudDef.maxPrefix && <span>{cloudDef.name} does not allow a network smaller than /{cloudDef.maxPrefix} ({sizeWords(cloudDef.maxPrefix)}).</span>}
+      </fieldset>
+      <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={sizeMax} held={cloudDef.held ?? 0} onPrefix={(p) => { setCidr(p); flow.reset() }} />
       <label className="flex flex-col gap-1 text-note text-muted">
         Name (optional)
         <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="demo-lab"
@@ -599,7 +631,9 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
         onPreview={() => flow.runPreview(input())}
         onApply={() => flow.runBuild(input(), (j) => {
           const got = j.run?.objects?.find((o) => o.kind === 'subnet')?.label
-          return got ? `Done. ${got} is made. Remove it any time from Your recent changes.` : 'Done.'
+          const kept = (j.run?.objects ?? []).filter((o) => o.kind === 'address').length
+          const done = got ? `Done. ${got} is made${kept ? `, with ${kept} address${kept === 1 ? '' : 'es'} held back for ${cloudDef.name}` : ''}. Remove it any time from Your recent changes.` : 'Done.'
+          return j.run?.note ? `${done} ${j.run.note}` : done
         })}
         applyLabel="Build it"
         error={flow.error}
@@ -612,6 +646,15 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
               : would?.address_preview === 'none-available'
                 ? <p>This block has no free network of that size. Pick a smaller size or another block.</p>
                 : <p>Infoblox could not say which network it would make{would?.reason ? ` (${would.reason})` : ''}. Try Preview again.</p>}
+            {held.length > 0 && (
+              <div data-held="">
+                <p>{cloudDef.name} keeps {held.length} addresses in every network, so Build holds them back:</p>
+                <ul className="list-disc pl-5">
+                  {held.map((h) => <li key={h.address}>{h.address} ({h.label.replace(/^Kept by [^:]+: /, '')})</li>)}
+                </ul>
+                <p>That leaves {usableCount(cidr) - held.length} for devices.</p>
+              </div>
+            )}
             <CheckedAgainst res={flow.preview} />
           </PreviewBox>
         )}
