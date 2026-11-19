@@ -36,9 +36,9 @@ function files(dir, out = []) {
 const THICK = /\bborder-[lrse]-(?:[2-9]|\d\d|\[)|\bborder(?:Left|Right|InlineStart|InlineEnd)Width\b/
 
 // file -> text found on the line, and why it stays.
-const EXCEPTIONS = [
-  ['components/DossierPage.jsx', "borderLeftColor: 'var(--color-warn)'", 'the warn-coloured rail on the one Dossier block that says something is wrong'],
-]
+// Empty since 2026-11-18: the Dossier "why" block's 2px warn rail became a
+// warn-tinted background, the way SiteLists.jsx marks its warning.
+const EXCEPTIONS = []
 
 const hits = files(SRC).flatMap((f) => {
   const rel = path.relative(SRC, f)
