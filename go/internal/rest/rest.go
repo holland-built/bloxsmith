@@ -7,6 +7,7 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -70,8 +71,9 @@ func (c *Client) getOnce(path string, params map[string]string) (*http.Response,
 // caller to read.
 func retryWait(resp *http.Response, err error) (time.Duration, bool) {
 	if err != nil {
-		var ne interface{ Timeout() bool }
-		return retryPause, errors.As(err, &ne) && ne.Timeout()
+		// A timeout or a dropped connection: a GET is safe to ask again.
+		// A read this app cancelled itself is not asked again.
+		return retryPause, !errors.Is(err, context.Canceled)
 	}
 	switch resp.StatusCode {
 	case 429:
@@ -484,7 +486,7 @@ const snippetCap = 8 << 10 // 8KiB
 type UpstreamError struct {
 	Path      string
 	Status    int    // 0 on a transport failure
-	Category  string // "network" | "status" | "decode" | "shape"
+	Category  string // "network" | "status" | "body" | "decode" | "shape"
 	Snippet   string // bounded copy of the upstream body, for logs only
 	Truncated bool   // Snippet was cut
 }
@@ -567,7 +569,9 @@ func (c *Client) getStrict(path string, params map[string]string) ([]any, map[st
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, &UpstreamError{Path: path, Category: "network"}
+		// The reply started (200) and stopped partway: not retried here,
+		// because the retry happens before the body is read.
+		return nil, nil, &UpstreamError{Path: path, Status: resp.StatusCode, Category: "body"}
 	}
 
 	var parsed any

@@ -592,7 +592,7 @@ function Why({ src, q, state, reason }) {
   return (
     <div className={'grid grid-cols-[30px_1fr] border-b border-line bg-card'} data-dossier-why={src.key}>
       <div className="border-r border-line" />
-      <div className="px-3 pt-2 pb-3 border-l-2" style={{ borderLeftColor: 'var(--color-warn)' }}>
+      <div className="px-3 pt-2 pb-3" style={{ background: 'var(--pill-warn-bg)' }}>
         <div className="flex flex-col min-[561px]:flex-row gap-2 items-baseline text-note leading-[1.5] mb-1 text-dim">
           <span className="text-note uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
           <span>

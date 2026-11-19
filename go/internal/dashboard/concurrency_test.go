@@ -471,8 +471,8 @@ func TestSubnetFirstPage_SplitsIntoConcurrentOffsetPages(t *testing.T) {
 // union is unaffected — exactly today's observable failure shape.
 //
 // Mutations that must turn this RED: in assembleSubnetPages, change the error
-// short-circuit to `continue`; or drop the one-shot retry (offset 2000 is then
-// requested once, not twice).
+// short-circuit to `continue`; or drop rest's one-shot retry of a 5xx read
+// (offset 2000 is then requested once, not twice).
 func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	var mu sync.Mutex
 	deadPageHits := 0
@@ -520,9 +520,81 @@ func TestSubnetFirstPage_OnePageFailureIsErrorNotPartial(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	// 4 = the page's own retry here, times rest.doGet's one retry of a 5xx read.
-	if deadPageHits != 4 {
-		t.Fatalf("failing subnet page was requested %d times, want 4 (one attempt + one retry, each asked twice by rest) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
+	// 2 = one attempt plus rest.doGet's one retry of a 5xx read. Before
+	// v3.178 the page also retried itself, so a dead page was asked 4 times.
+	if deadPageHits != 2 {
+		t.Fatalf("failing subnet page was requested %d times, want 2 (one attempt + rest's one retry) — ten pages mean ~10x the chance the slice reads \"error\", and the retry is what pays that back", deadPageHits)
+	}
+}
+
+// A page whose reply arrives cut off (200, then a body that is not JSON) is
+// asked once more by the page itself: rest retries before it reads a body,
+// never after, so without this one bad page blanks the whole subnet list.
+func TestSubnetFirstPage_CutOffReplyIsAskedAgain(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path != "/api/ddi/v1/ipam/subnet" {
+			writeResults(w, nil)
+			return
+		}
+		switch {
+		case q.Get("_filter") != "":
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+		case q.Get("_limit") == "1":
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "9"})
+		case q.Get("_offset") == "2000":
+			mu.Lock()
+			hits++
+			first := hits == 1
+			mu.Unlock()
+			if first {
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"results":[{"id":"cut`))
+				return
+			}
+			if hits == 3 {
+				// Promise 500 bytes, send 10, hang up: the connection drops
+				// after the 200, partway through the body.
+				w.Header().Set("Content-Length", "500")
+				w.WriteHeader(200)
+				w.Write([]byte(`{"results"`))
+				if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+					conn.Close()
+				}
+				return
+			}
+			fallthrough
+		default:
+			writeResults(w, []map[string]any{
+				{"id": "sub-" + q.Get("_offset"), "name": "s", "address": "10.0.0.0", "cidr": 24,
+					"utilization": map[string]any{"total": 100, "used": 10}},
+			})
+		}
+	})
+
+	data := s.FetchDashboardData(nil)
+	if meta, _ := data["_meta"].(map[string]any); meta["subnets"] != "ok" {
+		t.Fatalf("_meta[subnets] = %v, want ok — a garbled reply on one page must be asked again, not blank the list", data["_meta"])
+	}
+	mu.Lock()
+	if hits != 2 {
+		mu.Unlock()
+		t.Fatalf("garbled page asked %d times, want 2", hits)
+	}
+	// Second round: the reply hangs up partway through its body. hits is 2;
+	// the next ask is the 3rd (cut off), and the page's retry is the 4th.
+	mu.Unlock()
+	s.Cache.Invalidate()
+	data = s.FetchDashboardData(nil)
+	if meta, _ := data["_meta"].(map[string]any); meta["subnets"] != "ok" {
+		t.Fatalf("_meta[subnets] = %v, want ok — a reply cut off partway must be asked again, not blank the list", data["_meta"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 4 {
+		t.Fatalf("cut-off page asked %d times in total, want 4", hits)
 	}
 }
 

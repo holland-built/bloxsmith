@@ -222,14 +222,14 @@ A panel that says **unavailable** couldn't be read, and it names the reason. A l
 
 ### Why is a device missing?
 
-A colleague's testing in October 2026, syncing a demo company's devices from nine vendors into Infoblox, found these reasons a real device can be missing or look wrong. They are Infoblox or vendor behaviour, not something this app does:
+A colleague's testing in October 2026, syncing a demo company's devices from nine vendors into Infoblox, found these reasons a device can be missing or look wrong. They are Infoblox or vendor behaviour, not something this app does. He reported them to Infoblox as bugs, so some may since be fixed:
 
-- **Only managed devices seen in the last 7 days are listed** by the address search. A device Infoblox took in but marked unmanaged never comes back from it, and the reason isn't shown anywhere.
+- **Only managed devices seen in the last 7 days are listed** by the address search. A device Infoblox took in but marked unmanaged never comes back from it. In that testing 137 demo devices were marked unmanaged, and the reason wasn't found.
 - **CrowdStrike labels Windows servers as workstations**, so they show under the wrong type.
 - **CrowdStrike can show the location as "Unassigned"**, even when ServiceNow or the network knows the site.
 - **ServiceNow location needs a custom field called `u_region`.** A ServiceNow without it never gives a device a location, even when the city and country are filled in. Windows servers from ServiceNow weren't mapped at all in that testing, while Linux servers were.
-- **Very large Intune fleets can time out.** About 88,000 devices hit a one-hour limit and only 50,000 arrived. Intune and Jamf syncing at the same moment also failed together, and each worked when synced on its own.
-- **A device's detail can be a few hours old** after a sync, then catch up.
+- **Very large Intune fleets can time out.** About 88,000 devices hit a one-hour limit and only 50,000 arrived, even with Intune syncing on its own. Jamf, syncing at the same moment as Intune, failed too, and worked when synced on its own.
+- **A device's stored detail can lag a sync by hours.** In that testing, one device synced at 13:11 still showed its 08:12 detail until about 14:40.
 
 ## Incidents
 

@@ -608,16 +608,17 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 				"_limit":  strconv.Itoa(subnetPageSize),
 				"_offset": strconv.Itoa(i * subnetPageSize),
 			}
-			subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
-			// Retry ONCE on failure. Splitting one request into ten means
-			// roughly ten times today's chance that some page fails and, by
-			// assembleSubnetPages' all-or-nothing rule, zeroes the whole
-			// slice. One retry takes that amplification from ~10p to ~10p².
-			// No new status word, and no backoff: the failure modes measured
-			// here are transient per-request ones, not a tenant-wide outage
-			// that a sleep would help with.
-			if subnetPageStatus[i] == "error" {
-				subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			// Splitting one request into ten means roughly ten times the
+			// chance that some page fails and, by assembleSubnetPages'
+			// all-or-nothing rule, zeroes the whole slice. rest.doGet asks a
+			// failed read once more before it reads a body; a reply that then
+			// arrives cut off is the one case left, so only that is asked
+			// again here. Retrying every failure here as well asked a dead
+			// server 4 times.
+			var cut bool
+			subnetPages[i], subnetPageStatus[i], cut = fetchStrictCut(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			if cut {
+				subnetPages[i], subnetPageStatus[i], _ = fetchStrictCut(s.Rest, "/api/ddi/v1/ipam/subnet", params)
 			}
 		})
 	}
@@ -863,12 +864,21 @@ func projectFull(full map[string]any, ss sliceSet) map[string]any {
 // non-nil empty []any so every downstream norm* shaper and the handler keep
 // working — one dead feed must never blank the whole /api/data payload.
 func fetchStrict(c *rest.Client, path string, params map[string]string) ([]any, string) {
+	rows, status, _ := fetchStrictCut(c, path, params)
+	return rows, status
+}
+
+// fetchStrictCut is fetchStrict that also says whether the failure was a reply
+// cut off or garbled after it started (rest's "body" and "decode" categories),
+// which rest's own retry never sees because it retries before reading the body.
+func fetchStrictCut(c *rest.Client, path string, params map[string]string) ([]any, string, bool) {
 	rows, err := c.GetStrict(path, params)
 	if err != nil {
-		return []any{}, "error"
+		var ue *rest.UpstreamError
+		return []any{}, "error", errors.As(err, &ue) && (ue.Category == "body" || ue.Category == "decode")
 	}
 	if len(rows) == 0 {
-		return rows, "empty"
+		return rows, "empty", false
 	}
-	return rows, "ok"
+	return rows, "ok", false
 }
