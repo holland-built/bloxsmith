@@ -13,7 +13,6 @@ import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
-import { isUnused } from '../lib/unusedNetworks.js'
 // The look the owner picked for dashboards (Overview's tokens and tiles), plus
 // this page's own few rules.
 import './Overview.css'
@@ -39,14 +38,17 @@ function ipCompare(a, b) {
   return 0
 }
 
-// The line under the table heading while "Show unused networks" is on. The
-// table only holds the networks loaded into the page, so it says how many of
-// the tenant-wide unused ones are here, and which sizes were not judged.
-function unusedNote(loadedUnused, loaded, total) {
-  const here = total == null
-    ? `${loadedUnused.toLocaleString()} of the ${loaded.toLocaleString()} networks loaded here.`
-    : `${total.toLocaleString()} unused across all networks; ${loadedUnused.toLocaleString()} of them are in the ${loaded.toLocaleString()} networks loaded here.`
-  return `Only the first and last address in use. ${here} /31, /32 and IPv6 networks were not checked.`
+// "Show unused networks" pages through every unused network in the tenant,
+// UNUSED_PAGE at a time, from GET /api/ipam/subnets/unused (server order:
+// address). The server cannot search inside an address or name (CSP answers
+// 500 to address~"..."), so the search box, site list and column sorting,
+// which only work on loaded rows, are switched off and the note says so.
+const UNUSED_PAGE = 50
+
+// The line under the table heading while "Show unused networks" is on.
+function unusedNote(page, total) {
+  const all = total == null ? '' : ` ${total.toLocaleString()} unused across all networks.`
+  return `Only the first and last address in use. Page ${page + 1}, ${UNUSED_PAGE} a page, in address order.${all} Search, site and column sorting are off while this is on. /31, /32 and IPv6 networks were not checked.`
 }
 
 // A Cloud cell: AWS, Azure or GCP, with the account as its hover. Blank for
@@ -634,19 +636,22 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
   // links=1 puts them back, so a "subnets ≥90%" count that includes them
   // (Overview, Daily, the tile above) opens a list of the same length.
   const links = hp.links === '1'
-  // "Show unused networks" (unused=1) lists the loaded networks that have
-  // nothing in use but their network and broadcast address. It covers every
-  // size the rule can judge (/30 and up), so the tiny-networks switch does not
-  // apply to it. The count in its label is the tenant-wide one from the server
-  // (_totals.subnetsUnused); without it, the loaded count is shown and says so.
+  // "Show unused networks" (unused=1) pages through every network in the
+  // tenant with nothing in use but its network and broadcast address (see
+  // UNUSED_PAGE). It covers every size the rule can judge (/30 and up), so the
+  // tiny-networks switch and the util filter do not apply to it. The count in
+  // its label is the tenant-wide one (_totals.subnetsUnused).
   const unused = hp.unused === '1'
-  const unusedLoaded = useMemo(() => subnets.filter((s) => isUnused(s) === true), [subnets])
+  const [unusedPage, setUnusedPage] = useState(0)
+  useEffect(() => { if (!unused) setUnusedPage(0) }, [unused])
+  const unusedApi = useApi(unused ? `/api/ipam/subnets/unused?offset=${unusedPage * UNUSED_PAGE}&limit=${UNUSED_PAGE}` : null)
   const unusedTotal = Number.isFinite(totals?.subnetsUnused) ? totals.subnetsUnused : null
-  const base = useMemo(() => (unused ? unusedLoaded : links ? subnets : subnets.filter((s) => (Number(s.cidr) || 0) <= 28)),
-    [subnets, links, unused, unusedLoaded])
+  const base = useMemo(() => (unused ? unusedApi.data?.subnets ?? NO_ROWS : links ? subnets : subnets.filter((s) => (Number(s.cidr) || 0) <= 28)),
+    [subnets, links, unused, unusedApi.data])
   const sites = useMemo(() => [...new Set(base.map((s) => s.site).filter(Boolean))].sort(), [base])
 
   const filtered = useMemo(() => {
+    if (unused) return base
     const q = filter.trim().toLowerCase()
     return base.filter((s) => {
       if (site && s.site !== site) return false
@@ -660,9 +665,9 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
       if (!q) return true
       return [s.addr, s.cidr, s.site, s.name].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     })
-  }, [base, filter, site, minUtil])
+  }, [base, filter, site, minUtil, unused])
 
-  const sorted = useMemo(() => sortRows(filtered, sort, exhaustionSort(sort.dir)), [filtered, sort])
+  const sorted = useMemo(() => (unused ? filtered : sortRows(filtered, sort, exhaustionSort(sort.dir))), [filtered, sort, unused])
 
   // NO cap is applied here, deliberately. This used to be `sorted.slice(0, 20)`,
   // and the 20 was invisible: DataTable only prints its "showing N of M" footer
@@ -764,7 +769,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
       title={
         <>
           Which Subnets Run Out First?
-          {minUtil !== null && (
+          {minUtil !== null && !unused && (
             <button
               type="button"
               aria-label="Clear filter"
@@ -777,7 +782,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
           )}
         </>
       }
-      note={unused ? unusedNote(unusedLoaded.length, subnets.length, unusedTotal)
+      note={unused ? unusedNote(unusedPage, unusedTotal)
         : links ? 'incl. tiny networks (8 addresses or fewer)' : 'excl. tiny networks (8 addresses or fewer)'}
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
@@ -788,7 +793,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
               checked={unused}
               onChange={(e) => setHashParams('network', { ...hp, unused: e.target.checked ? '1' : undefined })}
             />
-            Show unused networks ({(unusedTotal ?? unusedLoaded.length).toLocaleString()}{unusedTotal == null ? ' loaded' : ''})
+            Show unused networks{unusedTotal == null ? '' : ` (${unusedTotal.toLocaleString()})`}
           </label>
           {!unused && <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap">
             <input
@@ -803,13 +808,15 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className={`${FIELD_CLS} w-[170px] max-w-full`}
+            disabled={unused}
+            className={`${FIELD_CLS} w-[170px] max-w-full disabled:opacity-40`}
           />
           <select
             aria-label="Filter by site"
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            className={FIELD_CLS}
+            disabled={unused}
+            className={`${FIELD_CLS} disabled:opacity-40`}
           >
             <option value="">All sites</option>
             {sites.map((s) => (
@@ -819,13 +826,25 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
         </div>
       }
     >
-      {base.length === 0 ? (
-        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+      {unused && !unusedApi.data ? (
+        unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
+      ) : base.length === 0 ? (
+        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : tableRows.length === 0 ? (
         <Empty>no subnets match</Empty>
       ) : (
         <div className="mt-2.5">
-          <DataTable rows={tableRows} columns={columns} sort={sort} onSort={onSort} maxHeight={420} rowCap={EXHAUSTION_CAP} />
+          <DataTable rows={tableRows} columns={unused ? columns.map((c) => ({ ...c, sortable: false })) : columns}
+            sort={unused ? undefined : sort} onSort={unused ? undefined : onSort} maxHeight={420} rowCap={EXHAUSTION_CAP} />
+        </div>
+      )}
+      {unused && (
+        <div className="mt-2 flex items-center justify-end gap-3 text-note">
+          <button type="button" className="text-accent disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={unusedPage === 0} onClick={() => setUnusedPage((p) => p - 1)}>Previous</button>
+          <span className="text-muted">Page {unusedPage + 1}</span>
+          <button type="button" className="text-accent disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!unusedApi.data?.more} onClick={() => setUnusedPage((p) => p + 1)}>Next</button>
         </div>
       )}
     </Card>
