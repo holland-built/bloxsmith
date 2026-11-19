@@ -125,6 +125,12 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		}
 	}
 	comment := strOr(body, "comment")
+	// cloud is the network job's "This network is for" choice. A cloud's own
+	// addresses are held back after the network is made, never in a preview.
+	cloud := strings.ToLower(strOr(body, "cloud"))
+	if msg := CloudSizeCheck(cloud, cidr); msg != "" {
+		return M{"ok": false, "error": msg}, 400
+	}
 
 	// block_id is the one id in this package a human types by hand: the Editor
 	// tab renders it as a free-text field (ui/src/tabs/Editor.jsx, "Address
@@ -224,6 +230,9 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			}
 		}
 		would["address"] = subnetAddr
+		if pfx, err := netip.ParsePrefix(fmt.Sprintf("%s/%d", subnetAddr, cidr)); err == nil && CloudHeld(cloud, pfx) != nil {
+			would["cloud"], would["held"] = cloud, CloudHeld(cloud, pfx)
+		}
 		return M{"ok": true, "dry_run": true, "would_create": would,
 			"checked": snap.Counts.MapWith(warns), "skipped": freecheck.SkipList(skipped), "warnings": freecheck.WarnList(warns)}, 200
 	}
@@ -324,13 +333,39 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		// tagging_failed marks the one failure shape that nonetheless left a
 		// live object behind, so the route layer can audit the id instead of
 		// writing nothing at all (an orphan with no record it was created).
-		return M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
-			"detail": presp, "id": sid, "tagging_failed": true}, statusOr(pstatus, 502)
+		out := M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
+			"detail": presp, "id": sid, "tagging_failed": true}
+		if held := CloudHeld(cloud, made.Masked()); perr == nil && held != nil {
+			notHeld := []any{}
+			for _, h := range held {
+				notHeld = append(notHeld, M{"address": h.Address, "label": h.Label, "reason": "the network's tags failed first"})
+			}
+			out["not_held"] = notHeld
+		}
+		return out, statusOr(pstatus, 502)
 	}
 	if r := asMap(presp); r != nil && asMap(r["result"]) != nil {
 		subnet = asMap(r["result"])
 	}
-	return M{"ok": true, "subnet": subnet}, 200
+	out = M{"ok": true, "subnet": subnet}
+	if cloud != "" && cloud != "none" {
+		// Counted from the network Infoblox made, which can differ from the
+		// one the preview showed.
+		got, err := netip.ParsePrefix(fmt.Sprintf("%s/%v", pyStr(subnet["address"]), subnet["cidr"]))
+		if err != nil {
+			got, err = made, perr
+		}
+		hspace := pyStr(subnet["space"])
+		if hspace == "" {
+			hspace = space
+		}
+		if err != nil {
+			out["hold_error"] = "Infoblox did not say which network it made, so none of " + cloudNames[cloud] + "'s addresses were held back"
+		} else {
+			out["held"], out["not_held"] = c.holdCloudAddresses(cloud, got, hspace)
+		}
+	}
+	return out, 200
 }
 
 // recheckSubnet checks made, the subnet sid just created in space inside block,

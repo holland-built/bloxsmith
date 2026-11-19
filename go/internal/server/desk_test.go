@@ -3,6 +3,7 @@ package server
 import (
 	"bloxsmith/internal/freecheck"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,11 +25,25 @@ type fakeTenant struct {
 	exists       map[string]bool
 	deletes      []string
 	refuseDelete bool
-	slowDelete   chan struct{} // when set, each DELETE waits for a value
-	refusePatch  bool          // the tag PATCH after a new network fails
-	inSubnet     []string      // addresses listed inside the new network
-	ranges       int           // DHCP ranges listed inside the new network
-	zoneRecords  []string      // record types listed in a zone
+	slowDelete   chan struct{}     // when set, each DELETE waits for a value
+	refusePatch  bool              // the tag PATCH after a new network fails
+	inSubnet     []string          // addresses listed inside the new network
+	ranges       int               // DHCP ranges listed inside the new network
+	zoneRecords  []string          // record types listed in a zone
+	subnet       string            // the network nextavailablesubnet makes; "" is 10.9.0.0/29
+	writes       []string          // every POST, PATCH and DELETE, in order
+	reserves     []map[string]any  // bodies of POST ipam/address
+	refuseHold   map[string]bool   // addresses whose POST ipam/address fails
+	held         map[string]string // reservation id -> address, while it exists
+}
+
+func (f *fakeTenant) subnetJSON() string {
+	s := f.subnet
+	if s == "" {
+		s = "10.9.0.0/29"
+	}
+	a, c, _ := strings.Cut(s, "/")
+	return `{"id":"ipam/subnet/s-9","address":"` + a + `","cidr":` + c + `,"space":"ipam/ip_space/sp-1"}`
 }
 
 func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +51,28 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	p := r.URL.Path
+	if r.Method != "GET" {
+		f.writes = append(f.writes, r.Method+" "+p)
+	}
 	switch {
+	case r.Method == "POST" && p == "/api/ddi/v1/ipam/address":
+		var b map[string]any
+		json.NewDecoder(r.Body).Decode(&b)
+		f.reserves = append(f.reserves, b)
+		addr, _ := b["address"].(string)
+		if f.refuseHold[addr] {
+			w.WriteHeader(500)
+			io.WriteString(w, `{"error":[{"message":"refused"}]}`)
+			return
+		}
+		id := "ipam/address/k-" + strings.ReplaceAll(addr, ".", "-")
+		if f.held == nil {
+			f.held = map[string]string{}
+		}
+		f.exists[id], f.held[id] = true, addr
+		io.WriteString(w, `{"result":{"id":"`+id+`","address":"`+addr+`"}}`)
+	case r.Method == "GET" && strings.HasSuffix(p, "/nextavailablesubnet"):
+		io.WriteString(w, `{"results":[`+f.subnetJSON()+`]}`)
 	case r.Method == "GET" && strings.HasSuffix(p, "/nextavailableip"):
 		io.WriteString(w, `{"results":[{"address":"10.7.0.9"}]}`)
 	case r.Method == "POST" && strings.HasSuffix(p, "/nextavailableip"):
@@ -47,17 +83,29 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"result":{"id":"dns/record/r-1"}}`)
 	case r.Method == "POST" && strings.HasSuffix(p, "/nextavailablesubnet"):
 		f.exists["ipam/subnet/s-9"] = true
-		io.WriteString(w, `{"results":[{"id":"ipam/subnet/s-9","address":"10.9.0.0","cidr":29}]}`)
+		io.WriteString(w, `{"results":[`+f.subnetJSON()+`]}`)
 	case r.Method == "PATCH":
 		if f.refusePatch {
 			w.WriteHeader(500)
 			return
 		}
-		io.WriteString(w, `{"result":{"id":"ipam/subnet/s-9","address":"10.9.0.0","cidr":29}}`)
+		io.WriteString(w, `{"result":`+f.subnetJSON()+`}`)
 	case r.Method == "GET" && p == "/api/ddi/v1/ipam/address":
-		rows := []map[string]string{{"address": "10.9.0.0"}, {"address": "10.9.0.7"}}
+		rows := []map[string]string{}
+		s := f.subnet
+		if s == "" {
+			s = "10.9.0.0/29"
+		}
+		for a := range subnetOwnAddresses(s) {
+			rows = append(rows, map[string]string{"address": a})
+		}
 		for _, a := range f.inSubnet {
 			rows = append(rows, map[string]string{"address": a})
+		}
+		for id, a := range f.held {
+			if f.exists[id] {
+				rows = append(rows, map[string]string{"id": id, "address": a})
+			}
 		}
 		json.NewEncoder(w).Encode(map[string]any{"results": rows})
 	case r.Method == "GET" && p == "/api/ddi/v1/dns/record":
@@ -71,8 +119,10 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 		rows := make([]map[string]string, f.ranges)
 		json.NewEncoder(w).Encode(map[string]any{"results": rows})
 	case r.Method == "GET" && strings.Count(strings.TrimPrefix(p, "/api/ddi/v1/"), "/") == 2:
-		if f.exists[strings.TrimPrefix(p, "/api/ddi/v1/")] {
-			io.WriteString(w, `{"result":{"address":"10.9.0.0","cidr":29}}`)
+		if strings.Contains(p, "/address_block/") {
+			io.WriteString(w, `{"result":{"id":"ipam/address_block/b-1","address":"10.9.0.0","cidr":16,"space":"ipam/ip_space/sp-1"}}`)
+		} else if f.exists[strings.TrimPrefix(p, "/api/ddi/v1/")] {
+			io.WriteString(w, `{"result":`+f.subnetJSON()+`}`)
 		} else {
 			w.WriteHeader(404)
 		}
@@ -579,5 +629,152 @@ func TestSampleNames_SkipTheSiteOwnRangeAndHosts(t *testing.T) {
 	}
 	if len(skipped) != 2 {
 		t.Fatalf("skipped = %+v, want the range and the host", skipped)
+	}
+}
+
+// cloudInput is the network job with a cloud picked.
+func cloudInput(cloud string, cidr int) string {
+	return fmt.Sprintf(`{"space":"ipam/ip_space/sp-1","block_id":"ipam/address_block/b-1","cidr":%d,"name":"cloud-net","cloud":%q}`, cidr, cloud)
+}
+
+func reservedAddrs(f *fakeTenant) string {
+	var out []string
+	for _, b := range f.reserves {
+		out = append(out, anyStr(b["address"])+"="+anyStr(b["comment"]))
+	}
+	return strings.Join(out, " ")
+}
+
+// Build holds back the cloud's own addresses after the network is made,
+// counted from the network Infoblox actually made, and records each one.
+func TestDeskRun_NetworkHoldsTheCloudsAddresses(t *testing.T) {
+	for _, c := range []struct{ cloud, subnet, want string }{
+		{"aws", "10.9.0.32/28", "10.9.0.33=Kept by AWS: router 10.9.0.34=Kept by AWS: DNS 10.9.0.35=Kept by AWS: future use"},
+		{"azure", "10.9.4.0/24", "10.9.4.1=Kept by Azure: gateway 10.9.4.2=Kept by Azure: DNS 10.9.4.3=Kept by Azure: DNS"},
+		{"gcp", "10.9.0.32/28", "10.9.0.33=Kept by Google Cloud: gateway 10.9.0.46=Kept by Google Cloud: reserved by Google"},
+	} {
+		d, f, _ := newDeskDeps(t)
+		f.subnet = c.subnet
+		_, cidr, _ := strings.Cut(c.subnet, "/")
+		n := 28
+		fmt.Sscan(cidr, &n)
+		code, body := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput(c.cloud, n)+`,"dry":false}`)
+		if code != 200 || body["ok"] != true {
+			t.Fatalf("%s build = %d %v", c.cloud, code, body)
+		}
+		if got := reservedAddrs(f); got != c.want {
+			t.Fatalf("%s held %q, want %q", c.cloud, got, c.want)
+		}
+		for _, b := range f.reserves {
+			if anyStr(b["space"]) != "ipam/ip_space/sp-1" {
+				t.Fatalf("%s reservation without the network's space: %v", c.cloud, b)
+			}
+		}
+		if !strings.HasSuffix(f.writes[0], "/nextavailablesubnet") || !strings.HasPrefix(f.writes[len(f.writes)-1], "POST /api/ddi/v1/ipam/address") {
+			t.Fatalf("%s writes %v, want the network first and the reservations after", c.cloud, f.writes)
+		}
+		run := onlyRun(t, d)
+		if run.Status != runs.Built || len(run.Objects) != 1+len(f.reserves) {
+			t.Fatalf("%s run = %+v, want the network and each held address recorded", c.cloud, run)
+		}
+		for _, o := range run.Objects[1:] {
+			if o.Kind != "address" || !strings.HasPrefix(o.ID, "ipam/address/k-") || !strings.Contains(o.Label, "Kept by") {
+				t.Fatalf("%s recorded %+v", c.cloud, o)
+			}
+		}
+	}
+}
+
+// None makes no reservations; Preview writes nothing and lists the held ones.
+func TestDeskRun_NetworkNoneHoldsNothingAndPreviewWritesNothing(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("none", 29)+`,"dry":false}`)
+	if len(f.reserves) != 0 || len(onlyRun(t, d).Objects) != 1 {
+		t.Fatalf("None held %v", f.reserves)
+	}
+
+	d, f, _ = newDeskDeps(t)
+	_, body := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 28)+`,"dry":true}`)
+	if len(f.writes) != 0 {
+		t.Fatalf("preview wrote %v", f.writes)
+	}
+	if rs, _ := d.ledger().List(); len(rs) != 0 {
+		t.Fatalf("preview recorded %v", rs)
+	}
+	held, _ := body["would_create"].(map[string]any)["held"].([]any)
+	if len(held) != 3 {
+		t.Fatalf("preview = %v, want 3 held addresses listed", body)
+	}
+}
+
+// A reservation that fails keeps the network, records it and every hold that
+// worked, and says which addresses were not held. The run counts as built, so
+// the page never offers a Build that would make a second network.
+func TestDeskRun_NetworkFailedHoldKeepsAndRecordsTheNetwork(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	f.subnet = "10.9.0.32/28"
+	f.refuseHold = map[string]bool{"10.9.0.34": true}
+	code, body := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 28)+`,"dry":false}`)
+	for _, w := range f.writes {
+		if strings.HasPrefix(w, "DELETE") {
+			t.Fatalf("the network was deleted: %v", f.writes)
+		}
+	}
+	run := onlyRun(t, d)
+	if code != 200 || body["ok"] != true || run.Status != runs.Built {
+		t.Fatalf("build = %d %v, run %+v", code, body, run)
+	}
+	if len(run.Objects) != 3 || run.Objects[0].ID != "ipam/subnet/s-9" {
+		t.Fatalf("objects = %+v, want the network and the 2 holds that worked", run.Objects)
+	}
+	if !strings.Contains(run.Note, "10.9.0.34") || strings.Contains(run.Note, "10.9.0.33") {
+		t.Fatalf("note = %q, want it to name only 10.9.0.34", run.Note)
+	}
+}
+
+// Remove deletes this run's held addresses first, then the network, and the
+// held addresses do not count as someone else's contents.
+func TestDeskRemove_NetworkDeletesItsHeldAddressesFirst(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	f.subnet = "10.9.0.32/28"
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 28)+`,"dry":false}`)
+	run := onlyRun(t, d)
+	_, body := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":true}`)
+	for _, w := range body["would_remove"].([]any) {
+		if b := anyStr(w.(map[string]any)["blocked"]); b != "" {
+			t.Fatalf("preview blocked by its own holds: %v", body)
+		}
+	}
+	f.writes = nil
+	code, _ := deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+run.ID+`","dry":false}`)
+	want := "DELETE /api/ddi/v1/ipam/address/k-10-9-0-33 DELETE /api/ddi/v1/ipam/address/k-10-9-0-34 DELETE /api/ddi/v1/ipam/address/k-10-9-0-35 DELETE /api/ddi/v1/ipam/subnet/s-9"
+	if got := strings.Join(f.writes, " "); code != 200 || got != want {
+		t.Fatalf("remove = %d, writes %s, want %s", code, got, want)
+	}
+	// Someone else's address in the network still blocks it.
+	d, f, _ = newDeskDeps(t)
+	f.subnet = "10.9.0.32/28"
+	deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 28)+`,"dry":false}`)
+	f.inSubnet = []string{"10.9.0.40"}
+	deskPost(t, d, d.deskRemove, "/api/desk/remove", `{"run":"`+onlyRun(t, d).ID+`","dry":false}`)
+	if f.exists["ipam/subnet/s-9"] != true {
+		t.Fatal("a network holding someone else's address was deleted")
+	}
+}
+
+// AWS does not allow a network smaller than /28.
+func TestDeskRun_AWSRefusesSlash29(t *testing.T) {
+	d, f, _ := newDeskDeps(t)
+	for _, dry := range []string{"true", "false"} {
+		code, body := deskPost(t, d, d.deskRun, "/api/desk/run", `{"job":"network","input":`+cloudInput("aws", 29)+`,"dry":`+dry+`}`)
+		if code != 400 || !strings.Contains(anyStr(body["error"]), "AWS") {
+			t.Fatalf("aws /29 dry=%s = %d %v", dry, code, body)
+		}
+	}
+	if len(f.writes) != 0 {
+		t.Fatalf("writes %v", f.writes)
+	}
+	if rs, _ := d.ledger().List(); len(rs) != 0 {
+		t.Fatalf("recorded %v", rs)
 	}
 }

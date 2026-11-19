@@ -133,12 +133,13 @@ var deskJobs = map[string]deskJobDef{
 			if n, ok := in["cidr"].(float64); !ok || n < 8 || n > 30 || n != float64(int(n)) {
 				return "Pick a network size."
 			}
-			return ""
+			n, _ := in["cidr"].(float64)
+			return edit.CloudSizeCheck(strings.ToLower(inStr(in, "cloud")), int(n))
 		},
 		deskJob: deskJob{
 			build: func(d *Deps, r *http.Request, in map[string]any, dry bool) (map[string]any, int) {
 				return d.editFor(r).SubnetCreate(map[string]any{"block_id": inStr(in, "block_id"),
-					"cidr": in["cidr"], "name": inStr(in, "name"), "dry": dry})
+					"cidr": in["cidr"], "name": inStr(in, "name"), "cloud": inStr(in, "cloud"), "dry": dry})
 			},
 			collect: subnetObjects,
 			title: func(in map[string]any) string {
@@ -285,7 +286,29 @@ func subnetObjects(res, in map[string]any) ([]runs.Object, string) {
 	if n := inStr(in, "name"); n != "" {
 		label += ", " + n
 	}
-	return []runs.Object{{ID: id, Kind: "subnet", Label: label, State: runs.Created}}, ""
+	objs := []runs.Object{{ID: id, Kind: "subnet", Label: label, State: runs.Created}}
+	// The addresses held back for a cloud are this run's too, so Remove
+	// deletes them before the network. One that was not held is named.
+	for _, h := range asList(res["held"]) {
+		m, _ := h.(map[string]any)
+		if hid := anyStr(m["id"]); hid != "" {
+			objs = append(objs, runs.Object{ID: hid, Kind: "address", Label: anyStr(m["address"]) + ", " + anyStr(m["label"]), State: runs.Created})
+		}
+	}
+	var missed []string
+	for _, h := range asList(res["not_held"]) {
+		m, _ := h.(map[string]any)
+		missed = append(missed, anyStr(m["address"])+" ("+anyStr(m["label"])+": "+anyStr(m["reason"])+")")
+	}
+	note := ""
+	if len(missed) > 0 {
+		note = "The network was made, but these addresses were not held back: " + strings.Join(missed, "; ") +
+			". Reserve them by hand on the Subnet page before anything uses them."
+	}
+	if e := anyStr(res["hold_error"]); e != "" {
+		note = "The network was made, but " + e + ". Reserve them by hand on the Subnet page."
+	}
+	return objs, note
 }
 
 // allocatedObjects reads the IDs an allocate result proves were made. An
@@ -357,6 +380,13 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 		return
 	}
 	cli := d.editFor(r)
+	// The addresses this run itself recorded are not someone else's contents.
+	ours := map[string]bool{}
+	for _, o := range run.Objects {
+		if o.Kind == "address" {
+			ours[o.ID] = true
+		}
+	}
 
 	if dry, ok := b["dry"].(bool); !ok || dry {
 		would := []map[string]any{}
@@ -378,7 +408,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			row := map[string]any{"id": o.ID, "kind": o.Kind, "label": o.Label,
 				"exists": st == 200, "gone": st == 404, "status": st}
 			if st == 200 {
-				if why := blocker(cli, o); why != "" {
+				if why := runBlocker(cli, o, ours); why != "" {
 					row["blocked"] = why
 				}
 			}
@@ -430,7 +460,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// put something in the network since the preview. A small gap
 			// remains between this check and the DELETE; Infoblox offers no
 			// "delete only if empty".
-			if why := blocker(cli, *o); why != "" {
+			if why := runBlocker(cli, *o, ours); why != "" {
 				o.State, o.Error = runs.Error, why
 				failed++
 				continue
@@ -505,10 +535,14 @@ func asList(v any) []any {
 
 // blocker is the leftover check for the kinds whose delete takes their
 // contents with them: networks and zones. "" means safe to delete.
-func blocker(cli *edit.Client, o runs.Object) string {
+func blocker(cli *edit.Client, o runs.Object) string { return runBlocker(cli, o, nil) }
+
+// runBlocker is blocker for a desk run: ours are the address IDs the run
+// recorded itself, which Remove deletes before the network.
+func runBlocker(cli *edit.Client, o runs.Object, ours map[string]bool) string {
 	switch o.Kind {
 	case "subnet":
-		return subnetBlocker(cli, o.ID)
+		return subnetBlocker(cli, o.ID, ours)
 	case "dns_zone":
 		return zoneBlocker(cli, o.ID)
 	}
@@ -520,7 +554,7 @@ func blocker(cli *edit.Client, o runs.Object) string {
 // deletes one only when it holds nothing but its own network and broadcast
 // addresses (Infoblox lists those two as addresses in every IPv4 network) and
 // no DHCP range. When it cannot check, it does not delete.
-func subnetBlocker(cli *edit.Client, id string) string {
+func subnetBlocker(cli *edit.Client, id string, ours map[string]bool) string {
 	const cantCheck = "Bloxsmith could not check whether this network holds anything else, so it was not deleted. Try again, or delete it on the Subnet page."
 	p, err := edit.ObjectPath("ipam/subnet", id)
 	if err != nil {
@@ -550,7 +584,7 @@ func subnetBlocker(cli *edit.Client, id string) string {
 	others := 0
 	for _, a := range addrs {
 		m, _ := a.(map[string]any)
-		if !own[anyStr(m["address"])] {
+		if !own[anyStr(m["address"])] && !ours[anyStr(m["id"])] {
 			others++
 		}
 	}
