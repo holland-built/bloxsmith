@@ -400,7 +400,7 @@ export const PANEL_HELP = {
     look: 'Also addresses DHCP handed out, and laptops protected off the office network. Last 30 days. DHCP pairs in HA each count an address, so that number can be up to twice the devices served.',
   },
   'value-work': {
-    what: 'Jobs Bloxsmith finished on this tenant in the last 30 days, by page, and the items they made in Infoblox. Deletes are not counted.',
+    what: 'Jobs Bloxsmith finished on this tenant in the last 30 days, by page, and the items they made in Infoblox. Deletes and undone jobs are not counted.',
     look: 'Time saved is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. "Not checked" means the list of changes could not be read.',
   },
 

@@ -18,9 +18,12 @@ export const SOURCES = [
   ['editor', 'Editor'],
 ]
 
-// A run that got as far as making something. A run later removed was still
-// built. "building" (stopped part way) and "failed" did not finish.
-const DONE = new Set(['built', 'removing', 'removed', 'remove-failed'])
+// Only "built" counts. Remove (go/internal/server/desk.go) also runs on a
+// failed run and then overwrites its status with "removed" or
+// "remove-failed", so those statuses cannot tell a finished job that was
+// undone from a failed one that was cleaned up. Undone jobs are left out
+// with them, and the panel says so.
+const DONE = new Set(['built'])
 
 // countWork(data, now) returns null when the runs list did not load (the
 // panel says "not checked", never 0). Otherwise:

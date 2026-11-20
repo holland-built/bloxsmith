@@ -13,12 +13,18 @@ test('counts only the last 30 days', () => {
   assert.equal(w.jobs, 1)
 })
 
-test('leaves out recorded deletes, failed runs and runs stopped part way', () => {
+test('leaves out recorded deletes, failed runs, runs stopped part way, and removed runs', () => {
   const w = countWork({
     tenant: 't1',
-    runs: [run({ source: 'delete' }), run({ status: 'failed' }), run({ status: 'building' }), run({ status: 'removed' }), run()],
+    runs: [
+      run({ source: 'delete' }), run({ status: 'failed' }), run({ status: 'building' }),
+      // Remove also runs on a failed run and overwrites its status, so these
+      // cannot prove the job ever finished.
+      run({ status: 'removed' }), run({ status: 'remove-failed' }), run({ status: 'removing' }),
+      run(),
+    ],
   }, NOW)
-  assert.equal(w.jobs, 2, 'a run later removed was still built')
+  assert.equal(w.jobs, 1)
 })
 
 test('counts jobs and objects made, by page', () => {
