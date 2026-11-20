@@ -7,24 +7,43 @@ import "encoding/json"
 const valuePlatformWindow = "last 30 days"
 
 // valuePlatformMetrics are the HostMetricsV1 series behind CSPValuePlatform.
-// Agg says how 30 days of readings become one number: "sum" adds them up (a
-// count of things that happened), "avg" averages them (a share). Checked on
-// the live demo tenant on 2026-11-20:
-//   - total_query_count_iq: 720 hourly account-wide rows over 30 days, each
-//     the queries answered in that hour (average 35,321 an hour). The 30-day
-//     sum was 25,431,226. Cross-check: dns_qps_iq averaged 9.958 a second,
-//     times 2,592,000 seconds = 25,811,387, within 1.5% of the sum.
-//   - cache_hit_ratio_iq: 30 daily account-wide rows, 34.9-58.5, so 0-100
-//     (not a 0-1 fraction); 30-day average 44.70.
-//   - dhcp_cumulative_assigned_addresses_iq: daily rows per host. Despite the
-//     name it is not a running total: the busiest host read 0, 175, 341, 359
-//     ... 190, 0 over the month, rising and falling, so each row is that
-//     day's count and the 30-day total is their sum (5,744 over 9 hosts).
-var valuePlatformMetrics = []struct{ Key, Metric, Agg, Unit string }{
-	{"queries", "total_query_count_iq", "sum", "queries"},
-	{"cache_hit", "cache_hit_ratio_iq", "avg", "percent"},
-	{"dhcp_assigned", "dhcp_cumulative_assigned_addresses_iq", "sum", "addresses"},
+// Each is read as ONE tenant-wide row (no host dimension), so the cube adds
+// every host up itself and there is no host-by-host total whose completeness
+// would have to be proven. Field is the measure shown: "sum_value" adds 30
+// days of readings up (a count of things that happened), "avg_value" averages
+// them (a share). Checked on the live demo tenant on 2026-11-20:
+//   - total_query_count_iq: 720 hourly rows over 30 days, each the queries
+//     answered in that hour (average 35,321 an hour). The 30-day sum was
+//     25,431,226. Cross-check: dns_qps_iq averaged 9.958 a second, times
+//     2,592,000 seconds = 25,811,387, within 1.5% of the sum.
+//   - cache_hit_ratio_iq: 30 daily rows, 34.9-58.5, so 0-100 (not a 0-1
+//     fraction); 30-day average 44.70.
+var valuePlatformMetrics = []struct{ Key, Metric, Field, Unit string }{
+	{"queries", "total_query_count_iq", "sum_value", "queries"},
+	{"cache_hit", "cache_hit_ratio_iq", "avg_value", "percent"},
 }
+
+// DHCP addresses handed out would be the 30-day sum of
+// dhcp_cumulative_assigned_addresses_iq, but is switched off until Infoblox
+// says whether that number is a running total (review, 2026-11-20). Summing a
+// running total would count the same addresses many times.
+//
+// What the demo tenant returned on 2026-11-20: only one row per host per day
+// (granularity "day"; no hourly or 5-minute rows to show whether it resets
+// within a day). Tenant-wide 30-day sum 5,744 over 185 rows from 9 hosts. The
+// busiest host (03d0ff19...) read, by day: 0 0 0 1 0 175 341 359 368 339 334
+// 348 328 342 333 321 291 264 277 296 190 0 0 0 0 1 0 0 0 0. dhcp_discover_iq
+// for the same host was 3,600-6,014 a day (about 3,940 while assignments were
+// about 340). The series falls as well as rises, so it is not a lifetime
+// counter, but a day's value near 340 held for 16 days fits both "addresses
+// handed out that day" and "addresses held at the time", and nothing in the
+// cube metadata says which. Set this to true once that is confirmed.
+var dhcpTotalConfirmed = false
+
+const (
+	dhcpMetric        = "dhcp_cumulative_assigned_addresses_iq"
+	dhcpUnavailableWh = "Not available: Infoblox doesn't say whether this number is a running total."
+)
 
 // DNS server uptime is read from dns_status_iq, but is switched off until
 // Infoblox confirms what that number measures (main chat's call, 2026-11-20).
@@ -55,34 +74,39 @@ const (
 //
 // Each number stands alone. A read that failed, or came back 200 with no
 // result.data, is "error" with a null value ("not checked" on screen), never
-// 0. A read with no rows, or only missing readings, is "empty", also null.
-// Uptime is "unavailable" while its meaning is unconfirmed (see above), and
+// 0, and so is a row whose reading is missing, null or not a number. A read
+// with no rows is "empty", also null. Uptime and DHCP are "unavailable" while
+// their meaning is unconfirmed (see above), and
 // roaming is "unavailable" when the tenant has no B1EndpointsDailyV1 cube.
 func (s *Service) CSPValuePlatform() map[string]any {
 	results := make([][]map[string]any, len(valuePlatformMetrics))
-	var uptimeRows, roamingRows []map[string]any
-	tasks := make([]func(), 0, len(valuePlatformMetrics)+2)
+	var uptimeRows, dhcpRows, roamingRows []map[string]any
+	tasks := make([]func(), 0, len(valuePlatformMetrics)+3)
 	for i, m := range valuePlatformMetrics {
-		tasks = append(tasks, func() { results[i] = s.hostMetricRows(m.Metric) })
+		tasks = append(tasks, func() { results[i] = s.hostMetricRows(m.Metric, false) })
 	}
 	if uptimeMeaningConfirmed {
-		tasks = append(tasks, func() { uptimeRows = s.hostMetricRows(uptimeMetric) })
+		tasks = append(tasks, func() { uptimeRows = s.hostMetricRows(uptimeMetric, true) })
+	}
+	if dhcpTotalConfirmed {
+		tasks = append(tasks, func() { dhcpRows = s.hostMetricRows(dhcpMetric, false) })
 	}
 	tasks = append(tasks, func() { roamingRows = s.roamingRows() })
 	mustFanOut(tasks...)
 
 	metrics := map[string]any{}
 	for i, m := range valuePlatformMetrics {
-		var out map[string]any
-		if m.Agg == "sum" {
-			out = metricTotal(results[i])
-		} else {
-			out = dnsHealthMetric(results[i], nil)
-			delete(out, "hosts")
-		}
+		out := tenantReading(results[i], m.Field)
 		out["metric"], out["unit"] = m.Metric, m.Unit
 		metrics[m.Key] = out
 	}
+
+	dhcp := map[string]any{"status": "unavailable", "value": nil, "reason": dhcpUnavailableWh}
+	if dhcpTotalConfirmed {
+		dhcp = tenantReading(dhcpRows, "sum_value")
+	}
+	dhcp["metric"], dhcp["unit"] = dhcpMetric, "addresses"
+	metrics["dhcp_assigned"] = dhcp
 
 	var uptime map[string]any
 	if uptimeMeaningConfirmed {
@@ -128,17 +152,21 @@ func (s *Service) CSPValuePlatform() map[string]any {
 	return map[string]any{"status": status, "window": valuePlatformWindow, "metrics": metrics}
 }
 
-// hostMetricRows reads one HostMetricsV1 series over the window, one row per
-// host (blank host = account-wide). nil means the read failed.
-func (s *Service) hostMetricRows(metric string) []map[string]any {
-	q, _ := json.Marshal(map[string]any{
-		"measures":   []string{cubeHost + ".sum_value", cubeHost + ".avg_value", cubeHost + ".count_value"},
-		"dimensions": []string{cubeHost + ".host"},
+// hostMetricRows reads one HostMetricsV1 series over the window: one
+// tenant-wide row, or with perHost one row per host (blank host =
+// account-wide). nil means the read failed.
+func (s *Service) hostMetricRows(metric string, perHost bool) []map[string]any {
+	query := map[string]any{
+		"measures": []string{cubeHost + ".sum_value", cubeHost + ".avg_value", cubeHost + ".count_value"},
 		"filters": []map[string]any{{
 			"member": cubeHost + ".metric_name", "operator": "equals", "values": []string{metric}}},
 		"timeDimensions": []map[string]any{{
 			"dimension": cubeHost + ".timestamp", "dateRange": valuePlatformWindow}},
-	})
+	}
+	if perHost {
+		query["dimensions"] = []string{cubeHost + ".host"}
+	}
+	q, _ := json.Marshal(query)
 	body, st, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
 	if errored(st, err) {
 		return nil
@@ -146,36 +174,22 @@ func (s *Service) hostMetricRows(metric string) []map[string]any {
 	return strictCubeRows(body)
 }
 
-// metricTotal is a 30-day total from one series' rows (nil = read failed):
-// the account-wide row's sum when there is one, otherwise the per-host sums
-// added up. Readings are added, never averaged. A row whose sum is missing,
-// null or not a number adds nothing, and if no row had one the total is null.
-func metricTotal(rows []map[string]any) map[string]any {
-	if rows == nil {
+// tenantReading is one tenant-wide number from a query with no dimensions
+// (nil rows = read failed). No rows is "empty". More than one row, or a row
+// whose field is missing, null or not a number, is "error" ("not checked"):
+// never a partial or zero total.
+func tenantReading(rows []map[string]any, field string) map[string]any {
+	if rows == nil || len(rows) > 1 {
 		return map[string]any{"status": "error", "value": nil}
 	}
-	var tenant any
-	var sum float64
-	seen := false
-	for _, r := range rows {
-		v := floatOrNil(r["sum_value"])
-		if v == nil {
-			continue
-		}
-		if getStr(r["host"]) == "" {
-			tenant = v
-			continue
-		}
-		sum += v.(float64)
-		seen = true
-	}
-	if tenant == nil && seen {
-		tenant = sum
-	}
-	if tenant == nil {
+	if len(rows) == 0 {
 		return map[string]any{"status": "empty", "value": nil}
 	}
-	return map[string]any{"status": "ok", "value": tenant}
+	v := floatOrNil(rows[0][field])
+	if v == nil {
+		return map[string]any{"status": "error", "value": nil}
+	}
+	return map[string]any{"status": "ok", "value": v}
 }
 
 // roamingRows reads the count of protected roaming devices. nil = failed.

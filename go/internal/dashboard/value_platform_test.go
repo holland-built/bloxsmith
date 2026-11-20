@@ -57,13 +57,10 @@ func valuePlatformServer(t *testing.T, bodies map[string]string, fail map[string
 
 func vpBodies() map[string]string {
 	return map[string]string{
-		"total_query_count_iq": `{"result":{"data":[{"HostMetricsV1.host":null,"HostMetricsV1.sum_value":25431225.68867135,"HostMetricsV1.avg_value":35321.1,"HostMetricsV1.count_value":"720"}]}}`,
-		"cache_hit_ratio_iq":   `{"result":{"data":[{"HostMetricsV1.host":"","HostMetricsV1.sum_value":1340.8577,"HostMetricsV1.avg_value":44.695256666666666,"HostMetricsV1.count_value":"30"}]}}`,
-		"dhcp_cumulative_assigned_addresses_iq": `{"result":{"data":[
-			{"HostMetricsV1.host":"h1","HostMetricsV1.sum_value":4908,"HostMetricsV1.avg_value":163.6,"HostMetricsV1.count_value":"30"},
-			{"HostMetricsV1.host":"h2","HostMetricsV1.sum_value":"616","HostMetricsV1.avg_value":205.3,"HostMetricsV1.count_value":"3"},
-			{"HostMetricsV1.host":"h3","HostMetricsV1.sum_value":0,"HostMetricsV1.avg_value":0,"HostMetricsV1.count_value":"30"}]}}`,
-		"roaming": `{"result":{"data":[{"B1EndpointsDailyV1.payload_protection_count":"7"}]}}`,
+		"total_query_count_iq":                  `{"result":{"data":[{"HostMetricsV1.sum_value":25431225.68867135,"HostMetricsV1.avg_value":35321.1,"HostMetricsV1.count_value":"720"}]}}`,
+		"cache_hit_ratio_iq":                    `{"result":{"data":[{"HostMetricsV1.sum_value":1340.8577,"HostMetricsV1.avg_value":44.695256666666666,"HostMetricsV1.count_value":"30"}]}}`,
+		"dhcp_cumulative_assigned_addresses_iq": `{"result":{"data":[{"HostMetricsV1.sum_value":"5744","HostMetricsV1.avg_value":31.05,"HostMetricsV1.count_value":"185"}]}}`,
+		"roaming":                               `{"result":{"data":[{"B1EndpointsDailyV1.payload_protection_count":"7"}]}}`,
 	}
 }
 
@@ -84,11 +81,14 @@ func TestCSPValuePlatform_AllOK(t *testing.T) {
 	if got["status"] != "ok" || got["window"] != "last 30 days" {
 		t.Fatalf("status/window = %v/%v, want ok/last 30 days", got["status"], got["window"])
 	}
-	// One query per metric plus roaming; uptime is switched off so not read.
-	if len(*seen) != 4 {
-		t.Fatalf("queries = %d, want 4", len(*seen))
+	// Queries, cache and roaming; uptime and DHCP are switched off so not read.
+	if len(*seen) != 3 {
+		t.Fatalf("queries = %d, want 3", len(*seen))
 	}
 	for _, q := range *seen {
+		if q["dimensions"] != nil {
+			t.Errorf("dimensions = %v, want none: one tenant-wide row", q["dimensions"])
+		}
 		td := asMap(q["timeDimensions"].([]any)[0])
 		if td["dateRange"] != "last 30 days" || td["granularity"] != nil {
 			t.Errorf("timeDimension = %v, want last 30 days as one total", td)
@@ -108,21 +108,53 @@ func TestCSPValuePlatform_AllOK(t *testing.T) {
 	}
 }
 
-// Totals add the per-host sums; they never average them.
-func TestCSPValuePlatform_TotalsSummedNotAveraged(t *testing.T) {
-	s, _ := valuePlatformServer(t, vpBodies(), nil, vpMetaWithRoaming)
+// DHCP is switched off until Infoblox says whether its number is a running
+// total: "unavailable" with a reason, and the series is not read.
+func TestCSPValuePlatform_DHCPOffByDefault(t *testing.T) {
+	s, seen := valuePlatformServer(t, vpBodies(), nil, vpMetaWithRoaming)
 	m := vpMetric(t, s.CSPValuePlatform(), "dhcp_assigned")
-	if m["status"] != "ok" || m["value"] != 5524.0 || m["unit"] != "addresses" {
-		t.Errorf("dhcp_assigned = %v, want 4908+616+0 = 5524 addresses", m)
+	if m["status"] != "unavailable" || m["value"] != nil || !strings.Contains(getStr(m["reason"]), "running total") {
+		t.Errorf("dhcp_assigned = %v, want unavailable with the running-total reason", m)
+	}
+	for _, q := range *seen {
+		if fs, ok := q["filters"].([]any); ok && asMap(fs[0])["values"].([]any)[0] == "dhcp_cumulative_assigned_addresses_iq" {
+			t.Errorf("the DHCP series was read while it is off")
+		}
 	}
 }
 
-// A missing, null or non-numeric measure is not a reading: it never becomes 0.
-func TestCSPValuePlatform_BadMeasureIsNotZero(t *testing.T) {
+// Switched on, DHCP is the cube's own tenant-wide sum.
+func TestCSPValuePlatform_DHCPOnIsTenantSum(t *testing.T) {
+	dhcpTotalConfirmed = true
+	t.Cleanup(func() { dhcpTotalConfirmed = false })
+	s, _ := valuePlatformServer(t, vpBodies(), nil, vpMetaWithRoaming)
+	m := vpMetric(t, s.CSPValuePlatform(), "dhcp_assigned")
+	if m["status"] != "ok" || m["value"] != 5744.0 || m["unit"] != "addresses" {
+		t.Errorf("dhcp_assigned = %v, want ok 5744 addresses", m)
+	}
+}
+
+// A total is the cube's own sum (one row), never a sum of rows put together
+// here: more than one row, as from a per-host split, is "not checked", even
+// when every row has a number, because nothing shows the rows are complete.
+func TestCSPValuePlatform_SeveralRowsIsNotChecked(t *testing.T) {
+	b := vpBodies()
+	b["total_query_count_iq"] = `{"result":{"data":[
+		{"HostMetricsV1.host":"h1","HostMetricsV1.sum_value":4908},
+		{"HostMetricsV1.host":"h2","HostMetricsV1.sum_value":616}]}}`
+	s, _ := valuePlatformServer(t, b, nil, vpMetaWithRoaming)
+	if m := vpMetric(t, s.CSPValuePlatform(), "queries"); m["status"] != "error" || m["value"] != nil {
+		t.Errorf("queries = %v, want error and null", m)
+	}
+}
+
+// A missing, null or non-numeric reading is "not checked": never 0, never a
+// partial total. Roaming's single count stays "empty" (no readings).
+func TestCSPValuePlatform_BadMeasureIsNotChecked(t *testing.T) {
 	for name, row := range map[string]string{
-		"missing":     `{"HostMetricsV1.host":""}`,
-		"null":        `{"HostMetricsV1.host":"","HostMetricsV1.sum_value":null,"HostMetricsV1.avg_value":null}`,
-		"non-numeric": `{"HostMetricsV1.host":"","HostMetricsV1.sum_value":"n/a","HostMetricsV1.avg_value":"n/a"}`,
+		"missing":     `{"HostMetricsV1.count_value":"30"}`,
+		"null":        `{"HostMetricsV1.sum_value":null,"HostMetricsV1.avg_value":null}`,
+		"non-numeric": `{"HostMetricsV1.sum_value":"n/a","HostMetricsV1.avg_value":"n/a"}`,
 	} {
 		b := vpBodies()
 		b["total_query_count_iq"] = `{"result":{"data":[` + row + `]}}`
@@ -130,11 +162,24 @@ func TestCSPValuePlatform_BadMeasureIsNotZero(t *testing.T) {
 		b["roaming"] = `{"result":{"data":[{"B1EndpointsDailyV1.payload_protection_count":null}]}}`
 		s, _ := valuePlatformServer(t, b, nil, vpMetaWithRoaming)
 		got := s.CSPValuePlatform()
-		for _, k := range []string{"queries", "cache_hit", "roaming"} {
-			if m := vpMetric(t, got, k); m["status"] != "empty" || m["value"] != nil {
-				t.Errorf("%s: %s = %v, want empty with a null value", name, k, m)
+		for _, k := range []string{"queries", "cache_hit"} {
+			if m := vpMetric(t, got, k); m["status"] != "error" || m["value"] != nil {
+				t.Errorf("%s: %s = %v, want error (not checked) with a null value", name, k, m)
 			}
 		}
+		if m := vpMetric(t, got, "roaming"); m["status"] != "empty" || m["value"] != nil {
+			t.Errorf("%s: roaming = %v, want empty with a null value", name, m)
+		}
+	}
+}
+
+// No rows at all is "empty" (no readings), not an error and not 0.
+func TestCSPValuePlatform_NoRowsIsEmpty(t *testing.T) {
+	b := vpBodies()
+	b["total_query_count_iq"] = `{"result":{"data":[]}}`
+	s, _ := valuePlatformServer(t, b, nil, vpMetaWithRoaming)
+	if m := vpMetric(t, s.CSPValuePlatform(), "queries"); m["status"] != "empty" || m["value"] != nil {
+		t.Errorf("queries = %v, want empty and null", m)
 	}
 }
 
@@ -154,8 +199,7 @@ func TestCSPValuePlatform_OneFailing(t *testing.T) {
 }
 
 func TestCSPValuePlatform_AllFailing(t *testing.T) {
-	fail := map[string]bool{"total_query_count_iq": true, "cache_hit_ratio_iq": true,
-		"dhcp_cumulative_assigned_addresses_iq": true, "roaming": true}
+	fail := map[string]bool{"total_query_count_iq": true, "cache_hit_ratio_iq": true, "roaming": true}
 	s, _ := valuePlatformServer(t, vpBodies(), fail, "")
 	if got := s.CSPValuePlatform(); got["status"] != "error" {
 		t.Errorf("status = %v, want error", got["status"])
@@ -165,10 +209,10 @@ func TestCSPValuePlatform_AllFailing(t *testing.T) {
 // A 200 with no result.data did not deliver: "error", never an empty "ok".
 func TestCSPValuePlatform_200WithoutResultData(t *testing.T) {
 	b := vpBodies()
-	b["dhcp_cumulative_assigned_addresses_iq"] = `{"result":{}}`
+	b["cache_hit_ratio_iq"] = `{"result":{}}`
 	s, _ := valuePlatformServer(t, b, nil, vpMetaWithRoaming)
-	if m := vpMetric(t, s.CSPValuePlatform(), "dhcp_assigned"); m["status"] != "error" || m["value"] != nil {
-		t.Errorf("dhcp_assigned = %v, want error and null", m)
+	if m := vpMetric(t, s.CSPValuePlatform(), "cache_hit"); m["status"] != "error" || m["value"] != nil {
+		t.Errorf("cache_hit = %v, want error and null", m)
 	}
 }
 
