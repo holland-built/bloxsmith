@@ -25,6 +25,11 @@ type HostDef struct {
 	Hostname string
 	Subnet   string
 	Comment  string
+	// Offset is the template's optional `offset`: where in the subnet to start
+	// looking for this host's address. 0 means unset, which keeps the old rule
+	// (the subnet's first host starts at offset 1). Cloud templates set it so
+	// no host lands on an address AWS, Azure or Google Cloud keeps.
+	Offset int
 }
 
 // SiteConfig is server.py's SiteConfig dataclass (1516).
@@ -122,10 +127,19 @@ func TemplateToSiteConfig(template, params M) (*SiteConfig, error) {
 		if len(subnetPlan) > 0 {
 			defaultSubnet = subnetPlan[0].Name
 		}
+		offset := 0
+		if hm["offset"] != nil {
+			o, ok := intCoerce(hm["offset"])
+			if !ok || o < 1 {
+				return nil, perr("host %s: offset must be a whole number of 1 or more, got %s", pyStr(hm["hostname"]), pyRepr(hm["offset"]))
+			}
+			offset = o
+		}
 		hostList = append(hostList, HostDef{
 			Hostname: pyStr(hm["hostname"]),
 			Subnet:   resolve(nil, hm["subnet"], defaultSubnet),
 			Comment:  pyStr(hm["comment"]),
+			Offset:   offset,
 		})
 	}
 	if len(hostList) == 0 {
@@ -857,6 +871,9 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 		offset := subnetOffsets[hdef.Subnet]
 		if offset == 0 {
 			offset = 1
+		}
+		if hdef.Offset > 0 {
+			offset = hdef.Offset
 		}
 		subnetOffsets[hdef.Subnet] = offset + 1
 		n, err := ipNet(baseAddr, cidr)

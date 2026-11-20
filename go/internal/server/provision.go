@@ -590,21 +590,24 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		const blocksTemplate = "blocks/regional_address_blocks.yaml"
-		emit(map[string]any{"step": "Seeding blocks…"})
-		if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
-			run.fail(blocksTemplate, err)
-		} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": run.dryParam, "ip_space": override}); err != nil {
-			run.fail(blocksTemplate, err)
-		} else if bres, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
-			// Every provisioning error here is a *provision.Error (IsError is
-			// almost always true), so the old "only tally when !IsError" branch
-			// left this failure permanently invisible to the summary — the same
-			// "0 succeeded reads as done" bug this fix targets. Tally it.
-			run.fail(blocksTemplate, err)
-		} else {
-			run.saw(bres)
-			run.done(blocksTemplate, "succeeded")
+		if wantsRegionalBlocks(regions) {
+			const blocksTemplate = "blocks/regional_address_blocks.yaml"
+			emit(map[string]any{"step": "Seeding blocks…"})
+			if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
+				run.fail(blocksTemplate, err)
+			} else {
+				run.seedBlocks(blocksTemplate, bt, provision.M{"dry": run.dryParam, "ip_space": override})
+			}
+		}
+		for _, cloud := range seedClouds(regions) {
+			label := cloudBlocksTemplate + " (" + cloud + ")"
+			emit(map[string]any{"step": "Seeding " + cloudRegion[cloud] + " block…"})
+			if bt, err := d.prov(r).LoadTemplate(cloudBlocksTemplate); err != nil {
+				run.fail(label, err)
+			} else {
+				run.seedBlocks(label, cloudBlocksFor(bt, cloud),
+					provision.M{"dry": run.dryParam, "ip_space": override, "name": cloudBlocksName(cloud)})
+			}
 		}
 
 		run.sites(regions,
@@ -766,24 +769,22 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 				run.done(rel, "succeeded")
 			})
 
-		const blocksTemplate = "blocks/regional_address_blocks.yaml"
-		emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
-		if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
-			run.fail(blocksTemplate, err)
-		} else {
-			blockName := bstr(bt, "name")
-			blockIPSpace := override
-			if blockIPSpace == nil || provision.PyStr(blockIPSpace) == "" {
-				if v := bstr(bt, "ip_space"); v != "" {
-					blockIPSpace = v
-				} else {
-					blockIPSpace = "default"
-				}
+		for _, cloud := range seedClouds(regions) {
+			label := cloudBlocksTemplate + " (" + cloud + ")"
+			emit(map[string]any{"step": "Decommissioning " + cloudRegion[cloud] + " address block…"})
+			if bt, err := d.prov(r).LoadTemplate(cloudBlocksTemplate); err != nil {
+				run.fail(label, err)
+			} else {
+				run.teardownBlocks(label, cloudBlocksName(cloud), bt, override)
 			}
-			if _, err := d.prov(r).NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
+		}
+		if wantsRegionalBlocks(regions) {
+			const blocksTemplate = "blocks/regional_address_blocks.yaml"
+			emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
+			if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
 				run.fail(blocksTemplate, err)
 			} else {
-				run.done(blocksTemplate, "succeeded")
+				run.teardownBlocks(blocksTemplate, bstr(bt, "name"), bt, override)
 			}
 		}
 
@@ -791,6 +792,92 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 		// worse of the two (see seedRun.finish).
 		run.finish("teardown-seed-demo", regions)
 	})
+}
+
+// The demo seed's cloud choices: the region key the UI sends, and the region
+// the cloud's block and site templates carry (cloud_address_blocks.yaml,
+// go/templates/<key>/). Only ticked clouds get a block.
+const cloudBlocksTemplate = "blocks/cloud_address_blocks.yaml"
+
+var cloudRegion = map[string]string{"aws": "AWS", "azure": "Azure", "gcp": "Google Cloud"}
+
+// seedClouds is the clouds among regions, in the order they were asked for.
+func seedClouds(regions []string) []string {
+	var out []string
+	for _, r := range regions {
+		if _, ok := cloudRegion[r]; ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// wantsRegionalBlocks is false only when every ticked choice is a cloud: a
+// cloud-only run did not make the regional pool, so it neither seeds nor
+// removes it. Any other mix behaves as it did before the clouds existed.
+func wantsRegionalBlocks(regions []string) bool {
+	return len(seedClouds(regions)) < len(regions)
+}
+
+// cloudBlocksName is the Template tag one cloud's blocks are made and found
+// under, so tearing down one cloud never finds another cloud's block.
+func cloudBlocksName(cloud string) string {
+	return "cloud_address_blocks_" + cloud
+}
+
+// cloudBlocksFor is the cloud blocks template cut down to one cloud's blocks.
+func cloudBlocksFor(bt provision.M, cloud string) provision.M {
+	out := provision.M{}
+	for k, v := range bt {
+		out[k] = v
+	}
+	var kept []any
+	list, _ := bt["address_blocks"].([]any)
+	for _, b := range list {
+		if m, ok := b.(map[string]any); ok && provision.PyStr(m["region"]) == cloudRegion[cloud] {
+			kept = append(kept, b)
+		}
+	}
+	out["address_blocks"] = kept
+	return out
+}
+
+// seedBlocks provisions one blocks template and tallies it under label.
+func (s *seedRun) seedBlocks(label string, bt, params provision.M) {
+	bcfg, err := provision.TemplateToBlockConfig(bt, params)
+	if err != nil {
+		s.fail(label, err)
+		return
+	}
+	bres, err := s.d.prov(s.r).NewBlockProvisioner(bcfg, emitter(s.emit)).Provision(true)
+	if err != nil {
+		// Every provisioning error here is a *provision.Error (IsError is
+		// almost always true), so the old "only tally when !IsError" branch
+		// left this failure permanently invisible to the summary — the same
+		// "0 succeeded reads as done" bug this fix targets. Tally it.
+		s.fail(label, err)
+		return
+	}
+	s.saw(bres)
+	s.done(label, "succeeded")
+}
+
+// teardownBlocks removes the blocks tagged Template=name and tallies it under
+// label. The IP space is the override, else the template's, else default.
+func (s *seedRun) teardownBlocks(label, name string, bt provision.M, override any) {
+	blockIPSpace := override
+	if blockIPSpace == nil || provision.PyStr(blockIPSpace) == "" {
+		if v := bstr(bt, "ip_space"); v != "" {
+			blockIPSpace = v
+		} else {
+			blockIPSpace = "default"
+		}
+	}
+	if _, err := s.d.prov(s.r).NewBlockDecommissioner(name, provision.PyStr(blockIPSpace), s.dry, emitter(s.emit)).Decommission(); err != nil {
+		s.fail(label, err)
+		return
+	}
+	s.done(label, "succeeded")
 }
 
 // seedRun is the state the seed-demo provision and teardown streams share: one

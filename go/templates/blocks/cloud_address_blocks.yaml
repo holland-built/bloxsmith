@@ -1,0 +1,26 @@
+type: address-block
+name: cloud_address_blocks
+
+# Bloxsmith seed template — original content, no third-party source.
+# A fictional RFC1918 plan for the demo company's cloud networks, one /12 per
+# cloud. Each block's region matches the region of that cloud's site templates
+# (go/templates/<cloud>/), which is how a site finds its block.
+#
+# The seed creates only the blocks for the clouds that are ticked, and tags
+# each with its own template name (cloud_address_blocks_aws and so on), so a
+# teardown for one cloud never removes another cloud's block.
+address_blocks:
+  - address: 10.48.0.0
+    cidr: 12
+    region: AWS
+    environment: production
+
+  - address: 10.64.0.0
+    cidr: 12
+    region: Azure
+    environment: production
+
+  - address: 10.80.0.0
+    cidr: 12
+    region: Google Cloud
+    environment: production
