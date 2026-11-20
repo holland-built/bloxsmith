@@ -4,7 +4,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 
 Tabs fall into two groups:
 
-- **Read-only**: Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section.
+- **Read-only**: Overview, Daily, Value, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section.
 - **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
 
 Almost every panel follows one rule: a feed that failed to load never looks like a feed that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
@@ -142,6 +142,16 @@ The checks:
   - **Not used in 180 days** (Stale), low. Infoblox only checks this in internal primary zones, and only with the Reporting licence.
 
 The rules come from a colleague's Infoblox CSP tool for Claude, used with his permission.
+
+## Value
+
+What Infoblox and Bloxsmith did for you in the last 30 days, on one screen, for a manager. It only reads, and changes nothing.
+
+- **What Infoblox stopped — 30 days**: lookups Infoblox blocked because they went to known bad domains, domains it caught as zero-day threats before other feeds listed them, and domains it rated suspicious that were later confirmed malicious.
+- **How the platform ran — 30 days**: how much DNS work your servers did and how well: queries answered, answers from cache, how much of the time each DNS server was up, addresses DHCP handed out, and laptops protected off the office network. DHCP pairs in HA each count an address, so that number can be up to twice the devices served.
+- **Work done in Bloxsmith — 30 days**: the jobs Bloxsmith finished on this tenant, by page (Automate, Get an address, Site lists and the Editor), and the items they made in Infoblox. Deletes, and jobs later undone with Remove, are not counted. **Time saved** is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. Jobs recorded before 13 November 2026 have no tenant on record; they are counted, and the panel says how many. Jobs made on another tenant are not counted, and the panel says how many of those there are too.
+
+A number that could not be read says "not checked", never 0.
 
 ## Network
 
@@ -640,6 +650,9 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Made with Bloxsmith | What Bloxsmith made and deleted | the app's own run records | No | it is a list, not a chart |
 | Made with Bloxsmith | Delete something else | the Infoblox API | No | it is a form, not a chart |
 | Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
+| Value | What Infoblox stopped — 30 days | Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records | No | it adds up 30 days into a few totals, worked out in the app |
+| Value | How the platform ran — 30 days | Infoblox host metrics and endpoint records | No | it adds up 30 days into a few totals, worked out in the app |
+| Value | Work done in Bloxsmith — 30 days | Bloxsmith's own record of what it made | No | it counts the app's own records, not a chart |
 | Demo server | Settings | the app's own vault | No | it is a form, not a chart |
 | Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |
 | Demo server | The Infoblox code | the app's own files | No | it is code, not a chart |

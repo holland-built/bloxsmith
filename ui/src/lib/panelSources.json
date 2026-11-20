@@ -738,6 +738,33 @@
     "why": "it checks design rules against what is there, worked out in the app"
   },
   {
+    "id": "value-security",
+    "page": "Value",
+    "name": "What Infoblox stopped — 30 days",
+    "kind": "cube",
+    "source": "Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records",
+    "builder": "no",
+    "why": "it adds up 30 days into a few totals, worked out in the app"
+  },
+  {
+    "id": "value-platform",
+    "page": "Value",
+    "name": "How the platform ran — 30 days",
+    "kind": "cube",
+    "source": "Infoblox host metrics and endpoint records",
+    "builder": "no",
+    "why": "it adds up 30 days into a few totals, worked out in the app"
+  },
+  {
+    "id": "value-work",
+    "page": "Value",
+    "name": "Work done in Bloxsmith — 30 days",
+    "kind": "local",
+    "source": "Bloxsmith's own record of what it made",
+    "builder": "no",
+    "why": "it counts the app's own records, not a chart"
+  },
+  {
     "id": "demo-settings",
     "page": "Demo server",
     "name": "Settings",

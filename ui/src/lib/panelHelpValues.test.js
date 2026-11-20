@@ -1094,6 +1094,26 @@ const CLAIMS = [
     file: PROVISION,
     proofs: [LOG_ERROR_RED_PROOF],
   },
+  // ---- Value: Work done in Bloxsmith ----
+  {
+    panel: 'value-work',
+    says: /Jobs Bloxsmith finished on this tenant in the last 30 days/,
+    file: 'ui/src/lib/valueWork.js',
+    proofs: [
+      { re: /export const WINDOW_DAYS = 30\b/, expect: 'WINDOW_DAYS = 30' },
+      { re: /const cutoff = now - WINDOW_DAYS \* 24 \* 60 \* 60 \* 1000/, expect: 'the cut-off is WINDOW_DAYS days back' },
+    ],
+  },
+  {
+    panel: 'value-work',
+    says: /Time saved is an estimate: 10 minutes for each job done by hand in the Infoblox Portal\./,
+    file: 'ui/src/lib/valueWork.js',
+    proofs: [
+      { re: /export const MINUTES_PER_JOB = 10\b/, expect: 'MINUTES_PER_JOB = 10' },
+      { re: /\(jobs \* MINUTES_PER_JOB\) \/ 6\) \/ 10/, expect: 'hours = jobs x MINUTES_PER_JOB / 60, to one decimal' },
+    ],
+  },
+
 ]
 
 // ---------------------------------------------------------------------------
@@ -1101,6 +1121,21 @@ const CLAIMS = [
 // `phrase` must still appear verbatim in that panel's copy; see the test below.
 // ---------------------------------------------------------------------------
 const EXCLUDED = [
+  {
+    panel: 'value-security',
+    phrase: 'Last 30 days.',
+    why: 'The panel is a stub on 2026-11-20 while its fetcher is built separately; there is no dateRange yet to bind. The helper that builds it replaces this row with a CLAIMS row proving its cube dateRange "last 30 days".',
+  },
+  {
+    panel: 'value-platform',
+    phrase: 'Last 30 days.',
+    why: 'The panel is a stub on 2026-11-20 while its fetcher is built separately; there is no dateRange yet to bind. The helper that builds it replaces this row with a CLAIMS row proving its cube dateRange "last 30 days".',
+  },
+  {
+    panel: 'value-platform',
+    phrase: 'DHCP pairs in HA each count an address',
+    why: 'A FALSE FLAG on "up to twice": a caution about how Infoblox counts DHCP leases in an HA pair, not a cap or threshold in the code. Nothing in the app doubles or halves the number.',
+  },
   {
     panel: 'security-axur-incidents',
     phrase: 'Ordered by exposed credentials',
