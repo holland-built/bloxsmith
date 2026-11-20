@@ -1,0 +1,49 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional Google Cloud VPC for the demo company: us-central1.
+# Google Cloud keeps the network address, +1 (gateway), the second-to-last
+# address and the last one, so hosts start at offset 4 and DHCP ranges end
+# well below the top of the subnet.
+site:
+  name: gcp-us-central
+  region: Google Cloud
+  environment: production
+  location: Google Cloud us-central1
+  owner: cloudops-gcp@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: gcp-us-central-services
+      purpose: Services subnet
+      cidr: 24
+      dhcp: false
+    - name: gcp-us-central-batch
+      purpose: Batch compute subnet
+      cidr: 24
+      dhcp: true
+      dhcp_start: 10
+      dhcp_end: 200
+
+dns:
+  parent: gcp.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: gcp-us-central-api01
+    subnet: gcp-us-central-services
+    offset: 4
+    comment: API server
+  - hostname: gcp-us-central-cache01
+    subnet: gcp-us-central-services
+    offset: 5
+    comment: Cache server
+
+tags:
+  cloud: gcp
+  cost_center: cloud-gcp-400
+  managed_by: bloxsmith

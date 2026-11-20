@@ -1044,9 +1044,12 @@ const CLAIMS = [
   },
   {
     panel: 'provision-seed-request',
-    says: /Which of the three regions to build demo sites for/,
+    says: /Which of the three regions, and which of AWS, Azure and Google Cloud, to build demo sites for/,
     file: PROVISION,
-    proofs: [{ re: /\{\['amer', 'emea', 'apac'\]\.map\(\(r\) => \(/, expect: 'exactly three regions are offered as tick boxes' }],
+    proofs: [
+      { re: /\{\['amer', 'emea', 'apac', 'aws', 'azure', 'gcp'\]\.map\(\(r\) => \(/, expect: 'three regions and three clouds are offered as tick boxes' },
+      { re: /useState\(\{ amer: true, emea: true, apac: true, aws: false, azure: false, gcp: false \}\)/, expect: 'the clouds start unticked' },
+    ],
   },
   {
     panel: 'provision-seed-teardown',

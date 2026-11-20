@@ -1,0 +1,49 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional Azure virtual network for the demo company: West Europe.
+# Azure keeps the first four addresses of every subnet (network, +1 gateway,
+# +2 and +3 DNS) and the last one, so hosts start at offset 4 and DHCP
+# ranges start at 10.
+site:
+  name: azure-west-europe
+  region: Azure
+  environment: production
+  location: Azure West Europe
+  owner: cloudops-azure@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: azure-west-europe-web
+      purpose: Web tier subnet
+      cidr: 24
+      dhcp: false
+    - name: azure-west-europe-vdi
+      purpose: Virtual desktop subnet
+      cidr: 24
+      dhcp: true
+      dhcp_start: 10
+      dhcp_end: 200
+
+dns:
+  parent: azure.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: azure-west-europe-web01
+    subnet: azure-west-europe-web
+    offset: 4
+    comment: Web server
+  - hostname: azure-west-europe-web02
+    subnet: azure-west-europe-web
+    offset: 5
+    comment: Web server
+
+tags:
+  cloud: azure
+  cost_center: cloud-azure-300
+  managed_by: bloxsmith

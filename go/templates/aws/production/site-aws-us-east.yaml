@@ -1,0 +1,57 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional AWS VPC for the demo company: us-east-1.
+# AWS keeps the first four addresses of every subnet (network, +1 router,
+# +2 DNS, +3 reserved) and the last one, so hosts start at offset 4 and DHCP
+# ranges start at 10. AWS refuses subnets smaller than /28.
+site:
+  name: aws-us-east
+  region: AWS
+  environment: production
+  location: AWS us-east-1
+  owner: cloudops-aws@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: aws-us-east-app
+      purpose: Private app subnet
+      cidr: 24
+      dhcp: false
+    - name: aws-us-east-workloads
+      purpose: Container workloads subnet
+      cidr: 24
+      dhcp: true
+      dhcp_start: 10
+      dhcp_end: 200
+    - name: aws-us-east-endpoints
+      purpose: VPC endpoints subnet
+      cidr: 28
+      dhcp: false
+
+dns:
+  parent: aws.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: aws-us-east-app01
+    subnet: aws-us-east-app
+    offset: 4
+    comment: Application server
+  - hostname: aws-us-east-db01
+    subnet: aws-us-east-app
+    offset: 5
+    comment: Database server
+  - hostname: aws-us-east-s3-ep
+    subnet: aws-us-east-endpoints
+    offset: 4
+    comment: S3 interface endpoint
+
+tags:
+  cloud: aws
+  cost_center: cloud-aws-200
+  managed_by: bloxsmith

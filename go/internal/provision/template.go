@@ -480,6 +480,14 @@ func validateSite(t M, v *validator) {
 	}
 
 	subnetNames := map[string]bool{}
+	// What a host's optional offset is checked against: the subnet's size and,
+	// when it serves DHCP, the range the run will create.
+	type hostRoom struct {
+		cidrOf     func() (int, bool)
+		dhcp       bool
+		start, end int
+	}
+	rooms := map[string]hostRoom{}
 	subnetDefs, subnetsOK := v.listOrErr(net, "subnets", "network.subnets")
 	for i, s := range subnetDefs {
 		pfx := fmt.Sprintf("network.subnets[%d]", i)
@@ -511,6 +519,12 @@ func validateSite(t M, v *validator) {
 		}
 		if !isFalsy(sm["dhcp"]) {
 			v.dhcpOffsets(sm, pfx, subnetCidr(sm, net))
+		}
+		if sname != "" {
+			room := hostRoom{cidrOf: subnetCidr(sm, net), dhcp: !isFalsy(sm["dhcp"])}
+			room.start, _, _ = resolvedOffset(sm, "dhcp_start", dhcpStartDefault)
+			room.end, _, _ = resolvedOffset(sm, "dhcp_end", dhcpEndDefault)
+			rooms[sname] = room
 		}
 	}
 	// The SYNTHESIZED default subnet plan is checked too. With no network.subnets
@@ -563,6 +577,33 @@ func validateSite(t M, v *validator) {
 		// bury the one error that matters under N derived ones.
 		if ref != "" && subnetsOK && len(subnetNames) > 0 && !subnetNames[ref] {
 			v.err(pfx+".subnet", fmt.Sprintf("References unknown subnet '%s'; defined: %s", ref, sortedNames(subnetNames)))
+		}
+		if hm["offset"] != nil {
+			off, ok := intCoerce(hm["offset"])
+			if !ok {
+				v.err(pfx+".offset", fmt.Sprintf("Must be an integer, got %s", pyRepr(hm["offset"])))
+				continue
+			}
+			if ref == "" && len(subnetDefs) > 0 {
+				// TemplateToSiteConfig puts a host with no subnet in the first one.
+				ref = strings.TrimSpace(pyStr(asMap(subnetDefs[0])["name"]))
+			}
+			room, known := rooms[ref]
+			if !known {
+				if off < 1 {
+					v.err(pfx+".offset", fmt.Sprintf("Host offset %d must be 1 or more", off))
+				}
+				continue
+			}
+			if cidr, ok := room.cidrOf(); ok {
+				if max, ok := maxHostOffset(cidr); ok && (off < 1 || off > max) {
+					v.err(pfx+".offset", fmt.Sprintf("Host offset %d is outside 1-%d for a /%d subnet", off, max, cidr))
+					continue
+				}
+			}
+			if room.dhcp && off >= room.start && off <= room.end {
+				v.err(pfx+".offset", fmt.Sprintf("Host offset %d is inside the subnet's DHCP range (offsets %d-%d)", off, room.start, room.end))
+			}
 		}
 	}
 

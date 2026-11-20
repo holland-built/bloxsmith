@@ -727,11 +727,15 @@ function SiteMode({ isAdmin }) {
 // ---------- seed demo mode ----------
 
 const SEED_REGIONS = { amer: 'Americas', emea: 'Europe', apac: 'Asia Pacific' }
-// "Americas: sites amer-hq, amer-lab", from the templates the seed runs.
+// The clouds are off by default, so a run nobody changed seeds what it always did.
+const SEED_CLOUDS = { aws: 'AWS', azure: 'Azure', gcp: 'Google Cloud' }
+// "Americas (AMER): sites amer-hq, amer-lab", from the templates the seed runs.
+// A cloud is named by its own word only: "AWS: sites aws-us-east".
 function seedRegionLabel(r, templates) {
   const sites = (Array.isArray(templates) ? templates : [])
     .filter((t) => t.name.startsWith(`${r}/`) && isSiteTemplate(t)).map((t) => t.site).filter(Boolean)
-  return sites.length ? `${SEED_REGIONS[r]} (${r.toUpperCase()}): sites ${sites.join(', ')}` : `${SEED_REGIONS[r]} (${r.toUpperCase()})`
+  const name = SEED_CLOUDS[r] || `${SEED_REGIONS[r]} (${r.toUpperCase()})`
+  return sites.length ? `${name}: sites ${sites.join(', ')}` : name
 }
 
 function SeedMode({ isAdmin }) {
@@ -739,7 +743,7 @@ function SeedMode({ isAdmin }) {
   const spacesApi = useApi('/api/ipam/spaces', SHARE_PICKER)
   const spaces = spacesApi.data?.spaces ?? []
 
-  const [regions, setRegions] = useState({ amer: true, emea: true, apac: true })
+  const [regions, setRegions] = useState({ amer: true, emea: true, apac: true, aws: false, azure: false, gcp: false })
   const [seedSpace, setSeedSpace] = useState('')
   const [tdConfirm, setTdConfirm] = useState('')
 
@@ -772,7 +776,7 @@ function SeedMode({ isAdmin }) {
           library. Preview the plan before writing real objects — this creates a lot of them.
         </div>
         <div data-form-cols="" className="flex flex-col gap-3">
-          {['amer', 'emea', 'apac'].map((r) => (
+          {['amer', 'emea', 'apac', 'aws', 'azure', 'gcp'].map((r) => (
             <CheckRow
               key={r}
               checked={!!regions[r]}

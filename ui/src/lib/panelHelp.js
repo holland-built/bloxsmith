@@ -331,7 +331,7 @@ export const PANEL_HELP = {
     look: 'After a preview these are the counts it would remove — an amber line at the bottom says nothing was actually deleted.',
   },
   'provision-seed-request': {
-    what: 'Which of the three regions to build demo sites for, and which IP space to put them in.',
+    what: 'Which of the three regions, and which of AWS, Azure and Google Cloud, to build demo sites for, and which IP space to put them in. The clouds start unticked.',
     look: 'Untick every region and the buttons switch off. These same tick boxes also decide what the teardown panel further down will remove.',
   },
   'provision-seed-progress': {

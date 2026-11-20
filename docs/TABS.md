@@ -329,7 +329,7 @@ If the template list is empty, no templates are installed. Run `scripts/fetch_te
 
 ### Seed demo
 
-Builds a full demo network in the regions you tick (AMER, EMEA, APAC) from the template library, all at once. Each region lists the sites it will build. Made for demos and lab tenants.
+Builds a full demo network in the regions you tick (AMER, EMEA, APAC) from the template library, all at once. Each region lists the sites it will build. Made for demos and lab tenants. You can also tick AWS, Azure and Google Cloud, which start unticked: each builds that cloud's demo sites in its own address block, and keeps hosts and DHCP ranges off the addresses the cloud keeps for itself.
 
 Progress for each template adds up as `done/total`, and each failure is listed. The last message says what happened, not just that the run ended. A clean run says "Seed complete". A mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed". A run where nothing worked says "Seed failed — 0 of *N* template(s) succeeded".
 
