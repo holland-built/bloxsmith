@@ -12,6 +12,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -80,6 +81,10 @@ func (s *Service) bestPractices(ctx context.Context) map[string]any {
 		gmResilienceCheck(hosts, hostsOK, hostsWhole),
 		dhcpAAPCheck(ha, haErr == nil, haWhole),
 		as,
+	}
+	for _, c := range s.dnsRecordChecks() {
+		failed = failed || c.Status == "unknown"
+		checks = append(checks, c)
 	}
 	out := map[string]any{"checks": checks}
 	if !failed {
@@ -282,4 +287,169 @@ func activeSearchCheck(body map[string]any, readOK bool) bpCheck {
 		c.Status, c.Items = "problem", []map[string]any{}
 	}
 	return c
+}
+
+// --- Risky DNS records -------------------------------------------------------
+//
+// Infoblox already flags risky DNS records (Universal Asset Insights, "DNS
+// Record Classification"). The cube NetworkInsightsDnsRecordsRolledByIndicatorIdV1
+// has one row per record, and indicator_ids_str lists every flag the record
+// carries, for example ['Abandoned','Untrusted']. The cube's own notes say to
+// filter that field with contains, never equals, so a record with two flags is
+// found by both checks. NetworkInsightsDnsRecordsV1 has no indicator_id field
+// to filter on (checked against /api/cubejs/v1/meta on 2026-11-20).
+//
+// On the demo tenant on 2026-11-20 this read Dangling 3, Abandoned 13,
+// Untrusted 40 and Stale 3,068, the same as uniqueRecordCount grouped by
+// indicator_ids_str.
+
+const dnsRecCube = "NetworkInsightsDnsRecordsRolledByIndicatorIdV1"
+
+// dnsRecLimit is the most rows one read asks for. A read that comes back with
+// this many rows may have been cut short, so its check says it couldn't tell.
+var dnsRecLimit = 10000
+
+type dnsRecFlag struct {
+	flag, id, severity, why string
+	found                   func(n int) string // problem title for n records
+	none, unsure            string             // passed title, couldn't-tell title
+}
+
+var dnsRecFlags = []dnsRecFlag{
+	{
+		flag: "Dangling", id: "dns-dangling", severity: "high",
+		why: "These records point at something that no longer exists, such as a deleted cloud service or domain. Someone else can claim that name and take over your subdomain.",
+		found: func(n int) string {
+			return plural(n, "DNS record points at something that no longer exists", "DNS records point at something that no longer exists")
+		},
+		none:   "No DNS records point at something that no longer exists",
+		unsure: "DNS records that point at something that no longer exists",
+	},
+	{
+		flag: "Abandoned", id: "dns-abandoned", severity: "high",
+		why: "These records point at an address or name that answers nothing. Left in place they confuse people and give an attacker more to aim at.",
+		found: func(n int) string {
+			return plural(n, "DNS record points at something that doesn't answer", "DNS records point at something that doesn't answer")
+		},
+		none:   "No DNS records point at something that doesn't answer",
+		unsure: "DNS records that point at something that doesn't answer",
+	},
+	{
+		flag: "Untrusted", id: "dns-untrusted", severity: "medium",
+		why: "These records point at a name or address that isn't in your Infoblox inventory, so your organisation may not control it. If that outside place is taken over, your name sends people to it.",
+		found: func(n int) string {
+			return plural(n, "DNS record points outside what you manage", "DNS records point outside what you manage")
+		},
+		none:   "No DNS records point outside what you manage",
+		unsure: "DNS records that point outside what you manage",
+	},
+	{
+		flag: "Stale", id: "dns-stale", severity: "low",
+		why: "Nobody has looked these records up in 180 days. Old records clutter your zones and can be forgotten until they cause trouble. Infoblox only checks this in your own internal primary zones.",
+		found: func(n int) string {
+			return plural(n, "DNS record hasn't been used in 180 days", "DNS records haven't been used in 180 days")
+		},
+		none:   "No DNS records have gone unused for 180 days",
+		unsure: "DNS records unused for 180 days",
+	},
+}
+
+// cubeRowsStrict is cubeQuery for checks that must not pass on a bad read: ok
+// is false on a failed request and on a reply without result.data (Cube.js
+// can answer 200 with {"error":"Continue wait"}), never an empty list.
+func (s *Service) cubeRowsStrict(query map[string]any) (rows []map[string]any, ok bool) {
+	q, _ := json.Marshal(query)
+	body, st, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
+	if errored(st, err) {
+		return nil, false
+	}
+	raw, ok := asMap(asMap(body)["result"])["data"].([]any)
+	if !ok {
+		return nil, false
+	}
+	rows = make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		rows = append(rows, cubeRow(asMap(item)))
+	}
+	return rows, true
+}
+
+// dnsRecordChecks reads the four flags at once, one read per flag, so a long
+// Stale list that runs past the row limit can't hide a Dangling record.
+func (s *Service) dnsRecordChecks() []bpCheck {
+	out := make([]bpCheck, len(dnsRecFlags))
+	tasks := make([]func(), len(dnsRecFlags))
+	for i, f := range dnsRecFlags {
+		tasks[i] = func() {
+			d := func(n string) string { return dnsRecCube + "." + n }
+			rows, ok := s.cubeRowsStrict(map[string]any{
+				"measures": []string{d("uniqueRecordCount")},
+				"dimensions": []string{
+					d("record_asset_name"), d("record_asset_record_type"),
+					d("record_asset_absolute_zone_name"), d("record_asset_zone_id"),
+					d("record_asset_dns_rdata"), d("record_asset_last_queried_str"),
+				},
+				"filters": []map[string]any{{
+					"member": d("indicator_ids_str"), "operator": "contains",
+					"values": []string{"'" + f.flag + "'"},
+				}},
+				"order": map[string]any{d("record_asset_absolute_zone_name"): "asc", d("record_asset_name"): "asc"},
+				"limit": dnsRecLimit,
+			})
+			out[i] = dnsRecordCheck(f, rows, ok)
+		}
+	}
+	mustFanOut(tasks...)
+	return out
+}
+
+func dnsRecordCheck(f dnsRecFlag, rows []map[string]any, readOK bool) bpCheck {
+	c := bpCheck{ID: f.id, Severity: f.severity, Why: f.why}
+	what := "list of DNS records Infoblox flagged " + f.flag
+	if !readOK || len(rows) >= dnsRecLimit {
+		c.Title = f.unsure
+		return unknown(c, readOK, what)
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, dnsRecordItem(r))
+	}
+	if len(items) == 0 {
+		c.Title = f.none
+		c.Status, c.Items = "passed", items
+		return c
+	}
+	c.Title = f.found(len(items))
+	c.Status, c.Items = "problem", items
+	return c
+}
+
+// dnsRecordItem names a record by its full name (label plus zone, as the
+// cube's notes say to build it) and puts its type, zone, where it points and
+// when it was last looked up in the detail line, which is all the page shows.
+func dnsRecordItem(r map[string]any) map[string]any {
+	label := getStr(r["record_asset_name"])
+	zone := strings.TrimSuffix(getStr(r["record_asset_absolute_zone_name"]), ".")
+	name := zone
+	if label != "" && label != "@" {
+		name = label + "." + zone
+	}
+	var parts []string
+	if t := getStr(r["record_asset_record_type"]); t != "" {
+		parts = append(parts, t+" record in "+zone)
+	} else {
+		parts = append(parts, "in "+zone)
+	}
+	if to := getStr(r["record_asset_dns_rdata"]); to != "" {
+		parts = append(parts, "points to "+to)
+	}
+	// Live values look like 2025-06-06T18:40:10.000; the day is enough. Blank
+	// means Infoblox has no lookup on record: never looked up, or only before
+	// it started keeping track (the cube's notes).
+	if q, _, _ := strings.Cut(getStr(r["record_asset_last_queried_str"]), "T"); q != "" {
+		parts = append(parts, "last looked up "+q)
+	} else {
+		parts = append(parts, "no lookup on record")
+	}
+	return map[string]any{"name": name, "detail": strings.Join(parts, ", ")}
 }

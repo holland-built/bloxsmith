@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -277,5 +278,188 @@ func TestBestPractices_ActiveSearchFailureNotCached(t *testing.T) {
 	fail = false
 	if c := findCheck(t, s.BestPractices(context.Background()), "active-search"); c["status"] != "passed" {
 		t.Fatalf("after recovery: want passed, got %v", c)
+	}
+}
+
+// --- Risky DNS records ---
+
+// dnsRec is one row of NetworkInsightsDnsRecordsRolledByIndicatorIdV1, keyed
+// and shaped like the live reply read on 2026-11-20 (prefixed field names,
+// counts as strings, indicator_ids_str as a bracketed list with no spaces).
+func dnsRec(label, zone, typ, rdata, lastQueried, flags string) map[string]any {
+	p := "NetworkInsightsDnsRecordsRolledByIndicatorIdV1."
+	return map[string]any{
+		p + "record_asset_name": label, p + "record_asset_absolute_zone_name": zone,
+		p + "record_asset_zone_id": "zone-" + zone, p + "record_asset_record_type": typ,
+		p + "record_asset_dns_rdata": rdata, p + "record_asset_last_queried_str": lastQueried,
+		p + "indicator_ids_str": flags, p + "uniqueRecordCount": "1",
+	}
+}
+
+// dnsRecService answers the cube with the rows whose indicator_ids_str
+// contains the filter value, the way Cube.js applies "contains". reply, when
+// set, replaces the whole answer (status and body) for every cube read.
+func dnsRecService(t *testing.T, rows []map[string]any, reply func() (int, string)) *Service {
+	t.Helper()
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		if reply != nil {
+			if st, body := reply(); st != 0 {
+				w.WriteHeader(st)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+		}
+		var q struct {
+			Filters []struct {
+				Member, Operator string
+				Values           []string
+			}
+		}
+		if err := json.Unmarshal([]byte(r.URL.Query().Get("query")), &q); err != nil || len(q.Filters) != 1 ||
+			q.Filters[0].Operator != "contains" || !strings.HasSuffix(q.Filters[0].Member, ".indicator_ids_str") {
+			t.Errorf("unexpected cube query %s", r.URL.Query().Get("query"))
+			w.WriteHeader(400)
+			return
+		}
+		out := []map[string]any{}
+		for _, row := range rows {
+			if strings.Contains(row["NetworkInsightsDnsRecordsRolledByIndicatorIdV1.indicator_ids_str"].(string), q.Filters[0].Values[0]) {
+				out = append(out, row)
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": out}})
+		_, _ = w.Write(b)
+	})
+	return s
+}
+
+var dnsRecIDs = []string{"dns-dangling", "dns-abandoned", "dns-untrusted", "dns-stale"}
+
+func TestBestPractices_DNSRecordsEachFlagCounted(t *testing.T) {
+	s := dnsRecService(t, []map[string]any{
+		dnsRec("info", "aws.public.", "CNAME", "gone.s3-website.amazonaws.com.", "", "['Dangling']"),
+		dnsRec("app2", "aws.public.", "A", "18.18.11.1", "", "['Abandoned']"),
+		dnsRec("www", "acme.com.", "A", "10.10.0.10", "", "['Untrusted']"),
+		dnsRec("old", "blox.corp.", "A", "10.61.10.49", "2025-06-06T18:40:10.000", "['Stale']"),
+		dnsRec("", "blox.corp.", "MX", "5 mail.blox.corp.", "", "['Stale']"),
+	}, nil)
+	out := s.BestPractices(context.Background())
+	want := map[string]string{"dns-dangling": "info.aws.public", "dns-abandoned": "app2.aws.public", "dns-untrusted": "www.acme.com", "dns-stale": "blox.corp,old.blox.corp"}
+	sev := map[string]string{"dns-dangling": "high", "dns-abandoned": "high", "dns-untrusted": "medium", "dns-stale": "low"}
+	for _, id := range dnsRecIDs {
+		c := findCheck(t, out, id)
+		names := itemNames(c)
+		sort.Strings(names)
+		if c["status"] != "problem" || strings.Join(names, ",") != want[id] || c["severity"] != sev[id] {
+			t.Errorf("%s: want problem %s (%s), got %v", id, want[id], sev[id], c)
+		}
+		if c["why"] == "" {
+			t.Errorf("%s: no why line", id)
+		}
+	}
+	stale := findCheck(t, out, "dns-stale")
+	if !strings.HasPrefix(stale["title"].(string), "2 ") {
+		t.Fatalf("title should lead with the count: %q", stale["title"])
+	}
+	details := map[string]string{}
+	for _, it := range stale["items"].([]any) {
+		m := it.(map[string]any)
+		details[m["name"].(string)] = m["detail"].(string)
+	}
+	if got := details["old.blox.corp"]; got != "A record in blox.corp, points to 10.61.10.49, last looked up 2025-06-06" {
+		t.Fatalf("detail line: %q", got)
+	}
+	if got := details["blox.corp"]; !strings.Contains(got, "no lookup on record") {
+		t.Fatalf("a blank last-queried must say so, got %q", got)
+	}
+}
+
+// A record with two flags is listed under both checks.
+func TestBestPractices_DNSRecordTwoFlagsInBoth(t *testing.T) {
+	s := dnsRecService(t, []map[string]any{
+		dnsRec("cdn", "acme.com.", "CNAME", "x.azureedge.net.", "", "['Abandoned','Untrusted']"),
+	}, nil)
+	out := s.BestPractices(context.Background())
+	for _, id := range []string{"dns-abandoned", "dns-untrusted"} {
+		if c := findCheck(t, out, id); c["status"] != "problem" || strings.Join(itemNames(c), ",") != "cdn.acme.com" {
+			t.Errorf("%s: want cdn.acme.com, got %v", id, c)
+		}
+	}
+	for _, id := range []string{"dns-dangling", "dns-stale"} {
+		if c := findCheck(t, out, id); c["status"] != "passed" {
+			t.Errorf("%s: want passed, got %v", id, c)
+		}
+	}
+}
+
+func TestBestPractices_DNSRecordsEmptyPasses(t *testing.T) {
+	out := dnsRecService(t, nil, nil).BestPractices(context.Background())
+	for _, id := range dnsRecIDs {
+		if c := findCheck(t, out, id); c["status"] != "passed" || len(c["items"].([]any)) != 0 {
+			t.Errorf("%s: want passed with no items, got %v", id, c)
+		}
+	}
+}
+
+// A failed read, and a 200 with no result.data (Cube.js "Continue wait"),
+// both say couldn't tell, never passed.
+func TestBestPractices_DNSRecordsBadReadIsUnknown(t *testing.T) {
+	cases := map[string]func() (int, string){
+		"failed request":  func() (int, string) { return 500, `{"error":"boom"}` },
+		"no result.data":  func() (int, string) { return 200, `{"error":"Continue wait"}` },
+		"data not a list": func() (int, string) { return 200, `{"result":{"data":null}}` },
+	}
+	for name, reply := range cases {
+		t.Run(name, func(t *testing.T) {
+			out := dnsRecService(t, nil, reply).BestPractices(context.Background())
+			for _, id := range dnsRecIDs {
+				if c := findCheck(t, out, id); c["status"] != "unknown" || c["reason"] == "" {
+					t.Errorf("%s: want unknown with a reason, got %v", id, c)
+				}
+			}
+		})
+	}
+}
+
+// A read that fills the row limit may be cut short, so it can't pass or count.
+func TestBestPractices_DNSRecordsCutShortIsUnknown(t *testing.T) {
+	old := dnsRecLimit
+	dnsRecLimit = 2
+	t.Cleanup(func() { dnsRecLimit = old })
+	s := dnsRecService(t, []map[string]any{
+		dnsRec("a", "z.", "A", "10.0.0.1", "", "['Stale']"),
+		dnsRec("b", "z.", "A", "10.0.0.2", "", "['Stale']"),
+		dnsRec("c", "z.", "CNAME", "gone.", "", "['Dangling']"),
+	}, nil)
+	out := s.BestPractices(context.Background())
+	if c := findCheck(t, out, "dns-stale"); c["status"] != "unknown" || !strings.Contains(c["reason"].(string), "cut short") {
+		t.Fatalf("a full read must say couldn't tell, got %v", c)
+	}
+	// One long list doesn't spoil the others: each flag is its own read.
+	if c := findCheck(t, out, "dns-dangling"); c["status"] != "problem" {
+		t.Fatalf("dangling read was whole: want problem, got %v", c)
+	}
+}
+
+// A failed read is not cached, so the checks recover on the next load.
+func TestBestPractices_DNSRecordsFailureNotCached(t *testing.T) {
+	fail := true
+	s := dnsRecService(t, []map[string]any{dnsRec("c", "z.", "CNAME", "gone.", "", "['Dangling']")},
+		func() (int, string) {
+			if fail {
+				return 503, ""
+			}
+			return 0, ""
+		})
+	if c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling"); c["status"] != "unknown" {
+		t.Fatalf("first read failed: want unknown, got %v", c)
+	}
+	fail = false
+	if c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling"); c["status"] != "problem" {
+		t.Fatalf("after recovery: want problem, got %v", c)
 	}
 }

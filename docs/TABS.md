@@ -135,6 +135,11 @@ The checks:
 - **On-prem hosts offline or in error**, from the host list. Infoblox-managed hosts aren't in that list, so they aren't checked.
 - **Grid Masters with no HA and no candidate.** Losing such a Grid Master leaves the grid unmanaged until it's rebuilt from backup. A grid is only judged when all of its members are visible in the Portal, because otherwise a candidate could exist that the Portal doesn't show. Those grids are counted under the check instead.
 - **DHCP HA groups in Advanced Active/Passive mode.** That mode is deprecated and doesn't support DHCPv6.
+- **Risky DNS records**, four checks, from the records Infoblox already flags (the DNS Record Classification in the Portal). A record with two flags is listed under both checks. Each record shows its full name, type, zone, where it points, and the day it was last looked up, or "no lookup on record" when Infoblox has none. A long list shows the first 50 and says how many more.
+  - **Points at something that no longer exists** (Infoblox calls these Dangling), high. Someone else can claim the name it points at and take over your subdomain.
+  - **Points at something that doesn't answer** (Abandoned), high. The address or name is there but nothing answers.
+  - **Points outside what you manage** (Untrusted), medium. The target isn't in your Infoblox inventory.
+  - **Not used in 180 days** (Stale), low. Infoblox only checks this in internal primary zones, and only with the Reporting licence.
 
 The rules come from a colleague's Infoblox CSP tool for Claude, used with his permission.
 
