@@ -409,9 +409,10 @@ func TestBestPractices_DNSRecordsEmptyPasses(t *testing.T) {
 // both say couldn't tell, never passed.
 func TestBestPractices_DNSRecordsBadReadIsUnknown(t *testing.T) {
 	cases := map[string]func() (int, string){
-		"failed request":  func() (int, string) { return 500, `{"error":"boom"}` },
-		"no result.data":  func() (int, string) { return 200, `{"error":"Continue wait"}` },
-		"data not a list": func() (int, string) { return 200, `{"result":{"data":null}}` },
+		"failed request":   func() (int, string) { return 500, `{"error":"boom"}` },
+		"no result.data":   func() (int, string) { return 200, `{"error":"Continue wait"}` },
+		"data not a list":  func() (int, string) { return 200, `{"result":{"data":null}}` },
+		"row not a record": func() (int, string) { return 200, `{"result":{"data":[null]}}` },
 	}
 	for name, reply := range cases {
 		t.Run(name, func(t *testing.T) {

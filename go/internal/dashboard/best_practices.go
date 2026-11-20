@@ -369,7 +369,12 @@ func (s *Service) cubeRowsStrict(query map[string]any) (rows []map[string]any, o
 	}
 	rows = make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
-		rows = append(rows, cubeRow(asMap(item)))
+		// A row that isn't a record is a bad read, not a blank record.
+		m, isMap := item.(map[string]any)
+		if !isMap {
+			return nil, false
+		}
+		rows = append(rows, cubeRow(m))
 	}
 	return rows, true
 }
