@@ -6,6 +6,7 @@
 // not have is "not available on this tenant". None of them is ever a 0.
 
 import { reading } from './dnsCompare.js'
+import { fmtShortDay } from './chartFormat.js'
 
 export const NOT_CHECKED = 'not checked'
 export const COULDNT_TELL = "couldn't tell"
@@ -38,6 +39,32 @@ export function aheadText(minutes) {
 }
 
 /**
+ * The line under the blocked number. When Infoblox does not hold all 30 days
+ * the number is not a 30-day total, so the line says which days it counts and
+ * there is no trend. covered null means that could not be checked.
+ */
+export function blockedNote(m, value) {
+  if (m.covered === false) {
+    if (!m.days_from) return 'Infoblox holds no data for these 30 days'
+    const [first, last] = Array.isArray(m.window_range) ? m.window_range : []
+    // The newest day can still be landing, so ending the day before is whole.
+    const endsEarly = last && m.days_to && m.days_to < dayBefore(last)
+    if (first && m.days_from > first && !endsEarly) return `Counted since ${fmtShortDay(m.days_from)}, the earliest day Infoblox holds`
+    return `Counted ${fmtShortDay(m.days_from)} to ${fmtShortDay(m.days_to)} only, the days Infoblox holds`
+  }
+  if (m.covered == null) return "Couldn't check that Infoblox holds all 30 days"
+  const t = trendText(value, m.previous)
+  return t && t[0].toUpperCase() + t.slice(1)
+}
+
+/** The day before a YYYY-MM-DD day, as YYYY-MM-DD. */
+function dayBefore(d) {
+  const t = new Date(`${d}T00:00:00Z`)
+  t.setUTCDate(t.getUTCDate() - 1)
+  return t.toISOString().slice(0, 10)
+}
+
+/**
  * The three numbers as { key, label, state, text, note }. state is 'loading',
  * 'ok', 'empty', 'error' or 'unavailable'; text is the big number or the word
  * that stands in for it; note is a second line or null.
@@ -52,10 +79,7 @@ export function valueSecurity(feed) {
     const v = reading(m.value)
     if (m.status !== 'ok' || v == null) return { ...base, state: 'empty', text: COULDNT_TELL }
     let note = null
-    if (key === 'blocked') {
-      const t = trendText(v, m.previous)
-      note = t && t[0].toUpperCase() + t.slice(1)
-    }
+    if (key === 'blocked') note = blockedNote(m, v)
     if (key === 'sus_to_mal') {
       const a = aheadText(m.ahead_minutes)
       note = a && `Spotted on average ${a} before they were confirmed`

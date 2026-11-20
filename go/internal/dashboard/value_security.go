@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 )
 
@@ -32,8 +31,11 @@ import (
 // with the 30 whole days before, sent as explicit dates. The cube does not
 // always reach that far back: on the demo tenant on 2026-11-20 its first day
 // was 2026-10-14, so the earlier window held 7 days (122,733 blocked against
-// 393,407) and a trend would have read "up 221%". The earlier total is only
-// used when the cube has a row on that window's first day.
+// 393,407) and a trend would have read "up 221%". So a third read lists the
+// days the cube holds, and each window is checked against it
+// (windowCoverage): a current window not fully held keeps its number with
+// covered false and the days it does hold (days_from, days_to), and an
+// earlier window not fully held gives no trend (previous_status "partial").
 const valueWindow = "last 30 days"
 
 // valueNow is the clock the previous window is counted back from.
@@ -58,26 +60,26 @@ func (s *Service) CSPValueSecurity() map[string]any {
 	}
 
 	today := valueNow().UTC().Truncate(24 * time.Hour)
-	prevRange := []string{
-		today.AddDate(0, 0, -60).Format("2006-01-02"),
-		today.AddDate(0, 0, -31).Format("2006-01-02"),
-	}
+	prevRange := []string{day(today, -60), day(today, -31)}
 	blockedQuery := func(dateRange any) map[string]any {
-		td := map[string]any{"dimension": "PortunusAggThreat_ch.timestamp", "dateRange": dateRange}
-		if _, explicit := dateRange.([]string); explicit {
-			// By day, so a window the cube only partly holds can be told
-			// from a quiet one (blockedPrevious).
-			td["granularity"] = "day"
-		}
 		return map[string]any{
 			"measures": []string{"PortunusAggThreat_ch.requests"},
 			"filters": []map[string]any{{
 				"member": "PortunusAggThreat_ch.action", "operator": "equals", "values": []string{"Block"}}},
-			"timeDimensions": []map[string]any{td},
+			"timeDimensions": []map[string]any{{
+				"dimension": "PortunusAggThreat_ch.timestamp", "dateRange": dateRange}},
 		}
 	}
+	// Which days the cube holds at all, Block or Allow, over both windows:
+	// the proof that a total covers its whole window (blockedCoverage).
+	coverageQuery := map[string]any{
+		"measures": []string{"PortunusAggThreat_ch.requests"},
+		"timeDimensions": []map[string]any{{
+			"dimension": "PortunusAggThreat_ch.timestamp", "granularity": "day",
+			"dateRange": []string{prevRange[0], day(today, -1)}}},
+	}
 
-	var blocked, previous, zdd, sus []map[string]any
+	var blocked, previous, held, zdd, sus []map[string]any
 	read := func(endpoint string, q map[string]any, out *[]map[string]any) func() {
 		return func() {
 			qj, _ := json.Marshal(q)
@@ -91,6 +93,7 @@ func (s *Service) CSPValueSecurity() map[string]any {
 	tasks := []func(){
 		read(cubeSecurityEndpoint, blockedQuery(valueWindow), &blocked),
 		read(cubeSecurityEndpoint, blockedQuery(prevRange), &previous),
+		read(cubeSecurityEndpoint, coverageQuery, &held),
 	}
 	if zddListed {
 		tasks = append(tasks, read(zddEndpoint, map[string]any{
@@ -109,7 +112,19 @@ func (s *Service) CSPValueSecurity() map[string]any {
 	mustFanOut(tasks...)
 
 	b := valueMetric(blocked, "requests")
-	b["previous"], b["previous_status"] = blockedPrevious(previous, prevRange[0])
+	days := heldDays(held)
+	cur := windowCoverage(days, day(today, -30), day(today, -1))
+	b["covered"], b["days_from"], b["days_to"] = cur.covered, cur.from, cur.to
+	b["window_range"] = []string{day(today, -30), day(today, -1)}
+	b["previous"], b["previous_status"] = nil, "error"
+	if prev := valueMetric(previous, "requests"); prev["status"] == "ok" {
+		switch c := windowCoverage(days, prevRange[0], prevRange[1]).covered; c {
+		case true:
+			b["previous"], b["previous_status"] = prev["value"], "ok"
+		case false:
+			b["previous_status"] = "partial"
+		}
+	}
 	b["previous_range"] = prevRange
 	b["measure"] = "PortunusAggThreat_ch.requests"
 
@@ -180,28 +195,60 @@ func valueMetric(rows []map[string]any, measure string) map[string]any {
 	return map[string]any{"status": "ok", "value": v}
 }
 
-// blockedPrevious is the earlier window's total and why it may be missing:
-// "ok"; "error" (the read failed or a day's reading was not a number);
-// "partial" (the cube has no row on the window's first day, so it does not
-// hold the whole window and a comparison would be against fewer days).
-func blockedPrevious(rows []map[string]any, firstDay string) (any, string) {
+func day(t time.Time, offset int) string { return t.AddDate(0, 0, offset).Format("2006-01-02") }
+
+// heldDays is the set of days (YYYY-MM-DD) the cube has a row for, from the
+// coverage read; nil when that read failed or a row had no usable day.
+func heldDays(rows []map[string]any) map[string]bool {
 	if rows == nil {
-		return nil, "error"
+		return nil
 	}
-	var sum float64
-	covered := false
+	out := map[string]bool{}
 	for _, r := range rows {
-		v := floatOrNil(r["requests"])
-		if v == nil {
-			return nil, "error"
+		ts := getStr(r["timestamp"])
+		if len(ts) < 10 {
+			return nil
 		}
-		sum += v.(float64)
-		if strings.HasPrefix(getStr(r["timestamp"]), firstDay) {
-			covered = true
+		out[ts[:10]] = true
+	}
+	return out
+}
+
+type coverage struct {
+	// covered is true or false, or nil when the days could not be read.
+	covered  any
+	from, to any // the first and last day held inside the window, or nil
+}
+
+// windowCoverage says whether the cube holds the whole window first..last:
+// a day held on or before first, and last or the day before it held (the
+// newest day can still be landing). Seen live on 2026-11-20: the demo
+// tenant's cube began 2026-10-14, inside the earlier window, so that window
+// held 7 of its 30 days.
+func windowCoverage(days map[string]bool, first, last string) coverage {
+	if days == nil {
+		return coverage{}
+	}
+	var from, to string
+	early := false
+	for d := range days {
+		if d <= first {
+			early = true
+		}
+		if d >= first && d <= last {
+			if from == "" || d < from {
+				from = d
+			}
+			if d > to {
+				to = d
+			}
 		}
 	}
-	if !covered {
-		return nil, "partial"
+	lastT, _ := time.Parse("2006-01-02", last)
+	late := days[last] || days[day(lastT, -1)]
+	c := coverage{covered: early && late}
+	if from != "" {
+		c.from, c.to = from, to
 	}
-	return sum, "ok"
+	return c
 }

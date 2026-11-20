@@ -13,16 +13,21 @@ const valueMetaBoth = `{"result":{"cubes":[
  {"name":"SusToMalAggV1","measures":[{"name":"SusToMalAggV1.indicatorCount","type":"number"}],"dimensions":[]}]}}`
 
 // valueFake is one tenant for CSPValueSecurity. bodies is keyed by the
-// query's first measure, or "previous" for the blocked read with explicit
-// dates; a key in fail answers 500.
+// query's first measure, "previous" for the blocked read with explicit dates,
+// or "held" for the by-day read of the days the cube holds; a key in fail
+// answers 500.
 type valueFake struct {
 	meta   string
 	bodies map[string]string
 	fail   map[string]bool
 }
 
+// valueServer is the fake tenant, with the clock fixed at 2026-11-20: the
+// current window is 2026-10-21..2026-11-19, the earlier 2026-09-21..2026-10-20.
 func valueServer(t *testing.T, f valueFake) (*Service, *[]map[string]any) {
 	t.Helper()
+	valueNow = func() time.Time { return time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { valueNow = time.Now })
 	var mu sync.Mutex
 	seen := []map[string]any{}
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
@@ -42,8 +47,12 @@ func valueServer(t *testing.T, f valueFake) (*Service, *[]map[string]any) {
 			seen = append(seen, q)
 			mu.Unlock()
 			key := getStr(q["measures"].([]any)[0])
-			if _, rel := asMap(q["timeDimensions"].([]any)[0])["dateRange"].([]any); rel {
+			td := asMap(q["timeDimensions"].([]any)[0])
+			if _, explicit := td["dateRange"].([]any); explicit {
 				key = "previous"
+				if td["granularity"] == "day" {
+					key = "held"
+				}
 			}
 			if f.fail[key] {
 				w.WriteHeader(500)
@@ -57,23 +66,25 @@ func valueServer(t *testing.T, f valueFake) (*Service, *[]map[string]any) {
 	return s, &seen
 }
 
+// valueAllOK holds every day of both windows.
 func valueAllOK() map[string]string {
 	return map[string]string{
 		"PortunusAggThreat_ch.requests":     `{"result":{"data":[{"PortunusAggThreat_ch.requests":"393407"}]}}`,
-		"previous":                          valuePrevDays("2026-09-21", "200000", "150000"),
+		"previous":                          `{"result":{"data":[{"PortunusAggThreat_ch.requests":"350000"}]}}`,
+		"held":                              valueHeld("2026-09-21", "2026-11-19"),
 		"ZDDReclassifiedV1.totalIndicators": `{"result":{"data":[{"ZDDReclassifiedV1.totalIndicators":"19"}]}}`,
 		"SusToMalAggV1.indicatorCount":      `{"result":{"data":[{"SusToMalAggV1.indicatorCount":"24","SusToMalAggV1.avgTimeAdvantageMinutes":"754"}]}}`,
 	}
 }
 
-// valuePrevDays is the earlier window by day: the first row on first, the
-// rest the days after.
-func valuePrevDays(first string, counts ...string) string {
+// valueHeld is the by-day read of the days the cube holds: one row a day from
+// first to last, inclusive.
+func valueHeld(first, last string) string {
 	rows := []string{}
-	day, _ := time.Parse("2006-01-02", first)
-	for i, c := range counts {
-		d := day.AddDate(0, 0, i).Format("2006-01-02") + "T00:00:00.000"
-		rows = append(rows, `{"PortunusAggThreat_ch.timestamp":"`+d+`","PortunusAggThreat_ch.timestamp.day":"`+d+`","PortunusAggThreat_ch.requests":"`+c+`"}`)
+	end, _ := time.Parse("2006-01-02", last)
+	for d, _ := time.Parse("2006-01-02", first); !d.After(end); d = d.AddDate(0, 0, 1) {
+		ts := d.Format("2006-01-02") + "T00:00:00.000"
+		rows = append(rows, `{"PortunusAggThreat_ch.timestamp":"`+ts+`","PortunusAggThreat_ch.timestamp.day":"`+ts+`","PortunusAggThreat_ch.requests":"100"}`)
 	}
 	return `{"result":{"data":[` + strings.Join(rows, ",") + `]}}`
 }
@@ -88,7 +99,6 @@ func valueOf(t *testing.T, got map[string]any, key string) map[string]any {
 }
 
 func TestCSPValueSecurity_AllRead(t *testing.T) {
-	fixValueClock(t)
 	s, seen := valueServer(t, valueFake{meta: valueMetaBoth, bodies: valueAllOK()})
 	got := s.CSPValueSecurity()
 	if got["status"] != "ok" || got["window"] != "last 30 days" {
@@ -97,6 +107,12 @@ func TestCSPValueSecurity_AllRead(t *testing.T) {
 	b := valueOf(t, got, "blocked")
 	if b["status"] != "ok" || b["value"] != 393407.0 || b["previous"] != 350000.0 || b["previous_status"] != "ok" {
 		t.Errorf("blocked = %v", b)
+	}
+	if b["covered"] != true || b["days_from"] != "2026-10-21" || b["days_to"] != "2026-11-19" {
+		t.Errorf("coverage = %v %v %v, want the whole current window held", b["covered"], b["days_from"], b["days_to"])
+	}
+	if wr := b["window_range"].([]string); wr[0] != "2026-10-21" || wr[1] != "2026-11-19" {
+		t.Errorf("window_range = %v", wr)
 	}
 	if pr := b["previous_range"].([]string); pr[0] != "2026-09-21" || pr[1] != "2026-10-20" {
 		t.Errorf("previous_range = %v, want the 30 days before 2026-10-21", pr)
@@ -107,19 +123,30 @@ func TestCSPValueSecurity_AllRead(t *testing.T) {
 	if m := valueOf(t, got, "sus_to_mal"); m["status"] != "ok" || m["value"] != 24.0 || m["ahead_minutes"] != 754.0 {
 		t.Errorf("sus_to_mal = %v", m)
 	}
-	// Every query: the right time field, and blocked filtered to Block.
+	// Every query: the right time field, blocked filtered to Block, and the
+	// days-held read unfiltered, by day, over both windows.
 	wantDim := map[string]string{
 		"PortunusAggThreat_ch.requests":     "PortunusAggThreat_ch.timestamp",
 		"ZDDReclassifiedV1.totalIndicators": "ZDDReclassifiedV1.firstSeenDim",
 		"SusToMalAggV1.indicatorCount":      "SusToMalAggV1.reclassified_time",
 	}
+	heldReads := 0
 	for _, q := range *seen {
 		measure := getStr(q["measures"].([]any)[0])
 		td := asMap(q["timeDimensions"].([]any)[0])
-		_, explicit := td["dateRange"].([]any)
-		wantGran := map[bool]any{true: "day", false: nil}[explicit]
-		if td["dimension"] != wantDim[measure] || td["granularity"] != wantGran {
+		if td["dimension"] != wantDim[measure] {
 			t.Errorf("%s timeDimension = %v", measure, td)
+		}
+		if td["granularity"] == "day" {
+			heldReads++
+			dr := td["dateRange"].([]any)
+			if q["filters"] != nil || dr[0] != "2026-09-21" || dr[1] != "2026-11-19" {
+				t.Errorf("days-held read = %v", q)
+			}
+			continue
+		}
+		if td["granularity"] != nil {
+			t.Errorf("%s timeDimension = %v, want one total", measure, td)
 		}
 		if strings.HasPrefix(measure, "PortunusAggThreat_ch") {
 			f := asMap(q["filters"].([]any)[0])
@@ -127,6 +154,9 @@ func TestCSPValueSecurity_AllRead(t *testing.T) {
 				t.Errorf("blocked filter = %v", f)
 			}
 		}
+	}
+	if heldReads != 1 {
+		t.Errorf("days-held reads = %d, want 1", heldReads)
 	}
 }
 
@@ -175,32 +205,75 @@ func TestCSPValueSecurity_PreviousFailsKeepsBlocked(t *testing.T) {
 	}
 }
 
-func fixValueClock(t *testing.T) {
-	valueNow = func() time.Time { return time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC) }
-	t.Cleanup(func() { valueNow = time.Now })
-}
-
 // The cube's data starting inside the earlier window (seen live: it began
-// 2026-10-14) gives no trend, never a rise against a week of data.
+// 2026-10-14) gives no trend, never a rise against a week of data. The
+// current window is still fully held, so its number stands as 30 days.
 func TestCSPValueSecurity_PreviousWindowPartlyHeldGivesNoTrend(t *testing.T) {
-	fixValueClock(t)
 	b := valueAllOK()
-	b["previous"] = valuePrevDays("2026-10-14", "4711", "43894", "37347")
+	b["held"] = valueHeld("2026-10-14", "2026-11-19")
 	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
 	m := valueOf(t, s.CSPValueSecurity(), "blocked")
-	if m["value"] != 393407.0 || m["previous"] != nil || m["previous_status"] != "partial" {
-		t.Errorf("blocked = %v, want the value, no previous, previous_status partial", m)
+	if m["value"] != 393407.0 || m["previous"] != nil || m["previous_status"] != "partial" || m["covered"] != true {
+		t.Errorf("blocked = %v, want the value, covered, no previous, previous_status partial", m)
 	}
 }
 
-// A day in the earlier window that is not a number spoils the total.
-func TestCSPValueSecurity_PreviousBadDayIsError(t *testing.T) {
-	fixValueClock(t)
+// Data on only the earlier window's first days is not the whole window: one
+// row on the first day used to pass as a complete 30-day total.
+func TestCSPValueSecurity_PreviousWindowOnlyItsFirstDaysGivesNoTrend(t *testing.T) {
 	b := valueAllOK()
-	b["previous"] = valuePrevDays("2026-09-21", "10", "n/a")
+	b["held"] = valueHeld("2026-09-21", "2026-09-22")
 	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
-	if m := valueOf(t, s.CSPValueSecurity(), "blocked"); m["previous"] != nil || m["previous_status"] != "error" {
-		t.Errorf("blocked = %v, want previous null and error", m)
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["previous"] != nil || m["previous_status"] != "partial" {
+		t.Errorf("blocked = %v, want no previous, previous_status partial", m)
+	}
+}
+
+// A current window the cube only partly holds keeps its number but says which
+// days it counts, so the screen can say "since" rather than 30 days.
+func TestCSPValueSecurity_CurrentWindowPartlyHeld(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-11-02", "2026-11-19")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["status"] != "ok" || m["value"] != 393407.0 || m["covered"] != false || m["days_from"] != "2026-11-02" || m["days_to"] != "2026-11-19" {
+		t.Errorf("blocked = %v, want the value, covered false, days 2026-11-02 to 2026-11-19", m)
+	}
+	if m["previous"] != nil || m["previous_status"] != "partial" {
+		t.Errorf("blocked previous = %v / %v, want none", m["previous"], m["previous_status"])
+	}
+}
+
+// Data that stops before the window's end is not the whole window either.
+func TestCSPValueSecurity_CurrentWindowEndsEarly(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-09-21", "2026-11-10")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["covered"] != false || m["days_to"] != "2026-11-10" || m["previous_status"] != "ok" {
+		t.Errorf("blocked = %v, want covered false to 2026-11-10, earlier window still whole", m)
+	}
+}
+
+// The newest day may still be landing: data through the day before yesterday
+// still covers the window.
+func TestCSPValueSecurity_NewestDayStillLanding(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-09-21", "2026-11-18")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	if m := valueOf(t, s.CSPValueSecurity(), "blocked"); m["covered"] != true {
+		t.Errorf("blocked = %v, want covered", m)
+	}
+}
+
+// The days-held read failing proves nothing: coverage is unknown and there is
+// no trend, but the number itself still shows.
+func TestCSPValueSecurity_DaysHeldReadFails(t *testing.T) {
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: valueAllOK(), fail: map[string]bool{"held": true}})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["value"] != 393407.0 || m["covered"] != nil || m["previous"] != nil || m["previous_status"] != "error" {
+		t.Errorf("blocked = %v, want the value, covered null, previous error", m)
 	}
 }
 
@@ -218,7 +291,7 @@ func TestCSPValueSecurity_200WithoutResultDataIsNotChecked(t *testing.T) {
 
 func TestCSPValueSecurity_AllFailIsError(t *testing.T) {
 	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: valueAllOK(), fail: map[string]bool{
-		"PortunusAggThreat_ch.requests": true, "previous": true,
+		"PortunusAggThreat_ch.requests": true, "previous": true, "held": true,
 		"ZDDReclassifiedV1.totalIndicators": true, "SusToMalAggV1.indicatorCount": true}})
 	if got := s.CSPValueSecurity(); got["status"] != "error" {
 		t.Errorf("status = %v, want error", got["status"])
