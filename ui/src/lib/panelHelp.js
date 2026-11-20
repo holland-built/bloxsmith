@@ -390,6 +390,20 @@ export const PANEL_HELP = {
     look: 'Problems come first, worst first; open one to see what it affects. "Couldn\'t tell" means the data could not prove the answer, and is never counted as passed.',
   },
 
+  // ---- Value ----
+  'value-security': {
+    what: 'Lookups Infoblox blocked because they went to known bad domains, or to domains it caught as zero-day threats before other feeds listed them.',
+    look: 'Also domains it rated suspicious that were later confirmed malicious. Last 30 days.',
+  },
+  'value-platform': {
+    what: 'How much DNS work your servers did and how well: queries answered, answers from cache, and how much of the time each DNS server was up.',
+    look: 'Also addresses DHCP handed out, and laptops protected off the office network. Last 30 days. DHCP pairs in HA each count an address, so that number can be up to twice the devices served.',
+  },
+  'value-work': {
+    what: 'Jobs Bloxsmith finished on this tenant in the last 30 days, by page, and the items they made in Infoblox. Deletes are not counted.',
+    look: 'Time saved is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. "Not checked" means the list of changes could not be read.',
+  },
+
   // ---- Demo server ----
   'demo-settings': {
     what: 'The Proxmox host, demo network, NIOS-X image and join token, set once and kept in the encrypted vault.',

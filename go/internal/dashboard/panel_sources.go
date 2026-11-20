@@ -43,6 +43,7 @@ const (
 	whyIncident = "the incidents are worked out in the app"
 	whyTotal    = "it counts a different set of asset records from the ones Build a chart reads"
 	whyTable    = "it is a searchable, paged table, not a chart"
+	whyTotals   = "it adds up 30 days into a few totals, worked out in the app"
 
 	srcSubnets = "the subnet list"
 	srcHosts   = "the host list"
@@ -182,6 +183,14 @@ var panelSources = []PanelSource{
 
 	// ---- Best practices ----
 	restPanel("bp-checks", "Best practices", "Checks", "the Infoblox API", "it checks design rules against what is there, worked out in the app"),
+
+	// ---- Value ----
+	{ID: "value-security", Page: "Value", Name: "What Infoblox stopped — 30 days", Kind: "cube",
+		Source: "Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records", Builder: "no", Why: whyTotals},
+	{ID: "value-platform", Page: "Value", Name: "How the platform ran — 30 days", Kind: "cube",
+		Source: "Infoblox host metrics and endpoint records", Builder: "no", Why: whyTotals},
+	{ID: "value-work", Page: "Value", Name: "Work done in Bloxsmith — 30 days", Kind: "local",
+		Source: "Bloxsmith's own record of what it made", Builder: "no", Why: "it counts the app's own records, not a chart"},
 
 	// ---- Demo server ----
 	{ID: "demo-settings", Page: "Demo server", Name: "Settings", Kind: "local", Source: "the app's own vault", Builder: "no", Why: whyForm},
