@@ -68,10 +68,10 @@ test('with the backend unreachable, no check claims to have passed', async ({ pa
   // The e2e server points at an address that never answers, so every read fails.
   await page.goto('/#best-practices');
   const list = page.getByRole('list', { name: 'Best practice checks' });
-  await expect(list.locator(':scope > li')).toHaveCount(4);
+  await expect(list.locator(':scope > li')).toHaveCount(8);
   await expect(list).not.toContainText('Passed');
-  await expect(list.getByText("Couldn't tell")).toHaveCount(4);
+  await expect(list.getByText("Couldn't tell")).toHaveCount(8);
   const glance = page.getByRole('region', { name: 'Checks at a glance' });
-  await expect(glance.locator('[data-tile="passed"] .bp-num')).toHaveText('0 of 4');
-  await expect(glance.locator('[data-tile="unknown"] .bp-num')).toHaveText('4 of 4');
+  await expect(glance.locator('[data-tile="passed"] .bp-num')).toHaveText('0 of 8');
+  await expect(glance.locator('[data-tile="unknown"] .bp-num')).toHaveText('8 of 8');
 });

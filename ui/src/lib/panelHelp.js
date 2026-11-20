@@ -382,7 +382,7 @@ export const PANEL_HELP = {
 
   // ---- Best practices ----
   'bp-checks': {
-    what: 'Design rules checked against this account: hosts down, Grid Masters with no backup, and DHCP HA groups in a deprecated mode.',
+    what: 'Design rules checked against this account: hosts down, Grid Masters with no backup, DHCP HA groups in an old mode, and risky DNS records Infoblox flagged.',
     look: 'Problems come first, worst first; open one to see what it affects. "Couldn\'t tell" means the data could not prove the answer, and is never counted as passed.',
   },
 
