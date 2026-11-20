@@ -64,10 +64,34 @@ export function hasPerHost(feed, keys) {
   return keys.some((k) => (feed?.data?.metrics?.[k]?.hosts ?? []).length > 0)
 }
 
-// Per-host CPU and memory from /api/host-metrics rows, one row per host. A
-// missing or non-number reading stays null, shown as "not checked".
-export function hostLoadRows(metrics) {
+/**
+ * Which of `keys` come back per host and which only for the whole account,
+ * decided metric by metric: one metric with host rows must not turn another
+ * that has only an account-wide reading into a column of "no readings".
+ */
+export function splitPerHost(feed, keys) {
+  const perHost = keys.filter((k) => hasPerHost(feed, [k]))
+  return { perHost, accountWide: keys.filter((k) => !perHost.includes(k)) }
+}
+
+/** The hosts named in the per-host rows of `keys`, once each, by host id. */
+export function dnsHosts(feed, keys) {
   const by = new Map()
+  for (const k of keys) {
+    for (const h of feed?.data?.metrics?.[k]?.hosts ?? []) {
+      if (h?.host && !by.has(h.host)) by.set(h.host, { host: h.host, host_name: h.host_name || h.host })
+    }
+  }
+  return [...by.values()]
+}
+
+// Per-host CPU and memory from /api/host-metrics rows, one row per host, plus
+// a row for every host in `extraHosts` (hosts with DNS readings) that sent no
+// CPU or memory, so a host with any reading is listed. A missing or
+// non-number reading stays null, shown as "not checked".
+export function hostLoadRows(metrics, extraHosts = []) {
+  const by = new Map()
+  for (const h of extraHosts) by.set(h.host, { host: h.host, host_name: h.host_name || h.host, cpu: null, memory: null })
   for (const m of metrics ?? []) {
     const row = by.get(m.host) ?? { host: m.host, host_name: m.host_name || m.host, cpu: null, memory: null }
     if (m.metric_name === 'host_cpu') row.cpu = typeof m.avg_value === 'number' ? m.avg_value : null

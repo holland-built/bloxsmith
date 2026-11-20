@@ -1,7 +1,7 @@
 // Run with: npm test  (node --test, no test framework dependency)
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { fmtAnswerTime, fmtPerSecond, fmtShare, hasPerHost, healthMetric, hostLoadRows, hostMetricText, NO_READINGS, NOT_CHECKED } from './dnsHealth.js'
+import { dnsHosts, fmtAnswerTime, fmtPerSecond, fmtShare, hasPerHost, healthMetric, hostLoadRows, hostMetricText, NO_READINGS, NOT_CHECKED, splitPerHost } from './dnsHealth.js'
 
 const feed = (metrics, extra = {}) => ({ loading: false, error: null, data: { status: 'ok', metrics }, ...extra })
 
@@ -58,4 +58,28 @@ test('host load rows pair CPU and memory, keep a missing reading null, busiest f
   assert.deepEqual(rows.map((r) => r.host), ['b', 'a', 'c'])
   assert.deepEqual(rows[1], { host: 'a', host_name: 'ns-a', cpu: 12, memory: null })
   assert.equal(rows[2].cpu, null)
+})
+
+test('per-host or account-wide is decided per metric', () => {
+  // Answer time comes per host, timeouts only for the whole account: only
+  // answer time becomes a column, and timeouts keeps its account-wide reading.
+  const f = feed({
+    answer_time: { status: 'ok', unit: 'seconds', value: 0.05, hosts: [{ host: 'u1', host_name: 'ns1', value: 0.04 }] },
+    timeouts: { status: 'ok', unit: 'per_second', value: 14.3, hosts: [] },
+  })
+  assert.deepEqual(splitPerHost(f, ['answer_time', 'timeouts']), { perHost: ['answer_time'], accountWide: ['timeouts'] })
+  assert.equal(healthMetric(f, 'timeouts').text, '14 a second')
+})
+
+test('a host with DNS readings but no CPU or memory row is still listed', () => {
+  const f = feed({
+    answer_time: { status: 'ok', unit: 'seconds', value: 0.05, hosts: [{ host: 'dns-only', host_name: 'ns9', value: 0.04 }, { host: 'a', host_name: 'ns-a', value: 0.06 }] },
+    timeouts: { status: 'ok', unit: 'per_second', value: 2, hosts: [{ host: 'dns-only', host_name: 'ns9', value: 1 }] },
+  })
+  const extra = dnsHosts(f, ['answer_time', 'timeouts'])
+  assert.deepEqual(extra, [{ host: 'dns-only', host_name: 'ns9' }, { host: 'a', host_name: 'ns-a' }])
+  const rows = hostLoadRows([{ host: 'a', host_name: 'ns-a', metric_name: 'host_cpu', avg_value: 12 }], extra)
+  assert.deepEqual(rows.map((r) => r.host), ['a', 'dns-only'])
+  assert.deepEqual(rows[1], { host: 'dns-only', host_name: 'ns9', cpu: null, memory: null })
+  assert.equal(hostMetricText(f, 'answer_time', [rows[1].host, rows[1].host_name]), '40 ms')
 })

@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
-import { hasPerHost, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED } from '../lib/dnsHealth.js'
+import { dnsHosts, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED, splitPerHost } from '../lib/dnsHealth.js'
 import { sliceState } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
@@ -273,39 +273,46 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetr
 const pct = (v) => (typeof v === 'number' ? `${Math.round(v)}%` : null)
 const NOT_CHECKED_CELL = <span className="text-muted">{NOT_CHECKED}</span>
 
+const DNS_HOST_METRICS = [
+  ['answer_time', 'Answer time', 'answer time'],
+  ['timeouts', 'Timeouts', 'timeouts'],
+]
+
 function HostLoad({ hostMetrics, dnsHealth }) {
   if (!hostMetrics || (hostMetrics.loading && !hostMetrics.data)) return <Skeleton h={60} />
   const failed = !!hostMetrics.error || hostMetrics.data?.availability !== 'ok'
-  const rows = failed ? [] : hostLoadRows(hostMetrics.data.metrics)
-  const perHostDns = hasPerHost(dnsHealth, ['answer_time', 'timeouts'])
+  // Per metric: a metric with host rows gets a column; one Infoblox reports
+  // only for the whole account keeps its all-hosts line below the table.
+  const { perHost, accountWide } = splitPerHost(dnsHealth, DNS_HOST_METRICS.map(([k]) => k))
+  // Every host with any reading: CPU/memory hosts plus hosts that only sent DNS.
+  const rows = hostLoadRows(failed ? [] : hostMetrics.data.metrics, dnsHosts(dnsHealth, perHost))
   const columns = [
     { key: 'host_name', label: 'Host', grow: true },
     { key: 'cpu', label: 'CPU', mono: true, render: (v) => pct(v) ?? NOT_CHECKED_CELL },
     { key: 'memory', label: 'Memory', mono: true, render: (v) => pct(v) ?? NOT_CHECKED_CELL },
-    ...(perHostDns
-      ? [
-          { key: 'answer', label: 'Answer time', mono: true, priority: 'low', render: (_, r) => hostMetricText(dnsHealth, 'answer_time', [r.host, r.host_name]) },
-          { key: 'timeouts', label: 'Timeouts', mono: true, priority: 'low', render: (_, r) => hostMetricText(dnsHealth, 'timeouts', [r.host, r.host_name]) },
-        ]
-      : []),
+    ...DNS_HOST_METRICS.filter(([k]) => perHost.includes(k)).map(([k, label]) => ({
+      key: k, label, mono: true, priority: 'low', render: (_, r) => hostMetricText(dnsHealth, k, [r.host, r.host_name]),
+    })),
   ]
-  const at = healthMetric(dnsHealth, 'answer_time')
-  const to = healthMetric(dnsHealth, 'timeouts')
+  const wide = DNS_HOST_METRICS.filter(([k]) => accountWide.includes(k))
   return (
     <div className="mt-3 pt-3 border-t border-line" data-host-load="">
       <div className="text-note text-muted mb-1">CPU and memory, latest reading</div>
-      {failed ? (
-        <div className="text-note text-muted">CPU and memory: {NOT_CHECKED}</div>
-      ) : rows.length === 0 ? (
-        <div className="text-note text-muted">No host sent a reading</div>
-      ) : (
+      {failed && <div className="text-note text-muted">CPU and memory: {NOT_CHECKED}</div>}
+      {rows.length > 0 ? (
         <DataTable rows={rows} columns={columns} maxHeight={220} rowKey={(r) => r.host} />
+      ) : (
+        !failed && <div className="text-note text-muted">No host sent a reading</div>
       )}
       {/* Infoblox reports these per host only on some tenants; on the demo
           tenant every reading is for the whole account (csp.go CSPDNSHealth). */}
-      {!perHostDns && (
+      {wide.length > 0 && (
         <div className="text-note text-muted mt-2" data-host-dns="">
-          DNS for all hosts together, last 24 hours: answer time <b>{at.text}</b>, timeouts <b>{to.text}</b>. Infoblox does not report these per host here.
+          DNS for all hosts together, last 24 hours:{' '}
+          {wide.map(([k, , words], i) => (
+            <span key={k}>{i > 0 && ', '}{words} <b>{healthMetric(dnsHealth, k).text}</b></span>
+          ))}
+          . Infoblox does not report {wide.length > 1 ? 'these' : 'this'} per host here.
         </div>
       )}
     </div>

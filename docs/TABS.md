@@ -199,7 +199,7 @@ Host and service health. Jobs refresh every 15 seconds, the rest every 30 to 60.
 
 - **Tiles** across the top: hosts, not online, degraded, unknown, and discovered assets (opens Assets).
 - **Host Inventory**, **Host Status**, **Service Health**.
-- **Host Status** also lists each host's CPU and memory use, from the latest reading Infoblox holds, busiest first. A host with no reading says "not checked", never 0%. Under the list are the DNS answer time and timeouts over the last 24 hours. When Infoblox reports those per host they become two more columns; otherwise they are for all hosts together, and the line says so.
+- **Host Status** also lists each host's CPU and memory use, from the latest reading Infoblox holds, busiest first. A host with no reading says "not checked", never 0%. Under the list are the DNS answer time and timeouts over the last 24 hours. Each one Infoblox reports per host becomes a column, and any host with a reading is listed even if it sent no CPU or memory. One reported only for all hosts together stays on the line.
 - **Host Apps**: each on-prem box and how many Infoblox apps it runs.
 - **Jobs**: recent job runs.
 - **DFP Services**: each DNS forwarding proxy, and its state when the feed has one.
