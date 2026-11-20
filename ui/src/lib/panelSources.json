@@ -131,6 +131,15 @@
     }
   },
   {
+    "id": "dns-answers",
+    "page": "DNS",
+    "name": "DNS Answers — 24h",
+    "kind": "cube",
+    "source": "Infoblox's DNS server metrics",
+    "builder": "no",
+    "why": "it puts eight separate DNS server measures side by side, one read each"
+  },
+  {
     "id": "dns-zone-kpis",
     "page": "DNS",
     "name": "Zone Counts",

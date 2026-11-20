@@ -97,7 +97,7 @@ Asking for an address ("give me an address in Dublin") opens Get an address, and
 What is wrong right now, service by service, and the page the app opens on. Refreshes every 30 seconds.
 
 - **Updated** (top right) is when the inventory arrived. Hover or tap it to see how much of the network the page could read: how many subnets and hosts loaded out of the total, and whether the service list was cut short. If the inventory could not be read, it says so in red.
-- **Five tiles**, one each for DNS, DHCP, IPAM, Hosts and Security. Each shows the main number and a one-word state: **Act** (something critical), **Look** (a warning), **Healthy**, or **Not checked** when a feed that would report a problem did not answer. Click a tile to show its detail underneath: for DNS, the last 24 hours of queries per second (the last hour is dashed because it is not finished; hover or tap a point for its value), and for the others a bar of how much is affected, with a link to its page.
+- **Five tiles**, one each for DNS, DHCP, IPAM, Hosts and Security. Each shows the main number and a one-word state: **Act** (something critical), **Look** (a warning), **Healthy**, or **Not checked** when a feed that would report a problem did not answer. Click a tile to show its detail underneath: for DNS, the last 24 hours of queries per second (the last hour is dashed because it is not finished; hover or tap a point for its value), plus the average time to answer a lookup and the share answered without an error, both over the last 24 hours. For the others it is a bar of how much is affected, with a link to its page.
 - **The service board**: one row each for DNS, DHCP, IPAM, Hosts and Security. Each row shows:
   - **The number**, with what it was counted over in its tip, such as "of 334 leases loaded" or "in the latest 50 events".
   - **Open issues**, as tags. Hover or tap one to see Critical or Warning, what is wrong, and since when. An issue open longer than a day has a hollow dot, so old problems don't look like a new outage. The tag links to the page where you fix it, and **Ask why** (shown when you point at an issue) opens the AI with a question about it. An issue that belongs to no service is listed under **Other**.
@@ -105,7 +105,7 @@ What is wrong right now, service by service, and the page the app opens on. Refr
   - **State**: the service's health from Infoblox when it has one, otherwise the tile's word.
 
   "none open" means the feed answered and found nothing. A feed that could not be read says "not checked", never "none". **Hide** folds the board to one line of counts.
-- **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown.
+- **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown. Under the big number: the average answer time and the share of lookups answered without an error, over the last 24 hours. Either one says "not checked" if it could not be read, and "no readings" if Infoblox had none for that day.
 - **License Inventory**: each licence's SKU, state, expiry date and time left. Under 30 days is red, under 90 is amber.
 
 Subnet and host detail lives on [Network](#network) and [Infra](#infra). The service names on the board link there.
@@ -162,6 +162,7 @@ You can link straight to a view: `#network?subnet=10.0.0.0`, `#network?minUtil=9
 Everything about DNS. Refreshes every 30 seconds.
 
 - **DNS Query Rate — 24h** and **Query Volume — 7d**.
+- **DNS Answers — 24h**: how your DNS answered over the last 24 hours. The average time to answer, for all lookups, for lookups answered from your own zones, and for lookups your servers had to ask other DNS servers about. Then the share answered from cache, the share that failed (SERVFAIL), the share for names that do not exist (NXDOMAIN), and how many times a second your servers gave up waiting for another server (timeouts). Each number is read on its own: one that could not be read says "not checked" and the rest are still shown. "No readings" means Infoblox had none for that day. These are for all your DNS servers together; Infoblox does not report them per server on every tenant.
 - **DNS Zones**: every zone and the view it is in. The **Cloud** column says AWS, Azure or GCP for zones copied in from a cloud, blank for the rest; point at it to see the Azure subscription, the GCP project or the AWS hosted zone.
 - **Compare views** (on DNS Zones, when a zone name is in two or more views): pick the zone and two of its views, then **Compare**. It reads every record in both and lists the records only in the first view, only in the second, and those whose value or cache time (TTL) differs. If Infoblox stops answering part-way, it says how many records were read and that the lists may be missing some. It changes nothing.
 - **DNS Services**: each DNS service and its state.
@@ -198,6 +199,7 @@ Host and service health. Jobs refresh every 15 seconds, the rest every 30 to 60.
 
 - **Tiles** across the top: hosts, not online, degraded, unknown, and discovered assets (opens Assets).
 - **Host Inventory**, **Host Status**, **Service Health**.
+- **Host Status** also lists each host's CPU and memory use, from the latest reading Infoblox holds, busiest first. A host with no reading says "not checked", never 0%. Under the list are the DNS answer time and timeouts over the last 24 hours. When Infoblox reports those per host they become two more columns; otherwise they are for all hosts together, and the line says so.
 - **Host Apps**: each on-prem box and how many Infoblox apps it runs.
 - **Jobs**: recent job runs.
 - **DFP Services**: each DNS forwarding proxy, and its state when the feed has one.
@@ -572,6 +574,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Network | DHCP Leases | the DHCP lease list | No | it is a searchable list, not a chart |
 | Network | Which Subnets Run Out First? | the subnet list | No | how full each subnet is, and its colour band, is worked out in the app |
 | DNS | DNS Query Rate — 24h | Infoblox's DNS server metrics | As a copy | the latest-hour figure and the comparison beside it are worked out in the app |
+| DNS | DNS Answers — 24h | Infoblox's DNS server metrics | No | it puts eight separate DNS server measures side by side, one read each |
 | DNS | Zone Counts | the DNS zone list | No | the counts and zone checks are worked out in the app |
 | DNS | DNS Services | the DNS service list | No | it is a list, not a chart |
 | DNS | Query Volume — 7d | Infoblox's DNS activity records | Yes |  |

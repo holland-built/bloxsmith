@@ -87,6 +87,8 @@ var panelSources = []PanelSource{
 	// ---- DNS ----
 	{ID: "dns-query-rate", Page: "DNS", Name: "DNS Query Rate — 24h", Kind: "cube", Source: srcQps, Builder: "copy",
 		Why: "the latest-hour figure and the comparison beside it are worked out in the app", Picks: picksQps},
+	{ID: "dns-answers", Page: "DNS", Name: "DNS Answers — 24h", Kind: "cube", Source: srcQps, Builder: "no",
+		Why: "it puts eight separate DNS server measures side by side, one read each"},
 	restPanel("dns-zone-kpis", "DNS", "Zone Counts", srcZones, "the counts and zone checks are worked out in the app"),
 	restPanel("dns-services", "DNS", "DNS Services", "the DNS service list", whyList),
 	{ID: "dns-query-volume-7d", Page: "DNS", Name: "Query Volume — 7d", Kind: "cube", Source: "Infoblox's DNS activity records",

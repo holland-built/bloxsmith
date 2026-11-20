@@ -544,7 +544,7 @@ test('a drag then a narrow window leaves no card wider than the tracks that exis
   test.setTimeout(120_000);
   await request.delete('/api/views/__layout_dns');
   try {
-  await gotoTab(page, 'dns', 8, 1920, 2400);
+  await gotoTab(page, 'dns', 9, 1920, 2400);
   const ids = await domOrder(page);
   await dragOntoRightHalfOf(page, ids[2]!, 1);
 
@@ -693,7 +693,7 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   overview: 2,
   daily: 5,
   network: 5, // 4 until 2026-11-16, when Overlapping ranges joined
-  dns: 8,
+  dns: 9, // 8 until 2026-11-20, when DNS Answers — 24h joined
   // security and infra each gained one on 2026-08-20 (#152): "Security
   // Inventory" from /api/hub/domains and "Service Health" from /api/hub/health,
   // two endpoints that had been registered and called by nothing.
@@ -868,6 +868,7 @@ const TAB_CASES: TabCase[] = [
     id: 'dns',
     declared: [
       'dns-query-rate', // hiddenPanelGroup run #1
+      'dns-answers', // hiddenPanelGroup run #1
       'dns-zone-kpis',
       'dns-services', // hiddenPanelGroup run #2
       'dns-query-volume-7d',
@@ -876,7 +877,9 @@ const TAB_CASES: TabCase[] = [
       'dns-rpz',
       'dns-dtc-lbdn',
     ],
-    resizeSubject: 'dns-zone-kpis',
+    // DNS Answers (span 2) fills the first row beside DNS Query Rate (span 4),
+    // so Zone Counts now starts its row already flush at span 4 (2026-11-20).
+    resizeSubject: 'dns-answers',
     firstDeclaredSpan: 4,
   },
   {

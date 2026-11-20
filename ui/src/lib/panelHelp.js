@@ -47,7 +47,7 @@ export const PANEL_HELP = {
   // ---- Overview ----
   'dns-hero': {
     what: 'The average number of DNS lookups a second your servers answered, hour by hour across the last 24 hours.',
-    look: 'The big figure is the latest hour, and the note beside it compares that hour with the first one on the chart. Click the heading to open the DNS tab.',
+    look: 'The big figure is the latest hour, compared with the first hour on the chart. Below it, average answer time and lookups answered without an error, over 24 hours.',
   },
   'license-inventory': {
     what: 'Every Infoblox licence on this tenant, what it covers, when it runs out, and how many you hold.',
@@ -110,6 +110,10 @@ export const PANEL_HELP = {
   'dns-query-rate': {
     what: 'How many lookups a second your DNS servers answered, hour by hour, across the last 24 hours.',
     look: 'The big figure is the latest hour; the note beside it compares it with the same time yesterday, and is left out when there is no such hour. Hidden when no DNS service is found.',
+  },
+  'dns-answers': {
+    what: 'How your DNS answered over the last 24 hours: average time to answer, and how many lookups came from cache, failed, or asked for a name that does not exist.',
+    look: 'Point at a label to see what it means. A number that could not be read says "not checked"; the others are still real.',
   },
   'dns-zone-kpis': {
     what: 'The kinds of problem your DNS zones have, most common first; how many zones are forward and how many reverse; and how many have unusual settings.',
@@ -203,7 +207,7 @@ export const PANEL_HELP = {
   },
   'infra-host-status': {
     what: 'Your Infoblox machines grouped by state. "Unknown" is its own group: nothing reported a state for those, which is not the same as offline.',
-    look: 'The percentages are shares of the machines that loaded, not of every machine you have. When those two numbers differ, a line under the list says so.',
+    look: 'Percentages are of the machines that loaded. When those two numbers differ, a line under the list says so. Below, each host\'s CPU and memory; "not checked" means no reading.',
   },
   'infra-onprem-hosts': {
     what: 'The Infoblox boxes installed on your own sites, and how many Infoblox applications each one is running.',

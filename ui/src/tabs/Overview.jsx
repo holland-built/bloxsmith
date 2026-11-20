@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { inboxRows } from '../lib/inboxRows.js'
 import { useApi } from '../lib/api.js'
+import { healthMetric } from '../lib/dnsHealth.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sampleSince } from '../lib/sampleCount.js'
@@ -75,6 +76,10 @@ export default function Overview() {
   const savedCharts = useSavedChartPanels('overview')
   const licenses = useApi('/api/csp/license-alerts', { poll: 30000 })
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
+  // Answer time and success share over the last 24 hours, shown in the DNS
+  // tile's detail and under the DNS chart. Read once a minute: a day's
+  // average barely moves in 30 seconds.
+  const health = useApi('/api/csp/dns-health', { poll: 60000 })
   const board = useBoard(dns)
 
   return (
@@ -84,12 +89,12 @@ export default function Overview() {
           <h1>Overview</h1>
           <Updated board={board} />
         </div>
-        <Tiles board={board} dns={dns} />
+        <Tiles board={board} dns={dns} health={health} />
         <ServiceBoard board={board} dns={dns} />
       </div>
       <h2 className="text-copy font-semibold mt-8 mb-2">Charts</h2>
       <CardGrid layoutKey="overview">
-        <DnsHero panelId="dns-hero" dns={dns} />
+        <DnsHero panelId="dns-hero" dns={dns} health={health} />
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
         {savedCharts}
       </CardGrid>
@@ -280,7 +285,7 @@ function TickBar({ fill, good, sev, label }) {
 
 // Five tiles in one card. Clicking one shows its detail below: the DNS chart,
 // or for the others a bar against what it is out of, with a link to its page.
-function Tiles({ board, dns }) {
+function Tiles({ board, dns, health }) {
   const T = tiles(board, dns)
   const [sel, setSel] = useState('DNS')
   const cur = T.find((t) => t.name === sel) ?? T[0]
@@ -305,6 +310,7 @@ function Tiles({ board, dns }) {
         <div className="ov-pad">
           <TickBar fill={cur.fill} good={cur.good} sev={cur.v.sev} label={`${cur.name}: ${cur.value} ${cur.unit} ${cur.right ?? ''}`} />
         </div>
+        {cur.name === 'DNS' && <DnsHealthLine health={health} />}
         {/* The chosen tile's explanation, written out: picking a tile by tap
             or keyboard shows it, not only a mouse hover over the tile. */}
         <div className="ov-foot ov-pad ov-detail-foot"><span className="ov-muted">{cur.tip}</span><a className="ov-act" href={cur.b?.href}>Open {cur.name}</a></div>
@@ -579,7 +585,25 @@ function LicenseInventory({ licenses, panelId }) {
 
 // ---------- hero ----------
 
-function DnsHero({ dns, panelId }) {
+// Average answer time and the share of lookups answered without an error,
+// over the last 24 hours. Each says "not checked" on its own when its read
+// failed (lib/dnsHealth.js), so one dead metric never hides the other.
+// `inCard` is the chart panel, which sits outside the .ov-look block whose
+// classes the tile detail uses, so it takes the app's own muted text.
+function DnsHealthLine({ health, inCard = false }) {
+  const at = healthMetric(health, 'answer_time')
+  const ok = healthMetric(health, 'success')
+  const muted = inCard ? 'text-muted' : 'ov-muted'
+  return (
+    <div className={`${inCard ? 'mb-2' : 'ov-pad'} flex flex-wrap gap-x-6 gap-y-1 text-note`} data-dns-health="">
+      <span><span className={muted}>Average answer time</span> <b>{at.text}</b></span>
+      <span><span className={muted}>Answered without an error</span> <b>{ok.text}</b></span>
+      <span className={muted}>last 24 hours</span>
+    </div>
+  )
+}
+
+function DnsHero({ dns, health, panelId }) {
   const { COLORS } = useChartTheme()
   const rows = dns.data?.rows ?? []
   const status = dns.data?.status
@@ -626,6 +650,7 @@ function DnsHero({ dns, panelId }) {
               </span>
             )}
           </div>
+          <DnsHealthLine health={health} inCard />
           {/* The headline above this chart already rounds the same series to
               one decimal; the tooltip used to answer `value : 346.1144444444444`
               for the very same point. One decimal, and the unit spelled out. */}
