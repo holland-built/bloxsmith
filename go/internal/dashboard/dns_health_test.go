@@ -115,6 +115,16 @@ func TestCSPDNSHealth_200WithoutResultDataIsNotChecked(t *testing.T) {
 	}
 }
 
+// A row that isn't a record is a bad read too, not a blank reading.
+func TestCSPDNSHealth_RowNotARecordIsNotChecked(t *testing.T) {
+	b := allTenantBodies()
+	b["dns_success_percent_iq"] = `{"result":{"data":[null]}}`
+	s, _ := dnsHealthServer(t, b, nil)
+	if m := metricOf(t, s.CSPDNSHealth(), "success"); m["status"] != "error" || m["value"] != nil {
+		t.Errorf("success = %v, want status error and a null value", m)
+	}
+}
+
 func TestCSPDNSHealth_OneMetricFailsOthersStillShown(t *testing.T) {
 	s, _ := dnsHealthServer(t, allTenantBodies(), map[string]bool{"cache_hit_ratio_iq": true})
 	got := s.CSPDNSHealth()

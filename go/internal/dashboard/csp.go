@@ -732,7 +732,7 @@ func (s *Service) CSPDNSHealth() map[string]any {
 			if errored(st, err) {
 				return
 			}
-			results[i] = cubeRowsStrict(body)
+			results[i] = strictCubeRows(body)
 		}
 	}
 	mustFanOut(tasks...)
@@ -773,17 +773,21 @@ func (s *Service) CSPDNSHealth() map[string]any {
 	return map[string]any{"status": status, "window": "last 24 hours", "metrics": metrics}
 }
 
-// cubeRowsStrict is cubeData for a caller that must tell "no rows" from "no
-// answer": a body without a result.data list is nil (failed), a real empty
-// list is a non-nil empty slice.
-func cubeRowsStrict(body any) []map[string]any {
+// strictCubeRows is cubeData for a caller that must tell "no rows" from "no
+// answer": a body without a result.data list, or with a row that isn't a
+// record, is nil (failed); a real empty list is a non-nil empty slice.
+func strictCubeRows(body any) []map[string]any {
 	raw, ok := asMap(asMap(body)["result"])["data"].([]any)
 	if !ok {
 		return nil
 	}
 	out := make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
-		out = append(out, cubeRow(asMap(item)))
+		m, isMap := item.(map[string]any)
+		if !isMap {
+			return nil
+		}
+		out = append(out, cubeRow(m))
 	}
 	return out
 }

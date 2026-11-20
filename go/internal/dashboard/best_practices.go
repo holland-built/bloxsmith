@@ -363,20 +363,8 @@ func (s *Service) cubeRowsStrict(query map[string]any) (rows []map[string]any, o
 	if errored(st, err) {
 		return nil, false
 	}
-	raw, ok := asMap(asMap(body)["result"])["data"].([]any)
-	if !ok {
-		return nil, false
-	}
-	rows = make([]map[string]any, 0, len(raw))
-	for _, item := range raw {
-		// A row that isn't a record is a bad read, not a blank record.
-		m, isMap := item.(map[string]any)
-		if !isMap {
-			return nil, false
-		}
-		rows = append(rows, cubeRow(m))
-	}
-	return rows, true
+	rows = strictCubeRows(body)
+	return rows, rows != nil
 }
 
 // dnsRecordChecks reads the four flags at once, one read per flag, so a long
