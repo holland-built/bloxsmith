@@ -61,12 +61,13 @@ test.describe('a service the tenant does not own', () => {
 
     // Both dns|ndns panels are gone — not empty, not "unavailable": absent.
     await expect(page.getByText('DNS Query Rate — 24h')).toHaveCount(0);
+    await expect(page.getByText('DNS Answers — 24h')).toHaveCount(0);
     await expect(page.getByText('DNS Services', { exact: true })).toHaveCount(0);
 
     // ...and something on screen says so, naming the service, never a count.
     const rows = hiddenRow(page);
     await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toContainText('1 panel hidden');
+    await expect(rows.first()).toContainText('2 panels hidden');
     await expect(rows.first()).toContainText('no DNS service detected');
 
     // Panels this tenant DOES own are untouched by its neighbour hiding.
@@ -75,6 +76,7 @@ test.describe('a service the tenant does not own', () => {
     // The escape hatch mounts them, and they then render exactly as normal.
     await showAnyway(page).first().click();
     await expect(page.getByText('DNS Query Rate — 24h')).toBeVisible();
+    await expect(page.getByText('DNS Answers — 24h')).toBeVisible();
     await expect(page.getByText('DNS Services', { exact: true })).toBeVisible();
     await expect(hiddenRow(page)).toHaveCount(0);
   });

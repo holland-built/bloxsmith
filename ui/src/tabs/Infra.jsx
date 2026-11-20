@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
+import { dnsHosts, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED, splitPerHost } from '../lib/dnsHealth.js'
 import { sliceState } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
@@ -74,6 +75,10 @@ export default function Infra() {
   // only to decide which panels to HIDE, never to say whether those services are
   // actually up.
   const svcHealth = useApi('/api/hub/health', { poll: 30000 })
+  // Per-host CPU and memory, and DNS answer time and timeouts, for Host
+  // Status. A minute apart: these are averages, and host-metrics is not cached.
+  const hostMetrics = useApi('/api/host-metrics', { poll: 60000 })
+  const dnsHealth = useApi('/api/csp/dns-health', { poll: 60000 })
 
   const theme = useThemeColors()
   const hp = useHashParams()
@@ -109,7 +114,7 @@ export default function Infra() {
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="infra">
         <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
-        <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+        <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} hostMetrics={hostMetrics} dnsHealth={dnsHealth} />
         <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
         {/* Host Health listed the same machines as Host Inventory, with a
             Version column the feed leaves empty, so it was merged away. */}
@@ -187,7 +192,7 @@ function headlines(hosts, totalHosts, hostsStatus) {
 // this is based on.
 const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 
-function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
+function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetrics, dnsHealth }) {
   const { COLORS } = useChartTheme()
   // Buckets come from the same statusBucket() the table sorts and filters by,
   // so one host cannot be "Other" here and "unknown" there. Unknown is its own
@@ -256,7 +261,61 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
           </div>
         </div>
       )}
+      <HostLoad hostMetrics={hostMetrics} dnsHealth={dnsHealth} />
     </Card>
+  )
+}
+
+// Per-host load under the donut: CPU and memory from /api/host-metrics (the
+// latest reading Infoblox holds for each host), and DNS answer time and
+// timeouts from /api/csp/dns-health when it reports them per host. A host
+// with no reading for a metric says "not checked", never 0%.
+const pct = (v) => (typeof v === 'number' ? `${Math.round(v)}%` : null)
+const NOT_CHECKED_CELL = <span className="text-muted">{NOT_CHECKED}</span>
+
+const DNS_HOST_METRICS = [
+  ['answer_time', 'Answer time', 'answer time'],
+  ['timeouts', 'Timeouts', 'timeouts'],
+]
+
+function HostLoad({ hostMetrics, dnsHealth }) {
+  if (!hostMetrics || (hostMetrics.loading && !hostMetrics.data)) return <Skeleton h={60} />
+  const failed = !!hostMetrics.error || hostMetrics.data?.availability !== 'ok'
+  // Per metric: a metric with host rows gets a column; one Infoblox reports
+  // only for the whole account keeps its all-hosts line below the table.
+  const { perHost, accountWide } = splitPerHost(dnsHealth, DNS_HOST_METRICS.map(([k]) => k))
+  // Every host with any reading: CPU/memory hosts plus hosts that only sent DNS.
+  const rows = hostLoadRows(failed ? [] : hostMetrics.data.metrics, dnsHosts(dnsHealth, perHost))
+  const columns = [
+    { key: 'host_name', label: 'Host', grow: true },
+    { key: 'cpu', label: 'CPU', mono: true, render: (v) => pct(v) ?? NOT_CHECKED_CELL },
+    { key: 'memory', label: 'Memory', mono: true, render: (v) => pct(v) ?? NOT_CHECKED_CELL },
+    ...DNS_HOST_METRICS.filter(([k]) => perHost.includes(k)).map(([k, label]) => ({
+      key: k, label, mono: true, priority: 'low', render: (_, r) => hostMetricText(dnsHealth, k, [r.host, r.host_name]),
+    })),
+  ]
+  const wide = DNS_HOST_METRICS.filter(([k]) => accountWide.includes(k))
+  return (
+    <div className="mt-3 pt-3 border-t border-line" data-host-load="">
+      <div className="text-note text-muted mb-1">CPU and memory, latest reading</div>
+      {failed && <div className="text-note text-muted">CPU and memory: {NOT_CHECKED}</div>}
+      {rows.length > 0 ? (
+        <DataTable rows={rows} columns={columns} maxHeight={220} rowKey={(r) => r.host} />
+      ) : (
+        !failed && <div className="text-note text-muted">No host sent a reading</div>
+      )}
+      {/* Infoblox reports these per host only on some tenants; on the demo
+          tenant every reading is for the whole account (csp.go CSPDNSHealth). */}
+      {wide.length > 0 && (
+        <div className="text-note text-muted mt-2" data-host-dns="">
+          DNS for all hosts together, last 24 hours:{' '}
+          {wide.map(([k, , words], i) => (
+            <span key={k}>{i > 0 && ', '}{words} <b>{healthMetric(dnsHealth, k).text}</b></span>
+          ))}
+          . Infoblox does not report {wide.length > 1 ? 'these' : 'this'} per host here.
+        </div>
+      )}
+    </div>
   )
 }
 

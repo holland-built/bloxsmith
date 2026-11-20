@@ -48,6 +48,7 @@ func (d *Deps) registerCSPRoutes(mux router) {
 	tile("/api/csp/exposed-ips", (*dashboard.Service).CSPExposedIPs)
 	tile("/api/csp/dns-services", (*dashboard.Service).CSPDNSServices)
 	tile("/api/csp/dns-qps", (*dashboard.Service).CSPDNSQps)
+	tile("/api/csp/dns-health", (*dashboard.Service).CSPDNSHealth)
 	tile("/api/csp/ipam-util", (*dashboard.Service).CSPIpamUtil)
 	tile("/api/csp/dhcp-leases", (*dashboard.Service).CSPDHCPLeases)
 	tile("/api/csp/license-alerts", (*dashboard.Service).CSPLicenseAlerts)

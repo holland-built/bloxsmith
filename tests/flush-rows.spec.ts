@@ -126,7 +126,7 @@ test('taking a panel off the page refills the rows it leaves behind', async ({ p
   try {
     await page.setViewportSize({ width: 1920, height: 2400 });
     await page.goto('/#dns');
-    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(8, { timeout: 20_000 });
+    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(9, { timeout: 20_000 });
     await page.waitForTimeout(1200);
     const shortRows = async () =>
       (await page.evaluate(readRows)).flatMap((g) => g.rows.filter((r) => r.shortBy > 1 || r.spans !== g.tracks).map((r) => r.panels.join(', ')));
@@ -134,7 +134,7 @@ test('taking a panel off the page refills the rows it leaves behind', async ({ p
 
     await openPanelMenu(page, 'dns-zone-kpis');
     await page.locator('[data-panel-id="dns-zone-kpis"] [data-layout-hide]').click();
-    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(7);
+    await expect(page.locator('[data-card-grid] [data-panel-id]')).toHaveCount(8);
     await page.waitForTimeout(600);
     expect(await shortRows()).toEqual([]);
   } finally {

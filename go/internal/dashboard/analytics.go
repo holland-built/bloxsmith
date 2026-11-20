@@ -585,6 +585,8 @@ func (s *Service) hostDisplayNames() map[string]string {
 // (never-working) MCP query. HostMetrics.host is an opaque UUID; it is
 // resolved to a display name via hostDisplayNames. Rows with a null host are
 // account-level (e.g. dns_qps_iq) and are skipped, never rendered blank.
+// A row whose avg_value is missing or not a number keeps avg_value null, so a
+// screen says "not checked" for that host instead of showing 0%.
 //
 // Same availability treatment as FetchDNSAnalytics: cubeQuery returns nil on
 // upstream failure and a non-nil (possibly empty) slice on a genuine
@@ -629,12 +631,13 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 			if n, ok := names[hostID]; ok {
 				hostName = n
 			}
+			// A missing reading stays null ("not checked" on screen), never 0.
 			metrics = append(metrics, map[string]any{
 				"host":              hostID,
 				"host_name":         hostName,
 				"metric_name":       metricName,
 				"metric_name_label": row["metric_name_label"],
-				"avg_value":         toFloat(orAny(row["avg_value"], 0)),
+				"avg_value":         floatOrNil(row["avg_value"]),
 			})
 		}
 	}

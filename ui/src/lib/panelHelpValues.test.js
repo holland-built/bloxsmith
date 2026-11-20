@@ -667,6 +667,28 @@ const CLAIMS = [
     ],
   },
   {
+    panel: 'dns-hero',
+    says: /Below it, average answer time and lookups answered without an error, over 24 hours\./,
+    file: GO_CSP,
+    proofs: [
+      {
+        re: /"dimension": cubeHost \+ "\.timestamp", "dateRange": "last 24 hours"\}/,
+        expect: 'CSPDNSHealth averages each metric over the last 24 hours',
+      },
+    ],
+  },
+  {
+    panel: 'dns-answers',
+    says: /How your DNS answered over the last 24 hours/,
+    file: GO_CSP,
+    proofs: [
+      {
+        re: /"dimension": cubeHost \+ "\.timestamp", "dateRange": "last 24 hours"\}/,
+        expect: 'CSPDNSHealth averages each metric over the last 24 hours',
+      },
+    ],
+  },
+  {
     panel: 'dns-query-rate',
     says: /hour by hour, across the last 24 hours/,
     file: GO_CSP,

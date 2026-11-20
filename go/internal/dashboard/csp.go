@@ -673,6 +673,186 @@ func (s *Service) CSPDNSQps() map[string]any {
 	return rowsResp(normDNSQps(cubeData(body)))
 }
 
+// dnsHealthMetrics are the HostMetricsV1 series behind CSPDNSHealth, with the
+// unit each one is stored in. The units were checked on the live demo tenant
+// on 2026-11-20, not taken from a name:
+//   - seconds: Infoblox's metric map builds the three dns_latency_* series from
+//     onprem_dns_resolution_labeled_seconds_sum / _count, and the live values
+//     (0.02-0.06 overall) only make sense as seconds (20-60 ms).
+//   - percent (0-100): the *_percent_iq series, and cache_hit_ratio_iq, which
+//     read 31-53 over the day, so it is not a 0-1 fraction.
+//   - per_second: dns_timeout_rate_iq is built from the counter
+//     onprem_dns_resolution_timeouts_total. Every 5-minute sample times 300
+//     was a whole number (72 of 72), the same shape as dns_qps_iq, so it is
+//     timeouts per second, not a share of queries.
+var dnsHealthMetrics = []struct{ Key, Metric, Unit string }{
+	{"answer_time", "dns_latency_all_iq", "seconds"},
+	{"answer_time_own", "dns_latency_auth_iq", "seconds"},
+	{"answer_time_upstream", "dns_latency_upstream_iq", "seconds"},
+	{"success", "dns_success_percent_iq", "percent"},
+	{"servfail", "dns_servfail_percent_iq", "percent"},
+	{"nxdomain", "dns_nxdomain_percent_iq", "percent"},
+	{"cache_hit", "cache_hit_ratio_iq", "percent"},
+	{"timeouts", "dns_timeout_rate_iq", "per_second"},
+}
+
+// CSPDNSHealth is how healthy and fast DNS was over the last 24 hours: one
+// average per metric for the whole tenant, plus one per host where the
+// upstream reports the metric per host.
+//
+// One query per metric, because HostMetricsV1 needs a metric_name filter on
+// each (as FetchHostMetrics). No granularity filter (hostTier): these are one
+// average over the day, not a chart by hour, and for one total V1 reads the
+// same stored 5-minute rows either way (live: 0.031489 without the filter,
+// 0.031487 with "hour").
+//
+// Each metric stands alone. A metric whose read failed, or came back 200 with
+// no result.data, is "error" with a null value, which the screens show as
+// "not checked"; the others are still shown. A metric that answered with no
+// rows, or only null readings, is "empty", also null, never 0.
+//
+// On the demo tenant every one of these series has a single account-wide row
+// (blank host), so "hosts" is empty there; Infoblox's own evals note the same
+// for dns_timeout_rate_iq (IBIQ-6480).
+func (s *Service) CSPDNSHealth() map[string]any {
+	results := make([][]map[string]any, len(dnsHealthMetrics))
+	tasks := make([]func(), len(dnsHealthMetrics))
+	for i, m := range dnsHealthMetrics {
+		tasks[i] = func() {
+			q, _ := json.Marshal(map[string]any{
+				"measures":   []string{cubeHost + ".avg_value", cubeHost + ".count_value"},
+				"dimensions": []string{cubeHost + ".host"},
+				"filters": []map[string]any{{
+					"member": cubeHost + ".metric_name", "operator": "equals",
+					"values": []string{m.Metric}}},
+				"timeDimensions": []map[string]any{{
+					"dimension": cubeHost + ".timestamp", "dateRange": "last 24 hours"}},
+			})
+			body, st, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
+			if errored(st, err) {
+				return
+			}
+			results[i] = strictCubeRows(body)
+		}
+	}
+	mustFanOut(tasks...)
+
+	// Names only when some metric came back per host: on a tenant where every
+	// row is account-wide the lookup would be a wasted inventory read.
+	var names map[string]string
+	for _, rows := range results {
+		for _, r := range rows {
+			if getStr(r["host"]) != "" && names == nil {
+				names = s.hostDisplayNames()
+			}
+		}
+	}
+
+	metrics := map[string]any{}
+	ok, failed := 0, 0
+	for i, m := range dnsHealthMetrics {
+		out := dnsHealthMetric(results[i], names)
+		out["metric"], out["unit"] = m.Metric, m.Unit
+		switch out["status"] {
+		case "ok":
+			ok++
+		case "error":
+			failed++
+		}
+		metrics[m.Key] = out
+	}
+	status := "empty"
+	switch {
+	case failed == len(dnsHealthMetrics):
+		status = "error"
+	case failed > 0:
+		status = "partial"
+	case ok > 0:
+		status = "ok"
+	}
+	return map[string]any{"status": status, "window": "last 24 hours", "metrics": metrics}
+}
+
+// strictCubeRows is cubeData for a caller that must tell "no rows" from "no
+// answer": a body without a result.data list, or with a row that isn't a
+// record, is nil (failed); a real empty list is a non-nil empty slice.
+func strictCubeRows(body any) []map[string]any {
+	raw, ok := asMap(asMap(body)["result"])["data"].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		m, isMap := item.(map[string]any)
+		if !isMap {
+			return nil
+		}
+		out = append(out, cubeRow(m))
+	}
+	return out
+}
+
+// floatOrNil is a cube measure as a number, or nil when it is missing or not
+// a number. Unlike toFloat it never turns a missing reading into 0.
+func floatOrNil(v any) any {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case string:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(t), 64); err == nil {
+			return f
+		}
+	}
+	return nil
+}
+
+// dnsHealthMetric shapes one metric's rows (nil = the read failed). The
+// tenant value is the account-wide row (blank host) when there is one,
+// otherwise the per-host averages weighted by how many readings each had,
+// which is what the cube's own average over all rows would be.
+func dnsHealthMetric(rows []map[string]any, names map[string]string) map[string]any {
+	hosts := []map[string]any{}
+	if rows == nil {
+		return map[string]any{"status": "error", "value": nil, "hosts": hosts}
+	}
+	var tenant any
+	var sum, weight float64
+	for _, r := range rows {
+		v := floatOrNil(r["avg_value"])
+		id := getStr(r["host"])
+		if id == "" {
+			if v != nil {
+				tenant = v
+			}
+			continue
+		}
+		name := id
+		if n, ok := names[id]; ok {
+			name = n
+		}
+		hosts = append(hosts, map[string]any{"host": id, "host_name": name, "value": v})
+		if v != nil {
+			w := toFloat(r["count_value"])
+			if w <= 0 {
+				w = 1
+			}
+			sum += v.(float64) * w
+			weight += w
+		}
+	}
+	if tenant == nil && weight > 0 {
+		tenant = sum / weight
+	}
+	sort.Slice(hosts, func(a, b int) bool { return getStr(hosts[a]["host_name"]) < getStr(hosts[b]["host_name"]) })
+	status := "ok"
+	if tenant == nil {
+		status = "empty"
+	}
+	return map[string]any{"status": status, "value": tenant, "hosts": hosts}
+}
+
 func (s *Service) CSPDNSServices() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/ddi/v1/dns/service", map[string]string{"_limit": "200"})
 	if errored(st, err) {

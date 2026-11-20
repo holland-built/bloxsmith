@@ -234,6 +234,39 @@ const TEMPLATES = [
 
 const WHOAMI = { actor: 'baseline-operator', role: 'admin', tenant: 'baseline-tenant', token_auth: false };
 
+// /api/csp/dns-health: one tenant-wide average per metric over 24 hours, in the
+// units csp.go dnsHealthMetrics records (seconds, 0-100, per second). One
+// metric is "empty" so the baseline shows "no readings", as the demo tenant does.
+const DNS_HEALTH_METRIC = (metric: string, unit: string, value: number | null) => ({
+  metric, unit, status: value == null ? 'empty' : 'ok', value, hosts: [],
+});
+const DNS_HEALTH = {
+  status: 'ok',
+  window: 'last 24 hours',
+  metrics: {
+    answer_time: DNS_HEALTH_METRIC('dns_latency_all_iq', 'seconds', 0.064),
+    answer_time_own: DNS_HEALTH_METRIC('dns_latency_auth_iq', 'seconds', null),
+    answer_time_upstream: DNS_HEALTH_METRIC('dns_latency_upstream_iq', 'seconds', 0.063),
+    success: DNS_HEALTH_METRIC('dns_success_percent_iq', 'percent', 62.1),
+    servfail: DNS_HEALTH_METRIC('dns_servfail_percent_iq', 'percent', 1.6),
+    nxdomain: DNS_HEALTH_METRIC('dns_nxdomain_percent_iq', 'percent', 35.6),
+    cache_hit: DNS_HEALTH_METRIC('cache_hit_ratio_iq', 'percent', 46.5),
+    timeouts: DNS_HEALTH_METRIC('dns_timeout_rate_iq', 'per_second', 14.3),
+  },
+};
+
+// /api/host-metrics: latest CPU and memory per host. One host has no memory
+// reading (null), so the baseline shows "not checked" for it.
+const HOST_METRICS = {
+  availability: 'ok',
+  metrics: [
+    { host: 'host-1', host_name: 'baseline-ns1', metric_name: 'host_cpu', metric_name_label: 'host_cpu', avg_value: 13 },
+    { host: 'host-1', host_name: 'baseline-ns1', metric_name: 'host_memory', metric_name_label: 'host_memory', avg_value: 59 },
+    { host: 'host-2', host_name: 'baseline-ns2', metric_name: 'host_cpu', metric_name_label: 'host_cpu', avg_value: 5 },
+    { host: 'host-2', host_name: 'baseline-ns2', metric_name: 'host_memory', metric_name_label: 'host_memory', avg_value: null },
+  ],
+};
+
 const DNS_QPS = {
   status: 'ok',
   count: 3,
@@ -681,6 +714,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   ],
   overview: [
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
+    { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/license-alerts', body: LICENSE_ALERTS, required: true },
     // The summary column beside the panels (Overview.jsx EstateRail).
     { method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true },
@@ -698,6 +732,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   ],
   dns: [
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
+    { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/dns-services', body: DNS_SERVICES, required: true },
     { method: 'GET', path: '/api/csp/dnssec', body: DNSSEC, required: true },
     { method: 'GET', path: '/api/csp/dtc-lbdn', body: DTC_LBDN, required: true },
@@ -728,6 +763,8 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/csp/jobs', body: JOBS, required: true },
     { method: 'GET', path: '/api/csp/maintenance', body: MAINTENANCE, required: true },
     { method: 'GET', path: '/api/csp/onprem-hosts', body: ONPREM_HOSTS, required: true },
+    { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
+    { method: 'GET', path: '/api/host-metrics', body: HOST_METRICS, required: true },
   ],
   assets: [
     { method: 'GET', path: '/api/csp/asset-filters', body: ASSET_FILTERS, required: true },

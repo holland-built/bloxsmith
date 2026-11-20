@@ -12,6 +12,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
+import { healthMetric } from '../lib/dnsHealth.js'
 import Tip from '../components/Tip.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
@@ -181,6 +182,8 @@ export default function Dns() {
   // Charts added from Build a chart; they join the grid as ordinary panels.
   const savedCharts = useSavedChartPanels('dns')
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
+  // A day's averages, so once a minute is plenty.
+  const health = useApi('/api/csp/dns-health', { poll: 60000 })
   const services = useApi('/api/csp/dns-services', { poll: 30000 })
   // Re-enabled 2026-07-22: MCP calls now carry a bounded 12s deadline (mcp.go post()),
   // so a stalled feed errors out instead of hanging goroutines / starving the upstream.
@@ -222,7 +225,10 @@ export default function Dns() {
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dns,
           state: owned,
-          children: [<QpsHero key="dns-query-rate" panelId="dns-query-rate" qps={qps} />],
+          children: [
+            <QpsHero key="dns-query-rate" panelId="dns-query-rate" qps={qps} />,
+            <DnsAnswers key="dns-answers" panelId="dns-answers" health={health} />,
+          ],
         })}
         {/* The id sits on the call site, not on the Cards inside: ZoneKpis
             returns a different Card for loading / dead feed / data, and all
@@ -303,6 +309,53 @@ function QpsHero({ panelId, qps }) {
               yDomain={['dataMin - 0.5', 'dataMax + 0.5']}
             />
           </Suspense>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- answers ----------
+
+// How DNS answered over the last 24 hours: how long an answer took, split by
+// where it came from, and what share were cache hits, server failures or
+// names that do not exist. Each number stands on its own: a metric whose read
+// failed says "not checked" and the rest are still shown (lib/dnsHealth.js).
+const ANSWER_TIMES = [
+  ['answer_time', 'All answers', 'The average time to answer any lookup.'],
+  ['answer_time_own', 'From your own zones', 'Lookups your servers answered from zones they hold themselves.'],
+  ['answer_time_upstream', 'Asked elsewhere', 'Lookups your servers had to pass on to other DNS servers on the internet.'],
+]
+const ANSWER_SHARES = [
+  ['cache_hit', 'Answered from cache', 'The share of lookups answered from a recent answer the server kept (its cache), without asking anyone again.'],
+  ['servfail', 'Failed (SERVFAIL)', 'The share of lookups the server could not answer at all.'],
+  ['nxdomain', 'Name not found (NXDOMAIN)', 'The share of lookups for a name that does not exist. Often typing errors or old settings.'],
+  ['timeouts', 'Timeouts', 'How many times a second your servers gave up waiting for another DNS server to reply.'],
+]
+
+function DnsAnswers({ panelId, health }) {
+  const dead = !health.loading && (!!health.error || health.data?.status === 'error')
+  const stat = ([key, label, tip]) => {
+    const m = healthMetric(health, key)
+    return (
+      <div key={key} data-dns-health-metric={key} data-state={m.state}>
+        <dt><Tip tip={tip}>{label}</Tip></dt>
+        <dd className={m.state === 'ok' ? undefined : 'text-muted'} style={m.state === 'ok' ? undefined : { fontSize: 15, fontWeight: 400 }}>{m.text}</dd>
+      </div>
+    )
+  }
+  return (
+    <Card panelId={panelId} span={2} title="DNS Answers — 24h">
+      {health.loading && !health.data ? (
+        <Skeleton h={180} />
+      ) : dead ? (
+        <FeedUnavailable label="DNS answer health feed unavailable" />
+      ) : (
+        <>
+          <div className="text-note text-muted pt-1">Average time to answer</div>
+          <dl className="dns-stats">{ANSWER_TIMES.map(stat)}</dl>
+          <div className="text-note text-muted">How lookups ended</div>
+          <dl className="dns-stats">{ANSWER_SHARES.map(stat)}</dl>
         </>
       )}
     </Card>
