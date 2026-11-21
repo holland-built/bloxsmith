@@ -147,7 +147,7 @@ The rules come from a colleague's Infoblox CSP tool for Claude, used with his pe
 
 What Infoblox and Bloxsmith did for you in the last 30 days, on one screen, for a manager. It only reads, and changes nothing.
 
-- **What Infoblox stopped — 30 days**: lookups Infoblox blocked because they went to known bad domains, domains it caught as zero-day threats before other feeds listed them, and domains it rated suspicious that were later confirmed malicious.
+- **What Infoblox stopped — 30 days**: lookups Infoblox blocked under your security rules (known bad domains, and content your policies block), domains it caught as zero-day threats before other feeds listed them, and domains it rated suspicious that were later confirmed malicious.
 - **How the platform ran — 30 days**: how much DNS work your servers did and how well: queries answered, answers from cache, and laptops protected off the office network. DNS server uptime and DHCP addresses handed out say **Not available** for now: Infoblox doesn't say what its DNS status number measures, or whether its DHCP number is a running total, and Bloxsmith shows no number it can't explain.
 - **Work done in Bloxsmith — 30 days**: the jobs Bloxsmith finished on this tenant, by page (Automate, Get an address, Site lists and the Editor), and the items they made in Infoblox. Deletes, and jobs later undone with Remove, are not counted. **Time saved** is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. Jobs recorded before 13 November 2026 have no tenant on record; they are counted, and the panel says how many. Jobs made on another tenant are not counted, and the panel says how many of those there are too.
 
