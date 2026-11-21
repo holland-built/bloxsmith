@@ -605,22 +605,29 @@ func applyLatestWith(h applyHooks) error {
 		// would strand progress at 'restarting'; surface it so the modal resolves.
 		defer func() {
 			if rec := recover(); rec != nil {
-				err := fmt.Errorf("update restart panicked: %v", rec)
-				progress.fail(err)
-				if h.handoffFailed != nil {
-					h.handoffFailed(err)
-				}
+				h.failHandoff(fmt.Errorf("update restart panicked: %v", rec))
 			}
 		}()
 		time.Sleep(750 * time.Millisecond)
-		restart()
-		// restart exits the process when the new binary launched, so reaching
-		// this line means it did not.
-		if h.handoffFailed != nil {
-			h.handoffFailed(errors.New("the new version could not be started"))
-		}
+		restart(h.failHandoff)
 	})
 	return nil
+}
+
+// failHandoff settles a restart that did not happen. The hook reopens the work
+// gate, and progress.fail releases the update guard, in that order. Released
+// first, a second update could close the gate and this run's late reopen would
+// let work start during that install.
+func (h applyHooks) failHandoff(err error) {
+	defer progress.fail(err)
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("[update] the restart-failure hook panicked: %v", rec)
+		}
+	}()
+	if h.handoffFailed != nil {
+		h.handoffFailed(err)
+	}
 }
 
 // completeApply publishes the terminal phase once the binary has been swapped,
@@ -661,27 +668,27 @@ var shutdownServer func(context.Context) error
 // restart re-execs the (now updated) binary and exits the current process. A
 // spawn+exit (rather than syscall.Exec) keeps the code identical on Windows,
 // where exec-in-place is unavailable.
-func restart() {
+func restart(failed func(error)) {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = os.Args[0]
 	}
-	if handleRestart(exe) {
+	if handleRestart(exe, failed) {
 		os.Exit(0)
 	}
 }
 
 // handleRestart launches the successor and, ONLY on a successful launch, releases
 // the listen socket. It returns true when the caller should exit. If the child
-// fails to start it reports phase=error and returns false WITHOUT releasing the
-// socket, so the old binary keeps serving and the service stays up (fixes the
+// fails to start it calls failed, which reports phase=error, and returns false
+// WITHOUT releasing the socket, so the old binary keeps serving and the service stays up (fixes the
 // EADDRINUSE race where the parent exited before the child could bind).
-func handleRestart(exe string) bool {
+func handleRestart(exe string, failed func(error)) bool {
 	cmd := exec.Command(exe, os.Args[1:]...)
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
-		progress.fail(fmt.Errorf("restart: could not launch new binary, keeping the old one: %w", err))
+		failed(fmt.Errorf("restart: could not launch new binary, keeping the old one: %w", err))
 		return false
 	}
 	progress.set("done", 100)

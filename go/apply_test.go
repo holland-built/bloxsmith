@@ -26,7 +26,7 @@ func TestHandleRestartLaunchFailureKeepsServing(t *testing.T) {
 	progress = &updateProgress{Phase: "restarting", running: true}
 
 	badExe := filepath.Join(t.TempDir(), "does-not-exist-bloxsmith")
-	if exit := handleRestart(badExe); exit {
+	if exit := handleRestart(badExe, applyHooks{}.failHandoff); exit {
 		t.Fatal("handleRestart returned exit=true on a launch failure; the parent would have exited and taken the service down")
 	}
 	if shutdownCalled {
