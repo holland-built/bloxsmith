@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../../lib/api.js'
 import { sinceIso } from '../../lib/changes.js'
 import Tip from '../../components/Tip.jsx'
-import { canTellNew, changeSummary, dnsTrend, licenseSummary, pageVerdict, rankProblems } from './model.js'
+import { changeSummary, dnsTrend, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
 import './Briefing.css'
 
 // The top of Overview, picked by the owner on 2026-11-21: is the network OK,
@@ -50,10 +50,12 @@ function trendWords(t) {
 function changeWords(c) {
   if (c.state === 'loading') return 'Loading…'
   if (c.state === 'unavailable') return 'Change log unavailable'
+  if (c.state === 'undetermined') return 'Period covered could not be determined'
   if (c.state === 'empty') return 'No changes logged in 24 hours'
   const people = `${c.people.toLocaleString()} by users`
   const failed = c.failed ? `, ${c.failed.toLocaleString()} failed` : ''
-  return `${c.total.toLocaleString()} changes, ${people}${failed}`
+  const noResult = c.noResult ? `, ${c.noResult.toLocaleString()} with no result reported` : ''
+  return `${c.total.toLocaleString()} changes, ${people}${failed}${noResult}`
 }
 
 function licenseWords(l) {
@@ -72,14 +74,11 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
   const audit = useApi(`/api/csp-audit?since=${encodeURIComponent(since)}`, { poll: 60000 })
   const clock = useClock()
   const nowMs = Date.now()
-  const verdict = pageVerdict(services)
+  const verdict = pageVerdict(services, board.board.find((b) => b.name === 'Other')?.issues)
   const problems = rankProblems(board, nowMs / 1000)
   const trend = useMemo(() => dnsTrend(dns), [dns])
   const changes = changeSummary(audit, nowMs)
   const license = licenseSummary(licenses, nowMs)
-  const newOnes = problems.filter((r) => r.isNew)
-  const anyDated = problems.some((r) => typeof r.seen === 'number')
-  const provable = canTellNew(problems, nowMs / 1000)
   const checking = verdict.checking > 0
   const fine = services.filter((s) => s.v.sev === 'ok')
   const unchecked = services.filter((s) => s.v.sev === 'none' && s.v.word !== 'Checking')
@@ -103,9 +102,7 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
               <Fact label="DNS traffic">{trendWords(trend)}</Fact>
               <Fact label={changes.state === 'ok' ? `Changes (${changes.window.toLowerCase()})` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
               <Fact label="New issues" tip="Issues are dated from when this system first detected them, so 24 hours of history are required to identify new issues.">
-                {provable
-                  ? (newOnes.length ? `${newOnes.length} opened in the last 24 hours` : 'None in the last 24 hours')
-                  : checking ? 'Checking…' : anyDated ? 'Not yet available. Requires 24 hours of history.' : 'Not available. No dated issues on record.'}
+                {newIssuesWords({ problems, allRead: board.allRead, reading: board.reading, nowS: nowMs / 1000 })}
               </Fact>
             </ul>
           </section>

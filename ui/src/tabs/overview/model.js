@@ -38,19 +38,27 @@ export function upCount(meta) {
 
 /**
  * The page's one answer. A problem that is known is reported even while other
- * feeds are still loading. "All OK" needs every service to have been checked.
+ * feeds are still loading. "All services healthy" needs every service to have
+ * been checked and no open incident outside them (the board's Other row).
  */
-export function pageVerdict(services) {
+export function pageVerdict(services, otherIssues = []) {
   const count = (test) => services.filter(test).length
   const total = services.length
   const act = count((s) => s.v.sev === 'crit')
   const look = count((s) => s.v.sev === 'warn')
   const checking = count((s) => s.v.word === 'Checking')
   const unchecked = count((s) => s.v.sev === 'none' && s.v.word !== 'Checking')
+  const otherAct = otherIssues.filter((r) => r.sev === 'crit').length
+  const otherLook = otherIssues.filter((r) => r.sev === 'warn').length
   const base = { total, act, look, checking, unchecked }
   const plural = (n) => (n === 1 ? 'services requires' : 'services require')
-  if (act) return { ...base, tone: 'crit', word: 'Action required', line: `${act} of ${total} ${plural(act)} action` }
-  if (look) return { ...base, tone: 'warn', word: 'Review recommended', line: `${look} of ${total} ${plural(look)} review` }
+  const incidents = (n) => `${n} other ${n === 1 ? 'incident' : 'incidents'}`
+  const line = (svc, other, need) => {
+    if (!svc) return `${incidents(other)} ${other === 1 ? 'requires' : 'require'} ${need}`
+    return `${svc} of ${total} ${plural(svc)} ${need}${other ? `, plus ${incidents(other)}` : ''}`
+  }
+  if (act || otherAct) return { ...base, tone: 'crit', word: 'Action required', line: line(act, otherAct, 'action') }
+  if (look || otherLook) return { ...base, tone: 'warn', word: 'Review recommended', line: line(look, otherLook, 'review') }
   if (checking) return { ...base, tone: 'none', word: 'Checking', line: checking === total ? 'Checking services' : `${total - checking} of ${total} services checked` }
   if (unchecked) return { ...base, tone: 'none', word: 'Status unconfirmed', line: `${unchecked} of ${total} services could not be checked` }
   return { ...base, tone: 'ok', word: 'All services healthy', line: `All ${total} services checked` }
@@ -85,6 +93,25 @@ export function openProblems(b) {
   return health ? [health, ...b.issues] : b.issues
 }
 
+/**
+ * The "New issues" line. "None" is only said when every source was read and
+ * every open problem has a date, because an undated or unread problem could be
+ * new. Takes the ranked list from rankProblems.
+ */
+export function newIssuesWords({ problems, allRead, reading, nowS }) {
+  if (reading) return 'Checking…'
+  const undated = problems.filter((r) => typeof r.seen !== 'number').length
+  if (!canTellNew(problems, nowS)) {
+    return undated < problems.length ? 'Not yet available. Requires 24 hours of history.' : 'Not available. No dated issues on record.'
+  }
+  const complete = allRead && undated === 0
+  const fresh = problems.filter((r) => r.isNew).length
+  if (fresh) return `${fresh} opened in the last 24 hours${complete ? '' : ', counting dated issues only'}`
+  if (complete) return 'None in the last 24 hours'
+  if (!allRead) return 'Not yet available. Some sources could not be read.'
+  return `None among dated issues. ${undated} ${undated === 1 ? 'issue has' : 'issues have'} no date.`
+}
+
 /** Every open problem, worst first, each with the one action that fixes it. */
 export function rankProblems(board, nowS) {
   const all = board.board.flatMap((b) => openProblems(b).map((r) => ({ ...r, service: b.name })))
@@ -108,17 +135,25 @@ export function dnsTrend(dns) {
   return { state: 'ok', now, was, hours, pct }
 }
 
+const hasResult = (row) => String(row?.result ?? '').trim() !== ''
+
 /** The change log over the last day, saying how far back it really reaches. */
 export function changeSummary(audit, nowMs) {
   const rows = withinWindow(audit.data?.rows, nowMs)
   const state = feedState({ payload: audit.data, error: audit.error, loading: audit.loading, rowsInWindow: rows })
+  // Capped, yet no row has a usable date: the period covered is unknown, and
+  // "nothing changed" would be false.
+  if (state === 'empty' && audit.data?.truncated === true) return { state: 'undetermined' }
   if (state !== 'ok') return { state }
   const win = windowLabel({ truncated: audit.data?.truncated === true, rows, nowMs })
   return {
     state,
     total: rows.length,
     people: rows.filter((r) => r.who_kind === 'person').length,
-    failed: rows.filter(isFailure).length,
+    // isFailure also covers a blank result. Blank means nobody reported an
+    // outcome, so it is counted apart and never called failed.
+    failed: rows.filter((r) => isFailure(r) && hasResult(r)).length,
+    noResult: rows.filter((r) => !hasResult(r)).length,
     capped: win.capped,
     window: win.text,
     tip: win.tip,

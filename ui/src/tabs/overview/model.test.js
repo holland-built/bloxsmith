@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canTellNew, changeSummary, dnsTrend, licenseSummary, openProblems, pageVerdict, rankProblems, upCount } from './model.js'
+import { canTellNew, changeSummary, dnsTrend, licenseSummary, newIssuesWords, openProblems, pageVerdict, rankProblems, upCount } from './model.js'
 
 const svc = (word, sev) => ({ v: { word, sev } })
 const NOW = 1_800_000_000
@@ -15,6 +15,39 @@ test('a known problem outranks a feed that is still loading', () => {
   const v = pageVerdict([svc('Action required', 'crit'), svc('Checking', 'none'), svc('Review', 'warn')])
   assert.equal(v.word, 'Action required')
   assert.equal(v.line, '1 of 3 services requires action')
+})
+
+test('an incident outside the five services still sets the verdict', () => {
+  const ok = [svc('Healthy', 'ok'), svc('Healthy', 'ok')]
+  assert.equal(pageVerdict(ok, [{ sev: 'crit' }]).word, 'Action required')
+  assert.equal(pageVerdict(ok, [{ sev: 'crit' }]).line, '1 other incident requires action')
+  assert.equal(pageVerdict(ok, [{ sev: 'warn' }, { sev: 'warn' }]).line, '2 other incidents require review')
+  assert.equal(pageVerdict(ok, [{ sev: 'note' }]).word, 'All services healthy')
+  assert.equal(pageVerdict([svc('Act', 'crit'), svc('Healthy', 'ok')], [{ sev: 'crit' }]).line, '1 of 2 services requires action, plus 1 other incident')
+})
+
+test('"None" new is only said over complete, fully dated records', () => {
+  const old = { seen: NOW - 90000, isNew: false }
+  const words = (problems, allRead = true, reading = false) => newIssuesWords({ problems, allRead, reading, nowS: NOW })
+  assert.equal(words([old]), 'None in the last 24 hours')
+  assert.equal(words([old, { seen: null }]), 'None among dated issues. 1 issue has no date.')
+  assert.equal(words([old], false), 'Not yet available. Some sources could not be read.')
+  assert.equal(words([old, { seen: NOW - 60, isNew: true }]), '1 opened in the last 24 hours')
+  assert.equal(words([old, { seen: NOW - 60, isNew: true }, { seen: null }]), '1 opened in the last 24 hours, counting dated issues only')
+  assert.equal(words([old], true, true), 'Checking…')
+})
+
+test('a blank change result is unknown, never failed', () => {
+  const nowMs = NOW * 1000
+  const ts = new Date(nowMs - 60000).toISOString()
+  const rows = ['success', 'failure', 'error', '', '  ', undefined].map((result) => ({ ts, result }))
+  const s = changeSummary({ data: { status: 'ok', truncated: false, rows } }, nowMs)
+  assert.deepEqual([s.total, s.failed, s.noResult], [6, 2, 3])
+})
+
+test('a capped log with no usable dates has an undetermined period', () => {
+  const s = changeSummary({ data: { status: 'ok', truncated: true, rows: [{ ts: 'not a date', result: 'success' }] } }, NOW * 1000)
+  assert.equal(s.state, 'undetermined')
 })
 
 test('"new" is only claimed once the record is over a day old', () => {

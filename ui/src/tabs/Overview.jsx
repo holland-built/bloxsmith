@@ -203,7 +203,13 @@ function useBoard(dns) {
     Security: secOk && sec.data.truncated ? `none in the latest ${sec.data.returned} events` : null,
     Hosts: hostsPartial ? `none among the ${n0(hosts.length)} loaded` : null,
   }
-  return { board, coverage, issuesChecked, noneLabel, dnsOk, feedDown, fetchedAt }
+  // Whether the briefing may say no issue is new: every source answered, in
+  // full. A partial service list or a sampled feed could be hiding one.
+  const healthRead = !health.loading && !health.error && Array.isArray(health.data)
+  const reading = health.loading || Object.values(issuesChecked).includes('loading')
+  const allRead = healthRead && [...HAS_HEALTH].every((name) => svc[name]) && !svcRows.some((s) => s.availability === 'partial')
+    && Object.values(issuesChecked).every((c) => c === true) && !Object.values(noneLabel).some(Boolean) && !totals.degraded
+  return { board, coverage, issuesChecked, noneLabel, dnsOk, feedDown, fetchedAt, allRead, reading }
 }
 
 // ---------- the top of the page: tiles, the chosen tile's chart, the board ----------
