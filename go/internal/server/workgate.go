@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
+	"bloxsmith/internal/demo"
 	"bloxsmith/internal/runs"
 )
 
@@ -149,16 +151,35 @@ func (d *Deps) runRecordsBusy() string {
 	if strings.TrimSpace(d.StateDir) == "" {
 		return ""
 	}
-	live, err := d.demoStore().Live()
+	store := d.demoStore()
+	live, err := store.Live()
 	if err != nil {
 		return "a demo server record could not be read"
 	}
-	for _, r := range live {
-		if r.Status == "building" || r.Status == "removing" {
-			return "a demo server was still being built or removed"
-		}
+	if !demoRunActive(live) {
+		return ""
+	}
+	// A crash leaves its lock behind, so startup recovery can miss the run.
+	// Both callers have already seen no work running in this process, and
+	// Recover changes nothing while a lock under two hours old exists.
+	_ = store.Recover(time.Now)
+	live, err = store.Live()
+	if err != nil {
+		return "a demo server record could not be read"
+	}
+	if demoRunActive(live) {
+		return "a demo server was still being built or removed"
 	}
 	return ""
+}
+
+func demoRunActive(live []demo.Run) bool {
+	for _, r := range live {
+		if r.Status == "building" || r.Status == "removing" {
+			return true
+		}
+	}
+	return false
 }
 
 // countsAsWork reports whether this request must hold the gate open: a live

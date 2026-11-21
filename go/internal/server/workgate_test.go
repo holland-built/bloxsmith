@@ -171,9 +171,15 @@ func TestRunStoresMakeTheGateBusy(t *testing.T) {
 		if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status}); err != nil {
 			t.Fatal(err)
 		}
+		// A running build holds the lock; without it the record is a crash leftover.
+		release, err := d.demoStore().Lock(time.Now)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if why := d.CloseForUpdate(); why == "" {
 			t.Errorf("demo run %q did not make the gate busy", status)
 		}
+		release()
 	}
 }
 
@@ -262,5 +268,74 @@ func TestUnreadableDemoRunStaysBusyAfterRecovery(t *testing.T) {
 	_ = d.demoStore().Recover(time.Now)
 	if why := d.WorkRunning(); why == "" {
 		t.Fatal("an unreadable real run stopped counting as busy")
+	}
+}
+
+// crashedDemo leaves what a killed process leaves: a record and its lock.
+func crashedDemo(t *testing.T, d *Deps, status string) {
+	t.Helper()
+	if _, err := d.demoStore().Lock(time.Now); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func ageDemoLock(t *testing.T, d *Deps) {
+	t.Helper()
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(filepath.Join(d.StateDir, "demo", "build.lock"), old, old); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCrashThenRestartClearsOnceTheLockExpires(t *testing.T) {
+	for status, want := range map[string]string{"building": "failed", "removing": "remove-failed"} {
+		state := t.TempDir()
+		crashedDemo(t, &Deps{StateDir: state, Cfg: &config.Config{}}, status)
+
+		restarted := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := restarted.demoStore().Recover(time.Now); err == nil {
+			t.Fatalf("%s: startup recovery ignored a lock under two hours old", status)
+		}
+		if why := restarted.WorkRunning(); why == "" {
+			t.Fatalf("%s: not busy while the lock is under two hours old", status)
+		}
+		if r, _ := restarted.demoStore().Load("c-20260101-000000"); r == nil || r.Status != status {
+			t.Fatalf("%s: record changed under a live lock: %+v", status, r)
+		}
+
+		ageDemoLock(t, restarted)
+		if why := restarted.WorkRunning(); why != "" {
+			t.Fatalf("%s: still busy after the lock expired: %s", status, why)
+		}
+		r, err := restarted.demoStore().Load("c-20260101-000000")
+		if err != nil || r.Status != want || r.VMID != 9001 {
+			t.Fatalf("%s: recovered record %+v, %v", status, r, err)
+		}
+		if why := restarted.CloseForUpdate(); why != "" {
+			t.Fatalf("%s: CloseForUpdate still busy: %s", status, why)
+		}
+	}
+}
+
+func TestRetryLeavesAloneABuildThisProcessIsRunning(t *testing.T) {
+	d := gateDeps(t)
+	crashedDemo(t, d, "building")
+	ageDemoLock(t, d)
+	release, ok := d.workGate().Enter()
+	if !ok {
+		t.Fatal("open gate refused work")
+	}
+	defer release()
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("not busy during counted work")
+	}
+	if why := d.CloseForUpdate(); why == "" {
+		t.Fatal("gate closed during counted work")
+	}
+	if r, _ := d.demoStore().Load("c-20260101-000000"); r == nil || r.Status != "building" {
+		t.Fatalf("a running build was marked stopped: %+v", r)
 	}
 }
