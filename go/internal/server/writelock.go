@@ -113,6 +113,7 @@ var tenantWritePrefixes = []string{
 //	                     opt-in itself (locking that would make the permission
 //	                     ungrantable — the lock would lock its own key away)
 //	/api/update/apply    replaces THIS binary; touches no tenant
+//	/api/update/auto     overnight update settings, a file on this machine
 //	/api/cache-bust      drops this process's cache
 //	/api/switch-account  changes which tenant is active locally. Deliberately NOT
 //	                     gated: switching is how you get TO a writable tenant, and
@@ -142,6 +143,7 @@ var nonTenantWritePaths = map[string]bool{
 	"/api/alerts/snooze":      true,
 	"/api/brand":              true,
 	"/api/update/apply":       true,
+	"/api/update/auto":        true,
 	"/api/cache-bust":         true,
 	"/api/switch-account":     true,
 	"/api/templates/validate": true,

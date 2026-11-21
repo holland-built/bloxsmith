@@ -533,10 +533,15 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	if passWarn != "" {
 		log.Printf("[vault] %s", passWarn)
 	}
+	// Whether this start opened the vault with no person present, which is what
+	// the next restart after an overnight update will depend on.
+	autoUnlocked := false
 	if pass != "" {
 		log.Printf("[vault] auto-unlock passphrase source: %s", passSrc)
 		if _, err := v.AutoUnlock(pass); err != nil {
 			log.Printf("vault auto-unlock: %v", err)
+		} else {
+			autoUnlocked = true
 		}
 	}
 
@@ -730,7 +735,33 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		log.Printf("[auth] %s", note)
 	}
 
-	handler := server.New(&server.Deps{
+	overnight := &autoUpdater{
+		path:    filepath.Join(stateDir, autoSettingsFile),
+		version: version,
+		now:     time.Now,
+		started: startTime,
+		apply:   applyLatestWith,
+		audit: func(event, actor string, detail map[string]any) {
+			if _, err := auditLog.Append(event, actor, detail); err != nil {
+				log.Printf("[audit] failed to record %q: %v", event, err)
+			}
+		},
+		unavailable: func() string {
+			return autoUnavailable(server.InContainer(), cfg.UpdateCheckDisabled)
+		},
+		needsPassphrase: func() bool { return v.Exists() && !autoUnlocked },
+		vaultLocked:     func() bool { return v.Exists() && !v.IsUnlocked() },
+		begin:           progress.begin,
+		finish: func(err error) {
+			if err != nil {
+				progress.fail(err)
+				return
+			}
+			progress.release()
+		},
+	}
+
+	deps := &server.Deps{
 		Cfg:       cfg,
 		Vault:     v,
 		Rest:      restClient,
@@ -757,6 +788,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		UpdateCheck:    updateCheckHandler(cfg),
 		UpdateApply:    applyUpdateHandler,
 		UpdateProgress: updateProgressHandler,
+		UpdateAuto:     overnight.handler,
 		UpdateStatus: func() any {
 			// Lightweight, non-blocking update object embedded in /api/vault/status
 			// (Python embeds update_status(); the network refresh happens on the
@@ -770,7 +802,9 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 				"selfUpdate":    true,
 			}
 		},
-	})
+	}
+	overnight.closeGate, overnight.reopenGate = deps.CloseForUpdate, deps.ReopenAfterUpdate
+	handler := server.New(deps)
 
 	// A graceful *http.Server (not http.ListenAndServe) so the self-updater can
 	// Shutdown() the listener and hand the port to its successor cleanly.
@@ -787,6 +821,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	overnight.start()
 	return srv, ln, cfg, nil
 }
 

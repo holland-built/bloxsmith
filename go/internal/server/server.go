@@ -72,6 +72,11 @@ type Deps struct {
 	UpdateStatus   func() any       // lightweight update obj embedded in vault status
 	UpdateApply    http.HandlerFunc // POST /api/update/apply download+verify+swap (Phase 3)
 	UpdateProgress http.HandlerFunc // GET /api/update/status pollable {phase,pct} (Phase 3)
+	UpdateAuto     http.HandlerFunc // GET+POST /api/update/auto, overnight updates; admin only
+	// Work counts running changes so an overnight update never swaps the binary
+	// under one (workgate.go). New supplies one when nil.
+	Work     *WorkGate
+	workOnce sync.Once
 }
 
 // New builds the routed handler: OPTIONS preflight + write-guard wrap the mux,
@@ -103,7 +108,7 @@ func New(d *Deps) http.Handler {
 	//
 	// Inside the pin, outside everything else: it must decide before any handler
 	// gets the chance to make an outbound call, and it must not run for OPTIONS.
-	locked := d.withWriteLock(gated)
+	locked := d.withWorkGate(d.withWriteLock(gated))
 
 	// Resolve the outbound tenant credential ONCE per request, before routing,
 	// so every outbound call a request makes goes to the same tenant even if an
@@ -153,6 +158,10 @@ func (d *Deps) registerAll(mux router) {
 	if d.UpdateApply != nil {
 		mux.HandleFunc("POST /api/update/apply", d.updateApply)
 		mux.HandleFunc("GET /api/update/status", d.UpdateProgress)
+	}
+	if d.UpdateAuto != nil {
+		mux.HandleFunc("GET /api/update/auto", d.updateAuto)
+		mux.HandleFunc("POST /api/update/auto", d.updateAuto)
 	}
 	d.registerVaultRoutes(mux)
 	d.registerWriteLockRoutes(mux)
@@ -256,6 +265,14 @@ func inContainer(markers ...string) bool {
 	return false
 }
 
+// InContainer reports whether this process runs in a container: the image's
+// own flag, a Kubernetes pod, or a Docker or Podman marker file.
+func InContainer() bool {
+	return os.Getenv("BLOXSMITH_IN_CONTAINER") != "" ||
+		os.Getenv("KUBERNETES_SERVICE_HOST") != "" ||
+		inContainer("/.dockerenv", "/run/.containerenv")
+}
+
 // --- GET /healthz ------------------------------------------------------------
 
 // healthz answers "is this process still able to do its job", for a supervisor
@@ -334,6 +351,16 @@ func (d *Deps) updateApply(w http.ResponseWriter, r *http.Request) {
 	}
 	d.auditAppend("update-apply", httpx.Actor(r), map[string]any{"from": d.Version})
 	d.UpdateApply(w, r)
+}
+
+// updateAuto admin-gates both verbs of the overnight update settings. Reading
+// them is admin-only too: they say when the app will next restart.
+func (d *Deps) updateAuto(w http.ResponseWriter, r *http.Request) {
+	if !d.roleGate(r, "admin") {
+		d.json(w, r, http.StatusForbidden, map[string]any{"ok": false, "error": "admin required"})
+		return
+	}
+	d.UpdateAuto(w, r)
 }
 
 // --- the 14 /api/vault/* POST routes -----------------------------------------

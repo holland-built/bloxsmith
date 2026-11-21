@@ -467,7 +467,7 @@ func (d *Deps) startKitServer(r *http.Request, l *runs.Ledger, runID string) {
 	}
 	ctx := context.WithoutCancel(r.Context())
 	actor := httpx.Actor(r)
-	go func() {
+	counted := d.goCounted(func() {
 		defer func() {
 			if v := recover(); v != nil && !started.Load() {
 				note(runs.Built, fmt.Sprintf("the build stopped: %v", v))
@@ -494,7 +494,10 @@ func (d *Deps) startKitServer(r *http.Request, l *runs.Ledger, runID string) {
 			return
 		}
 		d.auditAppend("demo-build", actor, detail)
-	}()
+	})
+	if !counted {
+		note(runs.Built, "Bloxsmith is installing an update. Try again in a moment.")
+	}
 }
 
 // demoServerPlan is a demo server's line in a Remove preview.
