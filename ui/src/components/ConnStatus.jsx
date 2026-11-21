@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { noteTenant, refreshFeeds, useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { REFRESH_CHOICES, setRefresh, useRefreshChoice } from '../lib/refresh.js'
@@ -54,16 +54,28 @@ function useWriteTarget() {
 const REFRESH_PAUSE_MS = 5000
 const REFRESH_OFF = 'Automatic refresh is off'
 
+// One pause for the whole app: the page bar and the menu each draw this control,
+// and a pause kept per button would let the second one empty the cache again.
+let refreshPaused = false
+const pauseListeners = new Set()
+const setRefreshPaused = (value) => {
+  refreshPaused = value
+  pauseListeners.forEach((listen) => listen())
+}
+const onPauseChange = (listen) => {
+  pauseListeners.add(listen)
+  return () => pauseListeners.delete(listen)
+}
+
 /** How often the screen reloads by itself, and a button to reload it now. */
 export function RefreshControl() {
   const choice = useRefreshChoice()
-  const [paused, setPaused] = useState(false)
-  const pauseRef = useRef(null)
-  useEffect(() => () => clearTimeout(pauseRef.current), [])
+  const paused = useSyncExternalStore(onPauseChange, () => refreshPaused)
   const refreshNow = () => {
-    setPaused(true)
+    if (refreshPaused) return
+    setRefreshPaused(true)
     refreshFeeds()
-    pauseRef.current = setTimeout(() => setPaused(false), REFRESH_PAUSE_MS)
+    setTimeout(() => setRefreshPaused(false), REFRESH_PAUSE_MS)
   }
   return (
     <span className="frame-refresh" data-off={choice === 'off' ? '' : undefined}>
