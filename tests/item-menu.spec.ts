@@ -12,7 +12,7 @@ import type { Page, Locator } from '@playwright/test';
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 // Requests that would mean a job ran rather than just opened.
-const WRITES = /\/api\/(desk\/run$|selfservice\/|edit\/(?!find)|provision|teardown|retag)/;
+const WRITES = /\/api\/(desk\/run$|selfservice\/|edit\/(?![^/]+\/find$)|provision|teardown|retag)/;
 
 let writes: string[] = [];
 
