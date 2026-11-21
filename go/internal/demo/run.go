@@ -135,10 +135,7 @@ const (
 	// olderLockLife is how long a timestamp lock from an older server is
 	// honored. Those servers hold no OS lock, so only its age says anything.
 	olderLockLife = 2 * time.Hour
-	// olderWriteWait covers an older server that has created the file and not
-	// yet written its timestamp.
-	olderWriteWait = 50 * time.Millisecond
-	lockTries      = 5
+	lockTries     = 5
 )
 
 // Lock takes the demo lock shared by every app process using this state
@@ -151,7 +148,7 @@ func (s Store) Lock(now func() time.Time) (func(), error) {
 	}
 	p := filepath.Join(s.Dir, "build.lock")
 	for i := 0; i < lockTries; i++ {
-		f, created, err := openLockFile(p)
+		f, err := openLockFile(p)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
@@ -167,7 +164,7 @@ func (s Store) Lock(now func() time.Time) (func(), error) {
 			_ = f.Close()
 			continue
 		}
-		if err := claimLockFile(f, created, now); err != nil {
+		if err := claimLockFile(f, now); err != nil {
 			_ = f.Close()
 			return nil, err
 		}
@@ -182,17 +179,47 @@ func (s Store) Lock(now func() time.Time) (func(), error) {
 	return nil, ErrBusy
 }
 
-// openLockFile opens build.lock and reports whether this call created it.
-func openLockFile(p string) (*os.File, bool, error) {
-	f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
-	if err == nil {
-		return f, true, nil
+// openLockFile opens build.lock, creating it first if it is missing.
+func openLockFile(p string) (*os.File, error) {
+	f, err := os.OpenFile(p, os.O_RDWR, 0o600)
+	if !errors.Is(err, os.ErrNotExist) {
+		return f, err
 	}
-	if !errors.Is(err, os.ErrExist) {
-		return nil, false, err
+	if err := createLockFile(p); err != nil && !errors.Is(err, os.ErrExist) {
+		return nil, err
 	}
-	f, err = os.OpenFile(p, os.O_RDWR, 0o600)
-	return f, false, err
+	return os.OpenFile(p, os.O_RDWR, 0o600)
+}
+
+// createLockFile puts the file in place with the marker already inside, by
+// hard link, because an empty build.lock means an older server is starting.
+func createLockFile(p string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(p), "build.lock.new-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, err = tmp.WriteString(lockMarker)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	err = os.Link(tmp.Name(), p)
+	if err == nil || errors.Is(err, os.ErrExist) {
+		return err
+	}
+	// This disk has no hard links, so write straight after creating.
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(lockMarker)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 func sameLockFile(f *os.File, p string) bool {
@@ -205,20 +232,16 @@ func sameLockFile(f *os.File, p string) bool {
 }
 
 // claimLockFile runs with the OS lock held. It refuses a recent timestamp from
-// an older server, which may be building, and otherwise writes this version's
-// marker. The file must stay in place so older servers keep out.
-func claimLockFile(f *os.File, created bool, now func() time.Time) error {
+// an older server, which may be building, and a recent empty file, which may be
+// an older server that has not written its timestamp yet. Otherwise it writes
+// this version's marker. The file must stay in place so older servers keep out.
+func claimLockFile(f *os.File, now func() time.Time) error {
 	held, err := readLockFile(f)
 	if err != nil {
 		return err
 	}
-	if held == "" && !created {
-		time.Sleep(olderWriteWait)
-		if held, err = readLockFile(f); err != nil {
-			return err
-		}
-	}
-	if _, err := time.Parse(time.RFC3339, held); err == nil {
+	_, perr := time.Parse(time.RFC3339, held)
+	if perr == nil || held == "" {
 		st, err := f.Stat()
 		if err != nil {
 			return err

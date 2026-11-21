@@ -527,20 +527,44 @@ func TestOlderServersTimestampLockIsHonoredForTwoHours(t *testing.T) {
 	release()
 }
 
-func TestAnEmptyLockFileIsFree(t *testing.T) {
+func TestAnEmptyLockFileIsBusyForTwoHours(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
-	if err := os.WriteFile(filepath.Join(s.Dir, "build.lock"), nil, 0o600); err != nil {
+	p := filepath.Join(s.Dir, "build.lock")
+	if err := os.WriteFile(p, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if release, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		if err == nil {
+			release()
+		}
+		t.Fatalf("a recent empty lock file was taken: %v", err)
+	}
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(p, old, old); err != nil {
 		t.Fatal(err)
 	}
 	release, err := s.Lock(time.Now)
 	if err != nil {
-		t.Fatalf("an empty lock file was not free: %v", err)
+		t.Fatalf("a three-hour-old empty lock file was not taken: %v", err)
 	}
 	release()
 }
 
-// Guard: an older server creates the file, then writes its timestamp.
-func TestLockWaitsForAnOlderServerToWriteItsTimestamp(t *testing.T) {
+// Guard: the marker Windows leaves on release counts as free on every system.
+func TestAFreeMarkerIsFree(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	if err := os.WriteFile(filepath.Join(s.Dir, "build.lock"), []byte("free"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatalf("a free marker was not free: %v", err)
+	}
+	release()
+}
+
+// An older server creates the file, then writes its timestamp.
+func TestLockRefusesAnOlderServerStillWritingItsTimestamp(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	p := filepath.Join(s.Dir, "build.lock")
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
@@ -548,7 +572,9 @@ func TestLockWaitsForAnOlderServerToWriteItsTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
+	wrote := make(chan struct{})
 	go func() {
+		defer close(wrote)
 		time.Sleep(time.Millisecond)
 		_, _ = f.WriteString(time.Now().UTC().Format(time.RFC3339))
 	}()
@@ -557,6 +583,35 @@ func TestLockWaitsForAnOlderServerToWriteItsTimestamp(t *testing.T) {
 			release()
 		}
 		t.Fatalf("took the lock while an older server was writing it: %v", err)
+	}
+	<-wrote
+}
+
+func TestOlderServerPausedBeforeWritingKeepsItsLock(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	p := filepath.Join(s.Dir, "build.lock")
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	wrote := make(chan struct{})
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	go func() {
+		defer close(wrote)
+		time.Sleep(150 * time.Millisecond) // longer than the old 50 ms wait
+		_, _ = f.WriteAt([]byte(stamp), 0)
+	}()
+	release, err := s.Lock(time.Now)
+	if err == nil {
+		defer release()
+	}
+	<-wrote
+	if !errors.Is(err, ErrBusy) {
+		t.Fatalf("took the lock from a paused older server: %v", err)
+	}
+	if b, err := os.ReadFile(p); err != nil || string(b) != stamp {
+		t.Fatalf("the older server's lock changed: %q %v", b, err)
 	}
 }
 
@@ -573,7 +628,11 @@ func TestOlderServerIsKeptOutUntilRelease(t *testing.T) {
 	}
 	release()
 	if runtime.GOOS == "windows" {
-		return // Windows empties the file instead of removing it.
+		// Windows cannot remove an open file, so it leaves the free marker.
+		if b, err := os.ReadFile(p); err != nil || string(b) != "free" {
+			t.Fatalf("release did not leave the free marker: %q %v", b, err)
+		}
+		return
 	}
 	if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("release left the file, which keeps an older server out: %v", err)

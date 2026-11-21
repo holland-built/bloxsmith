@@ -21,10 +21,16 @@ func tryLockFile(f *os.File) error {
 	return err
 }
 
-// releaseLockFile empties the file, because Windows cannot remove a file that
-// is open. An empty file with a free lock counts as free.
+// lockFreeMarker is what release leaves, because Windows cannot remove a file
+// that is open and an empty file counts as busy. With a free OS lock it is free.
+const lockFreeMarker = "free"
+
+// releaseLockFile writes before it shortens, so a crash never leaves it empty.
 func releaseLockFile(f *os.File, p string) {
-	if sameLockFile(f, p) {
-		_ = f.Truncate(0)
+	if !sameLockFile(f, p) {
+		return
+	}
+	if _, err := f.WriteAt([]byte(lockFreeMarker), 0); err == nil {
+		_ = f.Truncate(int64(len(lockFreeMarker)))
 	}
 }
