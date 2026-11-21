@@ -250,11 +250,11 @@ func claimLockFile(f *os.File, now func() time.Time) error {
 			return ErrBusy
 		}
 	}
-	if err := f.Truncate(0); err != nil {
+	// Write before shortening, so a crash here never leaves an empty file.
+	if _, err := f.WriteAt([]byte(lockMarker), 0); err != nil {
 		return err
 	}
-	_, err = f.WriteAt([]byte(lockMarker), 0)
-	return err
+	return f.Truncate(int64(len(lockMarker)))
 }
 
 func readLockFile(f *os.File) (string, error) {
