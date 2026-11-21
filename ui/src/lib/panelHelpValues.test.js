@@ -1135,10 +1135,10 @@ const CLAIMS = [
     file: PROVISION,
     proofs: [LOG_ERROR_RED_PROOF],
   },
-  // ---- Value: Work done in Bloxsmith ----
+  // ---- Value: Bloxsmith activity ----
   {
     panel: 'value-work',
-    says: /Jobs Bloxsmith finished on this tenant in the last 30 days/,
+    says: /Jobs Bloxsmith completed on this account in the last 30 days/,
     file: 'ui/src/lib/valueWork.js',
     proofs: [
       { re: /export const WINDOW_DAYS = 30\b/, expect: 'WINDOW_DAYS = 30' },

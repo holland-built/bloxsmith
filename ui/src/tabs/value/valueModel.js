@@ -1,32 +1,34 @@
-// The numbers behind the three preview looks of the Value page. Every look
-// reads this one model, so a number can't differ between them. It only reshapes
-// what the APIs said: a number that could not be read stays a word, never a 0.
+// The numbers behind the Value page. The panels and the printed report read
+// this one model, so a number can't differ between them. It only reshapes what
+// the APIs said: a number that could not be read stays a word, never a 0.
 import { valueSecurity } from '../../lib/valueSecurity.js'
 import { platformRows } from '../../lib/valuePlatform.js'
 import { countWork, MINUTES_PER_JOB } from '../../lib/valueWork.js'
 
-export const NO_EARLIER = 'No earlier month to compare'
+export const NO_EARLIER = 'No prior 30-day period available for comparison'
+// PortunusAggThreat_ch action Block: threat feeds and policy or content rules together.
+export const BLOCKED_COUNTS = 'Includes known threats and lookups blocked by your policy and content rules.'
 
 const LABELS = {
-  blocked: 'Lookups blocked by your security rules',
-  zero_day: 'Brand-new dangerous domains caught',
-  sus_to_mal: 'Suspicious sites later confirmed dangerous',
+  blocked: 'DNS lookups blocked',
+  zero_day: 'Brand-new malicious domains detected',
+  sus_to_mal: 'Suspicious sites later confirmed malicious',
   queries: 'DNS queries answered',
   cache_hit: 'Answered from cache',
-  roaming: 'Laptops protected off the office network',
+  roaming: 'Roaming devices protected',
   uptime: 'DNS server uptime',
-  dhcp_assigned: 'DHCP addresses handed out',
+  dhcp_assigned: 'DHCP addresses assigned',
 }
 
 const MISSING = {
   loading: ['Loading…', null],
-  error: ['Not checked', "Infoblox didn't answer. This page tries again every 5 minutes."],
-  empty: ['No readings', 'Infoblox has no reading for these 30 days.'],
-  unavailable: ['Not available', 'This tenant does not have this data.'],
+  error: ['Not checked', 'Infoblox did not respond. This page retries every 5 minutes.'],
+  empty: ['No readings', 'Infoblox has no data for this period.'],
+  unavailable: ['Not available', 'This data is not available for this account.'],
 }
 
 function stat(key, x) {
-  const base = { key, label: LABELS[key], state: x.state }
+  const base = { key, label: LABELS[key], state: x.state, line: x.line ?? null, hosts: x.hosts ?? [] }
   if (x.state === 'ok') return { ...base, text: x.text, note: x.note ?? null }
   const [text, why] = MISSING[x.state] ?? MISSING.error
   // The platform API sends its own reason for an unavailable number.
@@ -39,13 +41,13 @@ function stat(key, x) {
 const PLATFORM_KEYS = { queries: 1, cache_hit: 1, roaming: 1, uptime: 1, dhcp_assigned: 1 }
 
 function workStat(runs) {
-  const base = { key: 'work', label: 'Jobs done in Bloxsmith' }
+  const base = { key: 'work', label: 'Bloxsmith jobs completed' }
   if (runs?.loading && !runs?.data) return { ...base, state: 'loading', text: 'Loading…', note: null }
   const w = runs?.error ? null : countWork(runs?.data)
-  if (!w) return { ...base, state: 'error', text: 'Not checked', note: "The list of Bloxsmith's changes could not be read." }
-  if (w.jobs === 0) return { ...base, state: 'none', text: 'No jobs yet', note: 'Nothing was built in Bloxsmith on this tenant in these 30 days.' }
-  const items = `${w.objects.toLocaleString('en-US')} ${w.objects === 1 ? 'item' : 'items'} made`
-  const hours = `about ${w.hours.toLocaleString('en-US')} ${w.hours === 1 ? 'hour' : 'hours'} saved at ${MINUTES_PER_JOB} minutes a job`
+  if (!w) return { ...base, state: 'error', text: 'Not checked', note: "Bloxsmith's job history could not be read." }
+  if (w.jobs === 0) return { ...base, state: 'none', text: 'No jobs recorded', note: 'No Bloxsmith jobs were completed on this account in this period.' }
+  const items = `${w.objects.toLocaleString('en-US')} ${w.objects === 1 ? 'object' : 'objects'} created`
+  const hours = `an estimated ${w.hours.toLocaleString('en-US')} ${w.hours === 1 ? 'hour' : 'hours'} saved at ${MINUTES_PER_JOB} minutes per job`
   return { ...base, state: 'ok', text: w.jobs.toLocaleString('en-US'), note: `${items}, ${hours}` }
 }
 
@@ -57,7 +59,7 @@ export function rangeLabel(range) {
   return `${fmtDay(range[0])} to ${fmtDay(range[1], { year: 'numeric' })}`
 }
 
-/** The day-by-day series with its busiest day, quietest day and average. */
+/** The day-by-day series with its busiest day. */
 export function dailyModel(feed) {
   if (feed?.loading && !feed?.data) return { state: 'loading' }
   if (feed?.error || !feed?.data || feed.data.status === 'error') return { state: 'error' }
@@ -65,25 +67,17 @@ export function dailyModel(feed) {
   const days = feed.data.days.map((d) => ({ day: d.day, value: d.value, label: fmtDay(d.day) }))
   const held = days.filter((d) => d.value != null)
   if (!held.length) return { state: 'empty' }
-  const total = held.reduce((n, d) => n + d.value, 0)
   const peak = held.reduce((a, d) => (d.value > a.value ? d : a))
-  const low = held.reduce((a, d) => (d.value < a.value ? d : a))
-  const average = total / held.length
-  return {
-    state: 'ok', days, total, peak, low, average,
-    peakIndex: days.indexOf(peak),
-    missing: days.length - held.length,
-    timesAverage: average > 0 ? peak.value / average : null,
-  }
+  return { state: 'ok', days, peak, peakIndex: days.indexOf(peak), missing: days.length - held.length }
 }
 
 /** One plain sentence built only from numbers that were read. */
 export function answerSentence(m) {
   const parts = []
-  if (m.blocked.state === 'ok') parts.push(`blocked ${m.blocked.text} lookups`)
-  if (m.zero_day.state === 'ok') parts.push(`caught ${m.zero_day.text} brand-new dangerous ${m.zero_day.text === '1' ? 'domain' : 'domains'}`)
+  if (m.blocked.state === 'ok') parts.push(`blocked ${m.blocked.text} DNS lookups`)
+  if (m.zero_day.state === 'ok') parts.push(`detected ${m.zero_day.text} brand-new malicious ${m.zero_day.text === '1' ? 'domain' : 'domains'}`)
   if (m.queries.state === 'ok') parts.push(`answered ${m.queries.text} DNS queries`)
-  if (!parts.length) return 'Infoblox numbers could not be read for this period.'
+  if (!parts.length) return 'Infoblox data could not be read for this period.'
   const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
   return `Infoblox ${list}.`
 }
@@ -106,6 +100,5 @@ export function buildModel({ security, platform, runs, daily }) {
   }
   // The blocked note already holds its trend or coverage; with neither, say so.
   if (m.blocked.state === 'ok' && !m.blocked.note) m.blocked.note = NO_EARLIER
-  m.supporting = [m.zero_day, m.sus_to_mal, m.queries, m.cache_hit, m.roaming, m.uptime, m.dhcp_assigned, m.work]
   return m
 }

@@ -400,16 +400,16 @@ export const PANEL_HELP = {
 
   // ---- Value ----
   'value-security': {
-    what: 'Lookups Infoblox blocked under your security rules, and domains it caught as zero-day threats before other feeds listed them.',
-    look: 'Also domains it rated suspicious that were later confirmed malicious. Last 30 days.',
+    what: 'DNS lookups blocked, including known threats and your policy and content rules, and brand-new malicious domains detected by Zero Day DNS.',
+    look: 'Also sites rated suspicious that were later confirmed malicious. Last 30 days.',
   },
   'value-platform': {
-    what: 'How much DNS work your servers did and how well: queries answered, and answers from cache.',
-    look: 'Also laptops protected off the office network. Last 30 days. DNS server uptime and DHCP addresses say not available until Infoblox says what those numbers measure.',
+    what: 'DNS volume and efficiency for your servers: queries answered and the share answered from cache.',
+    look: 'Also roaming devices protected. Last 30 days. DNS server uptime and DHCP addresses show Not available until Infoblox states what those metrics measure.',
   },
   'value-work': {
-    what: 'Jobs Bloxsmith finished on this tenant in the last 30 days, by page, and the items they made in Infoblox. Deletes and undone jobs are not counted.',
-    look: 'Time saved is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. "Not checked" means the list of changes could not be read.',
+    what: 'Jobs Bloxsmith completed on this account in the last 30 days, by page, and the objects they created in Infoblox. Deletes and undone jobs are excluded.',
+    look: 'Time saved is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. "Not checked" means the job history could not be read.',
   },
 
   // ---- Demo server ----

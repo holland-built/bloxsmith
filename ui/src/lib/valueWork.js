@@ -1,4 +1,4 @@
-// "Work done in Bloxsmith — 30 days" on the Value page: the jobs Bloxsmith did
+// "Bloxsmith activity — 30 days" on the Value page: the jobs Bloxsmith did
 // and the objects they made, counted from the runs record (/api/desk/runs,
 // go/internal/runs). Pure, so the counting is tested without a browser.
 

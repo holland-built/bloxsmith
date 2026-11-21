@@ -1,50 +1,19 @@
-import { useApi } from '../../lib/api.js'
-import { Card, FeedUnavailable, Skeleton } from '../../components/ui.jsx'
-import { platformRows } from '../../lib/valuePlatform.js'
-import '../Overview.css'
-import '../Dns.css'
+import { Card, Skeleton } from '../../components/ui.jsx'
+import ValueStat from './ValueStat.jsx'
 
 // How much work the DNS and DHCP platform did, and how well, over the last 30
-// days. Each number stands on its own: one whose read failed says "not
-// checked" and the rest are still shown (lib/valuePlatform.js). Uptime keeps
-// its per-host list folded away under the number.
-export default function ValuePlatform({ panelId }) {
-  const feed = useApi('/api/csp/value-platform', { poll: 300000 })
-  const dead = !feed.loading && (!!feed.error || feed.data?.status === 'error')
+// days. A number whose read failed says so in words and the rest still show.
+export default function ValuePlatform({ panelId, m, loading }) {
   return (
-    <Card panelId={panelId} span={3} title="How the platform ran — 30 days">
-      {feed.loading && !feed.data ? (
-        <Skeleton h={220} />
-      ) : dead ? (
-        <FeedUnavailable label="Platform numbers unavailable" />
-      ) : (
-        <dl className="dns-stats" style={{ flexDirection: 'column', gap: 14 }}>
-          {platformRows(feed).map((r) => (
-            <div key={r.key} data-value-platform-metric={r.key} data-state={r.state}>
-              <dt style={{ color: 'var(--ov-ink)', fontSize: 14 }}>{r.label}</dt>
-              <dd
-                className={r.state === 'ok' ? undefined : 'text-muted'}
-                style={r.state === 'ok' ? undefined : { fontSize: 15, fontWeight: 400 }}
-              >
-                {r.text}
-              </dd>
-              <div className="text-note text-muted">{r.line}</div>
-              {r.note && r.state === 'ok' && <div className="text-note text-muted">{r.note}</div>}
-              {r.hosts.length > 0 && (
-                <details className="text-note">
-                  <summary>Each server ({r.hosts.length})</summary>
-                  <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-                    {r.hosts.map((h) => (
-                      <li key={h.name}>
-                        {h.name}: {h.text}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ))}
-        </dl>
+    <Card panelId={panelId} span={6} title="Platform performance — 30 days">
+      {loading ? <Skeleton h={140} /> : (
+        <div className="vl-panel">
+          <dl className="vl-strip">
+            {[m.queries, m.cache_hit, m.uptime, m.dhcp_assigned, m.roaming].map((s) => (
+              <div key={s.key} data-value-platform-metric={s.key} style={{ display: 'contents' }}><ValueStat s={s} /></div>
+            ))}
+          </dl>
+        </div>
       )}
     </Card>
   )

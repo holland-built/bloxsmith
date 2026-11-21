@@ -1,31 +1,39 @@
-import { useApi } from '../../lib/api.js'
-import { valueSecurity } from '../../lib/valueSecurity.js'
-import { Card, FeedUnavailable, Skeleton } from '../../components/ui.jsx'
-import './ValueSecurity.css'
+import { Card, Skeleton } from '../../components/ui.jsx'
+import DayChart from './DayChart.jsx'
+import ValueStat from './ValueStat.jsx'
+import { BLOCKED_COUNTS } from './valueModel.js'
 
-// What Infoblox stopped in the last 30 days, as three big numbers a manager
-// can repeat. Each number stands on its own: one that could not be read says
-// so in words and the others still show (lib/valueSecurity.js).
-export default function ValueSecurity({ panelId }) {
-  // Thirty-day totals move slowly; once every five minutes is plenty.
-  const feed = useApi('/api/csp/value-security', { poll: 300000 })
-  const dead = !feed.loading && (!!feed.error || feed.data?.status === 'error')
+const CHART_MISSING = {
+  loading: 'Loading daily data…',
+  error: 'Daily figures could not be read. This page retries every 5 minutes.',
+  empty: 'Infoblox has no daily figures for this period.',
+}
+
+// The page's headline: lookups blocked, the 30 days behind it, and the two
+// security numbers that go with it. Each stands on its own if another fails.
+export default function ValueSecurity({ panelId, m, loading }) {
   return (
-    <Card panelId={panelId} span={2} title="What Infoblox stopped — 30 days">
-      {feed.loading && !feed.data ? (
-        <Skeleton h={120} />
-      ) : dead ? (
-        <FeedUnavailable label="Security numbers not checked" />
-      ) : (
-        <dl className="value-sec">
-          {valueSecurity(feed).map((x) => (
-            <div key={x.key} data-value-security={x.key} data-state={x.state}>
-              <dt>{x.label}</dt>
-              <dd className={x.state === 'ok' ? 'value-sec-num' : 'value-sec-num value-sec-none text-muted'}>{x.text}</dd>
-              {x.note && <dd className="value-sec-note text-muted">{x.note}</dd>}
+    <Card panelId={panelId} span={6} title="Security results — 30 days">
+      {loading ? <Skeleton h={220} /> : (
+        <div className="vl-panel">
+          <section className="vl-hero">
+            <div data-stat="blocked" data-state={m.blocked.state}>
+              <p className={m.blocked.state === 'ok' ? 'vl-huge' : 'vl-huge vl-word'}>{m.blocked.text}</p>
+              <p className="vl-hero-label">{m.blocked.label}</p>
+              <p className="vl-note">{BLOCKED_COUNTS}</p>
+              {m.blocked.note && <p className="vl-note">{m.blocked.note}</p>}
             </div>
-          ))}
-        </dl>
+            <div>
+              {m.daily.state === 'ok'
+                ? <DayChart daily={m.daily} />
+                : <p className="vl-chart-note" data-state={m.daily.state}>{CHART_MISSING[m.daily.state]}</p>}
+            </div>
+          </section>
+          <dl className="vl-strip">
+            <ValueStat s={m.zero_day} />
+            <ValueStat s={m.sus_to_mal} />
+          </dl>
+        </div>
       )}
     </Card>
   )

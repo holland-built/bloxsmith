@@ -1,0 +1,116 @@
+/* The Value page: Scoreboard on screen, the Monthly report on paper.
+   Colours are Bloxsmith's tokens. */
+.vl-page { width: 100%; min-width: 0; padding: 20px 24px; color: var(--color-txt) }
+/* Tabular figures only on numbers: in Inter they also widen the hyphen in words like Brand-new. */
+.vl-num, .vl-huge, .vl-big, .vl-report td { font-variant-numeric: tabular-nums }
+.vl-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px }
+.vl-head > div { min-width: 0; flex: 1 1 220px }
+.vl-range { color: var(--color-muted); font-size: 14px }
+.vl-print { min-height: 40px; padding: 8px 16px; border: 0; border-radius: 8px; background: var(--color-accent); color: var(--color-on-accent); font-size: 14px; font-weight: 600; cursor: pointer; transition: scale 150ms ease-out, background-color 150ms ease-out }
+.vl-print:disabled { opacity: .55; cursor: default }
+.vl-print:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px }
+.vl-panel { display: flex; flex-direction: column; gap: 18px; min-width: 0; padding: 4px 0 14px }
+.vl-note { color: var(--color-muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere }
+.vl-hero-label { font-size: 16px; font-weight: 500; line-height: 1.3 }
+.vl-word { color: var(--color-muted) }
+
+/* One number layout for every stat on the page. */
+.vl-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 16px 28px; margin: 0 }
+.vl-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0 }
+.vl-stat dt { order: 2; font-size: 14px; font-weight: 500; line-height: 1.3 }
+.vl-stat dd { margin: 0 }
+.vl-stat .vl-num { order: 1 }
+.vl-stat .vl-note, .vl-stat details { order: 3 }
+.vl-stat details { font-size: 13px }
+.vl-stat summary { min-height: 24px; cursor: pointer }
+.vl-stat ul { margin: 4px 0 0; padding-inline-start: 18px }
+.vl-num { min-height: 34px; font-size: 28px; font-weight: 600; letter-spacing: -.02em; line-height: 34px; overflow-wrap: anywhere }
+.vl-num.vl-word { font-size: 18px; font-weight: 500; letter-spacing: 0 }
+.vl-list { font-size: 13px }
+.vl-list li { padding-block: 4px; border-top: 1px solid var(--color-line-2) }
+
+/* The headline number and its 30 days */
+.vl-hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 48px }
+.vl-hero > div { flex: 1 1 280px; min-width: 0 }
+.vl-huge { font-size: clamp(48px, 7vw, 96px); font-weight: 700; letter-spacing: -.04em; line-height: 1; margin-bottom: 8px; overflow-wrap: anywhere }
+.vl-huge.vl-word, .vl-big.vl-word { font-size: 32px; letter-spacing: -.01em; line-height: 1.2 }
+.vl-big { font-size: clamp(40px, 6vw, 64px); font-weight: 700; letter-spacing: -.035em; line-height: 1.02; margin-bottom: 6px }
+.vl-chart { display: flex; flex-direction: column; gap: 6px; margin: 0; min-width: 0 }
+.vl-readout { min-height: 20px; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums }
+.vl-readout strong { font-weight: 600 }
+.vl-spark { display: flex; align-items: flex-end; gap: 2px; height: 96px }
+.vl-spark.is-live { cursor: pointer; border-radius: 4px; touch-action: pan-y; -webkit-tap-highlight-color: transparent }
+.vl-spark.is-live:focus-visible { outline: 2px solid var(--color-link); outline-offset: 3px }
+.vl-bar { flex: 1 1 0; min-width: 0; height: var(--h); border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--color-accent) 42%, transparent); transition: background-color 120ms ease-out }
+.vl-bar.is-peak, .vl-bar.is-active { background: var(--color-accent) }
+.vl-bar.is-latest { background: transparent; border: 1px dashed var(--color-accent); border-bottom: 0 }
+.vl-bar.is-latest.is-active { background: color-mix(in srgb, var(--color-accent) 40%, transparent) }
+.vl-bar.is-missing { height: 100%; background: transparent; border: 1px dashed var(--color-border) }
+.vl-bar.is-missing.is-active { border-color: var(--color-txt) }
+.vl-axis { display: flex; justify-content: space-between; gap: 8px; color: var(--color-tick); font-size: 12px }
+.vl-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--color-muted); font-size: 12px }
+.vl-legend span { display: inline-flex; align-items: center; gap: 6px }
+.vl-key { flex: none; width: 12px; height: 12px; border-radius: 2px; border: 1.5px dashed var(--color-accent) }
+.vl-key.is-missing { border: 1px dashed var(--color-border) }
+.vl-chart-note { padding: 14px; border: 1px dashed var(--color-border); border-radius: 8px; color: var(--color-muted); font-size: 14px; text-align: center }
+
+/* The Monthly report: only ever on paper */
+.vl-report { display: none; flex-direction: column; gap: 18px; width: 100% }
+.vl-report > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; padding-bottom: 12px; border-bottom: 2px solid var(--color-txt) }
+.vl-report h2 { font-size: 22px; font-weight: 700; letter-spacing: -.015em }
+.vl-report > header p { color: var(--color-muted); font-size: 14px }
+.vl-answer { max-width: 62ch; font-size: 19px; font-weight: 500; line-height: 1.4; text-wrap: pretty }
+.vl-report-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 20px 40px }
+.vl-report .vl-spark { height: 72px }
+.vl-report-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 40px }
+.vl-report h3 { padding-bottom: 5px; border-bottom: 1px solid var(--color-border); font-size: 14px; font-weight: 700 }
+.vl-report table { width: 100%; border-collapse: collapse }
+.vl-report tr + tr { border-top: 1px solid var(--color-line-2) }
+.vl-report th { padding: 7px 12px 7px 0; font-size: 13px; font-weight: 500; line-height: 1.3; text-align: start; vertical-align: top }
+.vl-report th small { display: block; margin-top: 1px; color: var(--color-muted); font-size: 12px; font-weight: 400 }
+.vl-report td { padding: 7px 0; font-size: 16px; font-weight: 600; text-align: end; vertical-align: top; white-space: nowrap }
+.vl-report td.vl-word { font-size: 13px; font-weight: 500 }
+.vl-report footer { padding-top: 8px; border-top: 1px solid var(--color-line-2); color: var(--color-muted); font-size: 12px }
+
+@media (hover: hover) { .vl-print:not(:disabled):hover { background: color-mix(in srgb, var(--color-accent) 88%, black) } }
+.vl-print:not(:disabled):active { scale: .96 }
+
+/* Motion: the bars rise once, only for people who have not asked for less. */
+@media (prefers-reduced-motion: no-preference) {
+  .vl-spark.is-live .vl-bar { transform-origin: bottom; animation: vl-grow 420ms cubic-bezier(.2, 0, 0, 1) both; animation-delay: calc(var(--i) * 12ms) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vl-print, .vl-bar { transition: none }
+  .vl-print:not(:disabled):active { scale: 1 }
+}
+@keyframes vl-grow { from { transform: scaleY(0) } }
+
+@media (max-width: 640px) {
+  .vl-page { padding: 14px 16px }
+  .vl-num { font-size: 24px }
+  .vl-print { width: 100% }
+}
+
+/* Print: only the report, on white, on one page. A named page, so other tabs
+   keep their own print settings. */
+@page vl-report { size: letter; margin: 0.5in }
+@media print {
+  /* A dark theme's color-scheme paints the page margins dark otherwise. */
+  html:has(.vl-report) { color-scheme: light !important }
+  body:has(.vl-report) *:not(:has(.vl-report)):not(.vl-report):not(.vl-report *) { display: none !important }
+  html:has(.vl-report), body:has(.vl-report), body:has(.vl-report) *:has(.vl-report) { display: block !important; position: static !important; width: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: visible !important; background: #fff !important; transform: none !important; animation: none !important }
+  .vl-report {
+    display: flex !important;
+    --color-card: #fff; --color-card-border: #fff; --color-txt: #111; --color-muted: #444; --color-line-2: #ddd; --color-border: #999; --color-accent: #2456b8; --color-grid: #ddd;
+    page: vl-report; max-width: none; padding: 0 !important; gap: 30px; border: 0; box-shadow: none; color: #111; background: #fff; animation: none !important; print-color-adjust: exact; -webkit-print-color-adjust: exact
+  }
+  .vl-answer { font-size: 18px }
+  .vl-report .vl-big { font-size: 54px }
+  .vl-report .vl-spark { height: 150px }
+  .vl-report .vl-bar { animation: none !important }
+  .vl-report th { padding-block: 13px }
+  .vl-report td { padding-block: 13px }
+  .vl-report-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important }
+  .vl-report-cols { grid-template-columns: repeat(2, minmax(0, 1fr)) !important }
+  .vl-report section, .vl-report tr { break-inside: avoid }
+}

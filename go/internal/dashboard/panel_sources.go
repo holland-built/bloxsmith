@@ -189,11 +189,11 @@ var panelSources = []PanelSource{
 	restPanel("bp-checks", "Best practices", "Checks", "the Infoblox API", "it checks design rules against what is there, worked out in the app"),
 
 	// ---- Value ----
-	{ID: "value-security", Page: "Value", Name: "What Infoblox stopped — 30 days", Kind: "cube",
+	{ID: "value-security", Page: "Value", Name: "Security results — 30 days", Kind: "cube",
 		Source: "Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records", Builder: "no", Why: whyTotals},
-	{ID: "value-platform", Page: "Value", Name: "How the platform ran — 30 days", Kind: "cube",
+	{ID: "value-platform", Page: "Value", Name: "Platform performance — 30 days", Kind: "cube",
 		Source: "Infoblox host metrics and endpoint records", Builder: "no", Why: whyTotals},
-	{ID: "value-work", Page: "Value", Name: "Work done in Bloxsmith — 30 days", Kind: "local",
+	{ID: "value-work", Page: "Value", Name: "Bloxsmith activity — 30 days", Kind: "local",
 		Source: "Bloxsmith's own record of what it made", Builder: "no", Why: "it counts the app's own records, not a chart"},
 
 	// ---- Demo server ----

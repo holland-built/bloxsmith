@@ -42,7 +42,7 @@ var dhcpTotalConfirmed = false
 
 const (
 	dhcpMetric        = "dhcp_cumulative_assigned_addresses_iq"
-	dhcpUnavailableWh = "Not available: Infoblox doesn't say whether this number is a running total."
+	dhcpUnavailableWh = "Not available: Infoblox does not state whether this figure is a running total."
 )
 
 // DNS server uptime is read from dns_status_iq, but is switched off until
@@ -60,7 +60,7 @@ var uptimeMeaningConfirmed = false
 
 const (
 	uptimeMetric        = "dns_status_iq"
-	uptimeUnavailableWh = "Not available: Infoblox doesn't say what its DNS status number measures."
+	uptimeUnavailableWh = "Not available: Infoblox does not state what its DNS status metric measures."
 	roamingCube         = "B1EndpointsDailyV1"
 	// payload_protection_count: "Count of distinct endpoints (payloads) that
 	// were protected for any duration during the day" (cube meta). Over a
@@ -69,7 +69,7 @@ const (
 	roamingMeasure = roamingCube + ".payload_protection_count"
 )
 
-// CSPValuePlatform is the Value page's "How the platform ran — 30 days"
+// CSPValuePlatform is the Value page's "Platform performance — 30 days"
 // feed: how much work the DNS and DHCP platform did, and how well.
 //
 // Each number stands alone. A read that failed, or came back 200 with no
