@@ -8,6 +8,7 @@ import { sampleSince } from '../lib/sampleCount.js'
 import { statusBucket } from '../lib/statusBucket.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import Tip from '../components/Tip.jsx'
+import { useVariant } from './overview/variant.js'
 import './Overview.css'
 
 // OVERVIEW IS A SERVICE BOARD, NOT A PANEL WALL (2026-11-09).
@@ -30,6 +31,9 @@ import './Overview.css'
 // 2026-11-09 from four looks built with the dashboard-design skill.
 
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
+// Trial looks, only fetched when the address carries ?variant=.
+const OverviewLooks = lazy(() => import('./overview/Looks.jsx'))
+const LookSwitcher = lazy(() => import('./overview/LookSwitcher.jsx'))
 
 // Draws its children once the box is within 400px of the screen, or once the
 // browser is idle after the first draw, whichever comes first, with a Skeleton
@@ -81,6 +85,15 @@ export default function Overview() {
   // average barely moves in 30 seconds.
   const health = useApi('/api/csp/dns-health', { poll: 60000 })
   const board = useBoard(dns)
+  const variant = useVariant()
+
+  if (variant.look) {
+    return (
+      <Suspense fallback={<div className="w-full px-6 py-5"><Skeleton h={320} /></div>}>
+        <OverviewLooks look={variant.look} board={board} services={tiles(board, dns)} dns={dns} health={health} licenses={licenses} updated={<Updated board={board} />} />
+      </Suspense>
+    )
+  }
 
   return (
     <div className="w-full px-6 py-5">
@@ -98,6 +111,7 @@ export default function Overview() {
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
         {savedCharts}
       </CardGrid>
+      {variant.switcher && <Suspense fallback={null}><LookSwitcher current="none" /></Suspense>}
     </div>
   )
 }

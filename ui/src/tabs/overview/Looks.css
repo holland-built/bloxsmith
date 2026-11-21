@@ -1,0 +1,192 @@
+/* Three trial looks for Overview (?variant=a, b, c). They borrow the colour
+   tokens of .ov-look in Overview.css, so ok, warn and crit stay the app's own. */
+.lk-page { padding-bottom: 88px }
+.lk { min-width: 0 }
+.lk *, .lk *::before { box-sizing: border-box }
+.lk h1, .lk h2, .lk p, .lk ol, .lk ul { margin: 0; padding: 0 }
+.lk ol, .lk ul { list-style: none }
+.lk .ov-tip { left: 0; transform: none; max-width: min(280px, calc(100vw - 64px)) }
+
+.lk-mark { flex: none; color: var(--ov-muted) }
+.lk-mark.crit { color: var(--ov-crit) } .lk-mark.warn { color: var(--ov-warn) } .lk-mark.ok { color: var(--ov-ok) }
+.lk-new { font-style: normal; font-size: 11.5px; font-weight: 600; margin-inline-start: 8px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--ov-accent) 16%, transparent); color: var(--ov-accent) }
+.lk .lk-empty { color: var(--ov-muted); padding: 18px; font-size: 14px }
+.lkc .lk-empty { padding-inline: 0 }
+.lkb-queue .lk-empty { padding-block: 4px 10px; padding-inline: 16px }
+.lk-down { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; font-size: 14px; color: var(--color-crit); background: color-mix(in srgb, var(--color-crit) 10%, transparent) }
+
+.lk a.lk-btn, .lk a.lk-primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
+.lk a.lk-btn { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 12%, transparent) }
+.lk a.lk-primary { min-height: 44px; padding: 0 20px; border-radius: 10px; font-size: 15px; color: var(--ov-card); background: var(--ov-accent) }
+.lk a.lk-btn:active, .lk a.lk-primary:active { scale: .96 }
+@media (hover: hover) {
+  .lk a.lk-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) }
+  .lk a.lk-primary:hover { background: color-mix(in srgb, var(--ov-accent) 86%, var(--ov-ink)) }
+}
+.lk a.lk-quiet { color: var(--ov-muted); font-size: 13px; white-space: nowrap }
+.lk-more { display: block; width: 100%; min-height: 40px; color: var(--ov-accent); font-size: 13px; font-weight: 600; border-top: 1px solid var(--ov-line) }
+
+/* The floating switcher */
+.lk-switch { position: fixed; z-index: 40; inset-block-end: 16px; left: 50%; translate: -50% 0; display: flex; gap: 2px; padding: 4px; max-width: calc(100% - 16px); border-radius: 999px; color: #f3f3f5; background: #1c1c20; border: 1px solid rgb(255 255 255 / .16); box-shadow: 0 12px 32px -8px rgb(0 0 0 / .45) }
+.lk-switch a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13px; white-space: nowrap; text-decoration: none; color: inherit; opacity: .78; transition-property: background-color, opacity; transition-duration: 150ms }
+.lk-switch a[aria-current] { opacity: 1; font-weight: 600; background: color-mix(in srgb, #7b96ff 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #7b96ff 40%, transparent) }
+.lk-switch a:focus-visible { outline: 2px solid #7b96ff; outline-offset: 1px }
+@media (hover: hover) { .lk-switch a:hover { opacity: 1 } }
+/* Phones have the app's fixed menu along the bottom, so the switcher sits above it. */
+@media (max-width: 767px) {
+  .lk-page { padding-bottom: 148px }
+  .lk-switch { inset-block-end: calc(72px + env(safe-area-inset-bottom)) }
+}
+:root[data-theme="light"] .lk-switch { color: #17171a; background: #ffffff; border-color: rgb(0 0 0 / .14) }
+:root[data-theme="light"] .lk-switch a[aria-current] { background: color-mix(in srgb, #3e63dd 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #3e63dd 35%, transparent) }
+:root[data-theme="light"] .lk-switch a:focus-visible { outline-color: #3e63dd }
+.lk-short { display: none }
+@media (max-width: 620px) {
+  .lk-full { display: none } .lk-short { display: inline }
+  .lk-switch a { padding: 0 10px; font-size: 12.5px }
+}
+
+/* a. Command center */
+.lka-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; align-items: stretch; min-height: calc(100dvh - 270px) }
+.lka-list ol { flex: 1; display: flex; flex-direction: column }
+.lka-list ol > li { flex: 1 }
+.lka-verdict { display: flex; flex-direction: column; gap: 6px; padding: 28px; border-radius: 20px; border: 1px solid var(--lka-edge, var(--ov-line)); background: linear-gradient(160deg, color-mix(in srgb, var(--lka-tone, var(--ov-muted)) 15%, var(--ov-card)), var(--ov-card) 70%) }
+.lka-verdict.crit { --lka-tone: var(--ov-crit); --lka-edge: color-mix(in srgb, var(--ov-crit) 40%, transparent) }
+.lka-verdict.warn { --lka-tone: var(--ov-warn); --lka-edge: color-mix(in srgb, var(--ov-warn) 40%, transparent) }
+.lka-verdict.ok { --lka-tone: var(--ov-ok) }
+.lka-now { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ov-ink2) }
+.lka-word { font-size: clamp(52px, 7vw, 104px); font-weight: 650; line-height: 1; letter-spacing: -.04em; color: var(--lka-tone, var(--ov-ink)); text-wrap: balance }
+.lka-line { font-size: 17px; color: var(--ov-ink) }
+.lka-first { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-block: auto; padding-block: 18px; border-top: 1px solid var(--ov-line) }
+.lka-first span { font-size: 13px; color: var(--ov-muted) }
+.lka-first strong { font-size: 19px; font-weight: 600; line-height: 1.25 }
+.lka-services { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px }
+.lk .lka-services { margin-block-start: auto }
+.lka-services a { display: flex; flex-direction: column; gap: 3px; padding: 8px 6px; border-radius: 8px; text-decoration: none; min-width: 0 }
+.lka-services i { height: 6px; border-radius: 3px; background: var(--ov-line2) }
+.lka-services .ok i { background: color-mix(in srgb, var(--ov-ok) 40%, transparent) }
+.lka-services .warn i { background: var(--ov-warn) } .lka-services .crit i { background: var(--ov-crit) }
+.lka-services b { font-size: 13px; font-weight: 600 }
+.lka-services span { font-size: 12px; color: var(--ov-muted); overflow-wrap: anywhere }
+@media (hover: hover) { .lka-services a:hover { background: color-mix(in srgb, var(--ov-soft) 70%, transparent) } }
+.lka-list { display: flex; flex-direction: column; min-width: 0 }
+.lka-row { display: grid; grid-template-columns: 22px 16px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 18px; border-top: 1px solid var(--ov-line) }
+.lka-rank { font-size: 14px; color: var(--ov-muted); text-align: end }
+.lka-row:first-child .lka-rank { color: var(--ov-ink); font-weight: 700 }
+.lka-title { font-size: 14.5px; line-height: 1.3; min-width: 0; overflow-wrap: anywhere }
+.lka-row.crit .lka-title { font-weight: 600 }
+.lka-acts { display: inline-flex; align-items: center; gap: 12px }
+@media (max-width: 1040px) { .lka-grid { grid-template-columns: minmax(0, 1fr); min-height: 0 } }
+@media (max-width: 560px) {
+  .lka-verdict { padding: 20px }
+  .lka-services { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+  .lka-row { grid-template-columns: 18px 16px minmax(0, 1fr); padding: 12px 14px }
+  .lka-acts { grid-column: 3; justify-content: flex-start; flex-wrap: wrap }
+}
+
+/* b. Live wall: pale when healthy, bright only for problems */
+.lkb { gap: 10px }
+.lkb-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 18px; border-radius: 12px; background: color-mix(in srgb, var(--lkb-tone, var(--ov-muted)) 14%, var(--ov-card)); border: 1px solid color-mix(in srgb, var(--lkb-tone, var(--ov-muted)) 40%, transparent) }
+.lkb-top.crit { --lkb-tone: var(--ov-crit) } .lkb-top.warn { --lkb-tone: var(--ov-warn) } .lkb-top.ok { --lkb-tone: var(--ov-ok) }
+.lkb-state { display: inline-flex; align-items: center; gap: 8px; font-size: 26px; letter-spacing: -.02em }
+.lkb-state b { font-weight: 700; color: var(--lkb-tone, var(--ov-ink)) }
+.lkb-state .lk-mark { width: 22px; height: 22px }
+.lkb-line { font-size: 15px; color: var(--ov-ink) }
+.lkb-clock { margin-inline-start: auto; font-size: 22px; font-weight: 600 }
+.lkb-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); grid-template-rows: auto minmax(0, 1fr); gap: 10px }
+.lkb-panel { background: var(--ov-card); border: 1px solid var(--ov-line); border-radius: 12px; min-width: 0 }
+.lkb-strips { grid-row: span 2; display: flex; flex-direction: column }
+.lkb-strip { flex: 1; display: grid; grid-template-columns: 148px minmax(0, 1fr) 190px; align-items: center; gap: 16px; padding: 16px 18px; border-top: 1px solid var(--ov-line); text-decoration: none !important }
+.lkb-strip:first-child { border-top: 0 }
+@media (hover: hover) { .lkb-strip:hover { background: color-mix(in srgb, var(--ov-soft) 60%, transparent) } }
+.lkb-name { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center }
+.lkb-name b { font-size: 18px; font-weight: 650 }
+.lkb-name small { grid-column: 2; font-size: 12.5px; color: var(--ov-muted) }
+.lkb-strip.crit .lkb-name small { color: var(--ov-crit); font-weight: 600 }
+.lkb-strip.warn .lkb-name small { color: var(--ov-warn); font-weight: 600 }
+.lkb-cells { display: flex; gap: 3px; align-items: center; min-height: 34px }
+.lkb-cells i { flex: 1 1 0; min-width: 0; height: 34px; border-radius: 2px; background: color-mix(in srgb, var(--ov-ok) 22%, transparent) }
+.lkb-cells i.crit { background: var(--ov-crit) } .lkb-cells i.warn { background: var(--ov-warn) }
+.lkb-cells.nodata { align-items: center; border-radius: 4px; padding-inline: 10px; background: repeating-linear-gradient(135deg, var(--ov-line) 0 6px, transparent 6px 12px) }
+.lkb-num { display: flex; flex-direction: column; align-items: flex-end; text-align: end; min-width: 0 }
+.lkb-num b { font-size: 26px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1 }
+.lkb-num b.off { font-size: 15px; font-weight: 500; color: var(--ov-muted) }
+.lkb-num small { font-size: 12.5px; color: var(--ov-muted) }
+.lkb-dns { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px }
+.lkb-dnshead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px }
+.lkb-dnshead span { flex-basis: 100%; font-size: 13px; color: var(--ov-muted) }
+.lkb-dnshead b { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1 }
+.lkb-dnshead small { font-size: 12.5px; color: var(--ov-ink2) }
+.lkb-bars { display: flex; align-items: flex-end; gap: 2px; height: 72px }
+.lkb-bars i { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--ov-accent) 42%, transparent) }
+.lkb-bars i.open { background: transparent; border: 1px dashed var(--ov-accent); border-bottom: 0 }
+.lkb-vitals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px }
+.lkb-vital { display: flex; flex-direction: column; min-width: 0 }
+.lkb-vital span { font-size: 12px; color: var(--ov-muted) }
+.lkb-vital b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere }
+.lkb-vital b.off { font-weight: 400; color: var(--ov-muted) }
+.lkb-queue { padding-block: 12px 6px; min-height: 0; overflow-y: auto; overscroll-behavior: contain }
+.lkb-queue h2 { font-size: 13px; font-weight: 600; padding: 0 16px 8px; color: var(--ov-ink2) }
+.lkb-queue h2 span { color: var(--ov-muted); font-weight: 400; margin-inline-start: 4px }
+.lkb-queue li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 16px; font-size: 13.5px; line-height: 1.3 }
+.lkb-queue li.crit a { font-weight: 600 }
+@media (min-width: 1200px) and (min-height: 760px) {
+  .lkb-grid { height: calc(100dvh - 300px) }
+}
+@media (max-width: 1040px) {
+  .lkb-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none }
+  .lkb-strips { grid-row: auto }
+  .lkb-queue { overflow: visible }
+}
+@media (max-width: 640px) {
+  .lkb-strip { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px }
+  .lkb-strip .lkb-cells { grid-column: 1 / -1; grid-row: 2 }
+  .lkb-cells i { height: 18px } .lkb-cells { min-height: 18px; gap: 1px }
+  .lkb-num b { font-size: 22px }
+  .lkb-clock { font-size: 18px }
+}
+
+/* c. Morning briefing: read top to bottom */
+.lkc { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 48px; align-items: start; flex-direction: unset }
+.lkc-rail { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px }
+.lkc-date { font-size: 14px; color: var(--ov-muted) }
+.lkc-rail h1 { font-size: 34px; font-weight: 650; letter-spacing: -.025em; line-height: 1.1 }
+.lk .lkc-verdict { margin-block-start: 14px }
+.lkc-verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.05 }
+.lkc-verdict .lk-mark { width: 28px; height: 28px }
+.lkc-verdict.crit { color: var(--ov-crit) } .lkc-verdict.warn { color: var(--ov-warn) } .lkc-verdict.ok { color: var(--ov-ok) }
+.lk .lkc-line { font-size: 16px; color: var(--ov-ink2); margin-block-end: 10px }
+.lkc-updated { margin-block-start: 8px }
+.lkc-read { display: flex; flex-direction: column; gap: 34px; max-width: 860px; min-width: 0 }
+.lkc-read h2 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; padding-block-end: 10px; border-bottom: 2px solid var(--ov-line2) }
+.lkc-read h2 span { font-size: 15px; font-weight: 400; color: var(--ov-muted); margin-inline-start: 6px }
+.lkc-fact { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 4px 16px; padding-block: 11px; border-bottom: 1px solid var(--ov-line); font-size: 15px; line-height: 1.4 }
+.lkc-label { color: var(--ov-muted); justify-self: start }
+.lkc-fact > span:last-child { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0 }
+.lkc-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--ov-line) }
+.lkc-title { font-size: 15px; line-height: 1.35; min-width: 0; overflow-wrap: anywhere }
+.lkc-list .crit .lkc-title { font-weight: 600 }
+@media (max-width: 960px) {
+  .lkc { grid-template-columns: minmax(0, 1fr); gap: 28px }
+  .lkc-rail { position: static }
+}
+@media (max-width: 560px) {
+  .lkc-fact { grid-template-columns: minmax(0, 1fr) }
+  .lkc-list li { grid-template-columns: 16px minmax(0, 1fr) }
+  .lkc-list .lk-btn { grid-column: 2; justify-self: start }
+  .lkc-verdict { font-size: 34px }
+}
+
+/* One entrance when the look opens. Polling never replays it. */
+@media (prefers-reduced-motion: no-preference) {
+  .lka-verdict, .lka-list, .lkb-top, .lkb-panel, .lkc-rail, .lkc-read > section { animation: lk-in 300ms ease-out both }
+  .lka-list, .lkb-strips, .lkc-read > section:nth-child(1) { animation-delay: 100ms }
+  .lkb-dns, .lkc-read > section:nth-child(2) { animation-delay: 200ms }
+  .lkb-queue, .lkc-read > section:nth-child(3) { animation-delay: 300ms }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lka-verdict, .lka-list, .lkb-top, .lkb-panel, .lkc-rail, .lkc-read > section { animation: lk-fade 200ms linear both }
+  .lk a.lk-btn:active, .lk a.lk-primary:active { scale: 1 }
+}
+@keyframes lk-in { from { opacity: 0; filter: blur(4px); transform: translateY(12px) } }
+@keyframes lk-fade { from { opacity: 0 } }
