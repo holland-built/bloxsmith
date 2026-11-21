@@ -46,7 +46,7 @@ func (r *recordingRouter) HandleFunc(pattern string, _ func(http.ResponseWriter,
 // reopen the hole quietly.
 func allRoutesDeps() *Deps {
 	stub := func(w http.ResponseWriter, r *http.Request) {}
-	return &Deps{UpdateCheck: stub, UpdateApply: stub, UpdateProgress: stub}
+	return &Deps{UpdateCheck: stub, UpdateApply: stub, UpdateProgress: stub, UpdateAuto: stub}
 }
 
 // allRoutes records every route production declares, by handing the recorder to

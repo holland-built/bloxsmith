@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -452,15 +453,15 @@ func fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName string) (bin []
 	// the tarball can replace the checksum sitting beside it, which is precisely
 	// the gap the compiled-in public key closes (see signing.go).
 	if err := verifyReleaseSignature(sums, sigBytes); err != nil {
-		return nil, nil, err
+		return nil, nil, &releaseRejectedError{err}
 	}
 	want := checksumFor(sums, archName)
 	if want == "" {
-		return nil, nil, fmt.Errorf("checksums.txt has no entry for %s", archName)
+		return nil, nil, &releaseRejectedError{fmt.Errorf("checksums.txt has no entry for %s", archName)}
 	}
 	sum := sha256.Sum256(archBytes)
 	if got := hex.EncodeToString(sum[:]); got != want {
-		return nil, nil, fmt.Errorf("checksum mismatch: got %s want %s", got, want)
+		return nil, nil, &releaseRejectedError{fmt.Errorf("checksum mismatch: got %s want %s", got, want)}
 	}
 
 	bin, err = extractBinary(archBytes, runtime.GOOS == "windows")
@@ -470,9 +471,42 @@ func fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName string) (bin []
 	return bin, archBytes, nil
 }
 
+// errAlreadyCurrent means the newest release is not newer than this binary.
+var errAlreadyCurrent = errors.New("already up to date")
+
+// releaseRejectedError means a downloaded release failed its signature or
+// checksum check, or lacks what those checks need. Its text is the underlying
+// error unchanged. A network failure is never one of these.
+type releaseRejectedError struct{ err error }
+
+func (e *releaseRejectedError) Error() string { return e.err.Error() }
+func (e *releaseRejectedError) Unwrap() error { return e.err }
+
+// swapBinary replaces the running executable. A var so a test can prove what
+// happens around the swap without ever replacing a real binary.
+var swapBinary = func(bin io.Reader) error {
+	return selfupdate.Apply(bin, selfupdate.Options{})
+}
+
+// applyHooks let a caller add checks to the one install path. Update now
+// passes none. Overnight updates (autoupdate.go) use all three.
+type applyHooks struct {
+	// allow runs once the release tag is known, before anything is downloaded.
+	allow func(tag string) error
+	// beforeSwap runs after the download is verified, immediately before the
+	// swap. An error stops the update with the old binary untouched.
+	beforeSwap func(tag string) error
+	// handoffFailed runs if the swapped binary could not be started.
+	handoffFailed func(error)
+}
+
 // applyLatest runs the whole download -> verify -> swap for the newest release.
 // It advances updateProgress so the frontend can poll GET /api/update/status.
 func applyLatest() error {
+	return applyLatestWith(applyHooks{})
+}
+
+func applyLatestWith(h applyHooks) error {
 	progress.set("checking", 5)
 	rel, err := latestRelease()
 	if err != nil {
@@ -486,7 +520,12 @@ func applyLatest() error {
 	// version or roll BACK to an older "latest" — the CLI already gates on this
 	// via checkUpdate/verN, so match it here for the HTTP apply path.
 	if verN(rel.Tag) < 0 || verN(rel.Tag) <= verN(version) {
-		return fmt.Errorf("already up to date (current %s, latest %s)", version, rel.Tag)
+		return fmt.Errorf("%w (current %s, latest %s)", errAlreadyCurrent, version, rel.Tag)
+	}
+	if h.allow != nil {
+		if err := h.allow(rel.Tag); err != nil {
+			return err
+		}
 	}
 	progress.setVersion(rel.Tag)
 
@@ -498,7 +537,7 @@ func applyLatest() error {
 		return fmt.Errorf("release %s has no asset %q for this platform", rel.Tag, archName)
 	}
 	if sumAsset == "" {
-		return fmt.Errorf("release %s has no checksums.txt", rel.Tag)
+		return &releaseRejectedError{fmt.Errorf("release %s has no checksums.txt", rel.Tag)}
 	}
 	// Refusing outright is deliberate. A missing signature is exactly what an
 	// attacker who can write release assets would arrange, so treating it as
@@ -507,9 +546,9 @@ func applyLatest() error {
 	// release rather than publishing without one, so this can only fire on a
 	// tampered release — or on one this key was never meant to validate.
 	if sigAsset == "" {
-		return fmt.Errorf("release %s is not signed (no %s) — refusing to self-update; "+
+		return &releaseRejectedError{fmt.Errorf("release %s is not signed (no %s) — refusing to self-update; "+
 			"reinstall deliberately with scripts/install.sh if this is expected",
-			rel.Tag, releaseSigAssetName)
+			rel.Tag, releaseSigAssetName)}
 	}
 
 	bin, archBytes, err := fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName)
@@ -521,8 +560,13 @@ func applyLatest() error {
 	// atomic rename swap. On Windows it moves the still-running .exe aside first
 	// (the ".old" rename dance) so the replace succeeds while the file is locked.
 	// On any failure it rolls the old binary back into place.
+	if h.beforeSwap != nil {
+		if err := h.beforeSwap(rel.Tag); err != nil {
+			return err
+		}
+	}
 	progress.set("applying", 80)
-	if err := selfupdate.Apply(bytes.NewReader(bin), selfupdate.Options{}); err != nil {
+	if err := swapBinary(bytes.NewReader(bin)); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("apply failed AND rollback failed: %v (rollback: %v)", err, rerr)
 		}
@@ -551,11 +595,20 @@ func applyLatest() error {
 		// would strand progress at 'restarting'; surface it so the modal resolves.
 		defer func() {
 			if rec := recover(); rec != nil {
-				progress.fail(fmt.Errorf("update restart panicked: %v", rec))
+				err := fmt.Errorf("update restart panicked: %v", rec)
+				progress.fail(err)
+				if h.handoffFailed != nil {
+					h.handoffFailed(err)
+				}
 			}
 		}()
 		time.Sleep(750 * time.Millisecond)
 		restart()
+		// restart exits the process when the new binary launched, so reaching
+		// this line means it did not.
+		if h.handoffFailed != nil {
+			h.handoffFailed(errors.New("the new version could not be started"))
+		}
 	})
 	return nil
 }

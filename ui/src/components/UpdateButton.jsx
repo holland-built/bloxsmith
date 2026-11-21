@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { checkForUpdate, startUpdate, useUpdate } from '../lib/updateState.js';
+import { FIELD_CLS } from './ui.jsx';
+
+// Its own chunk: only an admin opening Settings needs it, and the main bundle
+// has a size budget (tests/bundle-budget.spec.ts).
+const OvernightUpdates = lazy(() => import('./OvernightUpdates.jsx'));
 
 // Ported from src/96.chrome-topbar.jsx (useSelfUpdate + UpdatePill).
 // The answer and the install flow live in lib/updateState.js, shared with
@@ -250,6 +255,9 @@ export function UpdateCheck({ version }) {
             What stays is the live region above: that is not an explanation of
             a feature, it is the result of the button beside it. */}
       </div>
+      <Suspense fallback={null}>
+        <OvernightUpdates fieldCls={FIELD_CLS} />
+      </Suspense>
     </>
   );
 }

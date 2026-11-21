@@ -16,7 +16,7 @@ import { tokenFetch } from './authFetch.js'
 //            POST /api/update/apply -> starts the swap + restart
 //            GET /api/update/status -> {phase,pct,error} poll target
 
-const fetchT = (url, opts, ms) => {
+export const fetchT = (url, opts, ms) => {
   const ac = new AbortController()
   const t = setTimeout(() => ac.abort(), ms || 8000)
   return tokenFetch(url, { ...(opts || {}), signal: ac.signal, cache: 'no-store' }).finally(() =>
