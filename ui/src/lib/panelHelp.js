@@ -396,8 +396,8 @@ export const PANEL_HELP = {
     look: 'Also domains it rated suspicious that were later confirmed malicious. Last 30 days.',
   },
   'value-platform': {
-    what: 'How much DNS work your servers did and how well: queries answered, answers from cache, and how much of the time each DNS server was up.',
-    look: 'Also addresses DHCP handed out, and laptops protected off the office network. Last 30 days. DHCP pairs in HA each count an address, so that number can be up to twice the devices served.',
+    what: 'How much DNS work your servers did and how well: queries answered, and answers from cache.',
+    look: 'Also laptops protected off the office network. Last 30 days. DNS server uptime and DHCP addresses say not available until Infoblox says what those numbers measure.',
   },
   'value-work': {
     what: 'Jobs Bloxsmith finished on this tenant in the last 30 days, by page, and the items they made in Infoblox. Deletes and undone jobs are not counted.',
