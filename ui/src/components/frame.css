@@ -123,12 +123,12 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   .frame-rail:not([data-open], :has(:focus-visible)) :is(.frame-fold, .frame-sub) { display: none; }
 }
 @media (hover: hover) {
-  .frame-rail:hover { width: var(--frame-rail-open); margin-inline-end: calc(var(--frame-rail) - var(--frame-rail-open)); box-shadow: var(--frame-pop); }
-  .frame-rail:not(:hover, [data-open], :has(:focus-visible)) .frame-link-text {
+  .frame-rail[data-hover] { width: var(--frame-rail-open); margin-inline-end: calc(var(--frame-rail) - var(--frame-rail-open)); box-shadow: var(--frame-pop); }
+  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-link-text {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
   }
-  .frame-rail:not(:hover, [data-open], :has(:focus-visible)) :is(.frame-fold, .frame-sub) { display: none; }
-  .frame-rail:is(:hover, [data-open], :has(:focus-visible)) .frame-rail-toggle { display: none; }
+  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) :is(.frame-fold, .frame-sub) { display: none; }
+  .frame-rail:is([data-hover], [data-open], :has(:focus-visible)) .frame-rail-toggle { display: none; }
 
   .frame-icon:hover, .frame-menu-btn:hover, .frame-refresh button:not(:disabled):hover, .frame-tools [data-theme-toggle]:hover { background: var(--frame-hover); color: var(--color-txt); }
   .frame-link:not([aria-current='page']):hover { background: var(--frame-hover); color: var(--color-txt); }

@@ -103,7 +103,17 @@ export function JobRail({ tab, groups, tabs, logo }) {
     // The outer div is the column: a flex child of App's row, so it stretches to
     // the full height of the page and paints the card background and border all
     // the way down. The part inside stays one screen tall and sticky.
-    <div ref={railRef} data-job-column="" className="frame-rail" data-open={railOpen ? '' : undefined} onKeyDown={onKeyDown}>
+    // data-hover is set on real pointer movement, not CSS :hover, so a pointer
+    // already resting here while a page loads cannot hold the rail open over it.
+    <div
+      ref={railRef}
+      data-job-column=""
+      className="frame-rail"
+      data-open={railOpen ? '' : undefined}
+      onKeyDown={onKeyDown}
+      onPointerMove={(e) => { if (e.pointerType === 'mouse') e.currentTarget.setAttribute('data-hover', '') }}
+      onPointerLeave={(e) => e.currentTarget.removeAttribute('data-hover')}
+    >
       <div className="frame-rail-inner">
         <div className="frame-rail-head">
           {logo}
