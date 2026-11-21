@@ -162,7 +162,7 @@ function SeverityHero({ panelId, hub, events }) {
         <Empty />
       ) : (
         <>
-          <div className="flex gap-4 mb-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3">
             {SEV_ORDER.map((s) => (
               <div key={s} className="flex items-center gap-1.5 text-note">
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: SEV_COLOR[s] }} />

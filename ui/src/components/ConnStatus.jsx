@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { noteTenant, refreshFeeds, useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { REFRESH_CHOICES, setRefresh, useRefreshChoice } from '../lib/refresh.js'
@@ -54,34 +54,32 @@ function useWriteTarget() {
 const REFRESH_PAUSE_MS = 5000
 const REFRESH_OFF = 'Automatic refresh is off'
 
-/**
- * The same control on its own row below desk width. In the header's row it
- * pushed the Settings button off a 390px screen.
- */
-export function RefreshBar() {
-  const off = useRefreshChoice() === 'off'
-  return (
-    <div className="xl:hidden flex items-center justify-between gap-2 px-3 sm:px-5 py-1 border-b border-card-border bg-card">
-      <span className={`text-note ${off ? 'text-warn' : 'text-muted'}`}>{off ? REFRESH_OFF : 'Automatic refresh'}</span>
-      <RefreshControl />
-    </div>
-  )
+// One pause for the whole app: the page bar and the menu each draw this control,
+// and a pause kept per button would let the second one empty the cache again.
+let refreshPaused = false
+const pauseListeners = new Set()
+const setRefreshPaused = (value) => {
+  refreshPaused = value
+  pauseListeners.forEach((listen) => listen())
+}
+const onPauseChange = (listen) => {
+  pauseListeners.add(listen)
+  return () => pauseListeners.delete(listen)
 }
 
 /** How often the screen reloads by itself, and a button to reload it now. */
-export function RefreshControl({ inHeader = false }) {
+export function RefreshControl() {
   const choice = useRefreshChoice()
-  const [paused, setPaused] = useState(false)
-  const pauseRef = useRef(null)
-  useEffect(() => () => clearTimeout(pauseRef.current), [])
+  const paused = useSyncExternalStore(onPauseChange, () => refreshPaused)
   const refreshNow = () => {
-    setPaused(true)
+    if (refreshPaused) return
+    setRefreshPaused(true)
     refreshFeeds()
-    pauseRef.current = setTimeout(() => setPaused(false), REFRESH_PAUSE_MS)
+    setTimeout(() => setRefreshPaused(false), REFRESH_PAUSE_MS)
   }
   return (
-    <span className={`${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`}>
-      {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">{REFRESH_OFF}</span>}
+    <span className="frame-refresh" data-off={choice === 'off' ? '' : undefined}>
+      {choice === 'off' && <span className="frame-refresh-off">{REFRESH_OFF}</span>}
       <select
         aria-label="Automatic refresh"
         title="How often this page reloads its data"
@@ -303,28 +301,26 @@ export default function ConnStatus() {
     (write.data && write.data.label) ||
     (writeWords ? 'This connection' : stateWord ? '' : 'connected')
 
-  // Name over state below `lg`, on one line above it. The name truncates: a long
-  // one must never push Settings and Provision off a 390px screen. The state
-  // wraps on a phone instead of truncating, however many lines it takes,
+  // The name and state wrap instead of truncating, however many lines it takes,
   // because "Changes allowed in another account" cut to "Changes…" would hide
   // the one part that matters before Provision is pressed.
   const body = (
     <>
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-      <span className="flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2">
+      <span className="frame-conn-body">
         {shownName && (
-          <span className="truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt">{shownName}</span>
+          <span>{shownName}</span>
         )}
         {stateWord && (
           <span
             data-state
-            className={`truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] ${shownName ? 'text-note' : 'text-copy font-medium'} ${stateTone}`}
+            className={stateTone}
           >
             {stateWord}
           </span>
         )}
         {writeWords && (
-          <span data-write className={`break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
+          <span data-write className={writeTone}>{writeWords}</span>
         )}
       </span>
       {/* A chip that opens a tenant list says so; one tenant is not a choice. */}
@@ -335,7 +331,7 @@ export default function ConnStatus() {
       )}
     </>
   )
-  const chipCls = 'flex items-center gap-2 min-w-0 min-h-9 lg:h-8 py-1 lg:py-0 px-2.5 rounded-control border border-border bg-field'
+  const chipCls = 'frame-conn'
 
   if (!canSwitch) {
     return (
@@ -373,11 +369,11 @@ export default function ConnStatus() {
   }
 
   return (
-    <span className="relative flex items-center min-w-0" onKeyDown={onMenuKey}>
+    <span className="frame-tenant flex items-center min-w-0" onKeyDown={onMenuKey}>
       <button
         ref={chipRef}
         type="button"
-        className={chipCls + ' cursor-pointer hover:border-border-hover'}
+        className={chipCls}
         title={`${title}${writeWords ? ` · ${writeWords}` : ''} — click to switch tenant`}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -390,7 +386,7 @@ export default function ConnStatus() {
           {/* Click-away, behind the menu. A menu that only closes by reselecting
               is a trap on a narrow screen. */}
           <button type="button" aria-label="Close tenant menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div ref={listRef} role="listbox" aria-label="Switch tenant" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-control border border-border bg-card shadow-lg py-1">
+          <div ref={listRef} role="listbox" aria-label="Switch tenant" className="frame-tenant-list mt-1.5 z-50 rounded-control border border-border bg-card shadow-lg py-1">
             {tenants.map((t) => {
               const isActive = t.id === activeTenant
               return (
@@ -408,8 +404,8 @@ export default function ConnStatus() {
                 >
                   {/* The mark, not just the colour: the current row has to be
                       identifiable without relying on seeing a hue. */}
-                  <span className="w-2.5 text-center">{isActive ? '✓' : ''}</span>
-                  <span className="truncate">{t.label}</span>
+                  <span className="w-2.5 shrink-0 text-center">{isActive ? '✓' : ''}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{t.label}</span>
                 </button>
               )
             })}

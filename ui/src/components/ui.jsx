@@ -1,4 +1,5 @@
 import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
+import { createPortal } from 'react-dom'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -2868,13 +2869,16 @@ export function PageHelp({ anchor }) {
         </svg>
         <span className="hidden sm:inline">Help</span>
       </button>
-      {open && (
+      {open && createPortal(
         // No fallback element: the panel is the only thing on screen that would
         // change, and a skeleton the size of a full-height sheet flashing in
         // and out is more movement than the wait it covers. The chunk is ~14 KB.
+        // On document.body because this button sits in the page bar, whose
+        // stacking level is below the side rail and the phone navigation.
         <Suspense fallback={null}>
           <DocsPanel anchor={anchor} onClose={close} />
-        </Suspense>
+        </Suspense>,
+        document.body,
       )}
     </>
   )
