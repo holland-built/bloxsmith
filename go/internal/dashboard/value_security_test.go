@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -78,11 +79,14 @@ func valueAllOK() map[string]string {
 }
 
 // valueHeld is the by-day read of the days the cube holds: one row a day from
-// first to last, inclusive.
-func valueHeld(first, last string) string {
+// first to last, inclusive, leaving out the days in skip.
+func valueHeld(first, last string, skip ...string) string {
 	rows := []string{}
 	end, _ := time.Parse("2006-01-02", last)
 	for d, _ := time.Parse("2006-01-02", first); !d.After(end); d = d.AddDate(0, 0, 1) {
+		if slices.Contains(skip, d.Format("2006-01-02")) {
+			continue
+		}
 		ts := d.Format("2006-01-02") + "T00:00:00.000"
 		rows = append(rows, `{"PortunusAggThreat_ch.timestamp":"`+ts+`","PortunusAggThreat_ch.timestamp.day":"`+ts+`","PortunusAggThreat_ch.requests":"100"}`)
 	}
@@ -264,6 +268,62 @@ func TestCSPValueSecurity_NewestDayStillLanding(t *testing.T) {
 	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
 	if m := valueOf(t, s.CSPValueSecurity(), "blocked"); m["covered"] != true {
 		t.Errorf("blocked = %v, want covered", m)
+	}
+}
+
+// A day missing from the middle of the current window means the number is not
+// a 30-day total, even though both ends of the window are held.
+func TestCSPValueSecurity_GapInCurrentWindow(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-09-21", "2026-11-19", "2026-11-05")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["value"] != 393407.0 || m["covered"] != false || m["days_held"] != 29 {
+		t.Errorf("blocked = %v, want the value, covered false, 29 days held", m)
+	}
+	if m["days_from"] != "2026-10-21" || m["days_to"] != "2026-11-19" {
+		t.Errorf("days = %v to %v", m["days_from"], m["days_to"])
+	}
+}
+
+// A day missing from the middle of the earlier window gives no trend.
+func TestCSPValueSecurity_GapInPreviousWindowGivesNoTrend(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-09-21", "2026-11-19", "2026-10-05")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["covered"] != true || m["previous"] != nil || m["previous_status"] != "partial" {
+		t.Errorf("blocked = %v, want covered, no previous, previous_status partial", m)
+	}
+}
+
+// Only the newest day may be absent. The day before it missing is a real gap,
+// whether or not the newest day arrived.
+func TestWindowCoverage_NewestDayAllowance(t *testing.T) {
+	const first, last = "2026-10-21", "2026-11-19"
+	for name, tc := range map[string]struct {
+		through string
+		skip    []string
+		want    bool
+	}{
+		"every day":                        {through: last, want: true},
+		"only the newest missing":          {through: "2026-11-18", want: true},
+		"newest and day before missing":    {through: "2026-11-17", want: false},
+		"day before missing, newest held":  {through: last, skip: []string{"2026-11-18"}, want: false},
+		"first day missing":                {through: last, skip: []string{first}, want: false},
+		"middle day missing":               {through: last, skip: []string{"2026-11-05"}, want: false},
+		"middle missing and newest absent": {through: "2026-11-18", skip: []string{"2026-11-05"}, want: false},
+	} {
+		days := map[string]bool{}
+		end, _ := time.Parse("2006-01-02", tc.through)
+		for d, _ := time.Parse("2006-01-02", first); !d.After(end); d = d.AddDate(0, 0, 1) {
+			if !slices.Contains(tc.skip, d.Format("2006-01-02")) {
+				days[d.Format("2006-01-02")] = true
+			}
+		}
+		if got := windowCoverage(days, first, last).covered; got != tc.want {
+			t.Errorf("%s: covered = %v, want %v", name, got, tc.want)
+		}
 	}
 }
 

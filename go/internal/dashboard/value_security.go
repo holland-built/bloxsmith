@@ -34,7 +34,7 @@ import (
 // 393,407) and a trend would have read "up 221%". So a third read lists the
 // days the cube holds, and each window is checked against it
 // (windowCoverage): a current window not fully held keeps its number with
-// covered false and the days it does hold (days_from, days_to), and an
+// covered false and the days it does hold (days_from, days_to, days_held), and an
 // earlier window not fully held gives no trend (previous_status "partial").
 const valueWindow = "last 30 days"
 
@@ -115,6 +115,9 @@ func (s *Service) CSPValueSecurity() map[string]any {
 	days := heldDays(held)
 	cur := windowCoverage(days, day(today, -30), day(today, -1))
 	b["covered"], b["days_from"], b["days_to"] = cur.covered, cur.from, cur.to
+	if cur.covered != nil {
+		b["days_held"] = cur.held
+	}
 	b["window_range"] = []string{day(today, -30), day(today, -1)}
 	b["previous"], b["previous_status"] = nil, "error"
 	if prev := valueMetric(previous, "requests"); prev["status"] == "ok" {
@@ -218,24 +221,24 @@ type coverage struct {
 	// covered is true or false, or nil when the days could not be read.
 	covered  any
 	from, to any // the first and last day held inside the window, or nil
+	held     int // how many days of the window are held
 }
 
 // windowCoverage says whether the cube holds the whole window first..last:
-// a day held on or before first, and last or the day before it held (the
-// newest day can still be landing). Seen live on 2026-11-20: the demo
-// tenant's cube began 2026-10-14, inside the earlier window, so that window
-// held 7 of its 30 days.
+// every day from first through the day before last. Only last itself may be
+// absent, because the newest day can still be landing. Checking the two ends
+// is not enough, since a tenant can be missing days in the middle. Seen live
+// on 2026-11-20: the demo tenant's cube began 2026-10-14, inside the earlier
+// window, so that window held 7 of its 30 days.
 func windowCoverage(days map[string]bool, first, last string) coverage {
 	if days == nil {
 		return coverage{}
 	}
+	var c coverage
 	var from, to string
-	early := false
 	for d := range days {
-		if d <= first {
-			early = true
-		}
 		if d >= first && d <= last {
+			c.held++
 			if from == "" || d < from {
 				from = d
 			}
@@ -244,9 +247,16 @@ func windowCoverage(days map[string]bool, first, last string) coverage {
 			}
 		}
 	}
-	lastT, _ := time.Parse("2006-01-02", last)
-	late := days[last] || days[day(lastT, -1)]
-	c := coverage{covered: early && late}
+	whole := true
+	start, _ := time.Parse("2006-01-02", first)
+	end, _ := time.Parse("2006-01-02", last)
+	for t := start; t.Before(end); t = t.AddDate(0, 0, 1) {
+		if !days[t.Format("2006-01-02")] {
+			whole = false
+			break
+		}
+	}
+	c.covered = whole
 	if from != "" {
 		c.from, c.to = from, to
 	}

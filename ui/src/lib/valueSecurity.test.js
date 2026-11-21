@@ -82,6 +82,13 @@ test('data that stops early names both ends', () => {
   assert.equal(blockedNote({ ...win, covered: false, days_from: '2026-10-21', days_to: '2026-11-10' }, 900), 'Counted Oct 21 to Nov 10 only, the days Infoblox holds')
 })
 
+test('days missing from the middle says how many are counted, with no trend', () => {
+  const gap = { ...win, covered: false, days_from: '2026-10-21', days_to: '2026-11-19', days_held: 29 }
+  assert.equal(blockedNote(gap, 900), 'Counted 29 of these 30 days, the days Infoblox holds')
+  // A late start with a gap as well must not read as "since" that day.
+  assert.equal(blockedNote({ ...gap, days_from: '2026-11-02', days_held: 17 }, 900), 'Counted 17 of these 30 days, the days Infoblox holds')
+})
+
 test('no days held, or coverage not checked, never shows a trend', () => {
   assert.equal(blockedNote({ ...win, covered: false, days_from: null, days_to: null }, 900), 'Infoblox holds no data for these 30 days')
   assert.equal(blockedNote({ ...win, covered: null }, 900), "Couldn't check that Infoblox holds all 30 days")

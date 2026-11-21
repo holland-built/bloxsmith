@@ -46,6 +46,8 @@ export function aheadText(minutes) {
 export function blockedNote(m, value) {
   if (m.covered === false) {
     if (!m.days_from) return 'Infoblox holds no data for these 30 days'
+    // Days missing between the first and last held: neither "since" nor a range is true.
+    if (m.days_held < daysSpanned(m.days_from, m.days_to)) return `Counted ${m.days_held} of these 30 days, the days Infoblox holds`
     const [first, last] = Array.isArray(m.window_range) ? m.window_range : []
     // The newest day can still be landing, so ending the day before is whole.
     const endsEarly = last && m.days_to && m.days_to < dayBefore(last)
@@ -55,6 +57,11 @@ export function blockedNote(m, value) {
   if (m.covered == null) return "Couldn't check that Infoblox holds all 30 days"
   const t = trendText(value, m.previous)
   return t && t[0].toUpperCase() + t.slice(1)
+}
+
+/** How many days first..last spans, counting both ends. */
+function daysSpanned(first, last) {
+  return Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86400000) + 1
 }
 
 /** The day before a YYYY-MM-DD day, as YYYY-MM-DD. */
