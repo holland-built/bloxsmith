@@ -59,6 +59,9 @@
 .vl-report > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 16px; padding-bottom: 12px; border-bottom: 2px solid var(--color-txt) }
 .vl-report h2 { font-size: 22px; font-weight: 700; letter-spacing: -.015em }
 .vl-report > header p { color: var(--color-muted); font-size: 14px }
+.vl-report > header .vl-account { color: var(--color-txt); font-size: 15px; font-weight: 500; overflow-wrap: anywhere }
+.vl-report > header > div { min-width: 0 }
+.vl-report .vl-bar.is-latest { border: 0; background: color-mix(in srgb, var(--color-accent) 20%, transparent) }
 .vl-answer { max-width: 62ch; font-size: 19px; font-weight: 500; line-height: 1.4; text-wrap: pretty }
 .vl-report-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 20px 40px }
 .vl-report .vl-spark { height: 72px }

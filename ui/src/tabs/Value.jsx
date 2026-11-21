@@ -16,10 +16,11 @@ export default function Value() {
   const platform = useApi('/api/csp/value-platform', { poll: 300000 })
   const daily = useApi('/api/csp/value-daily', { poll: 300000 })
   const runs = useApi('/api/desk/runs')
-  const m = useMemo(() => buildModel({ security, platform, runs, daily }), [security, platform, runs, daily])
+  const vault = useApi('/api/vault/status')
+  const m = useMemo(() => buildModel({ security, platform, runs, daily, vault }), [security, platform, runs, daily, vault])
   const securityLoading = security.loading && !security.data
   const platformLoading = platform.loading && !platform.data
-  const stillLoading = [security, platform, daily, runs].some((f) => f.loading && !f.data)
+  const stillLoading = [security, platform, daily, runs, vault].some((f) => f.loading && !f.data)
   return (
     <div className="vl-page">
       <header className="vl-head">

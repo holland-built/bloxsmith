@@ -64,6 +64,33 @@ export function countWork(data, now = Date.now()) {
   }
 }
 
+// The printed report's jobs: only runs recorded on this tenant, inside the
+// whole UTC days the report names (range is [first, last] as YYYY-MM-DD). A run
+// with no tenant may belong to another account, so it is not credited here;
+// `older` says how many were left out. Returns null when the runs did not load
+// and { noPeriod: true } when the range is not two real days.
+export function countReportWork(data, range) {
+  if (!data || !Array.isArray(data.runs)) return null
+  const from = Array.isArray(range) && range.length === 2 ? Date.parse(`${range[0]}T00:00:00Z`) : NaN
+  const last = Array.isArray(range) && range.length === 2 ? Date.parse(`${range[1]}T00:00:00Z`) : NaN
+  if (!Number.isFinite(from) || !Number.isFinite(last) || last < from) return { noPeriod: true }
+  const end = last + 24 * 60 * 60 * 1000
+  const sources = new Set(SOURCES.map(([s]) => s))
+  let jobs = 0
+  let objects = 0
+  let older = 0
+  for (const r of data.runs) {
+    if (!sources.has(r.source || '') || !DONE.has(r.status)) continue
+    const t = Date.parse(r.created)
+    if (!Number.isFinite(t) || t < from || t >= end) continue
+    if (!r.tenant) { older += 1; continue }
+    if (r.tenant !== data.tenant) continue
+    jobs += 1
+    objects += Array.isArray(r.objects) ? r.objects.length : 0
+  }
+  return { jobs, objects, older, hours: hoursSaved(jobs) }
+}
+
 // Jobs x MINUTES_PER_JOB, in hours to one decimal place.
 export function hoursSaved(jobs) {
   return Math.round((jobs * MINUTES_PER_JOB) / 6) / 10

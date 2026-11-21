@@ -73,5 +73,11 @@ test('Print report prints only the report', async ({ page }) => {
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('[data-value-report]')).toBeVisible();
   await expect(page.locator('[data-card-grid]')).toBeHidden();
-  await expect(page.locator('[data-value-report] [data-stat="cache_hit"] td')).toHaveText('Not checked');
+  const report = page.locator('[data-value-report]');
+  await expect(report.locator('[data-stat="cache_hit"] td')).toHaveText('Not checked');
+  await expect(report.locator('[data-report-account]')).toHaveText('Baseline Tenant');
+  await expect(report).not.toContainText('baseline-tenant');
+  await expect(report.locator('[data-report-gaps]')).toHaveText('No data for 1 day. Dashed bars are not values.');
+  await expect(report.locator('[data-stat="dhcp_assigned"]')).toContainText('Not available');
+  await expect(report.locator('[data-stat="dhcp_assigned"]')).not.toContainText('test reason');
 });

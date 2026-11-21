@@ -8,7 +8,7 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US')
 function Row({ s }) {
   return (
     <tr data-stat={s.key} data-state={s.state}>
-      <th scope="row">{s.label}{s.note && <small>{s.note}</small>}</th>
+      <th scope="row">{s.label}{s.note && s.state !== 'unavailable' && <small>{s.note}</small>}</th>
       <td className={s.state === 'ok' ? '' : 'vl-word'}>{s.text}</td>
     </tr>
   )
@@ -21,6 +21,7 @@ export default function ValueReport({ m }) {
       <header>
         <div>
           <h2>Monthly value report</h2>
+          {m.account && <p className="vl-account" data-report-account="">{m.account}</p>}
           <p>{m.range ?? 'Last 30 days'}</p>
         </div>
         <p>Prepared {today}</p>
@@ -36,7 +37,8 @@ export default function ValueReport({ m }) {
         {m.daily.state === 'ok' ? (
           <div>
             <DayChart daily={m.daily} still />
-            <p className="vl-note">Blocked per day. Peak: {m.daily.peak.label}, {fmt(m.daily.peak.value)}</p>
+            <p className="vl-note">Blocked per day. Peak: {m.daily.peak.label}, {fmt(m.daily.peak.value)}. The latest day may be incomplete.</p>
+            {m.daily.gapNote && <p className="vl-note" data-report-gaps="">{m.daily.gapNote}</p>}
           </div>
         ) : <p className="vl-note">Daily figures are not available.</p>}
       </div>

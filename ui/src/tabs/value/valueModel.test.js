@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { answerSentence, BLOCKED_COUNTS, buildModel, dailyModel, NO_EARLIER, rangeLabel } from './valueModel.js'
+import { accountName, answerSentence, BLOCKED_COUNTS, buildModel, dailyModel, NO_EARLIER, rangeLabel } from './valueModel.js'
 
 const security = { data: { status: 'ok', metrics: {
   blocked: { status: 'ok', value: 385940, covered: true, previous: null, previous_status: 'partial', window_range: ['2026-10-22', '2026-11-20'] },
@@ -81,4 +81,61 @@ test('platform numbers keep their explanation and per-server list', () => {
 test('range label', () => {
   assert.equal(rangeLabel(['2026-10-22', '2026-11-20']), 'Oct 22 to Nov 20, 2026')
   assert.equal(rangeLabel(null), null)
+})
+
+// The report: jobs counted inside the days it names, for this account only.
+const WINDOW = ['2026-10-22', '2026-11-20']
+const secWith = (window_range) => ({ data: { status: 'ok', metrics: { ...security.data.metrics, blocked: { ...security.data.metrics.blocked, window_range } } } })
+const job = (extra = {}) => ({ source: 'address', status: 'built', tenant: 't', created: '2026-11-10T12:00:00Z', objects: [{}, {}], ...extra })
+const reportWork = (runs, range = WINDOW) => model({ security: secWith(range), runs: { data: { tenant: 't', runs } } }).work
+
+test('the report does not credit jobs with no account on record', () => {
+  const w = reportWork([job(), job({ tenant: '' }), job({ tenant: undefined, objects: [{}, {}, {}] })])
+  assert.equal(w.text, '1')
+  assert.match(w.note, /^2 objects created/)
+  assert.match(w.note, /0\.2 hours/)
+  assert.match(w.note, /Excludes 2 older jobs with no account on record/)
+})
+
+test('only no-account jobs is no jobs for this account, not a count', () => {
+  const w = reportWork([job({ tenant: '' })])
+  assert.equal(w.state, 'none')
+  assert.equal(w.text, 'No jobs recorded')
+})
+
+test('report jobs fall inside the whole UTC days the report names', () => {
+  const w = reportWork([
+    job({ created: '2026-10-21T23:59:59Z', objects: Array(5).fill({}) }),
+    job({ created: '2026-10-22T00:00:00Z', objects: [{}] }),
+    job({ created: '2026-11-20T23:59:59Z', objects: [{}] }),
+    job({ created: '2026-11-21T00:00:00Z', objects: Array(5).fill({}) }),
+  ])
+  assert.equal(w.text, '2')
+  assert.match(w.note, /^2 objects created/)
+})
+
+test('with no report period the job figure is not available', () => {
+  for (const range of [null, ['2026-10-22'], ['nope', 'nope']]) {
+    const w = reportWork([job()], range)
+    assert.equal(w.state, 'unavailable')
+    assert.equal(w.text, 'Not available')
+    assert.doesNotMatch(`${w.text} ${w.note}`, /\d/)
+  }
+})
+
+test('the printed chart explains days with no data', () => {
+  const days = (n) => [{ day: '2026-11-01', value: 5 }, ...Array.from({ length: n }, (_, i) => ({ day: `2026-11-0${i + 2}`, value: null }))]
+  assert.equal(dailyModel({ data: { status: 'ok', days: days(2) } }).gapNote, 'No data for 2 days. Dashed bars are not values.')
+  assert.equal(dailyModel({ data: { status: 'ok', days: days(1) } }).gapNote, 'No data for 1 day. Dashed bars are not values.')
+  assert.equal(dailyModel({ data: { status: 'ok', days: days(0) } }).gapNote, null)
+})
+
+test('the account name is the active label, never an id', () => {
+  const vault = (active, tenants) => ({ data: { active, tenants } })
+  assert.equal(accountName(vault('a1', [{ id: 'a1', label: ' Acme Corp ' }, { id: 'a2', label: 'Other' }])), 'Acme Corp')
+  assert.equal(accountName(vault('a1', [{ id: 'a1', label: '' }])), null)
+  assert.equal(accountName(vault('a1', [{ id: 'a1', label: 'a1' }])), null)
+  assert.equal(accountName(vault('a1', [{ id: 'a1', label: 'Tenant 2' }])), null)
+  assert.equal(accountName(vault(null, [])), null)
+  assert.equal(accountName({ error: new Error('x') }), null)
 })
