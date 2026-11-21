@@ -154,9 +154,9 @@ func (d *Deps) runRecordsBusy() string {
 	store := d.demoStore()
 	live, err := store.Live()
 	if err != nil || demoRunActive(live) {
-		// A crash leaves its lock behind, so startup recovery can miss the run.
-		// Both callers have already seen no work running in this process, and
-		// Recover changes nothing while the lock is still being refreshed.
+		// Startup recovery can miss a run while an older server's lock is
+		// recent. Both callers have already seen no work running in this
+		// process, and Recover changes nothing while another process holds it.
 		_ = store.Recover(time.Now)
 		live, err = store.Live()
 	}

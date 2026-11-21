@@ -272,20 +272,22 @@ func TestUnreadableDemoRunStaysBusyAfterRecovery(t *testing.T) {
 	}
 }
 
-// crashedDemo leaves what a killed process leaves: a record and its lock.
+// crashedDemo leaves what a killed older server leaves: a record and its lock.
 func crashedDemo(t *testing.T, d *Deps, status string) {
 	t.Helper()
 	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(d.StateDir, "demo", "build.lock"), []byte("crashed"), 0o600); err != nil {
+	// An older server's lock: a timestamp and no OS lock, so only age clears it.
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	if err := os.WriteFile(filepath.Join(d.StateDir, "demo", "build.lock"), []byte(stamp), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func ageDemoLock(t *testing.T, d *Deps) {
 	t.Helper()
-	old := time.Now().Add(-11 * time.Minute)
+	old := time.Now().Add(-3 * time.Hour)
 	if err := os.Chtimes(filepath.Join(d.StateDir, "demo", "build.lock"), old, old); err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +300,7 @@ func TestCrashThenRestartClearsOnceTheLockExpires(t *testing.T) {
 
 		restarted := &Deps{StateDir: state, Cfg: &config.Config{}}
 		if err := restarted.demoStore().Recover(time.Now); err == nil {
-			t.Fatalf("%s: startup recovery ignored a recently refreshed lock", status)
+			t.Fatalf("%s: startup recovery ignored an older server's recent lock", status)
 		}
 		if why := restarted.WorkRunning(); why == "" {
 			t.Fatalf("%s: not busy while the lock is recent", status)
@@ -366,5 +368,19 @@ func TestNonEmptyUnreadableDemoRunStillBlocksAnUpdate(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("a non-empty run folder was changed: %v", err)
+	}
+}
+
+func TestDemoRunFolderWithOnlyATempRecordNoLongerBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "run.json.tmp"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf("a folder with only run.json.tmp blocked the update: %s", why)
 	}
 }

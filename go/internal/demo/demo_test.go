@@ -1,12 +1,19 @@
 package demo
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -338,12 +345,11 @@ func TestASecondProcessCannotBuildWhileTheLockIsHeld(t *testing.T) {
 		t.Fatalf("built while another process held the lock: %v", err)
 	}
 	release()
-	// A lock left by a crash is taken over once it is old. Staleness is read
-	// from the file's real timestamp, so use the real clock.
-	leaveLock(t, d.Store, 11*time.Minute)
+	// A file left by a crash holds no OS lock, so it is free.
+	leaveLock(t, d.Store, time.Minute)
 	again, err := d.Store.Lock(time.Now)
 	if err != nil {
-		t.Fatalf("a stale lock was not taken over: %v", err)
+		t.Fatalf("a lock left by a crash was not taken: %v", err)
 	}
 	again()
 }
@@ -355,7 +361,7 @@ func leaveLock(t *testing.T, s Store, age time.Duration) {
 		t.Fatal(err)
 	}
 	p := filepath.Join(s.Dir, "build.lock")
-	if err := os.WriteFile(p, []byte("crashed-owner"), 0o600); err != nil {
+	if err := os.WriteFile(p, []byte("oslock"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-age)
@@ -364,124 +370,326 @@ func leaveLock(t *testing.T, s Store, age time.Duration) {
 	}
 }
 
-func fastHeartbeat(t *testing.T) {
-	t.Helper()
-	was := lockHeartbeat
-	lockHeartbeat = 5 * time.Millisecond
-	t.Cleanup(func() { lockHeartbeat = was })
+// TestLockHelperProcess is not a test of its own. The tests below re-run this
+// binary to get a real second process that takes the lock and holds it until
+// its stdin closes.
+func TestLockHelperProcess(t *testing.T) {
+	dir := os.Getenv("DEMO_LOCK_HELPER_DIR")
+	if dir == "" {
+		t.Skip("runs only as a helper process")
+	}
+	if start := os.Getenv("DEMO_LOCK_HELPER_START"); start != "" {
+		fmt.Println("ready")
+		for {
+			if _, err := os.Stat(start); err == nil {
+				break
+			}
+			time.Sleep(100 * time.Microsecond)
+		}
+	}
+	release, err := Store{Dir: dir}.Lock(time.Now)
+	if err != nil {
+		fmt.Println("busy")
+	} else {
+		fmt.Println("held")
+		defer release()
+	}
+	_, _ = io.Copy(io.Discard, os.Stdin)
 }
 
-func TestARefreshedLockOlderThanTwoHoursIsNotTakenOver(t *testing.T) {
-	fastHeartbeat(t)
+type lockHelper struct {
+	cmd   *exec.Cmd
+	stdin io.Closer
+	lines chan string
+}
+
+func startLockHelper(t *testing.T, dir, start string) *lockHelper {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestLockHelperProcess$")
+	cmd.Env = append(os.Environ(), "DEMO_LOCK_HELPER_DIR="+dir, "DEMO_LOCK_HELPER_START="+start)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	h := &lockHelper{cmd: cmd, stdin: stdin, lines: make(chan string, 4)}
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			h.lines <- sc.Text()
+		}
+		close(h.lines)
+	}()
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	return h
+}
+
+func (h *lockHelper) next(t *testing.T) string {
+	t.Helper()
+	select {
+	case l := <-h.lines:
+		return l
+	case <-time.After(20 * time.Second):
+		t.Fatal("the helper process did not answer")
+		return ""
+	}
+}
+
+func TestLockHeldByAnotherProcessIsNotTakenEvenWithAnOldFileTime(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	const ch = "c-20260101-000001"
 	if err := s.Save(&Run{Change: ch, Status: "building", VMID: 9001}); err != nil {
 		t.Fatal(err)
 	}
-	release, err := s.Lock(time.Now)
-	if err != nil {
-		t.Fatal(err)
+	h := startLockHelper(t, s.Dir, "")
+	if got := h.next(t); got != "held" {
+		t.Fatalf("helper: %q", got)
 	}
-	defer release()
-	p := filepath.Join(s.Dir, "build.lock")
 	old := time.Now().Add(-3 * time.Hour)
-	if err := os.Chtimes(p, old, old); err != nil {
+	if err := os.Chtimes(filepath.Join(s.Dir, "build.lock"), old, old); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		st, err := os.Stat(p)
-		if err == nil && time.Since(st.ModTime()) < time.Minute {
-			break
+	if release, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		if err == nil {
+			release()
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("the held lock was never refreshed")
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-	if _, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
-		t.Fatalf("a refreshed lock was taken over: %v", err)
+		t.Fatalf("a lock held by a live process was taken: %v", err)
 	}
 	if err := s.Recover(time.Now); !errors.Is(err, ErrBusy) {
-		t.Fatalf("recovery ran under a refreshed lock: %v", err)
+		t.Fatalf("recovery ran under a live process's lock: %v", err)
 	}
 	if r, _ := s.Load(ch); r == nil || r.Status != "building" {
 		t.Fatalf("a live run was changed: %+v", r)
 	}
 }
 
-func TestALockNotRefreshedForTenMinutesIsTakenOver(t *testing.T) {
+func TestLockIsFreeTheMomentItsOwnerIsKilled(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
-	leaveLock(t, s, 9*time.Minute)
-	if _, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
-		t.Fatalf("a lock refreshed nine minutes ago was taken over: %v", err)
+	const ch = "c-20260101-000001"
+	if err := s.Save(&Run{Change: ch, Status: "building", VMID: 9001}); err != nil {
+		t.Fatal(err)
 	}
-	leaveLock(t, s, 11*time.Minute)
+	h := startLockHelper(t, s.Dir, "")
+	if got := h.next(t); got != "held" {
+		t.Fatalf("helper: %q", got)
+	}
+	if err := h.cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	for range h.lines { // stdout closes once the process is gone
+	}
+	_ = h.cmd.Wait()
+	if err := s.Recover(time.Now); err != nil {
+		t.Fatalf("the lock of a killed process was not free: %v", err)
+	}
+	if r, _ := s.Load(ch); r == nil || r.Status != "failed" || r.VMID != 9001 {
+		t.Fatalf("the run was not recovered: %+v", r)
+	}
+}
+
+func TestOlderServersTimestampLockIsHonoredForTwoHours(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	p := filepath.Join(s.Dir, "build.lock")
+	write := func(age time.Duration) {
+		t.Helper()
+		at := time.Now().Add(-age)
+		if err := os.WriteFile(p, []byte(at.UTC().Format(time.RFC3339)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(time.Hour)
+	if release, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		if err == nil {
+			release()
+		}
+		t.Fatalf("a one-hour-old timestamp lock was taken: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatalf("a refused lock lost the older server's file: %v", err)
+	}
+	write(3 * time.Hour)
 	release, err := s.Lock(time.Now)
 	if err != nil {
-		t.Fatalf("a lock unrefreshed for eleven minutes was not taken over: %v", err)
+		t.Fatalf("a three-hour-old timestamp lock was not taken: %v", err)
 	}
 	release()
 }
 
-func TestReleaseLeavesALockNowOwnedBySomeoneElse(t *testing.T) {
-	fastHeartbeat(t)
+func TestAnEmptyLockFileIsFree(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	if err := os.WriteFile(filepath.Join(s.Dir, "build.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatalf("an empty lock file was not free: %v", err)
+	}
+	release()
+}
+
+// Guard: an older server creates the file, then writes its timestamp.
+func TestLockWaitsForAnOlderServerToWriteItsTimestamp(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	p := filepath.Join(s.Dir, "build.lock")
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	go func() {
+		time.Sleep(time.Millisecond)
+		_, _ = f.WriteString(time.Now().UTC().Format(time.RFC3339))
+	}()
+	if release, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		if err == nil {
+			release()
+		}
+		t.Fatalf("took the lock while an older server was writing it: %v", err)
+	}
+}
+
+// Guard: an older server only checks that the file exists.
+func TestOlderServerIsKeptOutUntilRelease(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	release, err := s.Lock(time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := filepath.Join(s.Dir, "build.lock")
-	if err := os.WriteFile(p, []byte("another-owner"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(30 * time.Millisecond) // the heartbeat sees the other token and stops
-	old := time.Now().Add(-time.Hour).Truncate(time.Second)
-	if err := os.Chtimes(p, old, old); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(30 * time.Millisecond)
-	if st, err := os.Stat(p); err != nil || !st.ModTime().Equal(old) {
-		t.Fatalf("the heartbeat touched another owner's lock: %v", err)
+	if _, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("an older server could create the lock during a build: %v", err)
 	}
 	release()
-	if b, err := os.ReadFile(p); err != nil || string(b) != "another-owner" {
-		t.Fatalf("release changed another owner's lock: %q %v", b, err)
+	if runtime.GOOS == "windows" {
+		return // Windows empties the file instead of removing it.
+	}
+	if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("release left the file, which keeps an older server out: %v", err)
 	}
 }
 
-func TestConcurrentTakeoverHasExactlyOneWinner(t *testing.T) {
-	// A slow clock holds each process between "this lock is stale" and acting on it.
-	slow := func() time.Time { time.Sleep(time.Millisecond); return time.Now() }
-	for round := 0; round < 30; round++ {
+// Guard: goroutines and real processes race for one lock.
+func TestConcurrentLockHasExactlyOneWinner(t *testing.T) {
+	for round := 0; round < 5; round++ {
 		s := Store{Dir: t.TempDir()}
-		leaveLock(t, s, time.Hour*3)
-		const n = 16
-		results := make(chan func(), n)
-		start := make(chan struct{})
-		for i := 0; i < n; i++ {
+		start := filepath.Join(t.TempDir(), "go")
+		helpers := make([]*lockHelper, 4)
+		for i := range helpers {
+			helpers[i] = startLockHelper(t, s.Dir, start)
+			if got := helpers[i].next(t); got != "ready" {
+				t.Fatalf("helper: %q", got)
+			}
+		}
+		const goroutines = 8
+		results := make(chan func(), goroutines)
+		gate := make(chan struct{})
+		for i := 0; i < goroutines; i++ {
 			go func() {
-				<-start
-				release, err := s.Lock(slow)
+				<-gate
+				release, err := s.Lock(time.Now)
 				if err != nil {
 					release = nil
 				}
 				results <- release
 			}()
 		}
-		close(start)
-		var winners []func()
-		for i := 0; i < n; i++ {
+		if err := os.WriteFile(start, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		close(gate)
+		winners := 0
+		var releases []func()
+		for i := 0; i < goroutines; i++ {
 			if r := <-results; r != nil {
-				winners = append(winners, r)
+				winners++
+				releases = append(releases, r)
 			}
 		}
-		for _, r := range winners {
+		for _, h := range helpers {
+			if h.next(t) == "held" {
+				winners++
+			}
+		}
+		for _, r := range releases {
 			r()
 		}
-		if len(winners) != 1 {
-			t.Fatalf("round %d: %d processes took over one stale lock", round, len(winners))
+		for _, h := range helpers {
+			_ = h.stdin.Close()
 		}
+		if winners != 1 {
+			t.Fatalf("round %d: %d winners for one lock", round, winners)
+		}
+	}
+}
+
+// Guard: release removes the file, so a waiter can hold a removed file unless
+// Lock checks it is still the one at the path.
+func TestLockNeverHasTwoHoldersWhileBeingReleased(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	var holders, overlaps atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				release, err := s.Lock(time.Now)
+				if err != nil {
+					continue
+				}
+				if holders.Add(1) != 1 {
+					overlaps.Add(1)
+				}
+				time.Sleep(10 * time.Microsecond)
+				holders.Add(-1)
+				release()
+			}
+		}()
+	}
+	wg.Wait()
+	if n := overlaps.Load(); n != 0 {
+		t.Fatalf("%d times two callers held the lock at once", n)
+	}
+}
+
+func TestRecoverClearsAFolderWithOnlyATempRecord(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	tmpOnly := s.runDir("c-20260101-000001")
+	withMore := s.runDir("c-20260101-000002")
+	for _, dir := range []string{tmpOnly, withMore} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "run.json.tmp"), []byte("{"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(withMore, "ip"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Recover(time.Now); err == nil {
+		t.Fatal("the folder with other files was not reported")
+	}
+	if _, err := os.Stat(tmpOnly); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the folder with only run.json.tmp was not cleared: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(withMore, "run.json.tmp")); err != nil {
+		t.Fatalf("a folder with other files was changed: %v", err)
+	}
+	if _, err := s.Live(); err == nil {
+		t.Fatal("the folder with other files stopped counting as busy")
 	}
 }
 
@@ -772,7 +980,7 @@ func TestRecoverChangesNothingWhileALiveLockExists(t *testing.T) {
 	}
 }
 
-func TestRecoverTakesOverAnUnrefreshedLock(t *testing.T) {
+func TestRecoverTakesALockLeftByACrash(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	const ch = "c-20260101-000001"
 	if err := s.Save(&Run{Change: ch, Status: "building"}); err != nil {
