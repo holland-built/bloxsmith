@@ -69,7 +69,7 @@ export function RefreshBar() {
 }
 
 /** How often the screen reloads by itself, and a button to reload it now. */
-export function RefreshControl({ inHeader = false }) {
+export function RefreshControl({ inHeader = false, shell = false }) {
   const choice = useRefreshChoice()
   const [paused, setPaused] = useState(false)
   const pauseRef = useRef(null)
@@ -80,7 +80,8 @@ export function RefreshControl({ inHeader = false }) {
     pauseRef.current = setTimeout(() => setPaused(false), REFRESH_PAUSE_MS)
   }
   return (
-    <span className={`${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`}>
+    <span className={shell ? 'sx-refresh' : `${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`} data-off={shell && choice === 'off' ? '' : undefined}>
+      {shell && choice === 'off' && <span className="sx-refresh-off">Auto refresh off</span>}
       {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">{REFRESH_OFF}</span>}
       <select
         aria-label="Automatic refresh"
@@ -107,7 +108,7 @@ export function RefreshControl({ inHeader = false }) {
   )
 }
 
-export default function ConnStatus() {
+export default function ConnStatus({ shell = false }) {
   const [locked, setLocked] = useState(false)
   const [open, setOpen] = useState(false)
   const chipRef = useRef(null)
@@ -311,20 +312,20 @@ export default function ConnStatus() {
   const body = (
     <>
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-      <span className="flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2">
+      <span className={shell ? 'sx-conn-body' : 'flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2'}>
         {shownName && (
-          <span className="truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt">{shownName}</span>
+          <span className={shell ? undefined : 'truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt'}>{shownName}</span>
         )}
         {stateWord && (
           <span
             data-state
-            className={`truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] ${shownName ? 'text-note' : 'text-copy font-medium'} ${stateTone}`}
+            className={shell ? stateTone : `truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] ${shownName ? 'text-note' : 'text-copy font-medium'} ${stateTone}`}
           >
             {stateWord}
           </span>
         )}
         {writeWords && (
-          <span data-write className={`break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
+          <span data-write className={shell ? writeTone : `break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
         )}
       </span>
       {/* A chip that opens a tenant list says so; one tenant is not a choice. */}
@@ -335,7 +336,7 @@ export default function ConnStatus() {
       )}
     </>
   )
-  const chipCls = 'flex items-center gap-2 min-w-0 min-h-9 lg:h-8 py-1 lg:py-0 px-2.5 rounded-control border border-border bg-field'
+  const chipCls = shell ? 'sx-conn' : 'flex items-center gap-2 min-w-0 min-h-9 lg:h-8 py-1 lg:py-0 px-2.5 rounded-control border border-border bg-field'
 
   if (!canSwitch) {
     return (

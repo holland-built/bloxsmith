@@ -1,15 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FOCUS_RING } from './ui.jsx'
+import { JOBS } from '../lib/navJobs.js'
 
-// The everyday jobs, always one click away: at the top of the page menu from
-// md up, a bar along the bottom on a phone.
-const JOBS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'selfservice', label: 'Get an address' },
-  { id: 'automate', label: 'Automate' },
-  { id: 'daily', label: 'Daily report' },
-  { id: 'chart', label: 'Charts' },
-]
 const JOB_IDS = new Set(JOBS.map((j) => j.id))
 
 const linkCls = (on) => `${FOCUS_RING} no-underline ${on ? 'text-accent font-semibold border-accent' : 'text-muted border-transparent hover:text-txt'}`

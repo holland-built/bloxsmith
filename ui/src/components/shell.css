@@ -1,0 +1,281 @@
+/* The trial frame looks (?shell=a, b, c). This file is imported only by
+   ShellFrame, which loads only when a look is on, and every rule outside the
+   sx- classes is scoped to html[data-shell]. Meaning colours stay the app's own
+   ok, warn and crit tokens. */
+
+html[data-shell] {
+  --sx-top: 56px;
+  --sx-side: 216px;
+  --sx-tint: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  --sx-ring: color-mix(in srgb, var(--color-accent) 38%, transparent);
+  --sx-hover: color-mix(in srgb, var(--color-txt) 7%, transparent);
+  --sx-shadow: 0 1px 2px rgb(0 0 0 / .08);
+  --sx-pop: 0 12px 32px -8px rgb(0 0 0 / .35), 0 0 0 1px color-mix(in srgb, var(--color-txt) 10%, transparent);
+  scroll-padding-block-start: calc(var(--sx-top) + 8px);
+}
+html[data-shell='c'] { --sx-side: 56px; }
+
+.sx-root { min-height: 100dvh; display: flex; }
+.sx-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sx-main { flex: 1; min-width: 0; outline: none; padding-bottom: 56px; }
+
+/* ---------- shared controls ---------- */
+.sx-icon, .sx-find, .sx-page-btn, .sx-link, .sx-bottom-item, .sx-switch button, .sx-switch a {
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.sx-icon {
+  position: relative; width: 36px; height: 36px; flex: none;
+  display: inline-grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px;
+  color: var(--color-muted); background: transparent; cursor: pointer;
+}
+.sx-find {
+  height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: var(--sx-hover); color: var(--color-muted); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.sx-icon:not(:disabled):active, .sx-find:active, .sx-page-btn:active, .sx-bottom-item:active { scale: .96; }
+.sx-dot {
+  position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-accent); border: 2px solid var(--color-bg); box-sizing: content-box;
+}
+:is(.sx-icon, .sx-find, .sx-page-btn, .sx-link, .sx-bottom-item, .sx-logo, .sx-switch button, .sx-switch a):focus-visible {
+  outline: 2px solid var(--color-accent); outline-offset: 1px;
+}
+
+/* ---------- top row ---------- */
+.sx-top {
+  position: sticky; top: 0; z-index: 10;
+  min-height: var(--sx-top);
+  display: flex; align-items: center; gap: 12px; padding: 8px 24px;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+.sx-where { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.sx-where-text { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.sx-phone-logo { display: none; }
+.sx-wordmark { flex: none; letter-spacing: -.01em; }
+.sx-logo { flex: none; display: inline-grid; place-items: center; cursor: pointer; border-radius: 6px; }
+.sx-search { flex: 0 1 520px; min-width: 0; }
+.sx-tools { flex: none; display: flex; align-items: center; gap: 4px; }
+.sx-tools [data-theme-toggle], .sx-sheet-tools [data-theme-toggle] {
+  display: inline-grid; width: 36px; height: 36px; border-color: transparent; background: transparent; border-radius: 8px;
+}
+.sx-phone-only { display: none; }
+
+/* The connection: one line, the whole name, never cut. */
+.sx-conn { display: inline-flex; align-items: center; gap: 7px; min-width: 0; padding: 0; background: none; border: 0; text-align: start; }
+button.sx-conn { cursor: pointer; }
+.sx-conn-body { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 7px; min-width: 0; line-height: 1.3; }
+.sx-conn-body > span { font-size: 12px; overflow-wrap: anywhere; }
+.sx-conn-body > span:first-child { color: var(--color-txt); font-weight: 500; }
+
+/* Refresh: the timer and the button read as one control. */
+.sx-refresh { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.sx-refresh select {
+  height: 36px; width: auto; padding: 0 4px 0 8px;
+  border-color: transparent; background-color: transparent; color: var(--color-muted);
+  border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+.sx-refresh button { width: 36px; height: 36px; border-color: transparent; background: transparent; border-radius: 8px; position: relative; }
+.sx-refresh-off { font-size: 12px; color: var(--color-warn); white-space: nowrap; margin-inline-end: 4px; }
+.sx-refresh[data-off] button { color: var(--color-warn); }
+
+/* ---------- side menu ---------- */
+.sx-side { flex: none; width: var(--sx-side); position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; z-index: 20; }
+.sx-side-head { height: var(--sx-top); flex: none; display: flex; align-items: center; gap: 10px; padding: 0 18px; white-space: nowrap; }
+.sx-nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 10px 16px; display: flex; flex-direction: column; gap: 2px; }
+.sx-nav-gap { height: 14px; flex: none; }
+.sx-link {
+  width: 100%; min-height: 34px; display: flex; align-items: center; gap: 10px; padding: 6px 9px;
+  border: 0; border-radius: 8px; background: transparent;
+  color: var(--color-muted); font-size: 13px; text-align: start; text-decoration: none; cursor: pointer;
+}
+.sx-link > svg { flex: none; }
+.sx-link-text { min-width: 0; flex: 1; }
+.sx-link[aria-current='page'] {
+  background: var(--sx-tint); box-shadow: inset 0 0 0 1px var(--sx-ring);
+  color: var(--color-txt); font-weight: 600;
+}
+.sx-link[aria-current='page'] > svg { color: var(--color-link); }
+.sx-group[data-holds-page] { color: var(--color-txt); }
+.sx-fold { display: inline-grid; flex: none; transition: rotate 150ms ease-out; }
+.sx-fold[data-open] { rotate: 180deg; }
+.sx-sub { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px 26px; }
+.sx-sublink { min-height: 30px; padding-block: 4px; }
+
+/* ---------- a. Quiet workspace ---------- */
+html[data-shell='a'] .sx-side { background: transparent; }
+html[data-shell='a'] .sx-top { padding-inline: 24px; }
+html[data-shell='a'] [data-panel-id] { border-color: transparent; border-radius: 14px; box-shadow: var(--sx-shadow); }
+
+/* ---------- b. Command bar ---------- */
+html[data-shell='b'] .sx-top {
+  background: var(--color-card); backdrop-filter: none;
+  border-bottom: 1px solid var(--color-card-border);
+  padding-inline: 16px;
+}
+html[data-shell='b'] .sx-where { flex: 1 1 0; }
+html[data-shell='b'] .sx-phone-logo { display: inline-grid; }
+html[data-shell='b'] .sx-tools { flex: 1 1 0; justify-content: flex-end; }
+.sx-page-btn {
+  height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px;
+  border: 0; border-radius: 8px; background: var(--sx-tint); box-shadow: inset 0 0 0 1px var(--sx-ring);
+  color: var(--color-txt); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+html[data-shell='b'] [data-panel-id] { border-radius: 10px; box-shadow: var(--sx-shadow); }
+
+/* ---------- c. Rail ---------- */
+html[data-shell='c'] .sx-side {
+  background: var(--color-card); border-inline-end: 1px solid var(--color-card-border);
+  overflow: hidden; transition: width 180ms cubic-bezier(.2, 0, 0, 1);
+}
+html[data-shell='c'] .sx-side-head { padding: 0 18px; }
+html[data-shell='c'] .sx-nav { padding-inline: 8px; overflow-x: hidden; }
+html[data-shell='c'] .sx-link { padding-inline: 11px; white-space: nowrap; }
+html[data-shell='c'] .sx-side:not(:focus-within, [data-open]) .sx-link-text,
+html[data-shell='c'] .sx-side:not(:focus-within, [data-open]) .sx-fold,
+html[data-shell='c'] .sx-side:not(:focus-within, [data-open]) .sx-sub { display: none; }
+html[data-shell='c'] .sx-side:is(:focus-within, [data-open]) { width: 232px; margin-inline-end: -176px; box-shadow: var(--sx-pop); }
+.sx-rail-toggle { display: none; margin-inline-start: auto; }
+html[data-shell='c'] .sx-side:is(:focus-within, [data-open]) .sx-rail-toggle { display: inline-grid; }
+html[data-shell='c'] [data-panel-id] { border-radius: 8px; }
+/* The rail gives content the room: the top row scrolls away with the page. */
+html[data-shell='c'] { scroll-padding-block-start: 8px; }
+html[data-shell='c'] .sx-top { position: static; background: transparent; backdrop-filter: none; }
+@media (hover: none) {
+  html[data-shell='c'] .sx-side-head { padding-inline: 10px; }
+  html[data-shell='c'] .sx-side-head .sx-logo { display: none; }
+  html[data-shell='c'] .sx-rail-toggle { display: inline-grid; margin-inline-start: 0; }
+}
+@media (hover: hover) {
+  html[data-shell='c'] .sx-side:hover .sx-link-text { display: block; }
+  html[data-shell='c'] .sx-side:hover .sx-fold { display: inline-grid; }
+  html[data-shell='c'] .sx-side:hover .sx-sub { display: flex; }
+  html[data-shell='c'] .sx-side:hover { width: 232px; margin-inline-end: -176px; box-shadow: var(--sx-pop); }
+}
+
+/* ---------- panel cards, all looks ---------- */
+html[data-shell] [data-panel-menu-toggle],
+html[data-shell] [data-panel-help-toggle] {
+  border-color: transparent; background: transparent; color: var(--color-muted);
+  min-width: 28px; min-height: 28px; border-radius: 6px;
+}
+@media (hover: hover) {
+  html[data-shell] [data-panel-id]:not(:hover, :focus-within) [data-panel-menu-toggle][aria-expanded='false'],
+  html[data-shell] [data-panel-id]:not(:hover, :focus-within) [data-panel-help-toggle][aria-expanded='false'] { opacity: 0; }
+  html[data-shell] [data-panel-menu-toggle]:hover,
+  html[data-shell] [data-panel-help-toggle]:hover { background: var(--sx-hover); color: var(--color-txt); }
+  .sx-icon:hover, .sx-refresh button:not(:disabled):hover, .sx-refresh select:hover, .sx-tools [data-theme-toggle]:hover { background: var(--sx-hover); color: var(--color-txt); }
+  .sx-find:hover { color: var(--color-txt); }
+  .sx-link:not([aria-current='page']):hover { background: var(--sx-hover); color: var(--color-txt); }
+  .sx-bottom-item:hover { color: var(--color-txt); }
+  .sx-switch a:hover { background: var(--sx-hover); }
+}
+
+/* "Arrange panels" is a tool, not a switch that is on. */
+html[data-shell] [data-layout-arrange] {
+  border-color: transparent; background: transparent;
+  color: var(--color-muted); font-weight: 500; padding-inline: 6px; margin-inline-start: -6px;
+}
+html[data-shell] [data-layout-arrange]:hover { background: var(--sx-hover); border-color: transparent; color: var(--color-txt); }
+html[data-shell] [data-layout-arrange][aria-expanded='true'] { background: var(--sx-tint); color: var(--color-txt); }
+
+/* ---------- all-pages dialog ---------- */
+.sx-sheet {
+  width: min(880px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 88px);
+  margin: 64px auto 0; padding: 0; border: 0; border-radius: 14px;
+  background: var(--color-card); color: var(--color-txt); box-shadow: var(--sx-pop);
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.sx-sheet::backdrop { background: rgb(0 0 0 / .45); }
+.sx-sheet-inner { padding: 12px 16px 16px; }
+.sx-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sx-sheet-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.sx-sheet-title { display: flex; align-items: center; gap: 6px; padding: 4px 9px; font-size: 12px; font-weight: 600; color: var(--color-muted); }
+.sx-sheet-tools { display: none; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-card-border); font-size: 13px; color: var(--color-muted); }
+.sx-sheet-tools > span:first-child { flex: 1; }
+
+/* ---------- phone bottom menu ---------- */
+.sx-bottom { display: none; }
+.sx-bottom-item {
+  min-width: 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 4px 2px; border: 0; background: transparent; color: var(--color-muted);
+  font-size: 11px; line-height: 1.15; text-align: center; text-decoration: none; cursor: pointer;
+}
+.sx-bottom-item[aria-current='page'] { color: var(--color-link); font-weight: 600; }
+
+/* ---------- the look switch ---------- */
+.sx-switch { position: fixed; z-index: 45; inset-block-end: 16px; inset-inline-end: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.sx-switch > button {
+  height: 32px; padding: 0 12px; border: 1px solid var(--color-card-border); border-radius: 8px;
+  background: var(--color-card); color: var(--color-txt); font-size: 12px; font-weight: 500; box-shadow: var(--sx-pop); cursor: pointer;
+}
+.sx-switch-list { display: flex; flex-direction: column; min-width: 150px; padding: 4px; border-radius: 10px; background: var(--color-card); box-shadow: var(--sx-pop); }
+.sx-switch-list a { padding: 8px 10px; border-radius: 6px; color: var(--color-txt); font-size: 13px; text-decoration: none; }
+.sx-switch-list a[aria-current] { background: var(--sx-tint); box-shadow: inset 0 0 0 1px var(--sx-ring); font-weight: 600; }
+
+/* ---------- narrower desks ---------- */
+@media (max-width: 1099px) {
+  html[data-shell='b'] .sx-wordmark { display: none; }
+  .sx-find span { display: none; }
+  .sx-find { width: 36px; padding: 0; justify-content: center; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 767px) {
+  html[data-shell] { --sx-top: 52px; }
+  .sx-side, .sx-search, .sx-wordmark { display: none; }
+  .sx-phone-logo { display: inline-grid; }
+  .sx-phone-only { display: inline-grid; }
+  .sx-top, html[data-shell] .sx-top { padding: 6px 12px; gap: 6px; }
+  .sx-where { gap: 8px; }
+  .sx-where-text { flex-direction: column; align-items: flex-start; gap: 0; }
+  html[data-shell='b'] .sx-where, html[data-shell='b'] .sx-tools { flex: initial; }
+  html[data-shell='b'] .sx-where { flex: 1; }
+  .sx-page-btn { height: 22px; padding: 0 6px; margin-inline-start: -6px; background: none; box-shadow: none; font-size: 14px; }
+  .sx-tools { gap: 0; }
+  .sx-find { background: transparent; color: var(--color-muted); }
+  .sx-tools .sx-refresh select, .sx-tools .sx-refresh-off, .sx-tools [data-theme-toggle] { display: none; }
+  .sx-tools > button[aria-label='Help for this page'] { width: 36px; height: 36px; justify-content: center; padding: 0; color: var(--color-muted); }
+  .sx-switch-name { display: none; }
+  .sx-main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .sx-bottom {
+    position: fixed; z-index: 40; inset-inline: 0; inset-block-end: 0;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--color-card); border-top: 1px solid var(--color-card-border);
+  }
+  .sx-switch { inset-block-end: calc(66px + env(safe-area-inset-bottom, 0px)); inset-inline-end: 10px; }
+  .sx-sheet { width: 100%; max-height: 82dvh; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  html[data-shell='b'] .sx-sheet { margin: 0 0 auto; border-radius: 0 0 16px 16px; }
+  html[data-shell='c'] .sx-sheet { width: min(320px, 88%); height: 100dvh; max-height: none; margin: 0 auto 0 0; border-radius: 0 16px 16px 0; }
+  .sx-sheet-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  html[data-shell='c'] .sx-sheet-groups { grid-template-columns: minmax(0, 1fr); }
+  .sx-sheet-tools { display: flex; }
+
+  /* a: the bottom menu melts into the page. */
+  html[data-shell='a'] .sx-bottom { background: var(--color-bg); border-top-color: transparent; }
+
+  /* c: a slim icon dock. Only the current page keeps its word on screen; the
+     others keep theirs for screen readers and voice control. */
+  html[data-shell='c'] .sx-main { padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+  html[data-shell='c'] .sx-bottom { display: flex; align-items: center; gap: 2px; padding-inline: 6px; }
+  html[data-shell='c'] .sx-bottom-item { flex: 1 1 0; min-height: 44px; flex-direction: row; gap: 6px; border-radius: 8px; }
+  html[data-shell='c'] .sx-bottom-item:not([aria-current='page']) > span {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  html[data-shell='c'] .sx-bottom-item[aria-current='page'] {
+    flex: 2.4 1 auto; background: var(--sx-tint); box-shadow: inset 0 0 0 1px var(--sx-ring); color: var(--color-txt);
+  }
+  html[data-shell='c'] .sx-bottom-item[aria-current='page'] > svg { color: var(--color-link); }
+  html[data-shell='c'] .sx-switch { inset-block-end: calc(58px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sx-icon, .sx-find, .sx-page-btn, .sx-link, .sx-bottom-item, .sx-fold, html[data-shell='c'] .sx-side { transition-property: background-color, color; }
+  .sx-icon:active, .sx-find:active, .sx-page-btn:active, .sx-bottom-item:active { scale: none; }
+}

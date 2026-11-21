@@ -55,6 +55,9 @@ import OneBox from './components/OneBox.jsx'
 import { JobRail, JobBar } from './components/JobNav.jsx'
 import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
+import { shellLook } from './lib/shellLook.js'
+// The trial frame looks. Fetched only when ?shell= is set.
+const ShellFrame = lazy(() => import('./components/ShellFrame.jsx'))
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -556,6 +559,33 @@ export default function App() {
             layout entirely — the header's sticky positioning and the flex rows
             below it see exactly the box tree they saw before. */}
         <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
+          {shellLook ? (
+            <Suspense fallback={<TabLoading />}>
+              <ShellFrame
+                look={shellLook}
+                tab={tab}
+                groups={GROUPS}
+                tabs={TABS}
+                activeLabel={activeLabel}
+                hasGroup={!!groupOf(tab)}
+                brandDomain={brandDomain}
+                logoBust={logoBust}
+                onBrand={() => setShowBrand(true)}
+                settingsBtnRef={settingsBtnRef}
+                settingsOpen={showAccounts}
+                settingsNote={settingsNote}
+                onSettings={() => setShowAccounts(true)}
+                mainRef={mainRef}
+              >
+                <TabErrorBoundary tab={tab}>
+                  <Suspense fallback={<TabLoading />}>
+                    <Active />
+                  </Suspense>
+                </TabErrorBoundary>
+              </ShellFrame>
+            </Suspense>
+          ) : (
+          <>
           <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-card-border bg-card sticky top-0 z-10">
             <button
               type="button"
@@ -676,6 +706,8 @@ export default function App() {
             </main>
           </div>
           <JobBar tab={tab} />
+          </>
+          )}
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>
         {/* Said out loud on every tab change. Focus moving into <main> covers

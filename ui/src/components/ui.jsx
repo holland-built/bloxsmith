@@ -12,6 +12,7 @@ import {
 } from '../lib/layout.js'
 import { utilBand } from '../lib/utilBands.js'
 import { dialogKeyDown } from '../lib/focusTrap.js'
+import { shellLook } from '../lib/shellLook.js'
 
 // Where each panel's numbers come from (dashboard/panel_sources.go), by id.
 // Loaded the first time any About opens, not with the page: all 90 entries in
@@ -1644,6 +1645,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   const rightRef = useRef(null)
   const headCanvasRef = useRef(null)
   const bodyNeedRef = useRef(null)
+  const toggleAboutRef = useRef(null)
   const grid = useContext(GridFitContext)
   // Re-render when a web font finishes loading, so the header measurement in
   // publish() (run by the layout effect on every render) uses the real font.
@@ -2352,6 +2354,10 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
     if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setMenuOpen(false)
   }
 
+  // In a trial frame look (?shell=) the ⓘ moves into the ⋯ menu, so a panel
+  // carries one quiet button. Without ?shell this is false and nothing moves.
+  const foldAbout = !!shellLook && !!(hideBtn || handle) && !!(panelId && PANEL_HELP[helpKey ?? panelId])
+
   const menu = hideBtn || handle ? (
     <span ref={menuBoxRef} data-panel-menu="" className="relative shrink-0 inline-flex" onKeyDown={onMenuKey} onBlur={onMenuBlur}>
       <button
@@ -2382,6 +2388,17 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
         // screen for the panel in the last column.
         className="absolute right-0 top-full mt-1 z-30 flex flex-col gap-0.5 rounded-control border border-border bg-card p-1 shadow-lg"
       >
+        {foldAbout && (
+          <button
+            type="button"
+            data-shell-about=""
+            onClick={() => { setMenuOpen(false); menuBtnRef.current?.focus(); toggleAboutRef.current?.() }}
+            className={`${PANEL_MENU_ROW} cursor-pointer text-field-txt hover:bg-line`}
+          >
+            <span aria-hidden="true" className="w-4 text-center text-dim">ⓘ</span>
+            <span>About this panel</span>
+          </button>
+        )}
         {hideBtn}
         {handle}
       </span>
@@ -2504,8 +2521,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
     }
     setHelpPinned(true)
   }, [helpPinned])
+  useEffect(() => { toggleAboutRef.current = toggleHelp }, [toggleHelp])
 
-  const infoBtn = help ? (
+  const infoBtn = help && !foldAbout ? (
     <button
       type="button"
       data-panel-help-toggle=""
