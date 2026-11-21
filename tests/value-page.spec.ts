@@ -85,3 +85,37 @@ test('Print report prints only the report', async ({ page }) => {
   await expect(report.locator('[data-stat="dhcp_assigned"]')).toContainText('Not available');
   await expect(report.locator('[data-stat="dhcp_assigned"]')).not.toContainText('test reason');
 });
+
+// The screen and the report count the same jobs: this account only, inside the
+// whole UTC days the report names (Oct 1 to Oct 30 in this file).
+test('the panel and the report show the same job totals', async ({ page }) => {
+  const job = (extra: object) => ({ source: 'address', status: 'built', tenant: 't', created: '2026-10-15T12:00:00Z', objects: [{}, {}], ...extra });
+  await page.route('**/api/desk/runs', (r) => r.fulfill(json({ tenant: 't', runs: [
+    job({}),
+    job({ tenant: '', objects: [{}, {}, {}] }),
+    job({ created: '2026-10-31T00:00:00Z', objects: [{}, {}, {}] }),
+    job({ created: '2026-09-30T23:59:59Z', objects: [{}, {}, {}] }),
+  ] })));
+  await page.reload();
+  const panel = page.locator('[data-value-work]');
+  await expect(panel.locator('[data-stat="jobs"] .vl-num')).toHaveText('1');
+  await expect(panel.locator('[data-stat="objects"] .vl-num')).toHaveText('2');
+  await expect(panel.locator('[data-stat="hours"] .vl-num')).toHaveText('0.2 hours');
+  await expect(panel).not.toContainText('Includes');
+  await expect(panel).toContainText('Excludes 1 older job with no account on record.');
+  await page.emulateMedia({ media: 'print' });
+  const row = page.locator('[data-value-report] [data-stat="work"]');
+  await expect(row.locator('td')).toHaveText('1');
+  await expect(row).toContainText('2 objects created');
+  await expect(row).toContainText('0.2 hours');
+});
+
+test('with no report period the panel says Not available', async ({ page }) => {
+  const noPeriod = { ...security, metrics: { ...security.metrics, blocked: { status: 'error', value: null } } };
+  await page.route('**/api/csp/value-security', (r) => r.fulfill(json(noPeriod)));
+  await page.route('**/api/desk/runs', (r) => r.fulfill(json({ tenant: 't', runs: [{ source: 'address', status: 'built', tenant: 't', created: '2026-10-15T12:00:00Z', objects: [{}] }] })));
+  await page.reload();
+  const jobs = page.locator('[data-value-work] [data-stat="jobs"]');
+  await expect(jobs.locator('.vl-num')).toHaveText('Not available');
+  await expect(page.locator('[data-value-work] [data-stat="objects"]')).toHaveCount(0);
+});

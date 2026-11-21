@@ -34,7 +34,7 @@ export default function Value() {
       <CardGrid layoutKey="value">
         <ValueSecurity key="value-security" panelId="value-security" m={m} loading={securityLoading} />
         <ValuePlatform key="value-platform" panelId="value-platform" m={m} loading={platformLoading} />
-        <ValueWork key="value-work" panelId="value-work" runs={runs} />
+        <ValueWork key="value-work" panelId="value-work" runs={runs} w={m.workCount} loading={securityLoading || (runs.loading && !runs.data)} />
       </CardGrid>
       <ValueReport m={m} />
     </div>

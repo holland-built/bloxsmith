@@ -3,7 +3,7 @@
 // the APIs said: a number that could not be read stays a word, never a 0.
 import { valueSecurity } from '../../lib/valueSecurity.js'
 import { platformRows } from '../../lib/valuePlatform.js'
-import { countReportWork, MINUTES_PER_JOB } from '../../lib/valueWork.js'
+import { countWork, MINUTES_PER_JOB } from '../../lib/valueWork.js'
 
 export const NO_EARLIER = 'No prior 30-day period available for comparison'
 // PortunusAggThreat_ch action Block: threat feeds and policy or content rules together.
@@ -40,10 +40,9 @@ function stat(key, x) {
 
 const PLATFORM_KEYS = { queries: 1, cache_hit: 1, roaming: 1, uptime: 1, dhcp_assigned: 1 }
 
-function workStat(runs, range) {
+function workStat(runs, w) {
   const base = { key: 'work', label: 'Bloxsmith jobs completed' }
   if (runs?.loading && !runs?.data) return { ...base, state: 'loading', text: 'Loading…', note: null }
-  const w = runs?.error ? null : countReportWork(runs?.data, range)
   if (!w) return { ...base, state: 'error', text: 'Not checked', note: "Bloxsmith's job history could not be read." }
   if (w.noPeriod) return { ...base, state: 'unavailable', text: 'Not available', note: 'Job figures are not available for this report.' }
   const left = w.older > 0 ? `Excludes ${w.older.toLocaleString('en-US')} older ${w.older === 1 ? 'job' : 'jobs'} with no account on record.` : null
@@ -98,6 +97,7 @@ export function buildModel({ security, platform, runs, daily, vault }) {
   const sec = Object.fromEntries(valueSecurity(security).map((x) => [x.key, x]))
   const plat = Object.fromEntries(platformRows(platform).map((x) => [x.key, x]))
   const range = security?.data?.metrics?.blocked?.window_range
+  const counted = runs?.error ? null : countWork(runs?.data, range)
   const m = {
     blocked: stat('blocked', sec.blocked),
     zero_day: stat('zero_day', sec.zero_day),
@@ -107,7 +107,8 @@ export function buildModel({ security, platform, runs, daily, vault }) {
     roaming: stat('roaming', plat.roaming),
     uptime: stat('uptime', plat.uptime),
     dhcp_assigned: stat('dhcp_assigned', plat.dhcp_assigned),
-    work: workStat(runs, range),
+    work: workStat(runs, counted),
+    workCount: counted,
     daily: dailyModel(daily),
     range: rangeLabel(range),
     account: accountName(vault),

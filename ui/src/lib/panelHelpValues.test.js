@@ -1139,10 +1139,10 @@ const CLAIMS = [
   {
     panel: 'value-work',
     says: /Jobs Bloxsmith completed on this account in the last 30 days/,
-    file: 'ui/src/lib/valueWork.js',
+    file: 'ui/src/tabs/value/valueModel.js',
     proofs: [
-      { re: /export const WINDOW_DAYS = 30\b/, expect: 'WINDOW_DAYS = 30' },
-      { re: /const cutoff = now - WINDOW_DAYS \* 24 \* 60 \* 60 \* 1000/, expect: 'the cut-off is WINDOW_DAYS days back' },
+      { re: /const range = security\?\.data\?\.metrics\?\.blocked\?\.window_range/, expect: 'the period is the 30-day window the security read reports' },
+      { re: /countWork\(runs\?\.data, range\)/, expect: 'jobs are counted inside that same period' },
     ],
   },
   {
