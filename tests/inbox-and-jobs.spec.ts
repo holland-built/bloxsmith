@@ -76,7 +76,7 @@ test('an incident made of one finding says the finding itself, not "1 ×"', asyn
   await expect(full).not.toContainText('0 are 90% full');
 });
 
-test('unsigned public zones are a grey Note below warnings, "Ask why" shows on hover, and the board folds to one line', async ({ page }) => {
+test('unsigned public zones are a grey Note below warnings, "Ask AI" shows on hover, and the board folds to one line', async ({ page }) => {
   await feeds(page, {
     incidents: [
       { key: 'dnssec-unsigned', category: 'dnssec-unsigned', count: 1, severity: 'info', message: '1 dnssec unsigned' },
@@ -92,12 +92,12 @@ test('unsigned public zones are a grey Note below warnings, "Ask why" shows on h
   await expect(dns.nth(0)).toContainText('Warning');
   await expect(dns.nth(1)).toContainText('Note: 3 of 4 DNS zones with public names not signed (DNSSEC)');
 
-  // "Ask why" is not printed on every line: hidden until the line is hovered.
+  // "Ask AI" is not printed on every line: hidden until the line is hovered.
   const ask = dns.nth(1).getByRole('link', { name: /^Ask the AI:/ });
   await expect(ask).toHaveCSS('opacity', '0');
   await dns.nth(1).hover();
   await expect(ask).toHaveCSS('opacity', '1');
-  // Keyboard: focusing the issue's own link shows its "Ask why" too.
+  // Keyboard: focusing the issue's own link shows its "Ask AI" too.
   await page.mouse.move(0, 0);
   await dns.nth(0).getByRole('link').first().focus();
   await expect(dns.nth(0).getByRole('link', { name: /^Ask the AI:/ })).toHaveCSS('opacity', '1');
@@ -114,11 +114,11 @@ test('unsigned public zones are a grey Note below warnings, "Ask why" shows on h
   await expect(page.locator('[data-board]')).toBeVisible();
 });
 
-test('a quiet day says "none open" on every service row', async ({ page }) => {
+test('a quiet day says "None open" on every service row', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   await page.goto('/');
   for (const name of ['DNS', 'DHCP', 'IPAM', 'Hosts', 'Security']) {
-    await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('none open', { timeout: 20_000 });
+    await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('None open', { timeout: 20_000 });
   }
   await expect(page.locator('[data-inbox-row]')).toHaveCount(0);
   await expect(page.locator('[data-board] [data-board-row="Other"]')).toHaveCount(0);
@@ -177,7 +177,7 @@ test('See full subnets lands on the subnet table, not the charts above it', asyn
   await expect(page.locator('[data-panel-id="network-exhaustion"]')).toBeInViewport();
 });
 
-test('while security events are still loading, the Security row does not say "none open"', async ({ page }) => {
+test('while security events are still loading, the Security row does not say "None open"', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
   let release!: () => void;
   const held = new Promise<void>((r) => { release = r; });
@@ -190,9 +190,9 @@ test('while security events are still loading, the Security row does not say "no
   const sec = page.locator('[data-board] [data-board-row="Security"]');
   await expect(sec).toContainText('Checking…');
   await page.waitForTimeout(500);
-  await expect(sec).not.toContainText('none open');
+  await expect(sec).not.toContainText('None open');
   release();
-  await expect(sec).toContainText('none open');
+  await expect(sec).toContainText('None open');
 });
 
 test('a second question from the header box while on the AI page is asked too', async ({ page }) => {

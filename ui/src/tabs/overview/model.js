@@ -1,6 +1,6 @@
-// What the three trial looks for Overview (?variant=a, b, c) show, worked out
-// once so they can never disagree. Everything here reads the feeds Overview
-// already fetches. Nothing is estimated, and a feed that did not answer stays
+// What Overview's morning briefing and Services board say, worked out once so
+// they can never disagree. Everything here reads the feeds Overview already
+// fetches. Nothing is estimated, and a feed that did not answer stays
 // "not checked" rather than becoming a 0 or a green mark.
 
 import { feedState, isFailure, windowLabel, withinWindow } from '../../lib/changes.js'
@@ -20,13 +20,13 @@ const KIND_RANK = (key) => {
 
 const ACTION = (key) => {
   const k = String(key)
-  if (k.startsWith('svc-')) return 'See services'
-  if (k.startsWith('hosts')) return 'See hosts'
-  if (k.startsWith('subnet')) return 'See subnets'
+  if (k.startsWith('svc-')) return 'View services'
+  if (k.startsWith('hosts')) return 'View hosts'
+  if (k.startsWith('subnet')) return 'View subnets'
   if (k.startsWith('security-sitelist')) return 'Review list'
-  if (k.startsWith('security')) return 'See events'
-  if (k.startsWith('dns')) return 'See DNS'
-  if (k.startsWith('dhcp')) return 'See leases'
+  if (k.startsWith('security')) return 'View events'
+  if (k.startsWith('dns')) return 'View DNS'
+  if (k.startsWith('dhcp')) return 'View leases'
   return 'Open'
 }
 
@@ -48,12 +48,12 @@ export function pageVerdict(services) {
   const checking = count((s) => s.v.word === 'Checking')
   const unchecked = count((s) => s.v.sev === 'none' && s.v.word !== 'Checking')
   const base = { total, act, look, checking, unchecked }
-  const plural = (n) => (n === 1 ? 'services needs' : 'services need')
-  if (act) return { ...base, tone: 'crit', word: 'Not OK', line: `${act} of ${total} ${plural(act)} action` }
-  if (look) return { ...base, tone: 'warn', word: 'Needs a look', line: `${look} of ${total} ${plural(look)} a look` }
-  if (checking) return { ...base, tone: 'none', word: 'Checking', line: checking === total ? 'Checking your services' : `${total - checking} of ${total} services checked` }
-  if (unchecked) return { ...base, tone: 'none', word: "Can't confirm", line: `${unchecked} of ${total} services could not be checked` }
-  return { ...base, tone: 'ok', word: 'All OK', line: `All ${total} services checked` }
+  const plural = (n) => (n === 1 ? 'services requires' : 'services require')
+  if (act) return { ...base, tone: 'crit', word: 'Action required', line: `${act} of ${total} ${plural(act)} action` }
+  if (look) return { ...base, tone: 'warn', word: 'Review recommended', line: `${look} of ${total} ${plural(look)} review` }
+  if (checking) return { ...base, tone: 'none', word: 'Checking', line: checking === total ? 'Checking services' : `${total - checking} of ${total} services checked` }
+  if (unchecked) return { ...base, tone: 'none', word: 'Status unconfirmed', line: `${unchecked} of ${total} services could not be checked` }
+  return { ...base, tone: 'ok', word: 'All services healthy', line: `All ${total} services checked` }
 }
 
 /**
@@ -67,51 +67,45 @@ export function canTellNew(issues, nowS) {
   return seen.length > 0 && nowS - Math.min(...seen) >= DAY_S
 }
 
-/** Every open problem, worst first, each with the one action that fixes it. */
-export function rankProblems(board, nowS) {
-  const issues = board.board.flatMap((b) => b.issues.map((r) => ({ ...r, service: b.name })))
-  const provable = canTellNew(issues, nowS)
-  const health = board.board.flatMap((b) => {
-    const st = b.state?.status
-    if (st !== 'crit' && st !== 'warn') return []
-    const up = upCount(b.state.meta)
-    const title = up ? `${b.name} services: ${up.up} of ${up.total} up` : `${b.name} services: ${b.state.statusLabel || 'not healthy'}`
-    return [{ key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: '#infra', ask: `Which ${b.name} services are not running?`, service: b.name, seen: null, partial: b.state.availability === 'partial' }]
-  })
-  return [...health, ...issues]
-    .map((r) => ({ ...r, action: ACTION(r.key), isNew: provable && typeof r.seen === 'number' && nowS - r.seen < DAY_S }))
-    .sort((a, b) => SEV_RANK[a.sev] - SEV_RANK[b.sev] || KIND_RANK(a.key) - KIND_RANK(b.key))
+/**
+ * A service whose own health check is failing, as an open problem. This is the
+ * same check that makes the service read Act or Look, so the two cannot differ.
+ */
+function healthProblem(b) {
+  const st = b.state?.status
+  if (st !== 'crit' && st !== 'warn') return null
+  const up = upCount(b.state.meta)
+  const title = up ? `${b.name} services: ${up.up} of ${up.total} up` : `${b.name} services: ${b.state.statusLabel || 'not healthy'}`
+  return { key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: '#infra', ask: `Which ${b.name} services are not running?`, seen: null, health: true, partial: b.state.availability === 'partial' }
 }
 
-/**
- * Cells for a service's status strip. Up to 60 servers get one cell each.
- * Larger counts are a share of 60 cells, and any real problem keeps one cell.
- */
-export function stripCells(service) {
-  const up = upCount(service.b?.state?.meta)
-  if (up && up.total <= 60) return { count: up.total, bad: up.total - up.up, exact: true }
-  if (up) return { count: 60, bad: up.up === up.total ? 0 : Math.max(1, Math.round((1 - up.up / up.total) * 60)), exact: false }
-  const n = service.b?.n
-  const of = service.b?.of
-  if (typeof n === 'number' && typeof of === 'number' && of > 0) {
-    return { count: 60, bad: n > 0 ? Math.max(1, Math.round((n / of) * 60)) : 0, exact: false }
-  }
-  return null
+/** Everything open on one service: its failing health check, then its incidents. */
+export function openProblems(b) {
+  const health = healthProblem(b)
+  return health ? [health, ...b.issues] : b.issues
+}
+
+/** Every open problem, worst first, each with the one action that fixes it. */
+export function rankProblems(board, nowS) {
+  const all = board.board.flatMap((b) => openProblems(b).map((r) => ({ ...r, service: b.name })))
+  const provable = canTellNew(all, nowS)
+  return all
+    .map((r) => ({ ...r, action: ACTION(r.key), isNew: provable && typeof r.seen === 'number' && nowS - r.seen < DAY_S }))
+    .sort((a, b) => SEV_RANK[a.sev] - SEV_RANK[b.sev] || KIND_RANK(a.key) - KIND_RANK(b.key))
 }
 
 /** DNS traffic now against the oldest hour in the feed, with the real gap. */
 export function dnsTrend(dns) {
   const failed = !!dns.error || dns.data?.status === 'error'
-  if (dns.loading && !dns.data) return { state: 'loading', bars: [] }
-  if (failed) return { state: 'error', bars: [] }
+  if (dns.loading && !dns.data) return { state: 'loading' }
+  if (failed) return { state: 'error' }
   const rows = (dns.data?.rows ?? []).filter((r) => Number.isFinite(Number(r.avg_value)))
-  if (!rows.length) return { state: 'empty', bars: [] }
-  const bars = rows.map((r) => ({ hour: r.hour, value: Number(r.avg_value) }))
-  const now = bars.at(-1).value
-  const was = bars.length > 1 ? bars[0].value : null
-  const hours = bars.length > 1 ? Math.round((new Date(bars.at(-1).hour) - new Date(bars[0].hour)) / 3600000) : null
+  if (!rows.length) return { state: 'empty' }
+  const now = Number(rows.at(-1).avg_value)
+  const was = rows.length > 1 ? Number(rows[0].avg_value) : null
+  const hours = rows.length > 1 ? Math.round((new Date(rows.at(-1).hour) - new Date(rows[0].hour)) / 3600000) : null
   const pct = was > 0 && Number.isFinite(hours) && hours > 0 ? Math.round(((now - was) / was) * 100) : null
-  return { state: 'ok', bars, now, was, hours, pct, max: Math.max(...bars.map((b) => b.value)) }
+  return { state: 'ok', now, was, hours, pct }
 }
 
 /** The change log over the last day, saying how far back it really reaches. */

@@ -8,7 +8,8 @@ import { sampleSince } from '../lib/sampleCount.js'
 import { statusBucket } from '../lib/statusBucket.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import Tip from '../components/Tip.jsx'
-import { useVariant } from './overview/variant.js'
+import Briefing from './overview/Briefing.jsx'
+import { openProblems } from './overview/model.js'
 import './Overview.css'
 
 // OVERVIEW IS A SERVICE BOARD, NOT A PANEL WALL (2026-11-09).
@@ -29,11 +30,11 @@ import './Overview.css'
 // Above the board sit five service tiles, and the chosen tile's detail (the
 // DNS chart, or a bar for the others). The owner picked that pairing on
 // 2026-11-09 from four looks built with the dashboard-design skill.
+//
+// The morning briefing (overview/Briefing.jsx) leads the page since 2026-11-21:
+// the owner picked it from three looks. Tiles, board and charts stay below it.
 
 const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
-// Trial looks, only fetched when the address carries ?variant=.
-const OverviewLooks = lazy(() => import('./overview/Looks.jsx'))
-const LookSwitcher = lazy(() => import('./overview/LookSwitcher.jsx'))
 
 // Draws its children once the box is within 400px of the screen, or once the
 // browser is idle after the first draw, whichever comes first, with a Skeleton
@@ -85,23 +86,12 @@ export default function Overview() {
   // average barely moves in 30 seconds.
   const health = useApi('/api/csp/dns-health', { poll: 60000 })
   const board = useBoard(dns)
-  const variant = useVariant()
-
-  if (variant.look) {
-    return (
-      <Suspense fallback={<div className="w-full px-6 py-5"><Skeleton h={320} /></div>}>
-        <OverviewLooks look={variant.look} board={board} services={tiles(board, dns)} dns={dns} health={health} licenses={licenses} updated={<Updated board={board} />} />
-      </Suspense>
-    )
-  }
 
   return (
     <div className="w-full px-6 py-5">
+      <Briefing board={board} services={tiles(board, dns)} dns={dns} licenses={licenses} updated={<Updated board={board} />} />
+      <h2 className="text-copy font-semibold mb-2">Service details</h2>
       <div className="ov-look">
-        <div className="ov-head">
-          <h1>Overview</h1>
-          <Updated board={board} />
-        </div>
         <Tiles board={board} dns={dns} health={health} />
         <ServiceBoard board={board} dns={dns} />
       </div>
@@ -111,7 +101,6 @@ export default function Overview() {
         <LicenseInventory panelId="license-inventory" licenses={licenses} />
         {savedCharts}
       </CardGrid>
-      {variant.switcher && <Suspense fallback={null}><LookSwitcher current="none" /></Suspense>}
     </div>
   )
 }
@@ -240,11 +229,11 @@ function verdict(b, checked) {
   if (b.measure === 'Loading…' || checked === 'loading' || b.state?.loading) return { word: 'Checking', sev: 'none' }
   const w = worst(b.issues)
   const st = b.state?.status
-  if (w === 'crit' || st === 'crit') return { word: 'Act', sev: 'crit' }
-  if (w === 'warn' || st === 'warn') return { word: 'Look', sev: 'warn' }
+  if (w === 'crit' || st === 'crit') return { word: 'Action required', sev: 'crit' }
+  if (w === 'warn' || st === 'warn') return { word: 'Review', sev: 'warn' }
   // Subnets 90% full are worth a look even before an incident is raised, so
   // the tile never says Healthy beside a count of them.
-  if (b.name === 'IPAM' && b.n > 0) return { word: 'Look', sev: 'warn' }
+  if (b.name === 'IPAM' && b.n > 0) return { word: 'Review', sev: 'warn' }
   if (b.measure === 'unavailable') return { word: 'Unavailable', sev: 'none' }
   if (checked !== true || b.state?.failed) return { word: 'Not checked', sev: 'none' }
   if (HAS_HEALTH.has(b.name) && st !== 'ok') return { word: 'Not checked', sev: 'none' }
@@ -367,7 +356,7 @@ function Strip({ issues, state, v, days = 10 }) {
 
 // An issue as a pill: its title on screen; severity, age and detail in the tip.
 // A standing issue (first seen more than a day ago) is drawn hollow, so old
-// debt does not shout like a new outage. "Ask why" shows on the row under the
+// debt does not shout like a new outage. "Ask AI" shows on the row under the
 // pointer or with focus, always on touch screens (owner, 2026-11-09), and so
 // does "Open".
 function Issue({ r }) {
@@ -376,19 +365,20 @@ function Issue({ r }) {
     <li data-inbox-row={r.key} className="ov-issue">
       {/* The pill is not a link, so tapping it opens its tip instead of
           leaving the page. "Open" beside it goes to where it is fixed. */}
-      <Tip tip={tip} className={`ov-flag ${r.sev}${r.fresh ? '' : ' standing'}`}>
+      <Tip tip={tip} className={`ov-flag ${r.sev}${r.fresh || r.health ? '' : ' standing'}`}>
         <span aria-hidden="true" className={`ov-dot ${r.sev}`} />
         {r.title}
       </Tip>
       <a href={r.href} aria-label={`Open: ${r.title}`} className="ov-act ov-ask">Open</a>
-      {r.ask && <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className="ov-act ov-ask">Ask why</a>}
+      {r.ask && <a href={`#ai?q=${encodeURIComponent(r.ask)}`} aria-label={`Ask the AI: ${r.ask}`} className="ov-act ov-ask">Ask AI</a>}
     </li>
   )
 }
 
 function IssueList({ b, checked, none }) {
-  if (b.issues.length) return <ul className="ov-issues">{b.issues.map((r) => <Issue key={r.key} r={r} />)}</ul>
-  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'none open' : 'not checked: feed unavailable'}</span>
+  const open = openProblems(b)
+  if (open.length) return <ul className="ov-issues">{open.map((r) => <Issue key={r.key} r={r} />)}</ul>
+  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'None open' : 'not checked: feed unavailable'}</span>
 }
 
 // The board can be folded to one line of counts, so the charts below come up
@@ -409,7 +399,7 @@ function readHidden() {
 function boardSummary(rows, checked) {
   const parts = rows
     .map((b) => {
-      const n = (sev) => b.issues.filter((r) => r.sev === sev).length
+      const n = (sev) => openProblems(b).filter((r) => r.sev === sev).length
       const words = [['crit', 'critical'], ['warn', 'warning'], ['note', 'note']]
         .filter(([sev]) => n(sev))
         .map(([sev, w]) => `${n(sev)} ${w}${n(sev) > 1 && sev !== 'crit' ? 's' : ''}`)
@@ -444,19 +434,19 @@ function ServiceBoard({ board, dns }) {
         </span>
       </div>
       <div id="ov-board-table" hidden={hidden} role="region" aria-label="Service board" tabIndex={0} className="ov-board-box">
-        <table className="ov-board" data-board="">
-          <thead className="sr-only">
-            <tr><th scope="col">Service</th><th scope="col">Open issues</th><th scope="col">Last 10 days</th></tr>
+        <table role="table" className="ov-board" data-board="">
+          <thead role="rowgroup" className="sr-only">
+            <tr role="row"><th role="columnheader" scope="col">Service</th><th role="columnheader" scope="col">Open issues</th><th role="columnheader" scope="col">Last 10 days</th></tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {board.board.map((b) => {
               const t = T[b.name]
               const v = t ? t.v : verdict(b, board.issuesChecked[b.name])
               return (
-                <tr key={b.name} data-board-row={b.name}>
-                  <th scope="row"><a href={b.href}>{b.name}</a></th>
-                  <td className="ov-mid"><IssueList b={b} checked={board.issuesChecked[b.name]} none={board.noneLabel[b.name]} /></td>
-                  <td><Strip issues={b.issues} state={b.state} v={v} /></td>
+                <tr role="row" key={b.name} data-board-row={b.name}>
+                  <th role="rowheader" scope="row"><a href={b.href}>{b.name}</a></th>
+                  <td role="cell" className="ov-mid"><IssueList b={b} checked={board.issuesChecked[b.name]} none={board.noneLabel[b.name]} /></td>
+                  <td role="cell"><Strip issues={openProblems(b)} state={b.state} v={v} /></td>
                 </tr>
               )
             })}
@@ -498,10 +488,11 @@ function LicenseInventory({ licenses, panelId }) {
 
   const columns = [
     { key: 'name', label: 'Name', grow: true },
-    { key: 'sku', label: 'SKU', mono: true, grow: true },
+    { key: 'sku', label: 'SKU', mono: true, grow: true, priority: 'low' },
     {
       key: 'state',
       label: 'State',
+      priority: 'low',
       render: (state, r) => (
         <span className="flex items-center gap-1.5">
           <span>{state || '—'}</span>
@@ -511,7 +502,7 @@ function LicenseInventory({ licenses, panelId }) {
         </span>
       ),
     },
-    { key: 'expiry', label: 'Expiry' },
+    { key: 'expiry', label: 'Expiry', priority: 'low' },
     {
       key: 'remaining',
       label: 'Time Left',
@@ -535,6 +526,7 @@ function LicenseInventory({ licenses, panelId }) {
       // Known gap — tests/table-sizing.spec.ts only asserts on body cells, so
       // it does not catch clipped headers.
       label: 'Qty',
+      priority: 'low',
       align: 'right',
       render: (q) => <span className="text-muted tabular-nums">{typeof q === 'number' ? q.toLocaleString() : '—'}</span>,
     },
