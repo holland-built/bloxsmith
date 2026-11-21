@@ -335,8 +335,14 @@ export default function ConnStatus() {
 
   if (!canSwitch) {
     return (
-      <span className={chipCls} title={`${title}${writeWords ? ` · ${writeWords}` : ''}`}>
-        {body}
+      <span className="flex items-center min-w-0" title={`${title}${writeWords ? ` · ${writeWords}` : ''}`}>
+        {/* The browser's own popover: a tap opens it, Escape or a tap away closes it. */}
+        <button type="button" popoverTarget="conn-details" className={chipCls}>
+          {body}
+        </button>
+        <div id="conn-details" popover="auto" onBeforeToggle={(e) => setOpen(e.newState === 'open')}>
+          {open && [shownName, stateWord, writeWords].filter(Boolean).join(' · ')}
+        </div>
       </span>
     )
   }

@@ -82,6 +82,8 @@
 
    tests/contrast.spec.ts measures these live in both themes. */
 @theme {
+  /* The dossier ledger needs this much room for its seven lanes. */
+  --container-ledger: 1118px;
   --color-bg: #111217;
   --color-card: #181b1f;
   --color-card-border: #2e3036;
@@ -731,5 +733,43 @@ html[data-theme="light"] { color-scheme: light; }
   }
   [data-form-cols] > :not([data-field]) {
     margin-left: 12rem;
+  }
+}
+
+/* ---------- press feedback ----------
+   A pressed button dips to 0.96, so a tap registers even while the page behind
+   it is still loading. List rows, tabs, drag handles and click-away layers stay
+   still: they are large or pressed constantly, and movement there is noise. */
+@layer base {
+  @media (prefers-reduced-motion: no-preference) {
+    button:not([role="option"], [role="menuitem"], [role="tab"], [role="switch"], .cursor-default, .cursor-grab, .touch-none) {
+      transition: scale 150ms ease-out;
+    }
+    button:not([role="option"], [role="menuitem"], [role="tab"], [role="switch"], .cursor-default, .cursor-grab, .touch-none, :disabled):active {
+      scale: 0.96;
+    }
+  }
+}
+
+/* The connection chip's full name, opened by a tap on a phone. */
+#conn-details {
+  position: fixed;
+  inset: 3.5rem 0.5rem auto auto;
+  margin: 0;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 1rem));
+  padding: 0.5rem 0.625rem;
+  overflow-wrap: anywhere;
+  color: var(--color-txt);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.25);
+}
+
+/* Scrolling past the end of a pop-up panel stays in the panel. */
+@layer base {
+  :where([role="dialog"], [role="dialog"] *) {
+    overscroll-behavior: contain;
   }
 }
