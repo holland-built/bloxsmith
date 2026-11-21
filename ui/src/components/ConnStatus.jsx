@@ -52,6 +52,7 @@ function useWriteTarget() {
 // Long enough that repeated presses cannot keep emptying the server's cache
 // while the slowest reads (3.5-7.5s cold) are still coming back.
 const REFRESH_PAUSE_MS = 5000
+const REFRESH_OFF = 'Automatic refresh is off'
 
 /**
  * The same control on its own row below desk width. In the header's row it
@@ -61,7 +62,7 @@ export function RefreshBar() {
   const off = useRefreshChoice() === 'off'
   return (
     <div className="xl:hidden flex items-center justify-between gap-2 px-3 sm:px-5 py-1 border-b border-card-border bg-card">
-      <span className={`text-note ${off ? 'text-warn' : 'text-muted'}`}>{off ? 'Automatic refresh is off' : 'Automatic refresh'}</span>
+      <span className={`text-note ${off ? 'text-warn' : 'text-muted'}`}>{off ? REFRESH_OFF : 'Automatic refresh'}</span>
       <RefreshControl />
     </div>
   )
@@ -80,7 +81,7 @@ export function RefreshControl({ inHeader = false }) {
   }
   return (
     <span className={`${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`}>
-      {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">Automatic refresh is off</span>}
+      {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">{REFRESH_OFF}</span>}
       <select
         aria-label="Automatic refresh"
         title="How often this page reloads its data"
@@ -223,8 +224,7 @@ export default function ConnStatus() {
   // The name, when the vault can say which tenant is active.
   const knownName = status?.tenants?.find((t) => t.id === status?.active)?.label || ''
 
-  const tenantName =
-    status?.tenants?.find((t) => t.id === status?.active)?.label || status?.active || 'tenant'
+  const tenantName = knownName || status?.active || 'tenant'
   const secsAgo = lastFetchRef.current
     ? Math.round((Date.now() - lastFetchRef.current) / 1000)
     : null
