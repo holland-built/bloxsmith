@@ -199,3 +199,68 @@ func TestUnreadableRunRecordIsBusy(t *testing.T) {
 		t.Errorf("an unreadable demo record did not count as busy: %q", why)
 	}
 }
+
+func TestStoppedDemoRunNoLongerBlocksAnUpdate(t *testing.T) {
+	for _, status := range []string{"building", "removing"} {
+		state := t.TempDir()
+		before := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := before.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
+			t.Fatal(err)
+		}
+		after := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := after.demoStore().Recover(time.Now); err != nil {
+			t.Fatal(err)
+		}
+		if why := after.WorkRunning(); why != "" {
+			t.Errorf("%s: WorkRunning still busy: %s", status, why)
+		}
+		if why := after.CloseForUpdate(); why != "" {
+			t.Errorf("%s: CloseForUpdate still busy: %s", status, why)
+		}
+	}
+}
+
+func TestDemoRunUnderALiveLockStaysBusy(t *testing.T) {
+	d := gateDeps(t)
+	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: "building"}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := d.demoStore().Lock(time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	_ = d.demoStore().Recover(time.Now)
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("a build holding the lock stopped counting as busy")
+	}
+}
+
+func TestPlainFileInDemoRunsDoesNotBlockAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".DS_Store"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf(".DS_Store made the gate busy: %s", why)
+	}
+}
+
+func TestUnreadableDemoRunStaysBusyAfterRecovery(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "run.json"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.demoStore().Recover(time.Now)
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("an unreadable real run stopped counting as busy")
+	}
+}

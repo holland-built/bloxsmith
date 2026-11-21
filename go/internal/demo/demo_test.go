@@ -560,3 +560,104 @@ func TestStartedRunsBeforeTheBuildAndCanStopIt(t *testing.T) {
 		t.Fatalf("run = %+v, want failed", saved)
 	}
 }
+
+func TestRecoverMarksStoppedRunsAndKeepsTheirIDs(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	for ch, status := range map[string]string{
+		"c-20260101-000001": "building", "c-20260101-000002": "removing", "c-20260101-000003": "ready",
+	} {
+		if err := s.Save(&Run{Change: ch, Status: status, IP: "10.99.0.5", VMID: 9001, VMName: "demo", HostID: "h-1", Zone: "z", MAC: "aa:bb"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Recover(time.Now); err != nil {
+		t.Fatal(err)
+	}
+	for ch, want := range map[string]string{
+		"c-20260101-000001": "failed", "c-20260101-000002": "remove-failed", "c-20260101-000003": "ready",
+	} {
+		r, err := s.Load(ch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Status != want {
+			t.Errorf("%s: status %q, want %q", ch, r.Status, want)
+		}
+		if (want == "ready") != (r.Error == "") {
+			t.Errorf("%s: error text %q", ch, r.Error)
+		}
+		if r.IP != "10.99.0.5" || r.VMID != 9001 || r.VMName != "demo" || r.HostID != "h-1" || r.Zone != "z" || r.MAC != "aa:bb" {
+			t.Errorf("%s lost a recorded ID: %+v", ch, r)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir, "build.lock")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("recovery left the lock behind: %v", err)
+	}
+}
+
+func TestRecoverChangesNothingWhileALiveLockExists(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	const ch = "c-20260101-000001"
+	if err := s.Save(&Run{Change: ch, Status: "building", VMID: 9001}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if err := s.Recover(time.Now); !errors.Is(err, ErrBusy) {
+		t.Fatalf("want ErrBusy, got %v", err)
+	}
+	if r, _ := s.Load(ch); r == nil || r.Status != "building" {
+		t.Fatalf("a run under a live lock was changed: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir, "build.lock")); err != nil {
+		t.Fatalf("recovery removed a live lock: %v", err)
+	}
+}
+
+func TestRecoverTakesOverALockOlderThanTwoHours(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	const ch = "c-20260101-000001"
+	if err := s.Save(&Run{Change: ch, Status: "building"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Lock(time.Now); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(filepath.Join(s.Dir, "build.lock"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Recover(time.Now); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := s.Load(ch); r == nil || r.Status != "failed" {
+		t.Fatalf("stale lock: run not recovered: %+v", r)
+	}
+}
+
+func TestLiveSkipsPlainFilesButNotAnUnreadableRun(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	runsDir := filepath.Join(s.Dir, "runs")
+	if err := os.MkdirAll(runsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runsDir, ".DS_Store"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if live, err := s.Live(); err != nil || len(live) != 0 {
+		t.Fatalf("a plain file affected Live: %v %v", live, err)
+	}
+	bad := filepath.Join(runsDir, "c-20260101-000001")
+	if err := os.Mkdir(bad, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bad, "run.json"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Live(); err == nil {
+		t.Fatal("an unreadable run folder was ignored")
+	}
+}

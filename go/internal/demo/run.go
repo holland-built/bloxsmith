@@ -94,6 +94,11 @@ func (s Store) Live() ([]Run, error) {
 	}
 	var out []Run
 	for _, e := range ents {
+		// A plain file such as .DS_Store is not a run. Anything else that
+		// cannot be read still counts, because it may own a VM.
+		if e.Type().IsRegular() {
+			continue
+		}
 		r, err := s.Load(e.Name())
 		if err != nil {
 			return nil, fmt.Errorf("run record %s cannot be read (%v); fix or remove it first", e.Name(), err)
@@ -146,6 +151,50 @@ func (s Store) Lock(now func() time.Time) (func(), error) {
 		_ = os.Remove(p)
 	}
 	return nil, ErrBusy
+}
+
+// Recover marks runs left "building" or "removing" by a process that stopped
+// part way, keeping every recorded ID so teardown can still delete by ID. A
+// record alone does not prove its build died, so this holds the demo lock while
+// it works and returns ErrBusy, changing nothing, when a live lock exists.
+func (s Store) Recover(now func() time.Time) error {
+	ents, err := os.ReadDir(filepath.Join(s.Dir, "runs"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	release, err := s.Lock(now)
+	if err != nil {
+		return err
+	}
+	defer release()
+	var errs []error
+	for _, e := range ents {
+		if e.Type().IsRegular() {
+			continue
+		}
+		r, err := s.Load(e.Name())
+		if err != nil {
+			errs = append(errs, fmt.Errorf("run record %s: %w", e.Name(), err))
+			continue
+		}
+		switch r.Status {
+		case "building":
+			r.Status = "failed"
+			r.Error = "Bloxsmith stopped while this was being built. Check it by hand; it can be torn down."
+		case "removing":
+			r.Status = "remove-failed"
+			r.Error = "Bloxsmith stopped while removing this. Remove it again to finish."
+		default:
+			continue
+		}
+		if err := s.Save(r); err != nil {
+			errs = append(errs, fmt.Errorf("run record %s: %w", e.Name(), err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Claim takes a run ID no other build has, by creating its folder exclusively.
