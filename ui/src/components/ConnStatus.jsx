@@ -357,7 +357,7 @@ export default function ConnStatus() {
   }
 
   return (
-    <span className="relative flex items-center min-w-0" onKeyDown={onMenuKey}>
+    <span className="frame-tenant flex items-center min-w-0" onKeyDown={onMenuKey}>
       <button
         ref={chipRef}
         type="button"
@@ -374,7 +374,7 @@ export default function ConnStatus() {
           {/* Click-away, behind the menu. A menu that only closes by reselecting
               is a trap on a narrow screen. */}
           <button type="button" aria-label="Close tenant menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div ref={listRef} role="listbox" aria-label="Switch tenant" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-control border border-border bg-card shadow-lg py-1">
+          <div ref={listRef} role="listbox" aria-label="Switch tenant" className="frame-tenant-list mt-1.5 z-50 rounded-control border border-border bg-card shadow-lg py-1">
             {tenants.map((t) => {
               const isActive = t.id === activeTenant
               return (
@@ -392,8 +392,8 @@ export default function ConnStatus() {
                 >
                   {/* The mark, not just the colour: the current row has to be
                       identifiable without relying on seeing a hue. */}
-                  <span className="w-2.5 text-center">{isActive ? '✓' : ''}</span>
-                  <span className="truncate">{t.label}</span>
+                  <span className="w-2.5 shrink-0 text-center">{isActive ? '✓' : ''}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{t.label}</span>
                 </button>
               )
             })}

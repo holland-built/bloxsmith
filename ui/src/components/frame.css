@@ -57,6 +57,13 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
 .frame-conn-body > span { font-size: 12px; overflow-wrap: anywhere; }
 .frame-conn-body > span:first-child { color: var(--color-txt); font-weight: 500; }
 
+/* The tenant list opens from the chip's left edge and wraps long names. */
+.frame-tenant { position: relative; }
+.frame-tenant-list {
+  position: absolute; top: 100%; left: 0; width: max-content; min-width: 190px;
+  max-width: min(420px, calc(100vw - 88px)); max-height: calc(100dvh - 140px); overflow-y: auto;
+}
+
 /* Refresh: the timer and the button read as one control. */
 .frame-refresh { display: inline-flex; align-items: center; gap: 2px; flex: none; }
 .frame-refresh select {
@@ -157,6 +164,9 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   .frame-rail { display: none; }
   .frame-phone-logo, .frame-phone-search { display: inline-grid; }
   .frame-top { padding: 6px 12px; gap: 6px; }
+  /* On a phone the list spans the header, which is its positioning parent. */
+  .frame-tenant { position: static; }
+  .frame-tenant-list { left: 8px; right: 8px; width: auto; min-width: 0; max-width: none; }
   .frame-tools { gap: 0; }
   .frame-tools .frame-refresh select, .frame-tools .frame-refresh-off { display: none; }
   .frame-tools > button[aria-label='Help for this page'] { width: 36px; height: 36px; justify-content: center; padding: 0; color: var(--color-muted); }
