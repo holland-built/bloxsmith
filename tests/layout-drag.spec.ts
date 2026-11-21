@@ -544,7 +544,7 @@ test('a drag then a narrow window leaves no card wider than the tracks that exis
   test.setTimeout(120_000);
   await request.delete('/api/views/__layout_dns');
   try {
-  await gotoTab(page, 'dns', 9, 1920, 2400);
+  await gotoTab(page, 'dns', 10, 1920, 2400);
   const ids = await domOrder(page);
   await dragOntoRightHalfOf(page, ids[2]!, 1);
 
@@ -692,8 +692,8 @@ test('a grid whose DOM holds a panel its children cannot name says so, loudly', 
 const TAB_PANEL_COUNTS: Record<string, number> = {
   overview: 2,
   daily: 5,
-  network: 5, // 4 until 2026-11-16, when Overlapping ranges joined
-  dns: 9, // 8 until 2026-11-20, when DNS Answers — 24h joined
+  network: 6, // 4 until 2026-11-16, when Overlapping ranges joined; 5 until 2026-11-20, when DHCP Requests joined
+  dns: 10, // 8 until 2026-11-20, when DNS Answers — 24h joined, then Failed Lookups
   // security and infra each gained one on 2026-08-20 (#152): "Security
   // Inventory" from /api/hub/domains and "Service Health" from /api/hub/health,
   // two endpoints that had been registered and called by nothing.
@@ -860,6 +860,7 @@ const TAB_CASES: TabCase[] = [
       'network-overlaps',
       'network-exhaustion',
       'network-dhcp-leases', // inside hiddenPanelGroup({...SERVICE_GROUPS.dhcp})
+      'network-dhcp-requests', // same hiddenPanelGroup run
     ],
     resizeSubject: 'network-ipam-spaces',
     firstDeclaredSpan: 3,
@@ -869,6 +870,7 @@ const TAB_CASES: TabCase[] = [
     declared: [
       'dns-query-rate', // hiddenPanelGroup run #1
       'dns-answers', // hiddenPanelGroup run #1
+      'dns-failed-lookups', // hiddenPanelGroup run #1
       'dns-zone-kpis',
       'dns-services', // hiddenPanelGroup run #2
       'dns-query-volume-7d',

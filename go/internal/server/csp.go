@@ -55,6 +55,21 @@ func (d *Deps) registerCSPRoutes(mux router) {
 	tile("/api/csp/license-alerts", (*dashboard.Service).CSPLicenseAlerts)
 	tile("/api/csp/value-platform", (*dashboard.Service).CSPValuePlatform)
 	tile("/api/csp/dnssec", (*dashboard.Service).CSPDnssec)
+	// Not a tile(): the answer depends on ?window=, so the window is part of
+	// the cache key. A window outside the four the panel offers is a 400.
+	mux.HandleFunc("GET /api/csp/dns-failures", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp/dns-failures")
+		window := r.URL.Query().Get("window")
+		if !dashboard.ValidDNSFailureWindow(window) {
+			d.json(w, r, 400, map[string]any{"error": "window must be one of: today, yesterday, this week, last 30 days"})
+			return
+		}
+		svc := d.dash(r)
+		d.json(w, r, 200, svc.CachedRead("/api/csp/dns-failures?window="+window, func() map[string]any {
+			return svc.CSPDNSFailures(window)
+		}))
+	})
+	tile("/api/csp/dhcp-requests", (*dashboard.Service).CSPDHCPRequests)
 	tile("/api/csp/rpz", (*dashboard.Service).CSPRpz)
 	tile("/api/csp/dtc-lbdn", (*dashboard.Service).CSPDtcLbdn)
 

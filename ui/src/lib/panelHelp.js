@@ -93,6 +93,10 @@ export const PANEL_HELP = {
     what: 'Every address DHCP has leased out, the machine holding it, its hardware address, and when the lease runs out.',
     look: 'Search by address, name or MAC, or narrow to one lease state; the leases ending furthest away come first. Hidden when no DHCP service is detected.',
   },
+  'network-dhcp-requests': {
+    what: 'How many times devices asked your DHCP servers for an address, and how many of those requests got no address, for today and for the last 30 days.',
+    look: 'Last 30 days ends with yesterday. With servers in HA pairs both answer each request, so a count can be up to twice the devices asking. A number not read says "not checked".',
+  },
   'network-exhaustion': {
     what: 'The subnets closest to running out of addresses, with how full each one is and how many are still free. It draws 150 at most and says how many matched.',
     look: 'Amber from 70% full, red from 90%. A subnet nobody measured gets a grey Unknown badge, no bar and dashes, and sorts to the bottom whichever way you sort.',
@@ -114,6 +118,10 @@ export const PANEL_HELP = {
   'dns-answers': {
     what: 'How your DNS answered over the last 24 hours: average time to answer, and how many lookups came from cache, failed, or asked for a name that does not exist.',
     look: 'Point at a label to see what it means. A number that could not be read says "not checked"; the others are still real.',
+  },
+  'dns-failed-lookups': {
+    what: 'How many DNS lookups failed in the window you pick, split by why, and the ten names that failed most. Past about 3 days it reads the query logs.',
+    look: 'Your pick of Today, Yesterday, This week or Last 30 days is remembered in this browser. Last 30 days ends with yesterday. The line at the bottom says which records were read.',
   },
   'dns-zone-kpis': {
     what: 'The kinds of problem your DNS zones have, most common first; how many zones are forward and how many reverse; and how many have unusual settings.',

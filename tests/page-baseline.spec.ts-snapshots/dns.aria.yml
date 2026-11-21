@@ -18,6 +18,38 @@
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+/
   - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
+  - heading "Failed Lookups" [level=2]
+  - combobox "Time window":
+    - option "Today" [selected]
+    - option "Yesterday"
+    - option "This week"
+    - option /Last \d+ days/
+  - 'button "About: Failed Lookups"': "About: ⓘ"
+  - 'button "Options: Failed Lookups"'
+  - term: Failed lookups
+  - definition: /\d+,\d+/
+  - term: Name not found (NXDOMAIN)
+  - definition: /\d+,\d+/
+  - term: Server failed (SERVFAIL)
+  - definition: /\d+/
+  - term: Refused (REFUSED)
+  - definition: /\d+/
+  - term: Other
+  - definition: "5"
+  - text: /The \d+ names that failed most/
+  - table:
+    - rowgroup:
+      - row "Name Failed":
+        - columnheader "Name"
+        - columnheader "Failed"
+    - rowgroup:
+      - row /missing\.baseline\.example\. \d+/:
+        - cell "missing.baseline.example."
+        - cell /\d+/
+      - row /old-printer\.baseline\.example\. \d+/:
+        - cell "old-printer.baseline.example."
+        - cell /\d+/
+  - text: From the last 3 days of failure records
   - button "About dns-zone-kpis": ⓘ
   - button "Options for Zone Counts": ⋯
   - text: Issues by kind

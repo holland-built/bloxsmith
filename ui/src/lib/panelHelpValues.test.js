@@ -375,6 +375,31 @@ const CLAIMS = [
       { re: /const valuePlatformWindow = "last 30 days"/, expect: 'every platform read uses dateRange "last 30 days"' },
     ],
   },
+  // ---- failed lookups and DHCP requests (2026-11-20) ----
+  {
+    panel: 'dns-failed-lookups',
+    says: /the ten names that failed most/,
+    file: 'go/internal/dashboard/dns_failures.go',
+    proofs: [{ re: /dnsFailureQuery\(source, window, "qname", 10\)/, expect: 'the names read asks for the top 10' }],
+  },
+  {
+    panel: 'dns-failed-lookups',
+    says: /Past about 3 days it reads the query logs/,
+    file: 'go/internal/dashboard/dns_failures.go',
+    proofs: [{ re: /const rawLogsReach = 72 \* time\.Hour/, expect: 'windows reaching past 72 hours read the query logs' }],
+  },
+  {
+    panel: 'dns-failed-lookups',
+    says: /Your pick of Today, Yesterday, This week or Last 30 days/,
+    file: 'go/internal/dashboard/dns_failures.go',
+    proofs: [{ re: /DNSFailureWindows = \[\]string\{"today", "yesterday", "this week", "last 30 days"\}/, expect: 'the four windows the route accepts' }],
+  },
+  {
+    panel: 'network-dhcp-requests',
+    says: /for today and for the last 30 days/,
+    file: 'go/internal/dashboard/dhcp_requests.go',
+    proofs: [{ re: /\{"today", "today"\},\n\t\{"last_30_days", "last 30 days"\}/, expect: 'the two windows read: today and last 30 days' }],
+  },
   // ---- caps and counts ----
   {
     panel: 'network-ipam-spaces',
@@ -1137,6 +1162,21 @@ const CLAIMS = [
 // `phrase` must still appear verbatim in that panel's copy; see the test below.
 // ---------------------------------------------------------------------------
 const EXCLUDED = [
+  {
+    panel: 'dns-failed-lookups',
+    phrase: 'Last 30 days ends with yesterday.',
+    why: 'How Cube.js reads its own "last 30 days" range, not a value in this app. Checked live on 2026-11-20: the range ran 2026-10-21 to 2026-11-19 (dns_failures.go dnsFailureWindowStart).',
+  },
+  {
+    panel: 'network-dhcp-requests',
+    phrase: 'Last 30 days ends with yesterday.',
+    why: 'How Cube.js reads its own "last 30 days" range, not a value in this app. Checked live on 2026-11-20: the range ran 2026-10-21 to 2026-11-19.',
+  },
+  {
+    panel: 'network-dhcp-requests',
+    phrase: 'a count can be up to twice the devices asking',
+    why: 'A FALSE FLAG on "up to twice": a caution about how an HA pair answers DHCP requests, not a cap or threshold in the code. Nothing in the app doubles or halves the number.',
+  },
   {
     panel: 'security-axur-incidents',
     phrase: 'Ordered by exposed credentials',

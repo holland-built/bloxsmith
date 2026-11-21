@@ -13,6 +13,8 @@ import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
+import Tip from '../components/Tip.jsx'
+import { DHCP_REQUEST_ROWS, DHCP_REQUEST_WINDOWS, dhcpTotal, HA_NOTE } from '../lib/dhcpRequests.js'
 // The look the owner picked for dashboards (Overview's tokens and tiles), plus
 // this page's own few rules.
 import './Overview.css'
@@ -68,6 +70,8 @@ export default function Network() {
   const data = useApi('/api/data', { poll: 30000 })
   const ipam = useApi('/api/csp/ipam-util', { poll: 30000 })
   const dhcp = useApi('/api/csp/dhcp-leases', { poll: 30000 })
+  // Totals over a day and a month, so once a minute is plenty.
+  const dhcpRequests = useApi('/api/csp/dhcp-requests', { poll: 60000 })
   // Read once per page load, no poll: it reads every address block and every
   // top-level subnet (about 7 s on an 11,000-subnet tenant), hence the slow budget.
   const overlaps = useApi('/api/ipam/overlaps', { coldMs: SLOW_COLD_TIMEOUT_MS })
@@ -137,6 +141,7 @@ export default function Network() {
           state: owned,
           children: [
             <DhcpLeases key="network-dhcp-leases" panelId="network-dhcp-leases" dhcp={dhcp} innerRef={leasesRef} />,
+            <DhcpRequests key="network-dhcp-requests" panelId="network-dhcp-requests" requests={dhcpRequests} />,
           ],
         })}
         {savedCharts}
@@ -583,6 +588,41 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
         <div className="mt-2.5">
           <DataTable rows={tableRows} columns={columns} maxHeight={420} rowCap={150} stickyHeader emptyText="no leases match" />
         </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- dhcp requests ----------
+
+// How many devices asked DHCP for an address, and how many requests got none,
+// as totals for today and the last 30 days (lib/dhcpRequests.js). Each number
+// stands alone: one that could not be read says "not checked".
+function DhcpRequests({ panelId, requests }) {
+  return (
+    <Card panelId={panelId} span={2} title="DHCP Requests">
+      {requests.loading && !requests.data ? (
+        <Skeleton h={140} />
+      ) : (
+        <>
+          {DHCP_REQUEST_WINDOWS.map((w) => (
+            <div key={w.key} data-dhcp-window={w.key}>
+              <div className="text-note text-muted pt-1">{w.label}</div>
+              <dl className="flex flex-wrap gap-x-6 gap-y-2 mt-1 mb-3 tabular-nums">
+                {DHCP_REQUEST_ROWS.map((r) => {
+                  const t = dhcpTotal(requests, r.key, w.key)
+                  return (
+                    <div key={r.key} data-dhcp-request={r.key} data-state={t.state}>
+                      <dt className="text-note text-muted"><Tip tip={r.tip}>{r.label}</Tip></dt>
+                      <dd className={t.state === 'ok' ? 'text-figure font-medium' : 'text-copy text-muted'}>{t.text}</dd>
+                    </div>
+                  )
+                })}
+              </dl>
+            </div>
+          ))}
+          <p className="text-note text-muted mt-2">{HA_NOTE}</p>
+        </>
       )}
     </Card>
   )

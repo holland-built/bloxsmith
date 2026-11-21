@@ -105,3 +105,17 @@
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell /\d+:\d+:5e:\d+:\d+:\d+/
         - cell "expired"
+  - heading "DHCP Requests" [level=2]
+  - 'button "About: DHCP Requests"': "About: ⓘ"
+  - 'button "Options: DHCP Requests"'
+  - text: Today
+  - term: Requests for an address
+  - definition: /\d+,\d+/
+  - term: Requests that got no address
+  - definition: /\d+/
+  - text: /Last \d+ days/
+  - term: Requests for an address
+  - definition: /\d+,\d+/
+  - term: Requests that got no address
+  - definition: not checked
+  - paragraph: If your DHCP servers run in HA pairs, both answer each request, so these counts can be up to twice the devices asking.
