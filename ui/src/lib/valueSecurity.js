@@ -18,14 +18,14 @@ export const VALUE_SECURITY_ITEMS = [
   { key: 'sus_to_mal', label: 'Sites flagged as suspicious that were later confirmed dangerous' },
 ]
 
-/** "up 12% on the 30 days before", "down 3% …", "about the same as …", or null. */
+/** "up 12% from the previous 30 days", "down 3% …", "about the same as …", or null. */
 export function trendText(value, previous) {
   const now = reading(value)
   const was = reading(previous)
   if (now == null || was == null || was <= 0) return null
   const pct = Math.round(((now - was) / was) * 100)
-  if (pct === 0) return 'about the same as the 30 days before'
-  return `${pct > 0 ? 'up' : 'down'} ${Math.abs(pct).toLocaleString()}% on the 30 days before`
+  if (pct === 0) return 'about the same as the previous 30 days'
+  return `${pct > 0 ? 'up' : 'down'} ${Math.abs(pct).toLocaleString()}% from the previous 30 days`
 }
 
 /** Minutes as the plainest whole unit: "45 minutes", "13 hours", "3 days". */
@@ -54,7 +54,7 @@ export function blockedNote(m, value) {
     if (first && m.days_from > first && !endsEarly) return `Counted since ${fmtShortDay(m.days_from)}, the earliest day Infoblox holds`
     return `Counted ${fmtShortDay(m.days_from)} to ${fmtShortDay(m.days_to)} only, the days Infoblox holds`
   }
-  if (m.covered == null) return "Couldn't check that Infoblox holds all 30 days"
+  if (m.covered == null) return "Could not confirm that Infoblox holds all 30 days"
   const t = trendText(value, m.previous)
   return t && t[0].toUpperCase() + t.slice(1)
 }
@@ -89,7 +89,7 @@ export function valueSecurity(feed) {
     if (key === 'blocked') note = blockedNote(m, v)
     if (key === 'sus_to_mal') {
       const a = aheadText(m.ahead_minutes)
-      note = a && `Spotted on average ${a} before they were confirmed`
+      note = a && `Identified an average of ${a} before confirmation`
     }
     return { ...base, state: 'ok', text: Math.round(v).toLocaleString(), note }
   })

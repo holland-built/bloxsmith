@@ -145,13 +145,15 @@ The rules come from a colleague's Infoblox CSP tool for Claude, used with his pe
 
 ## Value
 
-What Infoblox and Bloxsmith did for you in the last 30 days, on one screen, for a manager. It only reads, and changes nothing.
+Results from Infoblox and Bloxsmith over the last 30 days, on one screen. This page is read-only.
 
-- **What Infoblox stopped — 30 days**: lookups Infoblox blocked under your security rules (known bad domains, and content your policies block), domains it caught as zero-day threats before other feeds listed them, and domains it rated suspicious that were later confirmed malicious.
-- **How the platform ran — 30 days**: how much DNS work your servers did and how well: queries answered, answers from cache, and laptops protected off the office network. DNS server uptime and DHCP addresses handed out say **Not available** for now: Infoblox doesn't say what its DNS status number measures, or whether its DHCP number is a running total, and Bloxsmith shows no number it can't explain.
-- **Work done in Bloxsmith — 30 days**: the jobs Bloxsmith finished on this tenant, by page (Automate, Get an address, Site lists and the Editor), and the items they made in Infoblox. Deletes, and jobs later undone with Remove, are not counted. **Time saved** is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. Jobs recorded before 13 November 2026 have no tenant on record; they are counted, and the panel says how many. Jobs made on another tenant are not counted, and the panel says how many of those there are too.
+- **Security results — 30 days**: lookups Infoblox blocked (known threats, and lookups stopped by your policy and content rules), with a chart of each day you can read by pointer, tap or arrow keys, domains it caught as zero-day threats before other feeds listed them, and domains it rated suspicious that were later confirmed malicious.
+- **Platform performance — 30 days**: how much DNS work your servers did and how well: queries answered, answers from cache, and roaming devices protected. DNS server uptime and DHCP addresses assigned show **Not available** for now.
+- **Bloxsmith activity — 30 days**: the jobs Bloxsmith finished on this tenant, by page (Automate, Get an address, Site lists and the Editor), and the items they made in Infoblox. Deletes, and jobs later undone with Remove, are not counted. **Time saved** is an estimate: 10 minutes for each job done by hand in the Infoblox Portal. Jobs are counted in the whole days (UTC) the page names, so this panel and the printed report always match. Jobs recorded before 13 November 2026 have no account on record; they are left out, and the panel says how many. Jobs made on another tenant are not counted, and the panel says how many of those there are too.
 
 A number that could not be read says "not checked", never 0.
+
+**Print report** opens your browser's print window with a one-page monthly report of these numbers, without the app's menus. Choose Save as PDF there to keep a copy.
 
 ## Network
 
@@ -654,9 +656,9 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Made with Bloxsmith | What Bloxsmith made and deleted | the app's own run records | No | it is a list, not a chart |
 | Made with Bloxsmith | Delete something else | the Infoblox API | No | it is a form, not a chart |
 | Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
-| Value | What Infoblox stopped — 30 days | Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records | No | it adds up 30 days into a few totals, worked out in the app |
-| Value | How the platform ran — 30 days | Infoblox host metrics and endpoint records | No | it adds up 30 days into a few totals, worked out in the app |
-| Value | Work done in Bloxsmith — 30 days | Bloxsmith's own record of what it made | No | it counts the app's own records, not a chart |
+| Value | Security results — 30 days | Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records | No | it adds up 30 days into a few totals, worked out in the app |
+| Value | Platform performance — 30 days | Infoblox host metrics and endpoint records | No | it adds up 30 days into a few totals, worked out in the app |
+| Value | Bloxsmith activity — 30 days | Bloxsmith's own record of what it made | No | it counts the app's own records, not a chart |
 | Demo server | Settings | the app's own vault | No | it is a form, not a chart |
 | Demo server | Build | Proxmox and the Infoblox API | No | it is a live log, not a chart |
 | Demo server | The Infoblox code | the app's own files | No | it is code, not a chart |

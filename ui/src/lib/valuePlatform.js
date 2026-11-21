@@ -22,15 +22,15 @@ export function fmtCount(n) {
 
 const FORMAT = { queries: fmtCount, addresses: fmtCount, devices: fmtCount, percent: fmtShare }
 
-export const DHCP_HA_NOTE = 'HA pairs each count an address, so this can be up to twice the devices served.'
+export const DHCP_HA_NOTE = 'High-availability pairs each count an address, so this figure can be up to twice the number of devices served.'
 
 // What each number is, in the order shown, with one plain line under it.
 export const PLATFORM_ROWS = [
-  ['queries', 'Queries answered', 'DNS lookups your servers answered.'],
-  ['cache_hit', 'Answers from cache', 'Share of lookups answered from memory, without asking the internet again.'],
-  ['uptime', 'DNS server uptime', 'How much of the time your DNS servers were running.'],
-  ['dhcp_assigned', 'DHCP addresses handed out', 'Addresses your DHCP servers gave to devices.'],
-  ['roaming', 'Laptops protected off the office network', 'Devices kept safe by the roaming client while away from the office.'],
+  ['queries', 'Queries answered', 'DNS queries answered by your servers.'],
+  ['cache_hit', 'Answers from cache', 'Share of DNS queries answered from cache, without an external lookup.'],
+  ['uptime', 'DNS server uptime', 'Share of time your DNS servers were running.'],
+  ['dhcp_assigned', 'DHCP addresses assigned', 'Addresses your DHCP servers assigned to devices.'],
+  ['roaming', 'Roaming devices protected', 'Devices protected by the roaming client for at least part of this period.'],
 ]
 
 /** One metric as { state, value, text }. state: loading, ok, empty, error or unavailable. */

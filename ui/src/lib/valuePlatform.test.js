@@ -7,7 +7,7 @@ const feed = (metrics, extra = {}) => ({ loading: false, error: null, data: { st
 const live = {
   queries: { status: 'ok', value: 25431225.68867135, unit: 'queries' },
   cache_hit: { status: 'ok', value: 44.695256666666666, unit: 'percent' },
-  uptime: { status: 'unavailable', value: null, unit: 'percent', hosts: [], reason: "Not available: Infoblox doesn't say what its DNS status number measures." },
+  uptime: { status: 'unavailable', value: null, unit: 'percent', hosts: [], reason: "Not available: Infoblox does not state what its DNS status metric measures." },
   dhcp_assigned: { status: 'ok', value: 5744, unit: 'addresses' },
   roaming: { status: 'ok', value: 7, unit: 'devices' },
 }
@@ -50,7 +50,7 @@ test('an unknown unit is not guessed', () => {
 test('unavailable shows the reason', () => {
   const m = platformMetric(feed(live), 'uptime')
   assert.equal(m.state, 'unavailable')
-  assert.equal(m.text, "Not available: Infoblox doesn't say what its DNS status number measures.")
+  assert.equal(m.text, "Not available: Infoblox does not state what its DNS status metric measures.")
   assert.equal(platformMetric(feed({ roaming: { status: 'unavailable', reason: 'Not available on this tenant.' } }), 'roaming').text, 'Not available on this tenant.')
   assert.equal(platformMetric(feed({ roaming: { status: 'unavailable' } }), 'roaming').text, 'Not available on this tenant.')
 })

@@ -758,7 +758,7 @@
   {
     "id": "value-security",
     "page": "Value",
-    "name": "What Infoblox stopped — 30 days",
+    "name": "Security results — 30 days",
     "kind": "cube",
     "source": "Infoblox security activity: blocked lookups, zero-day DNS and suspicious-to-malicious records",
     "builder": "no",
@@ -767,7 +767,7 @@
   {
     "id": "value-platform",
     "page": "Value",
-    "name": "How the platform ran — 30 days",
+    "name": "Platform performance — 30 days",
     "kind": "cube",
     "source": "Infoblox host metrics and endpoint records",
     "builder": "no",
@@ -776,7 +776,7 @@
   {
     "id": "value-work",
     "page": "Value",
-    "name": "Work done in Bloxsmith — 30 days",
+    "name": "Bloxsmith activity — 30 days",
     "kind": "local",
     "source": "Bloxsmith's own record of what it made",
     "builder": "no",

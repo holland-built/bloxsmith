@@ -41,6 +41,7 @@ func (d *Deps) registerCSPRoutes(mux router) {
 	tile("/api/csp/maintenance", (*dashboard.Service).CSPMaintenance)
 	tile("/api/csp/threats", (*dashboard.Service).CSPThreats)
 	tile("/api/csp/value-security", (*dashboard.Service).CSPValueSecurity)
+	tile("/api/csp/value-daily", (*dashboard.Service).CSPValueDaily)
 	tile("/api/csp/ctem-exposure", (*dashboard.Service).CSPCtemExposure)
 	tile("/api/csp/ctem-assets", (*dashboard.Service).CSPCtemAssets)
 	tile("/api/csp/exposures", (*dashboard.Service).CSPExposures)

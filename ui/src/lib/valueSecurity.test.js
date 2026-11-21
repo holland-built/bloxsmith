@@ -15,16 +15,16 @@ const live = {
 test('all three numbers, with the trend and the head start', () => {
   const v = byKey(feed(live))
   assert.equal(v.blocked.text, (393407).toLocaleString())
-  assert.equal(v.blocked.note, 'Up 12% on the 30 days before')
+  assert.equal(v.blocked.note, 'Up 12% from the previous 30 days')
   assert.equal(v.zero_day.text, '19')
   assert.equal(v.zero_day.note, null)
   assert.equal(v.sus_to_mal.text, '24')
-  assert.equal(v.sus_to_mal.note, 'Spotted on average 13 hours before they were confirmed')
+  assert.equal(v.sus_to_mal.note, 'Identified an average of 13 hours before confirmation')
 })
 
 test('trend: up, down, flat, and none without a usable previous', () => {
-  assert.equal(trendText(90, 100), 'down 10% on the 30 days before')
-  assert.equal(trendText(100.2, 100), 'about the same as the 30 days before')
+  assert.equal(trendText(90, 100), 'down 10% from the previous 30 days')
+  assert.equal(trendText(100.2, 100), 'about the same as the previous 30 days')
   assert.equal(trendText(100, null), null)
   assert.equal(trendText(100, 0), null)
   assert.equal(trendText(100, ''), null)
@@ -91,9 +91,9 @@ test('days missing from the middle says how many are counted, with no trend', ()
 
 test('no days held, or coverage not checked, never shows a trend', () => {
   assert.equal(blockedNote({ ...win, covered: false, days_from: null, days_to: null }, 900), 'Infoblox holds no data for these 30 days')
-  assert.equal(blockedNote({ ...win, covered: null }, 900), "Couldn't check that Infoblox holds all 30 days")
+  assert.equal(blockedNote({ ...win, covered: null }, 900), "Could not confirm that Infoblox holds all 30 days")
 })
 
 test('a whole window keeps the trend', () => {
-  assert.equal(blockedNote({ ...win, covered: true }, 900), 'Up 800% on the 30 days before')
+  assert.equal(blockedNote({ ...win, covered: true }, 900), 'Up 800% from the previous 30 days')
 })
