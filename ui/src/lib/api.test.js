@@ -1259,6 +1259,7 @@ function heldFetch(t) {
       url,
       answer: (body) => resolve(new Response(JSON.stringify(body), { status: 200 })),
       fail: () => reject(new TypeError('network')),
+      locked: () => resolve(new Response(JSON.stringify({ locked: true }), { status: 503 })),
     })
   })
   t.after(() => {
@@ -1588,4 +1589,78 @@ test('the first tenant seen is not a change', async (t) => {
   await settle()
   assert.equal(calls.length, 0)
   hook.unmount()
+})
+
+test('an older 503 locked answer after Refresh now does not say the vault is locked', async (t) => {
+  const calls = heldFetch(t)
+  const events = []
+  globalThis.window = { dispatchEvent: (e) => events.push(e.type) }
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  const old = calls[0]
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  feedCalls(calls, '/api/feed').at(-1).answer({ v: 'refreshed' })
+  await settle()
+  await done
+
+  old.locked()
+  await settle()
+  assert.deepEqual(events, [], 'the older answer is not news')
+  assert.deepEqual(hook.current.data, { v: 'refreshed' })
+  hook.unmount()
+})
+
+test('a locked answer from the newest request still says the vault is locked', async (t) => {
+  const calls = heldFetch(t)
+  const events = []
+  globalThis.window = { dispatchEvent: (e) => events.push(e.type) }
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  calls[0].answer({ v: 1 })
+  await settle()
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  feedCalls(calls, '/api/feed').at(-1).locked()
+  await settle()
+  await done
+  assert.deepEqual(events, ['bx:vault-locked'])
+  hook.unmount()
+})
+
+test('a panel waiting to adopt stands down when Refresh now takes it over', async (t) => {
+  const calls = heldFetch(t)
+  t.mock.method(Math, 'random', () => 0) // the refresh goes out at once
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 1, 'the second panel is waiting on the first')
+
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(1) // the refresh is sent, and the panel's hold ends
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 2, 'the first load plus the refresh')
+  t.mock.timers.tick(JOIN_GRACE_MS) // the wait from before the press runs out
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 2, 'the ended wait sent no third request')
+
+  feedCalls(calls, '/api/data')[1].answer({ v: 'refreshed' })
+  await settle()
+  await done
+  assert.deepEqual(first.current.data, { v: 'refreshed' })
+  assert.deepEqual(second.current.data, { v: 'refreshed' })
+  first.unmount()
+  second.unmount()
 })

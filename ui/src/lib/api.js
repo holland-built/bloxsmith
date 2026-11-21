@@ -533,6 +533,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
   // floorRef is raised by Refresh now; landedRef is the newest that has settled.
   const requestRef = useRef(0)
   const floorRef = useRef(0)
+  const takeoversRef = useRef(0) // how many times Refresh now has taken this panel over
   const landedRef = useRef(0)
   const ticksRef = useRef(0) // poll ticks since this feed last loaded by itself
   // One stable object for the whole life of the hook; only its fields change,
@@ -598,8 +599,12 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
         // request when the grace ran out.
         if (joiningRef.current) return
         joiningRef.current = true
+        const takeovers = takeoversRef.current
         Promise.race([first.settled, new Promise((resolve) => setTimeout(resolve, JOIN_GRACE_MS))]).then(() => {
           joiningRef.current = false
+          // Refresh now took this panel over during the wait, and its one shared
+          // request answers for this panel too.
+          if (takeoversRef.current !== takeovers) return
           if (live()) run(true)
         })
         return
@@ -622,7 +627,8 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
     const cancel = budget ? budget.cancel : () => {}
     const id = ++requestRef.current
     if (refresh) floorRef.current = id
-    const newest = () => live() && id >= floorRef.current && id >= landedRef.current
+    const superseded = () => id < floorRef.current || id < landedRef.current
+    const newest = () => live() && !superseded()
     const asked = refresh
       ? refresh.response.then((res) => res.clone())
       : fetch(url, { cache: 'no-store', signal: budget.signal })
@@ -632,7 +638,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
           const body = await res.json().catch(() => ({}))
           if (body && (body.locked === true || body.error === 'vault locked')) {
             cancel()
-            if (newest()) {
+            // An older request's lock is not news: a newer one has already
+            // answered, or Refresh now is asking again and will report a real lock.
+            if (superseded()) return null
+            if (live()) {
               landedRef.current = id
               // A locked vault answers every retry the same way, so a retry a
               // transient failure queued earlier is cancelled with the flag.
@@ -773,7 +782,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
     entry.retry = retry
     entry.url = url
     entry.coldMs = coldMs
-    entry.dropOlder = () => { floorRef.current = requestRef.current + 1 }
+    entry.dropOlder = () => {
+      floorRef.current = requestRef.current + 1
+      takeoversRef.current += 1
+    }
     entry.reload = (request) => {
       clearTimeout(retryTimerRef.current)
       retryTimerRef.current = null
