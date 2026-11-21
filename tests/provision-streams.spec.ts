@@ -76,7 +76,7 @@ async function openMode(page: import('@playwright/test').Page, label: string) {
   // has to be chosen before anything can be clicked. The seed paths need no
   // input at all, which is why their specs never had to do this.
   if (label === 'Subnet') {
-    const space = page.getByRole('combobox').first();
+    const space = page.getByRole('main').getByRole('combobox').first();
     await space.selectOption({ label: 'Baseline Space' });
     return;
   }

@@ -14,7 +14,7 @@ const PAGE_WORDS = { '': 'Automate', address: 'Get an address', dns: 'Get an add
 
 export default function MadeList({ sources, ro, empty = 'Nothing made here yet.' }) {
   // Every 10 seconds, so something just made on the page shows without a reload.
-  const api = useApi('/api/desk/runs', { poll: 10000 })
+  const api = useApi('/api/desk/runs', { poll: 10000, live: true })
   const tenant = api.data?.tenant
   const all = api.data?.runs ?? []
   const list = sources ? all.filter((r) => sources.includes(r.source || '')) : all

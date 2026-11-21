@@ -11,10 +11,13 @@ import {
   retryDelayMs,
   sameJson,
   __resetAdoptionForTests,
+  noteTenant,
+  refreshFeeds,
   retryFailedFeeds,
   shareResult,
   useApi,
 } from './api.js'
+import { setRefresh } from './refresh.js'
 
 // The slowest cold /api/data measured against the live tenant.
 //
@@ -1227,4 +1230,437 @@ test('a shared result is not adopted by a hook that did not opt in, nor once it 
   assert.equal(calls.length, 2, 'past the window the hook asks for itself')
   plain.unmount()
   late.unmount()
+})
+
+// ---------------------------------------------------------------------------
+// The refresh choice and Refresh now.
+// ---------------------------------------------------------------------------
+
+test.beforeEach(() => setRefresh('30s'))
+test.after(() => setRefresh('30s'))
+
+/** Advance the poll clock one interval at a time, letting each answer land. */
+async function pollFor(t, ms, step = 30_000) {
+  for (let at = step; at <= ms; at += step) {
+    t.mock.timers.tick(step)
+    await settle()
+  }
+}
+
+/** A fetch whose answers the test releases by hand, in any order. */
+function heldFetch(t) {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
+  const realFetch = globalThis.fetch
+  const realWindow = globalThis.window
+  const calls = []
+  globalThis.window = { dispatchEvent() {} }
+  globalThis.fetch = (url) => new Promise((resolve, reject) => {
+    calls.push({
+      url,
+      answer: (body) => resolve(new Response(JSON.stringify(body), { status: 200 })),
+      fail: () => reject(new TypeError('network')),
+      locked: () => resolve(new Response(JSON.stringify({ locked: true }), { status: 503 })),
+    })
+  })
+  t.after(() => {
+    globalThis.fetch = realFetch
+    globalThis.window = realWindow
+  })
+  return calls
+}
+
+const feedCalls = (calls, url) => calls.filter((c) => (c.url ?? c) === url)
+
+/** Run a Refresh now whose cache clear answers at once. */
+async function pressRefresh(t, opts) {
+  const done = refreshFeeds(opts)
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  await done
+  await settle()
+}
+
+test('at 30 sec a feed polls exactly as often as it always did', async (t) => {
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  await pollFor(t, 90_000)
+  assert.equal(calls.length, 4, 'the mount plus one request per 30s')
+  hook.unmount()
+})
+
+test('a slower choice stretches a faster feed to the choice', async (t) => {
+  setRefresh('5m')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  await pollFor(t, 270_000)
+  assert.equal(calls.length, 1, 'nothing before five minutes')
+  await pollFor(t, 30_000)
+  assert.equal(calls.length, 2, 'one request at five minutes')
+  hook.unmount()
+})
+
+test('a feed slower than the choice keeps its own interval', async (t) => {
+  setRefresh('1m')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed', { poll: 300_000 }))
+  await settle()
+  await pollFor(t, 240_000, 60_000)
+  assert.equal(calls.length, 1)
+  await pollFor(t, 60_000, 60_000)
+  assert.equal(calls.length, 2)
+  hook.unmount()
+})
+
+test('changing the choice reloads nothing, and the next tick obeys it', async (t) => {
+  setRefresh('off')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  await pollFor(t, 60_000)
+  assert.equal(calls.length, 1)
+
+  setRefresh('30s')
+  await settle()
+  assert.equal(calls.length, 1, 'the change itself sends no request')
+  await pollFor(t, 30_000)
+  assert.equal(calls.length, 2, 'the existing timer picks it up')
+  hook.unmount()
+})
+
+test('Off stops the timer but a newly opened feed still loads once', async (t) => {
+  setRefresh('off')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  assert.deepEqual(hook.current.data, { n: 1 })
+  await pollFor(t, 600_000)
+  assert.equal(calls.length, 1)
+  hook.unmount()
+})
+
+test('Off also stops the reload on returning to the browser tab', async (t) => {
+  setRefresh('off')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  tab.away()
+  now += 3_600_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 1)
+  hook.unmount()
+})
+
+test('returning to the tab measures freshness against the chosen interval', async (t) => {
+  setRefresh('5m')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  tab.away()
+  now += 60_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 1, 'a minute old is fresh on a five-minute choice')
+  tab.away()
+  now += 120_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 2, 'past half of five minutes it reloads')
+  hook.unmount()
+})
+
+test('a live feed keeps polling and reloading on return when refresh is Off', async (t) => {
+  setRefresh('off')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  let now = 1_000_000
+  t.mock.method(performance, 'now', () => now)
+  const tab = fakeDocument(t)
+  const hook = mountHook(() => useApi('/api/vault/status', { poll: 30_000, live: true }))
+  await settle()
+  await pollFor(t, 60_000)
+  assert.equal(calls.length, 3)
+  tab.away()
+  now += 60_000
+  tab.back()
+  await settle()
+  assert.equal(calls.length, 4)
+  hook.unmount()
+})
+
+test('a feed under 30 sec ignores the choice', async (t) => {
+  setRefresh('off')
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/csp/jobs', { poll: 15_000 }))
+  await settle()
+  await pollFor(t, 45_000, 15_000)
+  assert.equal(calls.length, 4)
+  hook.unmount()
+})
+
+test('Refresh now clears the server cache first, then sends one request per url', async (t) => {
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const a = mountHook(() => useApi('/api/data', { poll: 30_000 }))
+  const b = mountHook(() => useApi('/api/data', { poll: 60_000 }))
+  const c = mountHook(() => useApi('/api/other'))
+  await settle()
+  calls.length = 0
+
+  await pressRefresh(t)
+  assert.equal(calls[0], '/api/cache-bust')
+  assert.equal(feedCalls(calls, '/api/data').length, 1)
+  assert.equal(feedCalls(calls, '/api/other').length, 1, 'a feed with no timer reloads too')
+  for (const hook of [a, b, c]) hook.unmount()
+})
+
+test('Refresh now gives every panel on a url the new answer, each its own copy', async (t) => {
+  let n = 0
+  const { calls } = harness(t, [() => Promise.resolve(new Response(JSON.stringify({ n: ++n }), { status: 200 }))])
+  const a = mountHook(() => useApi('/api/data', { poll: 30_000 }))
+  const b = mountHook(() => useApi('/api/data', { poll: 60_000 }))
+  await settle()
+  await pressRefresh(t)
+  const last = n
+  assert.ok(feedCalls(calls, '/api/data').length >= 2)
+  assert.deepEqual(a.current.data, { n: last })
+  assert.deepEqual(b.current.data, { n: last })
+  assert.notEqual(a.current.data, b.current.data)
+  a.unmount()
+  b.unmount()
+})
+
+test('Refresh now spreads its requests over 0 to 500 ms', async (t) => {
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  t.mock.method(Math, 'random', () => 0.5, { times: Infinity })
+  Math.random.mock.mockImplementation(() => 0.5)
+  const hook = mountHook(() => useApi('/api/feed'))
+  await settle()
+  calls.length = 0
+  const done = refreshFeeds()
+  await settle()
+  assert.deepEqual(calls, ['/api/cache-bust'])
+  t.mock.timers.tick(249)
+  await settle()
+  assert.equal(feedCalls(calls, '/api/feed').length, 0)
+  t.mock.timers.tick(1)
+  await settle()
+  assert.equal(feedCalls(calls, '/api/feed').length, 1)
+  await done
+  hook.unmount()
+})
+
+test('Refresh now still reloads when the cache clear fails', async (t) => {
+  const { calls } = harness(t, [(url) => (url === '/api/cache-bust'
+    ? Promise.reject(new TypeError('network'))
+    : Promise.resolve(new Response('{"n":1}', { status: 200 })))])
+  const hook = mountHook(() => useApi('/api/feed'))
+  await settle()
+  calls.length = 0
+  await pressRefresh(t)
+  assert.equal(feedCalls(calls, '/api/feed').length, 1)
+  hook.unmount()
+})
+
+test('Refresh now does not adopt an answer from before it, even inside the window', async (t) => {
+  let n = 0
+  const { calls } = harness(t, [() => Promise.resolve(new Response(JSON.stringify({ n: ++n }), { status: 200 }))])
+  const hook = mountHook(() => useApi('/api/data', { poll: 60_000, adoptIfFresherThan: 45_000 }))
+  await settle()
+  calls.length = 0
+  await pressRefresh(t)
+  assert.equal(feedCalls(calls, '/api/data').length, 1, 'it asked, rather than taking the old answer')
+  assert.deepEqual(hook.current.data, { n: 3 })
+  hook.unmount()
+})
+
+test('a request from before Refresh now cannot replace the refreshed answer', async (t) => {
+  const calls = heldFetch(t)
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  const old = calls[0]
+
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  const fresh = feedCalls(calls, '/api/feed').at(-1)
+  assert.notEqual(fresh, old)
+  fresh.answer({ v: 'refreshed' })
+  await settle()
+  await done
+  assert.deepEqual(hook.current.data, { v: 'refreshed' })
+
+  old.answer({ v: 'old' })
+  await settle()
+  assert.deepEqual(hook.current.data, { v: 'refreshed' }, 'the older answer landed last and was dropped')
+  hook.unmount()
+})
+
+test('an older failure cannot mark a refreshed feed as failed', async (t) => {
+  const calls = heldFetch(t)
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  const old = calls[0]
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  feedCalls(calls, '/api/feed').at(-1).answer({ v: 'refreshed' })
+  await settle()
+  await done
+  old.fail()
+  await settle()
+  assert.equal(hook.current.error, null)
+  hook.unmount()
+})
+
+test('after a tenant change, an answer from the old tenant is dropped and feeds reload', async (t) => {
+  const calls = heldFetch(t)
+  noteTenant('tenant-a')
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  const fromA = calls[0]
+
+  const done = noteTenant('tenant-b')
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  assert.equal(feedCalls(calls, '/api/cache-bust').length, 0, 'the server already cleared its cache on the switch')
+  const fromB = feedCalls(calls, '/api/feed').at(-1)
+  assert.notEqual(fromB, fromA)
+
+  fromA.answer({ tenant: 'a' })
+  await settle()
+  assert.equal(hook.current.data, null, 'the old tenant never reaches the screen')
+  fromB.answer({ tenant: 'b' })
+  await settle()
+  await done
+  assert.deepEqual(hook.current.data, { tenant: 'b' })
+  hook.unmount()
+})
+
+test('a tenant change during Refresh now cancels the old run', async (t) => {
+  const calls = heldFetch(t)
+  noteTenant('tenant-a')
+  const hook = mountHook(() => useApi('/api/feed'))
+  await settle()
+  calls[0].answer({ tenant: 'a' })
+  await settle()
+
+  const pressed = refreshFeeds()
+  await settle()
+  const bust = calls.find((c) => c.url === '/api/cache-bust')
+  const switched = noteTenant('tenant-b')
+  await settle()
+  bust.answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  const asked = feedCalls(calls, '/api/feed')
+  assert.equal(asked.length, 2, 'one reload for the new tenant, not one from each run')
+  asked[1].answer({ tenant: 'b' })
+  await settle()
+  await Promise.all([pressed, switched])
+  assert.deepEqual(hook.current.data, { tenant: 'b' })
+  hook.unmount()
+})
+
+test('the first tenant seen is not a change', async (t) => {
+  const { calls } = harness(t, [jsonOk({ n: 1 })])
+  const hook = mountHook(() => useApi('/api/feed'))
+  await settle()
+  calls.length = 0
+  noteTenant('tenant-a')
+  noteTenant('tenant-a')
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  assert.equal(calls.length, 0)
+  hook.unmount()
+})
+
+test('an older 503 locked answer after Refresh now does not say the vault is locked', async (t) => {
+  const calls = heldFetch(t)
+  const events = []
+  globalThis.window = { dispatchEvent: (e) => events.push(e.type) }
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  const old = calls[0]
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  feedCalls(calls, '/api/feed').at(-1).answer({ v: 'refreshed' })
+  await settle()
+  await done
+
+  old.locked()
+  await settle()
+  assert.deepEqual(events, [], 'the older answer is not news')
+  assert.deepEqual(hook.current.data, { v: 'refreshed' })
+  hook.unmount()
+})
+
+test('a locked answer from the newest request still says the vault is locked', async (t) => {
+  const calls = heldFetch(t)
+  const events = []
+  globalThis.window = { dispatchEvent: (e) => events.push(e.type) }
+  const hook = mountHook(() => useApi('/api/feed', { poll: 30_000 }))
+  await settle()
+  calls[0].answer({ v: 1 })
+  await settle()
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(500)
+  await settle()
+  feedCalls(calls, '/api/feed').at(-1).locked()
+  await settle()
+  await done
+  assert.deepEqual(events, ['bx:vault-locked'])
+  hook.unmount()
+})
+
+test('a panel waiting to adopt stands down when Refresh now takes it over', async (t) => {
+  const calls = heldFetch(t)
+  t.mock.method(Math, 'random', () => 0) // the refresh goes out at once
+  const first = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  const second = mountHook(() => useApi('/api/data', { adoptIfFresherThan: WINDOW }))
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 1, 'the second panel is waiting on the first')
+
+  const done = refreshFeeds()
+  await settle()
+  calls.find((c) => c.url === '/api/cache-bust').answer({ ok: true })
+  await settle()
+  t.mock.timers.tick(1) // the refresh is sent, and the panel's hold ends
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 2, 'the first load plus the refresh')
+  t.mock.timers.tick(JOIN_GRACE_MS) // the wait from before the press runs out
+  await settle()
+  assert.equal(feedCalls(calls, '/api/data').length, 2, 'the ended wait sent no third request')
+
+  feedCalls(calls, '/api/data')[1].answer({ v: 'refreshed' })
+  await settle()
+  await done
+  assert.deepEqual(first.current.data, { v: 'refreshed' })
+  assert.deepEqual(second.current.data, { v: 'refreshed' })
+  first.unmount()
+  second.unmount()
 })

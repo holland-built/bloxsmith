@@ -33,6 +33,7 @@ const EXPECTED = [
   'search-box',
   'updates',
   'connection-status',
+  'refresh',
   'settings',
   'theme',
   'density',

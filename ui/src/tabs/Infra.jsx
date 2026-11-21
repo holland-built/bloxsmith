@@ -65,7 +65,7 @@ export default function Infra() {
   const savedCharts = useSavedChartPanels('infra')
   const data = useApi('/api/data', { poll: 30000 })
   const onprem = useApi('/api/csp/onprem-hosts', { poll: 30000 })
-  const jobs = useApi('/api/csp/jobs', { poll: 15000 })
+  const jobs = useApi('/api/csp/jobs', { poll: 15000, live: true })
   const dfp = useApi('/api/csp/dfp', { poll: 30000 })
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
   const discovery = useApi('/api/csp/discovery-status', { poll: 60000 })

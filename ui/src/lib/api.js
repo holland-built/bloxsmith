@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { feedIntervalMs, getRefreshMs, isFeedDue } from './refresh.js'
 
 // Why there is a timeout at all (unchanged): some feeds (e.g. /api/dns-analytics)
 // hang forever server-side, and without a cap the panel shows an eternal
@@ -147,7 +148,7 @@ export function retryDelayMs(attempt, rng = Math.random) {
 // 75 render sites by hand, which is the per-call-site mistake this codebase has
 // already had to undo once.
 
-const feeds = new Set() // entries: { failed, retrying, retry(delayMs) }
+const feeds = new Set() // entries: { failed, retrying, retry(delayMs), url, coldMs, reload(request), dropOlder() }
 const feedListeners = new Set()
 let feedSnapshot = { failed: false, retrying: false }
 
@@ -289,6 +290,9 @@ export function __resetAdoptionForTests() {
   lastOk.clear()
   seqByUrl.clear()
   asking.clear()
+  holding.clear()
+  refreshRun += 1
+  knownTenant = null
 }
 
 /**
@@ -374,6 +378,87 @@ export function shareResult(url, json) {
   lastOk.set(url, { json: structuredClone(json), at: performance.now(), seq })
 }
 
+// ---------- Refresh now ----------
+//
+// One request per url however many panels show it, because a page can mount the
+// same url several times and the server has just been told to forget its cache.
+// The panels share the one Response by each reading their own clone, so each
+// still gets its own object and runs its own success, failure and retry path.
+
+/** A request Refresh now already sent, handed to each panel showing that url. */
+class RefreshRequest {
+  constructor(response) {
+    this.response = response
+  }
+}
+
+const holding = new Map() // panel -> the url Refresh now is about to reload for it
+let refreshRun = 0 // a newer run, or a tenant change, abandons the one before
+let knownTenant = null
+
+function sendRefresh(url) {
+  const panels = [...feeds].filter((feed) => feed.url === url)
+  for (const panel of panels) holding.delete(panel)
+  if (!panels.length) return Promise.resolve()
+  // The server's cache was just cleared, so this is a cold read for every panel.
+  const { signal, cancel } = abortAfter(Math.max(...panels.map((p) => p.coldMs ?? COLD_TIMEOUT_MS)))
+  const request = new RefreshRequest(fetch(url, { cache: 'no-store', signal }))
+  return Promise.allSettled(panels.map((panel) => panel.reload(request))).finally(cancel)
+}
+
+/**
+ * Reload every mounted feed now, spread over 0-500ms, one request per url.
+ * Answers already on their way are ignored from this moment, and so is anything
+ * a panel could have adopted from before it. `bust: false` is for a tenant
+ * change, where the server has already rotated its cache.
+ */
+export async function refreshFeeds({ bust = true } = {}) {
+  const run = ++refreshRun
+  holding.clear()
+  for (const feed of feeds) {
+    feed.dropOlder()
+    if (feed.url) holding.set(feed, feed.url)
+  }
+  lastOk.clear()
+  asking.clear()
+  for (const url of adopting) claimSeq(url) // an answer still in flight is no longer the newest
+
+  if (bust) {
+    // A failed clear still reloads: the panels get the server's cached answer,
+    // which is no worse than what a timer would have fetched.
+    const { signal, cancel } = abortAfter(WARM_TIMEOUT_MS)
+    await fetch('/api/cache-bust', { cache: 'no-store', signal }).catch(() => {}).finally(cancel)
+    if (run !== refreshRun) return
+  }
+
+  // Read after the clear, so a panel that mounted while it ran is included.
+  const urls = new Set()
+  for (const feed of feeds) {
+    if (!feed.url) continue
+    urls.add(feed.url)
+    holding.set(feed, feed.url)
+  }
+  await Promise.all([...urls].map((url) => new Promise((done) => {
+    setTimeout(() => {
+      if (run !== refreshRun) done()
+      else sendRefresh(url).then(done)
+    }, Math.round(Math.random() * 500))
+  })))
+}
+
+/**
+ * Tell the feeds which tenant the server is on. When it changes without a page
+ * reload (another browser tab switched it), whatever is still on its way
+ * belongs to the old tenant, so it is dropped and every feed asks again.
+ */
+export function noteTenant(active) {
+  if (!active) return undefined
+  const was = knownTenant
+  knownTenant = active
+  if (was === null || was === active) return undefined
+  return refreshFeeds({ bust: false })
+}
+
 // performance.now(), NOT Date.now(), and this is not a style preference.
 //
 // Date.now() is the WALL clock. It jumps: an NTP correction, a laptop waking
@@ -406,8 +491,11 @@ export function shareResult(url, json) {
  * there is nothing to retry — no request was made. A polling call site already
  * never schedules its own retry (the poll IS the retry), so this matches how
  * such a call site behaves today rather than inventing an exception for it.
+ *
+ * `live: true` marks a feed that reports connection state or a job in progress.
+ * It keeps its own poll whatever the header's refresh choice says, including Off.
  */
-export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
+export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed = false } = {}) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -441,6 +529,13 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   const answeredAtRef = useRef(null)
   const failuresRef = useRef(0) // consecutive failures for this url
   const retryTimerRef = useRef(null)
+  // Requests are numbered so an older answer can never replace a newer one.
+  // floorRef is raised by Refresh now; landedRef is the newest that has settled.
+  const requestRef = useRef(0)
+  const floorRef = useRef(0)
+  const takeoversRef = useRef(0) // how many times Refresh now has taken this panel over
+  const landedRef = useRef(0)
+  const ticksRef = useRef(0) // poll ticks since this feed last loaded by itself
   // One stable object for the whole life of the hook; only its fields change,
   // so the registry never has to re-register to stay current.
   const entryRef = useRef({ failed: false, retrying: false, retry: null })
@@ -457,6 +552,9 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     // A load kept from an earlier render, for a url this hook no longer wants,
     // sends nothing.
     if (!url || urlRef.current !== url) return
+    const refresh = waited instanceof RefreshRequest ? waited : null
+    // Refresh now is about to reload this url, so nothing else asks meanwhile.
+    if (!refresh && holding.get(entryRef.current) === url) return
     // Mounted, AND still the url effect run this request was made in.
     const gen = genRef.current
     const live = () => aliveRef.current && genRef.current === gen
@@ -466,7 +564,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     // would have set, and nothing else: no `bx:vault-locked` (only a 503 raises
     // that, and a 503 is never published), no retry timer, no feeds-registry
     // change beyond clearing an error the way a success does.
-    if (adoptIfFresherThan) {
+    if (!refresh && adoptIfFresherThan) {
       const hit = freshOk(url, adoptIfFresherThan)
       if (hit) {
         // The url has answered — for somebody — so this hook's next real request
@@ -501,8 +599,12 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // request when the grace ran out.
         if (joiningRef.current) return
         joiningRef.current = true
+        const takeovers = takeoversRef.current
         Promise.race([first.settled, new Promise((resolve) => setTimeout(resolve, JOIN_GRACE_MS))]).then(() => {
           joiningRef.current = false
+          // Refresh now took this panel over during the wait, and its one shared
+          // request answers for this panel too.
+          if (takeoversRef.current !== takeovers) return
           if (live()) run(true)
         })
         return
@@ -520,14 +622,27 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     const seq = adopting.has(url) ? claimSeq(url) : 0
     const answered = adopting.has(url) ? startAsking(url) : null
     // Cold budget until this url has answered once, then the original hang guard.
-    const { signal, cancel } = abortAfter(budgetMs(warmRef.current, coldMs))
-    fetch(url, { cache: 'no-store', signal })
+    // A refresh request carries its own budget, set where it was sent.
+    const budget = refresh ? null : abortAfter(budgetMs(warmRef.current, coldMs))
+    const cancel = budget ? budget.cancel : () => {}
+    const id = ++requestRef.current
+    if (refresh) floorRef.current = id
+    const superseded = () => id < floorRef.current || id < landedRef.current
+    const newest = () => live() && !superseded()
+    const asked = refresh
+      ? refresh.response.then((res) => res.clone())
+      : fetch(url, { cache: 'no-store', signal: budget.signal })
+    const settled = asked
       .then(async (res) => {
         if (res.status === 503) {
           const body = await res.json().catch(() => ({}))
           if (body && (body.locked === true || body.error === 'vault locked')) {
             cancel()
+            // An older request's lock is not news: a newer one has already
+            // answered, or Refresh now is asking again and will report a real lock.
+            if (superseded()) return null
             if (live()) {
+              landedRef.current = id
               // A locked vault answers every retry the same way, so a retry a
               // transient failure queued earlier is cancelled with the flag.
               clearTimeout(retryTimerRef.current)
@@ -562,7 +677,8 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         // this url, so an unmounted caller cannot leave a payload behind for a
         // url nobody is watching.
         publishOk(url, seq, json)
-        if (!live()) return
+        if (!newest()) return
+        landedRef.current = id
         failuresRef.current = 0
         answeredAtRef.current = performance.now()
         // A poll that brings back what the screen already shows keeps the old
@@ -574,7 +690,8 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         setRetrying(false)
       })
       .catch((err) => {
-        if (!live()) return
+        if (!newest()) return
+        landedRef.current = id
         answeredAtRef.current = null // a failed feed asks again on return
         // error stays set and loading stays false for the whole retry wait, so
         // no existing branch at any call site sees a state it did not see
@@ -600,6 +717,9 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
         cancel()
         if (answered) answered()
       })
+    // Only Refresh now waits on this. A plain refetch keeps returning nothing,
+    // because call sites already await it and must not start waiting longer.
+    if (refresh) return settled
     // coldMs is read inside (budgetMs above) and was missing from this list, so
     // a call site that changed it would have kept fetching on the old budget.
     // Safe to add: every caller passes a module constant
@@ -626,6 +746,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     feeds.add(entry)
     return () => {
       feeds.delete(entry)
+      holding.delete(entry)
       publishFeeds()
     }
   }, [])
@@ -659,6 +780,19 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
   useEffect(() => {
     const entry = entryRef.current
     entry.retry = retry
+    entry.url = url
+    entry.coldMs = coldMs
+    entry.dropOlder = () => {
+      floorRef.current = requestRef.current + 1
+      takeoversRef.current += 1
+    }
+    entry.reload = (request) => {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+      failuresRef.current = 0
+      ticksRef.current = 0
+      return load(request)
+    }
     const failed = shownError !== null
     if (entry.failed === failed && entry.retrying === shownRetrying) return
     entry.failed = failed
@@ -693,14 +827,24 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
       // feed that answered moments ago is already fresher than the promise, and
       // its next poll still comes on time. A failure clears the answer time,
       // so a feed whose last request failed still asks again at once.
+      //
+      // The header's refresh choice is read inside the tick, so changing it
+      // reloads nothing: each feed simply obeys it from its own next tick.
+      ticksRef.current = 0
       id = setInterval(() => {
-        if (!pageHidden()) load()
+        ticksRef.current += 1
+        if (pageHidden() || !isFeedDue(ticksRef.current, poll, liveFeed, getRefreshMs())) return
+        ticksRef.current = 0
+        load()
       }, poll)
       if (typeof document !== 'undefined') {
         onVisible = () => {
           if (pageHidden()) return
+          const every = feedIntervalMs(poll, liveFeed, getRefreshMs())
+          if (every === null) return // automatic refresh is off
           const at = answeredAtRef.current
-          if (at !== null && performance.now() - at < poll / 2) return
+          if (at !== null && performance.now() - at < every / 2) return
+          ticksRef.current = 0
           load()
         }
         document.addEventListener('visibilitychange', onVisible)
@@ -717,7 +861,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan } = {}) {
     }
     // url is already in load's deps, so listing it changes no run; it is here
     // because the body reads it to tell a new url from a re-run for the same one.
-  }, [load, poll, url])
+  }, [load, poll, url, liveFeed])
 
   // Data and error belong to the url they were answered for. While a new url
   // loads, the old url's data is not handed out: a picker drawing it offered

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { noteTenant, refreshFeeds, useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
+import { REFRESH_CHOICES, setRefresh, useRefreshChoice } from '../lib/refresh.js'
 
 // Which tenant a change would land in, and whether it may be changed.
 //
@@ -48,6 +49,64 @@ function useWriteTarget() {
   return state
 }
 
+// Long enough that repeated presses cannot keep emptying the server's cache
+// while the slowest reads (3.5-7.5s cold) are still coming back.
+const REFRESH_PAUSE_MS = 5000
+const REFRESH_OFF = 'Automatic refresh is off'
+
+/**
+ * The same control on its own row below desk width. In the header's row it
+ * pushed the Settings button off a 390px screen.
+ */
+export function RefreshBar() {
+  const off = useRefreshChoice() === 'off'
+  return (
+    <div className="xl:hidden flex items-center justify-between gap-2 px-3 sm:px-5 py-1 border-b border-card-border bg-card">
+      <span className={`text-note ${off ? 'text-warn' : 'text-muted'}`}>{off ? REFRESH_OFF : 'Automatic refresh'}</span>
+      <RefreshControl />
+    </div>
+  )
+}
+
+/** How often the screen reloads by itself, and a button to reload it now. */
+export function RefreshControl({ inHeader = false }) {
+  const choice = useRefreshChoice()
+  const [paused, setPaused] = useState(false)
+  const pauseRef = useRef(null)
+  useEffect(() => () => clearTimeout(pauseRef.current), [])
+  const refreshNow = () => {
+    setPaused(true)
+    refreshFeeds()
+    pauseRef.current = setTimeout(() => setPaused(false), REFRESH_PAUSE_MS)
+  }
+  return (
+    <span className={`${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`}>
+      {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">{REFRESH_OFF}</span>}
+      <select
+        aria-label="Automatic refresh"
+        title="How often this page reloads its data"
+        value={choice}
+        onChange={(e) => setRefresh(e.target.value)}
+        className="h-8 w-[66px] sm:w-[76px] px-1 rounded-control border border-field-border bg-field text-note text-field-txt hover:border-border-hover"
+      >
+        {REFRESH_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+      </select>
+      <button
+        type="button"
+        onClick={refreshNow}
+        disabled={paused}
+        aria-label="Refresh now"
+        title="Refresh now"
+        className="w-8 h-8 inline-grid place-items-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover disabled:opacity-50 disabled:cursor-default"
+      >
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={paused ? 'motion-safe:animate-spin' : undefined}>
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
+        </svg>
+      </button>
+    </span>
+  )
+}
+
 export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
   const [open, setOpen] = useState(false)
@@ -62,7 +121,7 @@ export default function ConnStatus() {
   // gate reads this url to decide whether to draw the app, and hands its answer
   // over (shareResult) just before this mounts. Every 30s poll after that still
   // asks for itself, so the lock check in lib/api.js stays this poll's own.
-  const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000, adoptIfFresherThan: 2000 })
+  const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000, adoptIfFresherThan: 2000, live: true })
   // ADOPTS, because this dot and the Overview tab want the same 294KB and used
   // to fetch it separately — this one at t=39ms and Overview at t=331ms on every
   // load, measured 2026-08-27. Whichever of the two asks second now takes the
@@ -83,7 +142,7 @@ export default function ConnStatus() {
   // from the tick before. On every other page nobody else asks and it fetches as
   // it always did, which also keeps the server's full aggregate warm for the
   // pages above.
-  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 45000 })
+  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 45000, live: true })
 
   // The write state sits beside the tenant name because it is the one fact an
   // operator needs before pressing Provision.
@@ -98,6 +157,10 @@ export default function ConnStatus() {
   useEffect(() => {
     if (status && (status.ready || status.vaultMode === false)) setLocked(false)
   }, [status])
+
+  // Another browser tab can switch tenant without reloading this one.
+  const activeId = status?.active
+  useEffect(() => { noteTenant(activeId) }, [activeId])
 
   const FEED_KEYS = ['subnets', 'hosts', 'leases']
   const meta = rows?._meta || {}
@@ -161,8 +224,7 @@ export default function ConnStatus() {
   // The name, when the vault can say which tenant is active.
   const knownName = status?.tenants?.find((t) => t.id === status?.active)?.label || ''
 
-  const tenantName =
-    status?.tenants?.find((t) => t.id === status?.active)?.label || status?.active || 'tenant'
+  const tenantName = knownName || status?.active || 'tenant'
   const secsAgo = lastFetchRef.current
     ? Math.round((Date.now() - lastFetchRef.current) / 1000)
     : null

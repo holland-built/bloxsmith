@@ -54,6 +54,10 @@ export const CONTROL_HELP = {
     label: 'The tenant name',
     what: "The dot: green is connected with data arriving, amber is connected but nothing came back, red is a locked vault or a failed feed. Beside the name: Read-only, Changes allowed, or Can't tell.",
   },
+  refresh: {
+    label: 'Refresh',
+    what: 'The list sets how often this page reloads its data, or Off to stop. Connection and job progress keep updating. The round arrow reloads the page data now.',
+  },
   settings: {
     label: 'The sliders button',
     what: 'Connections, write access, the CSP account, the Axur key, theme and spacing, updates, the dashboard token, and locking the vault.',
