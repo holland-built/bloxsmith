@@ -350,7 +350,7 @@ func (d *Deps) updateApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.auditAppend("update-apply", httpx.Actor(r), map[string]any{"from": d.Version})
-	d.UpdateApply(w, r)
+	d.UpdateApply(w, d.withUpdateGate(r))
 }
 
 // updateAuto admin-gates both verbs of the overnight update settings. Reading

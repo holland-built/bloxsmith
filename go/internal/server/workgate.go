@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -8,14 +9,13 @@ import (
 	"bloxsmith/internal/runs"
 )
 
-// WORK GATE. An overnight update must never swap the binary under a running
-// change, so this counts every change in flight and can close to new ones.
+// WORK GATE. An update must never swap the binary under a running change, so
+// this counts every change in flight and can close to new ones.
 //
 // Closing and checking the count happen under one lock. Nothing can start
 // between "nothing is running" and "nothing new may start". The gate then stays
-// closed through the restart, or reopens if the update fails.
-//
-// Update now does not use this gate.
+// closed through the restart, or reopens if the update fails. Overnight updates
+// and Update now both use it.
 type WorkGate struct {
 	mu     sync.Mutex
 	active int
@@ -97,6 +97,40 @@ func (d *Deps) CloseForUpdate() string {
 
 // ReopenAfterUpdate lets work start again after an update that did not restart.
 func (d *Deps) ReopenAfterUpdate() { d.workGate().reopen() }
+
+// WorkRunning reports why an update should wait, or "" when nothing is running.
+// It closes nothing, so Update now can answer at once without blocking work
+// during the download. CloseForUpdate is still the check that protects the swap.
+func (d *Deps) WorkRunning() string {
+	g := d.workGate()
+	g.mu.Lock()
+	active := g.active
+	g.mu.Unlock()
+	if active > 0 {
+		return "a change was running"
+	}
+	return d.runRecordsBusy()
+}
+
+// UpdateGate is the part of the work gate the Update now handler needs.
+type UpdateGate interface {
+	WorkRunning() string
+	CloseForUpdate() string
+	ReopenAfterUpdate()
+}
+
+type updateGateKey struct{}
+
+// withUpdateGate hands this server's gate to the Update now handler.
+func (d *Deps) withUpdateGate(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), updateGateKey{}, UpdateGate(d)))
+}
+
+// UpdateGateFrom returns the gate for this request, or nil if it has none.
+func UpdateGateFrom(ctx context.Context) UpdateGate {
+	g, _ := ctx.Value(updateGateKey{}).(UpdateGate)
+	return g
+}
 
 // runRecordsBusy reads both run stores. A record that cannot be read counts as
 // busy, because it may belong to work still running.

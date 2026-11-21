@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"bloxsmith/internal/server"
+
 	"github.com/minio/selfupdate"
 )
 
@@ -68,7 +70,7 @@ const (
 // with a simpler, self-explanatory one.
 type updateProgress struct {
 	mu      sync.Mutex
-	Phase   string // idle | starting | downloading | verifying | applying | restarting | done | error
+	Phase   string // idle | starting | downloading | verifying | applying | restarting | done | waiting | error
 	Pct     int
 	Err     string
 	Version string // target release once known
@@ -93,6 +95,13 @@ func (p *updateProgress) fail(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.Phase, p.Err, p.running = "error", err.Error(), false
+}
+
+// wait ends a run that stopped because work was running. Nothing was installed.
+func (p *updateProgress) wait(msg string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Phase, p.Pct, p.Err, p.running = "waiting", 0, msg, false
 }
 
 // begin flips running true iff no apply is already in flight (returns false when
@@ -488,8 +497,9 @@ var swapBinary = func(bin io.Reader) error {
 	return selfupdate.Apply(bin, selfupdate.Options{})
 }
 
-// applyHooks let a caller add checks to the one install path. Update now
-// passes none. Overnight updates (autoupdate.go) use all three.
+// applyHooks let a caller add checks to the one install path. The command line
+// passes none. Update now uses beforeSwap and handoffFailed. Overnight updates
+// (autoupdate.go) use all three.
 type applyHooks struct {
 	// allow runs once the release tag is known, before anything is downloaded.
 	allow func(tag string) error
@@ -595,22 +605,29 @@ func applyLatestWith(h applyHooks) error {
 		// would strand progress at 'restarting'; surface it so the modal resolves.
 		defer func() {
 			if rec := recover(); rec != nil {
-				err := fmt.Errorf("update restart panicked: %v", rec)
-				progress.fail(err)
-				if h.handoffFailed != nil {
-					h.handoffFailed(err)
-				}
+				h.failHandoff(fmt.Errorf("update restart panicked: %v", rec))
 			}
 		}()
 		time.Sleep(750 * time.Millisecond)
-		restart()
-		// restart exits the process when the new binary launched, so reaching
-		// this line means it did not.
-		if h.handoffFailed != nil {
-			h.handoffFailed(errors.New("the new version could not be started"))
-		}
+		restart(h.failHandoff)
 	})
 	return nil
+}
+
+// failHandoff settles a restart that did not happen. The hook reopens the work
+// gate, and progress.fail releases the update guard, in that order. Released
+// first, a second update could close the gate and this run's late reopen would
+// let work start during that install.
+func (h applyHooks) failHandoff(err error) {
+	defer progress.fail(err)
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("[update] the restart-failure hook panicked: %v", rec)
+		}
+	}()
+	if h.handoffFailed != nil {
+		h.handoffFailed(err)
+	}
 }
 
 // completeApply publishes the terminal phase once the binary has been swapped,
@@ -651,27 +668,27 @@ var shutdownServer func(context.Context) error
 // restart re-execs the (now updated) binary and exits the current process. A
 // spawn+exit (rather than syscall.Exec) keeps the code identical on Windows,
 // where exec-in-place is unavailable.
-func restart() {
+func restart(failed func(error)) {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = os.Args[0]
 	}
-	if handleRestart(exe) {
+	if handleRestart(exe, failed) {
 		os.Exit(0)
 	}
 }
 
 // handleRestart launches the successor and, ONLY on a successful launch, releases
 // the listen socket. It returns true when the caller should exit. If the child
-// fails to start it reports phase=error and returns false WITHOUT releasing the
-// socket, so the old binary keeps serving and the service stays up (fixes the
+// fails to start it calls failed, which reports phase=error, and returns false
+// WITHOUT releasing the socket, so the old binary keeps serving and the service stays up (fixes the
 // EADDRINUSE race where the parent exited before the child could bind).
-func handleRestart(exe string) bool {
+func handleRestart(exe string, failed func(error)) bool {
 	cmd := exec.Command(exe, os.Args[1:]...)
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
-		progress.fail(fmt.Errorf("restart: could not launch new binary, keeping the old one: %w", err))
+		failed(fmt.Errorf("restart: could not launch new binary, keeping the old one: %w", err))
 		return false
 	}
 	progress.set("done", 100)
@@ -685,11 +702,38 @@ func handleRestart(exe string) bool {
 	return true
 }
 
+// updateWaitError stops Update now at the swap because work started during the
+// download. Its text is the sentence shown to the customer.
+type updateWaitError struct{ msg string }
+
+func (e *updateWaitError) Error() string { return e.msg }
+
+// updateWaitMessage turns the gate's reason into the sentence on the button's
+// status line. A record that could not be read is not the same fact as work
+// running, so it is worded differently.
+func updateWaitMessage(why string) string {
+	if strings.Contains(why, "could not be read") {
+		return "The update will wait because Bloxsmith could not confirm that no work is running. " +
+			"Nothing was installed or restarted. Try again in a moment."
+	}
+	return "The update will wait because work is running. " +
+		"Nothing was installed or restarted. Try again when the work has finished."
+}
+
 // applyUpdateHandler backs POST /api/update/apply. The admin RBAC gate + audit
-// entry are applied by the server wrapper before this runs. It honors the
-// startup cooldown, refuses concurrent applies, kicks the download off in the
-// background, and returns immediately so the frontend can poll /status.
+// entry are applied by the server wrapper before this runs.
 func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	applyUpdateNow(w, server.UpdateGateFrom(r.Context()), applyLatestWith)
+}
+
+// applyUpdateNow honors the startup cooldown, waits for running work, refuses
+// concurrent applies, kicks the download off in the background, and returns
+// immediately so the frontend can poll /status.
+//
+// The work gate is read here so a busy app answers at once, and closed in
+// beforeSwap as the overnight path does. Closing it checks for work under one
+// lock, so nothing can start between that check and the restart.
+func applyUpdateNow(w http.ResponseWriter, gate server.UpdateGate, apply func(applyHooks) error) {
 	w.Header().Set("Content-Type", "application/json")
 	if left := applyCooldown - time.Since(startTime); left > 0 {
 		w.WriteHeader(http.StatusTooEarly) // 425
@@ -699,23 +743,55 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	why := "the work gate could not be read"
+	if gate != nil {
+		why = gate.WorkRunning()
+	}
+	if why != "" {
+		w.WriteHeader(http.StatusConflict) // 409
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "busy": true, "error": updateWaitMessage(why)})
+		return
+	}
 	if !progress.begin() {
 		w.WriteHeader(http.StatusConflict) // 409
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "update already in progress"})
 		return
 	}
 	go func() {
+		gateClosed := false
 		// A panic here (extract/swap/nil-deref) would otherwise kill the goroutine
 		// WITHOUT a terminal status, freezing progress at its last phase and leaving
 		// the frontend polling forever. Recover into phase=error so the modal resolves.
 		defer func() {
 			if rec := recover(); rec != nil {
+				if gateClosed {
+					gate.ReopenAfterUpdate()
+				}
 				progress.fail(fmt.Errorf("update panicked: %v", rec))
 			}
 		}()
-		if err := applyLatest(); err != nil {
-			progress.fail(err)
+		err := apply(applyHooks{
+			beforeSwap: func(string) error {
+				if why := gate.CloseForUpdate(); why != "" {
+					return &updateWaitError{updateWaitMessage(why)}
+				}
+				gateClosed = true
+				return nil
+			},
+			handoffFailed: func(error) { gate.ReopenAfterUpdate() },
+		})
+		if err == nil {
+			return // restarting, and the gate stays closed through it
 		}
+		if gateClosed {
+			gate.ReopenAfterUpdate()
+		}
+		var wait *updateWaitError
+		if errors.As(err, &wait) {
+			progress.wait(wait.msg)
+			return
+		}
+		progress.fail(err)
 	}()
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "phase": "starting"})
 }
