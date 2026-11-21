@@ -113,7 +113,7 @@ func (s *Service) CSPValueSecurity() map[string]any {
 
 	b := valueMetric(blocked, "requests")
 	days := heldDays(held)
-	cur := windowCoverage(days, day(today, -30), day(today, -1))
+	cur := windowCoverage(days, day(today, -30), day(today, -1), true)
 	b["covered"], b["days_from"], b["days_to"] = cur.covered, cur.from, cur.to
 	if cur.covered != nil {
 		b["days_held"] = cur.held
@@ -121,7 +121,7 @@ func (s *Service) CSPValueSecurity() map[string]any {
 	b["window_range"] = []string{day(today, -30), day(today, -1)}
 	b["previous"], b["previous_status"] = nil, "error"
 	if prev := valueMetric(previous, "requests"); prev["status"] == "ok" {
-		switch c := windowCoverage(days, prevRange[0], prevRange[1]).covered; c {
+		switch c := windowCoverage(days, prevRange[0], prevRange[1], false).covered; c {
 		case true:
 			b["previous"], b["previous_status"] = prev["value"], "ok"
 		case false:
@@ -225,12 +225,13 @@ type coverage struct {
 }
 
 // windowCoverage says whether the cube holds the whole window first..last:
-// every day from first through the day before last. Only last itself may be
-// absent, because the newest day can still be landing. Checking the two ends
-// is not enough, since a tenant can be missing days in the middle. Seen live
+// every day from first through last. newestMayLand excuses last itself, and
+// only the current window sets it, because only its newest day can still be
+// landing. Checking the two ends is not enough, since a tenant can be missing
+// days in the middle. Seen live
 // on 2026-11-20: the demo tenant's cube began 2026-10-14, inside the earlier
 // window, so that window held 7 of its 30 days.
-func windowCoverage(days map[string]bool, first, last string) coverage {
+func windowCoverage(days map[string]bool, first, last string, newestMayLand bool) coverage {
 	if days == nil {
 		return coverage{}
 	}
@@ -250,7 +251,10 @@ func windowCoverage(days map[string]bool, first, last string) coverage {
 	whole := true
 	start, _ := time.Parse("2006-01-02", first)
 	end, _ := time.Parse("2006-01-02", last)
-	for t := start; t.Before(end); t = t.AddDate(0, 0, 1) {
+	if newestMayLand {
+		end = end.AddDate(0, 0, -1)
+	}
+	for t := start; !t.After(end); t = t.AddDate(0, 0, 1) {
 		if !days[t.Format("2006-01-02")] {
 			whole = false
 			break

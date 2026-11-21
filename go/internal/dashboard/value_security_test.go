@@ -297,6 +297,18 @@ func TestCSPValueSecurity_GapInPreviousWindowGivesNoTrend(t *testing.T) {
 	}
 }
 
+// Only the current window's newest day can still be landing. The earlier
+// window's last day is a month old, so without it there is no trend.
+func TestCSPValueSecurity_PreviousWindowMissingLastDayGivesNoTrend(t *testing.T) {
+	b := valueAllOK()
+	b["held"] = valueHeld("2026-09-21", "2026-11-18", "2026-10-20")
+	s, _ := valueServer(t, valueFake{meta: valueMetaBoth, bodies: b})
+	m := valueOf(t, s.CSPValueSecurity(), "blocked")
+	if m["covered"] != true || m["previous"] != nil || m["previous_status"] != "partial" {
+		t.Errorf("blocked = %v, want current covered, no previous, previous_status partial", m)
+	}
+}
+
 // Only the newest day may be absent. The day before it missing is a real gap,
 // whether or not the newest day arrived.
 func TestWindowCoverage_NewestDayAllowance(t *testing.T) {
@@ -321,7 +333,7 @@ func TestWindowCoverage_NewestDayAllowance(t *testing.T) {
 				days[d.Format("2006-01-02")] = true
 			}
 		}
-		if got := windowCoverage(days, first, last).covered; got != tc.want {
+		if got := windowCoverage(days, first, last, true).covered; got != tc.want {
 			t.Errorf("%s: covered = %v, want %v", name, got, tc.want)
 		}
 	}
