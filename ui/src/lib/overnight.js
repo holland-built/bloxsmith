@@ -29,6 +29,7 @@ export function overnightSaveBody(enabled, time, zone, warningShown) {
 const OVERNIGHT_TONES = {
   updated: 'text-txt',
   'no-update': 'text-dim',
+  'turned-off': 'text-dim',
   'updated-locked': 'text-warn',
   'skipped-busy': 'text-warn',
   blocked: 'text-warn',

@@ -36,3 +36,8 @@ test('turning on confirms the passphrase notice only when it was on screen', () 
 test('turning off sends only that', () => {
   assert.deepEqual(overnightSaveBody(false, '03:00', 'UTC', true), { enabled: false })
 })
+
+test('turned off mid-download is plain, and a refused release reads as a problem', () => {
+  assert.equal(overnightResult({ outcome: 'turned-off', message: 'x' }).tone, 'text-dim')
+  assert.equal(overnightResult({ outcome: 'rejected', message: 'x' }).tone, 'text-crit')
+})

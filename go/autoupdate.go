@@ -41,6 +41,7 @@ var autoTimeRE = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 var (
 	errAutoBusy    = errors.New("work was running")
 	errAutoBlocked = errors.New("this version failed before")
+	errAutoOff     = errors.New("overnight updates were turned off")
 )
 
 // autoAttempt is an install that has reached the swap and not been confirmed.
@@ -232,9 +233,10 @@ func (u *autoUpdater) run() {
 		u.record("skipped-busy", "", "Skipped last night because another update was running. It will try again tonight.", false)
 		return
 	}
-	attempted, gateClosed := "", false
+	attempted, offered, gateClosed := "", "", false
 	hooks := applyHooks{
 		allow: func(tag string) error {
+			offered = tag
 			s := u.load()
 			if s.BlockedTag != "" && verN(tag) <= verN(s.BlockedTag) {
 				return fmt.Errorf("%w: %s", errAutoBlocked, tag)
@@ -245,6 +247,10 @@ func (u *autoUpdater) run() {
 			return nil
 		},
 		beforeSwap: func(tag string) error {
+			// An admin may have turned this off during the download.
+			if !u.load().Enabled {
+				return errAutoOff
+			}
 			if why := u.closeGate(); why != "" {
 				return fmt.Errorf("%w: %s", errAutoBusy, why)
 			}
@@ -270,6 +276,7 @@ func (u *autoUpdater) run() {
 	if gateClosed {
 		u.reopenGate()
 	}
+	var rejected *releaseRejectedError
 	switch {
 	case errors.Is(err, errAlreadyCurrent):
 		u.finish(nil)
@@ -281,6 +288,13 @@ func (u *autoUpdater) run() {
 		u.finish(nil)
 		tag := strings.TrimPrefix(err.Error(), errAutoBlocked.Error()+": ")
 		u.record("blocked", tag, fmt.Sprintf("Skipped %s because it failed before. Overnight updates will wait for a newer version.", tag), false)
+	case errors.Is(err, errAutoOff):
+		u.finish(nil)
+		u.record("turned-off", offered, "Stopped because overnight updates were turned off. Nothing was installed.", false)
+	case errors.As(err, &rejected) && offered != "":
+		u.finish(err)
+		log.Printf("[auto-update] release %s refused: %v", offered, err)
+		u.record("rejected", offered, fmt.Sprintf("Did not install %s because it failed its security check. Overnight updates will wait for a newer version.", offered), true)
 	default:
 		u.finish(err)
 		log.Printf("[auto-update] update failed: %v", err)

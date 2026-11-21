@@ -604,6 +604,119 @@ func TestDownloadFailureDoesNotBlockTheTag(t *testing.T) {
 	}
 }
 
+func TestTurnedOffDuringDownloadStopsBeforeTheSwap(t *testing.T) {
+	r := newRig(t)
+	r.enable(t)
+	r.applyFn = func(h applyHooks) error {
+		if err := h.allow(auTag); err != nil {
+			return err
+		}
+		// The admin turns it off while the release downloads.
+		if rr := r.post(t, `{"enabled":false}`); rr.Code != 200 {
+			t.Fatal(rr.Body.String())
+		}
+		return h.beforeSwap(auTag)
+	}
+	r.u.tick()
+	s := r.u.load()
+	if r.closes != 0 || s.Attempt != nil {
+		t.Fatalf("went on to install: closes=%d attempt=%+v", r.closes, s.Attempt)
+	}
+	if s.BlockedTag != "" {
+		t.Fatalf("turning it off blocked %s", s.BlockedTag)
+	}
+	if s.Last == nil || s.Last.Outcome != "turned-off" {
+		t.Fatalf("result: %+v", s.Last)
+	}
+}
+
+func TestRejectedReleaseIsBlockedUntilANewerTag(t *testing.T) {
+	r := newRig(t)
+	r.enable(t)
+	tag := auTag
+	r.applyFn = func(h applyHooks) error {
+		if err := h.allow(tag); err != nil {
+			return err
+		}
+		if tag == auTag {
+			return &releaseRejectedError{err: errors.New("RELEASE SIGNATURE DOES NOT VERIFY")}
+		}
+		return h.beforeSwap(tag)
+	}
+	r.u.tick()
+	s := r.u.load()
+	if s.BlockedTag != auTag || s.Last == nil || s.Last.Outcome != "rejected" {
+		t.Fatalf("after a rejected release: blocked=%q last=%+v", s.BlockedTag, s.Last)
+	}
+	if strings.Contains(s.Last.Message, "SIGNATURE DOES NOT") || !strings.Contains(s.Last.Message, auTag) {
+		t.Fatalf("message is not plain: %q", s.Last.Message)
+	}
+	r.clock = r.clock.Add(24 * time.Hour)
+	r.u.tick()
+	if got := lastOutcome(t, r); got != "blocked" {
+		t.Fatalf("same tag next night: %q", got)
+	}
+	tag = "v9.0.1"
+	r.clock = r.clock.Add(24 * time.Hour)
+	r.u.tick()
+	if r.closes != 1 {
+		t.Fatalf("a newer tag was not tried: closes=%d", r.closes)
+	}
+}
+
+// The real verification path says which failures are rejections.
+func TestVerificationFailuresAreTypedAndDownloadFailuresAreNot(t *testing.T) {
+	_, priv := swapSigningKey(t)
+	archive := buildArchive(t, []byte("new binary"))
+	sums := checksumsFor(archive)
+	good := testServerAssets{archive: archive, sums: sums, sig: sign(priv, sums)}
+	wrongSum := []byte(strings.Repeat("0", 64) + "  " + testArchName + "\n")
+	cases := map[string]testServerAssets{
+		"bad signature":     {archive: archive, sums: sums, sig: sign(priv, []byte("other"))},
+		"checksum mismatch": {archive: archive, sums: wrongSum, sig: sign(priv, wrongSum)},
+		"no checksum entry": {archive: archive, sums: []byte("\n"), sig: sign(priv, []byte("\n"))},
+	}
+	for name, a := range cases {
+		srv := startTestServer(t, a)
+		_, _, err := fetchVerifiedBinary(srv.URL+"/archive", srv.URL+"/sums", srv.URL+"/sig", testArchName)
+		var rej *releaseRejectedError
+		if !errors.As(err, &rej) {
+			t.Errorf("%s: err %v is not a rejection", name, err)
+		}
+	}
+	srv := startTestServer(t, good)
+	_, _, err := fetchVerifiedBinary(srv.URL+"/missing", srv.URL+"/sums", srv.URL+"/sig", testArchName)
+	var rej *releaseRejectedError
+	if err == nil || errors.As(err, &rej) {
+		t.Errorf("a failed download must not be a rejection: %v", err)
+	}
+	dead := httptest.NewServer(http.NotFoundHandler())
+	url := dead.URL
+	dead.Close()
+	_, _, err = fetchVerifiedBinary(url+"/archive", url+"/sums", url+"/sig", testArchName)
+	if err == nil || errors.As(err, &rej) {
+		t.Errorf("a network failure must not be a rejection: %v", err)
+	}
+}
+
+func TestUnsignedReleaseIsARejection(t *testing.T) {
+	realPathRelease(t, true)
+	prev := githubAPIBase
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		name := archiveAssetName("v9.0.0")
+		fmt.Fprintf(w, `{"tag_name":"v9.0.0","assets":[{"name":%q,"browser_download_url":"http://x/a"},{"name":"checksums.txt","browser_download_url":"http://x/s"}]}`, name)
+	}))
+	t.Cleanup(srv.Close)
+	githubAPIBase = srv.URL
+	t.Cleanup(func() { githubAPIBase = prev })
+	swapBinary = func(io.Reader) error { t.Error("swap ran on an unsigned release"); return nil }
+	err := applyLatestWith(applyHooks{})
+	var rej *releaseRejectedError
+	if !errors.As(err, &rej) {
+		t.Fatalf("unsigned release: %v", err)
+	}
+}
+
 func TestAlreadyCurrentIsNotAFailure(t *testing.T) {
 	r := newRig(t)
 	r.enable(t)

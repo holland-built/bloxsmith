@@ -453,15 +453,15 @@ func fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName string) (bin []
 	// the tarball can replace the checksum sitting beside it, which is precisely
 	// the gap the compiled-in public key closes (see signing.go).
 	if err := verifyReleaseSignature(sums, sigBytes); err != nil {
-		return nil, nil, err
+		return nil, nil, &releaseRejectedError{err}
 	}
 	want := checksumFor(sums, archName)
 	if want == "" {
-		return nil, nil, fmt.Errorf("checksums.txt has no entry for %s", archName)
+		return nil, nil, &releaseRejectedError{fmt.Errorf("checksums.txt has no entry for %s", archName)}
 	}
 	sum := sha256.Sum256(archBytes)
 	if got := hex.EncodeToString(sum[:]); got != want {
-		return nil, nil, fmt.Errorf("checksum mismatch: got %s want %s", got, want)
+		return nil, nil, &releaseRejectedError{fmt.Errorf("checksum mismatch: got %s want %s", got, want)}
 	}
 
 	bin, err = extractBinary(archBytes, runtime.GOOS == "windows")
@@ -473,6 +473,14 @@ func fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName string) (bin []
 
 // errAlreadyCurrent means the newest release is not newer than this binary.
 var errAlreadyCurrent = errors.New("already up to date")
+
+// releaseRejectedError means a downloaded release failed its signature or
+// checksum check, or lacks what those checks need. Its text is the underlying
+// error unchanged. A network failure is never one of these.
+type releaseRejectedError struct{ err error }
+
+func (e *releaseRejectedError) Error() string { return e.err.Error() }
+func (e *releaseRejectedError) Unwrap() error { return e.err }
 
 // swapBinary replaces the running executable. A var so a test can prove what
 // happens around the swap without ever replacing a real binary.
@@ -529,7 +537,7 @@ func applyLatestWith(h applyHooks) error {
 		return fmt.Errorf("release %s has no asset %q for this platform", rel.Tag, archName)
 	}
 	if sumAsset == "" {
-		return fmt.Errorf("release %s has no checksums.txt", rel.Tag)
+		return &releaseRejectedError{fmt.Errorf("release %s has no checksums.txt", rel.Tag)}
 	}
 	// Refusing outright is deliberate. A missing signature is exactly what an
 	// attacker who can write release assets would arrange, so treating it as
@@ -538,9 +546,9 @@ func applyLatestWith(h applyHooks) error {
 	// release rather than publishing without one, so this can only fire on a
 	// tampered release — or on one this key was never meant to validate.
 	if sigAsset == "" {
-		return fmt.Errorf("release %s is not signed (no %s) — refusing to self-update; "+
+		return &releaseRejectedError{fmt.Errorf("release %s is not signed (no %s) — refusing to self-update; "+
 			"reinstall deliberately with scripts/install.sh if this is expected",
-			rel.Tag, releaseSigAssetName)
+			rel.Tag, releaseSigAssetName)}
 	}
 
 	bin, archBytes, err := fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName)
