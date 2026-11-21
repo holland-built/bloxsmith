@@ -4,7 +4,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 
 Tabs fall into two groups:
 
-- **Read-only**: Overview, Daily, Value, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section.
+- **Read-only**: Overview, Daily, Value, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section. The refresh times on this page are the normal ones. The list at the top of the screen can slow them to 1, 5 or 15 minutes or turn them off, and the round arrow beside it reloads the page now. Connection status and job progress keep updating whatever the list says.
 - **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
 
 Almost every panel follows one rule: a feed that failed to load never looks like a feed that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.

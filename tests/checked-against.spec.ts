@@ -33,7 +33,7 @@ test('Provision subnet preview says what it checked and what it skipped', async 
     body: sse({ step: 'Resolving block…' }, { done: true, subnet: { id: null, address: '10.16.9.0', cidr: 24 }, checked: CHECKED, skipped: [SKIP] }) }));
   await page.goto('/#provision');
   await page.getByRole('button', { name: 'Subnet', exact: true }).click();
-  await page.getByRole('combobox').first().selectOption({ label: 'Baseline Space' });
+  await page.getByRole('main').getByRole('combobox').first().selectOption({ label: 'Baseline Space' });
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
   await expectChecked(page.locator('[data-panel-id="provision-subnet-request"]'));
 });
@@ -110,7 +110,7 @@ test('Provision subnet preview warns when another IP space also uses the network
       warnings: [{ candidate: '10.4.0.0/24', space: 'default-TK-lab', object: '10.0.0.0/8', kind: 'address block', contains: true }] }) }));
   await page.goto('/#provision');
   await page.getByRole('button', { name: 'Subnet', exact: true }).click();
-  await page.getByRole('combobox').first().selectOption({ label: 'Baseline Space' });
+  await page.getByRole('main').getByRole('combobox').first().selectOption({ label: 'Baseline Space' });
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
   const panel = page.locator('[data-panel-id="provision-subnet-request"]');
   const warn = panel.locator('[data-shared-warning]');

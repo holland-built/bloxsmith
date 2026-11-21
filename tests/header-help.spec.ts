@@ -34,6 +34,7 @@ const TERMS = [
   'Search or ask',
   'Update v…',
   'The tenant name',
+  'Refresh',
   'The sliders button',
   'Sun · Monitor · Moon',
   'The two row icons',

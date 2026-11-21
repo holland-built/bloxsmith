@@ -60,7 +60,13 @@ import { test, expect } from './fixtures';
 // +458 B (the lazy import and its preload list), the entry chunk +45 B. The
 // CheckedAgainst chunk itself (1,261 B) loads only with a preview result.
 // vendor-react did not move and no charts chunk is on the route.
-const BUDGET_BYTES = 396 * 1024; // 405,504 B
+//
+// RAISED 396 -> 400 KB on 2026-11-21, with the chunk that grew identified. The
+// refresh choice and Refresh now took #provision to 409,108 B: the entry chunk
+// 153,093 -> 157,409 B (lib/refresh.js, the header control, and the request
+// ordering in useApi, which every tab needs). vendor-react did not move and no
+// charts chunk is on the route.
+const BUDGET_BYTES = 400 * 1024; // 409,600 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();

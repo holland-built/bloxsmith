@@ -38,7 +38,7 @@ import { PageBar } from './components/kit.jsx'
 import Palette, { OPEN_SEARCH } from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
 import { updateReady, useUpdate } from './lib/updateState.js'
-import ConnStatus from './components/ConnStatus.jsx'
+import ConnStatus, { RefreshBar, RefreshControl } from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 // The Settings sheet is fetched when it is first opened. It is 19 KB that no
 // first paint needs, and with it in the entry file #provision went over the
@@ -620,6 +620,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               <UpdateButton />
               <ConnStatus />
+              <RefreshControl inHeader />
               <ThemeToggle />
               <button
                 ref={settingsBtnRef}
@@ -642,6 +643,7 @@ export default function App() {
               </button>
             </div>
           </header>
+          <RefreshBar />
           {/* Where you are, Kentik-style: the group and the tab. Pages outside
               the groups (a dossier) have no group and so no bar. */}
           {groupOf(tab) && (
