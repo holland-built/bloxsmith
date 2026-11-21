@@ -89,22 +89,6 @@ export function HeadlineStrip({ items, label }) {
   )
 }
 
-// The bar under the top bar: where you are, and this page's actions.
-export function PageBar({ group, page, children }) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-6 py-2 border-b border-line bg-card">
-      <nav aria-label="Breadcrumb" className="text-copy">
-        <ol className="flex items-center gap-2">
-          <li className="text-muted">{group}</li>
-          <li aria-hidden="true" className="text-dim">›</li>
-          <li aria-current="page" className="font-semibold">{page}</li>
-        </ol>
-      </nav>
-      <div className="flex items-center gap-2">{children}</div>
-    </div>
-  )
-}
-
 // The Change tabs' task rail: a list of the panels on the page, beside them,
 // each jumping to its panel. It reads the panels off the page itself, so it
 // follows Provision's mode switch, a Drift result appearing, and a panel taken

@@ -65,12 +65,11 @@ const ROLES = new Set(['text-figure', 'text-copy', 'text-note'])
 
 // The one size still written by hand, and why it is not a defeat.
 const EXCEPTIONS = new Map([
-  ['text-[9px]', "App.jsx's caret. An aria-hidden glyph standing in for an icon, so a TEXT scale is the wrong place to file it"],
 ])
 
 // A ceiling, not an equality: deleting the caret should not fail the build,
 // only adding to the debt should.
-const EXCEPTION_BUDGET = 1
+const EXCEPTION_BUDGET = 0
 
 // The trailing boundary is INSIDE the word alternative, not after the whole
 // group. `\b` after `text-[26px]` asks for a word/non-word transition where

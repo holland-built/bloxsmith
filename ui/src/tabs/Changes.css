@@ -33,3 +33,10 @@
 .chg-colhead { color: var(--ov-muted) }
 .chg-group { background: var(--ov-soft) }
 .chg .ov-chip { text-transform: none; font-weight: 500; padding: 1px 8px; white-space: nowrap }
+
+/* A narrow phone: the label, its state and the short line wrap, never cut. */
+@media (max-width: 420px) {
+  .chg-tile { padding-inline: 10px }
+  .chg-tile .ov-kpi-top { flex-wrap: wrap; gap: 2px 6px }
+  .chg-line { overflow: visible; white-space: normal; text-overflow: clip }
+}

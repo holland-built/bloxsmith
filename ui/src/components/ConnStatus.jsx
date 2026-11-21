@@ -54,22 +54,8 @@ function useWriteTarget() {
 const REFRESH_PAUSE_MS = 5000
 const REFRESH_OFF = 'Automatic refresh is off'
 
-/**
- * The same control on its own row below desk width. In the header's row it
- * pushed the Settings button off a 390px screen.
- */
-export function RefreshBar() {
-  const off = useRefreshChoice() === 'off'
-  return (
-    <div className="xl:hidden flex items-center justify-between gap-2 px-3 sm:px-5 py-1 border-b border-card-border bg-card">
-      <span className={`text-note ${off ? 'text-warn' : 'text-muted'}`}>{off ? REFRESH_OFF : 'Automatic refresh'}</span>
-      <RefreshControl />
-    </div>
-  )
-}
-
 /** How often the screen reloads by itself, and a button to reload it now. */
-export function RefreshControl({ inHeader = false, shell = false }) {
+export function RefreshControl() {
   const choice = useRefreshChoice()
   const [paused, setPaused] = useState(false)
   const pauseRef = useRef(null)
@@ -80,9 +66,8 @@ export function RefreshControl({ inHeader = false, shell = false }) {
     pauseRef.current = setTimeout(() => setPaused(false), REFRESH_PAUSE_MS)
   }
   return (
-    <span className={shell ? 'sx-refresh' : `${inHeader ? 'hidden xl:flex' : 'flex'} items-center gap-1 shrink-0`} data-off={shell && choice === 'off' ? '' : undefined}>
-      {shell && choice === 'off' && <span className="sx-refresh-off">Auto refresh off</span>}
-      {inHeader && choice === 'off' && <span className="text-note text-warn whitespace-nowrap">{REFRESH_OFF}</span>}
+    <span className="frame-refresh" data-off={choice === 'off' ? '' : undefined}>
+      {choice === 'off' && <span className="frame-refresh-off">{REFRESH_OFF}</span>}
       <select
         aria-label="Automatic refresh"
         title="How often this page reloads its data"
@@ -108,7 +93,7 @@ export function RefreshControl({ inHeader = false, shell = false }) {
   )
 }
 
-export default function ConnStatus({ shell = false }) {
+export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
   const [open, setOpen] = useState(false)
   const chipRef = useRef(null)
@@ -304,28 +289,26 @@ export default function ConnStatus({ shell = false }) {
     (write.data && write.data.label) ||
     (writeWords ? 'This connection' : stateWord ? '' : 'connected')
 
-  // Name over state below `lg`, on one line above it. The name truncates: a long
-  // one must never push Settings and Provision off a 390px screen. The state
-  // wraps on a phone instead of truncating, however many lines it takes,
+  // The name and state wrap instead of truncating, however many lines it takes,
   // because "Changes allowed in another account" cut to "Changes…" would hide
   // the one part that matters before Provision is pressed.
   const body = (
     <>
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-      <span className={shell ? 'sx-conn-body' : 'flex flex-col items-start min-w-0 leading-tight lg:flex-row lg:items-center lg:gap-2'}>
+      <span className="frame-conn-body">
         {shownName && (
-          <span className={shell ? undefined : 'truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] text-copy font-medium text-txt'}>{shownName}</span>
+          <span>{shownName}</span>
         )}
         {stateWord && (
           <span
             data-state
-            className={shell ? stateTone : `truncate max-w-[56px] min-[360px]:max-w-[96px] lg:max-w-[220px] ${shownName ? 'text-note' : 'text-copy font-medium'} ${stateTone}`}
+            className={stateTone}
           >
             {stateWord}
           </span>
         )}
         {writeWords && (
-          <span data-write className={shell ? writeTone : `break-words lg:truncate max-w-[56px] min-[360px]:max-w-[96px] min-[380px]:max-w-[112px] lg:max-w-[220px] text-note ${writeTone}`}>{writeWords}</span>
+          <span data-write className={writeTone}>{writeWords}</span>
         )}
       </span>
       {/* A chip that opens a tenant list says so; one tenant is not a choice. */}
@@ -336,7 +319,7 @@ export default function ConnStatus({ shell = false }) {
       )}
     </>
   )
-  const chipCls = shell ? 'sx-conn' : 'flex items-center gap-2 min-w-0 min-h-9 lg:h-8 py-1 lg:py-0 px-2.5 rounded-control border border-border bg-field'
+  const chipCls = 'frame-conn'
 
   if (!canSwitch) {
     return (
@@ -378,7 +361,7 @@ export default function ConnStatus({ shell = false }) {
       <button
         ref={chipRef}
         type="button"
-        className={chipCls + ' cursor-pointer hover:border-border-hover'}
+        className={chipCls}
         title={`${title}${writeWords ? ` · ${writeWords}` : ''} — click to switch tenant`}
         aria-haspopup="listbox"
         aria-expanded={open}

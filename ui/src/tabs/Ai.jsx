@@ -447,7 +447,7 @@ function ChatCard({ panelId }) {
         </div>
       ) : (
         // Fills the window below the page title, so a long answer shows more of itself.
-        <div className="flex flex-col h-[calc(100dvh-304px)] min-h-[420px]">
+        <div className="flex flex-col h-[calc(100dvh-256px)] min-h-[420px]">
           <div className="flex justify-end -mt-1 mb-1">
             <button
               type="button"

@@ -65,7 +65,8 @@ test('the lookup stays in view beside the chat when the page scrolls', async ({ 
   // Shorter again on 2026-11-06: the chat now scrolls inside its own box, as
   // chat apps do, so a long conversation no longer makes the page taller.
   // 500 on 2026-11-06 too: the AI privacy notice shrank to one line.
-  const TALL = 500;
+  // 460 on 2026-11-21: the side rail frame dropped the row above the page.
+  const TALL = 460;
   await page.setViewportSize({ width: 1440, height: TALL });
   await page.goto('/#ai');
   await fillChat(page);

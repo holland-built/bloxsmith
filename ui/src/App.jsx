@@ -34,11 +34,10 @@ const DemoServer = lazy(() => import('./tabs/DemoServer.jsx'))
 const Automate = lazy(() => import('./tabs/Automate.jsx'))
 const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
 import { FOCUS_RING, PageHelp, Skeleton } from './components/ui.jsx'
-import { PageBar } from './components/kit.jsx'
 import Palette, { OPEN_SEARCH } from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
 import { updateReady, useUpdate } from './lib/updateState.js'
-import ConnStatus, { RefreshBar, RefreshControl } from './components/ConnStatus.jsx'
+import ConnStatus, { RefreshControl } from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 // The Settings sheet is fetched when it is first opened. It is 19 KB that no
 // first paint needs, and with it in the entry file #provision went over the
@@ -52,12 +51,10 @@ const SetupChecklist = lazy(() => import('./components/SetupChecklist.jsx'))
 import './lib/density.js'
 import HeaderHelp from './components/HeaderHelp.jsx'
 import OneBox from './components/OneBox.jsx'
-import { JobRail, JobBar } from './components/JobNav.jsx'
+import { JobRail, JobBar, NavIcon } from './components/JobNav.jsx'
+import './components/frame.css'
 import { ThemeToggle } from './components/ThemeSwitch.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
-import { shellLook } from './lib/shellLook.js'
-// The trial frame looks. Fetched only when ?shell= is set.
-const ShellFrame = lazy(() => import('./components/ShellFrame.jsx'))
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -255,24 +252,18 @@ class TabErrorBoundary extends Component {
   }
 }
 
-const Caret = ({ open }) => (
-  <span aria-hidden="true" className={'text-[9px] ' + (open ? 'text-field-txt' : 'text-dim')}>
-    {open ? '▴' : '▾'}
-  </span>
-)
-
 // The dropdown shell. A floating surface — same panel whether it hangs off one
 // group button or off the collapsed Menu button, so the two forms cannot drift
 // apart.
 const MenuPanel = ({ ref, label, onKeyDown, children }) => (
-  <div
-    ref={ref}
-    role="menu"
-    aria-label={label}
-    onKeyDown={onKeyDown}
-    className="absolute left-0 top-full mt-2 min-w-[214px] z-20 bg-card border border-border rounded-surface shadow-lg p-1.5"
-  >
-    {children}
+  <div ref={ref} className="absolute left-0 top-full mt-2 min-w-[214px] max-h-[calc(100dvh-132px)] overflow-y-auto z-50 bg-card border border-border rounded-surface shadow-lg p-1.5">
+    <div role="menu" aria-label={label} onKeyDown={onKeyDown}>
+      {children}
+    </div>
+    <div className="frame-menu-foot">
+      <span>Automatic refresh</span>
+      <RefreshControl />
+    </div>
   </div>
 )
 
@@ -550,6 +541,12 @@ export default function App() {
     setShowHeaderHelp(true)
   }
 
+  const logo = (
+    <button type="button" aria-label="Edit brand" title="Edit brand" onClick={() => setShowBrand(true)} className="frame-logo">
+      <BrandLogoImg domain={brandDomain} bust={logoBust} className="h-5 w-5 rounded-mark" />
+    </button>
+  )
+
   return (
     <VaultGate>
       <div className="min-h-screen bg-bg text-txt">
@@ -559,155 +556,90 @@ export default function App() {
             layout entirely — the header's sticky positioning and the flex rows
             below it see exactly the box tree they saw before. */}
         <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
-          {shellLook ? (
-            <Suspense fallback={<TabLoading />}>
-              <ShellFrame
-                look={shellLook}
-                tab={tab}
-                groups={GROUPS}
-                tabs={TABS}
-                activeLabel={activeLabel}
-                hasGroup={!!groupOf(tab)}
-                brandDomain={brandDomain}
-                logoBust={logoBust}
-                onBrand={() => setShowBrand(true)}
-                settingsBtnRef={settingsBtnRef}
-                settingsOpen={showAccounts}
-                settingsNote={settingsNote}
-                onSettings={() => setShowAccounts(true)}
-                mainRef={mainRef}
-              >
+          <div className="frame-root">
+            <JobRail tab={tab} groups={GROUPS} tabs={TABS} logo={logo} />
+            <div className="frame-col">
+              <header className="frame-top">
+                <div className="frame-where">
+                  <span className="frame-phone-logo">{logo}</span>
+                  {/* The "All pages" menu, on a phone only: from md up every page
+                      is in the side rail. */}
+                  <nav aria-label="All pages" className="shrink-0 flex items-center md:hidden">
+                    <div className="relative flex shrink-0">
+                      <button
+                        ref={(el) => { btnRefs.current.menu = el }}
+                        type="button"
+                        data-menu="all"
+                        aria-haspopup="menu"
+                        aria-expanded={openGroup === 'menu'}
+                        onClick={() => setOpenGroup(openGroup === 'menu' ? null : 'menu')}
+                        onKeyDown={onTriggerKey('menu')}
+                        className="frame-menu-btn"
+                      >
+                        <NavIcon name="menu" />
+                        <span className="sr-only">All pages</span>
+                      </button>
+                      {openGroup === 'menu' && (
+                        <MenuPanel ref={menuRef} label="All pages" onKeyDown={onMenuKey}>
+                          {GROUPS.map((g) => (
+                            <GroupSection key={g.id} group={g} tab={tab} onPick={() => setOpenGroup(null)} />
+                          ))}
+                        </MenuPanel>
+                      )}
+                    </div>
+                  </nav>
+                  <ConnStatus />
+                </div>
+                <div className="frame-search hidden md:block"><OneBox /></div>
+                <div className="frame-tools">
+                  {/* The header's box is hidden on a phone; this opens the same search. */}
+                  <button
+                    type="button"
+                    className="frame-icon frame-phone-search"
+                    aria-label="Search"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+                  >
+                    <NavIcon name="search" />
+                  </button>
+                  <UpdateButton />
+                  <RefreshControl />
+                  {/* Every tab's label is a "## " heading in docs/TABS.md. */}
+                  {groupOf(tab) && <PageHelp key={tab} anchor={activeLabel} />}
+                  <ThemeToggle />
+                  <button
+                    ref={settingsBtnRef}
+                    type="button"
+                    onClick={() => setShowAccounts(true)}
+                    title={settingsNote ? `Settings — ${settingsNote.toLowerCase()}` : 'Settings'}
+                    aria-label="Settings"
+                    aria-description={settingsNote || undefined}
+                    aria-haspopup="dialog"
+                    aria-expanded={showAccounts}
+                    className="frame-icon"
+                  >
+                    {settingsNote && <span aria-hidden="true" className="frame-dot" />}
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                      <path d="M2 5h7M13 5h1M2 11h1M7 11h7" />
+                      <circle cx="11" cy="5" r="1.6" />
+                      <circle cx="5" cy="11" r="1.6" />
+                    </svg>
+                  </button>
+                </div>
+              </header>
+              {/* The landing place for focus after a tab change, and the only
+                  named region on the page: its name is the tab, so a screen
+                  reader that lands here is told which tab it landed on. */}
+              <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="frame-main">
                 <TabErrorBoundary tab={tab}>
                   <Suspense fallback={<TabLoading />}>
                     <Active />
                   </Suspense>
                 </TabErrorBoundary>
-              </ShellFrame>
-            </Suspense>
-          ) : (
-          <>
-          <header className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-card-border bg-card sticky top-0 z-10">
-            <button
-              type="button"
-              aria-label="Edit brand"
-              title="Edit brand"
-              onClick={() => setShowBrand(true)}
-              className="shrink-0 cursor-pointer"
-            >
-              <BrandLogoImg
-                domain={brandDomain}
-                bust={logoBust}
-                className="h-5 w-5 rounded-mark"
-              />
-            </button>
-            {/* The wordmark folds below `lg`. The logo button above does NOT fold:
-                it is 20px, and it is the only way into brand editing. */}
-            <strong className="tracking-tight shrink-0 hidden lg:inline">Bloxsmith</strong>
-            {/* The "All pages" menu, on a phone only: from md up every page is
-                in the page menu on the left (owner, 2026-11-09). It is
-                shrink-0; the search box beside it is the part that gives. */}
-            <nav aria-label="All pages" className="shrink-0 flex items-center gap-2 sm:gap-3 md:hidden">
-              <div className="relative flex shrink-0">
-                <button
-                  ref={(el) => { btnRefs.current.menu = el }}
-                  type="button"
-                  data-menu="all"
-                  aria-haspopup="menu"
-                  aria-expanded={openGroup === 'menu'}
-                  onClick={() => setOpenGroup(openGroup === 'menu' ? null : 'menu')}
-                  onKeyDown={onTriggerKey('menu')}
-                  className={
-                    'flex items-center gap-1.5 h-8 px-3 rounded-control text-copy font-medium whitespace-nowrap cursor-pointer ' +
-                    (openGroup === 'menu' ? 'bg-line-2 text-txt' : 'text-muted hover:bg-line hover:text-txt')
-                  }
-                >
-                  All pages
-                  <Caret open={openGroup === 'menu'} />
-                </button>
-                {openGroup === 'menu' && (
-                  <MenuPanel ref={menuRef} label="All pages" onKeyDown={onMenuKey}>
-                    {GROUPS.map((g) => (
-                      <GroupSection key={g.id} group={g} tab={tab} onPick={() => setOpenGroup(null)} />
-                    ))}
-                  </MenuPanel>
-                )}
-              </div>
-            </nav>
-            <div className="flex-1 min-w-0 flex justify-center">
-              <div className="hidden md:block w-full max-w-xl"><OneBox /></div>
+              </main>
             </div>
-            {/* Four things on the right: an update (only when one is ready), the
-                tenant chip with its write state, the light/dark button, and
-                Settings. Light/dark is here because people flip it often and
-                expect to see it; the three-way switch with "System", and
-                spacing, stay in Settings. The "What these controls do" dialog
-                is reached from Settings too.
-
-                On a phone the search box gives way (the page bar's Search
-                button opens the same search), and below `md` every update
-                message becomes a dot on Settings, where the sheet has the
-                Install button. The chip is NOT one of the things that gives way. */}
-            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-              <UpdateButton />
-              <ConnStatus />
-              <RefreshControl inHeader />
-              <ThemeToggle />
-              <button
-                ref={settingsBtnRef}
-                onClick={() => setShowAccounts(true)}
-                title={settingsNote ? `Settings — ${settingsNote.toLowerCase()}` : 'Settings'}
-                aria-label="Settings"
-                aria-description={settingsNote || undefined}
-                aria-haspopup="dialog"
-                aria-expanded={showAccounts}
-                className="relative w-8 h-8 inline-grid place-items-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
-              >
-                {settingsNote && (
-                  <span aria-hidden="true" className="md:hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent border-2 border-bg" />
-                )}
-                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-                  <path d="M2 5h7M13 5h1M2 11h1M7 11h7" />
-                  <circle cx="11" cy="5" r="1.6" />
-                  <circle cx="5" cy="11" r="1.6" />
-                </svg>
-              </button>
-            </div>
-          </header>
-          <RefreshBar />
-          {/* Where you are, Kentik-style: the group and the tab. Pages outside
-              the groups (a dossier) have no group and so no bar. */}
-          {groupOf(tab) && (
-            <PageBar group={GROUPS.find((g) => g.id === groupOf(tab)).label} page={activeLabel}>
-              {/* Every tab's label is a "## " heading in docs/TABS.md. */}
-              <PageHelp key={tab} anchor={activeLabel} />
-              {/* The header's box is hidden on a phone; this opens the same search. */}
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
-                aria-keyshortcuts="Meta+K Control+K"
-                className={`md:hidden px-2.5 py-1 rounded-control border border-border text-copy text-txt hover:border-border-hover ${FOCUS_RING}`}
-              >
-                Search
-              </button>
-            </PageBar>
-          )}
-          {/* The landing place for focus after a tab change, and the only named
-              region on the page — its name is the tab, so a screen reader that
-              lands here is told which tab it landed on. tabIndex -1 makes it a
-              focus target without putting it in the Tab order. */}
-          <div className="flex">
-            <JobRail tab={tab} groups={GROUPS} tabs={TABS} />
-            <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="outline-none flex-1 min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-              <TabErrorBoundary tab={tab}>
-                <Suspense fallback={<TabLoading />}>
-                  <Active />
-                </Suspense>
-              </TabErrorBoundary>
-            </main>
+            <JobBar tab={tab} />
           </div>
-          <JobBar tab={tab} />
-          </>
-          )}
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>
         {/* Said out loud on every tab change. Focus moving into <main> covers
