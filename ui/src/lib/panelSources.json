@@ -106,6 +106,15 @@
     "why": "it is a searchable list, not a chart"
   },
   {
+    "id": "network-dhcp-requests",
+    "page": "Network",
+    "name": "DHCP Requests",
+    "kind": "cube",
+    "source": "Infoblox's DHCP server metrics",
+    "builder": "no",
+    "why": "it adds up two DHCP server measures for two windows, one read each"
+  },
+  {
     "id": "network-exhaustion",
     "page": "Network",
     "name": "Which Subnets Run Out First?",
@@ -138,6 +147,15 @@
     "source": "Infoblox's DNS server metrics",
     "builder": "no",
     "why": "it puts eight separate DNS server measures side by side, one read each"
+  },
+  {
+    "id": "dns-failed-lookups",
+    "page": "DNS",
+    "name": "Failed Lookups",
+    "kind": "cube",
+    "source": "Infoblox's DNS failure records, or the DNS query logs for windows older than 3 days",
+    "builder": "no",
+    "why": "it chooses which records to read by how far back the window goes, and groups failures by response code"
   },
   {
     "id": "dns-zone-kpis",

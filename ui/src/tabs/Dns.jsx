@@ -13,6 +13,7 @@ import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import { healthMetric } from '../lib/dnsHealth.js'
+import { FAILURE_WINDOWS, failuresUrl, failuresView, readWindow, saveWindow } from '../lib/dnsFailures.js'
 import Tip from '../components/Tip.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
@@ -228,6 +229,7 @@ export default function Dns() {
           children: [
             <QpsHero key="dns-query-rate" panelId="dns-query-rate" qps={qps} />,
             <DnsAnswers key="dns-answers" panelId="dns-answers" health={health} />,
+            <FailedLookups key="dns-failed-lookups" panelId="dns-failed-lookups" />,
           ],
         })}
         {/* The id sits on the call site, not on the Cards inside: ZoneKpis
@@ -356,6 +358,73 @@ function DnsAnswers({ panelId, health }) {
           <dl className="dns-stats">{ANSWER_TIMES.map(stat)}</dl>
           <div className="text-note text-muted">How lookups ended</div>
           <dl className="dns-stats">{ANSWER_SHARES.map(stat)}</dl>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- failed lookups ----------
+
+// Failed lookups over a window the viewer picks: the total, split by
+// response code, and the names that failed most (lib/dnsFailures.js). The
+// server picks which records to read by how far back the window goes, and the
+// line under the table says which. A read that failed says "not checked".
+function FailedLookups({ panelId }) {
+  const [win, setWin] = useState(readWindow)
+  // Totals over hours or days, so once a minute is plenty.
+  const feed = useApi(failuresUrl(win), { poll: 60000 })
+  const v = failuresView(feed, win)
+  // The server reads the top 10 only; the heading below says so.
+  const names = v.names
+  const pick = (w) => {
+    setWin(w)
+    saveWindow(w)
+  }
+  const columns = [
+    { key: 'name', label: 'Name', mono: true, grow: true },
+    { key: 'text', label: 'Failed', align: 'right' },
+  ]
+  return (
+    <Card
+      panelId={panelId}
+      span={2}
+      title="Failed Lookups"
+      right={
+        <select aria-label="Time window" className={FIELD_CLS} value={win} onChange={(e) => pick(e.target.value)}>
+          {FAILURE_WINDOWS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
+        </select>
+      }
+    >
+      {v.state === 'loading' ? (
+        <Skeleton h={180} />
+      ) : (
+        <>
+          <dl className="dns-stats">
+            <div data-failed-total="" data-state={v.total.value == null ? 'unknown' : 'ok'}>
+              <dt>Failed lookups</dt>
+              <dd className={v.total.value == null ? 'text-muted' : undefined} style={v.total.value == null ? { fontSize: 15, fontWeight: 400 } : undefined}>{v.total.text}</dd>
+            </div>
+          </dl>
+          <dl className="dns-stats">
+            {v.codes.map((c) => (
+              <div key={c.key} data-failed-code={c.key}>
+                <dt><Tip tip={c.tip}>{c.label}</Tip></dt>
+                <dd className={c.value == null ? 'text-muted' : undefined} style={c.value == null ? { fontSize: 15, fontWeight: 400 } : undefined}>{c.text}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="text-note text-muted">The 10 names that failed most</div>
+          {names == null ? (
+            <div className="text-copy text-muted py-2" data-failed-names="unknown">{v.namesText}</div>
+          ) : names.length === 0 ? (
+            <Empty>no failed lookups</Empty>
+          ) : (
+            <div className="mt-1.5">
+              <DataTable rows={names} columns={columns} maxHeight={320} emptyText="no failed lookups" />
+            </div>
+          )}
+          {v.source && <div className="text-note text-muted mt-2" data-failed-source="">{v.source}</div>}
         </>
       )}
     </Card>

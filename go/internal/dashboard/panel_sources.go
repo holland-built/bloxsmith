@@ -83,6 +83,8 @@ var panelSources = []PanelSource{
 	restPanel("network-ipam-spaces", "Network", "IPAM Spaces — Top Used", "the IP space tree", "it ranks spaces by addresses used, worked out in the app"),
 	restPanel("network-overlaps", "Network", "Overlapping ranges", "the address block list and the subnets not inside a block", "it groups ranges that touch across IP spaces, worked out in the app"),
 	restPanel("network-dhcp-leases", "Network", "DHCP Leases", "the DHCP lease list", "it is a searchable list, not a chart"),
+	{ID: "network-dhcp-requests", Page: "Network", Name: "DHCP Requests", Kind: "cube", Source: "Infoblox's DHCP server metrics", Builder: "no",
+		Why: "it adds up two DHCP server measures for two windows, one read each"},
 	restPanel("network-exhaustion", "Network", "Which Subnets Run Out First?", srcSubnets, whyFullness),
 
 	// ---- DNS ----
@@ -90,6 +92,8 @@ var panelSources = []PanelSource{
 		Why: "the latest-hour figure and the comparison beside it are worked out in the app", Picks: picksQps},
 	{ID: "dns-answers", Page: "DNS", Name: "DNS Answers — 24h", Kind: "cube", Source: srcQps, Builder: "no",
 		Why: "it puts eight separate DNS server measures side by side, one read each"},
+	{ID: "dns-failed-lookups", Page: "DNS", Name: "Failed Lookups", Kind: "cube", Source: "Infoblox's DNS failure records, or the DNS query logs for windows older than 3 days", Builder: "no",
+		Why: "it chooses which records to read by how far back the window goes, and groups failures by response code"},
 	restPanel("dns-zone-kpis", "DNS", "Zone Counts", srcZones, "the counts and zone checks are worked out in the app"),
 	restPanel("dns-services", "DNS", "DNS Services", "the DNS service list", whyList),
 	{ID: "dns-query-volume-7d", Page: "DNS", Name: "Query Volume — 7d", Kind: "cube", Source: "Infoblox's DNS activity records",

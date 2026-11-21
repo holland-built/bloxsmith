@@ -255,6 +255,32 @@ const DNS_HEALTH = {
   },
 };
 
+// /api/csp/dns-failures?window=: failed lookups for the picked window (the
+// panel starts on Today). Invented numbers; shape from csp dns_failures.go.
+const DNS_FAILURES = {
+  status: 'ok',
+  window: 'today',
+  source: 'failure_records',
+  total: 1290,
+  codes: { nxdomain: 1200, servfail: 40, refused: 45, other: 5 },
+  codes_status: 'ok',
+  names: [
+    { name: 'missing.baseline.example.', count: 900 },
+    { name: 'old-printer.baseline.example.', count: 250 },
+  ],
+  names_status: 'ok',
+};
+
+// /api/csp/dhcp-requests: DHCP DISCOVER and no-address totals. One total is
+// "error" so the baseline shows "not checked".
+const DHCP_REQUESTS = {
+  status: 'partial',
+  metrics: {
+    discover: { metric: 'dhcp_discover_iq', today: { status: 'ok', value: 4200 }, last_30_days: { status: 'ok', value: 130000 } },
+    no_address: { metric: 'dhcp_demand_gap_iq', today: { status: 'ok', value: 12 }, last_30_days: { status: 'error', value: null } },
+  },
+};
+
 // /api/host-metrics: latest CPU and memory per host. One host has no memory
 // reading (null), so the baseline shows "not checked" for it.
 const HOST_METRICS = {
@@ -726,6 +752,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   daily: [{ method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true }],
   network: [
     { method: 'GET', path: '/api/csp/dhcp-leases', body: DHCP_LEASES, required: true },
+    { method: 'GET', path: '/api/csp/dhcp-requests', body: DHCP_REQUESTS, required: true },
     { method: 'GET', path: '/api/csp/ipam-util', body: IPAM_UTIL, required: true },
     { method: 'GET', path: '/api/ipam/overlaps', body: IPAM_OVERLAPS, required: true },
     { method: 'GET', path: '/api/service-inventory', body: SERVICE_INVENTORY, required: true },
@@ -733,6 +760,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   dns: [
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
     { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
+    { method: 'GET', path: '/api/csp/dns-failures', body: DNS_FAILURES, required: true },
     { method: 'GET', path: '/api/csp/dns-services', body: DNS_SERVICES, required: true },
     { method: 'GET', path: '/api/csp/dnssec', body: DNSSEC, required: true },
     { method: 'GET', path: '/api/csp/dtc-lbdn', body: DTC_LBDN, required: true },
