@@ -25,7 +25,8 @@ export const fetchT = (url, opts, ms) => {
 }
 
 // info: the last /api/update/check answer, or null before the first one.
-// phase: idle | applying | restarting | error.
+// phase: idle | applying | restarting | waiting | error. "waiting" means work
+// was running, so nothing was installed; `error` holds the sentence to show.
 let state = { info: null, phase: 'idle', error: '' }
 const listeners = new Set()
 
@@ -61,7 +62,7 @@ export async function checkForUpdate(force) {
   // failed install should not keep speaking over the new answer. Cleared as the
   // press happens, not when the answer lands: an install that fails in between
   // is a new failure and has to stay.
-  if (force && state.phase === 'error') set({ phase: 'idle', error: '' })
+  if (force && (state.phase === 'error' || state.phase === 'waiting')) set({ phase: 'idle', error: '' })
   const r = await fetchT(force ? '/api/update/check?force=1' : '/api/update/check', null, 15000)
   const info = await r.json()
   // Answers can land out of order: an ordinary check still in flight when the
@@ -82,11 +83,12 @@ async function applyUpdate() {
   set({ phase: 'applying', error: '' })
   const oldVer = (state.info && state.info.current) || ''
   let done = false
-  const fail = (m) => {
+  // `to` is 'waiting' when work was running, so nothing was installed.
+  const fail = (m, to) => {
     if (done) return
     done = true
     applying = false
-    set({ phase: 'error', error: m || 'update failed' })
+    set({ phase: to || 'error', error: m || 'update failed' })
   }
   const confirmThenReload = () => {
     if (done) return
@@ -117,7 +119,7 @@ async function applyUpdate() {
     const r = await fetchT('/api/update/apply', { method: 'POST' }, 12000)
     if (!r.ok) {
       const j = await r.json().catch(() => ({}))
-      fail(j.error || 'HTTP ' + r.status)
+      fail(j.error || 'HTTP ' + r.status, j.busy && 'waiting')
       return
     }
     let lastPhase = 'starting'
@@ -132,8 +134,8 @@ async function applyUpdate() {
         return
       }
       if (done) return
-      if (s.phase === 'error') {
-        fail(s.error)
+      if (s.phase === 'error' || s.phase === 'waiting') {
+        fail(s.error, s.phase)
         return
       }
       if (s.phase === 'done' || s.pct >= 100) {

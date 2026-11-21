@@ -67,9 +67,10 @@ export default function UpdateButton() {
       <button
         type="button"
         onClick={startUpdate}
+        title={phase === 'waiting' ? error : undefined}
         className="hidden md:inline-block px-2 py-1 rounded-control bg-accent text-on-accent text-note"
       >
-        Update v{latest}
+        {phase === 'waiting' ? 'Update waiting. Try again' : `Update v${latest}`}
       </button>
     );
   }
@@ -192,6 +193,9 @@ export function UpdateCheck({ version }) {
   } else if (phase === 'error') {
     said = error;
     tone = 'text-crit';
+  } else if (phase === 'waiting') {
+    said = error;
+    tone = 'text-warn';
   } else if (state === 'checking') {
     said = 'Checking…';
   } else if (unreachable) {
@@ -210,7 +214,7 @@ export function UpdateCheck({ version }) {
   } else {
     said = "You're on the latest version.";
   }
-  if (said && fromMemory && state !== 'checking' && !installing && phase !== 'error') {
+  if (said && fromMemory && state !== 'checking' && !installing && phase !== 'error' && phase !== 'waiting') {
     said = `Just checked a moment ago, so this is the same answer. ${said}`;
   }
 
@@ -227,7 +231,11 @@ export function UpdateCheck({ version }) {
             onClick={startUpdate}
             className="w-full mt-2 px-2.5 py-1.5 rounded-control bg-accent text-on-accent text-copy font-medium"
           >
-            {info.selfUpdate ? `Install v${latest} and restart` : `Open the v${latest} release page`}
+            {phase === 'waiting'
+              ? 'Try the update again'
+              : info.selfUpdate
+                ? `Install v${latest} and restart`
+                : `Open the v${latest} release page`}
           </button>
         )}
         {!disabled && (
