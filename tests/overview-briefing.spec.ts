@@ -74,7 +74,7 @@ test('a source that failed stops "None" being claimed', async ({ page }) => {
 test('an unknown change outcome is never called failed', async ({ page }) => {
   await healthyWorld(page, []);
   const row = (id: number, result: unknown) => ({ id: `r${id}`, ts: agoIso(10 + id), user: 'admin@example.com', who_kind: 'person', action: 'update', resource: 'dns/zone', result });
-  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: false, count: 6, rows: [row(1, 'success'), row(2, 'failure'), row(3, 'error'), row(4, 'denied'), row(5, ''), row(6, undefined)] }));
+  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: false, count: 6, rows: [row(1, 'success'), row(2, 'failure'), row(3, 'failure'), row(4, 'failure'), row(5, ''), row(6, undefined)] }));
   await page.goto('/#overview');
   await expect(fact(page, 'Changes')).toContainText('6 changes, 6 by users, 3 failed, 2 with no result reported', { timeout: 20_000 });
 });
@@ -94,4 +94,77 @@ test('a capped change log with no usable dates does not say nothing changed', as
   await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: true, count: 500, rows: [{ id: 'r1', ts: 'not a date', result: 'success' }] }));
   await page.goto('/#overview');
   await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('Period covered could not be determined', { timeout: 20_000 });
+});
+
+// ---------- the server's own "no answer" values (normAudit, FetchHubHealth) ----------
+
+const auditRow = (id: number, result: string) => ({ id: `a${id}`, ts: agoIso(10 + id), user: 'admin@example.com', who_kind: 'person', who_role: '', action: 'UPDATE', resource: 'dns/zone', result });
+const partialRow = (name: string, status = 'ok', meta = '2/2 online') => ({ name, status, statusLabel: status === 'ok' ? 'healthy' : 'critical', meta, availability: 'partial', reason: 'service inventory truncated at the 500-row limit' });
+const errorRows = () => ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'error', statusLabel: 'unavailable', meta: 'feed unavailable', availability: 'error', reason: 'service inventory feed unavailable' }));
+const oldIncident = () => incident('dns-ttl-anomaly', 'warn', nowS - 3 * DAY);
+
+test('the server\'s literal "unknown" result is no result reported, never failed', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: false, count: 5, rows: [auditRow(1, 'success'), auditRow(2, 'failure'), auditRow(3, 'failure'), auditRow(4, 'unknown'), auditRow(5, 'unknown')] }));
+  await page.goto('/#overview');
+  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('5 changes, 5 by users, 2 failed, 2 with no result reported', { timeout: 20_000 });
+});
+
+test('health rows with availability "error" stop "None" being claimed', async ({ page }) => {
+  await healthyWorld(page, [oldIncident()]);
+  await page.route('**/api/hub/health*', (r) => json(r, errorRows()));
+  await page.goto('/#overview');
+  await expect(page.locator('[data-problem="dns-ttl-anomaly"]')).toBeVisible({ timeout: 20_000 });
+  await expect(fact(page, 'New issues').locator('> span:last-child')).toHaveText('Not yet available. Some sources could not be read.');
+});
+
+test('a partial service list never reads as all services healthy', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/hub/health*', (r) => json(r, [HEALTHY[0], partialRow('DHCP'), HEALTHY[2]]));
+  await page.goto('/#overview');
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+});
+
+test('a partial source with a warning stays unconfirmed, and a critical problem still wins', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/hub/health*', (r) => json(r, [HEALTHY[0], partialRow('DHCP', 'warn', '1 stopped · 1/2 up'), HEALTHY[2]]));
+  await page.goto('/#overview');
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+  await page.unroute('**/api/hub/health*');
+  await page.route('**/api/hub/health*', (r) => json(r, [HEALTHY[0], partialRow('DHCP', 'crit', '1 error · 1/2 up'), HEALTHY[2]]));
+  await page.reload();
+  await expect(verdict(page)).toHaveText('Action required', { timeout: 20_000 });
+});
+
+test('incidents built from a failed feed do not read as all healthy', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/incidents', (r) => json(r, { incidents: [], signals: [], signals_total: 0, signals_truncated: false, _meta: { subnets: 'error', zones: 'ok', leases: 'ok' }, signals_degraded: true, snoozes: {} }));
+  await page.goto('/#overview');
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+});
+
+test('a sampled security feed does not read as all healthy', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/hub/security*', (r) => json(r, { availability: 'ok', counts: { critical: 0, high: 0, medium: 0, low: 0 }, returned: 500, truncated: true, events: [] }));
+  await page.goto('/#overview');
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+});
+
+test('part of the hosts, or short whole-network counts, do not read as all healthy', async ({ page }) => {
+  await healthyWorld(page, []);
+  await page.route('**/api/data', (r) => json(r, { _meta: { hosts: 'ok', subnets: 'ok', leases: 'ok' }, _totals: { hosts: 40, subnets: 10, subnetsCrit: 0, subnetsWarn: 0, degraded: false }, hosts: [{ name: 'host-a', status: 'online' }], subnets: [], leases: [] }));
+  await page.goto('/#overview');
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+  await page.unroute('**/api/data');
+  await page.route('**/api/data', (r) => json(r, { _meta: { hosts: 'ok', subnets: 'ok', leases: 'ok' }, _totals: { hosts: 1, subnets: 10, subnetsCrit: 0, subnetsWarn: 0, degraded: true }, hosts: [{ name: 'host-a', status: 'online' }], subnets: [], leases: [] }));
+  await page.reload();
+  await expect(verdict(page)).toHaveText('Status unconfirmed', { timeout: 20_000 });
+});
+
+test('a failed site-list read stops "None" being claimed', async ({ page }) => {
+  await healthyWorld(page, [oldIncident()]);
+  await page.route('**/api/lists/proposals*', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' }));
+  await page.goto('/#overview');
+  await expect(page.locator('[data-problem="dns-ttl-anomaly"]')).toBeVisible({ timeout: 20_000 });
+  await expect(fact(page, 'New issues').locator('> span:last-child')).toHaveText('Not yet available. Some sources could not be read.');
 });

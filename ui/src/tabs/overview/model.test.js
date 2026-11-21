@@ -40,9 +40,18 @@ test('"None" new is only said over complete, fully dated records', () => {
 test('a blank change result is unknown, never failed', () => {
   const nowMs = NOW * 1000
   const ts = new Date(nowMs - 60000).toISOString()
-  const rows = ['success', 'failure', 'error', '', '  ', undefined].map((result) => ({ ts, result }))
+  const rows = ['success', 'failure', 'failure', 'unknown', '', undefined].map((result) => ({ ts, result }))
   const s = changeSummary({ data: { status: 'ok', truncated: false, rows } }, nowMs)
   assert.deepEqual([s.total, s.failed, s.noResult], [6, 2, 3])
+})
+
+test('a partial source keeps the verdict unconfirmed unless action is required', () => {
+  const partial = (word, sev) => ({ v: { word, sev }, b: { partial: true } })
+  assert.equal(pageVerdict([svc('Healthy', 'ok'), partial('Partly checked', 'none')]).word, 'Status unconfirmed')
+  const look = pageVerdict([svc('Healthy', 'ok'), partial('Review', 'warn')])
+  assert.equal(look.word, 'Status unconfirmed')
+  assert.equal(look.line, '1 of 2 services could not be fully checked, 1 item requires review')
+  assert.equal(pageVerdict([partial('Action required', 'crit'), partial('Partly checked', 'none')]).word, 'Action required')
 })
 
 test('a capped log with no usable dates has an undetermined period', () => {

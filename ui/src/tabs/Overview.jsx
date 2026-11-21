@@ -157,19 +157,25 @@ function useBoard(dns) {
   // Each measure carries the scope it was counted over, and a feed that failed
   // says so instead of showing a number or a dash that reads as zero.
   const m = (ok, loading, text) => (loading ? 'Loading…' : ok ? text : 'unavailable')
+  // A source that answered with only part of the picture. Its rows are real,
+  // but anything it did not reach could be down, so it can never support
+  // "healthy". Only the server's own "ok" counts as a full read.
+  const notFull = (s) => !!s && !s.loading && !s.failed && s.availability !== 'ok'
+  const hostsPartial = sliceOk('hosts') && typeof totals.hosts === 'number' && hosts.length < totals.hosts
+  const hostsShort = hostsPartial || (sliceOk('hosts') && typeof totals.hosts !== 'number')
   const issuesFor = (name) => issues.filter((r) => rowOf(r.key) === name)
   const board = [
-    { name: 'DNS', href: '#dns', state: svcState('DNS'), trend: dnsOk ? rows : null, n: qps,
+    { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps,
       measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: 'hourly average, last hour' },
-    { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
+    { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), partial: notFull(svcState('DHCP')), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
       measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active leases`), scope: sliceOk('leases') ? `of ${n0(leases.length)} leases loaded` : '' },
-    { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
+    { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, partial: totals.degraded === true, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
       measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} subnets ≥90%`),
       scope: crit !== null && typeof totals.subnetsWarn === 'number' ? `${n0(totals.subnetsWarn - crit)} more at 70–89% · all subnets` : '' },
-    { name: 'Hosts', href: '#infra?status=offline', state: null, n: offline, of: sliceOk('hosts') ? hosts.length : null,
+    { name: 'Hosts', href: '#infra?status=offline', state: null, partial: hostsShort, n: offline, of: sliceOk('hosts') ? hosts.length : null,
       measure: m(offline !== null, data.loading, `${n0(offline)} of ${n0(hosts.length)} not online`),
       scope: offline !== null ? (typeof totals.hosts === 'number' && hosts.length >= totals.hosts ? 'all hosts' : `${n0(hosts.length)} loaded of ${n0(totals.hosts)}`) : '' },
-    { name: 'Security', href: '#security', state: svcState('Security'), n: secBad,
+    { name: 'Security', href: '#security', state: svcState('Security'), partial: notFull(svcState('Security')) || (secOk && sec.data.truncated === true), n: secBad,
       measure: m(secOk, sec.loading, `${n0(secBad)} critical or high events`),
       scope: secOk && sec.data.truncated ? `in the latest ${sec.data.returned} events${since ? `, since ${since}` : ''}` : secOk ? 'whole window' : '' },
   ].map((b) => ({ ...b, issues: issuesFor(b.name) }))
@@ -194,21 +200,21 @@ function useBoard(dns) {
   // 'loading' while the feed is still on its way, so a slow first load never
   // reads as a failure.
   const checked = (loading, ok) => (loading ? 'loading' : ok)
-  const incChecked = checked(inc.loading, incOk)
+  // signals_degraded: a feed the incidents are built from failed, so an empty
+  // list proves nothing. The incidents it did find are still shown.
+  const incChecked = checked(inc.loading, incOk && inc.data.signals_degraded !== true)
   const issuesChecked = { DNS: incChecked, DHCP: incChecked, IPAM: incChecked, Hosts: checked(data.loading, sliceOk('hosts')), Security: checked(sec.loading, secOk), Other: incChecked }
   // A clear Security row over a truncated sample is only clear for that sample.
   // Likewise a clear Hosts row over part of the hosts is only clear for those.
-  const hostsPartial = sliceOk('hosts') && typeof totals.hosts === 'number' && hosts.length < totals.hosts
   const noneLabel = {
     Security: secOk && sec.data.truncated ? `none in the latest ${sec.data.returned} events` : null,
     Hosts: hostsPartial ? `none among the ${n0(hosts.length)} loaded` : null,
   }
   // Whether the briefing may say no issue is new: every source answered, in
   // full. A partial service list or a sampled feed could be hiding one.
-  const healthRead = !health.loading && !health.error && Array.isArray(health.data)
-  const reading = health.loading || Object.values(issuesChecked).includes('loading')
-  const allRead = healthRead && [...HAS_HEALTH].every((name) => svc[name]) && !svcRows.some((s) => s.availability === 'partial')
-    && Object.values(issuesChecked).every((c) => c === true) && !Object.values(noneLabel).some(Boolean) && !totals.degraded
+  const reading = health.loading || sitelists.loading || Object.values(issuesChecked).includes('loading')
+  const allRead = !health.error && !sitelists.error && [...HAS_HEALTH].every((name) => svc[name]?.availability === 'ok')
+    && Object.values(issuesChecked).every((c) => c === true) && !board.some((b) => b.partial)
   return { board, coverage, issuesChecked, noneLabel, dnsOk, feedDown, fetchedAt, allRead, reading }
 }
 
@@ -243,6 +249,7 @@ function verdict(b, checked) {
   if (b.measure === 'unavailable') return { word: 'Unavailable', sev: 'none' }
   if (checked !== true || b.state?.failed) return { word: 'Not checked', sev: 'none' }
   if (HAS_HEALTH.has(b.name) && st !== 'ok') return { word: 'Not checked', sev: 'none' }
+  if (b.partial) return { word: 'Partly checked', sev: 'none' }
   return { word: 'Healthy', sev: 'ok' }
 }
 

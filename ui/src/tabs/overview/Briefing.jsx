@@ -125,7 +125,7 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
             <ul className="br-facts">
               <Fact label="Healthy services">{fine.length ? fine.map((s) => s.name).join(', ') : checking ? 'Checking…' : unchecked.length === services.length ? 'No services could be checked' : 'None'}</Fact>
               <Fact label="Licenses">{licenseFine ? <><Mark sev="ok" /> {licenseWords(license)}</> : licenseWords(license)}</Fact>
-              {unchecked.length > 0 && <Fact label="Not checked">{unchecked.map((s) => s.name).join(', ')}</Fact>}
+              {unchecked.length > 0 && <Fact label="Not fully checked">{unchecked.map((s) => s.name).join(', ')}</Fact>}
             </ul>
           </section>
         </div>

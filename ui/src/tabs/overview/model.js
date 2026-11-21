@@ -3,7 +3,7 @@
 // fetches. Nothing is estimated, and a feed that did not answer stays
 // "not checked" rather than becoming a 0 or a green mark.
 
-import { feedState, isFailure, windowLabel, withinWindow } from '../../lib/changes.js'
+import { feedState, isSuccess, windowLabel, withinWindow } from '../../lib/changes.js'
 
 const DAY_S = 86400
 const SEV_RANK = { crit: 0, warn: 1, note: 2 }
@@ -39,7 +39,9 @@ export function upCount(meta) {
 /**
  * The page's one answer. A problem that is known is reported even while other
  * feeds are still loading. "All services healthy" needs every service to have
- * been checked and no open incident outside them (the board's Other row).
+ * been checked in full and no open incident outside them (the board's Other
+ * row). A source that was partial or failed keeps the page at "Status
+ * unconfirmed" unless a real problem already makes it "Action required".
  */
 export function pageVerdict(services, otherIssues = []) {
   const count = (test) => services.filter(test).length
@@ -47,7 +49,7 @@ export function pageVerdict(services, otherIssues = []) {
   const act = count((s) => s.v.sev === 'crit')
   const look = count((s) => s.v.sev === 'warn')
   const checking = count((s) => s.v.word === 'Checking')
-  const unchecked = count((s) => s.v.sev === 'none' && s.v.word !== 'Checking')
+  const unchecked = count((s) => (s.v.sev === 'none' && s.v.word !== 'Checking') || (s.v.sev === 'warn' && s.b?.partial))
   const otherAct = otherIssues.filter((r) => r.sev === 'crit').length
   const otherLook = otherIssues.filter((r) => r.sev === 'warn').length
   const base = { total, act, look, checking, unchecked }
@@ -58,9 +60,13 @@ export function pageVerdict(services, otherIssues = []) {
     return `${svc} of ${total} ${plural(svc)} ${need}${other ? `, plus ${incidents(other)}` : ''}`
   }
   if (act || otherAct) return { ...base, tone: 'crit', word: 'Action required', line: line(act, otherAct, 'action') }
+  if (unchecked) {
+    const review = look + otherLook
+    const also = review ? `, ${review} ${review === 1 ? 'item requires' : 'items require'} review` : ''
+    return { ...base, tone: 'none', word: 'Status unconfirmed', line: `${unchecked} of ${total} services could not be fully checked${also}` }
+  }
   if (look || otherLook) return { ...base, tone: 'warn', word: 'Review recommended', line: line(look, otherLook, 'review') }
   if (checking) return { ...base, tone: 'none', word: 'Checking', line: checking === total ? 'Checking services' : `${total - checking} of ${total} services checked` }
-  if (unchecked) return { ...base, tone: 'none', word: 'Status unconfirmed', line: `${unchecked} of ${total} services could not be checked` }
   return { ...base, tone: 'ok', word: 'All services healthy', line: `All ${total} services checked` }
 }
 
@@ -135,7 +141,9 @@ export function dnsTrend(dns) {
   return { state: 'ok', now, was, hours, pct }
 }
 
-const hasResult = (row) => String(row?.result ?? '').trim() !== ''
+// The server writes the literal "unknown" when no status code was recorded
+// (normAudit). That and a blank are no outcome at all, so never a failure.
+const hasNoResult = (row) => ['', 'unknown'].includes(String(row?.result ?? '').trim().toLowerCase())
 
 /** The change log over the last day, saying how far back it really reaches. */
 export function changeSummary(audit, nowMs) {
@@ -150,10 +158,8 @@ export function changeSummary(audit, nowMs) {
     state,
     total: rows.length,
     people: rows.filter((r) => r.who_kind === 'person').length,
-    // isFailure also covers a blank result. Blank means nobody reported an
-    // outcome, so it is counted apart and never called failed.
-    failed: rows.filter((r) => isFailure(r) && hasResult(r)).length,
-    noResult: rows.filter((r) => !hasResult(r)).length,
+    failed: rows.filter((r) => !isSuccess(r) && !hasNoResult(r)).length,
+    noResult: rows.filter(hasNoResult).length,
     capped: win.capped,
     window: win.text,
     tip: win.tip,
