@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"math"
 	"time"
 )
 
@@ -109,7 +110,15 @@ func failCount(r map[string]any) any {
 	return floatOrNil(r["total_query_count"])
 }
 
-// dnsFailureCodeKey files a response code under the panel's four groups.
+// readableRcode reports whether a row's response code is a whole number. A
+// missing or garbled code could belong to any group.
+func readableRcode(rcode any) bool {
+	v, ok := floatOrNil(rcode).(float64)
+	return ok && v >= 0 && !math.IsInf(v, 0) && v == math.Trunc(v)
+}
+
+// dnsFailureCodeKey files a readable response code under the panel's four
+// groups; a code other than 2, 3 or 5 is Other.
 func dnsFailureCodeKey(rcode any) string {
 	switch floatOrNil(rcode) {
 	case 2.0:
@@ -124,11 +133,19 @@ func dnsFailureCodeKey(rcode any) string {
 
 // dnsFailureCodes adds the per-code rows into the four groups and the total.
 // A group with a row whose count is missing is nil ("couldn't tell"), and so
-// is the total; a group with no rows at all is a real 0.
+// is the total. No rows at all is nil throughout too, because it can mean
+// nothing failed or that DNS logging sent nothing. So is any row whose code
+// can't be read, since its count could belong to any group. When other rows
+// were read, a group with no rows of its own is a real 0.
 func dnsFailureCodes(rows []map[string]any) (map[string]any, any) {
 	codes := map[string]any{"servfail": nil, "nxdomain": nil, "refused": nil, "other": nil}
-	if rows == nil {
+	if len(rows) == 0 {
 		return codes, nil
+	}
+	for _, r := range rows {
+		if !readableRcode(r["rcode"]) {
+			return codes, nil
+		}
 	}
 	sums := map[string]float64{}
 	unknown := map[string]bool{}
@@ -194,7 +211,7 @@ func (s *Service) CSPDNSFailures(window string) map[string]any {
 		status = "error"
 	case namesStatus == "error":
 		status = "partial"
-	case total == 0.0 && len(nameRows) == 0:
+	case len(codeRows) == 0 && len(nameRows) == 0:
 		status = "empty"
 	}
 	return map[string]any{

@@ -2,14 +2,16 @@
 // for the screen.
 //
 // A failed or missing read is "not checked", never 0. A group the server could
-// not count (a row with no number) is "couldn't tell". A real zero, from a
-// read that worked, is shown as 0. Which records a number came from is said in
+// not count is "couldn't tell", and so is a read that came back with no rows,
+// which can mean nothing failed or that DNS logging sent nothing. A real zero,
+// from a read with rows, is shown as 0. Which records a number came from is said in
 // one short line (csp dns_failures.go picks them by the window).
 
 import { reading } from './dnsCompare.js'
 
 export const NOT_CHECKED = 'not checked'
 export const CANT_TELL = "couldn't tell"
+export const NO_RECORDS = 'Infoblox returned no failed lookups for this time. Nothing may have failed, or DNS logging may not be sending data.'
 
 export const FAILURE_WINDOWS = [
   { value: 'today', label: 'Today' },
@@ -61,7 +63,7 @@ export function fmtCount(n) {
 
 /**
  * The feed for `window`, shaped for the panel:
- * { state, total, codes, names, namesText, source }.
+ * { state, total, codes, names, namesText, note, source }.
  * state is 'loading', 'error' (nothing could be read) or 'ok'. total and each
  * code are { value, text }; names is a list of { name, count, text } or null
  * when its read failed, with namesText saying why.
@@ -77,9 +79,11 @@ export function failuresView(feed, window) {
     const n = reading(v)
     return n == null ? { value: null, text: CANT_TELL } : { value: n, text: fmtCount(n) }
   }
-  const namesOk = mine && mine.names_status === 'ok' && Array.isArray(mine.names)
+  // No names is not proof that nothing failed.
+  const namesOk = mine && mine.names_status === 'ok' && Array.isArray(mine.names) && mine.names.length > 0
+  const namesRead = mine && mine.names_status === 'ok' && Array.isArray(mine.names)
   return {
-    state: !mine || (mine.status === 'error' && !namesOk) ? 'error' : 'ok',
+    state: !mine || (mine.status === 'error' && !namesRead) ? 'error' : 'ok',
     total: num(mine?.total),
     codes: FAILURE_CODES.map((c) => ({ ...c, ...num(mine?.codes?.[c.key]) })),
     names: namesOk
@@ -88,7 +92,8 @@ export function failuresView(feed, window) {
         return { name: String(r.name ?? ''), count: n, text: n == null ? CANT_TELL : fmtCount(n) }
       })
       : null,
-    namesText: namesOk ? null : NOT_CHECKED,
+    namesText: namesOk ? null : namesRead ? CANT_TELL : NOT_CHECKED,
+    note: mine?.status === 'empty' ? NO_RECORDS : null,
     source: SOURCE_LINE[mine?.source] ?? null,
   }
 }

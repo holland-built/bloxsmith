@@ -417,13 +417,12 @@ function FailedLookups({ panelId }) {
           <div className="text-note text-muted">The 10 names that failed most</div>
           {names == null ? (
             <div className="text-copy text-muted py-2" data-failed-names="unknown">{v.namesText}</div>
-          ) : names.length === 0 ? (
-            <Empty>no failed lookups</Empty>
           ) : (
             <div className="mt-1.5">
-              <DataTable rows={names} columns={columns} maxHeight={320} emptyText="no failed lookups" />
+              <DataTable rows={names} columns={columns} maxHeight={320} />
             </div>
           )}
+          {v.note && <div className="text-copy text-muted mt-2" data-failed-note="">{v.note}</div>}
           {v.source && <div className="text-note text-muted mt-2" data-failed-source="">{v.source}</div>}
         </>
       )}

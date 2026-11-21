@@ -210,12 +210,58 @@ func TestCSPDNSFailures_MissingMeasureIsUnknown(t *testing.T) {
 	}
 }
 
-func TestCSPDNSFailures_NothingFailedIsEmpty(t *testing.T) {
+// No rows can mean nothing failed or that DNS logging sent nothing, so the
+// total and every group are unknown, never 0.
+func TestCSPDNSFailures_NoRowsIsCouldntTell(t *testing.T) {
 	atTime(t, friday)
 	s, _ := failuresServer(t, `{"result":{"data":[]}}`, `{"result":{"data":[]}}`)
 	got := s.CSPDNSFailures("today")
-	if got["status"] != "empty" || got["total"] != 0.0 {
-		t.Errorf("got %v, want empty with a real 0", got)
+	if got["status"] != "empty" || got["codes_status"] != "ok" || got["total"] != nil {
+		t.Fatalf("got %v, want empty with a null total", got)
+	}
+	for k, v := range got["codes"].(map[string]any) {
+		if v != nil {
+			t.Errorf("codes[%s] = %v, want null", k, v)
+		}
+	}
+}
+
+// A row whose code cannot be read could belong to any group, so all four
+// groups and the total are unknown.
+func TestCSPDNSFailures_UnreadableCodeIsCouldntTell(t *testing.T) {
+	for name, rcode := range map[string]string{
+		"missing": ``,
+		"null":    `"NetworkInsightsDnsRawLogsV1.rcode":null,`,
+		"blank":   `"NetworkInsightsDnsRawLogsV1.rcode":"",`,
+		"words":   `"NetworkInsightsDnsRawLogsV1.rcode":"NXDOMAIN",`,
+		"nan":     `"NetworkInsightsDnsRawLogsV1.rcode":"NaN",`,
+		"part":    `"NetworkInsightsDnsRawLogsV1.rcode":"2.5",`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			atTime(t, friday)
+			codes := `{"result":{"data":[{"NetworkInsightsDnsRawLogsV1.rcode":"3","NetworkInsightsDnsRawLogsV1.failedTransactionCount":"10"},{` + rcode + `"NetworkInsightsDnsRawLogsV1.failedTransactionCount":"4"}]}}`
+			s, _ := failuresServer(t, codes, rawNames)
+			got := s.CSPDNSFailures("today")
+			if got["total"] != nil {
+				t.Errorf("total = %v, want null", got["total"])
+			}
+			for k, v := range got["codes"].(map[string]any) {
+				if v != nil {
+					t.Errorf("codes[%s] = %v, want null", k, v)
+				}
+			}
+		})
+	}
+}
+
+// A code that reads fine but is not 2, 3 or 5 is still Other.
+func TestCSPDNSFailures_ReadableOtherCodeStaysOther(t *testing.T) {
+	atTime(t, friday)
+	codes := `{"result":{"data":[{"NetworkInsightsDnsRawLogsV1.rcode":"9","NetworkInsightsDnsRawLogsV1.failedTransactionCount":"7"}]}}`
+	s, _ := failuresServer(t, codes, rawNames)
+	got := s.CSPDNSFailures("today")
+	if c := got["codes"].(map[string]any); c["other"] != 7.0 || got["total"] != 7.0 {
+		t.Errorf("total %v codes %v, want Other 7", got["total"], c)
 	}
 }
 

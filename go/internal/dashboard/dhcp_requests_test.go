@@ -122,6 +122,25 @@ func TestCSPDHCPRequests_NoReadingsIsEmptyNotZero(t *testing.T) {
 	}
 }
 
+// One missing reading beside real ones would show a total that is too low.
+func TestCSPDHCPRequests_MissingReadingIsEmptyNotPartialTotal(t *testing.T) {
+	for name, bad := range map[string]string{
+		"null":   sumRow("null"),
+		"absent": `{"HostMetricsV1.count_value":"288"}`,
+		"words":  sumRow(`"n/a"`),
+		"nan":    sumRow(`"NaN"`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, _ := dhcpRequestsServer(t, map[string]string{
+				"dhcp_discover_iq|today": `{"result":{"data":[` + sumRow("2789") + `,` + bad + `]}}`,
+			})
+			if v := dhcpTotal(t, s.CSPDHCPRequests(), "discover", "today"); v["status"] != "empty" || v["value"] != nil {
+				t.Errorf("discover today = %v, want empty with null", v)
+			}
+		})
+	}
+}
+
 func TestCSPDHCPRequests_AllFailedIsError(t *testing.T) {
 	b := map[string]string{}
 	for _, m := range dhcpRequestMetrics {

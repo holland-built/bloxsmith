@@ -1,5 +1,7 @@
 package dashboard
 
+import "math"
+
 // DHCP requests (the Network tab's DHCP Requests panel): how many DHCP
 // DISCOVER messages the servers saw, and how many requests got no address,
 // each as a total for Today and for the Last 30 days.
@@ -32,22 +34,23 @@ var dhcpRequestWindows = []struct{ Key, Range string }{
 }
 
 // dhcpRequestTotal adds one read's rows. nil rows (the read failed) is
-// "error"; no rows, or rows with no reading, is "empty"; both are a null
-// value, never 0.
+// "error"; no rows, or any row without a reading, is "empty", because adding
+// up only the rows that have one would show a total that is too low. Both are
+// a null value, never 0.
 func dhcpRequestTotal(rows []map[string]any) map[string]any {
 	if rows == nil {
 		return map[string]any{"status": "error", "value": nil}
 	}
-	var sum float64
-	read := false
-	for _, r := range rows {
-		if v, ok := floatOrNil(r["sum_value"]).(float64); ok {
-			sum += v
-			read = true
-		}
-	}
-	if !read {
+	if len(rows) == 0 {
 		return map[string]any{"status": "empty", "value": nil}
+	}
+	var sum float64
+	for _, r := range rows {
+		v, ok := floatOrNil(r["sum_value"]).(float64)
+		if !ok || math.IsNaN(v) || math.IsInf(v, 0) {
+			return map[string]any{"status": "empty", "value": nil}
+		}
+		sum += v
 	}
 	return map[string]any{"status": "ok", "value": sum}
 }

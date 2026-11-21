@@ -1,7 +1,7 @@
 // Run with: npm test  (node --test, no test framework dependency)
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { CANT_TELL, failuresUrl, failuresView, NOT_CHECKED, readWindow, saveWindow, WINDOW_KEY } from './dnsFailures.js'
+import { CANT_TELL, failuresUrl, failuresView, NO_RECORDS, NOT_CHECKED, readWindow, saveWindow, WINDOW_KEY } from './dnsFailures.js'
 
 const ok = (extra = {}) => ({
   status: 'ok', window: 'today', source: 'failure_records', total: 539374,
@@ -44,6 +44,18 @@ test('a group the server could not count says so; a real zero stays 0', () => {
   assert.equal(v.total.text, CANT_TELL)
   assert.equal(v.codes.find((c) => c.key === 'servfail').text, CANT_TELL)
   assert.equal(v.codes.find((c) => c.key === 'refused').text, '0')
+})
+
+test('no rows says we could not tell why, and never shows 0', () => {
+  const empty = ok({ status: 'empty', total: null, codes: { nxdomain: null, servfail: null, refused: null, other: null }, names: [] })
+  const v = failuresView(feed(empty), 'today')
+  assert.equal(v.state, 'ok')
+  assert.equal(v.total.text, CANT_TELL)
+  assert.ok(v.codes.every((c) => c.text === CANT_TELL && c.value === null))
+  assert.equal(v.names, null)
+  assert.equal(v.namesText, CANT_TELL)
+  assert.equal(v.note, NO_RECORDS)
+  assert.equal(failuresView(feed(ok()), 'today').note, null)
 })
 
 test("another window's answer is never shown as this one's", () => {
