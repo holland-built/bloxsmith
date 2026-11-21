@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -171,9 +172,15 @@ func TestRunStoresMakeTheGateBusy(t *testing.T) {
 		if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status}); err != nil {
 			t.Fatal(err)
 		}
+		// A running build holds the lock; without it the record is a crash leftover.
+		release, err := d.demoStore().Lock(time.Now)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if why := d.CloseForUpdate(); why == "" {
 			t.Errorf("demo run %q did not make the gate busy", status)
 		}
+		release()
 	}
 }
 
@@ -197,5 +204,183 @@ func TestUnreadableRunRecordIsBusy(t *testing.T) {
 	why := d.CloseForUpdate()
 	if why == "" || !strings.Contains(why, "read") {
 		t.Errorf("an unreadable demo record did not count as busy: %q", why)
+	}
+}
+
+func TestStoppedDemoRunNoLongerBlocksAnUpdate(t *testing.T) {
+	for _, status := range []string{"building", "removing"} {
+		state := t.TempDir()
+		before := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := before.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
+			t.Fatal(err)
+		}
+		after := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := after.demoStore().Recover(time.Now); err != nil {
+			t.Fatal(err)
+		}
+		if why := after.WorkRunning(); why != "" {
+			t.Errorf("%s: WorkRunning still busy: %s", status, why)
+		}
+		if why := after.CloseForUpdate(); why != "" {
+			t.Errorf("%s: CloseForUpdate still busy: %s", status, why)
+		}
+	}
+}
+
+func TestDemoRunUnderALiveLockStaysBusy(t *testing.T) {
+	d := gateDeps(t)
+	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: "building"}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := d.demoStore().Lock(time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	_ = d.demoStore().Recover(time.Now)
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("a build holding the lock stopped counting as busy")
+	}
+}
+
+func TestPlainFileInDemoRunsDoesNotBlockAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".DS_Store"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf(".DS_Store made the gate busy: %s", why)
+	}
+}
+
+func TestUnreadableDemoRunStaysBusyAfterRecovery(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "run.json"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.demoStore().Recover(time.Now)
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("an unreadable real run stopped counting as busy")
+	}
+}
+
+// crashedDemo leaves what a killed older server leaves: a record and its lock.
+func crashedDemo(t *testing.T, d *Deps, status string) {
+	t.Helper()
+	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
+		t.Fatal(err)
+	}
+	// An older server's lock: a timestamp and no OS lock, so only age clears it.
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	if err := os.WriteFile(filepath.Join(d.StateDir, "demo", "build.lock"), []byte(stamp), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func ageDemoLock(t *testing.T, d *Deps) {
+	t.Helper()
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(filepath.Join(d.StateDir, "demo", "build.lock"), old, old); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCrashThenRestartClearsOnceTheLockExpires(t *testing.T) {
+	for status, want := range map[string]string{"building": "failed", "removing": "remove-failed"} {
+		state := t.TempDir()
+		crashedDemo(t, &Deps{StateDir: state, Cfg: &config.Config{}}, status)
+
+		restarted := &Deps{StateDir: state, Cfg: &config.Config{}}
+		if err := restarted.demoStore().Recover(time.Now); err == nil {
+			t.Fatalf("%s: startup recovery ignored an older server's recent lock", status)
+		}
+		if why := restarted.WorkRunning(); why == "" {
+			t.Fatalf("%s: not busy while the lock is recent", status)
+		}
+		if r, _ := restarted.demoStore().Load("c-20260101-000000"); r == nil || r.Status != status {
+			t.Fatalf("%s: record changed under a live lock: %+v", status, r)
+		}
+
+		ageDemoLock(t, restarted)
+		if why := restarted.WorkRunning(); why != "" {
+			t.Fatalf("%s: still busy after the lock expired: %s", status, why)
+		}
+		r, err := restarted.demoStore().Load("c-20260101-000000")
+		if err != nil || r.Status != want || r.VMID != 9001 {
+			t.Fatalf("%s: recovered record %+v, %v", status, r, err)
+		}
+		if why := restarted.CloseForUpdate(); why != "" {
+			t.Fatalf("%s: CloseForUpdate still busy: %s", status, why)
+		}
+	}
+}
+
+func TestRetryLeavesAloneABuildThisProcessIsRunning(t *testing.T) {
+	d := gateDeps(t)
+	crashedDemo(t, d, "building")
+	ageDemoLock(t, d)
+	release, ok := d.workGate().Enter()
+	if !ok {
+		t.Fatal("open gate refused work")
+	}
+	defer release()
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("not busy during counted work")
+	}
+	if why := d.CloseForUpdate(); why == "" {
+		t.Fatal("gate closed during counted work")
+	}
+	if r, _ := d.demoStore().Load("c-20260101-000000"); r == nil || r.Status != "building" {
+		t.Fatalf("a running build was marked stopped: %+v", r)
+	}
+}
+
+func TestEmptyDemoRunFolderNoLongerBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf("an empty run folder blocked the update: %s", why)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the empty run folder was not removed: %v", err)
+	}
+}
+
+func TestNonEmptyUnreadableDemoRunStillBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000", "ip")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("a non-empty run folder with no record stopped counting as busy")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("a non-empty run folder was changed: %v", err)
+	}
+}
+
+func TestDemoRunFolderWithOnlyATempRecordNoLongerBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "run.json.tmp"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf("a folder with only run.json.tmp blocked the update: %s", why)
 	}
 }

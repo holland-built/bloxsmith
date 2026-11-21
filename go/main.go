@@ -28,6 +28,7 @@ import (
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/config"
 	"bloxsmith/internal/dashboard"
+	"bloxsmith/internal/demo"
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/freecheck"
 	"bloxsmith/internal/httpx"
@@ -804,6 +805,13 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		},
 	}
 	overnight.closeGate, overnight.reopenGate = deps.CloseForUpdate, deps.ReopenAfterUpdate
+	// Before any request: a demo left "building" by a crash would otherwise
+	// make Update now refuse forever.
+	if strings.TrimSpace(stateDir) != "" {
+		if err := (demo.Store{Dir: filepath.Join(stateDir, "demo")}).Recover(time.Now); err != nil {
+			log.Printf("demo run recovery: %v", err)
+		}
+	}
 	handler := server.New(deps)
 
 	// A graceful *http.Server (not http.ListenAndServe) so the self-updater can
