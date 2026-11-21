@@ -44,6 +44,10 @@ test('an unread number is a word, never a figure', async ({ page }) => {
   for (const key of ['sus_to_mal', 'cache_hit', 'dhcp_assigned', 'roaming']) {
     await expect(page.locator(`[data-card-grid] [data-stat="${key}"] .vl-num`)).not.toHaveText(/\d/);
   }
+  const dhcp = page.locator('[data-card-grid] [data-stat="dhcp_assigned"]');
+  await expect(dhcp.locator('.vl-num')).toHaveText('Not available');
+  await expect(dhcp.locator('.vl-note')).toHaveCount(0);
+  await expect(dhcp).not.toContainText('test reason');
   await page.getByText('Each server (1)').click();
   await expect(page.getByText('dns-1:')).toBeVisible();
 });

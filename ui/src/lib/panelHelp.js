@@ -405,7 +405,7 @@ export const PANEL_HELP = {
   },
   'value-platform': {
     what: 'DNS volume and efficiency for your servers: queries answered and the share answered from cache.',
-    look: 'Also roaming devices protected. Last 30 days. DNS server uptime and DHCP addresses show Not available until Infoblox states what those metrics measure.',
+    look: 'Also roaming devices protected. Last 30 days. DNS server uptime and DHCP addresses show Not available for now.',
   },
   'value-work': {
     what: 'Jobs Bloxsmith completed on this account in the last 30 days, by page, and the objects they created in Infoblox. Deletes and undone jobs are excluded.',
