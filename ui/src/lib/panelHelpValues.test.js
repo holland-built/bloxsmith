@@ -360,6 +360,14 @@ const SEV_COLOUR_PROOFS = [
 // ---------------------------------------------------------------------------
 const CLAIMS = [
   {
+    panel: 'value-security',
+    says: /Last 30 days\./,
+    file: 'go/internal/dashboard/value_security.go',
+    proofs: [
+      { re: /const valueWindow = "last 30 days"/, expect: 'every security read uses dateRange "last 30 days"' },
+    ],
+  },
+  {
     panel: 'value-platform',
     says: /Last 30 days\./,
     file: 'go/internal/dashboard/value_platform.go',
@@ -1129,11 +1137,6 @@ const CLAIMS = [
 // `phrase` must still appear verbatim in that panel's copy; see the test below.
 // ---------------------------------------------------------------------------
 const EXCLUDED = [
-  {
-    panel: 'value-security',
-    phrase: 'Last 30 days.',
-    why: 'The panel is a stub on 2026-11-20 while its fetcher is built separately; there is no dateRange yet to bind. The helper that builds it replaces this row with a CLAIMS row proving its cube dateRange "last 30 days".',
-  },
   {
     panel: 'security-axur-incidents',
     phrase: 'Ordered by exposed credentials',

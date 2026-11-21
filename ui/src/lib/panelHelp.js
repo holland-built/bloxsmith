@@ -392,7 +392,7 @@ export const PANEL_HELP = {
 
   // ---- Value ----
   'value-security': {
-    what: 'Lookups Infoblox blocked because they went to known bad domains, or to domains it caught as zero-day threats before other feeds listed them.',
+    what: 'Lookups Infoblox blocked under your security rules, and domains it caught as zero-day threats before other feeds listed them.',
     look: 'Also domains it rated suspicious that were later confirmed malicious. Last 30 days.',
   },
   'value-platform': {

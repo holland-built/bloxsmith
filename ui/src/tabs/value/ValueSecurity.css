@@ -1,0 +1,10 @@
+/* The Value page's security numbers: big figures in a row, one plain line
+   under each. Stacks on a phone. The number is the second child in the
+   markup (a dl lists the term first) and is moved up on screen. */
+.value-sec { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 28px; margin: 8px 0 4px; font-variant-numeric: tabular-nums }
+.value-sec > div { min-width: 0; display: flex; flex-direction: column }
+.value-sec dt { margin-top: 4px; font-size: 14px; line-height: 1.35 }
+.value-sec dd { margin: 0 }
+.value-sec .value-sec-num { order: -1; font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1 }
+.value-sec .value-sec-num.value-sec-none { font-size: 16px; font-weight: 400; line-height: 1.6 }
+.value-sec .value-sec-note { margin-top: 2px; font-size: 13px }
