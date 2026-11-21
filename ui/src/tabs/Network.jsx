@@ -605,27 +605,22 @@ function DhcpRequests({ panelId, requests }) {
         <Skeleton h={140} />
       ) : (
         <>
-          <table className="w-full mt-2 text-copy tabular-nums">
-            <thead>
-              <tr className="text-note text-muted">
-                <th className="text-left font-normal pb-1.5"><span className="sr-only">Measure</span></th>
-                {DHCP_REQUEST_WINDOWS.map((w) => <th key={w.key} className="text-right font-normal pb-1.5 pl-4">{w.label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {DHCP_REQUEST_ROWS.map((r) => (
-                <tr key={r.key} data-dhcp-request={r.key}>
-                  <th scope="row" className="text-left font-normal py-1.5"><Tip tip={r.tip}>{r.label}</Tip></th>
-                  {DHCP_REQUEST_WINDOWS.map((w) => {
-                    const t = dhcpTotal(requests, r.key, w.key)
-                    return (
-                      <td key={w.key} data-state={t.state} className={`text-right py-1.5 pl-4 ${t.state === 'ok' ? 'text-figure font-medium' : 'text-muted'}`}>{t.text}</td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {DHCP_REQUEST_WINDOWS.map((w) => (
+            <div key={w.key} data-dhcp-window={w.key}>
+              <div className="text-note text-muted pt-1">{w.label}</div>
+              <dl className="flex flex-wrap gap-x-6 gap-y-2 mt-1 mb-3 tabular-nums">
+                {DHCP_REQUEST_ROWS.map((r) => {
+                  const t = dhcpTotal(requests, r.key, w.key)
+                  return (
+                    <div key={r.key} data-dhcp-request={r.key} data-state={t.state}>
+                      <dt className="text-note text-muted"><Tip tip={r.tip}>{r.label}</Tip></dt>
+                      <dd className={t.state === 'ok' ? 'text-figure font-medium' : 'text-copy text-muted'}>{t.text}</dd>
+                    </div>
+                  )
+                })}
+              </dl>
+            </div>
+          ))}
           <p className="text-note text-muted mt-2">{HA_NOTE}</p>
         </>
       )}

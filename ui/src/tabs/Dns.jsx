@@ -383,7 +383,7 @@ function FailedLookups({ panelId }) {
   }
   const columns = [
     { key: 'name', label: 'Name', mono: true, grow: true },
-    { key: 'text', label: 'Failed', align: 'right' },
+    { key: 'text', label: 'Failed', align: 'right', mono: true },
   ]
   return (
     <Card

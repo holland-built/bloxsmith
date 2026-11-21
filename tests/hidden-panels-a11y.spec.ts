@@ -42,11 +42,11 @@ test('the reveal button names its own group, says it is collapsed, and hands foc
   await inventory(page, OWNS_NO_DNS);
   await page.goto('/#dns');
 
-  // Two runs hide on this tab (DNS Query Rate with DNS Answers, and DNS
+  // Two runs hide on this tab (DNS Query Rate with DNS Answers and Failed Lookups, and DNS
   // Services, sit either side of a panel that is NOT hidden), so the name has
   // to carry the group.
   await expect(page.getByTestId('hidden-panels')).toHaveCount(2);
-  await expect(page.getByRole('button', { name: 'Show anyway: 2 hidden DNS panels', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Show anyway: 3 hidden DNS panels', exact: true })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Show anyway: 1 hidden DNS panel', exact: true })).toHaveCount(1);
   const reveal = page.getByRole('button', { name: /^Show anyway: \d+ hidden DNS panels?$/ });
   await expect(reveal).toHaveCount(2);

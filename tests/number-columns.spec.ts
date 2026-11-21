@@ -42,7 +42,7 @@ const LICENSES = {
 const EXPECTED: Record<string, Array<[string, string]>> = {
   overview: [['license-inventory', 'Time Left'], ['license-inventory', 'Qty']],
   network: [['network-exhaustion', 'Used'], ['network-exhaustion', 'Free']],
-  dns: [['dns-zones', 'Records'], ['dns-dtc-lbdn', 'Precedence'], ['dns-dtc-lbdn', 'TTL']],
+  dns: [['dns-failed-lookups', 'Failed'], ['dns-zones', 'Records'], ['dns-dtc-lbdn', 'Precedence'], ['dns-dtc-lbdn', 'TTL']],
 };
 
 type Column = { panel: string; heading: string; cells: number; loose: string[] };
