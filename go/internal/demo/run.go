@@ -1,12 +1,15 @@
 package demo
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -125,32 +128,158 @@ func (s Store) List() []Run {
 
 func newChange(now time.Time) string { return "c-" + now.UTC().Format("20060102-150405") }
 
+const (
+	// lockStaleAfter is how long a lock can go unrefreshed before its owner
+	// counts as stopped. Lock age alone proves nothing: a build has no time limit.
+	lockStaleAfter = 10 * time.Minute
+	// guardStaleAfter clears a guard left by a crash. A guard is held for
+	// milliseconds, only while the lock file itself is being changed.
+	guardStaleAfter = time.Minute
+	guardWait       = 5 * time.Second
+)
+
+// lockHeartbeat is how often a held lock is refreshed. Tests shorten it.
+var lockHeartbeat = 30 * time.Second
+
 // Lock takes the demo lock shared by every app process using this state
-// folder, by creating a file exclusively. A lock left by a crashed process is
-// taken over after two hours, longer than any build runs. The caller must
-// call the returned release.
+// folder, by creating a file exclusively. The holder refreshes it until
+// release, and a lock not refreshed for ten minutes is taken over. The caller
+// must call the returned release.
 func (s Store) Lock(now func() time.Time) (func(), error) {
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return nil, err
 	}
 	p := filepath.Join(s.Dir, "build.lock")
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	token := hex.EncodeToString(b)
+	unguard, err := guardLock(p)
+	if err != nil {
+		return nil, err
+	}
+	defer unguard()
 	for i := 0; i < 2; i++ {
 		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
-			_, _ = f.WriteString(now().UTC().Format(time.RFC3339))
-			_ = f.Close()
-			return func() { _ = os.Remove(p) }, nil
+			_, werr := f.WriteString(token)
+			if cerr := f.Close(); werr == nil {
+				werr = cerr
+			}
+			if werr != nil {
+				_ = os.Remove(p)
+				return nil, werr
+			}
+			return holdLock(p, token), nil
 		}
 		if !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
-		st, serr := os.Stat(p)
-		if serr != nil || now().Sub(st.ModTime()) < 2*time.Hour {
-			return nil, ErrBusy
+		if err := takeOverStale(p, token, now); err != nil {
+			return nil, err
 		}
-		_ = os.Remove(p)
 	}
 	return nil, ErrBusy
+}
+
+// guardLock lets one process at a time change the lock file. Without it, a
+// third process could create a lock in the moment a takeover has moved a live
+// one aside. It is a plain file because releases include Windows.
+func guardLock(p string) (func(), error) {
+	g := p + ".guard"
+	deadline := time.Now().Add(guardWait)
+	for time.Now().Before(deadline) {
+		f, err := os.OpenFile(g, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = f.Close()
+			return func() { _ = os.Remove(g) }, nil
+		}
+		// Windows reports a file being deleted as permission denied.
+		if !errors.Is(err, os.ErrExist) && !errors.Is(err, os.ErrPermission) {
+			return nil, err
+		}
+		if st, serr := os.Stat(g); serr == nil && time.Since(st.ModTime()) > guardStaleAfter {
+			_ = os.Remove(g)
+			continue
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	return nil, ErrBusy
+}
+
+// takeOverStale claims a stale lock by renaming it, then checks the claimed
+// file really is stale. A lock refreshed in between goes back, overwriting
+// nothing, and the answer is ErrBusy. On nil the lock path is free.
+func takeOverStale(p, token string, now func() time.Time) error {
+	st, err := os.Stat(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || now().Sub(st.ModTime()) < lockStaleAfter {
+		return ErrBusy
+	}
+	claimed := p + ".takeover-" + token
+	if err := os.Rename(p, claimed); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return ErrBusy
+	}
+	st, err = os.Stat(claimed)
+	if err == nil && now().Sub(st.ModTime()) >= lockStaleAfter {
+		return os.Remove(claimed)
+	}
+	if lerr := os.Link(claimed, p); lerr != nil && !errors.Is(lerr, os.ErrExist) {
+		// No hard links on this disk. The guard means nothing can have
+		// created a new lock, so moving it back overwrites nothing.
+		_ = os.Rename(claimed, p)
+		return ErrBusy
+	}
+	_ = os.Remove(claimed)
+	return ErrBusy
+}
+
+// holdLock refreshes the lock until the returned release is called. A missing
+// file may be mid-takeover check and come back, so only another owner's token
+// ends the heartbeat. Release removes the lock only if it is still this one.
+func holdLock(p, token string) func() {
+	stop, done := make(chan struct{}), make(chan struct{})
+	every := lockHeartbeat
+	go func() {
+		defer close(done)
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				b, err := os.ReadFile(p)
+				if err != nil {
+					continue
+				}
+				if string(b) != token {
+					return
+				}
+				n := time.Now()
+				_ = os.Chtimes(p, n, n)
+			}
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(stop)
+			<-done
+			if unguard, err := guardLock(p); err == nil {
+				defer unguard()
+			}
+			if b, err := os.ReadFile(p); err == nil && string(b) == token {
+				_ = os.Remove(p)
+			}
+		})
+	}
 }
 
 // Recover marks runs left "building" or "removing" by a process that stopped
@@ -177,6 +306,11 @@ func (s Store) Recover(now func() time.Time) error {
 		}
 		r, err := s.Load(e.Name())
 		if err != nil {
+			// A crash right after Claim leaves an empty folder, and no VM can
+			// exist yet. os.Remove refuses a folder with anything in it.
+			if e.IsDir() && os.Remove(filepath.Join(s.Dir, "runs", e.Name())) == nil {
+				continue
+			}
 			errs = append(errs, fmt.Errorf("run record %s: %w", e.Name(), err))
 			continue
 		}

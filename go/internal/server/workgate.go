@@ -153,17 +153,13 @@ func (d *Deps) runRecordsBusy() string {
 	}
 	store := d.demoStore()
 	live, err := store.Live()
-	if err != nil {
-		return "a demo server record could not be read"
+	if err != nil || demoRunActive(live) {
+		// A crash leaves its lock behind, so startup recovery can miss the run.
+		// Both callers have already seen no work running in this process, and
+		// Recover changes nothing while the lock is still being refreshed.
+		_ = store.Recover(time.Now)
+		live, err = store.Live()
 	}
-	if !demoRunActive(live) {
-		return ""
-	}
-	// A crash leaves its lock behind, so startup recovery can miss the run.
-	// Both callers have already seen no work running in this process, and
-	// Recover changes nothing while a lock under two hours old exists.
-	_ = store.Recover(time.Now)
-	live, err = store.Live()
 	if err != nil {
 		return "a demo server record could not be read"
 	}

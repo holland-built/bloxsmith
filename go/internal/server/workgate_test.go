@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -274,17 +275,17 @@ func TestUnreadableDemoRunStaysBusyAfterRecovery(t *testing.T) {
 // crashedDemo leaves what a killed process leaves: a record and its lock.
 func crashedDemo(t *testing.T, d *Deps, status string) {
 	t.Helper()
-	if _, err := d.demoStore().Lock(time.Now); err != nil {
+	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.demoStore().Save(&demo.Run{Change: "c-20260101-000000", Status: status, VMID: 9001}); err != nil {
+	if err := os.WriteFile(filepath.Join(d.StateDir, "demo", "build.lock"), []byte("crashed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func ageDemoLock(t *testing.T, d *Deps) {
 	t.Helper()
-	old := time.Now().Add(-3 * time.Hour)
+	old := time.Now().Add(-11 * time.Minute)
 	if err := os.Chtimes(filepath.Join(d.StateDir, "demo", "build.lock"), old, old); err != nil {
 		t.Fatal(err)
 	}
@@ -297,10 +298,10 @@ func TestCrashThenRestartClearsOnceTheLockExpires(t *testing.T) {
 
 		restarted := &Deps{StateDir: state, Cfg: &config.Config{}}
 		if err := restarted.demoStore().Recover(time.Now); err == nil {
-			t.Fatalf("%s: startup recovery ignored a lock under two hours old", status)
+			t.Fatalf("%s: startup recovery ignored a recently refreshed lock", status)
 		}
 		if why := restarted.WorkRunning(); why == "" {
-			t.Fatalf("%s: not busy while the lock is under two hours old", status)
+			t.Fatalf("%s: not busy while the lock is recent", status)
 		}
 		if r, _ := restarted.demoStore().Load("c-20260101-000000"); r == nil || r.Status != status {
 			t.Fatalf("%s: record changed under a live lock: %+v", status, r)
@@ -337,5 +338,33 @@ func TestRetryLeavesAloneABuildThisProcessIsRunning(t *testing.T) {
 	}
 	if r, _ := d.demoStore().Load("c-20260101-000000"); r == nil || r.Status != "building" {
 		t.Fatalf("a running build was marked stopped: %+v", r)
+	}
+}
+
+func TestEmptyDemoRunFolderNoLongerBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why != "" {
+		t.Fatalf("an empty run folder blocked the update: %s", why)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the empty run folder was not removed: %v", err)
+	}
+}
+
+func TestNonEmptyUnreadableDemoRunStillBlocksAnUpdate(t *testing.T) {
+	d := gateDeps(t)
+	dir := filepath.Join(d.StateDir, "demo", "runs", "c-20260101-000000", "ip")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if why := d.WorkRunning(); why == "" {
+		t.Fatal("a non-empty run folder with no record stopped counting as busy")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("a non-empty run folder was changed: %v", err)
 	}
 }

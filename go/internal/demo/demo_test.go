@@ -338,18 +338,173 @@ func TestASecondProcessCannotBuildWhileTheLockIsHeld(t *testing.T) {
 		t.Fatalf("built while another process held the lock: %v", err)
 	}
 	release()
-	// A lock left by a crash is taken over once it is old.
-	if _, err := d.Store.Lock(d.Now); err != nil {
-		t.Fatal(err)
-	}
-	// Staleness is read from the file's real timestamp, so age the file and
-	// use the real clock rather than the test's fixed one.
-	old := time.Now().Add(-3 * time.Hour)
-	if err := os.Chtimes(filepath.Join(d.Store.Dir, "build.lock"), old, old); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Store.Lock(time.Now); err != nil {
+	// A lock left by a crash is taken over once it is old. Staleness is read
+	// from the file's real timestamp, so use the real clock.
+	leaveLock(t, d.Store, 11*time.Minute)
+	again, err := d.Store.Lock(time.Now)
+	if err != nil {
 		t.Fatalf("a stale lock was not taken over: %v", err)
+	}
+	again()
+}
+
+// leaveLock writes the lock a crashed process leaves, last refreshed age ago.
+func leaveLock(t *testing.T, s Store, age time.Duration) {
+	t.Helper()
+	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(s.Dir, "build.lock")
+	if err := os.WriteFile(p, []byte("crashed-owner"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-age)
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func fastHeartbeat(t *testing.T) {
+	t.Helper()
+	was := lockHeartbeat
+	lockHeartbeat = 5 * time.Millisecond
+	t.Cleanup(func() { lockHeartbeat = was })
+}
+
+func TestARefreshedLockOlderThanTwoHoursIsNotTakenOver(t *testing.T) {
+	fastHeartbeat(t)
+	s := Store{Dir: t.TempDir()}
+	const ch = "c-20260101-000001"
+	if err := s.Save(&Run{Change: ch, Status: "building", VMID: 9001}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	p := filepath.Join(s.Dir, "build.lock")
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		st, err := os.Stat(p)
+		if err == nil && time.Since(st.ModTime()) < time.Minute {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the held lock was never refreshed")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if _, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		t.Fatalf("a refreshed lock was taken over: %v", err)
+	}
+	if err := s.Recover(time.Now); !errors.Is(err, ErrBusy) {
+		t.Fatalf("recovery ran under a refreshed lock: %v", err)
+	}
+	if r, _ := s.Load(ch); r == nil || r.Status != "building" {
+		t.Fatalf("a live run was changed: %+v", r)
+	}
+}
+
+func TestALockNotRefreshedForTenMinutesIsTakenOver(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	leaveLock(t, s, 9*time.Minute)
+	if _, err := s.Lock(time.Now); !errors.Is(err, ErrBusy) {
+		t.Fatalf("a lock refreshed nine minutes ago was taken over: %v", err)
+	}
+	leaveLock(t, s, 11*time.Minute)
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatalf("a lock unrefreshed for eleven minutes was not taken over: %v", err)
+	}
+	release()
+}
+
+func TestReleaseLeavesALockNowOwnedBySomeoneElse(t *testing.T) {
+	fastHeartbeat(t)
+	s := Store{Dir: t.TempDir()}
+	release, err := s.Lock(time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(s.Dir, "build.lock")
+	if err := os.WriteFile(p, []byte("another-owner"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond) // the heartbeat sees the other token and stops
+	old := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if st, err := os.Stat(p); err != nil || !st.ModTime().Equal(old) {
+		t.Fatalf("the heartbeat touched another owner's lock: %v", err)
+	}
+	release()
+	if b, err := os.ReadFile(p); err != nil || string(b) != "another-owner" {
+		t.Fatalf("release changed another owner's lock: %q %v", b, err)
+	}
+}
+
+func TestConcurrentTakeoverHasExactlyOneWinner(t *testing.T) {
+	// A slow clock holds each process between "this lock is stale" and acting on it.
+	slow := func() time.Time { time.Sleep(time.Millisecond); return time.Now() }
+	for round := 0; round < 30; round++ {
+		s := Store{Dir: t.TempDir()}
+		leaveLock(t, s, time.Hour*3)
+		const n = 16
+		results := make(chan func(), n)
+		start := make(chan struct{})
+		for i := 0; i < n; i++ {
+			go func() {
+				<-start
+				release, err := s.Lock(slow)
+				if err != nil {
+					release = nil
+				}
+				results <- release
+			}()
+		}
+		close(start)
+		var winners []func()
+		for i := 0; i < n; i++ {
+			if r := <-results; r != nil {
+				winners = append(winners, r)
+			}
+		}
+		for _, r := range winners {
+			r()
+		}
+		if len(winners) != 1 {
+			t.Fatalf("round %d: %d processes took over one stale lock", round, len(winners))
+		}
+	}
+}
+
+func TestRecoverRemovesOnlyAnEmptyRunFolder(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	empty := s.runDir("c-20260101-000001")
+	full := filepath.Join(s.runDir("c-20260101-000002"), "ip")
+	for _, dir := range []string{empty, full} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Recover(time.Now); err == nil {
+		t.Fatal("the unreadable non-empty run was not reported")
+	}
+	if _, err := os.Stat(empty); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the empty folder was not removed: %v", err)
+	}
+	if _, err := os.Stat(full); err != nil {
+		t.Fatalf("a non-empty folder was removed: %v", err)
+	}
+	if _, err := s.Live(); err == nil {
+		t.Fatal("the non-empty unreadable run stopped counting")
 	}
 }
 
@@ -617,19 +772,13 @@ func TestRecoverChangesNothingWhileALiveLockExists(t *testing.T) {
 	}
 }
 
-func TestRecoverTakesOverALockOlderThanTwoHours(t *testing.T) {
+func TestRecoverTakesOverAnUnrefreshedLock(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	const ch = "c-20260101-000001"
 	if err := s.Save(&Run{Change: ch, Status: "building"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Lock(time.Now); err != nil {
-		t.Fatal(err)
-	}
-	old := time.Now().Add(-3 * time.Hour)
-	if err := os.Chtimes(filepath.Join(s.Dir, "build.lock"), old, old); err != nil {
-		t.Fatal(err)
-	}
+	leaveLock(t, s, 11*time.Minute)
 	if err := s.Recover(time.Now); err != nil {
 		t.Fatal(err)
 	}
