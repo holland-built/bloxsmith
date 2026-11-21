@@ -87,7 +87,7 @@ test.describe('Overview → service board (/api/data empty)', () => {
     await expect(tile('DHCP')).toContainText('0 active leases', { timeout: 20_000 });
     await expect(tile('IPAM')).toContainText('0 of 0 subnets ≥90%');
     await expect(tile('Hosts')).toContainText('0 of 0 not online');
-    await expect(row('Hosts')).toContainText('none open');
+    await expect(row('Hosts')).toContainText('None open');
     for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
   });

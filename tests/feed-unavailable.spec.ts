@@ -34,7 +34,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
   // The count itself is on the Hosts tile above the board.
   const hostsTile = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^Hosts / });
 
-  test('hosts feed error says unavailable and not checked, never "none open" or a zero', async ({ page }) => {
+  test('hosts feed error says unavailable and not checked, never "None open" or a zero', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'error' } })),
     );
@@ -42,19 +42,19 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     const row = hostsRow(page);
     await expect(row).toContainText('not checked: feed unavailable', { timeout: 20_000 });
     await expect(hostsTile(page)).toContainText('unavailable');
-    await expect(row).not.toContainText('none open');
+    await expect(row).not.toContainText('None open');
     await expect(row).not.toContainText('0 of 0');
     await expect(hostsTile(page)).not.toContainText('0 of 0');
   });
 
-  test('hosts feed empty is a real zero and "none open", not unavailable', async ({ page }) => {
+  test('hosts feed empty is a real zero and "None open", not unavailable', async ({ page }) => {
     await page.route('**/api/data*', (route) =>
       fulfillJson(route, dataPayload({ hosts: [], meta: { hosts: 'empty' } })),
     );
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(hostsTile(page)).toContainText('0 of 0 not online', { timeout: 20_000 });
-    await expect(row).toContainText('none');
+    await expect(row).toContainText('None open');
     await expect(row).not.toContainText('unavailable');
   });
 

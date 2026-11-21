@@ -25,7 +25,7 @@ test('a row that counts something bad names it as an issue, with its severity an
   await expect(measure(page, 'IPAM')).toContainText('0 more at 70–89% · all subnets');
 });
 
-test('a healthy network is a real 0 and "none open", not a missing number', async ({ page }) => {
+test('a healthy network is a real 0 and "None open", not a missing number', async ({ page }) => {
   await installBaselineWorld(page);
   const healthy = structuredClone(dataPayload()) as { hosts: Array<{ status: string }>; _totals: { subnetsCrit: number; subnetsWarn: number } };
   for (const h of healthy.hosts) h.status = 'online';
@@ -34,7 +34,7 @@ test('a healthy network is a real 0 and "none open", not a missing number', asyn
   await page.route('**/api/data', (route) => fulfillJson(route, healthy));
   await page.goto('/#overview');
   await expect(measure(page, 'Hosts')).toContainText('0 of 3 not online', { timeout: 20_000 });
-  await expect(row(page, 'Hosts')).toContainText('none open');
+  await expect(row(page, 'Hosts')).toContainText('None open');
   await expect(measure(page, 'IPAM')).toContainText('0 of 3 subnets ≥90%');
   await expect(measure(page, 'IPAM')).toContainText('1 more at 70–89%');
 });
@@ -49,14 +49,14 @@ test('a zero counted over part of the hosts says so, and a missing whole-network
   await expect(measure(page, 'Hosts')).toContainText('0 of 3 not online', { timeout: 20_000 });
   await expect(measure(page, 'Hosts')).toContainText('3 loaded of 40');
   await expect(row(page, 'Hosts')).toContainText('none among the 3 loaded');
-  await expect(row(page, 'Hosts')).not.toContainText('none open');
+  await expect(row(page, 'Hosts')).not.toContainText('None open');
   await expect(measure(page, 'IPAM')).toContainText('unavailable');
 });
 
 test('each service row shows its state from the health feed, and a partial service list says so', async ({ page }) => {
   await installBaselineWorld(page);
   await page.goto('/#overview');
-  await expect(measure(page, 'DHCP').locator('.ov-verdict')).toHaveText('Look', { timeout: 20_000 });
+  await expect(measure(page, 'DHCP').locator('.ov-verdict')).toHaveText('Review', { timeout: 20_000 });
   await expect(measure(page, 'DHCP')).toContainText('1 stopped · 1/2 up');
   await expect(page.locator('[data-coverage]')).toContainText('services: partial list (500-row limit)');
   // An incident no service claims is still shown, and leads to Incidents.

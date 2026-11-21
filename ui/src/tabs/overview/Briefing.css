@@ -1,0 +1,84 @@
+/* The morning briefing at the top of Overview. It borrows the colour tokens of
+   .ov-look in Overview.css, so ok, warn and crit stay the app's own. */
+.ov-look.br { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 48px; align-items: start; min-width: 0; margin-bottom: 32px }
+.br *, .br *::before { box-sizing: border-box }
+.br h1, .br h2, .br p, .br ol, .br ul { margin: 0; padding: 0 }
+.br ol, .br ul { list-style: none }
+.br .ov-tip { left: 0; transform: none; max-width: min(280px, calc(100vw - 64px)) }
+
+.br-mark { flex: none; color: var(--ov-muted) }
+.br-mark.crit { color: var(--ov-crit) } .br-mark.warn { color: var(--ov-warn) } .br-mark.ok { color: var(--ov-ok) }
+.br-new { font-style: normal; font-size: 11.5px; font-weight: 600; margin-inline-start: 8px; padding: 1px 7px; border-radius: 6px; background: color-mix(in srgb, var(--ov-accent) 16%, transparent); color: var(--ov-accent) }
+.br .br-empty { color: var(--ov-muted); padding-block: 18px; font-size: 14px }
+.br-down { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; font-size: 14px; color: var(--color-crit); background: color-mix(in srgb, var(--color-crit) 10%, transparent) }
+
+.br a.br-btn, .br a.br-primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
+.br a.br-btn { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 12%, transparent) }
+.br a.br-primary { min-height: 44px; max-width: 100%; padding: 0 20px; border-radius: 10px; font-size: 15px; color: var(--ov-card); background: var(--ov-accent) }
+.br a.br-btn:active, .br a.br-primary:active { scale: .96 }
+@media (hover: hover) {
+  .br a.br-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) }
+  .br a.br-primary:hover { background: color-mix(in srgb, var(--ov-accent) 86%, var(--ov-ink)) }
+}
+
+.br-rail { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0 }
+.br-date { font-size: 14px; color: var(--ov-muted) }
+.br-rail h1 { font-size: 34px; font-weight: 650; letter-spacing: -.025em; line-height: 1.1 }
+.br .br-verdict { margin-block-start: 14px }
+.br-verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.05 }
+.br-verdict .br-mark { width: 28px; height: 28px }
+.br-verdict.crit { color: var(--ov-crit) } .br-verdict.warn { color: var(--ov-warn) } .br-verdict.ok { color: var(--ov-ok) }
+.br .br-line { font-size: 16px; color: var(--ov-ink2); margin-block-end: 10px }
+.br-updated { margin-block-start: 8px }
+.br-read { display: flex; flex-direction: column; gap: 34px; max-width: 860px; min-width: 0 }
+.br-read h2 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; padding-block-end: 10px; border-bottom: 2px solid var(--ov-line2) }
+.br-read h2 span { font-size: 15px; font-weight: 400; color: var(--ov-muted); margin-inline-start: 6px }
+.br-fact { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 4px 16px; padding-block: 11px; border-bottom: 1px solid var(--ov-line); font-size: 15px; line-height: 1.4 }
+.br-label { color: var(--ov-muted); justify-self: start }
+.br-fact > span:last-child { display: inline-flex; align-items: center; gap: 6px; min-width: 0 }
+.br-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--ov-line) }
+.br-title { font-size: 15px; line-height: 1.35; min-width: 0; overflow-wrap: anywhere }
+.br-list .crit .br-title { font-weight: 600 }
+@media (pointer: coarse) { .br a.br-btn { min-height: 44px } }
+@media (max-width: 960px) {
+  .ov-look.br { grid-template-columns: minmax(0, 1fr); gap: 28px }
+  .br-rail { position: static }
+}
+@media (max-width: 560px) {
+  .br-fact { grid-template-columns: minmax(0, 1fr) }
+  .br-list li { grid-template-columns: 16px minmax(0, 1fr) }
+  .br-list .br-btn { grid-column: 2; justify-self: start }
+  .br-verdict { font-size: 34px }
+}
+
+/* The tiles and Services board below the briefing, kept readable on a phone:
+   the longer status words wrap under the name, and each board row stacks
+   instead of scrolling sideways. */
+.ov-look .ov-kpi-top { flex-wrap: wrap }
+.ov-look .ov-verdict { white-space: nowrap }
+@media (max-width: 640px) {
+  .ov-look .ov-kpi:last-child:nth-child(odd) { grid-column: 1 / -1 }
+  .ov-look .ov-board-box { overflow-x: visible }
+  .ov-look .ov-board { display: block; min-width: 0 }
+  .ov-look .ov-board tbody, .ov-look .ov-board tbody tr { display: block }
+  .ov-look .ov-board tbody tr { padding: 12px 16px; border-top: 1px solid var(--ov-line) }
+  .ov-look .ov-board tbody th, .ov-look .ov-board tbody td { display: block; width: auto; padding: 0; border: 0 }
+  .ov-look .ov-board tbody td { margin-top: 8px }
+  .ov-look .ov-issue { flex-wrap: wrap }
+  .ov-look .ov-flag { border-radius: 10px; overflow-wrap: anywhere }
+  .ov-look .ov-strip { min-width: 0 }
+}
+
+/* One entrance when the page opens. Polling never replays it. */
+@media (prefers-reduced-motion: no-preference) {
+  .br-rail, .br-read > section { animation: br-in 300ms ease-out both }
+  .br-read > section:nth-child(1) { animation-delay: 100ms }
+  .br-read > section:nth-child(2) { animation-delay: 200ms }
+  .br-read > section:nth-child(3) { animation-delay: 300ms }
+}
+@media (prefers-reduced-motion: reduce) {
+  .br-rail, .br-read > section { animation: br-fade 200ms linear both }
+  .br a.br-btn:active, .br a.br-primary:active { scale: 1 }
+}
+@keyframes br-in { from { opacity: 0; filter: blur(4px); transform: translateY(12px) } }
+@keyframes br-fade { from { opacity: 0 } }

@@ -739,6 +739,7 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
   ],
   overview: [
+    { method: 'GET', path: '/api/csp-audit', body: CSP_AUDIT, required: true },
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
     { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/license-alerts', body: LICENSE_ALERTS, required: true },
