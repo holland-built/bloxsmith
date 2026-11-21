@@ -200,6 +200,53 @@ test('a failed install does not hide the result of the next check', async ({ pag
   await expect(sheet.getByRole('status')).not.toContainText('disk full');
 });
 
+const WAIT_TEXT =
+  'The update will wait because work is running. Nothing was installed or restarted. Try again when the work has finished.';
+
+test('Update now waits while work is running and offers to try again', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await stubCheck(page, () => newer());
+  let presses = 0;
+  await page.route('**/api/update/apply', (route) => {
+    presses += 1;
+    return route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, busy: true, error: WAIT_TEXT }),
+    });
+  });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', CHECK).click();
+  await sheet.getByRole('button', { name: 'Install v3.56.0 and restart' }).click();
+
+  await expect(sheet.getByRole('status')).toHaveText(WAIT_TEXT);
+  await expect(sheet.getByRole('status')).toHaveClass(/text-warn/);
+  const again = sheet.getByRole('button', { name: 'Try the update again', exact: true });
+  await again.click();
+  await expect.poll(() => presses).toBe(2);
+  await expect(sheet.getByRole('status')).toHaveText(WAIT_TEXT);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('header').getByRole('button', { name: 'Update waiting. Try again' })).toHaveAttribute(
+    'title',
+    WAIT_TEXT,
+  );
+});
+
+test('work that starts during the download also makes the update wait', async ({ page }) => {
+  await stubCheck(page, () => newer());
+  await page.route('**/api/update/apply', (route) => fulfillJson(route, { ok: true, phase: 'starting' }));
+  await page.route('**/api/update/status', (route) =>
+    fulfillJson(route, { phase: 'waiting', pct: 0, running: false, error: WAIT_TEXT }),
+  );
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', CHECK).click();
+  await sheet.getByRole('button', { name: 'Install v3.56.0 and restart' }).click();
+
+  await expect(sheet.getByRole('status')).toHaveText(WAIT_TEXT);
+  await expect(sheet.getByRole('button', { name: 'Try the update again', exact: true })).toBeVisible();
+});
+
 test('a check that could not reach the update service says so, and claims nothing', async ({ page }) => {
   await stubCheck(page, () =>
     upToDate({ error: 'dial tcp: lookup api.github.com: no such host', checkedAt: isoAgo(0) }),
