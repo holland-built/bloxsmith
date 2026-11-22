@@ -16,7 +16,7 @@ import (
 
 // RunAITool is _run_tool (server.py:3940): execute one AI tool call and return
 // its JSON (or a "No X data." sentinel) as a string, exactly as the LLM loop
-// expects. Only search_entity still goes through s.Mcp (network_entity_search
+// expects. Only search_entity still goes through s.Mcp (entity_search
 // returns its result directly from the tool response and never touches the
 // broken parquet store). Every other data tool (get_subnets, get_hosts,
 // get_dns, get_dhcp_leases, get_threat_feeds, get_audit_logs,
@@ -47,7 +47,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return s.iqInsights(args)
 	}
 
-	// search_entity is the only tool still on the MCP path (network_entity_search
+	// search_entity is the only tool still on the MCP path (entity_search
 	// returns its hits directly, bypassing the broken parquet store), so it is
 	// the only one gated on a working MCP session. An MCP init failure must not
 	// block the REST-backed tools below.

@@ -2,7 +2,7 @@
 // streamable-HTTP MCP endpoint (server.py:3059 streamablehttp_client +
 // ClientSession). The plan's risk R1 sanctions this over the Go MCP SDK: the
 // app calls only `initialize` plus four `tools/call` tools
-// (make_get_request, query_stored_data, query_cube, network_entity_search), so
+// (make_get_request, query_stored_data, query_cube, entity_search), so
 // a bounded hand-rolled client over one POST-per-call transport is the safer,
 // well-understood path.
 //
@@ -1262,8 +1262,8 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 	return rows, nil
 }
 
-// Search is _mcp_search (server.py:3184): network entity search, 256-char cap
-// on the user filter. Callers that can show the reason use SearchErr.
+// Search is _mcp_search (server.py:3184): entity and threat search, 256-char
+// cap on the user filter. Callers that can show the reason use SearchErr.
 func (c *Client) Search(ctx context.Context, query string) []any {
 	hits, _ := c.SearchErr(ctx, query)
 	return hits
@@ -1275,7 +1275,11 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 	if r := []rune(query); len(r) > 256 {
 		query = string(r[:256])
 	}
-	text, err := c.CallTool(ctx, "infoblox-portal_network_entity_search", map[string]any{"query": query})
+	text, err := c.CallTool(ctx, "infoblox-portal_entity_search", map[string]any{
+		"query": query,
+		// Named, because with no modes Infoblox can add rows that are not entities.
+		"modes": []string{"infoblox_entities", "threat_intelligence"},
+	})
 	if err != nil {
 		log.Printf("mcp: Search: %v", err)
 		return nil, err
@@ -1286,12 +1290,12 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 		return nil, errors.New("response is not JSON")
 	}
 	if lst, ok := data.([]any); ok {
-		return lst, nil
+		return compactSearchHits(query, lst), nil
 	}
 	if m, ok := data.(map[string]any); ok {
 		for _, key := range []string{"data", "results", "items"} {
 			if v, ok := m[key].([]any); ok {
-				return v, nil
+				return compactSearchHits(query, v), nil
 			}
 		}
 	}
@@ -1302,4 +1306,70 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 	// the other two, with no part of the reply in it.
 	log.Printf("mcp: Search: response shape not recognised")
 	return nil, errors.New("response shape not recognised")
+}
+
+// searchSummaryMax caps a row's summary. One live threat row held 1.3 MB.
+const searchSummaryMax = 300
+
+// compactSearchHits gives every row the same five columns, because the Threat
+// lookup table takes its columns from the first row and the AI is sent these
+// rows. The result is never nil, so an empty search stays a real "no matches".
+// Threat intelligence's summary row goes first so the AI's row cap keeps it.
+func compactSearchHits(query string, hits []any) []any {
+	out := make([]any, 0, len(hits))
+	for _, hit := range hits {
+		row := compactSearchHit(query, hit)
+		if row["type"] == "summary" {
+			out = append([]any{row}, out...)
+		} else {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func compactSearchHit(query string, hit any) map[string]any {
+	row := map[string]any{"name": nil, "score": nil, "source": nil, "summary": nil, "type": nil}
+	m, ok := hit.(map[string]any)
+	if !ok {
+		row["summary"] = searchSummary(hit)
+		return row
+	}
+	switch {
+	case m["summary"] == true:
+		row["name"], row["type"], row["source"] = query, "summary", "threat_intelligence"
+		row["summary"] = fmt.Sprintf("%v sources checked, %v had findings. No findings: %s",
+			m["sources_checked"], m["sources_with_findings"], searchSummary(m["no_findings"]))
+	case m["mode"] == "threat_intelligence":
+		row["name"], row["type"], row["source"] = m["indicator"], m["indicator_type"], m["source"]
+		row["summary"] = searchSummary(m["data"])
+	case m["mode"] == "infoblox_entities":
+		row["name"], row["type"], row["source"] = m["name"], m["resource"], m["application"]
+		row["score"], row["summary"] = m["score"], m["id"]
+	default:
+		// A row kind Infoblox adds later is kept, without guessing at its fields.
+		rest := make(map[string]any, len(m))
+		for k, v := range m {
+			if k != "object_information" {
+				rest[k] = v
+			}
+		}
+		row["name"], row["summary"] = m["name"], searchSummary(rest)
+	}
+	return row
+}
+
+// searchSummary is v as one line of JSON, cut to searchSummaryMax characters.
+func searchSummary(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // URLs in threat data stay readable.
+	if err := enc.Encode(v); err != nil {
+		return ""
+	}
+	s := strings.TrimSpace(buf.String())
+	if r := []rune(s); len(r) > searchSummaryMax {
+		return string(r[:searchSummaryMax]) + "…"
+	}
+	return s
 }
