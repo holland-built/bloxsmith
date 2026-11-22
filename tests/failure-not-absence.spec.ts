@@ -143,10 +143,10 @@ test.describe('Incidents → Triage panel (signals_degraded)', () => {
 
 // ---------- 5. AI → Threat lookup (ThreatLookup availability) ----------
 
-test.describe('AI → Threat lookup panel (network_entity_search)', () => {
+test.describe('AI → Threat lookup panel (entity_search)', () => {
   const DEAD = {
     entities: [], query: 'evil.example.com', availability: 'error',
-    reason: 'Entity search (network_entity_search) unavailable (upstream error).',
+    reason: 'Entity search (entity_search) unavailable (upstream error).',
   };
   const EMPTY_OK = { entities: [], query: 'benign.example.com', availability: 'ok' };
 

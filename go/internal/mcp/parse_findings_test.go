@@ -13,8 +13,9 @@ import (
 // textToolServer answers initialize, then answers every tools/call with text, and
 // records the arguments of each call.
 type textToolServer struct {
-	mu   sync.Mutex
-	args []map[string]any
+	mu    sync.Mutex
+	args  []map[string]any
+	names []string
 }
 
 func (s *textToolServer) start(t *testing.T, text string) *httptest.Server {
@@ -24,6 +25,7 @@ func (s *textToolServer) start(t *testing.T, text string) *httptest.Server {
 		var req struct {
 			Method string `json:"method"`
 			Params struct {
+				Name      string         `json:"name"`
 				Arguments map[string]any `json:"arguments"`
 			} `json:"params"`
 		}
@@ -36,6 +38,7 @@ func (s *textToolServer) start(t *testing.T, text string) *httptest.Server {
 		case "tools/call":
 			s.mu.Lock()
 			s.args = append(s.args, req.Params.Arguments)
+			s.names = append(s.names, req.Params.Name)
 			s.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": requestID(body),
 				"result": map[string]any{"content": []map[string]any{{"text": text}}}})

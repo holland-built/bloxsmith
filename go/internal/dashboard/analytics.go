@@ -654,7 +654,7 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 
 // --- Threat Lookup (server.py threat_lookup 4551 / _threat_lookup_async) -----
 
-// ThreatLookup is threat_lookup: network_entity_search over one query string.
+// ThreatLookup is threat_lookup: entity_search over one query string.
 //
 // s.Mcp.Search returns nil on a failed search (no MCP client, a failed
 // Initialize, a transport error, a non-2xx, or an unparseable/unexpected
@@ -678,6 +678,6 @@ func (s *Service) ThreatLookup(ctx context.Context, query string) map[string]any
 		"entities":     []any{},
 		"query":        query,
 		"availability": "error",
-		"reason":       failReason(err, "Entity search (network_entity_search) unavailable (upstream error)."),
+		"reason":       failReason(err, "Entity search (entity_search) unavailable (upstream error)."),
 	}
 }

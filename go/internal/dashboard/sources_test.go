@@ -233,7 +233,7 @@ func TestSourceRows_AnomalyEvents_GenuineEmptyIsNotAnError(t *testing.T) {
 }
 
 // TestSourceRows_EntitySearch_FetcherUnavailableReportsError covers the
-// "entity_search" source (backed by ThreatLookup/network_entity_search over
+// "entity_search" source (backed by ThreatLookup/entity_search over
 // MCP).
 func TestSourceRows_EntitySearch_FetcherUnavailableReportsError(t *testing.T) {
 	f := &fakeMCP{searchRawText: `{"unexpected":"shape"}`} // decodes fine but matches no known Search shape -> nil (failure)

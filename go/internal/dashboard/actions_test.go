@@ -147,7 +147,7 @@ type fakeMCP struct {
 	getBody       map[string]any
 	updateBody    map[string]any
 	updateRawText string // when set, overrides updateBody with this literal (possibly-invalid) text
-	searchRawText string // raw text served for infoblox-portal_network_entity_search
+	searchRawText string // raw text served for infoblox-portal_entity_search
 }
 
 func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
@@ -208,7 +208,7 @@ func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
 				return
 			}
 			text, _ = json.Marshal(f.listPages[offset])
-		case "infoblox-portal_network_entity_search":
+		case "infoblox-portal_entity_search":
 			text = []byte(f.searchRawText)
 		default:
 			t.Fatalf("unexpected tool %q", req.Params.Name)

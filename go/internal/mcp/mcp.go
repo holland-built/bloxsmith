@@ -2,7 +2,7 @@
 // streamable-HTTP MCP endpoint (server.py:3059 streamablehttp_client +
 // ClientSession). The plan's risk R1 sanctions this over the Go MCP SDK: the
 // app calls only `initialize` plus four `tools/call` tools
-// (make_get_request, query_stored_data, query_cube, network_entity_search), so
+// (make_get_request, query_stored_data, query_cube, entity_search), so
 // a bounded hand-rolled client over one POST-per-call transport is the safer,
 // well-understood path.
 //
@@ -14,6 +14,7 @@ package mcp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,8 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1262,8 +1265,8 @@ func (c *Client) queryCubeMCP(ctx context.Context, cube string, measures []strin
 	return rows, nil
 }
 
-// Search is _mcp_search (server.py:3184): network entity search, 256-char cap
-// on the user filter. Callers that can show the reason use SearchErr.
+// Search is _mcp_search (server.py:3184): entity and threat search, 256-char
+// cap on the user filter. Callers that can show the reason use SearchErr.
 func (c *Client) Search(ctx context.Context, query string) []any {
 	hits, _ := c.SearchErr(ctx, query)
 	return hits
@@ -1275,7 +1278,11 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 	if r := []rune(query); len(r) > 256 {
 		query = string(r[:256])
 	}
-	text, err := c.CallTool(ctx, "infoblox-portal_network_entity_search", map[string]any{"query": query})
+	text, err := c.CallTool(ctx, "infoblox-portal_entity_search", map[string]any{
+		"query": query,
+		// Named, because with no modes Infoblox can add rows that are not entities.
+		"modes": []string{"infoblox_entities", "threat_intelligence"},
+	})
 	if err != nil {
 		log.Printf("mcp: Search: %v", err)
 		return nil, err
@@ -1286,12 +1293,12 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 		return nil, errors.New("response is not JSON")
 	}
 	if lst, ok := data.([]any); ok {
-		return lst, nil
+		return compactSearchHits(query, lst), nil
 	}
 	if m, ok := data.(map[string]any); ok {
 		for _, key := range []string{"data", "results", "items"} {
 			if v, ok := m[key].([]any); ok {
-				return v, nil
+				return compactSearchHits(query, v), nil
 			}
 		}
 	}
@@ -1302,4 +1309,160 @@ func (c *Client) SearchErr(ctx context.Context, query string) ([]any, error) {
 	// the other two, with no part of the reply in it.
 	log.Printf("mcp: Search: response shape not recognised")
 	return nil, errors.New("response shape not recognised")
+}
+
+// searchSummaryMax caps a row's summary. One live threat row held 1.3 MB.
+const searchSummaryMax = 300
+
+// compactSearchHits gives every row the same five columns, because the Threat
+// lookup table takes its columns from the first row and the AI is sent these
+// rows. The result is never nil, so an empty search stays a real "no matches".
+// Threat intelligence's summary row goes first so the AI's row cap keeps it.
+func compactSearchHits(query string, hits []any) []any {
+	out := make([]any, 0, len(hits))
+	for _, hit := range hits {
+		row := compactSearchHit(query, hit)
+		if row["type"] == "summary" {
+			out = append([]any{row}, out...)
+		} else {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func compactSearchHit(query string, hit any) map[string]any {
+	row := map[string]any{"name": nil, "score": nil, "source": nil, "summary": nil, "type": nil}
+	m, ok := hit.(map[string]any)
+	if !ok {
+		row["summary"] = searchSummary(hit)
+		return row
+	}
+	switch {
+	case m["summary"] == true:
+		row["name"], row["type"], row["source"] = query, "summary", "threat_intelligence"
+		row["summary"] = fmt.Sprintf("%v sources checked, %v had findings. No findings: %s",
+			m["sources_checked"], m["sources_with_findings"], searchSummary(m["no_findings"]))
+	case m["mode"] == "threat_intelligence":
+		row["name"], row["type"], row["source"] = m["indicator"], m["indicator_type"], m["source"]
+		row["summary"] = threatSummary(m["data"])
+	case m["mode"] == "infoblox_entities":
+		row["name"], row["type"], row["source"] = m["name"], m["resource"], m["application"]
+		row["score"], row["summary"] = m["score"], m["id"]
+	default:
+		// A row kind Infoblox adds later is kept, without guessing at its fields.
+		rest := make(map[string]any, len(m))
+		for k, v := range m {
+			if k != "object_information" {
+				rest[k] = v
+			}
+		}
+		row["name"], row["summary"] = m["name"], searchSummary(rest)
+	}
+	return row
+}
+
+// searchSummary is v as one line of JSON, cut to searchSummaryMax characters.
+func searchSummary(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // URLs in threat data stay readable.
+	if err := enc.Encode(v); err != nil {
+		return ""
+	}
+	return cutSearchSummary(strings.TrimSpace(buf.String()))
+}
+
+func cutSearchSummary(s string) string {
+	if r := []rune(s); len(r) > searchSummaryMax {
+		return string(r[:searchSummaryMax]) + "…"
+	}
+	return s
+}
+
+// threatFindingFields are the fields in live threat data (seen 2026-11-22) that
+// say how bad a finding is, most important first, because the cap cuts from
+// the end.
+var threatFindingFields = []string{
+	"verdict", "alert_severity", "threat_level", "threat_score_rating",
+	"risk_score_rating", "confidence_score_rating", "confidence", "class",
+	"property", "suggested_threat_label", "malicious", "score_label",
+	"ns_reputation_label", "ns_reputation_confidence", "whitelisted", "purpose",
+}
+
+// threatSummary puts the finding fields ahead of the raw data, so a long value
+// earlier in the data cannot push them past the cap.
+func threatSummary(data any) string {
+	found := map[string][]string{}
+	collectThreatFindings("", data, found)
+	var parts []string
+	for _, field := range threatFindingFields {
+		values := found[field]
+		if len(values) == 0 {
+			continue
+		}
+		// Worst first, so the limit below can never drop a "malicious".
+		slices.SortStableFunc(values, func(a, b string) int {
+			return cmp.Compare(threatValueRank(a), threatValueRank(b))
+		})
+		more := ""
+		if len(values) > 3 {
+			more = fmt.Sprintf(" +%d more", len(values)-3)
+			values = values[:3]
+		}
+		parts = append(parts, field+"="+strings.Join(values, ", ")+more)
+	}
+	if len(parts) == 0 {
+		return searchSummary(data)
+	}
+	return cutSearchSummary(strings.Join(parts, "; ") + " | " + searchSummary(data))
+}
+
+// threatValueRank orders a field's values, lowest first: severity words from
+// worst to mildest, then numbers from highest to lowest, then anything else.
+func threatValueRank(value string) float64 {
+	lower := strings.ToLower(value)
+	for i, word := range []string{"malicious", "critical", "high", "suspicious", "moderate", "medium"} {
+		if strings.Contains(lower, word) {
+			return float64(i) - 1e12
+		}
+	}
+	if n, err := strconv.ParseFloat(value, 64); err == nil {
+		return -n
+	}
+	return 0
+}
+
+// collectThreatFindings gathers each finding field's distinct values. Keys are
+// walked in sorted order so the same data always gives the same summary.
+func collectThreatFindings(key string, v any, found map[string][]string) {
+	switch x := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			// total_votes.malicious is a count of user votes, not a detection.
+			if k != "total_votes" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			collectThreatFindings(k, x[k], found)
+		}
+	case []any:
+		for _, item := range x {
+			collectThreatFindings(key, item, found)
+		}
+	case string, bool, float64:
+		if !slices.Contains(threatFindingFields, key) {
+			return
+		}
+		value := strings.Trim(searchSummary(x), `"`)
+		if r := []rune(value); len(r) > 40 {
+			value = string(r[:40]) + "…"
+		}
+		if value != "" && !slices.Contains(found[key], value) {
+			found[key] = append(found[key], value)
+		}
+	}
 }
