@@ -128,3 +128,15 @@ test('exposures: an ok answer with no rows is None reported, a failed one Unknow
   assert.equal(tile(ok('nope')).state, 'failed')
   assert.equal(tile(ok({ availability: 'ok', data: { rows: [{}, {}] } })).value, 2)
 })
+
+test('the attacks tile names the real number counted on a capped read', () => {
+  const t = byKey({ hub: ok({ availability: 'ok', truncated: true, complete: false, returned: 50, counted: 5000, counts: { critical: 1, high: 2 }, events: [] }), lookalikes: LOOK, exposures: EXP, axur: AXUR })
+  assert.equal(t.attacks.right, 'latest 5,000')
+  assert.match(t.attacks.tip, /Covers only the newest 5,000 events/)
+})
+
+test('the attacks tile carries no caveat for a complete hour', () => {
+  const t = byKey({ hub: ok({ availability: 'ok', truncated: false, complete: true, returned: 50, counted: 354, total: 354, counts: { critical: 4, high: 17 }, events: [] }), lookalikes: LOOK, exposures: EXP, axur: AXUR })
+  assert.equal(t.attacks.value, 21)
+  assert.equal(t.attacks.right, null)
+})

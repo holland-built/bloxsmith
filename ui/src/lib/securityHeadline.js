@@ -9,7 +9,7 @@
 // `tone` is set only when the number is a problem worth a look, so healthy
 // tiles stay pale and the eye lands on the bad one.
 
-import { isSample, sampleScopeNote } from './sampleCount.js'
+import { countedOf, isSample, sampleScopeNote } from './sampleCount.js'
 
 const n = (v) => (typeof v === 'number' ? v.toLocaleString() : '—')
 const fin = Number.isFinite
@@ -39,7 +39,7 @@ function attacks(hub) {
     state,
     // On a capped page the count covers only the latest events, so the tile
     // says so on screen: a 0 here is not "no attacks today".
-    right: sample ? `latest ${n(d.returned ?? d.events?.length)}` : null,
+    right: sample ? `latest ${n(countedOf(d))}` : null,
     tone: value > 0 ? 'crit' : null,
     tip: [
       state === 'ok' ? `${n(d.counts.critical)} critical, ${n(d.counts.high)} high` : null,
