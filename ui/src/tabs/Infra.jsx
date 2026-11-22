@@ -470,20 +470,20 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
         ) : 'Host Inventory'
       }
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
           <span className="text-note text-muted">{countLabel}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search name or IP"
             placeholder="Search name, IP…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className={`${FIELD_CLS} w-[170px]`}
+            className={`${FIELD_CLS} w-[170px] max-w-full`}
           />
           <select
             aria-label="Filter by type"
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className={FIELD_CLS}
+            className={`${FIELD_CLS} max-w-full`}
           >
             <option value="">All types</option>
             {types.map((t) => (

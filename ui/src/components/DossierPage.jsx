@@ -514,9 +514,11 @@ const STATE_TONE = {
 // `hidden min-[561px]:grid`, and shipping `grid` and `hidden` on the same
 // element leaves which one wins to the order Tailwind happens to emit its
 // display utilities in — a coin flip, not a layout.
+// The seven lanes need 1118px. The fold reads the ledger's own width, because
+// the side menu takes a different share of the window at each screen size.
 const LANE_COLS =
   'grid-cols-[30px_1fr] ' +
-  'min-[561px]:grid-cols-[30px_178px_98px_minmax(226px,1.15fr)_minmax(190px,1fr)_minmax(170px,0.9fr)_minmax(226px,1.15fr)]'
+  '@ledger:grid-cols-[30px_178px_98px_minmax(226px,1.15fr)_minmax(190px,1fr)_minmax(170px,0.9fr)_minmax(226px,1.15fr)]'
 
 const LANES = 'grid ' + LANE_COLS
 
@@ -527,8 +529,8 @@ const LANES = 'grid ' + LANE_COLS
 // (`div.h-6`, say) couples the guard to how the ledger happens to look this
 // week, and selecting them by their words couples it to the copy.
 const CELL =
-  'ledger-cell col-start-2 min-[561px]:col-start-auto px-2 py-2 border-b border-line min-w-0 ' +
-  'min-[561px]:py-0 min-[561px]:px-[var(--sp-ledger-inset)] min-[561px]:min-h-[34px] min-[561px]:border-b-0 min-[561px]:border-r min-[561px]:border-line ' +
+  'ledger-cell col-start-2 @ledger:col-start-auto px-2 py-2 border-b border-line min-w-0 ' +
+  '@ledger:py-0 @ledger:px-[var(--sp-ledger-inset)] @ledger:min-h-[34px] @ledger:border-b-0 @ledger:border-r @ledger:border-line ' +
   'flex items-center'
 
 function FieldCell({ k, v, title }) {
@@ -555,7 +557,7 @@ function SkeletonCell({ w }) {
 function LeftLanes({ state, label }) {
   return (
     <>
-      <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] flex justify-center items-start min-[561px]:items-center pt-2 min-[561px]:pt-0 border-r border-line">
+      <div className="row-start-1 [grid-row:1/span_6] @ledger:[grid-row:auto] flex justify-center items-start @ledger:items-center pt-2 @ledger:pt-0 border-r border-line">
         <Jack state={state} />
       </div>
       <div className={CELL + ' text-note font-semibold tracking-[0.05em] text-txt whitespace-nowrap overflow-hidden text-ellipsis'}>
@@ -575,7 +577,7 @@ function MessageCell({ tone = 'warn', children }) {
     <div
       className={
         CELL +
-        ' min-[561px]:col-span-4 min-[561px]:border-r-0 text-copy ' +
+        ' @ledger:col-span-4 @ledger:border-r-0 text-copy ' +
         (tone === 'warn' ? 'text-[var(--pill-warn-fg)]' : 'text-muted')
       }
     >
@@ -688,7 +690,7 @@ function SourceSection({ src, q, onResult }) {
       {state === 'ok' &&
         shown.slice(1).map((r) => (
           <div key={r.id} className={LANES + ' border-b border-line bg-card hover:bg-line-2'} data-dossier-extra={src.key}>
-            <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] border-r border-line" />
+            <div className="row-start-1 [grid-row:1/span_6] @ledger:[grid-row:auto] border-r border-line" />
             <div className={CELL} />
             <div className={CELL} />
             <div className={CELL + ' font-mono text-copy font-semibold text-txt truncate'}>{r.identity ?? DASH}</div>
@@ -701,7 +703,7 @@ function SourceSection({ src, q, onResult }) {
       {state === 'ok' && moreLine && (
         <div className={LANES + ' border-b border-line bg-card'}>
           <div className="border-r border-line" />
-          <div className={CELL + ' min-[561px]:col-span-6 min-[561px]:border-r-0 text-note text-muted'}>
+          <div className={CELL + ' @ledger:col-span-6 @ledger:border-r-0 text-note text-muted'}>
             {moreLine}
           </div>
         </div>
@@ -952,8 +954,9 @@ function SearchPage({ params }) {
       )}
       <Ribbon results={results} />
 
+      <div className="@container">
       {/* Ledger head */}
-      <div className={'hidden min-[561px]:grid ' + LANE_COLS + ' bg-field border-b border-border'}>
+      <div className={'hidden @ledger:grid ' + LANE_COLS + ' bg-field border-b border-border'}>
         <div />
         {['Source', 'State', 'Identity'].map((h) => (
           <div key={h} className="ledger-cell h-6 flex items-center px-[var(--sp-ledger-inset)] border-r border-line text-note uppercase tracking-[0.1em] text-dim font-semibold">
@@ -968,6 +971,7 @@ function SearchPage({ params }) {
       {SOURCES.map((src) => (
         <SourceSection key={src.key} src={src} q={q} onResult={report} />
       ))}
+      </div>
 
       {/* Threat intel is the one source with more than three fields worth
           reading, so its ledger row is the summary and the existing panel is
