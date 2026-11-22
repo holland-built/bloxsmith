@@ -160,3 +160,20 @@ func TestSearchSummaryKeepsTheFindingPastALongField(t *testing.T) {
 		t.Errorf("summary is %d characters, cap is %d", n, searchSummaryMax)
 	}
 }
+
+func TestSearchSummaryKeepsTheWorstValue(t *testing.T) {
+	var threats []any
+	for i, verdict := range []string{"clean", "unknown", "suspicious", "malicious"} {
+		threats = append(threats, map[string]any{"verdict": verdict, "threat_level": float64(10 + i*30)})
+	}
+	row := compactSearchHit("bad.example", map[string]any{
+		"mode": "threat_intelligence", "source": "atp", "indicator": "bad.example", "indicator_type": "host",
+		"data": map[string]any{"details": strings.Repeat("x", 400), "threat": threats},
+	})
+	summary := row["summary"].(string)
+	for _, want := range []string{"verdict=malicious, suspicious", "threat_level=100, 70, 40 +1 more"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary lost %q: %.120s", want, summary)
+		}
+	}
+}

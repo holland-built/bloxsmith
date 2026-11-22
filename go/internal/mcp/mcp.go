@@ -14,6 +14,7 @@ package mcp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1400,6 +1401,10 @@ func threatSummary(data any) string {
 		if len(values) == 0 {
 			continue
 		}
+		// Worst first, so the limit below can never drop a "malicious".
+		slices.SortStableFunc(values, func(a, b string) int {
+			return cmp.Compare(threatValueRank(a), threatValueRank(b))
+		})
 		more := ""
 		if len(values) > 3 {
 			more = fmt.Sprintf(" +%d more", len(values)-3)
@@ -1411,6 +1416,21 @@ func threatSummary(data any) string {
 		return searchSummary(data)
 	}
 	return cutSearchSummary(strings.Join(parts, "; ") + " | " + searchSummary(data))
+}
+
+// threatValueRank orders a field's values, lowest first: severity words from
+// worst to mildest, then numbers from highest to lowest, then anything else.
+func threatValueRank(value string) float64 {
+	lower := strings.ToLower(value)
+	for i, word := range []string{"malicious", "critical", "high", "suspicious", "moderate", "medium"} {
+		if strings.Contains(lower, word) {
+			return float64(i) - 1e12
+		}
+	}
+	if n, err := strconv.ParseFloat(value, 64); err == nil {
+		return -n
+	}
+	return 0
 }
 
 // collectThreatFindings gathers each finding field's distinct values. Keys are
