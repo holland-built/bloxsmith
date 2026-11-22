@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -253,14 +254,14 @@ func TestFetchServiceInventory(t *testing.T) {
 // labels that read as the hour. Measured live that day: 50 rows against a limit
 // of 50, `total: 50`, `blocked: 50`, and "Total Events 50" on screen.
 //
-// The `_limit+1` probe row is what does the work: it separates "I asked for 50
-// and got 50" from "there are exactly 50", the case the obvious
-// `len(rows) >= limit` test calls truncated and which is a false claim in the
+// The cap+1 probe row is what does the work: it separates "I asked for 5000 and
+// got 5000" from "there are exactly 5000", the case the obvious
+// `len(rows) >= cap` test calls truncated and which is a false claim in the
 // other direction.
 //
 // The total-bearing cases below are NOT the live path. This endpoint answers
-// HTTP 400 to _is_total_size_needed, so nothing asks it for a count and the
-// panels say "total unknown" — see the comment in FetchHubSecurity. What they
+// HTTP 400 to _is_total_size_needed, so nothing asks it for a count — see the
+// comment in FetchHubSecurity. What they
 // pin is the reading of a total that ARRIVES unasked: it is believed only when
 // coherent with the rows beside it, and a page envelope appearing here later
 // must not be trusted blindly. The absence of the parameter is pinned
@@ -288,11 +289,11 @@ func TestFetchHubSecurity_AsksForOneExtraRowAndNotForATotal(t *testing.T) {
 
 	s.FetchHubSecurity(3600, 50)
 
-	// 51, not 50. Without the probe row "asked for 50, got 50" and "there are
-	// exactly 50" cannot be told apart, and this is the only place that is
-	// checked.
-	if gotLimit != "51" {
-		t.Fatalf("_limit = %q, want \"51\" (limit+1, the truncation probe)", gotLimit)
+	// The count cap plus one, whatever the caller's display limit. Without the
+	// probe row "asked for 5000, got 5000" and "there are exactly 5000" cannot
+	// be told apart, and this is the only place that is checked.
+	if want := fmt.Sprint(hubSecurityCountCap + 1); gotLimit != want {
+		t.Fatalf("_limit = %q, want %q (count cap + 1, the truncation probe)", gotLimit, want)
 	}
 	// ABSENT, and this assertion is the whole reason this test names it.
 	// /api/dnsdata/v2/dns_event answers HTTP 400 to _is_total_size_needed, which
@@ -310,48 +311,44 @@ func TestFetchHubSecurity_AsksForOneExtraRowAndNotForATotal(t *testing.T) {
 }
 
 func TestFetchHubSecurity_SampleAndTotalContract(t *testing.T) {
+	cap := hubSecurityCountCap
 	for _, tc := range []struct {
-		name          string
-		rows          []map[string]any
-		page          any // nil = no page envelope at all
-		wantReturned  int
-		wantTruncated bool
-		wantTotal     any // nil = the key must be ABSENT
+		name         string
+		rows         []map[string]any
+		page         any // nil = no page envelope at all
+		wantReturned int
+		wantCounted  int
+		wantComplete bool
+		wantTotal    any // nil = the key must be ABSENT
 	}{{
-		// The live case on 2026-08-20, with a total now asked for.
-		name: "more than a page, upstream reports the estate figure",
+		name: "more than the list, all read: the count is the true total",
+		rows: hubEvents(354, "high"), page: nil,
+		wantReturned: 50, wantCounted: 354, wantComplete: true, wantTotal: 354,
+	}, {
+		name: "upstream volunteers a larger total: the read is partial",
 		rows: hubEvents(51, "high"), page: map[string]any{"total_size": "1204"},
-		wantReturned: 50, wantTruncated: true, wantTotal: 1204,
+		wantReturned: 50, wantCounted: 51, wantComplete: false, wantTotal: 1204,
 	}, {
-		// No total available. The 51st row is the only evidence there is, and
-		// it is enough to refuse to print a bare count.
-		name: "more than a page, no total published",
-		rows: hubEvents(51, "high"), page: nil,
-		wantReturned: 50, wantTruncated: true, wantTotal: nil,
+		name: "exactly the cap and that is genuinely all of them",
+		rows: hubEvents(cap, "high"), page: nil,
+		wantReturned: 50, wantCounted: cap, wantComplete: true, wantTotal: cap,
 	}, {
-		// THE CASE `len(rows) >= limit` GETS WRONG. An hour holding exactly 50
-		// events is not truncated, and saying so is its own false claim.
-		name: "exactly a page and that is genuinely all of them",
-		rows: hubEvents(50, "high"), page: map[string]any{"total_size": "50"},
-		wantReturned: 50, wantTruncated: false, wantTotal: 50,
-	}, {
-		name: "exactly a page, no total published, no 51st row",
-		rows: hubEvents(50, "high"), page: nil,
-		wantReturned: 50, wantTruncated: false, wantTotal: nil,
+		name: "one past the cap, no total published",
+		rows: hubEvents(cap+1, "high"), page: nil,
+		wantReturned: 50, wantCounted: cap, wantComplete: false, wantTotal: nil,
 	}, {
 		// An envelope claiming fewer than it just handed over is not a total.
-		// Dropped rather than displayed; the probe row still stands.
-		name: "total smaller than the rows returned is incoherent and dropped",
-		rows: hubEvents(51, "high"), page: map[string]any{"total_size": "3"},
-		wantReturned: 50, wantTruncated: true, wantTotal: nil,
+		name: "total smaller than the rows read is incoherent and dropped",
+		rows: hubEvents(cap+1, "high"), page: map[string]any{"total_size": "3"},
+		wantReturned: 50, wantCounted: cap, wantComplete: false, wantTotal: nil,
 	}, {
 		name: "unparseable total is dropped",
-		rows: hubEvents(51, "high"), page: map[string]any{"total_size": "not-a-number"},
-		wantReturned: 50, wantTruncated: true, wantTotal: nil,
+		rows: hubEvents(cap+1, "high"), page: map[string]any{"total_size": "not-a-number"},
+		wantReturned: 50, wantCounted: cap, wantComplete: false, wantTotal: nil,
 	}, {
-		name: "an ordinary short hour is neither truncated nor qualified",
+		name: "an ordinary short hour is complete",
 		rows: hubEvents(7, "high"), page: map[string]any{"total_size": "7"},
-		wantReturned: 7, wantTruncated: false, wantTotal: 7,
+		wantReturned: 7, wantCounted: 7, wantComplete: true, wantTotal: 7,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
@@ -370,8 +367,14 @@ func TestFetchHubSecurity_SampleAndTotalContract(t *testing.T) {
 			if result["returned"] != tc.wantReturned {
 				t.Errorf("returned = %v, want %d", result["returned"], tc.wantReturned)
 			}
-			if result["truncated"] != tc.wantTruncated {
-				t.Errorf("truncated = %v, want %v", result["truncated"], tc.wantTruncated)
+			if result["counted"] != tc.wantCounted {
+				t.Errorf("counted = %v, want %d", result["counted"], tc.wantCounted)
+			}
+			if result["complete"] != tc.wantComplete {
+				t.Errorf("complete = %v, want %v", result["complete"], tc.wantComplete)
+			}
+			if result["truncated"] != !tc.wantComplete {
+				t.Errorf("truncated = %v, want %v", result["truncated"], !tc.wantComplete)
 			}
 			if tc.wantTotal == nil {
 				if v, present := result["total"]; present {
@@ -380,8 +383,6 @@ func TestFetchHubSecurity_SampleAndTotalContract(t *testing.T) {
 			} else if result["total"] != tc.wantTotal {
 				t.Errorf("total = %v, want %v", result["total"], tc.wantTotal)
 			}
-			// The events list is the sample, and it must be the SAME sample the
-			// counts were taken over.
 			events, ok := result["events"].([]map[string]any)
 			if !ok || len(events) != tc.wantReturned {
 				t.Errorf("events length = %v, want %d", len(events), tc.wantReturned)
@@ -390,11 +391,54 @@ func TestFetchHubSecurity_SampleAndTotalContract(t *testing.T) {
 	}
 }
 
-// The probe row is proof, not content. If it were counted, every truncated hour
-// would report one more event than it shows, which is a new wrong number
-// introduced by the fix for the old one.
+// The live defect of 2026-11-21: 21 critical or high events in the hour, and
+// the app showed 2 because only the newest 50 rows were counted.
+func TestFetchHubSecurity_CountsEventsBeyondTheDisplayedList(t *testing.T) {
+	rows := hubEvents(50, "low")
+	for i := range rows {
+		rows[i]["event_time"] = "2026-11-21T02:00:00Z"
+		rows[i]["policy_action"] = "log"
+	}
+	for i := 0; i < 21; i++ {
+		sev := "high"
+		if i < 4 {
+			sev = "critical"
+		}
+		rows = append(rows, map[string]any{
+			"event_time": "2026-11-21T01:30:00Z", "qname": "older.example",
+			"severity": sev, "policy_action": "block",
+		})
+	}
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		writeResults(w, rows)
+	})
+
+	result := s.FetchHubSecurity(3600, 50)
+
+	counts := result["counts"].(map[string]int)
+	if counts["critical"] != 4 || counts["high"] != 17 || counts["low"] != 50 {
+		t.Errorf("counts = %v, want critical 4, high 17, low 50", counts)
+	}
+	if result["blocked"] != 21 || result["logged"] != 50 {
+		t.Errorf("blocked = %v, logged = %v, want 21 and 50", result["blocked"], result["logged"])
+	}
+	if result["counted"] != 71 || result["complete"] != true || result["total"] != 71 {
+		t.Errorf("counted = %v, complete = %v, total = %v, want 71, true, 71", result["counted"], result["complete"], result["total"])
+	}
+	if result["counted_since"] != "2026-11-21T01:30:00Z" {
+		t.Errorf("counted_since = %v, want the oldest counted event", result["counted_since"])
+	}
+	// The payload stays small: the list is still the newest 50, in order.
+	events := result["events"].([]map[string]any)
+	if len(events) != 50 || events[0]["event_time"] != "2026-11-21T02:00:00Z" || events[49]["severity"] != "low" {
+		t.Errorf("events = %d rows, want the newest 50 in upstream order", len(events))
+	}
+}
+
+// The row past the cap is proof, not content. If it were counted, every capped
+// window would report one more event than was counted.
 func TestFetchHubSecurity_ProbeRowIsNotCounted(t *testing.T) {
-	rows := hubEvents(50, "high")
+	rows := hubEvents(hubSecurityCountCap, "high")
 	rows = append(rows, map[string]any{
 		"event_time": "2026-08-20T00:00:00Z", "qname": "probe.example",
 		"severity": "critical", "policy_action": "block",
@@ -410,12 +454,31 @@ func TestFetchHubSecurity_ProbeRowIsNotCounted(t *testing.T) {
 		t.Fatalf("counts missing or wrong type: %T", result["counts"])
 	}
 	if counts["critical"] != 0 {
-		t.Errorf("critical = %d, want 0 — the 51st row was counted", counts["critical"])
+		t.Errorf("critical = %d, want 0 — the probe row was counted", counts["critical"])
 	}
-	if counts["high"] != 50 {
-		t.Errorf("high = %d, want 50", counts["high"])
+	if counts["high"] != hubSecurityCountCap {
+		t.Errorf("high = %d, want %d", counts["high"], hubSecurityCountCap)
 	}
-	if result["blocked"] != 50 {
-		t.Errorf("blocked = %v, want 50 — the probe row was counted as blocked", result["blocked"])
+	if result["blocked"] != hubSecurityCountCap {
+		t.Errorf("blocked = %v, want %d — the probe row was counted as blocked", result["blocked"], hubSecurityCountCap)
+	}
+}
+
+// A failed read must never look like a quiet, fully counted hour.
+func TestFetchHubSecurity_FailedReadClaimsNoCompleteCount(t *testing.T) {
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	result := s.FetchHubSecurity(3600, 50)
+
+	if result["availability"] != "error" {
+		t.Fatalf("availability = %v, want \"error\"", result["availability"])
+	}
+	if result["complete"] != false {
+		t.Errorf("complete = %v, want false", result["complete"])
+	}
+	if v, present := result["counted"]; present {
+		t.Errorf("counted should be absent on a failed read, got %v", v)
 	}
 }

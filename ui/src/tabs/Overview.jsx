@@ -4,7 +4,7 @@ import { useApi } from '../lib/api.js'
 import { healthMetric } from '../lib/dnsHealth.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
-import { sampleSince } from '../lib/sampleCount.js'
+import { countedOf, sampleSince } from '../lib/sampleCount.js'
 import { statusBucket } from '../lib/statusBucket.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import Tip from '../components/Tip.jsx'
@@ -129,7 +129,7 @@ function useBoard(dns) {
   const leases = data.data?.leases ?? []
 
   const secOk = !sec.loading && !sec.error && sec.data?.availability === 'ok'
-  const secCounts = secOk ? { critical: sec.data.counts?.critical ?? 0, high: sec.data.counts?.high ?? 0, note: sec.data.truncated ? `in the latest ${sec.data.returned} events` : '' } : null
+  const secCounts = secOk ? { critical: sec.data.counts?.critical ?? 0, high: sec.data.counts?.high ?? 0, note: sec.data.truncated ? `in the latest ${n0(countedOf(sec.data))} events` : '' } : null
   const incOk = !inc.loading && !inc.error && Array.isArray(inc.data?.incidents)
   const incidents = incOk ? inc.data.incidents : []
   const firstSeen = Object.fromEntries(incidents.map((i) => [i.key || i.category, i.first_detected_at]))
@@ -177,7 +177,7 @@ function useBoard(dns) {
       scope: offline !== null ? (typeof totals.hosts === 'number' && hosts.length >= totals.hosts ? 'all hosts' : `${n0(hosts.length)} loaded of ${n0(totals.hosts)}`) : '' },
     { name: 'Security', href: '#security', state: svcState('Security'), partial: notFull(svcState('Security')) || (secOk && sec.data.truncated === true), n: secBad,
       measure: m(secOk, sec.loading, `${n0(secBad)} critical or high events`),
-      scope: secOk && sec.data.truncated ? `in the latest ${sec.data.returned} events${since ? `, since ${since}` : ''}` : secOk ? 'whole window' : '' },
+      scope: secOk && sec.data.truncated ? `in the latest ${n0(countedOf(sec.data))} events${since ? `, since ${since}` : ''}` : secOk ? (sec.data.complete === true ? 'last hour' : 'whole window') : '' },
   ].map((b) => ({ ...b, issues: issuesFor(b.name) }))
   const other = issuesFor('Other')
   if (other.length) board.push({ name: 'Other', href: '#incidents', state: null, measure: '', scope: '', issues: other })
@@ -207,7 +207,7 @@ function useBoard(dns) {
   // A clear Security row over a truncated sample is only clear for that sample.
   // Likewise a clear Hosts row over part of the hosts is only clear for those.
   const noneLabel = {
-    Security: secOk && sec.data.truncated ? `none in the latest ${sec.data.returned} events` : null,
+    Security: secOk && sec.data.truncated ? `none in the latest ${n0(countedOf(sec.data))} events` : null,
     Hosts: hostsPartial ? `none among the ${n0(hosts.length)} loaded` : null,
   }
   // Whether the briefing may say no issue is new: every source answered, in

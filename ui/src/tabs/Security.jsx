@@ -8,7 +8,7 @@ import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedU
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
-import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampleCount.js'
+import { countedOf, sampleCountLabel, sampleScopeNote, shownNote, shownOnlyLabel, totalEventsTile } from '../lib/sampleCount.js'
 import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
@@ -150,7 +150,7 @@ function SeverityHero({ panelId, hub, events }) {
     }
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
-  const otherSev = events.length - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
+  const otherSev = countedOf(hub.data) - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
 
   return (
     <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
@@ -199,10 +199,10 @@ function SeverityHero({ panelId, hub, events }) {
               />
             </Suspense>
           )}
-          {/* The severity legend and the bars are both counted from `events`,
-              one capped page. The heading's count names the sample ("50 events
-              shown, total unknown"), so the longer scope sentence is said once,
-              under the Triage Inbox, rather than again here. */}
+          {/* The legend covers every event counted; the bars are drawn from the
+              listed rows only, so they say so. A capped read's longer scope
+              sentence is said once, under the Triage Inbox. */}
+          {shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
         </>
       )}
     </Card>
@@ -231,7 +231,7 @@ function KpiStack({ panelId, hub, events, acks }) {
   const cells = [
     // Red only when there is something to act on; blocked and logged are
     // counts, not problems, so they stay plain.
-    { label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined },
+    { label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: shownOnlyLabel(d) },
     { label: 'Blocked', value: d.blocked ?? 0 },
     { label: 'Logged', value: d.logged ?? 0 },
     { label: totalCell.label, value: totalCell.value },
@@ -246,16 +246,14 @@ function KpiStack({ panelId, hub, events, acks }) {
           <div className="grid grid-cols-2 gap-3">
             {cells.map((c) => (
               <div key={c.label}>
-                <div className="text-muted text-note">{c.label}</div>
+                <div className="text-muted text-note">{c.label}{c.scope ? `, ${c.scope}` : ''}</div>
                 <div className="text-figure font-semibold tracking-tight my-1" style={{ color: c.color }}>{Number(c.value).toLocaleString()}</div>
               </div>
             ))}
           </div>
-          {/* Unacked Critical, Blocked and Logged stay sample-derived even when
-              the tile beside them carries an authoritative total, so the note
-              is not conditional on that: it says which numbers were counted
-              from what, and a panel mixing scopes without saying so is the
-              defect wearing a smaller hat. */}
+          {/* Blocked and Logged cover every event counted. Unacked Critical
+              covers only the listed rows, because acknowledgements are per
+              listed row, and its label says so. */}
           {scopeNote && <div className="text-note text-dim mt-3">{scopeNote}</div>}
         </>
       )}
@@ -492,10 +490,10 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
             rowKey={(r, i) => ackKey(r) + i}
             rowStyle={(r) => ({ opacity: acks[ackKey(r)] ? 0.45 : 1 })}
           />
-          {/* The figure beside the severity buttons counts the rows matching the
-              filter, and those rows come from the same capped page as every
-              other number on this tab. Without this line an inbox holding the
-              first 50 of a bad hour reads as an inbox with 50 things in it. */}
+          {/* The figure beside the severity buttons counts the listed rows
+              matching the filter. Without these lines an inbox holding the
+              newest 50 of a bad hour reads as an inbox with 50 things in it. */}
+          {shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
           {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}

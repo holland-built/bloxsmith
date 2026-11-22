@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isSample, knownTotal, sampleCountLabel, sampleScopeNote, sampleSince, totalEventsTile } from './sampleCount.js'
+import { countedOf, isSample, knownTotal, sampleCountLabel, sampleScopeNote, sampleSince, shownNote, shownOnlyLabel, totalEventsTile } from './sampleCount.js'
 
 const COMPLETE = { returned: 7, truncated: false, total: 7 }
 const CAPPED_WITH_TOTAL = { returned: 50, truncated: true, total: 1204 }
@@ -112,4 +112,44 @@ test('sampleSince names the oldest event time, or null with none', () => {
   // An oldest event on another day carries its date.
   const older = sampleSince({ events: [{ event_time: new Date(2026, 9, 25, 9, 0).toISOString() }] }, now)
   assert.match(older, /25/)
+})
+
+// The whole-hour contract (2026-11-21). The server now counts every event it
+// read, up to a cap, and keeps the list short.
+const WHOLE_HOUR = { returned: 50, counted: 354, complete: true, truncated: false, total: 354 }
+const CAPPED_READ = { returned: 50, counted: 5000, complete: false, truncated: true }
+
+test('a complete hour reads as its true count, with no caveat', () => {
+  assert.equal(countedOf(WHOLE_HOUR), 354)
+  assert.equal(sampleCountLabel(WHOLE_HOUR, 'events'), '354 events')
+  assert.equal(sampleScopeNote(WHOLE_HOUR, 'events'), null)
+  assert.deepEqual(totalEventsTile(WHOLE_HOUR, 'Total Events', 'Events Shown'), { label: 'Total Events', value: 354 })
+})
+
+test('a capped read names the real number counted', () => {
+  assert.equal(countedOf(CAPPED_READ), 5000)
+  assert.equal(sampleCountLabel(CAPPED_READ, 'events'), 'newest 5,000 events')
+  assert.equal(sampleScopeNote(CAPPED_READ, 'events'), 'Covers only the newest 5,000 events in this window.')
+  assert.deepEqual(totalEventsTile(CAPPED_READ, 'Total Events', 'Events Shown'), { label: 'Events Counted', value: 5000 })
+})
+
+test('a list shorter than the count says how much it shows', () => {
+  assert.equal(shownNote(WHOLE_HOUR, 'events'), 'Showing the newest 50 of 354 events.')
+  assert.equal(shownNote(CAPPED_READ, 'events'), 'Showing the newest 50 of the 5,000 events counted.')
+  assert.equal(shownNote({ returned: 7, counted: 7, complete: true }, 'events'), null)
+  assert.equal(shownNote(COMPLETE, 'events'), null)
+})
+
+test('a figure built from the listed rows names that scope', () => {
+  assert.equal(shownOnlyLabel(WHOLE_HOUR), 'newest 50')
+  assert.equal(shownOnlyLabel({ returned: 7, counted: 7, complete: true }), null)
+  assert.equal(shownOnlyLabel(CAPPED_NO_TOTAL), null)
+})
+
+test('sampleSince uses the oldest counted event, not the oldest listed one', () => {
+  const now = new Date(2026, 10, 21, 23, 5)
+  const listed = new Date(2026, 10, 21, 23, 0).toISOString()
+  const oldest = new Date(2026, 10, 21, 22, 10)
+  const want = oldest.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  assert.equal(sampleSince({ events: [{ event_time: listed }], counted_since: oldest.toISOString() }, now), want)
 })

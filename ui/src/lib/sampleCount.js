@@ -10,10 +10,11 @@
  * 2026-08-20: 50 rows against a limit of 50, and a tile labelled "Total Events"
  * showing 50 for an hour whose real count nobody had asked for.
  *
- * The server now sends `returned` (the rows it counted), `truncated` (whether
- * there are more), and `total` ONLY when upstream gave an authoritative figure.
- * These helpers are the single place that turns those three into words, so the
- * three panels cannot drift into describing the same payload differently.
+ * The server now sends `returned` (the rows listed), `counted` (the events the
+ * figures cover), `complete` (whether that is the whole window), `truncated`
+ * (its inverse), and `total` ONLY when the true figure is known. These helpers
+ * are the single place that turns those into words, so the panels cannot drift
+ * into describing the same payload differently.
  *
  * WHY `total` IS NEVER SUBSTITUTED FOR `returned`. A consumer writing
  * `total ?? rows.length` is back to printing the sample under the old label,
@@ -53,6 +54,14 @@ function returnedOf(data) {
   return Array.isArray(data?.events) ? data.events.length : 0
 }
 
+/**
+ * How many events the figures cover. A payload from before `counted` existed
+ * counted only the rows it listed, so it falls back to those.
+ */
+export function countedOf(data) {
+  return Number.isFinite(data?.counted) ? data.counted : returnedOf(data)
+}
+
 /** The authoritative estate figure, or null when nobody published one. */
 export function knownTotal(data) {
   const total = data?.total
@@ -67,18 +76,19 @@ export function knownTotal(data) {
  * @returns {string} heading text; callers handle the feed-dead case themselves
  */
 export function sampleCountLabel(data, noun) {
-  const returned = returnedOf(data)
-  if (!isSample(data)) return `${returned.toLocaleString()} ${noun}`
+  const counted = countedOf(data)
+  if (!isSample(data)) return `${counted.toLocaleString()} ${noun}`
 
   const total = knownTotal(data)
   if (total !== null) {
-    return `${returned.toLocaleString()} of ${total.toLocaleString()} ${noun}`
+    return `${counted.toLocaleString()} of ${total.toLocaleString()} ${noun}`
   }
+  if (Number.isFinite(data?.counted)) return `newest ${counted.toLocaleString()} ${noun}`
   // Truncated with no total is the honest dead end: there ARE more, and how
   // many is not knowable from this response. "50+ events" was rejected as the
   // wording because it reads as a measured lower bound of the hour rather than
   // as a page size.
-  return `${returned.toLocaleString()} ${noun} shown, total unknown`
+  return `${counted.toLocaleString()} ${noun} shown, total unknown`
 }
 
 /**
@@ -95,7 +105,36 @@ export function sampleScopeNote(data, noun) {
   const returned = returnedOf(data)
   const total = knownTotal(data)
   const of = total !== null ? ` of ${total.toLocaleString()}` : ''
+  if (Number.isFinite(data?.counted)) {
+    return `Covers only the newest ${data.counted.toLocaleString()}${of} ${noun} in this window.`
+  }
   return `Counted from the ${returned.toLocaleString()}${of} ${noun} shown, not the whole window.`
+}
+
+/**
+ * What a list shows when it is shorter than the count above it, or null when
+ * it shows everything counted.
+ */
+export function shownNote(data, noun) {
+  if (!Number.isFinite(data?.counted)) return null
+  const returned = returnedOf(data)
+  if (returned >= data.counted) return null
+  const shown = returned.toLocaleString()
+  const counted = data.counted.toLocaleString()
+  return isSample(data)
+    ? `Showing the newest ${shown} of the ${counted} ${noun} counted.`
+    : `Showing the newest ${shown} of ${counted} ${noun}.`
+}
+
+/**
+ * The scope of a figure worked out from the listed rows alone, or null when
+ * those rows are everything counted. Acknowledgements are per listed row, so
+ * such a figure cannot speak for the rest of the hour.
+ */
+export function shownOnlyLabel(data) {
+  if (!Number.isFinite(data?.counted)) return null
+  const returned = returnedOf(data)
+  return returned < data.counted ? `newest ${returned.toLocaleString()}` : null
 }
 
 /**
@@ -115,7 +154,8 @@ export function totalEventsTile(data, totalLabel, sampleLabel) {
   if (total !== null) return { label: totalLabel, value: total }
   // Not truncated and no total means the rows in hand ARE everything in the
   // window, so "total" is accurate without upstream having to say so.
-  if (!isSample(data)) return { label: totalLabel, value: returned }
+  if (!isSample(data)) return { label: totalLabel, value: countedOf(data) }
+  if (Number.isFinite(data?.counted)) return { label: 'Events Counted', value: data.counted }
   return { label: sampleLabel, value: returned }
 }
 
@@ -128,7 +168,10 @@ export function totalEventsTile(data, totalLabel, sampleLabel) {
  * the window is minutes long and moves.
  */
 export function sampleSince(data, now = new Date()) {
-  const times = (data?.events ?? []).map((e) => Date.parse(e?.event_time)).filter((t) => Number.isFinite(t))
+  // The server names the oldest event it counted, which can be far older than
+  // the oldest one listed.
+  const source = data?.counted_since ? [{ event_time: data.counted_since }] : data?.events ?? []
+  const times = source.map((e) => Date.parse(e?.event_time)).filter((t) => Number.isFinite(t))
   if (!times.length) return null
   const oldest = new Date(Math.min(...times))
   const sameDay = oldest.toDateString() === now.toDateString()
