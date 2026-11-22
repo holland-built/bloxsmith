@@ -91,13 +91,13 @@ jobs:
       # failed to look. Both halves are fixed: the pin here, and the failure issue
       # at the bottom.
       #
-      # 1.29.0 is the last release before the rename and is what the last green run
-      # (2026-07-28) used. Moving to 2.x is a deliberate migration with its own
+      # 1.30.0 carries the fix for Dependabot alert #11 and still exports
+      # streamablehttp_client. Moving to 2.x is a deliberate migration with its own
       # verification against the live CSP endpoint, not something to inherit by
       # accident from a nightly cron.
       - name: Install MCP client (pinned — see comment)
         if: steps.gate.outputs.run == 'true'
-        run: pip install --quiet 'mcp==1.29.0'
+        run: pip install --quiet 'mcp==1.30.0'
 
       # Fail here, loudly and cheaply, rather than inside the catalog run where the
       # traceback is buried. A dependency that no longer exports what this repo
