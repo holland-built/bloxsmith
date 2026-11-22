@@ -23,6 +23,8 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1342,7 +1344,7 @@ func compactSearchHit(query string, hit any) map[string]any {
 			m["sources_checked"], m["sources_with_findings"], searchSummary(m["no_findings"]))
 	case m["mode"] == "threat_intelligence":
 		row["name"], row["type"], row["source"] = m["indicator"], m["indicator_type"], m["source"]
-		row["summary"] = searchSummary(m["data"])
+		row["summary"] = threatSummary(m["data"])
 	case m["mode"] == "infoblox_entities":
 		row["name"], row["type"], row["source"] = m["name"], m["resource"], m["application"]
 		row["score"], row["summary"] = m["score"], m["id"]
@@ -1367,9 +1369,80 @@ func searchSummary(v any) string {
 	if err := enc.Encode(v); err != nil {
 		return ""
 	}
-	s := strings.TrimSpace(buf.String())
+	return cutSearchSummary(strings.TrimSpace(buf.String()))
+}
+
+func cutSearchSummary(s string) string {
 	if r := []rune(s); len(r) > searchSummaryMax {
 		return string(r[:searchSummaryMax]) + "…"
 	}
 	return s
+}
+
+// threatFindingFields are the fields in live threat data (seen 2026-11-22) that
+// say how bad a finding is, most important first, because the cap cuts from
+// the end.
+var threatFindingFields = []string{
+	"verdict", "alert_severity", "threat_level", "threat_score_rating",
+	"risk_score_rating", "confidence_score_rating", "confidence", "class",
+	"property", "suggested_threat_label", "malicious", "score_label",
+	"ns_reputation_label", "ns_reputation_confidence", "whitelisted", "purpose",
+}
+
+// threatSummary puts the finding fields ahead of the raw data, so a long value
+// earlier in the data cannot push them past the cap.
+func threatSummary(data any) string {
+	found := map[string][]string{}
+	collectThreatFindings("", data, found)
+	var parts []string
+	for _, field := range threatFindingFields {
+		values := found[field]
+		if len(values) == 0 {
+			continue
+		}
+		more := ""
+		if len(values) > 3 {
+			more = fmt.Sprintf(" +%d more", len(values)-3)
+			values = values[:3]
+		}
+		parts = append(parts, field+"="+strings.Join(values, ", ")+more)
+	}
+	if len(parts) == 0 {
+		return searchSummary(data)
+	}
+	return cutSearchSummary(strings.Join(parts, "; ") + " | " + searchSummary(data))
+}
+
+// collectThreatFindings gathers each finding field's distinct values. Keys are
+// walked in sorted order so the same data always gives the same summary.
+func collectThreatFindings(key string, v any, found map[string][]string) {
+	switch x := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			// total_votes.malicious is a count of user votes, not a detection.
+			if k != "total_votes" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			collectThreatFindings(k, x[k], found)
+		}
+	case []any:
+		for _, item := range x {
+			collectThreatFindings(key, item, found)
+		}
+	case string, bool, float64:
+		if !slices.Contains(threatFindingFields, key) {
+			return
+		}
+		value := strings.Trim(searchSummary(x), `"`)
+		if r := []rune(value); len(r) > 40 {
+			value = string(r[:40]) + "…"
+		}
+		if value != "" && !slices.Contains(found[key], value) {
+			found[key] = append(found[key], value)
+		}
+	}
 }

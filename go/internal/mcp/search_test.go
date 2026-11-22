@@ -135,3 +135,28 @@ func TestSearchKeepsEmptyAndFailedApart(t *testing.T) {
 		}
 	}
 }
+
+// A long field must not push the one that says how bad the finding is past the
+// summary's cap.
+func TestSearchSummaryKeepsTheFindingPastALongField(t *testing.T) {
+	row := compactSearchHit("bad.example", map[string]any{
+		"mode": "threat_intelligence", "source": "atp", "indicator": "bad.example", "indicator_type": "host",
+		"data": map[string]any{
+			"details": strings.Repeat("x", 400),
+			"verdict": "malicious",
+			"threat": []any{
+				map[string]any{"class": "Phishing", "threat_level": float64(100)},
+				map[string]any{"class": "Phishing", "threat_level": float64(80)},
+			},
+		},
+	})
+	summary := row["summary"].(string)
+	for _, want := range []string{"verdict=malicious", "threat_level=100, 80", "class=Phishing"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary lost %q: %.120s", want, summary)
+		}
+	}
+	if n := utf8.RuneCountInString(summary); n > searchSummaryMax+1 {
+		t.Errorf("summary is %d characters, cap is %d", n, searchSummaryMax)
+	}
+}
