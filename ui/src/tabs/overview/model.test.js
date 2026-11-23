@@ -85,27 +85,13 @@ test('a failing health check is an open problem on its own service', () => {
   assert.deepEqual(openProblems({ name: 'DNS', state: { status: 'ok' }, issues: [] }), [])
 })
 
-test('every attention row links to its failing items', () => {
-  const issue = (key) => ({ key, sev: 'warn', title: key, href: '#old', seen: null })
-  const board = { board: [
-    { name: 'DHCP', state: { status: 'crit', meta: '1 error · 10/18 up' }, issues: [] },
-    { name: 'DNS', state: { status: 'warn', meta: '3 stopped · 25/28 up' }, issues: [issue('dns-ttl-anomaly'), issue('dnssec-unsigned')] },
-    { name: 'Security', state: { status: 'warn', meta: '1 stopped · 1/2 up' }, issues: [issue('security'), issue('security-sitelist-7')] },
-    { name: 'Hosts', state: null, issues: [issue('hosts-offline')] },
-    { name: 'IPAM', state: null, issues: [issue('subnet-utilization')] },
-  ] }
-  const href = Object.fromEntries(rankProblems(board, NOW).map((r) => [r.key, r.href]))
-  assert.deepEqual(href, {
-    'svc-DHCP': '#infra?service=DHCP&status=down',
-    'svc-DNS': '#infra?service=DNS&status=down',
-    'svc-Security': '#infra?service=Security&status=down',
-    'hosts-offline': '#infra?status=offline',
-    'subnet-utilization': '#network?minUtil=70&links=1',
-    security: '#security?severity=high',
-    'security-sitelist-7': '#old',
-    'dns-ttl-anomaly': '#dns?issues=1',
-    'dnssec-unsigned': '#dns?issues=dnssec',
-  })
+test('a failing service links to its own down list', () => {
+  const b = (name) => ({ name, state: { status: 'crit', meta: '1 error · 10/18 up' }, issues: [] })
+  assert.deepEqual(['DHCP', 'DNS', 'Security'].map((n) => openProblems(b(n))[0].href), [
+    '#infra?service=DHCP&status=down',
+    '#infra?service=DNS&status=down',
+    '#infra?service=Security&status=down',
+  ])
 })
 
 test('a failed feed is an error, never a zero', () => {

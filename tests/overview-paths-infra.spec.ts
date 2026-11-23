@@ -69,6 +69,35 @@ for (const width of [1440, 390]) {
   });
 }
 
+test('each attention row on Overview goes to its own address in one click', async ({ page }) => {
+  await installBaselineWorld(page);
+  await health(page, HEALTH);
+  const incident = (category: string, message: string, severity: string) => ({ key: category, category, count: 5, severity, message });
+  await page.route('**/api/incidents', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    incidents: [
+      incident('subnet-utilization', '5 subnet utilization', 'crit'),
+      incident('dns-ttl-anomaly', '5 dns ttl anomaly', 'warn'),
+      incident('dnssec-unsigned', '5 dnssec unsigned', 'info'),
+    ],
+    signals: [],
+  }) }));
+  const rows: [RegExp, string][] = [
+    [/^View services: DHCP services/, '#infra?service=DHCP&status=down'],
+    [/^View services: DNS services/, '#infra?service=DNS&status=down'],
+    [/^View services: Security services/, '#infra?service=Security&status=down'],
+    [/^View hosts: /, '#infra?status=offline'],
+    [/^View subnets: /, '#network?minUtil=70&links=1'],
+    [/^View events: /, '#security?severity=high'],
+    [/^View DNS: 5 zones have DNS timing/, '#dns?issues=1'],
+    [/^View DNS: 5 DNS zones not signed/, '#dns?issues=dnssec'],
+  ];
+  for (const [name, address] of rows) {
+    await page.goto('/#overview');
+    await page.getByRole('region', { name: /Items requiring attention/ }).getByRole('link', { name }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(address);
+  }
+});
+
 test.describe('the page never claims none are down without knowing', () => {
   test.beforeEach(async ({ page }) => { await installBaselineWorld(page); });
 

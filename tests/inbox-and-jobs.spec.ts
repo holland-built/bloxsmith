@@ -48,7 +48,7 @@ test('with no page named, the app opens on Overview: the service board, with the
   await expect(dns).toContainText('64 zones have DNS timing problems');
   await expect(board).not.toContainText('×');
   // The sentence is the link; there is no column of buttons.
-  await expect(ipam.getByRole('link', { name: '1,746 subnets are 70% full or more' })).toHaveAttribute('href', '#network?minUtil=70&focus=subnets');
+  await expect(ipam.getByRole('link', { name: '1,746 subnets are 70% full or more' })).toHaveAttribute('href', '#network?minUtil=70&links=1');
   await expect(board.locator('a.bg-accent')).toHaveCount(0);
 });
 

@@ -14,11 +14,14 @@ const isOffline = (s) => statusBucket(s) === 'offline'
 // Where each kind of incident is fixed, and the question to ask about it.
 const FIX = {
   // 70: the subnet signal starts there (signals.go), so the list holds every
-  // subnet this row counts, not only the ones at 90%.
-  'subnet-utilization': { href: '#network?minUtil=70&focus=subnets', ask: 'Which subnets are nearly full?' },
-  'dns-ttl-anomaly': { href: '#dns', ask: 'Are any of my DNS zones misconfigured?' },
+  // subnet this row counts, not only the ones at 90%. links=1 keeps the tiny
+  // point-to-point networks the count includes.
+  'subnet-utilization': { href: '#network?minUtil=70&links=1', ask: 'Which subnets are nearly full?' },
+  // Every zone issue the server raises is a timing one (norm.go), so issues=1
+  // is exactly the zones this row counts.
+  'dns-ttl-anomaly': { href: '#dns?issues=1', ask: 'Are any of my DNS zones misconfigured?' },
   'dhcp-expired-lease': { href: '#network?focus=leases', ask: 'Which DHCP leases have expired?' },
-  'dnssec-unsigned': { href: '#dns', ask: 'Which DNS zones with public names are not signed?' },
+  'dnssec-unsigned': { href: '#dns?issues=dnssec', ask: 'Which DNS zones with public names are not signed?' },
 }
 
 const fmt = (n) => Number(n).toLocaleString()
@@ -30,7 +33,7 @@ export function inboxRows({ hosts, incidents, signals, sec, sitelists }) {
     rows.push({ key: 'hosts-offline', sev: 'crit', title: `${fmt(offline)} of ${fmt(hosts.length)} ${hosts.length === 1 ? 'host' : 'hosts'} ${offline === 1 ? 'is' : 'are'} not online`, sub: '', href: '#infra?status=offline', ask: 'Which hosts are not online?' })
   }
   if (sec && sec.critical + sec.high > 0) {
-    rows.push({ key: 'security', sev: sec.critical ? 'crit' : 'warn', title: `${fmt(sec.critical + sec.high)} critical or high security events`, sub: sec.note, href: '#security', ask: 'Which domains are on threat feeds?' })
+    rows.push({ key: 'security', sev: sec.critical ? 'crit' : 'warn', title: `${fmt(sec.critical + sec.high)} critical or high security events`, sub: sec.note, href: '#security?severity=high', ask: 'Which domains are on threat feeds?' })
   }
   for (const i of incidents ?? []) {
     // An incident is a group of findings. When it holds exactly one, that

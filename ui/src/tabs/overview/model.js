@@ -93,22 +93,10 @@ function healthProblem(b) {
   return { key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: `#infra?service=${encodeURIComponent(b.name)}&status=down`, ask: `Which ${b.name} services are not running?`, seen: null, health: true, partial: b.state.availability === 'partial' }
 }
 
-// Where each kind of row lands: the failing items themselves, already filtered.
-// Every zone issue the server raises is a timing one (norm.go), so issues=1 is
-// exactly the zones the DNS timing row counts.
-const LANDING = {
-  'hosts-offline': '#infra?status=offline',
-  'subnet-utilization': '#network?minUtil=70&links=1',
-  security: '#security?severity=high',
-  'dns-ttl-anomaly': '#dns?issues=1',
-  'dnssec-unsigned': '#dns?issues=dnssec',
-}
-
 /** Everything open on one service: its failing health check, then its incidents. */
 export function openProblems(b) {
   const health = healthProblem(b)
-  const issues = b.issues.map((r) => (LANDING[r.key] ? { ...r, href: LANDING[r.key] } : r))
-  return health ? [health, ...issues] : issues
+  return health ? [health, ...b.issues] : b.issues
 }
 
 /**

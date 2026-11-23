@@ -13,3 +13,15 @@ test('a waiting site-list proposal is a Security note linking to Site lists', ()
   ])
   assert.equal(rows[1].sub, 'could not read the list')
 })
+
+test('every attention row links to its failing items', () => {
+  const incidents = ['subnet-utilization', 'dns-ttl-anomaly', 'dnssec-unsigned'].map((category) => ({ category, count: 1, severity: 'warn' }))
+  const rows = inboxRows({ hosts: [{ status: 'offline' }], incidents, sec: { critical: 1, high: 0 } })
+  assert.deepEqual(Object.fromEntries(rows.map((r) => [r.key, r.href])), {
+    'hosts-offline': '#infra?status=offline',
+    security: '#security?severity=high',
+    'subnet-utilization': '#network?minUtil=70&links=1',
+    'dns-ttl-anomaly': '#dns?issues=1',
+    'dnssec-unsigned': '#dns?issues=dnssec',
+  })
+})
