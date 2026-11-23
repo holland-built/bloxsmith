@@ -1,7 +1,7 @@
 import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
 import { createPortal } from 'react-dom'
 import { useFontsLoaded } from '../lib/fonts.js'
-import { isNoPermission, NO_PERMISSION, retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
+import { isNoPermission, noPermissionText, retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP, builtLine } from '../lib/panelHelp.js'
@@ -3088,7 +3088,7 @@ export function FetchError({ error, stale }) {
   const denied = isNoPermission(error)
   return (
     <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>
-      {denied ? NO_PERMISSION : `Could not load current data: ${String(error?.message || error)}`}
+      {denied ? noPermissionText(error) : `Could not load current data: ${String(error?.message || error)}`}
       {stale && (denied ? ' The list below may be out of date.' : ' — the list below may be out of date.')}
       {!denied && failed && !retrying && (
         <button
@@ -3140,7 +3140,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
       className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
     >
       <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{denied ? 'No permission' : label}</div>
-      {reason ? <div className="text-note" style={{ color: COLORS.warn }}>{denied ? NO_PERMISSION : reason}</div> : null}
+      {reason ? <div className="text-note" style={{ color: COLORS.warn }}>{denied ? noPermissionText(reason) : reason}</div> : null}
       {showButton ? (
         <button
           type="button"

@@ -236,8 +236,11 @@ function useStreamFlow(path) {
 
   useEffect(() => () => esRef.current?.close(), [])
 
+  // Inputs changed while a preview is running: its plan is for the old inputs.
+  const changedRef = useRef(false)
   function markStale() {
-    if (status === 'previewed') setStale(true)
+    if (esRef.current) changedRef.current = true
+    else if (status === 'previewed') setStale(true)
   }
 
   function run(qs, dry) {
@@ -251,6 +254,7 @@ function useStreamFlow(path) {
     }
     setLog([]); setRows({}); setResult(null); setError(null); setRollback(null); setStatus('busy')
     dryRef.current = dry
+    changedRef.current = false
     // withToken: EventSource can't send X-Auth-Token, so a token deployment
     // needs the ?token= query fallback or the stream 403s.
     const es = new EventSource(withToken(`${path}?${qs}`))
@@ -273,7 +277,7 @@ function useStreamFlow(path) {
       }
       else if (j?.done) {
         setResult(j)
-        setStale(false)
+        setStale(dryRef.current && changedRef.current)
         stop(dryRef.current ? 'previewed' : 'applied')
       }
     }

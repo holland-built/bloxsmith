@@ -377,3 +377,215 @@ test('14. record results and errors are announced', async ({ page }) => {
   await row.getByRole('button', { name: 'Confirm delete' }).click();
   await expect(card.getByRole('status').filter({ hasText: 'DNS record deleted.' })).toBeVisible();
 });
+
+// ---------- final review: late answers and real upstream refusals ----------
+
+const deferred = () => {
+  let release = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  return { held, release: () => release() };
+};
+const NO_PERM = "You don't have permission to see this. Check the key in Settings.";
+const REFUSED = "Infoblox refused the call (HTTP 403). This key's user probably needs the ib-mcp-server-user group (Infoblox ticket PTCI-4674).";
+const REC_A = { ...RECORD, id: 'rec-a', name_in_zone: 'alpha', dns_rdata: '192.0.2.21' };
+const REC_B = { ...RECORD, id: 'rec-b', name_in_zone: 'beta', dns_rdata: '192.0.2.22' };
+const ADDR_A = { ...ADDRESS, id: 'addr-a', address: '10.0.0.21', name: 'alpha' };
+const ADDR_B = { ...ADDRESS, id: 'addr-b', address: '10.0.0.22', name: 'beta' };
+
+// The dry check for one id waits until released; the others answer at once.
+async function holdCheck(page: Page, id: string) {
+  const gate = deferred();
+  await page.route('**/api/made/delete', async (route) => {
+    const b = route.request().postDataJSON();
+    if (b.id === id) await gate.held;
+    return json(route, { ok: true, dry_run: true, label: b.id, made: false, changed: false, gone: false, blocked: '', confirm: `code-${b.id}` });
+  });
+  return gate;
+}
+
+async function openTwoRecords(page: Page) {
+  await page.route('**/api/dns/zones*', (r) => json(r, { zones: [ZONE, { id: 'zone2', fqdn: 'other.example' }] }));
+  await page.route('**/api/dns/records*', (r) => json(r, { records: [REC_A, REC_B] }));
+  await page.goto('/#selfservice');
+  const card = await openTask(page, 'records');
+  await card.locator('select').selectOption(ZONE.id);
+  return card;
+}
+
+async function openTwoAddresses(page: Page) {
+  await page.route('**/api/ipam/spaces*', (r) => json(r, { spaces: [SPACE] }));
+  await page.route('**/api/ipam/subnets*', (r) => json(r, { subnets: [SUBNET, { ...SUBNET, id: 'subnet2', address: '10.0.1.0' }] }));
+  await page.route('**/api/ipam/addresses*', (r) => json(r, { addresses: [ADDR_A, ADDR_B] }));
+  await page.goto('/#selfservice');
+  const card = await openTask(page, 'addresses');
+  await card.locator('select').first().selectOption(SPACE.id);
+  await card.locator('select').nth(1).selectOption(SUBNET.id);
+  return card;
+}
+
+test('R1. a late record check cannot move the open confirm to another row', async ({ page }) => {
+  const gate = await holdCheck(page, REC_A.id);
+  const card = await openTwoRecords(page);
+  await rowOf(card, REC_A.dns_rdata).getByRole('button', { name: 'Delete', exact: true }).click();
+  await rowOf(card, REC_B.dns_rdata).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(rowOf(card, REC_B.dns_rdata).getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(rowOf(card, REC_B.dns_rdata).getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  await expect(rowOf(card, REC_A.dns_rdata).getByRole('button', { name: 'Confirm delete' })).toHaveCount(0);
+});
+
+test('R1. Cancel stops a record check that is still running', async ({ page }) => {
+  const gate = await holdCheck(page, REC_B.id);
+  const card = await openTwoRecords(page);
+  const a = rowOf(card, REC_A.dns_rdata);
+  await a.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(a.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  await rowOf(card, REC_B.dns_rdata).getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.waitForTimeout(150);
+  await a.getByRole('button', { name: 'Cancel' }).click();
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(card.getByRole('button', { name: 'Confirm delete' })).toHaveCount(0);
+});
+
+test('R1. changing the zone stops a record check that is still running', async ({ page }) => {
+  const gate = await holdCheck(page, REC_A.id);
+  const card = await openTwoRecords(page);
+  await rowOf(card, REC_A.dns_rdata).getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.waitForTimeout(150);
+  await card.locator('select').selectOption('zone2');
+  await expect(rowOf(card, REC_A.dns_rdata)).toBeVisible();
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(card.getByRole('button', { name: 'Confirm delete' })).toHaveCount(0);
+});
+
+test('R1. Cancel and a subnet change stop an address check that is still running', async ({ page }) => {
+  const gate = await holdCheck(page, ADDR_B.id);
+  const card = await openTwoAddresses(page);
+  const a = rowOf(card, ADDR_A.address);
+  await a.getByRole('button', { name: 'Release', exact: true }).click();
+  await expect(a.getByRole('button', { name: 'Confirm release' })).toBeVisible();
+  await rowOf(card, ADDR_B.address).getByRole('button', { name: 'Release', exact: true }).click();
+  await page.waitForTimeout(150);
+  await a.getByRole('button', { name: 'Cancel' }).click();
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(card.getByRole('button', { name: 'Confirm release' })).toHaveCount(0);
+});
+
+test('R1. changing the subnet stops an address check that is still running', async ({ page }) => {
+  const gate = await holdCheck(page, ADDR_A.id);
+  const card = await openTwoAddresses(page);
+  await rowOf(card, ADDR_A.address).getByRole('button', { name: 'Release', exact: true }).click();
+  await page.waitForTimeout(150);
+  await card.locator('select').nth(1).selectOption('subnet2');
+  await expect(rowOf(card, ADDR_A.address)).toBeVisible();
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(card.getByRole('button', { name: 'Confirm release' })).toHaveCount(0);
+});
+
+test('R2. a teardown preview whose inputs changed while it ran lands stale', async ({ page }) => {
+  const gate = deferred();
+  const seen: string[] = [];
+  await page.route('**/api/teardown/site/stream*', async (route) => {
+    seen.push(route.request().url());
+    await gate.held;
+    return route.fulfill({ status: 200, contentType: 'text/event-stream', body: SITE_PREVIEW });
+  });
+  await page.route('**/api/desk/spaces*', (r) => r.fulfill({ status: 404, body: '{}' }));
+  await page.goto('/#provision');
+  await page.getByRole('button', { name: 'Full site', exact: true }).click();
+  await page.getByRole('combobox').filter({ hasText: /baseline-site/ }).first().selectOption('baseline-site');
+  const card = page.locator('[data-panel-id="provision-site-teardown"]');
+  await card.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect.poll(() => seen.length).toBe(1);
+  await page.locator('[data-panel-id="provision-site-request"] select').first().selectOption('Baseline Space');
+  gate.release();
+  await expect(card.getByText('inputs changed — preview again')).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Tear down this site', exact: true })).toHaveCount(0);
+  await expect(card.getByText('amer-lab', { exact: true })).toHaveCount(0);
+  await expect(card.getByText('Press Preview to see the site name.')).toBeVisible();
+});
+
+for (const status of [401, 403]) {
+  test(`R3. a real upstream ${status} on a list read says no permission and does not retry`, async ({ page }) => {
+    let reads = 0;
+    await page.route('**/api/dns/zones*', (r) => json(r, { zones: [ZONE] }));
+    // The exact shape go/internal/server/ipam.go writeUpstreamError sends.
+    await page.route('**/api/dns/records*', (r) => { reads += 1; return json(r, { error: 'upstream request failed', status, upstream: 'denied' }, 502); });
+    await page.goto('/#selfservice');
+    const card = await openTask(page, 'records');
+    await card.locator('select').selectOption(ZONE.id);
+    await expect(card.getByText(NO_PERM)).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+    await page.waitForTimeout(2500);
+    expect(reads).toBe(1);
+  });
+}
+
+test('R3. another upstream failure on a list read is still an outage', async ({ page }) => {
+  await page.route('**/api/dns/zones*', (r) => json(r, { zones: [ZONE] }));
+  await page.route('**/api/dns/records*', (r) => json(r, { error: 'upstream request failed', status: 500 }, 502));
+  await page.goto('/#selfservice');
+  const card = await openTask(page, 'records');
+  await card.locator('select').selectOption(ZONE.id);
+  await expect(card.getByText(/Could not load current data: 502/)).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText(NO_PERM)).toHaveCount(0);
+});
+
+test('R4. Changes shows no permission when the audit read was refused', async ({ page }) => {
+  await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error', permission_denied: true }));
+  await page.goto('/#changes');
+  await expect(page.locator('[data-panel-id="changes-notability"]').getByText(NO_PERM)).toBeVisible();
+  await expect(page.locator('[data-panel-id="changes-changed-objects"]').getByText(NO_PERM)).toBeVisible();
+  await expect(page.getByText('CSP audit feed unavailable')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
+test('R4. Changes still says unavailable for any other audit failure', async ({ page }) => {
+  await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error' }));
+  await page.goto('/#changes');
+  await expect(page.getByText('CSP audit feed unavailable').first()).toBeVisible();
+  await expect(page.getByText(NO_PERM)).toHaveCount(0);
+});
+
+test('R5. a refused IQ Actions read is a permission problem and keeps its reason', async ({ page }) => {
+  await page.route(/\/api\/actions(\?.*)?$/, (r) => json(r, { actions: [], unavailable: REFUSED, availability: 'error' }));
+  await page.goto('/#incidents');
+  const queue = page.locator('[data-panel-id="incidents-soc-queue"]');
+  await expect(queue.getByText(REFUSED)).toBeVisible();
+  await expect(queue.getByText('No permission')).toBeVisible();
+  await expect(queue.getByText('IQ Actions feed unavailable')).toHaveCount(0);
+  await expect(queue.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
+test('R6. Cancel is off while a key replacement is saving', async ({ page }) => {
+  const gate = deferred();
+  await page.route('**/api/vault/tenant-update', async (r) => { await gate.held; return json(r, { ok: false, error: 'bad key' }); });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: 'Change key for Example Lab' }).click();
+  await sheet.getByLabel('New Infoblox API key').fill('new-key');
+  await sheet.getByRole('button', { name: 'Replace key' }).click();
+  await expect(sheet.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+  gate.release();
+  await expect(sheet.getByRole('alert').filter({ hasText: 'bad key' })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+});
+
+test('R6. a key test answering after Cancel does not reopen the form', async ({ page }) => {
+  const gate = deferred();
+  await page.route('**/api/vault/test-key', async (r) => { await gate.held; return json(r, { ok: true, name: 'Example' }); });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: 'Change key for Example Lab' }).click();
+  await sheet.getByLabel('New Infoblox API key').fill('new-key');
+  await sheet.getByRole('button', { name: 'Test', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(sheet.getByLabel('New Infoblox API key')).toHaveCount(0);
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(sheet.getByLabel('New Infoblox API key')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'Change key for Example Lab' })).toBeVisible();
+});

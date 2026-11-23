@@ -1679,3 +1679,13 @@ test('isNoPermission spots a 401 or 403, and nothing that merely contains the nu
   assert.equal(isNoPermission('subnet 10.0.0.403 is full'), false)
   assert.equal(isNoPermission(null), false)
 })
+
+test('isNoPermission reads the server refusal sentence, and not other text with 403 in it', () => {
+  const refused = "Infoblox refused the call (HTTP 403). This key's user probably needs the ib-mcp-server-user group (Infoblox ticket PTCI-4674)."
+  assert.equal(isNoPermission(refused), true)
+  assert.equal(isNoPermission(`Sources failed: ${refused}`), true)
+  assert.equal(isNoPermission("You don't have permission to see this. Check the key in Settings."), true)
+  assert.equal(isNoPermission('Row failed (HTTP 403) while saving a note'), false)
+  assert.equal(isNoPermission('Infoblox refused the call (HTTP 500). Try later.'), false)
+  assert.equal(isNoPermission('ticket 403 is still open'), false)
+})

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
-import { useApi } from '../lib/api.js'
+import { NO_PERMISSION, useApi } from '../lib/api.js'
 import {
   NOT_ENOUGH_HISTORY,
   OOH_END_HOUR,
@@ -89,6 +89,7 @@ export default function Changes() {
   const groups = useMemo(() => groupByResource(rows), [rows])
   const summary = useMemo(() => feedSummary(rows), [rows])
   const state = feedState({ payload: data, error, loading, rowsInWindow: rows })
+  const refused = data?.permission_denied === true
   const win = windowLabel({ truncated, rows, nowMs })
   // When the payload arrived, not when this render ran: the half-minute
   // window tick must not make an old read look fresh.
@@ -119,7 +120,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={96} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason="nothing can be said about the last 24 hours" />
+              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'nothing can be said about the last 24 hours'} />
             ) : (
               <NotabilityBand band={band} listed={summary.listed} />
             )}
@@ -139,7 +140,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={250} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason="the portal audit read did not complete" />
+              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'the portal audit read did not complete'} />
             ) : state === 'empty' ? (
               <Empty>nothing changed in the last 24 hours</Empty>
             ) : (

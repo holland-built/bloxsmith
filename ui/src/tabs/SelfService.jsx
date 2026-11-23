@@ -723,18 +723,27 @@ function ManageRecordsPanel() {
   const [armedId, setArmedId] = useState(null)
   const [armLabel, setArmLabel] = useState('')
   const confirmRef = useRef('')
+  // Each check gets a number. Cancel, a new check or a new list retires the
+  // running one, so its late answer cannot open a confirm box.
+  const checkRef = useRef(0)
+  function closeConfirm() {
+    checkRef.current += 1
+    setArmedId(null)
+  }
 
   function handleDeleteClick(row) {
-    if (armedId === row.id) { setArmedId(null); return }
+    if (armedId === row.id) { closeConfirm(); return }
     {
       setDeleteError(null)
       setPanelMessage(null)
       // Arm only on a fresh read that still finds the row, so the confirm
       // label never shows details that may have changed.
+      const run = ++checkRef.current
       fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
+          if (run !== checkRef.current) return
           const fresh = j && (j.records || []).find((x) => x.id === row.id)
           if (!fresh) {
             setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : "Couldn't re-check that record, so it wasn't deleted. Try again.")
@@ -744,6 +753,7 @@ function ManageRecordsPanel() {
           const nm = fresh.name_in_zone || '@'
           // The one "are you sure": says whether Bloxsmith made it.
           return checkDelete('dns_record', row.id).then((c) => {
+            if (run !== checkRef.current) return
             if (!c.ok || c.data?.blocked) {
               setDeleteError(c.data?.blocked || c.data?.error || "Couldn't check that record, so it wasn't deleted. Try again.")
               return
@@ -757,7 +767,7 @@ function ManageRecordsPanel() {
   }
 
   function confirmDeleteRow(row) {
-    setArmedId(null)
+    closeConfirm()
     setDeleteError(null)
     confirmDelete('dns_record', row.id, confirmRef.current)
       .then(({ ok: rOk, status, data }) => {
@@ -785,7 +795,7 @@ function ManageRecordsPanel() {
           <legend className="sr-only">Which zones to list</legend>
           {[[false, 'Forward zones'], [true, 'Reverse zones']].map(([rev, text]) => (
             <label key={text} className="flex items-center gap-2">
-              <input type="radio" name="ss-records-zone-kind" checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }} />
+              <input type="radio" name="ss-records-zone-kind" checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); closeConfirm(); setDeleteError(null); setPanelMessage(null) }} />
               {text}
             </label>
           ))}
@@ -794,7 +804,7 @@ function ManageRecordsPanel() {
           <FilterSelect
             label="Zone"
             value={zoneId}
-            onChange={(v) => { setZoneId(v); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }}
+            onChange={(v) => { setZoneId(v); setEditingId(null); closeConfirm(); setDeleteError(null); setPanelMessage(null) }}
             options={zoneOptions(zones, reverse)}
             placeholder="Select zone…"
           />
@@ -864,7 +874,7 @@ function ManageRecordsPanel() {
                     </div>
                     {isArmed && (
                       <div className="flex flex-col mt-2">
-                        <ConfirmStep warn takeFocus yesLabel="Confirm delete" onYes={() => confirmDeleteRow(row)} onCancel={() => setArmedId(null)}>
+                        <ConfirmStep warn takeFocus yesLabel="Confirm delete" onYes={() => confirmDeleteRow(row)} onCancel={() => closeConfirm()}>
                           {armLabel}
                         </ConfirmStep>
                       </div>
@@ -931,15 +941,24 @@ function ManageAddressesPanel() {
   const [armLabel, setArmLabel] = useState('')
   const [releaseError, setReleaseError] = useState(null)
   const confirmRef = useRef('')
+  // Each check gets a number. Cancel, a new check or a new list retires the
+  // running one, so its late answer cannot open a confirm box.
+  const checkRef = useRef(0)
+  function closeConfirm() {
+    checkRef.current += 1
+    setArmedId(null)
+  }
 
   function handleRelease(row) {
-    if (armedId === row.id) { setArmedId(null); return }
+    if (armedId === row.id) { closeConfirm(); return }
     {
       setReleaseError(null)
+      const run = ++checkRef.current
       fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
+          if (run !== checkRef.current) return
           const fresh = j && (j.addresses || []).find((x) => x.id === row.id)
           if (!fresh) {
             setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : "Couldn't re-check that address, so it wasn't released. Try again.")
@@ -948,6 +967,7 @@ function ManageAddressesPanel() {
           }
           // The one "are you sure": says whether Bloxsmith made it.
           return checkDelete('address', row.id).then((c) => {
+            if (run !== checkRef.current) return
             if (!c.ok || c.data?.blocked) {
               setReleaseError(c.data?.blocked || c.data?.error || "Couldn't check that address, so it wasn't released. Try again.")
               return
@@ -961,7 +981,7 @@ function ManageAddressesPanel() {
   }
 
   function confirmRelease(row) {
-    setArmedId(null)
+    closeConfirm()
     setReleaseError(null)
     confirmDelete('address', row.id, confirmRef.current)
       .then(({ ok: rOk, status, data }) => {
@@ -988,7 +1008,7 @@ function ManageAddressesPanel() {
           <FilterSelect
             label="IP Space"
             value={space}
-            onChange={(v) => { setSpace(v); setSubnetId(''); setArmedId(null); setReleaseError(null) }}
+            onChange={(v) => { setSpace(v); setSubnetId(''); closeConfirm(); setReleaseError(null) }}
             options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
             placeholder="Select space…"
           />
@@ -997,7 +1017,7 @@ function ManageAddressesPanel() {
           <FilterSelect
             label="Subnet"
             value={subnetId}
-            onChange={(v) => { setSubnetId(v); setArmedId(null); setReleaseError(null) }}
+            onChange={(v) => { setSubnetId(v); closeConfirm(); setReleaseError(null) }}
             options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
             placeholder="Select subnet…"
             disabled={!space}
@@ -1052,7 +1072,7 @@ function ManageAddressesPanel() {
                     </div>
                     {isArmed && (
                       <div className="flex flex-col mt-2">
-                        <ConfirmStep warn takeFocus yesLabel="Confirm release" onYes={() => confirmRelease(row)} onCancel={() => setArmedId(null)}>
+                        <ConfirmStep warn takeFocus yesLabel="Confirm release" onYes={() => confirmRelease(row)} onCancel={() => closeConfirm()}>
                           {armLabel}
                         </ConfirmStep>
                       </div>

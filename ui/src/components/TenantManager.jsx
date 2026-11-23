@@ -295,7 +295,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
       setEdit(null)
       load()
     } else {
-      setEdit((e) => ({ ...e, busy: false, err: data.error || 'Could not replace key.' }))
+      setEdit((e) => e && { ...e, busy: false, err: data.error || 'Could not replace key.' })
     }
   }
 
@@ -311,7 +311,8 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         : data.unverified
           ? 'Unverified: could not verify — check connectivity and try again'
           : 'Invalid: ' + (data.error || 'rejected')
-    setEdit((e) => ({ ...e, test }))
+    // The form may have been closed while the test ran.
+    setEdit((e) => e && { ...e, test })
   }
 
   // Grant or revoke write permission for the tenant a write would currently
@@ -478,7 +479,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   {edit.busy ? 'Replacing…' : 'Replace key'}
                 </button>
                 <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
-                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50" disabled={edit.busy} onClick={() => setEdit(null)}>Cancel</button>
               </div>
             </div>
               ) : (
