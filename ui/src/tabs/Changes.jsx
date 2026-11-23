@@ -25,6 +25,7 @@ import {
 import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Changes.css'
+import { formatTime } from '../lib/dates.js'
 
 // WHAT CHANGED (#changes)
 //
@@ -111,7 +112,7 @@ export default function Changes() {
             )}
             <span className="ov-pill">
               <span aria-hidden="true" className={`ov-live${state === 'unavailable' ? ' down' : state === 'loading' ? ' wait' : ''}`} />
-              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? 'Not updated' : `Updated ${fetchedAt ? fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`}
+              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? 'Not updated' : `Updated ${fetchedAt ? formatTime(fetchedAt) : ''}`}
             </span>
           </span>
         </div>
@@ -120,7 +121,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={96} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'nothing can be said about the last 24 hours'} />
+              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : 'nothing can be said about the last 24 hours'} />
             ) : (
               <NotabilityBand band={band} listed={summary.listed} />
             )}
@@ -140,7 +141,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={250} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'the portal audit read did not complete'} />
+              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : 'the portal audit read did not complete'} />
             ) : state === 'empty' ? (
               <Empty>nothing changed in the last 24 hours</Empty>
             ) : (
@@ -194,7 +195,7 @@ function BandCell({ cell, listed }) {
   const unknown = cell.state === 'unknown'
   const populated = cell.state === 'populated'
   const alarm = populated && ALARM.has(cell.key)
-  const word = unknown ? 'Unknown' : populated ? (alarm ? 'Look' : '') : 'None'
+  const word = unknown ? 'Unknown' : populated ? (alarm ? 'Review' : '') : 'None'
   const tip = (
     <>
       {unknown && <>{NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)}: {cell.reason}. </>}

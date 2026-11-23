@@ -59,5 +59,5 @@ test('Assets: a Cube.js time with no zone is read as UTC, so Last seen is never 
   // later time, and the age could not be a past one.
   const cell = row.locator('span[title]').last();
   await expect(cell).toHaveText(/^(just now|\d+m ago)$/);
-  await expect(cell).toHaveAttribute('title', await page.evaluate((iso) => new Date(iso + 'Z').toLocaleString(), utcNoZone));
+  await expect(cell).toHaveAttribute('title', await page.evaluate((iso) => new Date(iso + 'Z').toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }), utcNoZone));
 });

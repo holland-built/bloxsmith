@@ -434,7 +434,7 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 // a page that has rows in it loses data.
 func assembleAssetInventory(aq AssetQuery, listRows, countRows []map[string]any) map[string]any {
 	if listRows == nil {
-		return assetsUnavailable(aq, "the asset inventory query failed upstream")
+		return assetsUnavailable(aq, "the asset inventory query failed in Infoblox")
 	}
 	// RULE 3, AND IT IS A THIRD STATE, NOT A SUBCASE OF THE OTHER TWO. The two
 	// rules above both hang off listRows == nil: the query failed, or it ran
@@ -674,7 +674,7 @@ func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
 // renders as empty, not as broken.
 func assembleAssetFilters(typeRows, countRows []map[string]any) map[string]any {
 	if typeRows == nil {
-		return assetFiltersUnavailable("the asset type query failed upstream")
+		return assetFiltersUnavailable("the asset type query failed in Infoblox")
 	}
 	types := make([]any, 0, len(typeRows))
 	for _, raw := range typeRows {
@@ -775,7 +775,7 @@ func (s *Service) assetDetailUncached(ctx context.Context, cqid string) map[stri
 // decommissioned.
 func assembleAssetDetail(rows []map[string]any) map[string]any {
 	if rows == nil {
-		return assetDetailUnavailable("the asset detail query failed upstream")
+		return assetDetailUnavailable("the asset detail query failed in Infoblox")
 	}
 	if len(rows) == 0 {
 		return map[string]any{"detail": nil, "availability": "empty"}

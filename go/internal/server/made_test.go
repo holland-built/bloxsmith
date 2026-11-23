@@ -507,3 +507,24 @@ func TestParseItemID(t *testing.T) {
 		}
 	}
 }
+
+// A list delete that got no clear answer may have worked, whichever delete
+// path it took, so the reply and the audit row must not call it a refusal.
+func TestMadeDelete_NoClearAnswerSaysTheOutcomeIsUnknown(t *testing.T) {
+	const want = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
+	f := newMadeFake()
+	d, _ := newListsDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" {
+			w.WriteHeader(504)
+			return
+		}
+		f.handler(w, r)
+	})
+	d.StateDir = t.TempDir()
+	f.lists["42"] = map[string]any{"id": 42, "name": "bloxsmith-test", "policies": []any{}}
+	_, pre := madePost(t, d, map[string]any{"kind": "custom_list", "id": "42", "dry": true})
+	code, res := madePost(t, d, map[string]any{"kind": "custom_list", "id": "42", "dry": false, "confirm": pre["confirm"]})
+	if code != 502 || res["error"] != want {
+		t.Fatalf("delete = %d %v, want 502 with %q", code, res["error"], want)
+	}
+}

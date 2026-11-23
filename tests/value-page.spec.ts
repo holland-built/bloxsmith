@@ -63,7 +63,7 @@ test('the day chart reads by keyboard and by tap', async ({ page }) => {
   await page.keyboard.press('Home');
   await expect(readout).toContainText('Oct 1:');
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-  await expect(readout).toContainText('Oct 5: no data');
+  await expect(readout).toContainText('Oct 5: no reading');
   const box = (await chart.boundingBox())!;
   await page.mouse.click(box.x + box.width * (29.5 / 30), box.y + box.height / 2);
   await expect(readout).toContainText('Oct 30: 100 blocked, may be incomplete');

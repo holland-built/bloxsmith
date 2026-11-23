@@ -202,7 +202,7 @@ test.describe('Assets → filter bar (availability:"error")', () => {
     await page.goto('/#assets');
 
     const bar = panel(page, 'assets-filter-bar');
-    await expect(bar.locator('[data-feed-unavailable="Asset filter feed unavailable"]')).toBeVisible();
+    await expect(bar.locator('[data-feed-unavailable="Asset filter information is unavailable"]')).toBeVisible();
 
     // THE ASSERTION WITH TEETH, and it is the line directly below, not the one
     // after it. FILTERS_ERROR carries `types: []` exactly as the server does, so

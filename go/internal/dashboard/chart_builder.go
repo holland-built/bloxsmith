@@ -520,7 +520,7 @@ func (s *Service) runCubeQuery(ck string, g uint64, q map[string]any, endpoint s
 	if errored(st, err) {
 		return map[string]any{
 			"query": q, "endpoint": endpoint, "rows": []map[string]any{},
-			"status": "error", "reason": "Infoblox didn't answer this query (upstream error).",
+			"status": "error", "reason": "Infoblox didn't answer this query.",
 		}
 	}
 	raw := cubeData(body)
@@ -580,7 +580,7 @@ func (s *Service) runBuckets(base map[string]any, endpoint string, split chartCh
 	if failed {
 		return map[string]any{
 			"query": queries, "endpoint": endpoint, "rows": []map[string]any{},
-			"status": "error", "reason": "Infoblox didn't answer this query (upstream error).",
+			"status": "error", "reason": "Infoblox didn't answer this query.",
 		}
 	}
 	return map[string]any{"query": queries, "endpoint": endpoint, "rows": rows, "status": "ok"}

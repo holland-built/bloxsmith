@@ -592,7 +592,7 @@ func TestDNSRecordCreate_UpstreamFailureSurfaces(t *testing.T) {
 		if status != 500 || resultOK(res) {
 			t.Fatalf("want ok:false/500, got %d %+v", status, res)
 		}
-		if res["error"] != "create failed (status 500)" {
+		if res["error"] != "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again." {
 			t.Fatalf("error = %q", res["error"])
 		}
 		// The upstream body is preserved rather than swallowed — without it
@@ -633,7 +633,7 @@ func TestDNSRecordCreate_UpstreamFailureSurfaces(t *testing.T) {
 		if status != 502 || resultOK(res) {
 			t.Fatalf("want ok:false/502, got %d %+v", status, res)
 		}
-		const want = "create failed (could not reach the tenant — no request completed)"
+		const want = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
 		if pyStr(res["error"]) != want {
 			t.Fatalf("error = %q, want %q", res["error"], want)
 		}

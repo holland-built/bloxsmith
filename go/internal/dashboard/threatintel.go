@@ -130,7 +130,7 @@ func (s *Service) fetchDossier(q, itype string) map[string]any {
 	job, st, _ := s.Rest.GetEx("/tide/api/services/intel/lookup/indicator/"+itype,
 		map[string]string{"value": q, "wait": "true"})
 	if st == 403 {
-		res := dossierUnavail(q, itype, "Dossier not entitled")
+		res := dossierUnavail(q, itype, "This lookup is not included in your subscription")
 		s.Cache.SetGen(ck, res, g)
 		return res
 	}
@@ -411,7 +411,7 @@ func lookalikeUnavailable(err error) map[string]any {
 	reason := "Lookalike Domains service unavailable"
 	notEntitled := false
 	if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == 403 {
-		reason = "Lookalike Domains not entitled"
+		reason = "Lookalike Domains is not included in your subscription"
 		notEntitled = true
 	}
 	return map[string]any{"domains": []any{}, "targets": []any{},

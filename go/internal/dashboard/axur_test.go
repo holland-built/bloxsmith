@@ -245,10 +245,10 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 		wantReason  string
 		notEntitled bool
 	}{
-		{"403", 403, "Axur supplier monitoring not entitled for this key", true},
+		{"403", 403, "Axur supplier monitoring is not included for this key", true},
 		{"401", 401, "Axur rejected the credential — check the key under Settings", false},
-		{"500", 500, "Axur service unavailable — The upstream server returned an error (status 500).", false},
-		{"404", 404, "Axur service unavailable — The upstream server returned an error (status 404).", false},
+		{"500", 500, "Axur service unavailable — Axur returned an error (status 500).", false},
+		{"404", 404, "Axur service unavailable — Axur returned an error (status 404).", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

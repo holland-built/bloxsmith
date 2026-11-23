@@ -244,7 +244,7 @@ func (e *Engine) NewSiteProvisioner(cfg *SiteConfig, emit Emitter) *SiteProvisio
 // loop and not from provisionHosts, which has no result map — appending in both
 // would list the same host twice.
 func (p *SiteProvisioner) noteUnknownID(result M, kind, label string) {
-	p.emit(M{"step": fmt.Sprintf("  Warning: %s %s was created upstream but the response carried no id — "+
+	p.emit(M{"step": fmt.Sprintf("  Warning: %s %s was created in Infoblox but the response carried no id — "+
 		"it cannot be rolled back automatically or found again by id", kind, label)})
 	appendTo(result, "unknown_ids", M{"kind": kind, "label": label})
 }
@@ -990,7 +990,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 			p.emit(M{"step": fmt.Sprintf("  Rollback: cannot delete %s %s — it was created but the "+
 				"response carried no id. It is still there; remove it by hand.", kind, label)})
 			residual = append(residual, M{"kind": kind, "id": "", "label": label, "status": 0,
-				"reason": "created upstream but the create response carried no id, so rollback could not delete it"})
+				"reason": "created in Infoblox but the create response carried no id, so rollback could not delete it"})
 			return
 		}
 		// None of these three are ids. "" is a REUSED or legacy entry whose row
@@ -1007,7 +1007,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
 		if !(status >= 200 && status < 300) {
-			p.emit(M{"step": fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", kind, objID, status)})
+			p.emit(M{"step": rollbackDeleteStep(kind, objID, status)})
 			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status})
 			return
 		}
@@ -1071,7 +1071,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 
 	partial["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
+		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
 	}
 
 	return rollbackReport(attempted, deleted, residual)

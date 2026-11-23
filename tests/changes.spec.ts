@@ -248,7 +248,7 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     );
     await page.goto('/#changes');
 
-    await expect(page.getByText(/csp audit feed unavailable/i).first()).toBeVisible();
+    await expect(page.getByText(/portal audit information is unavailable/i).first()).toBeVisible();
     await expect(page.getByText(/nothing changed in the last 24 hours/i)).toHaveCount(0);
     // No band either: four "None" cells would answer four questions nobody
     // could actually ask.
@@ -264,7 +264,7 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await page.goto('/#changes');
 
     await expect(page.getByText(/nothing changed in the last 24 hours/i)).toBeVisible();
-    await expect(page.getByText(/csp audit feed unavailable/i)).toHaveCount(0);
+    await expect(page.getByText(/portal audit information is unavailable/i)).toHaveCount(0);
   });
 
   test('the request asks the server for the last 24 h', async ({ page }) => {

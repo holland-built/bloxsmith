@@ -40,7 +40,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     );
     await page.goto('/#overview');
     const row = hostsRow(page);
-    await expect(row).toContainText('not checked: feed unavailable', { timeout: 20_000 });
+    await expect(row).toContainText('not checked: information unavailable', { timeout: 20_000 });
     await expect(hostsTile(page)).toContainText('unavailable');
     await expect(row).not.toContainText('None open');
     await expect(row).not.toContainText('0 of 0');
@@ -80,8 +80,8 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     );
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
-    await expect(card.getByText(/subnets feed unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/subnet information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('subnets feed empty renders the normal empty state', async ({ page }) => {
@@ -90,8 +90,8 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     );
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
-    await expect(card.getByText(/subnets feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/^No subnets found$/i)).toBeVisible();
+    await expect(card.getByText(/subnet information is unavailable/i)).toHaveCount(0);
   });
 
   test('subnets feed ok renders the utilization chart', async ({ page }) => {
@@ -104,8 +104,8 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
     await expect(card.getByText(/2 loaded/i)).toBeVisible();
-    await expect(card.getByText(/subnets feed unavailable/i)).toHaveCount(0);
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/subnet information is unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 });
 
@@ -150,14 +150,14 @@ test.describe('Audit → Activity Summary panel (audit chain)', () => {
     await page.goto('/#audit');
     const card = page.locator('text=Activity Summary').locator('..').locator('..');
     await expect(card.getByText(/audit log unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('a chain that read cleanly and holds nothing renders the normal empty state', async ({ page }) => {
     await page.route('**/api/audit/log', (route) => fulfillJson(route, auditLogPayload([])));
     await page.goto('/#audit');
     const card = page.locator('text=Activity Summary').locator('..').locator('..');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
+    await expect(card.getByText(/^No audit entries yet$/i)).toBeVisible();
     await expect(card.getByText(/audit log unavailable/i)).toHaveCount(0);
   });
 
@@ -171,7 +171,7 @@ test.describe('Audit → Activity Summary panel (audit chain)', () => {
     await expect(card.getByText('Subnet created')).toBeVisible();
     await expect(card.getByText('Change blocked (read-only)')).toBeVisible();
     await expect(card.getByText(/audit log unavailable/i)).toHaveCount(0);
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('a short read says the list is incomplete', async ({ page }) => {

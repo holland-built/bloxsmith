@@ -239,7 +239,7 @@ func TestZoneCreate_UpstreamFailureIsNotSuccess(t *testing.T) {
 	if res["ok"] != false || status != 500 {
 		t.Fatalf("= (%v, %d), want ok:false 500", res, status)
 	}
-	if !strings.Contains(pyStr(res["error"]), "create failed (status 500)") {
+	if !strings.Contains(pyStr(res["error"]), "may or may not have happened") {
 		t.Fatalf("error = %v, want it to name the upstream status", res["error"])
 	}
 	if res["detail"] == nil {
@@ -984,7 +984,7 @@ func TestBuilders_TransportErrorReturns502(t *testing.T) {
 	if res["ok"] != false {
 		t.Fatalf("ok = %v, want false", res["ok"])
 	}
-	const want = "create failed (could not reach the tenant — no request completed)"
+	const want = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
 	if pyStr(res["error"]) != want {
 		t.Fatalf("error = %q, want %q", res["error"], want)
 	}
@@ -1014,16 +1014,16 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 	}{
 		{"ZoneCreate", func(c *Client) (M, int) {
 			return c.ZoneCreate(M{"fqdn": "example.com.", "view": "v", "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"ZoneUpdate", func(c *Client) (M, int) {
 			return c.ZoneUpdate(M{"id": "dns/auth_zone/z1", "comment": "c", "dry": false})
-		}, "update failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"SubnetCreate", func(c *Client) (M, int) {
 			return c.SubnetCreate(M{"block_id": "ipam/address_block/b1", "cidr": 24.0, "dry": false})
-		}, "could not read the address block: could not reach the tenant — no request completed"},
+		}, "could not read the address block: no answer from the tenant"},
 		{"SubnetUpdate", func(c *Client) (M, int) {
 			return c.SubnetUpdate(M{"id": "ipam/subnet/s1", "name": "n", "dry": false})
-		}, "update failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"BlockCreate", func(c *Client) (M, int) {
 			return c.BlockCreate(M{"address": "10.0.0.0", "cidr": 16.0, "space": "sp", "dry": false})
 		}, freecheckUnreachable},
@@ -1032,23 +1032,23 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 		}, freecheckUnreachable},
 		{"RangeUpdate", func(c *Client) (M, int) {
 			return c.RangeUpdate(M{"id": "ipam/range/r1", "comment": "c", "dry": false})
-		}, "update failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"HostCreate", func(c *Client) (M, int) {
 			return c.HostCreate(M{"name": "h", "addresses": []any{M{"address": "10.0.0.5"}}, "dry": false})
 		}, freecheckUnreachable},
 		{"HostUpdate", func(c *Client) (M, int) {
 			return c.HostUpdate(M{"id": "ipam/host/h1", "name": "n", "dry": false})
-		}, "update failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"DNSRecordCreate", func(c *Client) (M, int) {
 			return c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "h",
 				"type": "A", "value": "10.0.0.5", "dry": false})
-		}, "create failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"SelfserviceAllocate", func(c *Client) (M, int) {
 			return c.SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
-		}, "allocation failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 		{"Delete", func(c *Client) (M, int) {
 			return c.Delete("/api/ddi/v1/ipam/host/h-1")
-		}, "delete failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 	}
 
 	for _, tc := range cases {

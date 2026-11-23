@@ -134,7 +134,7 @@ func (c coverageCombo) hasNetwork() bool {
 // assembleCoverage is pure: the grouped rows in, the tiles out.
 func assembleCoverage(rows []map[string]any, err error) map[string]any {
 	if rows == nil {
-		reason := "the asset source query failed upstream"
+		reason := "the asset source query failed in Infoblox"
 		if r := mcp.Reason(err); r != "" {
 			reason = r
 		}

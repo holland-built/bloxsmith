@@ -89,9 +89,9 @@ test('any data set: search, pick, chart, and back to the common charts', async (
   await expect.poll(() => new URLSearchParams(asked[asked.length - 1]).has('window')).toBe(false);
 
   // The "Show cube names" switch shows the names Infoblox uses.
-  await page.getByRole('switch', { name: 'Show cube names' }).click();
+  await page.getByRole('switch', { name: 'Show technical names' }).click();
   await expect(page.getByLabel('What to count').locator('option').first()).toHaveText('DnsActivityV1.total_query_count');
-  await page.getByRole('switch', { name: 'Show cube names' }).click();
+  await page.getByRole('switch', { name: 'Show technical names' }).click();
 
   await page.getByRole('button', { name: 'Back to common charts' }).click();
   await expect(heading(page)).toHaveText('Top 10 devices by DNS queries, last 7 days');

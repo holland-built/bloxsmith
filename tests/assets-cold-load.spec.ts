@@ -105,7 +105,7 @@ test('a cold Assets read that outlives the old budget still renders', async ({ p
   // rather than checking once at the end, because it is transient by nature.
   const failureSeen: string[] = [];
   const sample = async () => {
-    for (const phrase of ['Asset inventory unavailable', 'Asset filter feed unavailable']) {
+    for (const phrase of ['Asset inventory unavailable', 'Asset filter information is unavailable']) {
       try {
         if (await page.getByText(phrase).count()) failureSeen.push(phrase);
       } catch { /* page mid-navigation */ }

@@ -168,6 +168,10 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 			out["record"] = M{"ok": false, "status": rstatus, "detail": rresp}
 			out["error"] = fmt.Sprintf("the reservation was made, but the DNS record was not (%s). "+
 				"The device still gets %s; add the record on its own", statusPhrase(rstatus), address)
+			if rest.NoClearAnswer(rstatus) {
+				out["error"] = fmt.Sprintf("the reservation was made, but the DNS record may or may not exist. "+
+					"The device still gets %s; check for the record in Infoblox", address)
+			}
 			return out, 502
 		}
 	}

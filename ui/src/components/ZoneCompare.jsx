@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { abortAfter } from '../lib/api.js'
+import { abortAfter, failureText } from '../lib/api.js'
 import { FIELD_CLS } from './ui.jsx'
 
 // "Compare views" on the DNS tab: one zone name that lives in two or more DNS
@@ -54,7 +54,7 @@ export default function ZoneCompare({ zones, onClose }) {
       const res = await fetch(`/api/dns/zone-compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { cache: 'no-store', signal })
       const body = await res.json().catch(() => ({}))
       if (!res.ok || body.status === 'error') {
-        setState({ busy: false, error: body.error || `The comparison failed (${res.status}).`, result: null, names })
+        setState({ busy: false, error: body.error || failureText(res.status, 'compare the zones'), result: null, names })
       } else {
         setState({ busy: false, error: '', result: body, names })
       }

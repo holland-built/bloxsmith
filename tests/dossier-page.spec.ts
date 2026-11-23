@@ -289,7 +289,7 @@ test.describe('availability states', () => {
     await expect(why).toContainText(/unknown/i);
     // The ledger row itself carries none of the zero-count vocabulary — that is
     // the line an operator scans, and it must not say "none".
-    await expect(dns).not.toContainText(/no data|nothing found|no matching/i);
+    await expect(dns).not.toContainText(/no data|nothing found|nothing to show|no rows to show|no matching/i);
 
     // "Nothing found" DOES appear once in the section, and only there: inside
     // the why block's "Not this" line, which exists to name that reading and
@@ -351,7 +351,7 @@ test.describe('availability states', () => {
     // Distinct from all four existing outcomes, in the words as well as the
     // attribute: it is not a failure, and it is not an empty result.
     await expect(ipam).not.toContainText(/unavailable|could not|can[’']t be asked/i);
-    await expect(ipam).not.toContainText(/no IPAM address object|nothing found|no data/i);
+    await expect(ipam).not.toContainText(/no IPAM address object|nothing found|nothing to show|no rows to show|no data/i);
     // The why block belongs to the two UNKNOWN states. Nothing here is
     // unknown, so it must not appear — a warning stripe would undo the point.
     await expect(page.locator('[data-dossier-why="ipam"]')).toHaveCount(0);
@@ -416,7 +416,7 @@ test.describe('availability states', () => {
       await expect(changes).toContainText(/what kind of object/i);
       // None of the proven-negative vocabulary, and none of the alarm
       // vocabulary: nothing is broken and nothing was found to be absent.
-      await expect(changes).not.toContainText(/no change|holds none|nothing found|no data/i);
+      await expect(changes).not.toContainText(/no change|holds none|nothing found|nothing to show|no rows to show|no data/i);
       await expect(changes).not.toContainText(/unavailable|could not/i);
       await expect(page.locator('[data-dossier-why="changes"]')).toHaveCount(0);
 

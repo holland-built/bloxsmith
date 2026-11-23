@@ -397,7 +397,7 @@ func TestRBSubnetCreatedThenTaggingFailedIsStillRolledBack(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the tagging failure (out %v)", out)
 	}
-	if !strings.Contains(err.Error(), "tagging failed") {
+	if !strings.Contains(err.Error(), "tagging") {
 		t.Fatalf("Provision() error = %q, want the tagging failure — the run broke somewhere else and this "+
 			"test is not exercising a created-but-untagged subnet", err.Error())
 	}
@@ -411,7 +411,7 @@ func TestRBSubnetCreatedThenTaggingFailedIsStillRolledBack(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("rollback DELETEs = %v, missing %s\n"+
-			"That subnet was created upstream — the POST returned 201 — and only the tag write failed. It "+
+			"That subnet was created in Infoblox — the POST returned 201 — and only the tag write failed. It "+
 			"is untagged, so teardown cannot find it by tag, and if rollback never recorded it, nothing can "+
 			"find it by id either. It stays in the customer's address space forever.", f.deletes(), created)
 	}

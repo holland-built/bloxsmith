@@ -66,7 +66,7 @@ test('Tear down lists what it removes and sends nothing live until confirmed', a
   await page.getByRole('button', { name: 'Tear down' }).click();
   await expect(page.getByText('VM 211 (jsmith-211) with its disk and seed')).toBeVisible();
   expect(calls).toEqual(['dry']);
-  await page.getByRole('button', { name: 'Keep' }).click();
+  await page.getByRole('button', { name: 'Keep these' }).click();
   await expect(page.getByText('VM 211 (jsmith-211) with its disk and seed')).toHaveCount(0);
   expect(calls).toEqual(['dry']);
   await page.getByRole('button', { name: 'Tear down' }).click();

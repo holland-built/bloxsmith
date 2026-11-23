@@ -1,4 +1,5 @@
-/**
+
+import { formatTime } from './dates.js'/**
  * Saying whose numbers these are, when a panel's figures were counted from a
  * capped page rather than from everything that happened.
  *
@@ -176,6 +177,6 @@ export function sampleSince(data, now = new Date()) {
   const oldest = new Date(Math.min(...times))
   const sameDay = oldest.toDateString() === now.toDateString()
   return sameDay
-    ? oldest.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    ? formatTime(oldest)
     : oldest.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }

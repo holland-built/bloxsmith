@@ -8,6 +8,7 @@ import { useApi } from '../lib/api.js'
 import { COLORS, Empty, FetchError } from './ui.jsx'
 import DeleteCheck from './DeleteCheck.jsx'
 import { canDelete, KIND_WORDS, when } from '../lib/madeDelete.js'
+import { WRITE_UNKNOWN } from '../lib/writeFailure.js'
 
 const STATE_WORDS = { created: '', removed: 'deleted', gone: 'was already gone', failed: 'could not be deleted' }
 const PAGE_WORDS = { '': 'Automate', address: 'Get an address', dns: 'Get an address', lists: 'Site lists', editor: 'Editor', delete: 'Delete' }
@@ -41,7 +42,7 @@ export default function MadeList({ sources, ro, empty = 'Nothing made here yet.'
                       <li key={o.kind + o.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 text-note">
                         <span className="flex-1 min-w-[12rem] break-words">
                           {KIND_WORDS[o.kind] || o.kind}: {o.label}
-                          {STATE_WORDS[o.state] ? <span className="text-muted"> ({STATE_WORDS[o.state]})</span> : null}
+                          {STATE_WORDS[o.state] ? <span className="text-muted"> ({o.error === WRITE_UNKNOWN ? 'result unknown' : STATE_WORDS[o.state]})</span> : null}
                         </span>
                         {o.state === 'created' && canDelete(o.kind) && here(r) && (
                           <DeleteCheck kind={o.kind} id={o.id} what={o.label} ro={ro} onDone={api.refetch} />

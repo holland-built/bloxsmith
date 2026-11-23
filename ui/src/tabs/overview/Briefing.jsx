@@ -60,7 +60,7 @@ function changeWords(c) {
 
 function licenseWords(l) {
   if (l.state === 'loading') return 'Loading…'
-  if (l.state === 'error') return 'License feed unavailable'
+  if (l.state === 'error') return 'License information is unavailable'
   if (l.state === 'empty') return 'No licenses reported'
   const bits = []
   if (l.expired) bits.push(`${l.expired} expired`)

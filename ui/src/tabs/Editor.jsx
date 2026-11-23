@@ -11,6 +11,8 @@ import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
 import { useHashParams } from '../lib/hash.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
+import { failureText } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -146,7 +148,7 @@ function FindExisting({ type, label, picked, busy, onPick, onClear, initialQ = '
       fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`)
         .then(async (r) => {
           const j = await r.json().catch(() => ({}))
-          if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+          if (!r.ok || j.error) throw new Error(j.error || failureText(r.status, 'find that item'))
           return j.items ?? []
         })
     const id = setTimeout(() => {
@@ -310,10 +312,10 @@ export default function Editor() {
   async function doFetch(url, method, body) {
     try {
       const res = await tokenFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const data = await res.json().catch(() => ({}))
-      return { ok: res.ok, data }
+      const data = await res.json().catch(() => null)
+      return { ok: res.ok, status: res.status, data }
     } catch {
-      return { ok: false, data: { error: 'network error' } }
+      return { ok: false, status: 0, data: null }
     }
   }
 
@@ -336,10 +338,10 @@ export default function Editor() {
     setStatus('busy')
     setResult(null)
 
-    doFetch(url, method, body).then(({ ok, data }) => {
+    doFetch(url, method, body).then(({ ok, status: code, data }) => {
       const j = data || {}
-      if (!ok || j.error || j.ok === false) {
-        setResult({ ok: false, msg: j.error || 'request failed' })
+      if (!ok || j.error || j.ok === false || (!dry && !data)) {
+        setResult({ ok: false, msg: dry ? j.error || 'request failed' : writeFailureText(code, data, 'complete this change') })
         setPreview(null)
         setStatus('idle')
         return
@@ -404,13 +406,13 @@ export default function Editor() {
     const sent = tracked
       ? confirmDelete(type, id, delConfirmRef.current)
       : tokenFetch(`${spec.endpoint}/${encodeURIComponent(id)}`, { method: 'DELETE' })
-        .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+        .then(async (r) => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => null) }))
     sent
-      .catch(() => ({ ok: false, data: { error: 'network error' } }))
-      .then(({ ok, data }) => {
+      .catch(() => ({ ok: false, status: 0, data: null }))
+      .then(({ ok, status: code, data }) => {
         const j = data || {}
-        if (!ok || j.error || j.ok === false) {
-          setResult({ ok: false, msg: j.error || 'delete failed' })
+        if (!ok || !data || j.error || j.ok === false) {
+          setResult({ ok: false, msg: writeFailureText(code, data, 'delete this item') })
           setStatus('idle')
           return
         }

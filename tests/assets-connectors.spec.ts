@@ -50,7 +50,7 @@ test('a long message is cut short and opens to the whole text', async ({ page })
 test('a connection list that could not be read says so', async ({ page }) => {
   await installFixtures(page, 'assets');
   await page.route('**/api/csp/asset-connectors', (r) => r.fulfill({ json: {
-    availability: 'error', reason: 'The upstream server returned an error (status 502).', connectors: [],
+    availability: 'error', reason: 'Infoblox returned an error (status 502).', connectors: [],
   } }));
   await page.goto('/#assets');
   await expect(panel(page)).toContainText('Connection list unavailable');

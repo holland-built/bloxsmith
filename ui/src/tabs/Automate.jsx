@@ -5,7 +5,8 @@
 // The older pages (Provision, Self-Service, Demo server) stay as they are.
 // Changes made there are not recorded here and cannot be removed from here.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { DevicesInput, ReadOnlyNote } from '../components/kit.jsx'
@@ -17,6 +18,7 @@ import { playbookFor } from '../lib/ansible.js'
 import { sizeWords, usableCount, withSize } from '../lib/sizes.js'
 import { useHashParams } from '../lib/hash.js'
 import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
+import { formatWhen } from '../lib/dates.js'
 
 const JOBS = [
   { id: 'ip', title: 'Get an IP address', says: 'The next free address in a network you pick' },
@@ -75,8 +77,9 @@ function useDeskFlow(job, onBuilt) {
     const r = await authFetch('/api/desk/run', { method: 'POST', body: JSON.stringify({ job, input, dry }) })
     const j = r.data || {}
     if (mine !== gen.current && dry) return null
-    if (!r.ok || j.ok === false || (j.error && !j.run)) {
-      setError(j.error || (r.tokenRequired ? 'Not allowed: set the dashboard token in Settings.' : `HTTP ${r.status}`))
+    if (!r.ok || j.ok === false || (j.error && !j.run) || (!dry && r.data == null)) {
+      const notAllowed = !j.error && r.tokenRequired ? 'Not allowed: set the dashboard token in Settings.' : null
+      setError(notAllowed || (dry ? j.error || failureText(r.status, 'run this job') : writeFailureText(r.status, r.data, 'run this job')))
       setStatus('idle')
       setPreview(null)
       if (j.run) onBuilt?.()
@@ -671,16 +674,18 @@ const STATUS_WORDS = {
   failed: 'Did not finish',
   removing: 'Removing',
   removed: 'Removed',
-  'remove-failed': 'Some items could not be removed',
+  'remove-failed': 'Some items were not confirmed as removed',
   ready: 'Ready',
 }
 
 const OBJECT_WORDS = { created: '', removed: 'removed', gone: 'was already gone', failed: 'could not be removed' }
+// A removal with no clear answer may have worked, so it is not called a failure.
+const objectWord = (o) => (o.error === WRITE_UNKNOWN ? 'result unknown' : OBJECT_WORDS[o.state])
 
 function when(iso) {
   const t = Date.parse(iso)
   if (!t) return ''
-  return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return formatWhen(t)
 }
 
 // One row of Your recent changes, with its own Remove: first a list of what
@@ -700,10 +705,10 @@ const DEMO_WORDS = {
 const joinFailed = (d) => d?.status === 'failed' && /join|portal/i.test(d.error || '')
 
 function DemoServerLine({ o, info }) {
-  if (!info) return <li>{o.label}{OBJECT_WORDS[o.state] ? `: ${OBJECT_WORDS[o.state]}` : ''}{o.error ? ` (${o.error})` : ''}</li>
+  if (!info) return <li>{o.label}{objectWord(o) ? `: ${objectWord(o)}` : ''}{o.error ? ` (${o.error})` : ''}</li>
   return (
     <li data-demo-server={o.id}>
-      {info.ip ? `demo server ${info.ip}` : o.label}: {OBJECT_WORDS[o.state] && o.state !== 'created' ? OBJECT_WORDS[o.state] : (DEMO_WORDS[info.status] || info.status)}
+      {info.ip ? `demo server ${info.ip}` : o.label}: {objectWord(o) && o.state !== 'created' ? objectWord(o) : (DEMO_WORDS[info.status] || info.status)}
       {info.status === 'failed' && info.error ? ` (${info.error})` : ''}
       {o.error ? ` (${o.error})` : ''}
       {joinFailed(info) && (
@@ -729,12 +734,12 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
     setBusy(false)
     const j = r.data || {}
     if (dry) {
-      if (!r.ok) setError(j.error || `HTTP ${r.status}`)
+      if (!r.ok) setError(j.error || failureText(r.status, 'check what would be removed'))
       else setPlan(j.would_remove || [])
       return
     }
     setPlan(null)
-    if (!r.ok || j.ok === false) setError(j.error || `HTTP ${r.status}`)
+    if (!r.ok || !r.data || j.ok === false) setError(writeFailureText(r.status, r.data, 'remove these items'))
     onChanged()
   }
 
@@ -760,7 +765,7 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
         <ul className="text-note text-muted">
           {run.objects.map((o) => o.kind === 'demo_server'
             ? <DemoServerLine key={o.id} o={o} info={demo[o.id]} />
-            : <li key={o.id}>{o.label}{OBJECT_WORDS[o.state] ? `: ${OBJECT_WORDS[o.state]}` : ''}{o.error ? ` (${o.error})` : ''}</li>)}
+            : <li key={o.id}>{o.label}{objectWord(o) ? `: ${objectWord(o)}` : ''}{o.error ? ` (${o.error})` : ''}</li>)}
         </ul>
       )}
       {plan && (
@@ -772,7 +777,7 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
                 <ul className="text-note list-disc pl-5">
                   {plan.map((o) => (
                     <li key={o.id}>
-                      {o.label}{o.exists ? '' : o.gone ? ' (already gone)' : ` (could not check it, HTTP ${o.status})`}
+                      {o.label}{o.exists ? '' : o.gone ? ' (already gone)' : ' (could not check it)'}
                       {(o.parts ?? []).length > 0 && <span className="block text-muted">{o.parts.join('; ')}</span>}
                       {o.blocked && <span className="block" style={{ color: COLORS.warn }}>Will be kept: {o.blocked}</span>}
                     </li>
@@ -850,7 +855,7 @@ function FindBox() {
       <input {...MACHINE_TEXT} aria-label="Find an address, network or name" className={`${FIELD_CLS} flex-1`}
         value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an address, network or name, like 10.2.1.7 or printer-02" />
       <button type="submit" disabled={!q.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
-        style={{ background: COLORS.accent, color: COLORS.onAccent }}>Find</button>
+        style={{ background: COLORS.accent, color: COLORS.onAccent }}>Find item</button>
     </form>
   )
 }
@@ -871,7 +876,7 @@ function PlanBox({ onOpen }) {
     setPlan(null)
     const r = await authFetch('/api/desk/plan', { method: 'POST', body: JSON.stringify({ sentence: text.trim() }) })
     setBusy(false)
-    if (!r.ok) setError(r.data?.error || `HTTP ${r.status}`)
+    if (!r.ok) setError(r.data?.error || failureText(r.status, 'plan this job'))
     else setPlan(r.data)
   }
   const titleOf = (id) => JOBS.find((j) => j.id === id)?.title || id

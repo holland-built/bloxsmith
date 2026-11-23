@@ -1,4 +1,5 @@
-// The Assets page's numbers, worked out apart from the page so they can be
+
+import { formatDay } from './dates.js'// The Assets page's numbers, worked out apart from the page so they can be
 // tested on their own: the asset types ranked largest first with each one's
 // share, the unclassified count, and "Last seen" as an age.
 //
@@ -73,5 +74,5 @@ export function seenAgo(v, now = Date.now()) {
   if (h < 48) return `${h}h ago`
   const days = Math.floor(h / 24)
   if (days < 60) return `${days}d ago`
-  return d.toLocaleDateString()
+  return formatDay(d)
 }

@@ -593,7 +593,7 @@ func axurUnavailable(err error) map[string]any {
 	if ue, ok := err.(*rest.UpstreamError); ok {
 		switch ue.Status {
 		case 403:
-			reason = "Axur supplier monitoring not entitled for this key"
+			reason = "Axur supplier monitoring is not included for this key"
 			notEntitled = true
 		case 401:
 			reason = "Axur rejected the credential — check the key under Settings"
@@ -602,9 +602,9 @@ func axurUnavailable(err error) map[string]any {
 			// owns. WHY IT IS NOT JUST "unavailable": that is what this said
 			// first, and when the live account hit this path on 2026-08-25 the
 			// panel gave a reader — and the person who wrote it — no way to tell
-			// a 404 from a 500 from an unreachable host. Public() deliberately
+			// a 404 from a 500 from an unreachable host. PublicFor deliberately
 			// omits path and body, so nothing about the request leaks.
-			reason = "Axur service unavailable — " + ue.Public()
+			reason = "Axur service unavailable — " + ue.PublicFor("Axur")
 			// Plus Axur's OWN wording, when it is one of the recognised message
 			// fields. This is the allowlist internal/server has always used for
 			// the same job: recognised keys only, 200 characters, and no

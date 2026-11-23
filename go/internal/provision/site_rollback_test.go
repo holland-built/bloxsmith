@@ -692,7 +692,7 @@ func TestSiteRollbackReportsAFailedDeleteAndKeepsGoing(t *testing.T) {
 
 	named, counted := false, false
 	for _, s := range steps {
-		if strings.Contains(s, "failed to delete host id=ipam/host/h-2") {
+		if strings.Contains(s, "no clear answer deleting host id=ipam/host/h-2") {
 			named = true
 		}
 		if strings.Contains(s, "Rollback incomplete: 1 object(s)") {

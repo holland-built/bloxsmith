@@ -3,6 +3,7 @@ import { COLORS, FIELD_CLS } from './ui.jsx'
 import { tokenFetch } from '../lib/authFetch.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { API_KEY_BOX } from '../lib/secretBox.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 
 // The demo server's settings: one form, used on the Demo server page and in
 // the setup checklist. `st` is /api/demo/status; onSaved refreshes it.
@@ -43,14 +44,15 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, joinToken: token }),
       })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j.ok === false) setSaveMsg({ bad: true, text: j.error === 'locked' ? 'Unlock the vault first.' : (j.error || `HTTP ${r.status}`) })
+      const data = await r.json().catch(() => null)
+      const j = data ?? {}
+      if (!r.ok || !data || j.ok === false) setSaveMsg({ bad: true, text: j.error === 'locked' ? 'Unlock the vault first.' : writeFailureText(r.status, data, 'save the demo settings') })
       else {
         setToken('')
         setSaveMsg(j.problems?.length ? { bad: true, text: `Saved. Still to fix: ${j.problems.join('; ')}` } : { text: 'Saved.' })
         onSaved?.()
       }
-    } catch (e) { setSaveMsg({ bad: true, text: String(e?.message || e) }) }
+    } catch { setSaveMsg({ bad: true, text: WRITE_UNKNOWN }) }
     setSaving(false)
   }
 

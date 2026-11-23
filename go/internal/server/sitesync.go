@@ -61,7 +61,7 @@ func (d *Deps) listsWatchSet(w http.ResponseWriter, r *http.Request, b map[strin
 	}
 	st := d.siteState()
 	if st == nil {
-		d.json(w, r, 500, map[string]any{"ok": false, "error": "there is nowhere to keep the setting"})
+		d.json(w, r, 500, map[string]any{"ok": false, "outcome": "not-sent", "error": "there is nowhere to keep the setting, so nothing was changed"})
 		return
 	}
 	listID, ok := intArg(b["list_id"])
@@ -310,6 +310,12 @@ func (d *Deps) listsProposalApply(w http.ResponseWriter, r *http.Request, b map[
 		added, _ = res["to_add"].([]string)
 		if res["ok"] != true {
 			out["ok"], out["error"] = false, res["error"]
+			if res["outcome"] == "refused" {
+				out["outcome"] = "refused"
+			}
+			if res["refused"] == true {
+				out["refused"] = true
+			}
 			if !dry && len(added) > 0 {
 				// Some may have gone in before it stopped: the ones now in the
 				// list are the sync's own, or a later drop would never find them.

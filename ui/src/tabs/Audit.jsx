@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { NO_PERMISSION, useApi } from '../lib/api.js'
+import { failureText, NO_PERMISSION, useApi } from '../lib/api.js'
 import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
@@ -11,6 +11,7 @@ import Tip from '../components/Tip.jsx'
 // this page borrows its tokens and tiles so the two read as one product.
 import './Overview.css'
 import './Audit.css'
+import { formatDay, formatTime } from '../lib/dates.js'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
 // are the two that get a colour. Everything else is one neutral tone rather than
@@ -107,7 +108,7 @@ export default function Audit() {
     try {
       const res = await fetch(`/api/audit/log?before=${cursor}`, { cache: 'no-store', signal: ctrl.signal })
       const page = await res.json()
-      if (!res.ok) throw new Error(page?.error || `HTTP ${res.status}`)
+      if (!res.ok) throw new Error(page?.error || failureText(res.status, 'load older entries'))
       dispatch({ type: 'older', gen, data, page, latest: latest.current })
     } catch (err) {
       if (err.name !== 'AbortError') setOlderError(err.message)
@@ -261,10 +262,10 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
       <TruncationNote chain={chain} loaded={entries.length} />
       {chain.loading ? (
         <Skeleton h={200} />
-      ) : chain.error ? (
+      ) : chain.error || (total === 0 && readShortfall(chain.data)) ? (
         <FeedUnavailable label="Audit log unavailable" />
       ) : total === 0 ? (
-        <Empty />
+        <Empty>No audit entries yet</Empty>
       ) : (
         <div className="flex flex-col gap-2">
           {rows.map((r) => (
@@ -411,15 +412,15 @@ function TrustStrip({ chain, entries }) {
           <div className="au-in">
             <span className="ov-kpi-top"><span>Last entry</span></span>
             <span className="ov-num">
-              {newest ? new Date(newest._ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—'}
-              {newest ? <small> {new Date(newest._ms).toLocaleDateString([], { month: 'short', day: 'numeric' })}</small> : null}
+              {newest ? formatTime(newest._ms) : '—'}
+              {newest ? <small> {formatDay(newest._ms)}</small> : null}
             </span>
             <span className="ov-muted ov-small au-clip" title={newest?.event}>{newest ? eventWord(newest.event) : ' '}</span>
           </div>
         </div>
         <div className={`au-tile ${failState}`} data-failures={typeof failed === 'number' ? failed : undefined}>
           <div className="au-in">
-            <span className="ov-kpi-top"><span>Not saved</span>{failState ? <span className="ov-verdict crit">Act</span> : null}</span>
+            <span className="ov-kpi-top"><span>Not saved</span>{failState ? <span className="ov-verdict crit">Needs action</span> : null}</span>
             <span className="ov-num">{typeof failed === 'number' ? failed.toLocaleString() : '—'}</span>
             {failState ? (
               <span className="ov-small">
@@ -601,10 +602,10 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
       <LoadOlder more={more} />
       {chain.loading ? (
         <Skeleton h={250} />
-      ) : chain.error ? (
+      ) : chain.error || (entries.length === 0 && readShortfall(chain.data)) ? (
         <FeedUnavailable label="Audit log unavailable" />
       ) : entries.length === 0 ? (
-        <Empty />
+        <Empty>No audit entries yet</Empty>
       ) : sorted.length === 0 ? (
         <Empty>{noMatchText(chain.data, entries.length)}</Empty>
       ) : (
@@ -649,7 +650,7 @@ function CspAuditTable({ panelId }) {
     const params = new URLSearchParams()
     if (searched) params.set('q', searched)
     fetch(`/api/csp-audit?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(failureText(r.status, 'search the portal audit log')), { status: r.status }))))
       .then((j) => setResult(j))
       .catch((e) => setError(e))
       .finally(() => setLoading(false))
@@ -737,13 +738,13 @@ function CspAuditTable({ panelId }) {
         // not run: a request that failed outright is that case too.
         // onRetry because this search is its own fetch: the page-wide Try again
         // only re-runs useApi feeds and would leave this one where it failed.
-        <FeedUnavailable label="CSP audit feed unavailable" reason={error.message || undefined} onRetry={() => runSearch(lastQuery ?? '')} />
+        <FeedUnavailable label="Portal audit information is unavailable" reason={error.message || undefined} onRetry={() => runSearch(lastQuery ?? '')} />
       ) : rows.length === 0 ? (
         // csp.go:849-851 returns HTTP 200 with {rows:[],count:0,status:"error"}
         // on any upstream failure — a fetch that never actually searched must
         // not be reported with the same wording as a genuine empty result.
         result?.status === 'error' ? (
-          <FeedUnavailable label="CSP audit feed unavailable" reason={result.permission_denied === true ? NO_PERMISSION : undefined} onRetry={() => runSearch(lastQuery ?? '')} />
+          <FeedUnavailable label="Portal audit information is unavailable" reason={result.permission_denied === true ? NO_PERMISSION : undefined} onRetry={() => runSearch(lastQuery ?? '')} />
         ) : lastQuery ? (
           <Empty>no entries match</Empty>
         ) : (

@@ -31,7 +31,7 @@ const entitlementRetry = time.Hour
 // entitlementReason is the operator-safe reason the three feeds return while
 // a 403 is believed. It names the actual cause — the earlier generic
 // "upstream ... failed" read as an outage, which a licence gap is not.
-const entitlementReason = "account not entitled to Attack Surface (re-checked hourly)"
+const entitlementReason = "Attack Surface is not included in this account (checked again every hour)"
 
 type entitlement struct {
 	mu    sync.Mutex

@@ -52,7 +52,7 @@ test('a failed read hides NOTHING — a dead feed must not read as "you don\'t o
   const state = ownedServices({
     availability: 'error',
     service_types: null,
-    reason: 'service inventory feed unavailable',
+    reason: 'Service inventory information is unavailable',
   })
   assert.equal(state.owned, null, 'unknown ownership must be null, never an empty Set')
   assert.equal(state.unavailable, true)

@@ -57,7 +57,7 @@ test('runs with no tenant or another tenant earn no credit, and are counted apar
   const w = countWork({ tenant: 't1', runs: [run({ tenant: '', objects: [{}, {}] }), run({ tenant: undefined }), run({ tenant: 't2' }), run()] }, RANGE)
   assert.equal(w.jobs, 1)
   assert.equal(w.objects, 1)
-  assert.deepEqual(w.bySource, [['Get an address: addresses', 1, 1]])
+  assert.deepEqual(w.bySource, [['Get an address: assigned IPs', 1, 1]])
   assert.equal(w.hours, 0.2)
   assert.equal(w.older, 2)
   assert.equal(w.other, 1)

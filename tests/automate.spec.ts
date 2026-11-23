@@ -118,7 +118,7 @@ test('a run that could not be fully removed says so and offers Remove again', as
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [stuck] }));
   await page.goto('/#automate');
   const row = page.locator(`[data-run="${RUN.id}"]`);
-  await expect(row).toContainText('Some items could not be removed');
+  await expect(row).toContainText('Some items were not confirmed as removed');
   await expect(row).toContainText('10.2.1.7: could not be removed (delete failed (500))');
   await expect(row.getByRole('button', { name: 'Remove' })).toBeVisible();
 });
@@ -286,7 +286,7 @@ test('Find opens the search page with what was typed', async ({ page }) => {
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [] }));
   await page.goto('/#automate');
   await page.getByRole('textbox', { name: 'Find an address, network or name' }).fill('printer-02');
-  await page.getByRole('button', { name: 'Find', exact: true }).click();
+  await page.getByRole('button', { name: 'Find item', exact: true }).click();
   await expect(page).toHaveURL(/#dossier\?q=printer-02$/);
 });
 

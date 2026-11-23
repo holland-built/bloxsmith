@@ -23,7 +23,7 @@ const LABELS = {
 const MISSING = {
   loading: ['Loading…', null],
   error: ['Not checked', 'Infoblox did not respond. This page retries every 5 minutes.'],
-  empty: ['No readings', 'Infoblox has no data for this period.'],
+  empty: ['No readings', 'Infoblox has no readings for this period.'],
   unavailable: ['Not available', 'This data is not available for this account.'],
 }
 

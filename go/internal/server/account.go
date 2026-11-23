@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -79,10 +80,23 @@ func (d *Deps) switchAccount(w http.ResponseWriter, r *http.Request, b map[strin
 	res, err := d.Account.SwitchAccount(str(b, "id"))
 	if err != nil {
 		d.logExc("/api/switch-account", err)
-		if he, ok := err.(*account.HTTPError); ok {
-			if he.Code == 403 {
-				d.json(w, r, 403, map[string]any{"ok": false,
-					"error": "Account switching requires an interactive User API key with multi-account access (CSP returned 403)"})
+		var he *account.HTTPError
+		isHTTP := errors.As(err, &he)
+		if isHTTP && he.Code == 403 {
+			d.json(w, r, 403, map[string]any{"ok": false,
+				"error": "Account switching requires an interactive User API key with multi-account access (CSP returned 403)"})
+			return
+		}
+		var notSent *account.NotSentError
+		if errors.As(err, &notSent) {
+			d.json(w, r, 502, map[string]any{"ok": false, "outcome": "not-sent",
+				"error": "Could not read your accounts, so the switch was not sent. Nothing was changed."})
+			return
+		}
+		if isHTTP {
+			if he.Code >= 400 && he.Code < 500 {
+				d.json(w, r, 502, map[string]any{"ok": false, "outcome": "refused",
+					"error": "Infoblox refused the account switch (HTTP " + itoaStatus(he.Code) + "). Nothing was changed."})
 				return
 			}
 			d.json(w, r, 502, map[string]any{"ok": false, "error": "CSP error " + itoaStatus(he.Code)})

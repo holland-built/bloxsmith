@@ -19,7 +19,7 @@
   - img "Not applicable"
   - text: Traffic N/A Each source is asked on its own — a slow one holds nothing else up. Source State Identity Fields returned by this source
   - img "Loaded"
-  - text: /Assets Loaded baseline-asset-a Type Server Provider baseline-provider Last seen 1\/1\/\d+, 7:\d+:\d+ AM/
+  - text: /Assets Loaded baseline-asset-a Type Server Provider baseline-provider Last seen Jan 1, \d+, 7:\d+ AM/
   - img "Loaded"
   - text: DNS records Loaded — Record A TTL — Zone —
   - img "Not applicable"

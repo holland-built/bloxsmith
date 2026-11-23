@@ -42,7 +42,7 @@ const OWNS_NO_DNS = { availability: 'ok', service_types: ['dfp', 'dhcp', 'discov
 const OWNS_NO_SECURITY = { availability: 'ok', service_types: ['dhcp', 'discovery', 'dns', 'ntp'] };
 const OWNS_NO_DHCP = { availability: 'ok', service_types: ['dfp', 'discovery', 'dns', 'ntp', 'orpheus'] };
 const OWNS_NOTHING = { availability: 'ok', service_types: [] };
-const READ_FAILED = { availability: 'error', service_types: null, reason: 'service inventory feed unavailable' };
+const READ_FAILED = { availability: 'error', service_types: null, reason: 'Service inventory information is unavailable' };
 const TRUNCATED = {
   availability: 'partial',
   service_types: ['dhcp', 'discovery'],

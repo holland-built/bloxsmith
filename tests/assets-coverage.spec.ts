@@ -54,9 +54,9 @@ test('a tenant with nothing to compare says why there are no tiles', async ({ pa
 test('a coverage read that failed says unavailable, not zero', async ({ page }) => {
   await installFixtures(page, 'assets');
   await page.route('**/api/csp/asset-coverage', (r) => r.fulfill({ json: {
-    availability: 'error', reason: 'the asset source query failed upstream', total: null, network: [], gaps: [],
+    availability: 'error', reason: 'the asset source query failed in Infoblox', total: null, network: [], gaps: [],
   } }));
   await page.goto('/#assets');
   await expect(panel(page)).toContainText('Coverage gaps unavailable');
-  await expect(panel(page)).toContainText('the asset source query failed upstream');
+  await expect(panel(page)).toContainText('the asset source query failed in Infoblox');
 });

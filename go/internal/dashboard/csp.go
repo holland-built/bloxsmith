@@ -982,7 +982,7 @@ func (s *Service) CSPExposures() map[string]any {
 	}
 	if errored(st, err) {
 		log.Printf("csp: exposures fetch failed: status=%d err=%v body=%v", st, err, body)
-		return exposureFeedUnavailable("upstream exposures fetch failed")
+		return exposureFeedUnavailable("Infoblox exposures could not be read")
 	}
 	rows := normExposures(body)
 	total, ok := totalConsistencyCheck(body, offset, len(rows))
@@ -1021,7 +1021,7 @@ func (s *Service) CSPExposedHostnames() map[string]any {
 		// upstream returns on the 429 isn't available here to log — only the
 		// status/err are. It never reaches the response body either way.
 		log.Printf("csp: exposed-hostnames fetch failed: status=%d err=%v", st, err)
-		return exposureFeedUnavailable("upstream response too large")
+		return exposureFeedUnavailable("Infoblox sent too much data to read")
 	}
 	rows := normExposedHostnames(body)
 	total, ok := totalConsistencyCheck(body, 0, len(rows))
@@ -1047,7 +1047,7 @@ func (s *Service) CSPExposedIPs() map[string]any {
 		// Same GetEx caveat as CSPExposedHostnames: the error body isn't
 		// available here to log, only status/err.
 		log.Printf("csp: exposed-ips fetch failed: status=%d err=%v", st, err)
-		return exposureFeedUnavailable("upstream response too large")
+		return exposureFeedUnavailable("Infoblox sent too much data to read")
 	}
 	rows := normExposedIPs(body)
 	total, ok := totalConsistencyCheck(body, 0, len(rows))

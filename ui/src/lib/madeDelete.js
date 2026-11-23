@@ -3,6 +3,7 @@
 // needs the code the check gave. The server refuses a delete without it, so
 // the "are you sure" step cannot be skipped.
 import { authFetch } from './authFetch.js'
+import { formatWhen } from './dates.js'
 
 // The kinds Bloxsmith can delete, with the word people know them by.
 export const KIND_WORDS = {
@@ -35,7 +36,7 @@ export function confirmDelete(kind, id, confirm) {
 export function when(iso) {
   const t = Date.parse(iso)
   if (!t) return ''
-  return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return formatWhen(t)
 }
 
 // The one sentence the "are you sure" step shows.

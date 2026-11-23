@@ -287,7 +287,7 @@ for (const status of [401, 403]) {
     await page.goto('/#incidents');
     const panel = page.locator('[data-panel-id="incidents-triage"]');
     await expect(panel.getByText("You don't have permission to see this. Check the key in Settings.")).toBeVisible({ timeout: 20_000 });
-    await expect(panel.getByText('Incidents feed unavailable')).toHaveCount(0);
+    await expect(panel.getByText('Incidents information is unavailable')).toHaveCount(0);
     await expect(panel.getByRole('button', { name: 'Try again' })).toHaveCount(0);
     // This panel puts words before the status, and must read the same.
     const categories = page.locator('[data-panel-id="incidents-categories"]');
@@ -515,7 +515,7 @@ for (const status of [401, 403]) {
     let reads = 0;
     await page.route('**/api/dns/zones*', (r) => json(r, { zones: [ZONE] }));
     // The exact shape go/internal/server/ipam.go writeUpstreamError sends.
-    await page.route('**/api/dns/records*', (r) => { reads += 1; return json(r, { error: 'upstream request failed', status, upstream: 'denied' }, 502); });
+    await page.route('**/api/dns/records*', (r) => { reads += 1; return json(r, { error: 'Infoblox request failed', status, upstream: 'denied' }, 502); });
     await page.goto('/#selfservice');
     const card = await openTask(page, 'records');
     await card.locator('select').selectOption(ZONE.id);
@@ -528,11 +528,11 @@ for (const status of [401, 403]) {
 
 test('R3. another upstream failure on a list read is still an outage', async ({ page }) => {
   await page.route('**/api/dns/zones*', (r) => json(r, { zones: [ZONE] }));
-  await page.route('**/api/dns/records*', (r) => json(r, { error: 'upstream request failed', status: 500 }, 502));
+  await page.route('**/api/dns/records*', (r) => json(r, { error: 'Infoblox request failed', status: 500 }, 502));
   await page.goto('/#selfservice');
   const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
-  await expect(card.getByText(/Could not load current data: 502/)).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText(/Could not load current data: The server had a problem\./)).toBeVisible({ timeout: 20_000 });
   await expect(card.getByText(NO_PERM)).toHaveCount(0);
 });
 
@@ -541,14 +541,14 @@ test('R4. Changes shows no permission when the audit read was refused', async ({
   await page.goto('/#changes');
   await expect(page.locator('[data-panel-id="changes-notability"]').getByText(NO_PERM)).toBeVisible();
   await expect(page.locator('[data-panel-id="changes-changed-objects"]').getByText(NO_PERM)).toBeVisible();
-  await expect(page.getByText('CSP audit feed unavailable')).toHaveCount(0);
+  await expect(page.getByText('Portal audit information is unavailable')).toHaveCount(0);
   await expect(page.getByRole('main').getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
 test('R4. Changes still says unavailable for any other audit failure', async ({ page }) => {
   await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error' }));
   await page.goto('/#changes');
-  await expect(page.getByText('CSP audit feed unavailable').first()).toBeVisible();
+  await expect(page.getByText('Portal audit information is unavailable').first()).toBeVisible();
   await expect(page.getByText(NO_PERM)).toHaveCount(0);
 });
 
@@ -558,7 +558,7 @@ test('R5. a refused IQ Actions read is a permission problem and keeps its reason
   const queue = page.locator('[data-panel-id="incidents-soc-queue"]');
   await expect(queue.getByText(REFUSED)).toBeVisible();
   await expect(queue.getByText('No permission')).toBeVisible();
-  await expect(queue.getByText('IQ Actions feed unavailable')).toHaveCount(0);
+  await expect(queue.getByText('IQ Actions information is unavailable')).toHaveCount(0);
   await expect(queue.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
@@ -699,7 +699,7 @@ test('L4. an old denial does not hide a newer failure on Changes', async ({ page
   fail = true;
   await page.clock.fastForward(10 * 60 * 1000);
   await page.clock.runFor(1000);
-  await expect(page.getByText('CSP audit feed unavailable').first()).toBeVisible();
+  await expect(page.getByText('Portal audit information is unavailable').first()).toBeVisible();
   await expect(page.getByText(NO_PERM)).toHaveCount(0);
 });
 
@@ -708,7 +708,7 @@ test('L5. the Audit tab shows no permission for a refused portal read', async ({
   await page.goto('/#audit');
   const panel = page.locator('[data-panel-id="audit-csp-portal"]');
   await expect(panel.getByText(NO_PERM)).toBeVisible();
-  await expect(panel.getByText('CSP audit feed unavailable')).toHaveCount(0);
+  await expect(panel.getByText('Portal audit information is unavailable')).toHaveCount(0);
   await expect(panel.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
@@ -716,6 +716,6 @@ test('L5. the Audit tab keeps Try again for any other portal failure', async ({ 
   await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error' }));
   await page.goto('/#audit');
   const panel = page.locator('[data-panel-id="audit-csp-portal"]');
-  await expect(panel.getByText('CSP audit feed unavailable')).toBeVisible();
+  await expect(panel.getByText('Portal audit information is unavailable')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Try again' })).toBeVisible();
 });

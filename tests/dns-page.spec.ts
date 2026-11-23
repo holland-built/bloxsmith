@@ -57,7 +57,7 @@ test('the zone headline counts zones with issues once and opens them', async ({ 
   const zones = tiles.locator('[data-tile="zones"]');
   await expect(zones).toContainText('2 with issues');
   await expect(zones).toContainText('of 6');
-  await expect(zones).toContainText('Act');
+  await expect(zones).toContainText('Needs action');
   // The old page said the same number twice, as two different names.
   await expect(page.getByText('Zones needing attention')).toHaveCount(0);
   await zones.click();

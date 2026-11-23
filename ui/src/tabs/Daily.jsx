@@ -12,6 +12,7 @@ import { issueWord } from '../lib/plainWords.js'
 import Tip from '../components/Tip.jsx'
 import { statusBucket } from '../lib/statusBucket.js'
 import './Daily.css'
+import { formatTime } from '../lib/dates.js'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -88,7 +89,7 @@ export default function Daily() {
 // When the inventory last arrived, and how often it refreshes (in the tip).
 // A failed refresh says so here once, in red, instead of a fresh-looking time.
 function Updated({ asOf, failed }) {
-  const time = asOf ? asOf.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  const time = asOf ? formatTime(asOf) : null
   const label = failed ? 'Refresh failed' : time ? `Updated ${time}` : 'Checking…'
   const tip = failed && time ? `Last good read ${time}. Tries again every 30 seconds.` : 'Refreshes every 30 seconds.'
   return (
@@ -171,7 +172,7 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
           {cells.map((c) => {
             const unavailable = c.status === 'error'
             const bad = !unavailable && c.value > 0
-            const word = unavailable ? '' : bad ? (c.sev === 'crit' ? 'Act' : 'Look') : 'Healthy'
+            const word = unavailable ? '' : bad ? (c.sev === 'crit' ? 'Needs action' : 'Review') : 'Healthy'
             // A click anywhere on the tile opens the list behind it, except on
             // the number, where a tap opens its tip. The name is the link a
             // keyboard or screen reader uses.
@@ -187,7 +188,7 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
                   {word && <span className={`dy-verdict ${bad ? c.sev : 'ok'}`}>{word}</span>}
                 </div>
                 {unavailable ? (
-                  <Tip tip="This feed did not answer." prefix="dy" className="dy-num-word">
+                  <Tip tip="Infoblox did not answer for this item." prefix="dy" className="dy-num-word">
                     <span style={{ color: COLORS.crit }}>unavailable</span>
                   </Tip>
                 ) : (
@@ -260,7 +261,7 @@ function SecurityToday({ sec, panelId }) {
       {sec.loading ? (
         <Skeleton h={160} />
       ) : secDead ? (
-        <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
+        <FeedUnavailable reason={sec.data?.reason} label="Threat information is unavailable" />
       ) : (
         <dl className="dy-sec">
           {chips.map((c) => (
@@ -336,9 +337,9 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
-        <FeedUnavailable label="Subnets feed unavailable" />
+        <FeedUnavailable label="Subnet information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty />
+        <Empty>{subnets.length > 0 ? 'No networks of /28 or larger in the loaded data' : 'No subnets found'}</Empty>
       ) : (
         <DataTable
           rows={rows}
@@ -404,7 +405,7 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
-        <FeedUnavailable label="Hosts feed unavailable" />
+        <FeedUnavailable label="Host information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>all hosts online</Empty>
       ) : (
@@ -458,7 +459,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
       {loading ? (
         <Skeleton h={160} />
       ) : feedDead ? (
-        <FeedUnavailable label="DNS zones feed unavailable" />
+        <FeedUnavailable label="DNS zone information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no DNS zone issues</Empty>
       ) : (

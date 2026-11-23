@@ -11,6 +11,7 @@ import AssetConnectors from '../components/AssetConnectors.jsx'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
+import { formatWhen } from '../lib/dates.js'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
 // discovery found. Until this existed, asset data appeared only as scalar
@@ -53,7 +54,7 @@ function seenCell(v) {
   if (!v) return <span>—</span>
   const d = parseSeen(v)
   if (!d) return <span>{String(v)}</span>
-  return <span className="whitespace-nowrap" title={d.toLocaleString()}>{seenAgo(v)}</span>
+  return <span className="whitespace-nowrap" title={formatWhen(d)}>{seenAgo(v)}</span>
 }
 
 // A cell that shows the value it has and an em-dash where it has none. The
@@ -280,7 +281,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       {filters.loading && !d ? (
         <Skeleton h={72} />
       ) : unavailable ? (
-        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter feed unavailable" onRetry={() => filters.refetch()} />
+        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter information is unavailable" onRetry={() => filters.refetch()} />
       ) : (
         <div className="as-look">
           {/* total === null is a real state: the type query worked and the

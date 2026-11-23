@@ -105,6 +105,12 @@ type HTTPError struct{ Code int }
 
 func (e *HTTPError) Error() string { return "CSP HTTP " + strconv.Itoa(e.Code) }
 
+// NotSentError is a switch that stopped before the switch request went out.
+type NotSentError struct{ Err error }
+
+func (e *NotSentError) Error() string { return e.Err.Error() }
+func (e *NotSentError) Unwrap() error { return e.Err }
+
 // ListAccounts is list_accounts (server.py:295): the active accounts the key's
 // user belongs to, sorted by name, plus the resolved active id.
 func (m *Manager) ListAccounts() (map[string]any, error) {
@@ -171,7 +177,7 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 	defer m.mu.Unlock()
 	lst, err := m.listAccountsLocked()
 	if err != nil {
-		return nil, err
+		return nil, &NotSentError{Err: err}
 	}
 	known := map[string]string{}
 	for _, ai := range lst["accounts"].([]any) {

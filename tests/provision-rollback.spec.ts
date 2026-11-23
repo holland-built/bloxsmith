@@ -36,7 +36,7 @@ const INCOMPLETE = failureBody({
   attempted: 6,
   deleted: 4,
   residual: [
-    { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 500 },
+    { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 400 },
     // Empty label on purpose: the id has to be shown instead, or this object is
     // unidentifiable to whoever has to go delete it by hand.
     { kind: 'dns record', id: 'dns/record/r-9', label: '', status: 409 },
@@ -82,8 +82,8 @@ test.describe('Provision → rollback report on a failed run', () => {
     await expect(page.getByText('10.10.1.0/24').first()).toBeVisible();
     await expect(page.getByText('dns/record/r-9').first()).toBeVisible();
     await expect(page.getByText(/4 of 6 removed/).first()).toBeVisible();
-    await expect(page.getByText(/HTTP 500/).first()).toBeVisible();
-    await expect(page.getByText(/HTTP 409/).first()).toBeVisible();
+    await expect(page.getByText(/could not remove it/).first()).toBeVisible();
+    await expect(page.getByText(/could not remove it/)).toHaveCount(2);
   });
 
   test('complete: one calm line, and none of the critical wording', async ({ page }) => {
@@ -113,4 +113,55 @@ test.describe('Provision → rollback report on a failed run', () => {
     await expect(page.getByText(/nothing needed removing/i)).toHaveCount(0);
     await expect(page.getByText(/left behind/i)).toHaveCount(0);
   });
+});
+
+test('a cleanup delete with no clear answer says the result is unknown', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 2, deleted: 0,
+    residual: [
+      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 504 },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 502 },
+    ],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup result unknown for 2 objects/).first()).toBeVisible();
+  await expect(page.getByText(/check whether it still exists/)).toHaveCount(2);
+  await expect(page.getByText(STILL_LIVE)).toHaveCount(0);
+});
+
+test('a mixed cleanup separates what is still there from what is unknown', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 2, deleted: 0,
+    residual: [
+      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 409 },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 504 },
+    ],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup could not remove 1 object\b/).first()).toBeVisible();
+  await expect(page.getByText(/could not remove it/)).toHaveCount(1);
+  await expect(page.getByText(/check whether it still exists/)).toHaveCount(1);
+});
+
+test('a cleanup delete that got a 500 is unknown too', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 1, deleted: 0,
+    residual: [{ kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 500 }],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup result unknown for 1 object/).first()).toBeVisible();
+  await expect(page.getByText(STILL_LIVE)).toHaveCount(0);
+});
+
+test('a real run whose connection drops says the outcome is unknown', async ({ page }) => {
+  await page.route('**/api/vault/write-target*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ known: true, tenant: 't/-', label: 'Test Tenant', writable: true }) }));
+  await page.route('**/api/provision/seed-demo/stream*', (route) => (route.request().url().includes('dry=1')
+    ? route.fulfill({ status: 200, contentType: 'text/event-stream', body: PREVIEW_OK })
+    : route.abort()));
+  await page.goto('/#provision');
+  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Seed demo data', exact: true }).click();
+  await expect(page.getByText('Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.').first()).toBeVisible();
 });

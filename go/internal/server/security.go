@@ -103,7 +103,7 @@ func outcomeStatus(result map[string]any) int {
 		return 200
 	case "invalid":
 		return 400
-	case "rejected":
+	case "rejected", "not-sent":
 		return 502
 	case "unverified":
 		return 504

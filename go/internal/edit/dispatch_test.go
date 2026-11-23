@@ -261,6 +261,9 @@ func TestDelete_RealFailuresAreNotReportedAsSuccess(t *testing.T) {
 				t.Errorf("upstream %d: want returned status %d, got %d", upstream, upstream, status)
 			}
 			wantMsg := "delete failed"
+			if upstream >= 500 { // no clear answer: the outcome is unknown
+				wantMsg = "may or may not have happened"
+			}
 			if msg, _ := res["error"].(string); !strings.Contains(msg, wantMsg) {
 				t.Errorf("upstream %d: want an error mentioning %q, got %q", upstream, wantMsg, msg)
 			}
@@ -275,15 +278,15 @@ func TestDelete_RealFailuresAreNotReportedAsSuccess(t *testing.T) {
 	}
 }
 
-func TestDelete_TransportErrorIs502AndSaysTheTenantWasNeverReached(t *testing.T) {
+func TestDelete_TransportErrorIs502AndSaysTheOutcomeIsUnknown(t *testing.T) {
 	// FINDING A-F2, now FIXED. When no HTTP response ever arrived,
 	// rest.Client.Write reports status 0 (rest.go:344). The returned code was
 	// always correct — statusOr(0, 502) — but the human-readable string used to
 	// render "delete failed (status 0)", presenting 0 as if it were an HTTP
 	// status the tenant sent back. "The request never completed" and "the tenant
 	// answered 0" are different facts and that string made them look the same.
-	// statusPhrase now renders the could-not-reach case in words; this test owns
-	// the exact wording for Delete.
+	// A dropped connection can happen after the DELETE was sent, so the message
+	// must not say that no request completed. This test owns the exact wording.
 	res, status := dispatchDeadClient(t).Delete("/api/ddi/v1/ipam/host/h-1")
 
 	if dispatchBool(res, "ok") {
@@ -292,7 +295,7 @@ func TestDelete_TransportErrorIs502AndSaysTheTenantWasNeverReached(t *testing.T)
 	if status != 502 {
 		t.Errorf("want 502 for a transport failure, got %d", status)
 	}
-	const want = "delete failed (could not reach the tenant — no request completed)"
+	const want = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
 	if msg, _ := res["error"].(string); msg != want {
 		t.Errorf("error = %q, want %q", msg, want)
 	}
@@ -667,5 +670,50 @@ func TestDispatchFixturesCoverEveryResource(t *testing.T) {
 		if _, err := json.Marshal(body); err != nil {
 			t.Errorf("%s: create fixture is not JSON-encodable: %v", name, err)
 		}
+	}
+}
+
+func TestDelete_GatewayWithNoAnswerSaysTheOutcomeIsUnknown(t *testing.T) {
+	const want = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
+	for _, upstream := range []int{502, 504} {
+		res, status := dispatchStatic(t, upstream, `{}`).client().Delete("/api/ddi/v1/ipam/host/h-1")
+		if msg, _ := res["error"].(string); msg != want || status != upstream {
+			t.Errorf("upstream %d: status %d, error %q, want %q", upstream, status, msg, want)
+		}
+	}
+	res, _ := dispatchStatic(t, 409, `{}`).client().Delete("/api/ddi/v1/ipam/host/h-1")
+	if msg, _ := res["error"].(string); msg != "delete failed (status 409)" {
+		t.Errorf("a clear refusal changed wording: %q", msg)
+	}
+}
+
+// A 200 or 201 means Infoblox may have reserved the address even when the body
+// cannot be read, so the reply must not call the allocation failed.
+func TestAllocate_AcceptedWithUnreadableBodyIsUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+	}{{200, ""}, {201, "not json"}} {
+		f := builderFakeServer(t, func(r builderReq) (int, string) {
+			if r.Method == "POST" && strings.HasSuffix(r.Path, "/nextavailableip") {
+				return tc.status, tc.body
+			}
+			return 200, `{"results":[]}`
+		})
+		res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
+		if status != 502 || res["error"] != "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again." {
+			t.Errorf("%d %q: status %d, error %v", tc.status, tc.body, status, res["error"])
+		}
+	}
+}
+
+func TestWriteFailed_SaysUnknownOnlyWithoutAClearAnswer(t *testing.T) {
+	for _, st := range []int{0, 500, 502, 503, 504} {
+		if got := writeFailed("create", st); got != "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again." {
+			t.Errorf("status %d: %q", st, got)
+		}
+	}
+	if got := writeFailed("update", 409); got != "update failed (status 409)" {
+		t.Errorf("a clear refusal changed: %q", got)
 	}
 }

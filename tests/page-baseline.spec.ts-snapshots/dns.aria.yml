@@ -5,10 +5,10 @@
     - listitem:
       - button /DNS queries \d+ a second/
     - listitem:
-      - link /Zones Act \d+ with issues of \d+/:
+      - link /Zones Needs action \d+ with issues of \d+/:
         - /url: "#dns?issues=1"
     - listitem:
-      - button /Signing Look \d+ not signed of \d+ public/
+      - button /Signing Review \d+ not signed of \d+ public/
     - listitem:
       - button /DNS services \d+/
   - button "Arrange panels"
