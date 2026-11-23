@@ -89,7 +89,7 @@ export default function Changes() {
   const groups = useMemo(() => groupByResource(rows), [rows])
   const summary = useMemo(() => feedSummary(rows), [rows])
   const state = feedState({ payload: data, error, loading, rowsInWindow: rows })
-  const refused = data?.permission_denied === true
+  const refused = !error && data?.permission_denied === true
   const win = windowLabel({ truncated, rows, nowMs })
   // When the payload arrived, not when this render ran: the half-minute
   // window tick must not make an old read look fresh.

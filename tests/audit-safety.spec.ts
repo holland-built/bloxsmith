@@ -589,3 +589,133 @@ test('R6. a key test answering after Cancel does not reopen the form', async ({ 
   await expect(sheet.getByLabel('New Infoblox API key')).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Change key for Example Lab' })).toBeVisible();
 });
+
+// ---------- last round: saves in flight, late key tests, stale denials ----------
+
+async function holdPost(page: Page, path: string, body: unknown) {
+  const gate = deferred();
+  await page.route(path, async (r) => { await gate.held; return json(r, body); });
+  return gate;
+}
+
+test('L1. Cancel on the Add form is off while adding', async ({ page }) => {
+  const gate = await holdPost(page, '**/api/vault/tenant', { ok: false, error: 'bad key' });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: '+ Add connection' }).click();
+  await sheet.getByLabel('Infoblox API key').fill('new-key');
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+  gate.release();
+  await expect(sheet.getByRole('alert').filter({ hasText: 'bad key' })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+});
+
+const SAVES: [string, string, (s: ReturnType<Page['getByRole']>) => Promise<void>][] = [
+  ['adding a connection', '**/api/vault/tenant', async (s) => {
+    await s.getByRole('button', { name: '+ Add connection' }).click();
+    await s.getByLabel('Infoblox API key').fill('new-key');
+    await s.getByRole('button', { name: 'Add', exact: true }).click();
+  }],
+  ['replacing a key', '**/api/vault/tenant-update', async (s) => {
+    await s.getByRole('button', { name: 'Change key for Example Lab' }).click();
+    await s.getByLabel('New Infoblox API key').fill('new-key');
+    await s.getByRole('button', { name: 'Replace key' }).click();
+  }],
+  ['saving the Axur key', '**/api/vault/axur', async (s) => {
+    await s.getByRole('button', { name: 'Integrations', exact: true }).click();
+    await s.getByLabel('Axur API key').fill('token');
+    await s.getByRole('button', { name: 'Save Axur key' }).click();
+  }],
+  ['saving the Kentik login', '**/api/vault/kentik', async (s) => {
+    await s.getByRole('button', { name: 'Integrations', exact: true }).click();
+    await s.getByLabel('Kentik login email').fill('a@example.com');
+    await s.getByLabel('Kentik API token').fill('token');
+    await s.getByRole('button', { name: 'Save Kentik login' }).click();
+  }],
+];
+for (const [name, path, start] of SAVES) {
+  test(`L2. the drawer stays open while ${name}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const gate = await holdPost(page, path, { ok: false, error: 'save refused' });
+    const sheet = await openSettings(page);
+    await start(sheet);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeVisible();
+    await page.mouse.click(5, 5);
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+    gate.release();
+    await expect(sheet.getByRole('alert').filter({ hasText: 'save refused' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+  });
+}
+
+test('L3. a late Add key test does not land on a different key', async ({ page }) => {
+  const gate = await holdPost(page, '**/api/vault/test-key', { ok: true, name: 'Example' });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: '+ Add connection' }).click();
+  await sheet.getByLabel('Infoblox API key').fill('key-one');
+  await sheet.getByRole('button', { name: 'Test', exact: true }).click();
+  await sheet.getByLabel('Infoblox API key').fill('key-two');
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(sheet.getByText(/Key valid/)).toHaveCount(0);
+});
+
+test('L3. a late Replace key test does not land on another tenant form', async ({ page }) => {
+  const gate = await holdPost(page, '**/api/vault/test-key', { ok: true, name: 'Example' });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: 'Change key for Example Lab' }).click();
+  await sheet.getByLabel('New Infoblox API key').fill('same-key');
+  await sheet.getByRole('button', { name: 'Test', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Change key for Example Sales' }).click();
+  await sheet.getByLabel('New Infoblox API key').fill('same-key');
+  gate.release();
+  await page.waitForTimeout(300);
+  await expect(sheet.getByText(/Key valid/)).toHaveCount(0);
+});
+
+test('L3. a key test still reports on the key it tested', async ({ page }) => {
+  const gate = await holdPost(page, '**/api/vault/test-key', { ok: true, name: 'Example' });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: 'Change key for Example Lab' }).click();
+  await sheet.getByLabel('New Infoblox API key').fill('same-key');
+  await sheet.getByRole('button', { name: 'Test', exact: true }).click();
+  gate.release();
+  await expect(sheet.getByText('Key valid — Example')).toBeVisible();
+});
+
+test('L4. an old denial does not hide a newer failure on Changes', async ({ page }) => {
+  await page.clock.install({ time: FIXED_NOW });
+  let fail = false;
+  await page.route('**/api/csp-audit*', (r) => (fail
+    ? json(r, { error: 'down' }, 500)
+    : json(r, { rows: [], count: 0, truncated: false, status: 'error', permission_denied: true })));
+  await page.goto('/#changes');
+  await page.clock.runFor(100);
+  await expect(page.getByText(NO_PERM).first()).toBeVisible();
+  fail = true;
+  await page.clock.fastForward(10 * 60 * 1000);
+  await page.clock.runFor(1000);
+  await expect(page.getByText('CSP audit feed unavailable').first()).toBeVisible();
+  await expect(page.getByText(NO_PERM)).toHaveCount(0);
+});
+
+test('L5. the Audit tab shows no permission for a refused portal read', async ({ page }) => {
+  await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error', permission_denied: true }));
+  await page.goto('/#audit');
+  const panel = page.locator('[data-panel-id="audit-csp-portal"]');
+  await expect(panel.getByText(NO_PERM)).toBeVisible();
+  await expect(panel.getByText('CSP audit feed unavailable')).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});
+
+test('L5. the Audit tab keeps Try again for any other portal failure', async ({ page }) => {
+  await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error' }));
+  await page.goto('/#audit');
+  const panel = page.locator('[data-panel-id="audit-csp-portal"]');
+  await expect(panel.getByText('CSP audit feed unavailable')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Try again' })).toBeVisible();
+});

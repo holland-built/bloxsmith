@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { NO_PERMISSION, useApi } from '../lib/api.js'
 import { chainRows, eventTally, joinPages, olderPages, pageOf, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
@@ -742,7 +742,7 @@ function CspAuditTable({ panelId }) {
         // on any upstream failure — a fetch that never actually searched must
         // not be reported with the same wording as a genuine empty result.
         result?.status === 'error' ? (
-          <FeedUnavailable label="CSP audit feed unavailable" onRetry={() => runSearch(lastQuery ?? '')} />
+          <FeedUnavailable label="CSP audit feed unavailable" reason={result.permission_denied === true ? NO_PERMISSION : undefined} onRetry={() => runSearch(lastQuery ?? '')} />
         ) : lastQuery ? (
           <Empty>no entries match</Empty>
         ) : (

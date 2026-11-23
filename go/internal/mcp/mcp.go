@@ -137,6 +137,10 @@ func (e *StatusError) Error() string {
 // "probably".
 const RefusedReason = "Infoblox refused the call (HTTP 403). This key's user probably needs the ib-mcp-server-user group (Infoblox ticket PTCI-4674)."
 
+// UnauthorizedReason is the 401 wording. A 401 says the key was not accepted and
+// nothing about groups, so it names only the key.
+const UnauthorizedReason = "Infoblox refused the call (HTTP 401). It did not accept this key. Check the key in Settings."
+
 // Reason turns a failed call into a sentence an operator can act on, or "" when
 // the failure has no better wording than the caller's own. It is read from the
 // error, never from its text.
@@ -145,6 +149,8 @@ func Reason(err error) string {
 	switch {
 	case errors.As(err, &se) && se.Code == http.StatusForbidden:
 		return RefusedReason
+	case errors.As(err, &se) && se.Code == http.StatusUnauthorized:
+		return UnauthorizedReason
 	case errors.Is(err, context.DeadlineExceeded):
 		return fmt.Sprintf("Infoblox did not answer within %ds.", int(callTimeout.Round(time.Second)/time.Second))
 	}

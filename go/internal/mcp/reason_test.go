@@ -70,3 +70,24 @@ func TestReasonHasNothingToAddForOtherFailures(t *testing.T) {
 		t.Fatalf("a 502 has no better wording than the caller's own, got %q (error: %v)", Reason(err), err)
 	}
 }
+
+// A 401 is a refusal too, but it says nothing about groups: the key itself was
+// not accepted, so the words must not send anyone after a group.
+func TestReasonOn401IsARefusalWithoutBlamingTheGroup(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	c := New(srv.URL+"/mcp", func() string { return "Token k" })
+
+	got := Reason(c.Initialize(t.Context()))
+	if !strings.Contains(got, "Infoblox refused the call (HTTP 401).") {
+		t.Fatalf("want a refusal naming HTTP 401, got %q", got)
+	}
+	if strings.Contains(got, "ib-mcp-server-user") || strings.Contains(got, "PTCI-4674") {
+		t.Fatalf("a 401 must not claim the group is the cause, got %q", got)
+	}
+	if !strings.Contains(got, "key") {
+		t.Fatalf("want the key named as the thing to check, got %q", got)
+	}
+}
