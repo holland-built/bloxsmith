@@ -73,8 +73,41 @@ func (d *Deps) hubHealth(w http.ResponseWriter, r *http.Request) {
 
 func (d *Deps) hubSecurity(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/hub/security")
+	// Overview's "critical or high" count covers every event read (up to the
+	// 5,000 cap), so its landing list has to be drawn from all of them, not the
+	// newest 50. Only this exact value does that; anything else is the default.
+	if r.URL.Query().Get("severity") == "high" {
+		d.json(w, r, 200, onlyCriticalHigh(d.dash(r).FetchHubSecurity(3600, hubSecurityListAll)))
+		return
+	}
 	// server.py:5246 fetch_hub_security() — the route uses the defaults (1h/50).
 	d.json(w, r, 200, d.dash(r).FetchHubSecurity(3600, 50))
+}
+
+// hubSecurityListAll matches the cap FetchHubSecurity counts up to, so every
+// counted event is listed.
+const hubSecurityListAll = 5000
+
+// onlyCriticalHigh returns a copy of a hub/security result listing only its
+// critical and high events, by the same lower-cased match the counts use. The
+// input is a shared cache entry and is not changed. Counts, counted, complete
+// and truncated carry over, so a capped or failed read still says so.
+func onlyCriticalHigh(result map[string]any) map[string]any {
+	out := make(map[string]any, len(result))
+	for k, v := range result {
+		out[k] = v
+	}
+	events, _ := result["events"].([]map[string]any)
+	kept := make([]map[string]any, 0, len(events))
+	for _, e := range events {
+		sev, _ := e["severity"].(string)
+		if s := strings.ToLower(sev); s == "critical" || s == "high" {
+			kept = append(kept, e)
+		}
+	}
+	out["events"] = kept
+	out["returned"] = len(kept)
+	return out
 }
 
 func (d *Deps) hubDomains(w http.ResponseWriter, r *http.Request) {

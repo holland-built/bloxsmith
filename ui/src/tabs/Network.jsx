@@ -135,7 +135,7 @@ export default function Network() {
             layout. The id lives here rather than on the <Card> inside
             DhcpLeases for the same reason it does on Overview: the grid reads
             it off this element. */}
-        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} totals={totals} hp={hp} subnetsStatus={subnetsStatus} innerRef={subnetsRef} />
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} totals={totals} hp={hp} subnetsStatus={subnetsStatus} loading={data.loading} readFailed={!!data.error} innerRef={subnetsRef} />
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dhcp,
           state: owned,
@@ -661,11 +661,15 @@ function exhaustionSort(dir) {
 // it is a cap nothing can label.
 const EXHAUSTION_CAP = 150
 
-function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef }) {
+const isPercent = (n) => Number.isFinite(n) && n >= 0 && n <= 100
+
+function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading, readFailed, innerRef }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
-  const minUtil = hp.minUtil !== undefined && hp.minUtil !== '' ? Number(hp.minUtil) : null
+  // Only a real percentage is a filter. Anything else in the address is ignored.
+  const askedUtil = hp.minUtil?.trim() ? Number(hp.minUtil) : NaN
+  const minUtil = isPercent(askedUtil) ? askedUtil : null
 
   useEffect(() => {
     if (hp.subnet) setFilter(hp.subnet)
@@ -708,6 +712,32 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
   }, [base, filter, site, minUtil, unused])
 
   const sorted = useMemo(() => (unused ? filtered : sortRows(filtered, sort, exhaustionSort(sort.dir))), [filtered, sort, unused])
+
+  // Arriving on a "N% full or more" address: fullest first, and the list in
+  // view once it has loaded. Once per address, so a 30s poll never moves the page.
+  const landing = minUtil !== null && !unused ? `${minUtil}|${links}` : null
+  const jumpedFor = useRef(null)
+  useEffect(() => { if (landing) setSort({ key: 'util', dir: 'desc' }) }, [landing])
+  useEffect(() => {
+    if (!landing) { jumpedFor.current = null; return }
+    if (loading || jumpedFor.current === landing) return
+    jumpedFor.current = landing
+    jumpToPanel(panelId)
+  }, [landing, loading, panelId])
+  const landingWhat = `subnets ${minUtil}% full or more${links ? '' : ', not counting tiny networks'}`
+  const listFailed = !!readFailed || subnetsStatus === 'error'
+  // The rows hold every subnet at 70% or more only when the server's capped
+  // pager finished and they reach its count (the same test as the headlines).
+  const atRisk = subnets.filter((s) => { const u = num(s.util); return u !== null && u >= UTIL_WARN }).length
+  const listComplete = totals?.degraded !== true && (minUtil !== null && minUtil >= UTIL_WARN
+    ? Number.isFinite(totals?.subnetsWarn) && atRisk >= totals.subnetsWarn
+    : Number.isFinite(totals?.subnets) && subnets.length >= totals.subnets)
+  const landingLine = loading && !subnets.length ? `Checking ${landingWhat}…`
+    : sorted.length === 0 && listFailed ? `Could not load subnets, so the ${landingWhat} are not known.`
+    : sorted.length === 0 ? (filter.trim() || site ? `None of the ${landingWhat} match your search.`
+      : listComplete ? `No ${landingWhat}.`
+      : `None found in the subnets loaded. Not every subnet could be read, so some may be ${minUtil}% full or more.`)
+    : `Showing ${sorted.length > EXHAUSTION_CAP ? `the fullest ${EXHAUSTION_CAP} of ${sorted.length.toLocaleString()}` : sorted.length.toLocaleString()} ${sorted.length === 1 ? landingWhat.replace('subnets', 'subnet') : landingWhat}, fullest first.${listFailed ? ' The latest read failed, so this list may be out of date.' : ''}${listComplete ? '' : ' Not every subnet could be read, so there may be more.'}`
 
   // NO cap is applied here, deliberately. This used to be `sorted.slice(0, 20)`,
   // and the 20 was invisible: DataTable only prints its "showing N of M" footer
@@ -866,12 +896,19 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
         </div>
       }
     >
+      {landing && (
+        <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
+          <span>{landingLine}</span>
+          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => setHashParams('network', {})}>Show all</button>
+        </div>
+      )}
       {unused && !unusedApi.data ? (
         unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
       ) : base.length === 0 ? (
         subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : tableRows.length === 0 ? (
-        <Empty>no subnets match</Empty>
+        landing && listFailed ? <FeedUnavailable label="Subnets feed unavailable" />
+          : <Empty>{landing && !listComplete ? 'none in the subnets loaded' : 'no subnets match'}</Empty>
       ) : (
         <div className="mt-2.5">
           <DataTable rows={tableRows} columns={unused ? columns.map((c) => ({ ...c, sortable: false })) : columns}

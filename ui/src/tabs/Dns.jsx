@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
@@ -243,7 +243,7 @@ export default function Dns() {
           children: [<DnsServices key="dns-services" panelId="dns-services" services={services} />],
         })}
         <QueryVolume7d panelId="dns-query-volume-7d" analytics={analytics} />
-        <ZoneTable panelId="dns-zones" zones={zones} issuesOnly={hp.issues || ''} zonesStatus={zonesStatus} loading={data.loading} />
+        <ZoneTable panelId="dns-zones" zones={zones} issuesOnly={hp.issues || ''} zonesStatus={zonesStatus} loading={data.loading} readFailed={!!data.error} dnssec={dnssec} />
         <DnssecHealth panelId="dns-dnssec-health" dnssec={dnssec} />
         <RpzPanel panelId="dns-rpz" rpz={rpz} />
         <DtcLbdnPanel panelId="dns-dtc-lbdn" dtcLbdn={dtcLbdn} />
@@ -631,7 +631,7 @@ function QueryVolume7d({ panelId, analytics }) {
 
 // ---------- zone table ----------
 
-function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
+function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFailed, dnssec }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
@@ -650,14 +650,46 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const [sort, setSort] = useState({ key: 'issues', dir: 'desc' })
   // `issues=1` lists every zone with an issue; `issues=<kind>` (from Zone
   // Counts) lists the zones with that one kind.
-  const kind = issuesOnly && issuesOnly !== '1' ? issuesOnly : null
+  // `issues=dnssec` lists public zones that are not signed, from the signing
+  // feed, because only that feed marks which names are public.
+  const notSigned = issuesOnly === 'dnssec'
+  const kind = issuesOnly && issuesOnly !== '1' && !notSigned ? issuesOnly : null
+  const signingFailed = !!dnssec.error || dnssec.data?.status === 'error'
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    let base = issuesOnly ? zones.filter((z) => hasIssues(z) && (!kind || z.issues.includes(kind))) : zones
+    let base = zones
+    if (notSigned) {
+      const byId = new Map(zones.map((z) => [z.id, z]))
+      base = signing({ data: dnssec.data }).publicRows
+        .filter((r) => r.dnssec_status === 'UNSIGNED')
+        .map((r) => ({ ...r, ...byId.get(r.id) }))
+    } else if (issuesOnly) {
+      base = zones.filter((z) => hasIssues(z) && (!kind || z.issues.includes(kind)))
+    }
     if (!q) return base
     return base.filter((z) => [z.fqdn, z.view].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [zones, filter, issuesOnly, kind])
+  }, [zones, filter, issuesOnly, kind, notSigned, dnssec.data])
+
+  // Arriving on a filtered address: the list in view once its feed has loaded.
+  // Once per address, so a 30s poll never moves the page.
+  const listLoading = notSigned ? dnssec.loading : loading
+  const jumpedFor = useRef(null)
+  useEffect(() => {
+    if (!issuesOnly) { jumpedFor.current = null; return }
+    if (listLoading || jumpedFor.current === issuesOnly) return
+    jumpedFor.current = issuesOnly
+    jumpToPanel(panelId)
+  }, [issuesOnly, listLoading, panelId])
+
+  const landingWhat = notSigned ? 'public zones not signed' : kind ? `zones with this problem: ${issueWord(kind)}` : 'zones with DNS timing problems'
+  const listFailed = notSigned ? signingFailed : filtered.length === 0 && (readFailed || zonesStatus === 'error')
+  const uncheckedCount = notSigned ? 0 : zones.length - zones.filter(ttlChecked).length
+  const landingLine = listLoading ? `Checking ${landingWhat}…`
+    : listFailed ? `Could not load zones, so the ${landingWhat} are not known.`
+    : filtered.length === 0 ? (filter.trim() ? `None of the ${landingWhat} match your search.`
+      : `No ${landingWhat}.${uncheckedCount ? ` ${uncheckedCount.toLocaleString()} zones could not be checked.` : ''}`)
+    : `Showing ${filtered.length > 150 ? `the first 150 of ${filtered.length.toLocaleString()}` : filtered.length.toLocaleString()} ${filtered.length === 1 ? landingWhat.replace('zones', 'zone') : landingWhat}.${!notSigned && readFailed ? ' The latest read failed, so this list may be out of date.' : ''}`
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -759,7 +791,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
               className="text-note font-medium px-2 py-0.5 rounded-full cursor-pointer"
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
-              {kind ? issueWord(kind) : 'issues only'} ✕
+              {notSigned ? 'not signed' : kind ? issueWord(kind) : 'issues only'} ✕
             </button>
           </span>
         ) : 'DNS Zones'
@@ -789,11 +821,21 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
           <ZoneCompare zones={zones} onClose={() => setComparing(false)} />
         </Suspense>
       )}
-      {loading ? (
+      {issuesOnly && (
+        <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
+          <span>{landingLine}</span>
+          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => { location.hash = 'dns' }}>Show all</button>
+        </div>
+      )}
+      {listLoading ? (
         // Same reason as ZoneKpis: an unfinished read is neither "no zones"
         // nor "the feed is dead".
         <Skeleton h={250} />
-      ) : zones.length === 0 ? (
+      ) : notSigned && signingFailed ? (
+        <FeedUnavailable label="DNSSEC feed unavailable" />
+      ) : issuesOnly && listFailed ? (
+        <FeedUnavailable label="DNS zones feed unavailable" />
+      ) : !notSigned && zones.length === 0 ? (
         zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty />
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>

@@ -13,6 +13,8 @@ import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { SecurityHeadline } from './SecurityHeadline.jsx'
+import { setHashParams, useHashParams } from '../lib/hash.js'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -49,6 +51,10 @@ export default function Security() {
   // Charts added from Build a chart; they join the grid as ordinary panels.
   const savedCharts = useSavedChartPanels('security')
   const hub = useApi('/api/hub/security')
+  // Overview's "critical or high" link. The plain read lists only the newest
+  // 50 events, so this asks for every counted critical or high event.
+  const landing = useHashParams().severity === 'high'
+  const landingHub = useApi(landing ? '/api/hub/security?severity=high' : null)
   const threats = useApi('/api/csp/threats', { poll: 30000 })
   const lookalikes = useApi('/api/lookalikes')
   // Axur is a separate vendor, deliberately polled far slower than the CSP
@@ -105,7 +111,7 @@ export default function Security() {
           ...SERVICE_GROUPS.threatDefense,
           state: owned,
           children: [
-            <TriageInbox key="security-triage-inbox" panelId="security-triage-inbox" hub={hub} events={events} acks={acks} setAcks={setAcks} />,
+            <TriageInbox key="security-triage-inbox" panelId="security-triage-inbox" hub={landing ? landingHub : hub} landing={landing} events={landing ? landingHub.data?.events ?? NO_ROWS : events} acks={acks} setAcks={setAcks} />,
             <KpiStack key="security-response-summary" panelId="security-response-summary" hub={hub} events={events} acks={acks} />,
             <SeverityHero key="security-threat-events" panelId="security-threat-events" hub={hub} events={events} />,
           ],
@@ -348,7 +354,14 @@ function BlockCell({ domain, readOnly, urgent }) {
 
 // ---------- triage inbox ----------
 
-function TriageInbox({ panelId, hub, events, acks, setAcks }) {
+// "21", or "the first 150 of 400" when the table's row cap or a short list
+// means fewer are on screen than were counted.
+function shownOfCount(listed, count) {
+  const shown = Math.min(listed, 150)
+  return shown < count ? `the first ${shown.toLocaleString()} of ${count.toLocaleString()}` : count.toLocaleString()
+}
+
+function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
   const ro = useReadOnly()
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
@@ -366,9 +379,30 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
   const unavailable = hub.data?.availability === 'error' || !!hub.error
 
   const filtered = useMemo(() => {
+    if (landing) return events.filter((e) => sevRank(e.severity) <= 1)
     if (sevFilter === 'all') return events
     return events.filter((e) => String(e.severity).toLowerCase() === sevFilter)
-  }, [events, sevFilter])
+  }, [events, sevFilter, landing])
+
+  // Once per arrival, after the list has loaded, so a later read never moves
+  // the page.
+  const jumped = useRef(false)
+  useEffect(() => {
+    if (!landing) { jumped.current = false; return }
+    if (hub.loading || jumped.current) return
+    jumped.current = true
+    jumpToPanel(panelId)
+  }, [landing, hub.loading, panelId])
+
+  // The same two counts Overview adds up, so the two pages say one number.
+  const landingCount = (hub.data?.counts?.critical ?? 0) + (hub.data?.counts?.high ?? 0)
+  const partial = hub.data?.truncated ? ` Only the newest ${countedOf(hub.data).toLocaleString()} events this hour were read.` : ''
+  const landingLine = hub.loading ? 'Checking for critical and high events…'
+    : unavailable ? 'Could not load security events, so the critical and high events are not known.'
+    : landingCount === 0 ? (hub.data?.truncated
+      ? `No critical or high events in the newest ${countedOf(hub.data).toLocaleString()} events. Older events this hour were not checked.`
+      : 'No critical or high events in the last hour.')
+    : `Showing ${shownOfCount(filtered.length, landingCount)} critical or high ${landingCount === 1 ? 'event' : 'events'}, critical first.${partial}`
 
   // Default order matches the old severity-asc sort (Critical first); DataTable
   // re-sorts in place when a header is clicked.
@@ -458,11 +492,11 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
           {['all', ...SEV_ORDER].map((s) => (
             <button
               key={s}
-              onClick={() => setSevFilter(s)}
+              onClick={() => { if (landing) setHashParams('security', {}); setSevFilter(s) }}
               className="px-2 py-1 rounded-control text-note capitalize border"
               style={{
-                borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
-                color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
+                borderColor: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
+                color: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
               }}
             >
               {s}
@@ -473,6 +507,12 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       }
     >
       <ReadOnlyNote ro={ro} what="Block is off, so nothing is added to the block list." />
+      {landing && (
+        <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
+          <span>{landingLine}</span>
+          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => { setSevFilter('all'); setHashParams('security', {}) }}>Show all</button>
+        </div>
+      )}
       {hub.loading ? <Skeleton h={260} /> : unavailable ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : rows.length === 0 ? (
@@ -490,8 +530,8 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
           {/* The figure beside the severity buttons counts the listed rows
               matching the filter. Without these lines an inbox holding the
               newest 50 of a bad hour reads as an inbox with 50 things in it. */}
-          {shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
-          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
+          {!landing && shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
+          {!landing && scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}
     </Card>
