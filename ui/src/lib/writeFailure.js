@@ -20,7 +20,7 @@ const GENERIC_REFUSAL = /^(?:create|update|allocation|delete) failed \(status 40
 export function writeFailureText(status, data, what) {
   const said = typeof data?.error === 'string' ? data.error : ''
   // The server says outright that it was refused or never sent.
-  if (said && (data.outcome === 'refused' || data.outcome === 'not-sent')) return said
+  if (said && (data.refused === true || data.outcome === 'refused' || data.outcome === 'not-sent')) return said
   const unreadable = status >= 200 && status < 300 && data == null
   if (status === 0 || unreadable || (status >= 500 && !KNOWN_5XX.test(said))) return WRITE_UNKNOWN
   if ((!said || GENERIC_REFUSAL.test(said)) && isNoPermission({ status })) return WRITE_NO_PERMISSION

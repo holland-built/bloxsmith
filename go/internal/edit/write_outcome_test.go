@@ -31,7 +31,7 @@ func TestAllocate_StillReservedAddressesAreCounted(t *testing.T) {
 			if strings.Contains(msg, "released") {
 				t.Fatalf("says released while one is still reserved: %q", msg)
 			}
-			if !strings.Contains(msg, "1 address(es) are still reserved") || !strings.Contains(msg, "Editor") {
+			if !strings.Contains(msg, "1 address(es) may still be reserved") || !strings.Contains(msg, "Editor") {
 				t.Fatalf("must count what is still reserved and name the Editor: %q", msg)
 			}
 		})

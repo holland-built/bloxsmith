@@ -1024,9 +1024,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				out["error"] = "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox"
 			}
 			if len(orphaned) > 0 {
-				out["error"] = fmt.Sprintf("dns record creation failed, but %d address(es) are still reserved. Remove them in the Editor", len(orphaned))
+				out["error"] = fmt.Sprintf("dns record creation failed, but %d address(es) may still be reserved. Check them in the Editor and remove any that remain", len(orphaned))
 				if rest.NoClearAnswer(rstatus) {
-					out["error"] = fmt.Sprintf("the DNS record may or may not exist, but %d address(es) are still reserved. Remove them in the Editor, and check for the record in Infoblox", len(orphaned))
+					out["error"] = fmt.Sprintf("the DNS record may or may not exist, and %d address(es) may still be reserved. Check them in the Editor, remove any that remain, and check for the record in Infoblox", len(orphaned))
 				}
 			}
 			return out, 502

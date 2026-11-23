@@ -313,6 +313,9 @@ func (d *Deps) listsProposalApply(w http.ResponseWriter, r *http.Request, b map[
 			if res["outcome"] == "refused" {
 				out["outcome"] = "refused"
 			}
+			if res["refused"] == true {
+				out["refused"] = true
+			}
 			if !dry && len(added) > 0 {
 				// Some may have gone in before it stopped: the ones now in the
 				// list are the sync's own, or a later drop would never find them.

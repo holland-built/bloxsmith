@@ -46,7 +46,7 @@ func TestApplyList_ARefusedChunkIsMarkedAndNoAnswerIsNot(t *testing.T) {
 	for i := range domains {
 		domains[i] = fmt.Sprintf("site%d.example.com", i)
 	}
-	for code, want := range map[int]any{403: "refused", 503: "partial"} {
+	for code, want := range map[int]any{403: "partial", 503: "partial"} {
 		f := newFakeTenant()
 		f.patchCode = code
 		b := newListBody(false)
@@ -54,6 +54,11 @@ func TestApplyList_ARefusedChunkIsMarkedAndNoAnswerIsNot(t *testing.T) {
 		res, status := applyAfterPreview(t, f.serve(t), b)
 		if status != 502 || res["outcome"] != want {
 			t.Errorf("%d: want %v, got %d %v", code, want, status, res["outcome"])
+		}
+		// A chunk landed first, so the headline stays partial. A clear refusal
+		// is marked separately so the screen keeps the server's exact message.
+		if got := res["refused"] == true; got != (code == 403) {
+			t.Errorf("%d: refused = %v", code, res["refused"])
 		}
 	}
 }

@@ -142,3 +142,9 @@ test('a reply the server marks as refused or not sent keeps its message, even on
   }
   assert.equal(writeFailureText(502, { outcome: 'partial', error: 'Infoblox stopped taking domains' }, 'save this'), WRITE_UNKNOWN)
 })
+
+test('a refusal after part of a list went in keeps the server message', () => {
+  const error = 'Infoblox stopped taking domains (HTTP 403) after about 500 of 900.'
+  assert.equal(writeFailureText(502, { outcome: 'partial', refused: true, error }, 'add the domains'), error)
+  assert.equal(writeFailureText(502, { outcome: 'partial', error }, 'add the domains'), WRITE_UNKNOWN)
+})
