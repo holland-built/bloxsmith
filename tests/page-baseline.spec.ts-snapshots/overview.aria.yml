@@ -6,12 +6,6 @@
   - 'link "Start with: View hosts"':
     - /url: "#infra?status=offline"
   - text: /Updated \d+:\d+ PM/
-  - region "Since yesterday":
-    - heading "Since yesterday" [level=2]
-    - list:
-      - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
-      - listitem: Changes (last 6 h only) 5 changes, 0 by users, 1 failed
-      - listitem: /New issues Not yet available\. Requires \d+ hours of history\./
   - region "Items requiring attention 4":
     - heading "Items requiring attention 4" [level=2]
     - list:
@@ -35,6 +29,12 @@
         - 'link "Open: 2 subnets close to full"':
           - /url: "#incidents"
           - text: ""
+  - region "Since yesterday":
+    - heading "Since yesterday" [level=2]
+    - list:
+      - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
+      - listitem: Changes (last 6 h only) 5 changes, 0 by users, 1 failed
+      - listitem: /New issues Not yet available\. Requires \d+ hours of history\./
   - region "Current status":
     - heading "Current status" [level=2]
     - list:

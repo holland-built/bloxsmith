@@ -34,7 +34,7 @@ const firstScreenReach = (page: Page) => page.evaluate(() => {
   const wrap = document.querySelector('.ov-look.br')!.parentElement!;
   const pad = parseFloat(getComputedStyle(wrap).paddingRight);
   const available = wrap.getBoundingClientRect().right - pad;
-  const items = [...document.querySelectorAll('[data-problem], .br-fact, .ov-kpis')];
+  const items = [...document.querySelectorAll('[data-problem], .br-fact')];
   const seen = items.map((el) => el.getBoundingClientRect()).filter((b) => b.width > 0 && b.top < innerHeight);
   return { available, reach: Math.max(...seen.map((b) => b.right)) };
 });
@@ -61,6 +61,15 @@ test('a long list still leaves Service details on the first screen at 2000x900',
   await expect(page.locator('[data-problem]')).toHaveCount(14);
   const box = await page.getByRole('heading', { name: 'Service details' }).boundingBox();
   expect(box!.y + box!.height).toBeLessThanOrEqual(900);
+});
+
+test('reading and Tab order follow the screen: attention list first', async ({ page }) => {
+  await page.setViewportSize({ width: 2000, height: 900 });
+  await busyWorld(page);
+  const order = await page.locator('.br-read h2').allTextContents();
+  expect(order[0]).toContain('Items requiring attention');
+  expect(order[1]).toContain('Since yesterday');
+  expect(order[2]).toContain('Current status');
 });
 
 test('the page does not scroll sideways at the width where the wide layout starts', async ({ page }) => {

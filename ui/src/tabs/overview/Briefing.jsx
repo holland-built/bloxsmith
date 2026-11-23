@@ -96,16 +96,6 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
           <div className="br-updated">{updated}</div>
         </header>
         <div className="br-read">
-          <section aria-labelledby="br-since">
-            <h2 id="br-since">Since yesterday</h2>
-            <ul className="br-facts">
-              <Fact label="DNS traffic">{trendWords(trend)}</Fact>
-              <Fact label={changes.state === 'ok' ? `Changes (${changes.window.toLowerCase()})` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
-              <Fact label="New issues" tip="Issues are dated from when this system first detected them, so 24 hours of history are required to identify new issues.">
-                {newIssuesWords({ problems, allRead: board.allRead, reading: board.reading, nowS: nowMs / 1000 })}
-              </Fact>
-            </ul>
-          </section>
           <section aria-labelledby="br-look">
             <h2 id="br-look">Items requiring attention <span>{problems.length || ''}</span></h2>
             {problems.length ? (
@@ -119,6 +109,16 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
                 ))}
               </ol>
             ) : <p className="br-empty">{verdict.tone === 'ok' ? 'No items require attention.' : 'No issues found so far.'}</p>}
+          </section>
+          <section aria-labelledby="br-since">
+            <h2 id="br-since">Since yesterday</h2>
+            <ul className="br-facts">
+              <Fact label="DNS traffic">{trendWords(trend)}</Fact>
+              <Fact label={changes.state === 'ok' ? `Changes (${changes.window.toLowerCase()})` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
+              <Fact label="New issues" tip="Issues are dated from when this system first detected them, so 24 hours of history are required to identify new issues.">
+                {newIssuesWords({ problems, allRead: board.allRead, reading: board.reading, nowS: nowMs / 1000 })}
+              </Fact>
+            </ul>
           </section>
           <section aria-labelledby="br-fine">
             <h2 id="br-fine">Current status</h2>
