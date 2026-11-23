@@ -149,10 +149,9 @@ function measureTables(tolerance: number): TableReport[] {
       const gapH = parseFloat(getComputedStyle(headRow).columnGap) || 0;
       headFloor = Math.ceil(measureText(h2.textContent || '', getComputedStyle(h2).font));
       const kids = Array.from(headRow.children) as HTMLElement[];
-      const rightEl = kids[kids.length - 1];
-      if (rightEl && rightEl !== h2 && !rightEl.classList.contains('flex-1')) {
-        headFloor += gapH + rightEl.scrollWidth;
-      }
+      // Everything after the spacer: the panel's controls, then its buttons.
+      const spacer = kids.findIndex((k) => k.classList.contains('flex-1'));
+      for (const el of kids.slice(spacer + 1)) headFloor += gapH + el.scrollWidth;
     }
 
     // (b) One grid track plus one gap: the span is the FEWEST whole tracks that

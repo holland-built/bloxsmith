@@ -1643,6 +1643,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   const titleRef = useRef(null)
   const noteRef = useRef(null)
   const rightRef = useRef(null)
+  const headButtonsRef = useRef(null)
   const headCanvasRef = useRef(null)
   const bodyNeedRef = useRef(null)
   const grid = useContext(GridFitContext)
@@ -1707,8 +1708,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
     const ctx = headCanvasRef.current
     ctx.font = getComputedStyle(titleEl).font
     let sum = Math.ceil(ctx.measureText(titleEl.textContent || '').width)
-    if (rightRef.current) {
-      sum += (parseFloat(getComputedStyle(head).columnGap) || 0) + rightRef.current.scrollWidth
+    const gap = parseFloat(getComputedStyle(head).columnGap) || 0
+    for (const part of [rightRef.current, headButtonsRef.current]) {
+      if (part) sum += gap + part.scrollWidth
     }
     return sum
   }, [])
@@ -2418,9 +2420,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   // never a replacement for it. A native <button> keeps Enter, Space, focus and
   // the expanded/collapsed announcement free.
   //
-  // WHERE THE BUTTON GOES IS NOT A FREE CHOICE. It renders INSIDE the rightRef
-  // span alongside the drag handle, for the reason spelled out at that span:
-  // headNeed measures the width floor as title + gap + rightRef.scrollWidth,
+  // WHERE THE BUTTON GOES IS NOT A FREE CHOICE. It renders INSIDE the header's
+  // buttons span alongside the drag handle, for the reason spelled out there:
+  // headNeed measures the width floor as title + gap + right + gap + buttons,
   // so a header control rendered as a SIBLING of that span is width the
   // measurement cannot see, and the header overflows the card by exactly that
   // control's width. Inside it, it is counted for free. Its own width is
@@ -2439,7 +2441,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   // the spec now holds all four tabs at all five widths to zero.
   //
   // The BODY is a block BELOW the header and is invisible to both measurers:
-  // headNeed reads only the title canvas and rightRef, bodyNeed is whatever
+  // headNeed reads only the title canvas, rightRef and the buttons span, bodyNeed is whatever
   // DataTable reported about its own table. The fit system is width-only, so
   // the height this adds costs nothing.
   //
@@ -2657,16 +2659,19 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
           <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
           {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
           <span className="flex-1" />
-          {/* The drag handle goes INSIDE the `right` slot, not beside it, and
-              that placement is the whole reason headNeed keeps working: the
-              floor under a panel's width is measured as title + gap +
-              rightRef.scrollWidth, so a handle rendered as a sibling of this
-              span would be a header element the measurement could not see —
-              and the header would overflow the card by exactly the handle's
-              width. Sitting inside rightRef, it is counted for free. */}
-          {(right || infoBtn || menu) && (
-            <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+          {/* The drag handle goes in the buttons span below, and headNeed
+              measures both that span and `right`: a header element outside
+              those two would be invisible to the width floor, and the header
+              would overflow the card by exactly that element's width. */}
+          {/* On a phone `right` takes its own line, so a wide control cannot
+              carry the help and menu buttons away from the title. */}
+          {right && (
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
+            </span>
+          )}
+          {(infoBtn || menu) && (
+            <span ref={headButtonsRef} className="shrink-0 flex items-center gap-2">
               {infoBtn}
               {menu}
             </span>

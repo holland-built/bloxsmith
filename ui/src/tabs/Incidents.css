@@ -45,3 +45,9 @@
 tr:hover .inc-quiet, tr:focus-within .inc-quiet, .inc-quiet[data-busy] { opacity: 1 }
 tr:hover .inc-quiet:disabled { opacity: .5 }
 @media (hover: none) { .inc-quiet { opacity: 1 } }
+
+/* A finger needs 24px on the row's own actions. */
+@media (pointer: coarse) {
+  .inc-quiet { min-height: 24px }
+  input.inc-seen { width: 24px; height: 24px }
+}

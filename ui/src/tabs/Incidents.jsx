@@ -460,6 +460,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       render: (_v, s) => (
         <input
           type="checkbox"
+          className="inc-seen"
           checked={!!acks[ackKey(s)]}
           onChange={() => onToggleAck(s)}
           aria-label={`Mark ${s.entity_id || ackKey(s)} as seen`}

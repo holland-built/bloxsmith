@@ -34,3 +34,9 @@
 .sec-triage tr:focus-within .sec-block { opacity: 1 }
 @media (hover: none) { .sec-block { opacity: 1 } }
 .sec-kpi .ov-kpi-top > :last-child:not(:first-child) { white-space: nowrap }
+
+/* A finger needs 24px on the row's own actions. */
+@media (pointer: coarse) {
+  .sec-block { min-height: 24px }
+  .sec-triage input[type='checkbox'] { width: 24px; height: 24px }
+}

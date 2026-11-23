@@ -78,6 +78,7 @@ function visibleColumns(columns, sorted) {
 // any cost.
 
 const CELL_PAD = 20 // px-2.5 on both sides of a th/td
+const PHONE_GROW_MAX = 240 // widest a wrapping text column gets on a phone
 const SORT_AFFORDANCE_PAD = 17 // room for the ▲/▼ indicator on a sortable header; Inter's triangle paints 15.53px (tests/table-measures-what-it-paints.spec.ts), was 14 under system-ui
 const MEASURE_BUFFER = 3 // absorbs measureText() sub-pixel rounding
 const BADGE_PAD = 20 // the pill span's own px-2.5
@@ -510,9 +511,14 @@ export function DataTable({
     const tier2 = cols.filter((c) => !c.width && !tier1.includes(c))
 
     const fixedTotal = Object.values(fixed).reduce((a, b) => a + b, 0)
-    const available = wrapper.clientWidth
-    const budget = Math.max(0, available - fixedTotal)
+    // On a phone a long free-text column wraps at a readable width, and the
+    // table keeps every column at full size and swipes sideways instead of
+    // squeezing them until their values are cut off.
+    const phone = window.matchMedia?.('(width < 48rem)')?.matches
+    if (phone) for (const c of growWrapSet) naturals[c.key] = Math.min(naturals[c.key], PHONE_GROW_MAX)
     const totalNatural = cols.reduce((a, c) => (c.width ? a : a + naturals[c.key]), 0)
+    const available = phone ? Math.max(wrapper.clientWidth, fixedTotal + totalNatural) : wrapper.clientWidth
+    const budget = Math.max(0, available - fixedTotal)
 
     // Tell the enclosing Card how much width these columns actually need, so
     // the panel's GRID width can follow its content instead of a hand-declared
@@ -710,7 +716,9 @@ export function DataTable({
     const wrapper = wrapperRef.current
     if (!wrapper || typeof ResizeObserver === 'undefined') return undefined
     const ro = new ResizeObserver(() => {
-      if (wrapper.scrollHeight > wrapper.clientHeight + 1) {
+      // Sideways counts too: a short table wider than a phone has to take focus
+      // for the arrow keys to reach its other columns.
+      if (wrapper.scrollHeight > wrapper.clientHeight + 1 || wrapper.scrollWidth > wrapper.clientWidth + 1) {
         wrapper.tabIndex = 0
         wrapper.setAttribute('role', 'group')
         wrapper.setAttribute('aria-label', 'Scrollable table')
@@ -755,7 +763,7 @@ export function DataTable({
         <tr>
           {cols.map((c) => {
             const alignRight = c.align === 'right'
-            const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
+            const lowPri = c.priority === 'low' ? ' md:@max-[360px]:hidden' : ''
             // py-[var(--sp-cell-y)] is density-driven; px-2.5 is NOT, and must
             // never become so — CELL_PAD above hard-codes it for the canvas
             // measurer, so a density that moved it would desync the two.
@@ -805,7 +813,7 @@ export function DataTable({
             {cols.map((c) => {
               const v = r[c.key]
               const alignRight = c.align === 'right'
-              const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
+              const lowPri = c.priority === 'low' ? ' md:@max-[360px]:hidden' : ''
               // The button is laid over its cell and see-through, so it takes
               // no room and moves no text, and focusing it scrolls the row in,
               // not one pixel of it. It lets the pointer through, so the cell's
@@ -896,8 +904,9 @@ export function DataTable({
 
   // Explicit px widths (table-fixed) that sum to <= the wrapper's clientWidth
   // make overflow arithmetically impossible, so the wrapper never x-scrolls
-  // (the user's #1 complaint). @container only hides priority:'low' columns at
-  // true phone width (<360px). Long values clip within their column via
+  // (the user's #1 complaint). Phones are the exception: there the columns keep
+  // their full width and the table swipes. @container hides priority:'low'
+  // columns only in a narrow panel on a larger screen. Long values clip within their column via
   // ellipsis (or a 2-line clamp for the non-mono grow column).
   return (
     <div className="@container">
@@ -917,7 +926,7 @@ export function DataTable({
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
-      <div ref={wrapperRef} className={`overflow-x-hidden overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
+      <div ref={wrapperRef} className={`overflow-x-hidden max-md:overflow-x-auto overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
         {table}
       </div>
       {footer}

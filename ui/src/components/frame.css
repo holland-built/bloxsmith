@@ -171,6 +171,7 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   :root { --frame-top: 52px; }
   .frame-rail { display: none; }
   .frame-phone-logo, .frame-phone-search { display: inline-grid; }
+  .frame-phone-logo { flex: none; }
   .frame-top { padding: 6px 12px; gap: 6px; }
   /* On a phone the list spans the header, which is its positioning parent. */
   .frame-tenant { position: static; }
