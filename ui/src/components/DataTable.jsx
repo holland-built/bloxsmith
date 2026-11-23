@@ -716,7 +716,9 @@ export function DataTable({
     const wrapper = wrapperRef.current
     if (!wrapper || typeof ResizeObserver === 'undefined') return undefined
     const ro = new ResizeObserver(() => {
-      if (wrapper.scrollHeight > wrapper.clientHeight + 1) {
+      // Sideways counts too: a short table wider than a phone has to take focus
+      // for the arrow keys to reach its other columns.
+      if (wrapper.scrollHeight > wrapper.clientHeight + 1 || wrapper.scrollWidth > wrapper.clientWidth + 1) {
         wrapper.tabIndex = 0
         wrapper.setAttribute('role', 'group')
         wrapper.setAttribute('aria-label', 'Scrollable table')

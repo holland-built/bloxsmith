@@ -34,6 +34,9 @@ for (const width of PHONES) {
           if (box.scrollWidth > box.clientWidth + 1 && getComputedStyle(box).overflowX !== 'auto') {
             out.push(`table is ${box.scrollWidth}px in a ${box.clientWidth}px box that cannot swipe`);
           }
+          if (box.scrollWidth > box.clientWidth + 1 && box.getAttribute('tabindex') !== '0') {
+            out.push('a table wider than its box cannot be scrolled from the keyboard');
+          }
           for (const cell of t.querySelectorAll('thead th')) {
             const el = cell as HTMLElement;
             if (el.scrollWidth > el.clientWidth + 1) out.push(`heading cut: ${el.textContent}`);
