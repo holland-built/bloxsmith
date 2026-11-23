@@ -134,6 +134,7 @@ test('a filter that matches nothing says so', async ({ page }) => {
     ...structuredClone(dataPayload()),
     subnets: [SUBNETS[3]],
     zones: [ZONES[0]],
+    _totals: { ...dataPayload()._totals, subnets: 1, subnetsCrit: 0, subnetsWarn: 0 },
   }));
   await page.route('**/api/csp/dnssec*', (r) => json(r, { status: 'ok', rows: [DNSSEC.rows[0]] }));
   await page.route('**/api/hub/security*', (r) => json(r, { ...PLAIN_HUB, counts: { critical: 0, high: 0, medium: 2, low: 0 }, events: [ev('m.example', 'MEDIUM', 0)] }));
@@ -162,5 +163,74 @@ for (const c of CASES) {
     await expect(line(page, c.panel)).toContainText(c.text);
     await page.waitForTimeout(2500);
     await expectLanded(page, c.panel);
+  });
+}
+
+test('a capped security read with none found does not claim the whole hour', async ({ page }) => {
+  await world(page);
+  await page.route('**/api/hub/security*', (r) => json(r, {
+    ...PLAIN_HUB, counted: 5000, returned: 0, complete: false, truncated: true,
+    counts: { critical: 0, high: 0, medium: 5000, low: 0 }, events: [],
+  }));
+  await page.goto('/#security?severity=high');
+  const l = line(page, 'security-triage-inbox');
+  await expect(l).toContainText('No critical or high events in the newest 5,000 events. Older events this hour were not checked.');
+  await expect(l).not.toContainText('in the last hour');
+});
+
+// A first read that works and holds no matches, then a poll that fails.
+for (const c of [
+  { name: 'subnets', hash: '#network?minUtil=70&links=1', panel: 'network-exhaustion', failed: 'Could not load subnets', none: 'No subnets' },
+  { name: 'zones', hash: '#dns?issues=1', panel: 'dns-zones', failed: 'Could not load zones', none: 'No zones' },
+]) {
+  test(`a failed refresh with no matches on screen shows the failure: ${c.name}`, async ({ page }) => {
+    await page.clock.install({ time: new Date('2026-01-01T12:00:00Z') });
+    await world(page);
+    let fail = false;
+    await page.route('**/api/data*', (r) => (fail ? json(r, { error: 'x' }, 500) : json(r, {
+      ...structuredClone(dataPayload()),
+      subnets: [SUBNETS[3]],
+      zones: [ZONES[0]],
+      _totals: { ...dataPayload()._totals, subnets: 1, subnetsCrit: 0, subnetsWarn: 0 },
+    })));
+    await page.goto(`/${c.hash}`);
+    await expect(line(page, c.panel)).toContainText(`${c.none}`);
+    fail = true;
+    await page.clock.runFor(31_000);
+    await expect(line(page, c.panel)).toContainText(c.failed, { timeout: 15_000 });
+    await expect(line(page, c.panel)).not.toContainText(c.none);
+    await expect(page.locator(`[data-panel-id="${c.panel}"]`)).not.toContainText(/no (subnets|zones) match/);
+  });
+}
+
+for (const c of [
+  { name: 'server says the read was capped', totals: { degraded: true, subnets: 9, subnetsWarn: 0 } },
+  { name: 'fewer loaded than the server counted', totals: { degraded: false, subnets: 9, subnetsWarn: 4 } },
+]) {
+  test(`a partial subnet list never claims none: ${c.name}`, async ({ page }) => {
+    await world(page);
+    await page.route('**/api/data*', (r) => json(r, { ...structuredClone(dataPayload()), subnets: [SUBNETS[3]], _totals: { ...dataPayload()._totals, ...c.totals } }));
+    await page.goto('/#network?minUtil=70&links=1');
+    const l = line(page, 'network-exhaustion');
+    await expect(l).toContainText('None found in the subnets loaded. Not every subnet could be read, so some may be 70% full or more.');
+  });
+
+  test(`a partial subnet list says why it may be short: ${c.name}`, async ({ page }) => {
+    await world(page);
+    await page.route('**/api/data*', (r) => json(r, { ...structuredClone(dataPayload()), subnets: [SUBNETS[0], SUBNETS[3]], _totals: { ...dataPayload()._totals, ...c.totals } }));
+    await page.goto('/#network?minUtil=70&links=1');
+    await expect(line(page, 'network-exhaustion')).toContainText('Showing 1 subnet 70% full or more, fullest first. Not every subnet could be read, so there may be more.');
+  });
+}
+
+for (const bad of ['abc', '150', '-5']) {
+  test(`minUtil=${bad} is no filter and no landing message`, async ({ page }) => {
+    await world(page);
+    await page.goto(`/#network?minUtil=${bad}&links=1`);
+    const card = page.locator('[data-panel-id="network-exhaustion"]');
+    await expect(rowsOf(page, 'network-exhaustion')).toHaveCount(SUBNETS.length);
+    await expect(line(page, 'network-exhaustion')).toHaveCount(0);
+    await expect(card).not.toContainText('NaN');
+    await expect(card.getByRole('button', { name: 'Clear filter' })).toHaveCount(0);
   });
 }

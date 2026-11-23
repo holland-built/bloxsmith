@@ -399,7 +399,9 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
   const partial = hub.data?.truncated ? ` Only the newest ${countedOf(hub.data).toLocaleString()} events this hour were read.` : ''
   const landingLine = hub.loading ? 'Checking for critical and high events…'
     : unavailable ? 'Could not load security events, so the critical and high events are not known.'
-    : landingCount === 0 ? `No critical or high events in the last hour.${partial}`
+    : landingCount === 0 ? (hub.data?.truncated
+      ? `No critical or high events in the newest ${countedOf(hub.data).toLocaleString()} events. Older events this hour were not checked.`
+      : 'No critical or high events in the last hour.')
     : `Showing ${shownOfCount(filtered.length, landingCount)} critical or high ${landingCount === 1 ? 'event' : 'events'}, critical first.${partial}`
 
   // Default order matches the old severity-asc sort (Critical first); DataTable

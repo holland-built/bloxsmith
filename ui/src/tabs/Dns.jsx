@@ -683,7 +683,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
   }, [issuesOnly, listLoading, panelId])
 
   const landingWhat = notSigned ? 'public zones not signed' : kind ? `zones with this problem: ${issueWord(kind)}` : 'zones with DNS timing problems'
-  const listFailed = notSigned ? signingFailed : zones.length === 0 && (readFailed || zonesStatus === 'error')
+  const listFailed = notSigned ? signingFailed : filtered.length === 0 && (readFailed || zonesStatus === 'error')
   const uncheckedCount = notSigned ? 0 : zones.length - zones.filter(ttlChecked).length
   const landingLine = listLoading ? `Checking ${landingWhat}…`
     : listFailed ? `Could not load zones, so the ${landingWhat} are not known.`
@@ -833,6 +833,8 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
         <Skeleton h={250} />
       ) : notSigned && signingFailed ? (
         <FeedUnavailable label="DNSSEC feed unavailable" />
+      ) : issuesOnly && listFailed ? (
+        <FeedUnavailable label="DNS zones feed unavailable" />
       ) : !notSigned && zones.length === 0 ? (
         zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty />
       ) : sorted.length === 0 ? (

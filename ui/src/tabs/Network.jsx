@@ -661,11 +661,15 @@ function exhaustionSort(dir) {
 // it is a cap nothing can label.
 const EXHAUSTION_CAP = 150
 
+const isPercent = (n) => Number.isFinite(n) && n >= 0 && n <= 100
+
 function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading, readFailed, innerRef }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
-  const minUtil = hp.minUtil !== undefined && hp.minUtil !== '' ? Number(hp.minUtil) : null
+  // Only a real percentage is a filter. Anything else in the address is ignored.
+  const askedUtil = hp.minUtil ? Number(hp.minUtil) : NaN
+  const minUtil = isPercent(askedUtil) ? askedUtil : null
 
   useEffect(() => {
     if (hp.subnet) setFilter(hp.subnet)
@@ -721,10 +725,19 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
     jumpToPanel(panelId)
   }, [landing, loading, panelId])
   const landingWhat = `subnets ${minUtil}% full or more${links ? '' : ', not counting tiny networks'}`
+  const listFailed = !!readFailed || subnetsStatus === 'error'
+  // The rows hold every subnet at 70% or more only when the server's capped
+  // pager finished and they reach its count (the same test as the headlines).
+  const atRisk = subnets.filter((s) => { const u = num(s.util); return u !== null && u >= UTIL_WARN }).length
+  const listComplete = totals?.degraded !== true && (minUtil !== null && minUtil >= UTIL_WARN
+    ? Number.isFinite(totals?.subnetsWarn) && atRisk >= totals.subnetsWarn
+    : Number.isFinite(totals?.subnets) && subnets.length >= totals.subnets)
   const landingLine = loading && !subnets.length ? `Checking ${landingWhat}…`
-    : !subnets.length && (readFailed || subnetsStatus === 'error') ? `Could not load subnets, so the ${landingWhat} are not known.`
-    : sorted.length === 0 ? (filter.trim() || site ? `None of the ${landingWhat} match your search.` : `No ${landingWhat}.`)
-    : `Showing ${sorted.length > EXHAUSTION_CAP ? `the fullest ${EXHAUSTION_CAP} of ${sorted.length.toLocaleString()}` : sorted.length.toLocaleString()} ${sorted.length === 1 ? landingWhat.replace('subnets', 'subnet') : landingWhat}, fullest first.${readFailed ? ' The latest read failed, so this list may be out of date.' : ''}`
+    : sorted.length === 0 && listFailed ? `Could not load subnets, so the ${landingWhat} are not known.`
+    : sorted.length === 0 ? (filter.trim() || site ? `None of the ${landingWhat} match your search.`
+      : listComplete ? `No ${landingWhat}.`
+      : `None found in the subnets loaded. Not every subnet could be read, so some may be ${minUtil}% full or more.`)
+    : `Showing ${sorted.length > EXHAUSTION_CAP ? `the fullest ${EXHAUSTION_CAP} of ${sorted.length.toLocaleString()}` : sorted.length.toLocaleString()} ${sorted.length === 1 ? landingWhat.replace('subnets', 'subnet') : landingWhat}, fullest first.${listFailed ? ' The latest read failed, so this list may be out of date.' : ''}${listComplete ? '' : ' Not every subnet could be read, so there may be more.'}`
 
   // NO cap is applied here, deliberately. This used to be `sorted.slice(0, 20)`,
   // and the 20 was invisible: DataTable only prints its "showing N of M" footer
@@ -894,7 +907,8 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
       ) : base.length === 0 ? (
         subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : tableRows.length === 0 ? (
-        <Empty>no subnets match</Empty>
+        landing && listFailed ? <FeedUnavailable label="Subnets feed unavailable" />
+          : <Empty>{landing && !listComplete ? 'none in the subnets loaded' : 'no subnets match'}</Empty>
       ) : (
         <div className="mt-2.5">
           <DataTable rows={tableRows} columns={unused ? columns.map((c) => ({ ...c, sortable: false })) : columns}
