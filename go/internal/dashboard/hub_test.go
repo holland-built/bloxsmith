@@ -530,3 +530,24 @@ func TestFetchHubHealth_FailedReadHasNoNotRunningList(t *testing.T) {
 		}
 	}
 }
+
+// A cut-off inventory with none of a group's rows has no list to offer: an
+// empty one would read as "none are down" for services nobody saw.
+func TestFetchHubHealth_TruncatedEmptyGroupHasNoNotRunningList(t *testing.T) {
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		writeResultsWithPage(w, mixedServiceRows(3, 3), map[string]any{"total_size": "900"})
+	})
+	for _, b := range s.FetchHubHealth() {
+		if getStr(b["name"]) != "DHCP" {
+			continue
+		}
+		if got := getStr(b["availability"]); got != "partial" {
+			t.Fatalf("availability = %q, want partial", got)
+		}
+		if _, ok := b["not_running"]; ok {
+			t.Fatalf("a cut-off empty group must not carry a list: %v", b["not_running"])
+		}
+		return
+	}
+	t.Fatal("no DHCP bucket")
+}

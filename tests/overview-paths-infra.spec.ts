@@ -121,6 +121,19 @@ test.describe('the page never claims none are down without knowing', () => {
     await expect(page.locator('[data-services-down="DHCP"]').getByRole('heading')).toContainText('there may be more');
   });
 
+  for (const [what, b] of [
+    ['a group with no rows before the cut-off', { name: 'DHCP', status: 'unknown', statusLabel: 'not listed', meta: 'beyond the row cap', availability: 'partial', reason: 'cut off' }],
+    ['a group whose rows were all up before the cut-off', { ...bucket('DHCP', 18, 18), status: 'ok', availability: 'partial' }],
+  ] as const) {
+    test(`cut-off list with ${what} is not called clear`, async ({ page }) => {
+      await health(page, [b]);
+      await page.goto('/#infra?service=DHCP&status=down');
+      const heading = page.locator('[data-services-down="DHCP"]').getByRole('heading');
+      await expect(heading).toContainText('could not be fully checked');
+      await expect(heading).not.toContainText('No DHCP services are down');
+    });
+  }
+
   test('complete read with none down says so', async ({ page }) => {
     await health(page, [{ ...bucket('DHCP', 18, 18), status: 'ok' }]);
     await page.goto('/#infra?service=DHCP&status=down');
@@ -133,3 +146,41 @@ test.describe('the page never claims none are down without knowing', () => {
     await expect(page.locator('[data-host-filter-line]')).toContainText('could not be loaded');
   });
 });
+
+for (const width of [1440, 390]) {
+  test.describe(`hosts landing with Host Inventory hidden, at ${width}px`, () => {
+    test.use({ viewport: { width, height: 800 } });
+
+    test('shows the hosts for this visit and leaves the saved layout alone', async ({ page }) => {
+      await installBaselineWorld(page);
+      const name = '__layout_infra';
+      const saved = { name, order: ['infra-host-status', 'infra-service-health'], layout: { version: 1, spans: {}, hidden: ['infra-host-inventory'] } };
+      const writes: string[] = [];
+      await page.route('**/api/views', (r) => {
+        if (r.request().method() !== 'GET') { writes.push(r.request().method()); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); }
+        return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ views: [{ name }] }) });
+      });
+      await page.route(`**/api/views/${name}`, (r) => {
+        if (r.request().method() !== 'GET') { writes.push(r.request().method()); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); }
+        return r.fulfill({ contentType: 'application/json', body: JSON.stringify(saved) });
+      });
+
+      await page.goto('/#infra?status=offline');
+      const list = page.locator('[data-hosts-landing]');
+      await expect(list.locator('[data-host-filter-line]')).toContainText('Showing 1 host not online');
+      await expect(list.getByText('baseline-host-c').first()).toBeVisible();
+      await expect(list.getByText('baseline-host-a')).toHaveCount(0);
+      await expectInView(page, list);
+      await expect(page.locator('[data-panel-id="infra-host-inventory"]')).toHaveCount(0);
+      // The Arrange panels list keeps the panel's real name during the visit.
+      await page.getByTestId('hidden-tiles').getByRole('button', { name: 'Arrange panels' }).click();
+      await expect(page.getByRole('button', { name: 'Put back on the page: Host Inventory' })).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      await list.locator('[data-host-filter-line]').getByRole('button', { name: 'Show all' }).click();
+      await expect(list).toHaveCount(0);
+      await expect(page.locator('[data-panel-id="infra-host-inventory"]')).toHaveCount(0);
+      expect(writes).toEqual([]);
+    });
+  });
+}
