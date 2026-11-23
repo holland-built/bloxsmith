@@ -178,7 +178,10 @@ for (const width of [1440, 390]) {
       await page.keyboard.press('Escape');
 
       await list.locator('[data-host-filter-line]').getByRole('button', { name: 'Show all' }).click();
-      await expect(list).toHaveCount(0);
+      // Show all means all hosts, for the rest of this visit. The saved layout still hides the panel.
+      await expect(list.locator('[data-host-filter-line]')).toHaveCount(0);
+      await expect(list.getByText('baseline-host-a').first()).toBeVisible();
+      await expect(list.getByText('baseline-host-c').first()).toBeVisible();
       await expect(page.locator('[data-panel-id="infra-host-inventory"]')).toHaveCount(0);
       expect(writes).toEqual([]);
     });

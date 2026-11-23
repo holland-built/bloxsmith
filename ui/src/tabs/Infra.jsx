@@ -498,10 +498,17 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
   // A filtered address lands on this table, once per filter, when its answer
   // is in. The refresh must not pull the page back here.
   // A saved layout can hide this panel, and it arrives after the first render,
-  // so the landing is redone if the answer changes. While filtered, the hosts
-  // show anyway for this visit. Nothing here writes to the saved layout.
+  // so the landing is redone if the answer changes. Once a filter has opened
+  // the hosts, they stay for this visit, so Show all really shows all of them.
+  // Nothing here writes to the saved layout.
   const grid = useGridLayout()
-  const offPage = !!statusFilter && !!grid?.hidden?.includes(panelId)
+  const panelHidden = !!grid?.hidden?.includes(panelId)
+  const [keepShown, setKeepShown] = useState(false)
+  useEffect(() => {
+    if (!panelHidden) setKeepShown(false)
+    else if (statusFilter) setKeepShown(true)
+  }, [panelHidden, statusFilter])
+  const offPage = panelHidden && (!!statusFilter || keepShown)
   const landingRef = useRef(null)
   const landedOn = useRef(null)
   useEffect(() => {
