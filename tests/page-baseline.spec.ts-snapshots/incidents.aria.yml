@@ -22,7 +22,7 @@
   - 'button "Options: Triage"'
   - table:
     - rowgroup:
-      - row "Ack Category What Severity Message Age":
+      - row "Seen Category What Severity Message Age":
         - columnheader "Seen"
         - columnheader "Category":
           - button "Category"
