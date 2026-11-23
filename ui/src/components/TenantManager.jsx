@@ -729,7 +729,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                 {axur.stored && confirmKey === 'axur' && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                     <span className="flex-1 text-note text-crit">Remove the saved Axur key?</span>
-                    <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove Axur key" onClick={() => { setConfirmKey(null); clearAxur() }}>Remove</button>
+                    <button disabled={axur.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Axur key" onClick={() => { setConfirmKey(null); clearAxur() }}>Remove</button>
                     <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Axur key" onClick={() => setConfirmKey(null)}>Keep</button>
                   </div>
                 )}
@@ -784,7 +784,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                 {kentik.stored && confirmKey === 'kentik' && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                     <span className="flex-1 text-note text-crit">Remove the saved Kentik login?</span>
-                    <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove Kentik login" onClick={() => { setConfirmKey(null); putKentik('', '', 'Kentik login removed from the vault.') }}>Remove</button>
+                    <button disabled={kentik.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Kentik login" onClick={() => { setConfirmKey(null); putKentik('', '', 'Kentik login removed from the vault.') }}>Remove</button>
                     <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Kentik login" onClick={() => setConfirmKey(null)}>Keep</button>
                   </div>
                 )}

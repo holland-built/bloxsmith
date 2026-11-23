@@ -140,6 +140,39 @@ test('2. Editor delete: separate confirm with no timer', async ({ page }) => {
   expect(live).toHaveLength(0);
 });
 
+test('2. a delete check that lands after switching item never arms the delete', async ({ page }) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  let checks = 0;
+  await page.route('**/api/made/delete', async (route) => {
+    checks += 1;
+    await held;
+    await json(route, { ok: true, dry_run: true, label: 'zone-1', made: true, changed: false, gone: false, blocked: '', confirm: 'code-1' });
+  });
+  await page.goto('/#editor?type=dns_zone&id=zone-1');
+  await page.getByRole('button', { name: 'Delete DNS Zone' }).click();
+  await expect.poll(() => checks).toBe(1);
+  await page.getByRole('button', { name: /Address Block/ }).first().click();
+  await page.getByPlaceholder(/existing object id/).fill('block-y');
+  release();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole('button', { name: 'Permanently delete' })).toHaveCount(0);
+});
+
+test('3. a saved login cannot be removed while a save is running', async ({ page }) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  await page.route('**/api/vault/kentik', async (r) => { await held; await json(r, { ok: true, stored: true }); });
+  const sheet = await openSettings(page);
+  await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Remove Kentik login', exact: true }).click();
+  await sheet.locator('#tm-kentik-email').fill('person@example.com');
+  await sheet.locator('#tm-kentik-token').fill('replacement');
+  await sheet.getByRole('button', { name: 'Save Kentik login' }).click();
+  await expect(sheet.getByRole('button', { name: 'Confirm remove Kentik login', exact: true })).toBeDisabled();
+  release();
+});
+
 for (const [name, path, remove, keep] of [
   ['Axur', '**/api/vault/axur', 'Remove Axur key', 'Keep Axur key'],
   ['Kentik', '**/api/vault/kentik', 'Remove Kentik login', 'Keep Kentik login'],

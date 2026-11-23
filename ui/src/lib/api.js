@@ -190,7 +190,7 @@ export function useFeedRecovery() {
 export const NO_PERMISSION = "You don't have permission to see this. Check the key in Settings."
 export function isNoPermission(error) {
   if (error?.status === 401 || error?.status === 403) return true
-  return /(?:^|:\s*)(?:401|403)(?:\s+(?:Unauthorized|Forbidden))?\s*$/.test(String(error?.message ?? error ?? ''))
+  return /(?:(?:^|:\s*)(?:401|403)(?:\s+(?:Unauthorized|Forbidden))?\s*$)|\(status (?:401|403)\)\.?\s*$/.test(String(error?.message ?? error ?? ''))
 }
 
 /**

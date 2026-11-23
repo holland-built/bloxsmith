@@ -368,7 +368,10 @@ export default function Editor() {
   const [delSay, setDelSay] = useState('')
   const delConfirmRef = useRef('')
   // A Delete armed for one item must never fire on another.
+  // That includes a check still running: its answer is about the old item.
+  const delCheckRef = useRef(0)
   function disarmDelete() {
+    delCheckRef.current += 1
     setDelArmed(false)
   }
   function del() {
@@ -379,7 +382,9 @@ export default function Editor() {
     // sure" says whether Bloxsmith made the item and the delete is recorded.
     if (!madeKind(type)) { setDelSay(''); setDelArmed(true); return }
     setResult(null)
+    const run = ++delCheckRef.current
     checkDelete(type, id).then((c) => {
+      if (run !== delCheckRef.current) return
       if (!c.ok || c.data?.blocked || c.data?.gone) {
         setResult({ ok: false, msg: c.data?.blocked || (c.data?.gone ? 'That item is already gone.' : c.data?.error || 'could not check it, so nothing was deleted') })
         return
