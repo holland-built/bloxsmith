@@ -63,7 +63,7 @@ for (const theme of ['light', 'dark'] as const) {
     const before = await painter();
     expect(before.bg, 'the menu column is painted in the card colour').toBe(before.card);
     expect(before.borderRight, 'the menu column keeps its right-hand border line').toBeGreaterThanOrEqual(1);
-    expect(before.width, 'the side rail keeps its slim width').toBe(56);
+    expect(before.width, 'the side bar keeps its narrow width').toBe(84);
     // The bug: this box was one screen tall, so it stopped ~950px down a 2100px page.
     expect(before.bottom, `menu column stops at ${before.bottom}px on a ${docH}px page`).toBeGreaterThanOrEqual(docH - 1);
 
