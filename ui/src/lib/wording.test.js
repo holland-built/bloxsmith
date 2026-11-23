@@ -21,6 +21,14 @@ test('401 and 403 read as the no-permission message', () => {
   assert.equal(failureText(403, 'save the list'), NO_PERMISSION)
 })
 
+test('a Remove summary keeps its counts instead of reading as unknown', () => {
+  for (const error of [
+    '1 item(s) were not removed because the delete was never sent. Check them, then Remove again to retry.',
+    '2 item(s) were refused by Infoblox and not removed. Check them, then Remove again to retry.',
+    '1 item(s) may or may not have been removed, because Infoblox gave no clear answer. Check them, then Remove again to retry.',
+  ]) assert.equal(writeFailureText(502, { error }, 'remove these items'), error)
+})
+
 test('every date helper uses the same format for one moment', () => {
   const at = new Date(2026, 10, 23, 14, 5)
   const opts = { month: 'short', day: 'numeric', year: 'numeric' }

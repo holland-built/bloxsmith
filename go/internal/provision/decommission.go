@@ -264,7 +264,7 @@ func (d *SiteDecommissioner) execDeleteDNSZone(fqdn, zoneID string) (bool, error
 	if !d.cfg.DryRun {
 		_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+zoneID, nil, nil)
 		if !(status >= 200 && status < 300) {
-			return false, perr("Failed to delete DNS zone %s: status %d", fqdn, status)
+			return false, failedWrite("delete DNS zone", fqdn, status)
 		}
 	}
 	return true, nil
@@ -282,7 +282,7 @@ func (d *SiteDecommissioner) execDeleteRanges(ranges []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+rangeID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete DHCP range %s: status %d", rangeID, status)
+				return deleted, failedWrite("delete DHCP range", rangeID, status)
 			}
 		}
 		deleted = append(deleted, M{"id": rangeID, "start": pyStr(rm["start"]), "end": pyStr(rm["end"])})
@@ -299,7 +299,7 @@ func (d *SiteDecommissioner) execDeleteReverseZones(planned []reverseZonePlan) (
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+p.zoneID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete reverse zone %s: status %d", p.fqdn, status)
+				return deleted, failedWrite("delete reverse zone", p.fqdn, status)
 			}
 		}
 		deleted = append(deleted, M{"id": p.zoneID, "fqdn": p.fqdn})
@@ -319,7 +319,7 @@ func (d *SiteDecommissioner) execDeleteSubnets(subnets []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+subnetID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete subnet %s: status %d", addr, status)
+				return deleted, failedWrite("delete subnet", addr, status)
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "name": pyStr(sm["name"]), "id": subnetID})
@@ -344,7 +344,7 @@ func (d *SiteDecommissioner) execDeleteHosts(hosts []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+hostID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete host %s: status %d", fqdn, status)
+				return deleted, failedWrite("delete host", fqdn, status)
 			}
 		}
 		deleted = append(deleted, M{"fqdn": fqdn, "id": hostID})

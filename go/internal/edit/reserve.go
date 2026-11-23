@@ -152,26 +152,19 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		switch {
 		case (rstatus == 200 || rstatus == 201) && asMap(rresp) != nil:
 			out["record"] = M{"ok": true, "id": recordID(rresp), "status": rstatus}
-		case writeUnreadable(rresp, rstatus) || outcomeUnknown(rstatus):
+		case recordMayExist(rresp, rstatus):
 			// The record may exist: say so, and do not suggest adding it again.
-			rec := createdUnreadable("DNS record", rstatus, "The reservation was made")
-			if outcomeUnknown(rstatus) {
-				rec = createdMaybe("DNS record", rstatus, "The reservation was made")
-			}
+			rec, code := recordMaybe(rresp, rstatus, "The reservation was made")
 			delete(out, "ok")
 			out[CreatedUnreadableKey] = true
 			out["record"] = rec
 			out["error"] = rec["error"]
-			return out, statusOr(rstatus, 502)
+			return out, code
 		default:
 			out["ok"] = false
 			out["record"] = M{"ok": false, "status": rstatus, "detail": rresp}
 			out["error"] = fmt.Sprintf("the reservation was made, but the DNS record was not (%s). "+
 				"The device still gets %s; add the record on its own", statusPhrase(rstatus), address)
-			if rest.NoClearAnswer(rstatus) {
-				out["error"] = fmt.Sprintf("the reservation was made, but the DNS record may or may not exist. "+
-					"The device still gets %s; check for the record in Infoblox", address)
-			}
 			return out, 502
 		}
 	}

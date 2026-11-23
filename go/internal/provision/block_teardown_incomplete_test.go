@@ -164,7 +164,7 @@ func TestBlockTeardown_PartialDeleteReportsWhatIsAlreadyGone(t *testing.T) {
 	if ev["operation"] != "decommission-block" || ev["failed_step"] != "delete address blocks" {
 		t.Fatalf("event = %v, want operation=decommission-block failed_step=\"delete address blocks\"", ev)
 	}
-	if msg, _ := ev["error"].(string); !strings.Contains(msg, "Failed to delete block") {
+	if msg, _ := ev["error"].(string); !strings.Contains(msg, "to delete block") {
 		t.Fatalf("event error = %q, want the mid-delete failure", msg)
 	}
 	evReport := asMap(ev["report"])

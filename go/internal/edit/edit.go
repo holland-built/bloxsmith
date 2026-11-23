@@ -934,12 +934,13 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	// counts as this one.
 	snap, fail, fstatus := c.inUse(freecheck.Addresses, false, lo, hi)
 	if fail != nil {
-		released, orphaned := c.releaseAddresses(addresses)
+		released, orphaned, unclear := c.releaseAddresses(addresses)
 		fail["released"] = released
-		fail["error"] = pyStr(fail["error"]) + " The address(es) Infoblox handed out were released."
 		if len(orphaned) > 0 {
 			fail["orphaned"] = orphaned
-			fail["error"] = pyStr(fail["error"]) + fmt.Sprintf(" %d could not be released; remove them in the Editor.", len(orphaned))
+			fail["error"] = pyStr(fail["error"]) + " " + releaseNote(len(orphaned), unclear) + "."
+		} else {
+			fail["error"] = pyStr(fail["error"]) + " The address(es) Infoblox handed out were released."
 		}
 		return fail, fstatus
 	}
@@ -949,14 +950,13 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			continue
 		}
 		if r := snap.CheckAddr(pyStr(asMap(a)["space"]), ip); !r.Free {
-			released, orphaned := c.releaseAddresses(addresses)
+			released, orphaned, unclear := c.releaseAddresses(addresses)
 			out := M{"ok": false, "released": released, "checked": snap.Counts.Map(),
 				"skipped": freecheck.SkipList([]freecheck.Skip{{Candidate: ip.String(), Reason: r.Reason}}),
 				"error":   fmt.Sprintf("Infoblox handed out %s, but %s, so the address(es) were released. Preview again", ip, r.Reason)}
 			if len(orphaned) > 0 {
 				out["orphaned"] = orphaned
-				out["error"] = fmt.Sprintf("Infoblox handed out %s, but %s. %d address(es) could not be released; remove them in the Editor",
-					ip, r.Reason, len(orphaned))
+				out["error"] = fmt.Sprintf("Infoblox handed out %s, but %s. %s", ip, r.Reason, releaseNote(len(orphaned), unclear))
 			}
 			return out, 409
 		}
@@ -985,7 +985,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 
 		if (rstatus == 200 || rstatus == 201) && asMap(rresp) != nil {
 			out["record"] = M{"ok": true, "id": recordID(rresp), "status": rstatus}
-		} else if writeUnreadable(rresp, rstatus) || outcomeUnknown(rstatus) {
+		} else if recordMayExist(rresp, rstatus) {
 			// Upstream ACCEPTED the record write and we cannot read back what it
 			// made — or never said (a timeout or a gateway error): the record may
 			// exist either way. The compensating release below MUST NOT run here: releasing
@@ -1000,19 +1000,16 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			// and correct; the record carries no id because there is none.
 			also := "The address(es) reserved for it are deliberately still reserved — releasing them " +
 				"would strip a live record of its addresses"
-			rec := createdUnreadable("DNS record", rstatus, also)
-			if outcomeUnknown(rstatus) {
-				rec = createdMaybe("DNS record", rstatus, also)
-			}
+			rec, code := recordMaybe(rresp, rstatus, also)
 			delete(out, "ok")
 			out[CreatedUnreadableKey] = true
 			out["record"] = rec
 			out["error"] = rec["error"]
-			return out, statusOr(rstatus, 502)
+			return out, code
 		} else {
 			// Compensating release (plan 016): the DNS step failed, so roll back
 			// the reservation(s) we just made — otherwise they exhaust the subnet.
-			released, orphaned := c.releaseAddresses(addresses)
+			released, orphaned, _ := c.releaseAddresses(addresses)
 			out["ok"] = false
 			out["record"] = M{"ok": false, "status": rstatus, "detail": rresp}
 			out["released"] = released
@@ -1020,14 +1017,8 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				out["orphaned"] = orphaned
 			}
 			out["error"] = "dns record creation failed; reserved address(es) released"
-			if rest.NoClearAnswer(rstatus) {
-				out["error"] = "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox"
-			}
 			if len(orphaned) > 0 {
 				out["error"] = fmt.Sprintf("dns record creation failed, but %d address(es) may still be reserved. Check them in the Editor and remove any that remain", len(orphaned))
-				if rest.NoClearAnswer(rstatus) {
-					out["error"] = fmt.Sprintf("the DNS record may or may not exist, and %d address(es) may still be reserved. Check them in the Editor, remove any that remain, and check for the record in Infoblox", len(orphaned))
-				}
 			}
 			return out, 502
 		}
@@ -1037,8 +1028,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 }
 
 // releaseAddresses deletes addresses an allocation just made, and says which
-// were released and which are still reserved (orphaned).
-func (c *Client) releaseAddresses(addresses []any) (released, orphaned []any) {
+// were released and which may still be reserved (orphaned). unclear counts the
+// orphaned ones whose delete was sent and got no clear answer.
+func (c *Client) releaseAddresses(addresses []any) (released, orphaned []any, unclear int) {
 	released, orphaned = []any{}, []any{}
 	for _, a := range addresses {
 		aid := asMap(a)["id"]
@@ -1068,9 +1060,52 @@ func (c *Client) releaseAddresses(addresses []any) (released, orphaned []any) {
 			released = append(released, aid)
 		} else {
 			orphaned = append(orphaned, aid)
+			if rest.UnclearFailure(dstatus) {
+				unclear++
+			}
 		}
 	}
-	return released, orphaned
+	return released, orphaned, unclear
+}
+
+// releaseNote words the addresses a release left behind. left counts them all;
+// unclear counts those with no clear answer, which may in fact be released.
+func releaseNote(left, unclear int) string {
+	switch {
+	case unclear == 0:
+		return fmt.Sprintf("%d address(es) could not be released; remove them in the Editor", left)
+	case unclear == left:
+		return fmt.Sprintf("%d address(es) may or may not have been released. Check them in the Editor", left)
+	}
+	return fmt.Sprintf("%d address(es) could not be released and %d may or may not have been released. Check them in the Editor",
+		left-unclear, unclear)
+}
+
+// recordMayExist reports a DNS record write, already known not to be a readable
+// 200/201, that did not clearly fail: the record may be there.
+func recordMayExist(resp any, status int) bool {
+	return writeUnreadable(resp, status) || rest.UnclearFailure(status)
+}
+
+// recordMaybe builds the result for recordMayExist and the status to answer
+// with. A 202 or 204 is answered as 502, so no client reads it as success.
+func recordMaybe(resp any, status int, also string) (M, int) {
+	if writeUnreadable(resp, status) {
+		return createdUnreadable("DNS record", status, also), statusOr(status, 502)
+	}
+	if status >= 500 {
+		return createdMaybe("DNS record", status, also), status
+	}
+	return createdMaybe("DNS record", status, also), 502
+}
+
+// cleanupLeft ends a sentence about a just-made object whose cleanup delete did
+// not plainly succeed.
+func cleanupLeft(status int) string {
+	if rest.UnclearFailure(status) {
+		return "it may or may not have been removed. Check it in the Editor"
+	}
+	return fmt.Sprintf("it could not be removed (%s). Remove it in the Editor", statusPhrase(status))
 }
 
 // validateRecord checks an allocation's optional DNS payload before anything is

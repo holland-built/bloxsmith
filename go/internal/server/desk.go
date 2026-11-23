@@ -441,6 +441,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			if o.Kind != kind || (o.State != runs.Created && o.State != runs.Error) {
 				continue
 			}
+			o.Outcome = ""
 			if o.Kind == "demo_server" {
 				if why := d.removeDemoServer(r, o.ID); why != "" {
 					o.State, o.Error = runs.Error, why
@@ -452,7 +453,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			}
 			p, perr := edit.ObjectPath(removeKinds[o.Kind], o.ID)
 			if perr != nil {
-				o.State, o.Error = runs.Error, "not a valid Infoblox ID"
+				o.State, o.Error, o.Outcome = runs.Error, "not a valid Infoblox ID", outcomeNotSent
 				failed++
 				continue
 			}
@@ -463,18 +464,21 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// just before (removeOrder), so nothing is skipped here: one whose
 			// delete failed is still inside and must keep the network.
 			if why := runBlocker(cli, *o, nil); why != "" {
-				o.State, o.Error = runs.Error, why
+				o.State, o.Error, o.Outcome = runs.Error, why, outcomeNotSent
 				failed++
 				continue
 			}
-			res, _ := cli.Delete(p)
+			res, status := cli.Delete(p)
 			switch {
 			case resultOK(res) && res["already_gone"] == true:
 				o.State, o.Error = runs.Gone, ""
 			case resultOK(res):
 				o.State, o.Error = runs.Deleted, ""
 			default:
-				o.State, o.Error = runs.Error, anyStr(res["error"])
+				o.State, o.Error, o.Outcome = runs.Error, anyStr(res["error"]), outcomeRefused
+				if rest.UnclearFailure(status) {
+					o.Outcome = outcomeUnknown
+				}
 				failed++
 			}
 		}
@@ -483,7 +487,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 		x.Objects = objs
 		if failed > 0 {
 			x.Status = runs.RemoveFailed
-			x.Error = fmt.Sprintf("%d item(s) were not confirmed as removed. Check them, then Remove again to retry.", failed)
+			x.Error = removeSummary(objs)
 		} else {
 			x.Status = runs.Removed
 			x.Error = ""
@@ -503,6 +507,37 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 		code = 502
 	}
 	d.json(w, r, code, map[string]any{"ok": failed == 0, "run": run, "error": run.Error})
+}
+
+// What a failed Remove knows about one object (runs.Object.Outcome).
+const (
+	outcomeUnknown = "unknown"
+	outcomeRefused = "refused"
+	outcomeNotSent = "not-sent"
+)
+
+// removeSummary counts the objects Remove left, by what is known about each.
+func removeSummary(objs []runs.Object) string {
+	counts := map[string]int{}
+	for _, o := range objs {
+		if o.State == runs.Error {
+			counts[o.Outcome]++
+		}
+	}
+	parts := []string{}
+	for _, c := range []struct {
+		outcome, words string
+	}{
+		{outcomeUnknown, "%d item(s) may or may not have been removed, because Infoblox gave no clear answer."},
+		{outcomeRefused, "%d item(s) were refused by Infoblox and not removed."},
+		{outcomeNotSent, "%d item(s) were not removed because the delete was never sent."},
+		{"", "%d item(s) were not confirmed as removed."},
+	} {
+		if n := counts[c.outcome]; n > 0 {
+			parts = append(parts, fmt.Sprintf(c.words, n))
+		}
+	}
+	return strings.Join(append(parts, "Check them, then Remove again to retry."), " ")
 }
 
 func objectIDs(objs []runs.Object) []any {

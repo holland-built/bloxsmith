@@ -351,6 +351,13 @@ func blockOf(c *rest.Client, blockPath string) (netip.Prefix, string, error) {
 // (its removal failed), so the caller records that it exists.
 var errPickKept = errors.New("the subnet is still there")
 
+// pickMaybeKept is handled like errPickKept, but its message does not say the
+// subnet is still there, because the delete got no clear answer.
+type pickMaybeKept string
+
+func (e pickMaybeKept) Error() string        { return string(e) }
+func (e pickMaybeKept) Is(target error) bool { return target == errPickKept }
+
 // verifySubnetPick checks the subnet Infoblox just made against a fresh read
 // of everything around it. A clash, or a check that cannot run, removes it.
 // warns is what overlaps it only in another IP space (not a clash).
@@ -372,8 +379,13 @@ func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN 
 	}
 	path, oerr := edit.ObjectPath("ipam/subnet", id)
 	if oerr == nil {
-		if _, st, _ := c.Write("DELETE", path, nil, nil); st == 200 || st == 204 || st == 404 {
+		_, st, _ := c.Write("DELETE", path, nil, nil)
+		if st == 200 || st == 204 || st == 404 {
 			return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, so it was removed. Preview again", addr, cidrN, reason)
+		}
+		if rest.UnclearFailure(st) {
+			return nil, pickMaybeKept(fmt.Sprintf("Infoblox picked %s/%d, but %s, and it may or may not have been removed. Check it in the Editor",
+				addr, cidrN, reason))
 		}
 	}
 	return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, and it could not be removed: remove it in the Editor (%w)",

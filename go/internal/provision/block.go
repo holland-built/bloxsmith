@@ -227,7 +227,7 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 				"comment": pyStr(bdef["comment"]), "tags": tags}
 			resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", body, nil)
 			if (status != 200 && status != 201) || resp == nil {
-				return perr("Failed to create block %s: status %d %v", cidrStr(n), status, resp)
+				return failedWrite("create block", cidrStr(n), status, resp)
 			}
 			block := asMap(asMap(resp)["result"])
 			if block == nil {
@@ -325,7 +325,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 
 	result["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
+		p.emit(M{"step": rollbackIncompleteStep(residual)})
 	}
 
 	return rollbackReport(attempted, deleted, residual)
@@ -505,7 +505,7 @@ func (e *Engine) RetagBlock(block M, status string, dryRun bool) (M, error) {
 	if !dryRun {
 		_, httpStatus, _ := e.Rest.Write("PATCH", "/api/ddi/v1/"+pyStr(block["id"]), M{"tags": tags}, nil)
 		if !(httpStatus >= 200 && httpStatus < 300) {
-			return nil, perr("Failed to retag block %s: status %d", addr, httpStatus)
+			return nil, failedWrite("retag block", addr, httpStatus)
 		}
 	}
 	return M{"address": addr, "id": pyStr(block["id"]), "status": status}, nil
@@ -574,7 +574,7 @@ func (d *BlockDecommissioner) deleteBlocks(blocks []any) (deleted []any, attempt
 			attempted++
 			_, httpStatus, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 			if !(httpStatus >= 200 && httpStatus < 300) {
-				return deleted, attempted, perr("Failed to delete block %s: status %d", addr, httpStatus)
+				return deleted, attempted, failedWrite("delete block", addr, httpStatus)
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "id": blockID, "status": status})
@@ -711,6 +711,48 @@ func appendTo(result M, key string, v any) {
 
 // itoa is used where a query param must be a string.
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// failedWrite is the error for a create, delete or retag that did not succeed.
+// Only a clear refusal may say it failed. detail, when given, is the reply.
+func failedWrite(action, what string, status int, detail ...any) *Error {
+	if rest.UnclearFailure(status) {
+		return perr("No clear answer to %s %s (status %d), so it may or may not have happened. "+
+			"Check it in the Editor before trying again", action, what, status)
+	}
+	if len(detail) > 0 {
+		return perr("Failed to %s %s: status %d %v", action, what, status, detail[0])
+	}
+	return perr("Failed to %s %s: status %d", action, what, status)
+}
+
+// rollbackIncompleteStep is the log line for objects rollback left behind,
+// counted by what Bloxsmith knows about each one.
+func rollbackIncompleteStep(residual []any) string {
+	unknown, refused, notSent := 0, 0, 0
+	for _, r := range residual {
+		m := asMap(r)
+		st, _ := m["status"].(int)
+		switch {
+		case pyStr(m["reason"]) != "":
+			notSent++
+		case rest.UnclearFailure(st):
+			unknown++
+		default:
+			refused++
+		}
+	}
+	parts := []string{}
+	if unknown > 0 {
+		parts = append(parts, fmt.Sprintf("%d may or may not be deleted (no clear answer)", unknown))
+	}
+	if refused > 0 {
+		parts = append(parts, fmt.Sprintf("%d refused by Infoblox", refused))
+	}
+	if notSent > 0 {
+		parts = append(parts, fmt.Sprintf("%d never sent (no id)", notSent))
+	}
+	return fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted: %s", len(residual), strings.Join(parts, ", "))
+}
 
 // rollbackDeleteStep is the log line for a cleanup delete that did not succeed.
 // Only a clear refusal may say the delete failed.

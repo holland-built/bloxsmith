@@ -529,6 +529,13 @@ const OutcomeUnknown = "Bloxsmith did not get an answer, so this may or may not 
 // 0 is no response at all, and a 5xx does not say whether the change landed.
 func NoClearAnswer(status int) bool { return status == 0 || status >= 500 }
 
+// UnclearFailure is NoClearAnswer for a write the caller already knows did not
+// plainly succeed: a 2xx it could not use says nothing either way. Only a clear
+// refusal (a 4xx) makes this false.
+func UnclearFailure(status int) bool {
+	return NoClearAnswer(status) || (status >= 200 && status < 300)
+}
+
 // GetStrict is Get with the failures surfaced. Empty is still a legitimate
 // result — only a non-nil error means the read failed. Unlike Get, it does
 // not call GetEx: GetEx throws the error body away, and GetStrict needs to

@@ -291,8 +291,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		if dpath, derr := ObjectPath("ipam/subnet", sid); derr != nil {
 			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s. Remove it in the Editor", label, reason)
 		} else if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s, and it could not be removed (%s). Remove it in the Editor",
-				label, reason, statusPhrase(dst))
+			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s, and %s", label, reason, cleanupLeft(dst))
 		}
 		return out, 409
 	}
@@ -437,8 +436,7 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 		if dp, e := ObjectPath("ipam/subnet", nid); e != nil {
 			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s. Remove it in the Editor", label, made, reason)
 		} else if _, dst, _ := c.Rest.Write("DELETE", dp, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s, and it could not be removed (%s). Remove it in the Editor",
-				label, made, reason, statusPhrase(dst))
+			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s, and %s", label, made, reason, cleanupLeft(dst))
 		}
 		return out, 409, true
 	}
@@ -808,7 +806,7 @@ func (c *Client) Delete(fullPath string) (M, int) {
 	if status == 200 || status == 204 {
 		return M{"ok": true, "already_gone": false}, 200
 	}
-	if rest.NoClearAnswer(status) {
+	if rest.UnclearFailure(status) {
 		return M{"ok": false, "error": rest.OutcomeUnknown, "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": false, "error": fmt.Sprintf("delete failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/freecheck"
+	"bloxsmith/internal/rest"
 )
 
 // SubnetDef is server.py's SubnetDef dataclass (1499). Cidr/DhcpStart/DhcpEnd
@@ -455,7 +456,7 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/"+blockID+"/nextavailablesubnet", nil,
 		map[string]string{"cidr": itoa(cidr), "count": "1"})
 	if (status != 200 && status != 201) || resp == nil {
-		return nil, perr("Failed to create subnet %s: status %d %v", sdef.Name, status, resp)
+		return nil, failedWrite("create subnet", sdef.Name, status, resp)
 	}
 	subnet := firstRow(resp)
 	sid := pyStr(subnet["id"])
@@ -496,6 +497,10 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 		// created by its address.
 		if clean, w, _, ok := p.free.NextFreePrefix(p.spaceID, p.block, scidr); ok && len(w) == 0 && clean != made {
 			if _, dst, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+sid, nil, nil); dst != 200 && dst != 204 && dst != 404 {
+				if rest.UnclearFailure(dst) {
+					return nil, perr("Infoblox picked %s for %s, which another IP space also uses, and it may or may not have been removed "+
+						"(status %d). The clean %s was not made and nothing more was created. Check it in the Editor", made, sdef.Name, dst, clean)
+				}
 				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, and it could not be removed "+
 					"to make the clean %s instead (status %d); nothing more was created", made, sdef.Name, clean, dst)
 			}
@@ -656,7 +661,7 @@ func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) er
 		"comment": fmt.Sprintf("DHCP range for %s", sdef.Name), "tags": tags}
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/ipam/range", body, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return perr("Failed to create DHCP range for %s: status %d %v", sdef.Name, status, resp)
+		return failedWrite("create DHCP range for", sdef.Name, status, resp)
 	}
 	rng := asMap(asMap(resp)["result"])
 	rid := pyStr(rng["id"])
@@ -704,7 +709,7 @@ func (p *SiteProvisioner) createDNSZone() (M, error) {
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone",
 		M{"fqdn": fqdn, "view": p.viewID, "primary_type": "cloud"}, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return nil, perr("Failed to create DNS zone %s: status %d %v", fqdn, status, resp)
+		return nil, failedWrite("create DNS zone", fqdn, status, resp)
 	}
 	zone := asMap(asMap(resp)["result"])
 	if zone == nil {
@@ -765,7 +770,7 @@ func (p *SiteProvisioner) createReverseZone(subnetAddr string, cidr int) (M, boo
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone",
 		M{"fqdn": fqdn, "view": p.viewID, "primary_type": "cloud"}, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return nil, false, perr("Failed to create reverse zone %s: status %d %v", fqdn, status, resp)
+		return nil, false, failedWrite("create reverse zone", fqdn, status, resp)
 	}
 	zone := asMap(asMap(resp)["result"])
 	if zone == nil {
@@ -935,7 +940,7 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 		if (status != 200 && status != 201) || resp == nil {
 			// `results`, not nil: the hosts before this one are real objects on
 			// the customer's network. Dropping them here is what stranded them.
-			return results, perr("Failed to create host %s: status %d %v", hdef.Hostname, status, resp)
+			return results, failedWrite("create host", hdef.Hostname, status, resp)
 		}
 		host := asMap(asMap(resp)["result"])
 		if host == nil {
@@ -1071,7 +1076,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 
 	partial["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
+		p.emit(M{"step": rollbackIncompleteStep(residual)})
 	}
 
 	return rollbackReport(attempted, deleted, residual)

@@ -36,6 +36,7 @@ type fakeTenant struct {
 	refuseHold     map[string]bool   // addresses whose POST ipam/address fails
 	held           map[string]string // reservation id -> address, while it exists
 	refuseDeleteOf map[string]bool   // ids whose DELETE fails
+	refuseStatus   int               // the refused DELETE's status; 0 is 500
 }
 
 func (f *fakeTenant) subnetJSON() string {
@@ -136,7 +137,11 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 			f.mu.Lock()
 		}
 		if f.refuseDelete || f.refuseDeleteOf[id] {
-			w.WriteHeader(500)
+			if f.refuseStatus != 0 {
+				w.WriteHeader(f.refuseStatus)
+			} else {
+				w.WriteHeader(500)
+			}
 			io.WriteString(w, `{"error":"refused"}`)
 			return
 		}

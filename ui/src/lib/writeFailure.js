@@ -9,7 +9,7 @@ export const WRITE_NO_PERMISSION = "You don't have permission to do this. Nothin
 // the server knows: a read that failed before anything was sent, a refusal
 // passed on, or a sentence naming the part that did happen. Anything else, new
 // messages included, reads as unknown.
-const KNOWN_5XX = /nothing was sent|so it was not made|^could not (?:read|list|check)\b|^Couldn't read|^subnet lookup failed|^no free subnet|could not be read$|^record not found|will not save over it|Infoblox refused the call|MAY EXIST|may already have applied|\bbut\b|address\(es\) released|not confirmed as removed|^Bloxsmith could not save what Remove did|\blocked\b/
+const KNOWN_5XX = /nothing was sent|so it was not made|^could not (?:read|list|check)\b|^Couldn't read|^subnet lookup failed|^no free subnet|could not be read$|^record not found|will not save over it|Infoblox refused the call|MAY EXIST|may already have applied|\bbut\b|address\(es\) released|not confirmed as removed|^Bloxsmith could not save what Remove did|\blocked\b|^\d+ item\(s\) /
 const GENERIC_REFUSAL = /^(?:create|update|allocation|delete) failed \(status 40[13]\)/
 
 /**

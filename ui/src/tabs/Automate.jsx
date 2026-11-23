@@ -680,7 +680,29 @@ const STATUS_WORDS = {
 
 const OBJECT_WORDS = { created: '', removed: 'removed', gone: 'was already gone', failed: 'could not be removed' }
 // A removal with no clear answer may have worked, so it is not called a failure.
-const objectWord = (o) => (o.error === WRITE_UNKNOWN ? 'result unknown' : OBJECT_WORDS[o.state])
+const objectWord = (o) => {
+  if (o.state === 'failed' && o.outcome === 'not-sent') return 'not removed, the delete was never sent'
+  return o.error === WRITE_UNKNOWN || o.outcome === 'unknown' ? 'result unknown' : OBJECT_WORDS[o.state]
+}
+
+const REMOVE_FAILED_WORDS = {
+  unknown: 'Some items may or may not have been removed',
+  refused: 'Infoblox refused to remove some items',
+  'not-sent': 'Some items were kept, and their delete was never sent',
+}
+
+// One kind of result gets its own words. A mix, or an older run that did not
+// record the kind, keeps the general sentence; the run's message gives counts.
+function statusWord(run) {
+  if (run.status === 'remove-failed') {
+    const kinds = new Set(run.objects.filter((o) => o.state === 'failed').map((o) => o.outcome))
+    if (kinds.size === 1) {
+      const [kind] = kinds
+      if (REMOVE_FAILED_WORDS[kind]) return REMOVE_FAILED_WORDS[kind]
+    }
+  }
+  return STATUS_WORDS[run.status] || run.status
+}
 
 function when(iso) {
   const t = Date.parse(iso)
@@ -749,7 +771,7 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
         <div className="flex-1 min-w-0">
           <p className="text-copy font-medium text-txt">{run.title}</p>
           <p className="text-note text-muted">
-            {STATUS_WORDS[run.status] || run.status}{run.created ? `, ${when(run.created)}` : ''}
+            {statusWord(run)}{run.created ? `, ${when(run.created)}` : ''}
           </p>
         </div>
         {canRemove && !plan && (

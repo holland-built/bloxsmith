@@ -40,7 +40,7 @@ func allocateUpstream(releaseStatus int) http.HandlerFunc {
 		case r.Method == "POST" && strings.HasSuffix(path, "/nextavailableip"):
 			io.WriteString(w, `{"results":[{"id":"a-1111","address":"10.7.0.4"},{"id":"a-2222","address":"10.7.0.5"}]}`)
 		case r.Method == "POST" && strings.HasSuffix(path, "/dns/record"):
-			w.WriteHeader(500)
+			w.WriteHeader(400)
 			io.WriteString(w, `{"error":"record create refused"}`)
 		default:
 			w.WriteHeader(500)

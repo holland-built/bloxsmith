@@ -7,6 +7,7 @@ import (
 
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
+	"bloxsmith/internal/rest"
 	"bloxsmith/internal/runs"
 )
 
@@ -136,15 +137,14 @@ func unreadableDetail(resource string, identity []string, b map[string]any) map[
 // the object may well be gone from the customer's tenant. Recording nothing
 // there loses the only trace of a destructive call.
 //
-// A definite upstream status (400/403/404/409/500 …) is upstream having
-// answered and refused. That is a genuine non-event and stays unrecorded, which
-// is what keeps the entry below from degenerating into "audit every failure".
+// A clear refusal (400/401/403/409 …) is upstream having answered and said no.
+// That is a genuine non-event and stays unrecorded, which is what keeps the
+// entry below from degenerating into "audit every failure".
 //
-// The conflation this accepts is one-way and deliberate: a real upstream 502 or
-// 504 is a gateway saying it could not get an answer from the backend, which is
-// the same unknown, so it belongs on the recorded side too. Nothing upstream
-// positively refused can land here.
-func deleteOutcomeUnknown(status int) bool { return status == 502 || status == 504 }
+// Any 5xx, and a 2xx the delete could not count as done, says nothing about
+// whether the object is gone, so they belong on the recorded side too. Nothing
+// upstream positively refused can land here.
+func deleteOutcomeUnknown(status int) bool { return rest.UnclearFailure(status) }
 
 // strandedReservations is taggingFailed's sibling for the allocate path, and
 // closes the same hole: edit.SelfserviceAllocate can return ok:false AFTER it
@@ -519,7 +519,7 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 		// A distinct event name for the same reason they use one: filing it as
 		// "edit-<resource>-delete" would count an unknown outcome as a deletion.
 		// It claims nothing — outcome is "unknown" and the builder's own error text
-		// travels with it. A definite upstream refusal (400/403/404/409/500) is
+		// travels with it. A definite upstream refusal (400/403/409) is
 		// still not recorded; see deleteOutcomeUnknown for why that is not
 		// "audit every failure".
 		d.auditAppend("edit-"+resource+"-delete-error", httpx.Actor(r),
