@@ -135,7 +135,7 @@ export default function Network() {
             layout. The id lives here rather than on the <Card> inside
             DhcpLeases for the same reason it does on Overview: the grid reads
             it off this element. */}
-        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} totals={totals} hp={hp} subnetsStatus={subnetsStatus} innerRef={subnetsRef} />
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} totals={totals} hp={hp} subnetsStatus={subnetsStatus} loading={data.loading} readFailed={!!data.error} innerRef={subnetsRef} />
         {hiddenPanelGroup({
           ...SERVICE_GROUPS.dhcp,
           state: owned,
@@ -661,7 +661,7 @@ function exhaustionSort(dir) {
 // it is a cap nothing can label.
 const EXHAUSTION_CAP = 150
 
-function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef }) {
+function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading, readFailed, innerRef }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -708,6 +708,23 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
   }, [base, filter, site, minUtil, unused])
 
   const sorted = useMemo(() => (unused ? filtered : sortRows(filtered, sort, exhaustionSort(sort.dir))), [filtered, sort, unused])
+
+  // Arriving on a "N% full or more" address: fullest first, and the list in
+  // view once it has loaded. Once per address, so a 30s poll never moves the page.
+  const landing = minUtil !== null && !unused ? `${minUtil}|${links}` : null
+  const jumpedFor = useRef(null)
+  useEffect(() => { if (landing) setSort({ key: 'util', dir: 'desc' }) }, [landing])
+  useEffect(() => {
+    if (!landing) { jumpedFor.current = null; return }
+    if (loading || jumpedFor.current === landing) return
+    jumpedFor.current = landing
+    jumpToPanel(panelId)
+  }, [landing, loading, panelId])
+  const landingWhat = `subnets ${minUtil}% full or more${links ? '' : ', not counting tiny networks'}`
+  const landingLine = loading && !subnets.length ? `Checking ${landingWhat}…`
+    : !subnets.length && (readFailed || subnetsStatus === 'error') ? `Could not load subnets, so the ${landingWhat} are not known.`
+    : sorted.length === 0 ? (filter.trim() || site ? `None of the ${landingWhat} match your search.` : `No ${landingWhat}.`)
+    : `Showing ${sorted.length > EXHAUSTION_CAP ? `the fullest ${EXHAUSTION_CAP} of ${sorted.length.toLocaleString()}` : sorted.length.toLocaleString()} ${sorted.length === 1 ? landingWhat.replace('subnets', 'subnet') : landingWhat}, fullest first.${readFailed ? ' The latest read failed, so this list may be out of date.' : ''}`
 
   // NO cap is applied here, deliberately. This used to be `sorted.slice(0, 20)`,
   // and the 20 was invisible: DataTable only prints its "showing N of M" footer
@@ -866,6 +883,12 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, innerRef
         </div>
       }
     >
+      {landing && (
+        <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
+          <span>{landingLine}</span>
+          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => setHashParams('network', {})}>Show all</button>
+        </div>
+      )}
       {unused && !unusedApi.data ? (
         unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
       ) : base.length === 0 ? (
