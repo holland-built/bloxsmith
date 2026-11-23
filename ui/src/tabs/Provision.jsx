@@ -18,6 +18,8 @@ import FilterSelect from '../components/FilterSelect.jsx'
 // Lazy: #provision has almost no room left under tests/bundle-budget.spec.ts,
 // and this line is only needed once a preview has finished.
 const LazyChecked = lazy(() => import('../components/CheckedAgainst.jsx'))
+// Lazy for the same reason: only pressing Switch to read-write needs it.
+const LazyReadOnly = lazy(() => import('../components/ReadOnlySwitch.jsx'))
 // f is a stream flow; res is what to word, its done frame unless given.
 const CheckedAgainst = ({ f, res = f.result }) => f.status === 'previewed' && <Suspense><LazyChecked res={res} /></Suspense>
 
@@ -54,8 +56,6 @@ function useWriteTarget() {
 function WriteAccessBanner({ isAdmin }) {
   const wt = useContext(WriteTarget)
   const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
   if (!wt || wt.loading) return null
   if (wt.error && !wt.data) return <div className="mb-4 text-note" style={{ color: COLORS.warn }}>{wt.error}</div>
   if (wt.data && !wt.data.known) {
@@ -66,23 +66,6 @@ function WriteAccessBanner({ isAdmin }) {
     )
   }
   if (!wt.readOnly) return null
-
-  // The id of the tenant NAMED on screen is sent, not left for the server to
-  // resolve: the active tenant is process-wide, and another tab could switch it
-  // while this confirm is open. Without the id the server would mark whichever
-  // tenant is active by then, not the one the operator just agreed to.
-  const allow = async () => {
-    setBusy(true); setErr('')
-    const r = await authFetch('/api/vault/tenant-writable', { method: 'POST', body: JSON.stringify({ writable: true, id: wt.data.tenant }) })
-    setBusy(false)
-    if (r.ok && r.data?.ok) {
-      setConfirming(false)
-      wt.reload()
-      // The tenant chip in the top bar shows this same permission.
-      window.dispatchEvent(new Event('bx:write-target'))
-    }
-    else setErr(r.data?.error || 'Could not change the write permission.')
-  }
 
   return (
     <div role="status" className="mb-4 rounded-control border px-3 py-2.5 text-copy" style={{ borderColor: 'var(--color-warn)' }}>
@@ -97,26 +80,8 @@ function WriteAccessBanner({ isAdmin }) {
           Switch to read-write
         </button>
       ) : (
-        <div className="mt-2">
-          <p className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
-            This lets Apply and teardown create and delete real DNS zones, subnets, address blocks, DHCP ranges and
-            host records in {wt.name}.
-            Only do this on a tenant you own. You can switch it back in Settings.
-          </p>
-          <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={allow}
-              className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
-              style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}>
-              {busy ? 'Saving…' : 'Yes, allow changes'}
-            </button>
-            <button type="button" disabled={busy} onClick={() => { setConfirming(false); setErr('') }}
-              className="px-2.5 py-1.5 rounded-control border border-border text-copy">
-              Cancel
-            </button>
-          </div>
-        </div>
+        <Suspense><LazyReadOnly wt={wt} onClose={() => setConfirming(false)} /></Suspense>
       )}
-      {err && <p className="text-note mt-2" style={{ color: 'var(--color-crit)' }}>{err}</p>}
     </div>
   )
 }
