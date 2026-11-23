@@ -59,6 +59,8 @@ type failingTenant struct {
 	// failDeleteID is the object id whose DELETE returns 500. Every other
 	// delete succeeds, so the run reaches exactly the failure site under test.
 	failDeleteID string
+	// failStatus is what that DELETE answers; 0 is 500.
+	failStatus int
 
 	// deletes is every object id DELETEd, in order. Order matters: it is what
 	// proves the run stopped AT the failure rather than carrying on past it.
@@ -88,6 +90,10 @@ func (f *failingTenant) handler() http.HandlerFunc {
 			shouldFail := id == f.failDeleteID
 			f.mu.Unlock()
 			if shouldFail {
+				if f.failStatus != 0 {
+					w.WriteHeader(f.failStatus)
+					return
+				}
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(`{"error":"upstream refused the delete"}`))
 				return

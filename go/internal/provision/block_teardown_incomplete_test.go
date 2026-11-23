@@ -40,6 +40,7 @@ const (
 type partialBlockTenant struct {
 	mu           sync.Mutex
 	failDeleteID string
+	failStatus   int // what that DELETE answers; 0 is 500
 	deletes      []string
 }
 
@@ -52,6 +53,10 @@ func (f *partialBlockTenant) handler() http.HandlerFunc {
 			f.deletes = append(f.deletes, id)
 			fail := id == f.failDeleteID
 			f.mu.Unlock()
+			if fail && f.failStatus != 0 {
+				w.WriteHeader(f.failStatus)
+				return
+			}
 			if fail {
 				w.WriteHeader(500)
 				w.Write([]byte(`{"error":"block is in use"}`))

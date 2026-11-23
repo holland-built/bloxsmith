@@ -243,6 +243,25 @@ test('5 and 6. teardown shows the real site name, needs an exact match, and typi
   expect(seen[1]).toContain('confirm=amer-lab');
 });
 
+test('a teardown delete with an unconfirmed answer is not called deleted or kept', async ({ page }) => {
+  const body = sse({ step: 'plan' }, { done: true, result: {
+    site: 'amer-lab', dry_run: false, dns_zone_deleted: false, dns_zone_fqdn: 'site-amer-lab.example.com',
+    subnets_deleted: [], dhcp_ranges_deleted: [], hosts_deleted: [],
+    unconfirmed: [{ action: 'delete DNS zone', label: 'site-amer-lab.example.com', id: 'dns/auth_zone/z', status: 202 }],
+  } });
+  await page.route('**/api/teardown/site/stream*', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
+  await page.route('**/api/desk/spaces*', (r) => r.fulfill({ status: 404, body: '{}' }));
+  await page.goto('/#provision');
+  await page.getByRole('button', { name: 'Full site', exact: true }).click();
+  await page.getByRole('combobox').filter({ hasText: /baseline-site/ }).first().selectOption('baseline-site');
+  const card = page.locator('[data-panel-id="provision-site-teardown"]');
+  await card.getByRole('button', { name: 'Preview', exact: true }).click();
+  const result = page.locator('[data-panel-id="provision-site-teardown-result"]');
+  await expect(result).toContainText('(result unknown)');
+  await expect(result).not.toContainText('(kept)');
+  await expect(result).toContainText('1 item(s) may or may not have been deleted: site-amer-lab.example.com. Check them in the Editor.');
+});
+
 test('7. a failed list never says there is nothing', async ({ page }) => {
   await page.route('**/api/desk/runs', (r) => json(r, { error: 'down' }, 500));
   await page.goto('/#automate');

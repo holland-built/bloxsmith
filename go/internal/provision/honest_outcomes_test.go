@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
@@ -123,6 +124,104 @@ func TestFailedWrite_OnlyAClearRefusalSaysFailed(t *testing.T) {
 			if got := failedWrite(action, "x", st).Error(); !strings.HasPrefix(got, "No clear answer to "+action+" x") {
 				t.Fatalf("%s %d = %q", action, st, got)
 			}
+		}
+	}
+}
+
+func unconfirmedIDs(result M) []string {
+	ids := []string{}
+	for _, u := range getList(result, "unconfirmed") {
+		ids = append(ids, pyStr(asMap(u)["id"]))
+	}
+	return ids
+}
+
+// A 202 on a teardown delete is not called done, and the teardown carries on
+// exactly as it did.
+func TestSiteTeardown_AcceptedDeleteIsUnknownAndCarriesOn(t *testing.T) {
+	all := []string{failFwdZoneID, failRange1ID, failRange2ID, failRevZone1, failRevZone2,
+		failSubnet1ID, failSubnet2ID, failHost1ID, failHost2ID}
+	for _, tc := range []struct{ id, key string }{
+		{failFwdZoneID, "dns_zone_deleted"}, {failRange2ID, "dhcp_ranges_deleted"},
+		{failRevZone2, "reverse_zones_deleted"}, {failSubnet2ID, "subnets_deleted"}, {failHost2ID, "hosts_deleted"},
+	} {
+		e, ft := newFailingHarness(t, tc.id)
+		ft.failStatus = 202
+		var steps []string
+		result, err := e.NewSiteDecommissioner(teardownCfg(false), collectSteps(&steps)).Decommission()
+		if err != nil {
+			t.Fatalf("%s: %v, want the teardown to carry on", tc.id, err)
+		}
+		if got := ft.deletedIDs(); !equalStrings(got, all) {
+			t.Fatalf("%s: deletes = %v, want every planned delete", tc.id, got)
+		}
+		if got := unconfirmedIDs(result); !equalStrings(got, []string{tc.id}) {
+			t.Fatalf("%s: unconfirmed = %v", tc.id, got)
+		}
+		if tc.key == "dns_zone_deleted" {
+			if result[tc.key] != false {
+				t.Fatalf("zone with a 202 reported as deleted: %v", result[tc.key])
+			}
+		} else if n := len(getList(result, tc.key)); n != 1 {
+			t.Fatalf("%s: %s has %d rows, want only the confirmed one", tc.id, tc.key, n)
+		}
+		if !strings.Contains(strings.Join(steps, "\n"), "may or may not") {
+			t.Fatalf("%s: no step says the result is unknown: %v", tc.id, steps)
+		}
+	}
+}
+
+func TestSiteTeardown_Plain200And204StaySuccess(t *testing.T) {
+	for _, st := range []int{200, 204} {
+		e, ft := newFailingHarness(t, failSubnet2ID)
+		ft.failStatus = st
+		result, err := e.NewSiteDecommissioner(teardownCfg(false), func(M) {}).Decommission()
+		if err != nil || len(getList(result, "subnets_deleted")) != 2 || has(result, "unconfirmed") {
+			t.Fatalf("status %d: err %v, result %v", st, err, result)
+		}
+	}
+}
+
+func has(m M, k string) bool { _, ok := m[k]; return ok }
+
+func TestBlockTeardown_AcceptedDeleteIsUnknownAndCarriesOn(t *testing.T) {
+	for _, tc := range []struct {
+		st      int
+		deleted int
+		unknown bool
+	}{{202, 1, true}, {200, 2, false}, {204, 2, false}} {
+		tenant := &partialBlockTenant{failDeleteID: partialChildID, failStatus: tc.st}
+		srv := httptest.NewServer(tenant.handler())
+		t.Cleanup(srv.Close)
+		e := newTestEngine(srv)
+		e.Export = &ExportWriter{Dir: t.TempDir()}
+		var steps []string
+		out, err := e.NewBlockDecommissioner("regional-blocks", "default", false, collectSteps(&steps)).Decommission()
+		if err != nil || len(tenant.deletes) != 2 {
+			t.Fatalf("status %d: err %v, deletes %v", tc.st, err, tenant.deletes)
+		}
+		if n := len(getList(out, "blocks_deleted")); n != tc.deleted {
+			t.Fatalf("status %d: blocks_deleted = %d, want %d", tc.st, n, tc.deleted)
+		}
+		if has(out, "unconfirmed") != tc.unknown || strings.Contains(strings.Join(steps, "\n"), "may or may not") != tc.unknown {
+			t.Fatalf("status %d: out %v, steps %v", tc.st, out, steps)
+		}
+	}
+}
+
+func TestRetagBlock_AcceptedPatchIsUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		st      int
+		unknown bool
+	}{{202, true}, {200, false}, {201, false}, {204, false}} {
+		e, f := newBlockAPIHarness(t)
+		f.patchStatus = tc.st
+		out, err := e.RetagBlock(retagBlockFixture(), "available", false)
+		if err != nil {
+			t.Fatalf("status %d: %v", tc.st, err)
+		}
+		if (out["unconfirmed"] == true) != tc.unknown {
+			t.Fatalf("status %d: out = %v", tc.st, out)
 		}
 	}
 }

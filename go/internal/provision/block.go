@@ -507,6 +507,11 @@ func (e *Engine) RetagBlock(block M, status string, dryRun bool) (M, error) {
 		if !(httpStatus >= 200 && httpStatus < 300) {
 			return nil, failedWrite("retag block", addr, httpStatus)
 		}
+		// A PATCH may also answer 201 for done, as the Editor's updates accept.
+		if httpStatus != 201 && acceptedUnconfirmed(httpStatus) {
+			return M{"address": addr, "id": pyStr(block["id"]), "status": status, "unconfirmed": true,
+				"http_status": httpStatus}, nil
+		}
 	}
 	return M{"address": addr, "id": pyStr(block["id"]), "status": status}, nil
 }
@@ -522,6 +527,8 @@ type BlockDecommissioner struct {
 	dryRun  bool
 	emit    Emitter
 	spaceID string
+	// unconfirmed lists deletes Infoblox accepted without saying they finished.
+	unconfirmed []any
 }
 
 func (e *Engine) NewBlockDecommissioner(name, ipSpace string, dryRun bool, emit Emitter) *BlockDecommissioner {
@@ -575,6 +582,10 @@ func (d *BlockDecommissioner) deleteBlocks(blocks []any) (deleted []any, attempt
 			_, httpStatus, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 			if !(httpStatus >= 200 && httpStatus < 300) {
 				return deleted, attempted, failedWrite("delete block", addr, httpStatus)
+			}
+			if acceptedUnconfirmed(httpStatus) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete block", addr, blockID, httpStatus)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "id": blockID, "status": status})
@@ -640,6 +651,9 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 			"blocks_deleted": deleted,
 			"export_path":    exportPath,
 		}
+		if len(d.unconfirmed) > 0 {
+			report["unconfirmed"] = d.unconfirmed
+		}
 		// Emitted for the SSE route (server/provision.go's seed-demo teardown),
 		// which only ever sees the stream. Same grammar as the site teardown's
 		// emitIncomplete — top-level incomplete/failed_step/error — so one SSE
@@ -656,8 +670,12 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 		// already gone.
 		return M{"incomplete": report}, err
 	}
-	return M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
-		"export_path": exportPath, "export_written": !d.dryRun}, nil
+	out := M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
+		"export_path": exportPath, "export_written": !d.dryRun}
+	if len(d.unconfirmed) > 0 {
+		out["unconfirmed"] = d.unconfirmed
+	}
+	return out, nil
 }
 
 // recordPlan writes the address blocks this teardown is about to delete. A dry
@@ -723,6 +741,19 @@ func failedWrite(action, what string, status int, detail ...any) *Error {
 		return perr("Failed to %s %s: status %d %v", action, what, status, detail[0])
 	}
 	return perr("Failed to %s %s: status %d", action, what, status)
+}
+
+// acceptedUnconfirmed is a 2xx on a delete or tag change that is not the plain
+// "done" of a 200 or 204: Infoblox took the request but did not say it finished.
+func acceptedUnconfirmed(status int) bool {
+	return status > 200 && status < 300 && status != 204
+}
+
+// noteUnconfirmed logs and lists a delete with an acceptedUnconfirmed answer.
+// The teardown carries on as it always did; the object is just not called gone.
+func noteUnconfirmed(list *[]any, emit Emitter, action, label, id string, status int) {
+	emit(M{"step": "  " + failedWrite(action, label, status).Msg})
+	*list = append(*list, M{"action": action, "label": label, "id": id, "status": status})
 }
 
 // rollbackIncompleteStep is the log line for objects rollback left behind,

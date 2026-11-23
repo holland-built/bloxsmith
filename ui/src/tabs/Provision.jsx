@@ -704,13 +704,18 @@ function SiteMode({ isAdmin }) {
             <div><span className="text-muted">Site: </span><ItemLink kind="site" value={teardown.result.result.site || siteTemplate} /></div>
             <div>
               <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_deleted ? teardown.result.result.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={teardown.result.result.dns_zone_fqdn} />}{' '}
-              {teardown.result.result.dns_zone_deleted ? '(deleted)' : '(kept)'}
+              {teardown.result.result.dns_zone_deleted ? '(deleted)' : (teardown.result.result.unconfirmed || []).some((u) => u.action === 'delete DNS zone') ? '(result unknown)' : '(kept)'}
             </div>
             <div>
               <span className="text-muted">Subnets: </span>{(teardown.result.result.subnets_deleted || []).length} ·{' '}
               <span className="text-muted">DHCP ranges: </span>{(teardown.result.result.dhcp_ranges_deleted || []).length} ·{' '}
               <span className="text-muted">Hosts: </span>{(teardown.result.result.hosts_deleted || []).length} deleted
             </div>
+            {(teardown.result.result.unconfirmed || []).length > 0 && (
+              <div style={{ color: COLORS.warn }}>
+                {`${teardown.result.result.unconfirmed.length} item(s) may or may not have been deleted: ${teardown.result.result.unconfirmed.map((u) => u.label).join(', ')}. Check them in the Editor.`}
+              </div>
+            )}
             {teardown.status === 'previewed' && <div style={{ color: COLORS.warn }}>Preview — nothing was deleted.</div>}
           </div>
         </Card>

@@ -440,6 +440,11 @@ func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN
 			"the clean %s may have been created, but Infoblox's answer was lost%s. Check for it in the Editor before trying again (%w)",
 			made, clean, upstreamDetail(status, result), errPickKept)
 	}
+	if rest.NoClearAnswer(status) {
+		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed. "+
+			"No clear answer to create the clean subnet %s (status %d), so it may or may not have happened. "+
+			"Check it in the Editor before trying again", made, clean, status)
+	}
 	if werr != nil || status < 200 || status > 299 {
 		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
 			"creating the clean %s instead failed%s. Nothing was created; preview again", made, clean, upstreamDetail(status, result))
@@ -718,7 +723,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]any{"done": true, "result": result})
 		if !cfg.DryRun {
 			d.auditAppend("teardown-site", httpx.Actor(r),
-				map[string]any{"template": name, "site": cfg.Site})
+				withUnconfirmed(map[string]any{"template": name, "site": cfg.Site}, result["unconfirmed"]))
 		}
 	})
 }
@@ -1193,7 +1198,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 	d.json(w, r, 200, map[string]any{"result": result})
 	if !dry {
 		d.auditAppend("teardown-block", httpx.Actor(r),
-			map[string]any{"template": name, "block": blockName})
+			withUnconfirmed(map[string]any{"template": name, "block": blockName}, result["unconfirmed"]))
 	}
 }
 
@@ -1242,7 +1247,7 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.provErr(w, r, "/api/retag/block", err)
 		return
 	}
-	changed := []any{}
+	changed, unconfirmed := []any{}, []any{}
 	for _, blk := range blocks {
 		res, err := d.prov(r).RetagBlock(mapOf(blk), status, dry)
 		if err != nil {
@@ -1270,13 +1275,31 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 			d.provErr(w, r, "/api/retag/block", err)
 			return
 		}
+		if res["unconfirmed"] == true {
+			unconfirmed = append(unconfirmed, res)
+			continue
+		}
 		changed = append(changed, res)
 	}
-	d.json(w, r, 200, map[string]any{"status": status, "changed": changed, "dry_run": dry})
+	if len(unconfirmed) > 0 {
+		d.json(w, r, 502, map[string]any{"status": status, "changed": changed, "unconfirmed": unconfirmed, "dry_run": dry,
+			"error": fmt.Sprintf("%d block(s) may or may not have been re-tagged. Check them in the Editor before trying again.", len(unconfirmed))})
+	} else {
+		d.json(w, r, 200, map[string]any{"status": status, "changed": changed, "dry_run": dry})
+	}
 	if !dry {
 		d.auditAppend("retag-block", httpx.Actor(r),
-			map[string]any{"template": templateName, "status": status, "count": len(changed)})
+			withUnconfirmed(map[string]any{"template": templateName, "status": status, "count": len(changed)}, unconfirmed))
 	}
+}
+
+// withUnconfirmed adds how many writes got an unconfirmed answer to an audit
+// row, when there were any.
+func withUnconfirmed(detail map[string]any, list any) map[string]any {
+	if l, _ := list.([]any); len(l) > 0 {
+		detail["unconfirmed"] = len(l)
+	}
+	return detail
 }
 
 // --- POST /api/drift/check (server.py:6264) ----------------------------------

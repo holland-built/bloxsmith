@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"bloxsmith/internal/rest"
 )
 
 // A DNS record write with no clear answer may have landed, so the addresses it
@@ -189,8 +187,11 @@ func TestReserveCreate_NoClearAnswerIsNotCalledRefused(t *testing.T) {
 	for _, st := range []int{500, 501, 202, 204} {
 		f := newResvFake(t, resvConfig{fixedStatus: st})
 		res, status := f.client().SelfserviceAllocate(reserveBody(false, M{"mac": "aa:bb:cc:dd:ee:01"}))
-		if msg := pyStr(res["error"]); msg != rest.OutcomeUnknown {
-			t.Fatalf("status %d: error = %q, want the unknown wording", st, msg)
+		if msg := pyStr(res["error"]); !strings.Contains(msg, "MAY EXIST") || strings.Contains(msg, "nothing was created") {
+			t.Fatalf("status %d: error = %q, want the may-exist wording", st, msg)
+		}
+		if res[CreatedUnreadableKey] != true || has(res, "ok") {
+			t.Fatalf("status %d: want a may-exist result, got %v", st, res)
 		}
 		if status < 500 {
 			t.Fatalf("status %d: returned %d, which a browser reads as success", st, status)
