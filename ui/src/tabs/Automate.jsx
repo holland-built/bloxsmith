@@ -5,7 +5,8 @@
 // The older pages (Provision, Self-Service, Demo server) stay as they are.
 // Changes made there are not recorded here and cannot be removed from here.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { failureText, useApi, WRITE_UNKNOWN, writeFailureText } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { DevicesInput, ReadOnlyNote } from '../components/kit.jsx'

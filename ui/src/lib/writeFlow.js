@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { tokenFetch } from './authFetch.js'
-import { failureText, WRITE_UNKNOWN, writeFailureText } from './api.js'
+import { failureText } from './api.js'
+import { WRITE_UNKNOWN, writeFailureText } from './writeFailure.js'
 
 // Shared Preview -> Apply driver for both cards. Preview posts with dry:true so
 // the server does the validating; apply re-posts the same body with dry:false.

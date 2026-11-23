@@ -522,7 +522,7 @@ func (e *UpstreamError) PublicFor(service string) string {
 
 // OutcomeUnknown is the message for a write that was sent with no clear answer
 // back. The change may have landed, so the message must not say that it failed
-// or that no request completed. ui/src/lib/api.js WRITE_UNKNOWN is the same text.
+// or that no request completed. ui/src/lib/writeFailure.js WRITE_UNKNOWN is the same text.
 const OutcomeUnknown = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
 
 // NoClearAnswer reports whether a write's status leaves its outcome unknown:

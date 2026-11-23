@@ -11,7 +11,8 @@ import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
 import { useHashParams } from '../lib/hash.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
-import { failureText, writeFailureText } from '../lib/api.js'
+import { failureText } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 

@@ -66,7 +66,14 @@ import { test, expect } from './fixtures';
 // 153,093 -> 157,409 B (lib/refresh.js, the header control, and the request
 // ordering in useApi, which every tab needs). vendor-react did not move and no
 // charts chunk is on the route.
-const BUDGET_BYTES = 400 * 1024; // 409,600 B
+//
+// RAISED 400 -> 404 KB on 2026-11-23, with the chunks that grew identified.
+// Truthful failure messages took #provision from 409,578 B (22 B under the old
+// ceiling) to 410,124 B: Provision +400 B (a cleanup with no clear answer is
+// reported as unknown), the entry chunk +146 B (the tenant chip's "checking"
+// state). The shared write wording was moved to its own chunk, off this route.
+// vendor-react did not move and no charts chunk is on the route.
+const BUDGET_BYTES = 404 * 1024; // 413,696 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { NO_PERMISSION, WRITE_NO_PERMISSION, WRITE_UNKNOWN, failureText, writeFailureText } from './api.js'
+import { NO_PERMISSION, failureText } from './api.js'
+import { WRITE_NO_PERMISSION, WRITE_UNKNOWN, writeFailureText } from './writeFailure.js'
 import { formatDay, formatTime, formatWhen } from './dates.js'
 import { SOURCES } from './valueWork.js'
 

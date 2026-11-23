@@ -10,7 +10,8 @@
 // that is what carries the notice.
 import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { failureText, isNoPermission, NO_PERMISSION, SHARE_PICKER, useApi, WRITE_UNKNOWN, writeFailureText } from '../lib/api.js'
+import { failureText, isNoPermission, NO_PERMISSION, SHARE_PICKER, useApi } from '../lib/api.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
