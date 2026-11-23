@@ -39,7 +39,7 @@ If a preview looks wrong, it is wrong. Fix the input and preview again.
 
 One limit: Provision streams its plan from the server, and the server plans again when you press Apply. Provision promises that your inputs are the same between preview and apply, not that the plan is byte for byte the same. Get an address and Editor send exactly the request you reviewed.
 
-Actions that delete things have extra safeguards. Teardown needs an admin token and a typed confirmation. Editor's Delete is a separate button you click twice, and it never goes through preview.
+Actions that delete things have extra safeguards. Teardown needs an admin token and a typed confirmation. Editor's Delete is a separate button with its own confirm box, and it never goes through preview.
 
 If the tenant you are using is read-only, the buttons that would write are greyed out and the panel says why. Preview still works on Get an address and Editor.
 
@@ -258,7 +258,7 @@ The IQ for Threat Defense action queue. Refreshes every 20 seconds.
 
 - **Severity Counts**: at the top, how many of the loaded incidents are critical, high, medium and low. Click one to show only that level in the list.
 - **Categories**: click a category to show only its incidents in the list.
-- **Triage**: the incident list. Click a row for the detail. Tick **Ack** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
+- **Triage**: the incident list. Click a row for the detail. Tick **Seen** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
 - **IQ Actions**: actions from Infoblox IQ for Threat Defense, with the detail of each one. Each says whether it is open or resolved, open ones first. **Resolve** closes an open one; **Reopen** on a resolved one shows when you point at its row.
 - **Action Volume**: actions per day.
 
@@ -389,13 +389,13 @@ Edit or delete a record that is already in a zone.
 
 Choose **Forward zones** or **Reverse zones**, then pick a **zone** (the search box above the list finds one by name). The list shows the first 200 records; type in **Find a record** to search by name or value, or press **Show 200 more**. Press **Edit** on any row you can change. Record types that can't be changed are marked, and have no Edit or Delete. Change the value, TTL or comment and press **Preview**, which checks it on the server just like the create form. **Update** reads the record again just before writing and compares it with the copy the preview used. If they differ, Update stops with "record changed since you previewed — preview again", so it never overwrites a change someone else made.
 
-**Delete** takes two clicks. The first click changes the button to "Click again to delete `<type> <name> -> <value>`", naming the exact record as it is right now. If the record can't be re-checked, or someone else already removed it, the button doesn't arm and says why. If you don't click again within four seconds, it goes back to normal.
+**Delete** opens a confirm box that names the exact record as it is right now (`<type> <name> -> <value>`), with a red **Confirm delete** button and **Cancel**. The box stays until you choose. If the record can't be re-checked, or someone else already removed it, no box opens and the page says why.
 
 ### Give back an address
 
 Give an address back so it can be used again.
 
-Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its full IP address or by a word in its comment, or press **Show 200 more**. **Release** works like Delete when changing records. One click shows "Click again to release `<address>`", the second click releases it, and after four seconds it goes back to normal.
+Pick an **IP space**, then a **subnet**, to list its addresses. Find one by its full IP address or by a word in its comment, or press **Show 200 more**. **Release** works like Delete when changing records. It opens a confirm box naming the address, with a red **Confirm release** button and **Cancel**.
 
 ## Editor
 
@@ -410,7 +410,7 @@ It handles six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, 
 
 **Then:** press **Preview** to see the exact request it will send. If it is right, press **Create** (or **Update**). See [the write flow](#the-write-flow).
 
-**Delete** is separate and doesn't go through preview. It takes two clicks: the first changes the button to "Click again to permanently delete", and it goes back to normal after four seconds. Delete can't be undone.
+**Delete** is separate and doesn't go through preview. It opens a confirm box with a red **Permanently delete** button and **Cancel**, and the box stays until you choose. Delete can't be undone.
 
 Other tabs can open Editor with the form filled in, using a link such as `#editor?type=subnet&id=abc123`.
 

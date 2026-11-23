@@ -13,6 +13,7 @@ import {
   __resetAdoptionForTests,
   noteTenant,
   refreshFeeds,
+  isNoPermission,
   retryFailedFeeds,
   shareResult,
   useApi,
@@ -1663,4 +1664,28 @@ test('a panel waiting to adopt stands down when Refresh now takes it over', asyn
   assert.deepEqual(second.current.data, { v: 'refreshed' })
   first.unmount()
   second.unmount()
+})
+
+test('isNoPermission spots a 401 or 403, and nothing that merely contains the number', () => {
+  assert.equal(isNoPermission({ status: 403 }), true)
+  assert.equal(isNoPermission('401 Unauthorized'), true)
+  assert.equal(isNoPermission('403 '), true)
+  assert.equal(isNoPermission('could not load incidents: 403 Forbidden'), true)
+  assert.equal(isNoPermission('The upstream server returned an error (status 403).'), true)
+  assert.equal(isNoPermission('Sources failed: The upstream server returned an error (status 401).'), true)
+  assert.equal(isNoPermission('The upstream server returned an error (status 500).'), false)
+  assert.equal(isNoPermission({ status: 500, message: '500 Internal Server Error' }), false)
+  assert.equal(isNoPermission('403 of 500 rows read: timeout'), false)
+  assert.equal(isNoPermission('subnet 10.0.0.403 is full'), false)
+  assert.equal(isNoPermission(null), false)
+})
+
+test('isNoPermission reads the server refusal sentence, and not other text with 403 in it', () => {
+  const refused = "Infoblox refused the call (HTTP 403). This key's user probably needs the ib-mcp-server-user group (Infoblox ticket PTCI-4674)."
+  assert.equal(isNoPermission(refused), true)
+  assert.equal(isNoPermission(`Sources failed: ${refused}`), true)
+  assert.equal(isNoPermission("You don't have permission to see this. Check the key in Settings."), true)
+  assert.equal(isNoPermission('Row failed (HTTP 403) while saving a note'), false)
+  assert.equal(isNoPermission('Infoblox refused the call (HTTP 500). Try later.'), false)
+  assert.equal(isNoPermission('ticket 403 is still open'), false)
 })

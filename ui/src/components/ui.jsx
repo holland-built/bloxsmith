@@ -1,7 +1,7 @@
 import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
 import { createPortal } from 'react-dom'
 import { useFontsLoaded } from '../lib/fonts.js'
-import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
+import { isNoPermission, noPermissionText, retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP, builtLine } from '../lib/panelHelp.js'
@@ -3083,11 +3083,22 @@ export function deletedMsg(j, label) {
 }
 
 export function FetchError({ error, stale }) {
+  const { failed, retrying } = useFeedRecovery()
   if (!error) return null
+  const denied = isNoPermission(error)
   return (
     <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>
-      Could not load current data: {String(error?.message || error)}
-      {stale && ' — the list below may be out of date.'}
+      {denied ? noPermissionText(error) : `Could not load current data: ${String(error?.message || error)}`}
+      {stale && (denied ? ' The list below may be out of date.' : ' — the list below may be out of date.')}
+      {!denied && failed && !retrying && (
+        <button
+          type="button"
+          onClick={retryFailedFeeds}
+          className="ml-2 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note"
+        >
+          Try again
+        </button>
+      )}
     </div>
   )
 }
@@ -3110,7 +3121,8 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
   const { failed, retrying } = useFeedRecovery()
   // A caller that passed onRetry has already decided it is stuck — it has no
   // registry entry to set `failed`, so the global pair cannot answer for it.
-  const showButton = onRetry ? true : failed && !retrying
+  const denied = isNoPermission(reason)
+  const showButton = !denied && (onRetry ? true : failed && !retrying)
   // data-feed-unavailable carries the label so a test can name WHICH feed is
   // down without scraping the rendered text. tests/contrast.spec.ts uses it to
   // tell "the page never loaded" apart from "the page loaded and its feeds did
@@ -3127,8 +3139,8 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
       role="status"
       className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
     >
-      <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{label}</div>
-      {reason ? <div className="text-note" style={{ color: COLORS.warn }}>{reason}</div> : null}
+      <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{denied ? 'No permission' : label}</div>
+      {reason ? <div className="text-note" style={{ color: COLORS.warn }}>{denied ? noPermissionText(reason) : reason}</div> : null}
       {showButton ? (
         <button
           type="button"
@@ -3137,7 +3149,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
         >
           Try again
         </button>
-      ) : retrying ? (
+      ) : retrying && !denied ? (
         <div className="text-note text-dim">{"Didn't load — trying again…"}</div>
       ) : null}
     </div>

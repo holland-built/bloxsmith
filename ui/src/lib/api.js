@@ -184,6 +184,24 @@ export function useFeedRecovery() {
   return useSyncExternalStore(subscribeFeeds, getFeedSnapshot, getFeedSnapshot)
 }
 
+// 401 and 403 will not change on a retry. An error from useApi carries `.status`;
+// the many panels pass only its message, as "403 Forbidden" or with a lead-in
+// such as "could not load incidents: 403 Forbidden".
+export const NO_PERMISSION = "You don't have permission to see this. Check the key in Settings."
+// The sentence go/internal/mcp/mcp.go RefusedReason writes. It names the fix, so
+// it is shown as it is.
+const REFUSED_CALL = /\bInfoblox refused the call \(HTTP (?:401|403)\)\./
+export function isNoPermission(error) {
+  if (error?.status === 401 || error?.status === 403) return true
+  const text = String(error?.message ?? error ?? '')
+  return text === NO_PERMISSION || REFUSED_CALL.test(text)
+    || /(?:(?:^|:\s*)(?:401|403)(?:\s+(?:Unauthorized|Forbidden))?\s*$)|\(status (?:401|403)\)\.?\s*$/.test(text)
+}
+export function noPermissionText(error) {
+  const text = String(error?.message ?? error ?? '')
+  return REFUSED_CALL.test(text) ? text : NO_PERMISSION
+}
+
 /**
  * Load every currently-failed feed again with its attempt budget reset —
  * including polling ones, which otherwise wait out their interval. Spread over
@@ -659,6 +677,16 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
         // The status rides along on the error: it is the only thing that tells
         // a retryable 503 apart from a 404 that will never change its mind.
         if (!res.ok) {
+          // A list read answers 502 with Infoblox's own status in the body
+          // (writeUpstreamError). A refusal there is a permission problem.
+          if (res.status === 502) {
+            const body = await res.json().catch(() => null)
+            if (body?.status === 401 || body?.status === 403) {
+              throw Object.assign(new Error(`${body.status} ${body.status === 401 ? 'Unauthorized' : 'Forbidden'}`), {
+                status: body.status,
+              })
+            }
+          }
           throw Object.assign(new Error(`${res.status} ${res.statusText}`), {
             status: res.status,
           })

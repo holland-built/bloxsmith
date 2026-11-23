@@ -239,7 +239,7 @@ test.describe('Editor delete — already_gone must not read as "deleted"', () =>
     await page.goto('/#editor?type=dns_zone&id=zone-1');
     const btn = page.getByRole('button', { name: 'Delete DNS Zone' });
     await btn.click();
-    await page.getByRole('button', { name: 'Click again to permanently delete' }).click();
+    await page.getByRole('button', { name: 'Permanently delete' }).click();
   }
 
   test('already_gone:false says the zone was deleted', async ({ page }) => {

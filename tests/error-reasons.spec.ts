@@ -19,49 +19,22 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-test('Assets: a refused inventory read names the reason and Try again reads it again', async ({ page }) => {
-  let calls = 0;
-  await page.route('**/api/csp/assets*', (route) => {
-    calls += 1;
-    if (calls === 1) {
-      return json(route, {
-        availability: 'error', reason: REFUSED, dir: 'desc', page: 0, page_size: 50,
-        sort: 'last_seen', rows: [], total: null, has_more: false,
-      });
-    }
-    return json(route, {
-      availability: 'ok', dir: 'desc', has_more: false, page: 0, page_size: 50, sort: 'last_seen', total: 1,
-      rows: [{ cqid: 'c1', last_seen: '2026-08-10T17:54:44.000', name: 'retry-host.example.internal', provider: 'AWS', type: 'Workstation', vendor: 'Dell' }],
-    });
-  });
+// A refusal will not change on a retry, so these name the reason with no Try again.
+test('Assets: a refused inventory read is a permission problem and names the reason', async ({ page }) => {
+  await page.route('**/api/csp/assets*', (route) => json(route, {
+    availability: 'error', reason: REFUSED, dir: 'desc', page: 0, page_size: 50,
+    sort: 'last_seen', rows: [], total: null, has_more: false,
+  }));
   await page.route('**/api/csp/asset-filters*', (route) => json(route, { availability: 'ok', total: 1, types: [] }));
 
   await page.goto('/#assets');
   const list = page.locator('[data-panel-id="assets-list"]');
   await expect(list.getByText(REFUSED)).toBeVisible();
-  await list.getByRole('button', { name: 'Try again' }).click();
-  await expect(list.getByText('retry-host.example.internal')).toBeVisible();
-  await expect(list.locator('[data-feed-unavailable]')).toHaveCount(0);
-  expect(calls).toBe(2);
+  await expect(list.getByText('No permission')).toBeVisible();
+  await expect(list.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
-test('Incidents: a refused IQ Actions read names the reason and Try again reads it again', async ({ page }) => {
-  let calls = 0;
-  await page.route(/\/api\/actions(\?.*)?$/, (route) => {
-    calls += 1;
-    if (calls === 1) return json(route, { actions: [], unavailable: REFUSED, availability: 'error' });
-    return route.fallback();
-  });
-
-  await page.goto('/#incidents');
-  const queue = page.locator('[data-panel-id="incidents-soc-queue"]');
-  await expect(queue.getByText(REFUSED)).toBeVisible();
-  await queue.getByRole('button', { name: 'Try again' }).click();
-  await expect(queue.locator('[data-feed-unavailable]')).toHaveCount(0);
-  expect(calls).toBeGreaterThanOrEqual(2);
-});
-
-test('Threat lookup: a refused search names the reason and Try again runs it again', async ({ page }) => {
+test('Threat lookup: a refused search names the reason, and Lookup runs it again', async ({ page }) => {
   let calls = 0;
   await page.route('**/api/threat-lookup*', (route) => {
     calls += 1;
@@ -74,7 +47,8 @@ test('Threat lookup: a refused search names the reason and Try again runs it aga
   await lookup.getByPlaceholder('domain, IP, or host…').fill('example.com');
   await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
   await expect(lookup.getByText(REFUSED)).toBeVisible();
-  await lookup.getByRole('button', { name: 'Try again' }).click();
+  await expect(lookup.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
   await expect(lookup.getByText('No matches')).toBeVisible();
   expect(calls).toBe(2);
 });

@@ -236,8 +236,11 @@ function useStreamFlow(path) {
 
   useEffect(() => () => esRef.current?.close(), [])
 
+  // Inputs changed while a preview is running: its plan is for the old inputs.
+  const changedRef = useRef(false)
   function markStale() {
-    if (status === 'previewed') setStale(true)
+    if (esRef.current) changedRef.current = true
+    else if (status === 'previewed') setStale(true)
   }
 
   function run(qs, dry) {
@@ -251,6 +254,7 @@ function useStreamFlow(path) {
     }
     setLog([]); setRows({}); setResult(null); setError(null); setRollback(null); setStatus('busy')
     dryRef.current = dry
+    changedRef.current = false
     // withToken: EventSource can't send X-Auth-Token, so a token deployment
     // needs the ?token= query fallback or the stream 403s.
     const es = new EventSource(withToken(`${path}?${qs}`))
@@ -273,7 +277,7 @@ function useStreamFlow(path) {
       }
       else if (j?.done) {
         setResult(j)
-        setStale(false)
+        setStale(dryRef.current && changedRef.current)
         stop(dryRef.current ? 'previewed' : 'applied')
       }
     }
@@ -552,6 +556,9 @@ function SiteMode({ isAdmin }) {
   }
 
   const built = build.result?.result
+  // The server's confirm rule compares against the site name in this preview,
+  // which can differ from the template's name.
+  const tdSite = teardown.status === 'previewed' && !teardown.stale ? teardown.result?.result?.site || '' : ''
 
   return (
     // Its own key, for the reason spelled out on the subnet grid above.
@@ -669,9 +676,14 @@ function SiteMode({ isAdmin }) {
       <Card key="provision-site-teardown" title="Tear down this site" note="permanently deletes its provisioned objects" panelId="provision-site-teardown" span={6}>
         <div data-form-cols="" className="flex flex-col gap-3">
           {isAdmin ? (
-            <Field label="Type the site name to confirm">
-              <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
-            </Field>
+            <>
+              <Field label="Type the site name to confirm">
+                <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => setTdConfirm(e.target.value)} placeholder={tdSite || 'site name'} />
+              </Field>
+              <p className="text-note text-muted">
+                {tdSite ? <>Site name: <span className="font-mono text-txt">{tdSite}</span></> : 'Press Preview to see the site name.'}
+              </p>
+            </>
           ) : (
             <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
@@ -681,8 +693,8 @@ function SiteMode({ isAdmin }) {
             stale={teardown.stale}
             disabled={!siteTemplate}
             needs={[!siteTemplate && 'pick a site template']}
-            applyDisabled={!isAdmin || !tdConfirm.trim()}
-            applyNote={isAdmin ? 'type the site name to confirm' : 'admin required'}
+            applyDisabled={!isAdmin || !tdSite || tdConfirm.trim() !== tdSite}
+            applyNote={!isAdmin ? 'admin required' : tdSite ? `type ${tdSite} to confirm` : 'the preview did not name the site'}
             onPreview={() => teardown.run(tdQs(true), true)}
             onApply={() => teardown.run(tdQs(false), false)}
             applyLabel="Tear down this site"
@@ -852,7 +864,7 @@ function SeedMode({ isAdmin }) {
           </p>
           {isAdmin ? (
             <Field label="Type DELETE to remove those sites">
-              <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
+              <input {...MACHINE_TEXT} className={inputCls} value={tdConfirm} onChange={(e) => setTdConfirm(e.target.value)} placeholder="DELETE" />
             </Field>
           ) : (
             <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>

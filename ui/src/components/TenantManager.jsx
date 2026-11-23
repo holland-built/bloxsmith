@@ -111,7 +111,16 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   const panelRef = useRef(null)
   useEffect(() => { panelRef.current?.focus() }, [])
 
-  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, onClose)
+  // Closing unmounts the sheet and with it every busy guard, so a reopened sheet
+  // could remove a key that is still being saved. It stays open during a save.
+  const saving = add.busy || !!edit?.busy || axur.busy || kentik.busy
+  const closeIfIdle = () => { if (!saving) onClose() }
+  // The pressed button is disabled during a save, which drops keyboard focus out
+  // of the sheet. Bring it back, or Escape stops working once the save ends.
+  useEffect(() => {
+    if (!saving && document.activeElement === document.body) panelRef.current?.focus()
+  }, [saving])
+  const onKeyDown = (e) => dialogKeyDown(e, panelRef.current, closeIfIdle)
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active
@@ -122,6 +131,10 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   // an operator staring at a wall of "feed unavailable" panels had no way to
   // tell a broken tenant from a broken upstream.
   const [connTest, setConnTest] = useState({ busy: false, result: '' })
+  // Why the last remove or switch of a saved tenant failed.
+  const [tenantErr, setTenantErr] = useState('')
+  // Which saved integration login is waiting on Remove / Keep.
+  const [confirmKey, setConfirmKey] = useState(null)
 
   const saveToken = (v) => {
     setDashToken(v)
@@ -134,6 +147,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   const setActive = async (id) => {
     if (id === activeId) return
     setSwitchingAcct(true)
+    setTenantErr('')
     const { ok, data } = await vpost('/api/vault/active', { id })
     if (ok && data.ok) {
       // RELOAD, not load(). load() refreshes this sheet's own state and nothing
@@ -146,6 +160,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
       window.location.reload()
       return
     }
+    setTenantErr(data.error || 'Could not switch to that connection.')
     setSwitchingAcct(false)
   }
 
@@ -178,9 +193,11 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   }
 
   const remove = async (id) => {
-    await vpost('/api/vault/tenant-remove', { id })
+    setTenantErr('')
+    const { ok, data } = await vpost('/api/vault/tenant-remove', { id })
     setConfirmRm(null)
-    load()
+    if (ok && data.ok) load()
+    else setTenantErr(data.error || 'Could not remove that connection.')
   }
 
   const submitAdd = async () => {
@@ -242,7 +259,8 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   const testAddKey = async () => {
     if (!add.key) return
     setAdd((a) => ({ ...a, test: 'Testing…' }))
-    const { ok, data } = await vpost('/api/vault/test-key', { key: add.key })
+    const tested = add.key
+    const { ok, data } = await vpost('/api/vault/test-key', { key: tested })
     // unverified: the request never reached CSP (offline/VPN/proxy/timeout) —
     // the key was never judged, so this must not read as "rejected".
     const test =
@@ -251,7 +269,8 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         : data.unverified
           ? 'Unverified: could not verify — check connectivity and try again'
           : 'Invalid: ' + (data.error || 'rejected')
-    setAdd((a) => ({ ...a, test }))
+    // Only onto the form and key it tested.
+    setAdd((a) => (a.open && a.key === tested ? { ...a, test } : a))
   }
 
   const testConnection = async () => {
@@ -287,14 +306,15 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
       setEdit(null)
       load()
     } else {
-      setEdit((e) => ({ ...e, busy: false, err: data.error || 'Could not replace key.' }))
+      setEdit((e) => e && { ...e, busy: false, err: data.error || 'Could not replace key.' })
     }
   }
 
   const testEditKey = async () => {
     if (!edit.key) return
     setEdit((e) => ({ ...e, test: 'Testing…' }))
-    const { ok, data } = await vpost('/api/vault/test-key', { key: edit.key })
+    const { id: testedId, key: tested } = edit
+    const { ok, data } = await vpost('/api/vault/test-key', { key: tested })
     // unverified: the request never reached CSP (offline/VPN/proxy/timeout) —
     // the key was never judged, so this must not read as "rejected".
     const test =
@@ -303,7 +323,8 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         : data.unverified
           ? 'Unverified: could not verify — check connectivity and try again'
           : 'Invalid: ' + (data.error || 'rejected')
-    setEdit((e) => ({ ...e, test }))
+    // Only onto the form and key it tested; that form may have closed.
+    setEdit((e) => (e?.id === testedId && e.key === tested ? { ...e, test } : e))
   }
 
   // Grant or revoke write permission for the tenant a write would currently
@@ -325,6 +346,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   }
 
   const lockNow = async () => {
+    if (saving) return
     setLocking(true)
     await tokenFetch('/api/vault/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
     setLocking(false)
@@ -333,7 +355,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex justify-end bg-black/60" onClick={onClose} onKeyDown={onKeyDown}>
+    <div className="fixed inset-0 z-[200] flex justify-end bg-black/60" onClick={closeIfIdle} onKeyDown={onKeyDown}>
       <div
         ref={panelRef}
         role="dialog"
@@ -346,7 +368,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         <div className="shrink-0 flex items-center px-5 py-3 border-b border-line-2">
           <h2 id="tm-title" className="text-copy font-semibold">Settings</h2>
           <span className="flex-1" />
-          <button className="w-8 h-8 text-muted text-copy hover:text-txt" onClick={onClose} aria-label="Close">✕</button>
+          <button className="w-8 h-8 text-muted text-copy hover:text-txt disabled:opacity-50" disabled={saving} onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
@@ -384,7 +406,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
             {onOpenSetup && (
               <p className="text-note text-muted mb-3">
                 AI answers, the demo server, your logo and templates are on one list:{' '}
-                <button type="button" onClick={onOpenSetup} className="text-link underline underline-offset-2">Setup checklist</button>
+                <button type="button" disabled={saving} onClick={onOpenSetup} className="text-link underline underline-offset-2 disabled:opacity-50">Setup checklist</button>
               </p>
             )}
               {add.open ? (
@@ -433,7 +455,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   {add.busy ? 'Adding…' : 'Add'}
                 </button>
                 <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
-                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50" disabled={add.busy} onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
               </div>
             </div>
               ) : edit ? (
@@ -470,7 +492,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   {edit.busy ? 'Replacing…' : 'Replace key'}
                 </button>
                 <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
-                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
+                <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50" disabled={edit.busy} onClick={() => setEdit(null)}>Cancel</button>
               </div>
             </div>
               ) : (
@@ -494,7 +516,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                         <>
                           <button className={rowBtn} disabled={switchingAcct} onClick={() => setActive(t.id)}>
                             <span>{t.id === activeId ? '●' : '○'}</span>
-                            <span className="truncate">{t.label}</span>
+                            <span className="min-w-0 break-words">{t.label}</span>
                           </button>
                           <button className={miniBtn} aria-label={`Change key for ${t.label}`} onClick={() => openEdit(t)}>Change key</button>
                           <button className={miniBtn + ' hover:text-crit hover:border-crit'} aria-label={`Remove ${t.label}`} onClick={() => setConfirmRm(t.id)}>Remove</button>
@@ -505,6 +527,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   {tenants.length === 0 && <div className="text-note text-dim px-1">No tenants saved.</div>}
                 </div>
                 )}
+                {tenantErr && <div role="alert" className="mb-3 text-note text-crit">{tenantErr}</div>}
                 {activeId && (
                   <div className="mb-3">
                     <button
@@ -514,7 +537,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                     >
                       {connTest.busy ? 'Testing connection…' : 'Test active connection'}
                     </button>
-                    {connTest.result && <div className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
+                    {connTest.result && <div role="status" className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
                   </div>
                 )}
                 <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
@@ -581,7 +604,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                       the change and the list stays where it was.
                     </div>
                     {acctSwitchErr && (
-                      <div className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
+                      <div role="alert" className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
                     )}
                     {!acctSwitchErr && <div className="mb-4" />}
                   </>
@@ -698,7 +721,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   the &ldquo;Bearer&rdquo; word is added for you.
                 </div>
                 {axur.err && <div role="alert" className="mt-2 text-note text-crit">{axur.err}</div>}
-                {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
+                {axur.msg && <div role="status" className="mt-2 text-note text-ok">{axur.msg}</div>}
                 <div className="flex gap-2 mt-2">
                   <button
                     className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
@@ -707,16 +730,23 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   >
                     {axur.busy ? 'Saving…' : 'Save Axur key'}
                   </button>
-                  {axur.stored && (
+                  {axur.stored && confirmKey !== 'axur' && (
                     <button
                       className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
-                      onClick={clearAxur}
+                      onClick={() => setConfirmKey('axur')}
                       disabled={axur.busy}
                     >
-                      Remove
+                      Remove Axur key
                     </button>
                   )}
                 </div>
+                {axur.stored && confirmKey === 'axur' && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
+                    <span className="flex-1 text-note text-crit">Remove the saved Axur key?</span>
+                    <button disabled={axur.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Axur key" onClick={() => { setConfirmKey(null); clearAxur() }}>Remove</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Axur key" onClick={() => setConfirmKey(null)}>Keep</button>
+                  </div>
+                )}
               </div>
 
               <div className="text-copy font-medium mb-2">Kentik (network traffic)</div>
@@ -746,7 +776,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   Encrypted in the vault. Used by search: look up an IP to see its traffic for the last hour.
                 </div>
                 {kentik.err && <div role="alert" className="mt-2 text-note text-crit">{kentik.err}</div>}
-                {kentik.msg && <div className="mt-2 text-note text-ok">{kentik.msg}</div>}
+                {kentik.msg && <div role="status" className="mt-2 text-note text-ok">{kentik.msg}</div>}
                 <div className="flex gap-2 mt-2">
                   <button
                     className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
@@ -755,16 +785,23 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   >
                     {kentik.busy ? 'Saving…' : 'Save Kentik login'}
                   </button>
-                  {kentik.stored && (
+                  {kentik.stored && confirmKey !== 'kentik' && (
                     <button
                       className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
-                      onClick={() => putKentik('', '', 'Kentik login removed from the vault.')}
+                      onClick={() => setConfirmKey('kentik')}
                       disabled={kentik.busy}
                     >
-                      Remove
+                      Remove Kentik login
                     </button>
                   )}
                 </div>
+                {kentik.stored && confirmKey === 'kentik' && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
+                    <span className="flex-1 text-note text-crit">Remove the saved Kentik login?</span>
+                    <button disabled={kentik.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Kentik login" onClick={() => { setConfirmKey(null); putKentik('', '', 'Kentik login removed from the vault.') }}>Remove</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Kentik login" onClick={() => setConfirmKey(null)}>Keep</button>
+                  </div>
+                )}
               </div>
 
               {/* The AI tab's provider. Any provider that takes OpenAI-style
@@ -789,6 +826,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   the other half and sends focus back to the Settings button. */}
               <button
                 type="button"
+                disabled={saving}
                 onClick={onOpenHelp}
                 aria-haspopup="dialog"
                 className="block mb-3 text-left text-note font-medium text-link hover:underline underline-offset-2"

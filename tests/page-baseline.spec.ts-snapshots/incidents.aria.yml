@@ -16,14 +16,14 @@
   - heading "Triage" [level=2]
   - textbox "Filter incidents":
     - /placeholder: Filter…
-  - button "Clear acks"
+  - button "Clear seen marks"
   - text: "2"
   - 'button "About: Triage"': "About: ⓘ"
   - 'button "Options: Triage"'
   - table:
     - rowgroup:
-      - row "Ack Category What Severity Message Age":
-        - columnheader "Ack"
+      - row "Seen Category What Severity Message Age":
+        - columnheader "Seen"
         - columnheader "Category":
           - button "Category"
         - columnheader "What":
@@ -34,17 +34,17 @@
         - columnheader "Age":
           - button "Age"
     - rowgroup:
-      - row /Acknowledge signal Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
-        - cell "Acknowledge signal":
-          - checkbox "Acknowledge signal"
+      - row /Mark signal as seen Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
+        - cell "Mark signal as seen":
+          - checkbox "Mark signal as seen"
         - cell "Capacity"
         - cell "ipam/subnet/baseline-3"
         - cell "Critical"
         - cell /baseline-net-c is \d+% used/
         - cell /\d+[hmsp]+/
-      - row /Acknowledge signal DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
-        - cell "Acknowledge signal":
-          - checkbox "Acknowledge signal"
+      - row /Mark signal as seen DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
+        - cell "Mark signal as seen":
+          - checkbox "Mark signal as seen"
         - cell "DNS"
         - cell "dns/auth_zone/baseline-2"
         - cell "Medium"

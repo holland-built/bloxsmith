@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
-import { useApi } from '../lib/api.js'
+import { NO_PERMISSION, useApi } from '../lib/api.js'
 import {
   NOT_ENOUGH_HISTORY,
   OOH_END_HOUR,
@@ -13,6 +13,7 @@ import {
   formatDate,
   groupByResource,
   isDeletion,
+  hasNoResult,
   isFailure,
   isOutOfHours,
   notability,
@@ -88,6 +89,7 @@ export default function Changes() {
   const groups = useMemo(() => groupByResource(rows), [rows])
   const summary = useMemo(() => feedSummary(rows), [rows])
   const state = feedState({ payload: data, error, loading, rowsInWindow: rows })
+  const refused = !error && data?.permission_denied === true
   const win = windowLabel({ truncated, rows, nowMs })
   // When the payload arrived, not when this render ran: the half-minute
   // window tick must not make an old read look fresh.
@@ -118,7 +120,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={96} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason="nothing can be said about the last 24 hours" />
+              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'nothing can be said about the last 24 hours'} />
             ) : (
               <NotabilityBand band={band} listed={summary.listed} />
             )}
@@ -138,7 +140,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={250} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="CSP audit feed unavailable" reason="the portal audit read did not complete" />
+              <FeedUnavailable label="CSP audit feed unavailable" reason={refused ? NO_PERMISSION : 'the portal audit read did not complete'} />
             ) : state === 'empty' ? (
               <Empty>nothing changed in the last 24 hours</Empty>
             ) : (
@@ -347,13 +349,14 @@ function FeedRow({ row }) {
   const { COLORS } = useChartTheme()
   const del = isDeletion(row)
   const failed = isFailure(row)
+  const noResult = hasNoResult(row)
   const ooh = isOutOfHours(row)
   const rail = del || failed ? COLORS.crit : ooh ? COLORS.warn : COLORS.other
   // The rail is a colour and nothing else, so it is invisible to anyone reading
   // by ear or in greyscale. The word behind the colour rides with it. It is not
   // simply the Flags column repeated: a routine row has an EMPTY Flags cell and
   // a grey rail, and "Routine" is the only place that state is ever stated.
-  const railWord = del || failed ? 'Critical' : ooh ? 'Out of hours' : 'Routine'
+  const railWord = del || failed ? 'Critical' : ooh ? 'Out of hours' : noResult ? 'No result' : 'Routine'
   // Both halves of this timestamp read in the browser's zone. The header above
   // says "Local time" and means it for the date as well as the clock.
   const date = formatDate(row.ts)
@@ -384,6 +387,7 @@ function FeedRow({ row }) {
       <span role="cell" aria-colindex={COL.flags} className="flex items-center gap-1">
         {del && <span data-flag="deleted" className="ov-chip crit">Deleted</span>}
         {failed && <span data-flag="failed" className="ov-chip crit">Failed</span>}
+        {noResult && <span data-flag="no-result" className="ov-chip none">No result</span>}
         {ooh && <span data-flag="ooh" className="ov-chip none">Out of hours</span>}
       </span>
     </div>

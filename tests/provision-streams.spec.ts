@@ -140,7 +140,8 @@ test('Full site mode uses /api/provision/site/stream, not the subnet one', async
 // — it pins dry=1 on preview and dry=0 on apply, the same pair the Subnet test
 // above proves for its own endpoint.
 test('site teardown uses /api/teardown/site/stream and surfaces a failure', async ({ page }) => {
-  const teardown = await stubStream(page, '/api/teardown/site/stream', [OK_RUN, FAILED_RUN]);
+  const PREVIEW = sse({ done: true, succeeded: 1, failed: 0, skipped: 0, result: { site: 'baseline-site', dry_run: true } });
+  const teardown = await stubStream(page, '/api/teardown/site/stream', [PREVIEW, FAILED_RUN]);
   await openMode(page, 'Full site');
 
   const card = page.locator('[data-panel-id="provision-site-teardown"]');
@@ -152,21 +153,16 @@ test('site teardown uses /api/teardown/site/stream and surfaces a failure', asyn
   const confirm = card.getByLabel(/Type the site name to confirm/i);
   await expect(confirm).toBeVisible();
 
-  // CONFIRM FIRST, THEN PREVIEW, and that order is a property of the UI rather
-  // than a preference. The confirm field calls `teardown.markStale()` on every
-  // keystroke (ui/src/tabs/Provision.jsx:438), and PreviewApply hides Apply while
-  // `stale` is set — so typing the site name AFTER previewing retracts the
-  // preview and the destructive button vanishes again. Which is correct
-  // behaviour: changing what you are about to delete should invalidate the
-  // preview of deleting it.
-  await confirm.fill('baseline-site');
-
+  // PREVIEW FIRST, THEN CONFIRM: the preview names the site to type, and typing
+  // it changes nothing about what would be deleted, so the preview stays valid.
   await card.getByRole('button', { name: 'Preview', exact: true }).click();
   await expect.poll(() => teardown.length, { message: 'teardown preview never opened its stream' }).toBeGreaterThan(0);
   expect(teardown[0], 'teardown preview must run with dry=1').toContain('dry=1');
 
   const tearDown = card.getByRole('button', { name: 'Tear down this site', exact: true });
   await expect(tearDown, 'apply appears only after a clean preview').toBeVisible();
+  await expect(tearDown, 'apply stays off until the site name is typed').toBeDisabled();
+  await confirm.fill('baseline-site');
   await tearDown.click();
 
   await expect.poll(() => teardown.length, { message: 'teardown apply never opened its stream' }).toBeGreaterThan(1);

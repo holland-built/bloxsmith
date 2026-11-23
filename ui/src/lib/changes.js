@@ -51,13 +51,13 @@ export function isSuccess(row) {
   return String(row?.result ?? '').trim().toLowerCase() === 'success'
 }
 
-/**
- * Not-success. A blank or missing `result` counts here too: the row did not
- * report success, and calling it successful would invent an outcome nobody
- * read. The band caption says "not reported successful" for that reason.
- */
+// The server writes the literal "unknown" when no status code was recorded
+// (normAudit). That and a blank are no outcome at all, so never a failure.
+export const hasNoResult = (row) => ['', 'unknown'].includes(String(row?.result ?? '').trim().toLowerCase())
+
+/** A result that was reported and is not success. No result is not a failure. */
 export function isFailure(row) {
-  return !isSuccess(row)
+  return !isSuccess(row) && !hasNoResult(row)
 }
 
 /** A delete of any spelling (DELETE, delete, DELETE_RANGE). */
@@ -200,7 +200,7 @@ export const MIN_HISTORY_MS = 2 * 60 * 60 * 1000
 export const CAPTIONS = {
   deletions: 'Pulled out because a delete is the only operation with no later state left to inspect.',
   failures:
-    'Anything whose result is not "success" — including a result the feed left blank, which is unread rather than fine.',
+    'Anything that reported a result other than "success". A change with no recorded result is marked No result and not counted here.',
   outOfHours: `Out of hours means at or after ${OOH_START_HOUR}:00, or before 0${OOH_END_HOUR}:00, on your own local clock — your browser's time zone, not the tenant's.`,
   newActors:
     'This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half. There is no history before this window, so nothing older can be checked.',

@@ -1076,7 +1076,7 @@ const CLAIMS = [
     file: PROVISION,
     proofs: [
       { re: /panelId="provision-site-teardown"[\s\S]{0,1400}?destructive\n/, expect: 'this panel declares its Apply destructive, which is what paints it red' },
-      { re: /applyDisabled=\{!isAdmin \|\| !tdConfirm\.trim\(\)\}/, expect: 'Apply is refused without the admin role and without something typed in the confirm box' },
+      { re: /applyDisabled=\{!isAdmin \|\| !tdSite \|\| tdConfirm\.trim\(\) !== tdSite\}/, expect: 'Apply is refused without the admin role and unless the typed name exactly matches the site in the preview' },
     ],
   },
   {

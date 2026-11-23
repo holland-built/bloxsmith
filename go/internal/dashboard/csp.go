@@ -1129,7 +1129,11 @@ func (s *Service) CSPAudit(q, kind, since, until string) map[string]any {
 	}
 	body, st, err := s.Rest.GetEx("/api/auditlog/v1/logs", params)
 	if errored(st, err) {
-		return map[string]any{"rows": []any{}, "count": 0, "truncated": false, "status": "error"}
+		out := map[string]any{"rows": []any{}, "count": 0, "truncated": false, "status": "error"}
+		if st == 401 || st == 403 {
+			out["permission_denied"] = true
+		}
+		return out
 	}
 	rows := normAudit(rest.Unwrap(body))
 	return map[string]any{"rows": rows, "count": len(rows),

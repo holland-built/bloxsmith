@@ -428,6 +428,7 @@ function subjectLink(s) {
 }
 
 function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, severity, onSeverity, acks, onToggleAck, onClearAcks, panelId }) {
+  const [confirmClear, setConfirmClear] = useState(false)
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
   const failedFeeds = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
@@ -451,14 +452,14 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
   const columns = [
     {
       key: 'ack',
-      label: 'Ack',
+      label: 'Seen',
       keep: true,
       render: (_v, s) => (
         <input
           type="checkbox"
           checked={!!acks[ackKey(s)]}
           onChange={() => onToggleAck(s)}
-          aria-label="Acknowledge signal"
+          aria-label="Mark signal as seen"
         />
       ),
     },
@@ -509,9 +510,17 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
               Clear filter
             </button>
           )}
-          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
-            Clear acks
-          </button>
+          {confirmClear ? (
+            <span role="group" aria-label="Clear seen marks?" className="flex items-center gap-2 px-2.5 py-1 rounded-control bg-crit/10 border border-crit/40">
+              <span className="text-note text-crit">Clear all seen marks?</span>
+              <button aria-label="Confirm clear seen marks" onClick={() => { setConfirmClear(false); onClearAcks() }} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note">Clear</button>
+              <button aria-label="Keep seen marks" onClick={() => setConfirmClear(false)} className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt">Keep</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmClear(true)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
+              Clear seen marks
+            </button>
+          )}
           <span className="text-note text-muted">{signalsTotal.toLocaleString()}</span>
         </div>
       }

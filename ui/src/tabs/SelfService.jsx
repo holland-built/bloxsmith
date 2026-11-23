@@ -24,6 +24,7 @@ import { useWriteFlow } from '../lib/writeFlow.js'
 import { setHashParams, useHashParams } from '../lib/hash.js'
 import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 import MadeList from '../components/MadeList.jsx'
+import { ConfirmStep } from '../components/DeleteCheck.jsx'
 import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
 
@@ -717,24 +718,32 @@ function ManageRecordsPanel() {
       })
   }
 
-  // Two-click delete arm — re-reads the row so the confirm label shows the
-  // current identity, then auto-disarms after 4s.
+  // Delete opens a confirm box after re-reading the row, so the box shows the
+  // current identity. The button itself only opens and closes the box.
   const [armedId, setArmedId] = useState(null)
   const [armLabel, setArmLabel] = useState('')
-  const armTimerRef = useRef(null)
   const confirmRef = useRef('')
-  useEffect(() => () => clearTimeout(armTimerRef.current), [])
+  // Each check gets a number. Cancel, a new check or a new list retires the
+  // running one, so its late answer cannot open a confirm box.
+  const checkRef = useRef(0)
+  function closeConfirm() {
+    checkRef.current += 1
+    setArmedId(null)
+  }
 
   function handleDeleteClick(row) {
-    if (armedId !== row.id) {
+    if (armedId === row.id) { closeConfirm(); return }
+    {
       setDeleteError(null)
       setPanelMessage(null)
       // Arm only on a fresh read that still finds the row, so the confirm
       // label never shows details that may have changed.
+      const run = ++checkRef.current
       fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
+          if (run !== checkRef.current) return
           const fresh = j && (j.records || []).find((x) => x.id === row.id)
           if (!fresh) {
             setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : "Couldn't re-check that record, so it wasn't deleted. Try again.")
@@ -744,21 +753,21 @@ function ManageRecordsPanel() {
           const nm = fresh.name_in_zone || '@'
           // The one "are you sure": says whether Bloxsmith made it.
           return checkDelete('dns_record', row.id).then((c) => {
+            if (run !== checkRef.current) return
             if (!c.ok || c.data?.blocked) {
               setDeleteError(c.data?.blocked || c.data?.error || "Couldn't check that record, so it wasn't deleted. Try again.")
               return
             }
             confirmRef.current = c.data.confirm
-            setArmLabel(`${whoMade(c.data)} Click again to delete ${fresh.type} ${nm} -> ${fresh.dns_rdata}`)
+            setArmLabel(`${whoMade(c.data)} This deletes ${fresh.type} ${nm} -> ${fresh.dns_rdata}`)
             setArmedId(row.id)
-            clearTimeout(armTimerRef.current)
-            armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
           })
         })
-      return
     }
-    clearTimeout(armTimerRef.current)
-    setArmedId(null)
+  }
+
+  function confirmDeleteRow(row) {
+    closeConfirm()
     setDeleteError(null)
     confirmDelete('dns_record', row.id, confirmRef.current)
       .then(({ ok: rOk, status, data }) => {
@@ -786,7 +795,7 @@ function ManageRecordsPanel() {
           <legend className="sr-only">Which zones to list</legend>
           {[[false, 'Forward zones'], [true, 'Reverse zones']].map(([rev, text]) => (
             <label key={text} className="flex items-center gap-2">
-              <input type="radio" name="ss-records-zone-kind" checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }} />
+              <input type="radio" name="ss-records-zone-kind" checked={reverse === rev} onChange={() => { setReverse(rev); setZoneId(''); setEditingId(null); closeConfirm(); setDeleteError(null); setPanelMessage(null) }} />
               {text}
             </label>
           ))}
@@ -795,7 +804,7 @@ function ManageRecordsPanel() {
           <FilterSelect
             label="Zone"
             value={zoneId}
-            onChange={(v) => { setZoneId(v); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }}
+            onChange={(v) => { setZoneId(v); setEditingId(null); closeConfirm(); setDeleteError(null); setPanelMessage(null) }}
             options={zoneOptions(zones, reverse)}
             placeholder="Select zone…"
           />
@@ -823,8 +832,8 @@ function ManageRecordsPanel() {
       {zoneId && (
         <>
           <FetchError error={recordsApi.error} stale={records.length > 0} />
-          {deleteError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
-          {!deleteError && panelMessage && <div className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
+          {deleteError && <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
+          {!deleteError && panelMessage && <div role="status" className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
           {note && <div className="text-note text-dim mb-2">{note}</div>}
           {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>{search.term ? 'no records match that search' : 'no records in this zone'}</Empty>}
           {records.length > 0 && (
@@ -835,11 +844,11 @@ function ManageRecordsPanel() {
                 const isArmed = armedId === row.id
                 return (
                   <div key={row.id} className="rounded-control border border-border p-2">
-                    <div className="flex items-center gap-2 text-copy">
+                    <div className="flex flex-wrap items-center gap-2 text-copy">
                       <span className="font-mono text-note w-[110px] shrink-0 truncate" title={row.name_in_zone || '@'}>{row.name_in_zone || '@'}</span>
                       <span className="text-note text-muted w-[50px] shrink-0">{row.type}</span>
                       <span className="text-note text-muted w-[45px] shrink-0">{row.ttl}</span>
-                      <span className="text-note flex-[2] min-w-0 truncate" title={row.dns_rdata}>{row.dns_rdata}</span>
+                      <span className="text-note flex-[2] basis-full sm:basis-0 min-w-0 truncate" title={row.dns_rdata}>{row.dns_rdata}</span>
                       <span className="text-note text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
                       {editable ? (
                         <div className="flex items-center gap-1.5">
@@ -853,9 +862,10 @@ function ManageRecordsPanel() {
                           <button
                             type="button"
                             className="px-2 py-1 rounded-control text-note border border-border"
+                            aria-expanded={isArmed}
                             onClick={() => handleDeleteClick(row)}
                           >
-                            {isArmed ? 'Confirm delete' : 'Delete'}
+                            Delete
                           </button>
                         </div>
                       ) : (
@@ -863,7 +873,11 @@ function ManageRecordsPanel() {
                       )}
                     </div>
                     {isArmed && (
-                      <div className="text-note mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
+                      <div className="flex flex-col mt-2">
+                        <ConfirmStep warn takeFocus yesLabel="Confirm delete" onYes={() => confirmDeleteRow(row)} onCancel={() => closeConfirm()}>
+                          {armLabel}
+                        </ConfirmStep>
+                      </div>
                     )}
                     {isEditing && (
                       <div className="mt-2 flex flex-col gap-2">
@@ -926,17 +940,25 @@ function ManageAddressesPanel() {
   const [armedId, setArmedId] = useState(null)
   const [armLabel, setArmLabel] = useState('')
   const [releaseError, setReleaseError] = useState(null)
-  const armTimerRef = useRef(null)
   const confirmRef = useRef('')
-  useEffect(() => () => clearTimeout(armTimerRef.current), [])
+  // Each check gets a number. Cancel, a new check or a new list retires the
+  // running one, so its late answer cannot open a confirm box.
+  const checkRef = useRef(0)
+  function closeConfirm() {
+    checkRef.current += 1
+    setArmedId(null)
+  }
 
   function handleRelease(row) {
-    if (armedId !== row.id) {
+    if (armedId === row.id) { closeConfirm(); return }
+    {
       setReleaseError(null)
+      const run = ++checkRef.current
       fetch(rereadUrl(row), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null)
         .then((j) => {
+          if (run !== checkRef.current) return
           const fresh = j && (j.addresses || []).find((x) => x.id === row.id)
           if (!fresh) {
             setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : "Couldn't re-check that address, so it wasn't released. Try again.")
@@ -945,21 +967,21 @@ function ManageAddressesPanel() {
           }
           // The one "are you sure": says whether Bloxsmith made it.
           return checkDelete('address', row.id).then((c) => {
+            if (run !== checkRef.current) return
             if (!c.ok || c.data?.blocked) {
               setReleaseError(c.data?.blocked || c.data?.error || "Couldn't check that address, so it wasn't released. Try again.")
               return
             }
             confirmRef.current = c.data.confirm
-            setArmLabel(`${whoMade(c.data)} Click again to release ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
+            setArmLabel(`${whoMade(c.data)} This releases ${fresh.address}${fresh.name ? ` (${fresh.name})` : ''}`)
             setArmedId(row.id)
-            clearTimeout(armTimerRef.current)
-            armTimerRef.current = setTimeout(() => setArmedId(null), 4000)
           })
         })
-      return
     }
-    clearTimeout(armTimerRef.current)
-    setArmedId(null)
+  }
+
+  function confirmRelease(row) {
+    closeConfirm()
     setReleaseError(null)
     confirmDelete('address', row.id, confirmRef.current)
       .then(({ ok: rOk, status, data }) => {
@@ -986,7 +1008,7 @@ function ManageAddressesPanel() {
           <FilterSelect
             label="IP Space"
             value={space}
-            onChange={(v) => { setSpace(v); setSubnetId(''); setArmedId(null); setReleaseError(null) }}
+            onChange={(v) => { setSpace(v); setSubnetId(''); closeConfirm(); setReleaseError(null) }}
             options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
             placeholder="Select space…"
           />
@@ -995,7 +1017,7 @@ function ManageAddressesPanel() {
           <FilterSelect
             label="Subnet"
             value={subnetId}
-            onChange={(v) => { setSubnetId(v); setArmedId(null); setReleaseError(null) }}
+            onChange={(v) => { setSubnetId(v); closeConfirm(); setReleaseError(null) }}
             options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
             placeholder="Select subnet…"
             disabled={!space}
@@ -1034,21 +1056,26 @@ function ManageAddressesPanel() {
                 const isArmed = armedId === row.id
                 return (
                   <div key={row.id} className="rounded-control border border-border p-2">
-                    <div className="flex items-center gap-2 text-copy">
+                    <div className="flex flex-wrap items-center gap-2 text-copy">
                       <span className="font-mono text-note w-[140px] shrink-0 truncate" title={row.address}><ItemLink kind="address" value={row.address} /></span>
                       <span className="text-note text-muted w-[80px] shrink-0 truncate" title={row.state}>{row.state}</span>
-                      <span className="text-note flex-1 min-w-0 truncate" title={row.name}>{row.name}</span>
+                      <span className="text-note flex-1 basis-full sm:basis-0 min-w-0 truncate" title={row.name}>{row.name}</span>
                       <span className="text-note text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
                       <button
                         type="button"
                         className="px-2 py-1 rounded-control text-note border border-border"
+                        aria-expanded={isArmed}
                         onClick={() => handleRelease(row)}
                       >
-                        {isArmed ? 'Confirm release' : 'Release'}
+                        Release
                       </button>
                     </div>
                     {isArmed && (
-                      <div className="text-note mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
+                      <div className="flex flex-col mt-2">
+                        <ConfirmStep warn takeFocus yesLabel="Confirm release" onYes={() => confirmRelease(row)} onCancel={() => closeConfirm()}>
+                          {armLabel}
+                        </ConfirmStep>
+                      </div>
                     )}
                   </div>
                 )
