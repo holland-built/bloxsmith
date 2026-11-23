@@ -153,7 +153,7 @@ export const PANEL_HELP = {
   // ---- Security ----
   'security-threat-events': {
     what: 'DNS lookups from your own network that an outside threat feed flagged in the last hour, counted by the hour of day they happened.',
-    look: 'The four figures on top are red for critical, pink for high, amber for medium, blue for low. They and the bars count the events fetched; a line underneath says when that is only part of the hour.',
+    look: 'The figures on top count each severity. They and the bars count the events fetched; a line underneath says when that is only part of the hour.',
   },
   'security-response-summary': {
     what: 'What happened to the flagged lookups: how many were stopped, how many were only written down, and how many there were.',
@@ -177,11 +177,11 @@ export const PANEL_HELP = {
   },
   'security-ctem-exposure': {
     what: 'Weaknesses found on your internet-facing assets, grouped by how serious they are and how urgent the source rates fixing them.',
-    look: 'Severity is red for critical, pink for high, amber for medium, blue for low. Click a heading to re-sort. If the outside feed cannot be read the panel says so.',
+    look: 'Severity is red for critical, pink for high, amber for medium, grey for low. Click a heading to re-sort. If the outside feed cannot be read the panel says so.',
   },
   'security-threat-feed-activity': {
     what: 'How many requests matched the threat feed each day, split into ones that were stopped and ones that were let through.',
-    look: 'Each day is one column: the blue part was blocked, the grey cap on top was let through. Point at a column to read both figures.',
+    look: 'Each day is one column: the green part was blocked, the grey cap on top was let through. Point at a column to read both figures.',
   },
   'security-soc-insights': {
     what: 'Threat campaigns the security service has raised against your tenant, with how many events each caused and when it was last seen.',
@@ -305,7 +305,7 @@ export const PANEL_HELP = {
   // ---- Provision ----
   'provision-subnet-request': {
     what: 'The details for one new subnet: which space and address block it is carved out of, how big it is, and what to call it.',
-    look: 'Preview runs the whole job without creating anything; the green Provision button appears only after that, and disappears again the moment you edit a field.',
+    look: 'Preview runs the whole job without creating anything; the blue Provision button appears only after that, and disappears again the moment you edit a field.',
   },
   'provision-subnet-log': {
     what: 'Every step the server reports while it works, in the order it happens.',

@@ -163,7 +163,7 @@ function SpacePicker({ value, onChange, want }) {
             <button key={s.id} type="button" onClick={() => { picked.current = true; onChange(s.id, s.name) }}
               aria-pressed={s.id === value}
               className="text-left px-3 py-1.5 rounded-control border"
-              style={s.id === value ? { borderColor: COLORS.accent, boxShadow: `inset 3px 0 0 ${COLORS.accent}` } : undefined}>
+              style={s.id === value ? { borderColor: COLORS.accent, background: 'var(--color-line-2)' } : undefined}>
               <span className="block text-copy text-txt">{s.name || s.id}</span>
               <span className="block text-note text-muted">{s.reason || 'IP space'}</span>
             </button>
@@ -952,9 +952,9 @@ export default function Automate() {
             <h2 className="text-copy font-semibold px-3 pt-3 pb-2">What do you want to do?</h2>
             {JOBS.map((j) => (
               <button key={j.id} type="button" onClick={() => pick(j.id)} aria-pressed={j.id === job}
-                className="text-left px-3 py-2 border-t border-border hover:bg-line-2"
-                style={j.id === job ? { boxShadow: `inset 4px 0 0 ${COLORS.accent}` } : undefined}>
-                <span className="block text-copy font-medium" style={{ color: j.id === job ? COLORS.accent : undefined }}>{j.title}</span>
+                className="text-left px-3 py-2 border border-transparent border-t-border hover:bg-line-2"
+                style={j.id === job ? { borderColor: COLORS.accent, background: 'var(--color-line-2)' } : undefined}>
+                <span className="block text-copy font-medium">{j.title}</span>
                 <span className="block text-note text-muted">{j.says}</span>
               </button>
             ))}

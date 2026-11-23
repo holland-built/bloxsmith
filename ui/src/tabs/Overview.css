@@ -87,7 +87,7 @@
 .ov-strip { display: flex; gap: 3px; min-width: 150px }
 .ov-day { flex: 1; height: 22px; min-width: 7px; border-radius: 3px; display: block }
 .ov-day.ok { background: color-mix(in srgb, var(--ov-ok) 35%, transparent) }
-.ov-day.warn { background: var(--ov-warn) } .ov-day.crit { background: var(--ov-crit) }
+.ov-day.warn { background: linear-gradient(var(--ov-warn) 0 0) bottom / 100% 60% no-repeat } .ov-day.crit { background: var(--ov-crit) }
 .ov-day.none { background: transparent; box-shadow: inset 0 0 0 1px var(--ov-line2) }
 
 .ov-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ov-muted) }
@@ -107,9 +107,11 @@
 
 /* one tip system: hover, focus, or tap */
 .ov-tipwrap { position: relative; cursor: help }
-.ov-tip { position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 280px;
+.ov-tip { position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(calc(-50% + var(--tip-shift, 0px))); width: max-content; max-width: min(280px, calc(100vw - 16px));
   background: var(--ov-tip); color: #f3f3f5; border-radius: 9px; padding: 8px 11px; font-size: 12.5px; line-height: 1.4; font-weight: 400; letter-spacing: 0;
-  box-shadow: 0 12px 32px -8px rgb(0 0 0 / .4); pointer-events: none; text-align: left; white-space: normal; display: none }
+  box-shadow: 0 12px 32px -8px rgb(0 0 0 / .4); text-align: left; white-space: normal; display: none }
+/* Bridges the gap, so the pointer can reach the tip without closing it. */
+.ov-tip::after { content: ''; position: absolute; inset-inline: 0; top: 100%; height: 8px }
 .ov-tip b { display: block; font-size: 18px; font-weight: 600 }
 .ov-tip-sub { display: block; color: #b9bfcc; font-size: 11.5px }
 /* Closed tips take no room, so a tip near the right edge cannot widen the page. */

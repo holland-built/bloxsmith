@@ -320,7 +320,7 @@
   --color-warn: #b45309;
   --color-crit: #c81e1e;
   --color-other: #888888;
-  --color-sev-high: #e5484d;
+  --color-sev-high: #cf2a38;
 
   /* Light ok and crit are used as TEXT as well as fills, on the page background
      (#f4f5f5) and on --color-line-2. The earlier #16a34a / #dc2626 scored 3.04
@@ -533,7 +533,7 @@ html[data-density="compact"] {
   [data-card-grid] { --grid-tracks: 6; }
 }
 
-html { background: var(--color-bg); }
+html { background: var(--color-bg); scroll-padding-top: calc(var(--frame-top) + 48px); }
 /* Below md the job bar is fixed along the bottom (JobNav.jsx, h-14). Anything
    scrolled into view, by Tab or by a link, stops above it, not under it. */
 @media (width < 48rem) { html { scroll-padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); } }
@@ -676,10 +676,10 @@ html[data-theme="light"] { color-scheme: light; }
   }
 }
 
-/* Obsidian: links are the text colour in dark theme, so they carry an
-   underline to stay distinguishable without relying on colour (WCAG 1.4.1). */
-:root:not([data-theme="light"]) a.text-link,
-:root:not([data-theme="light"]) .text-link a { text-decoration: underline; text-underline-offset: 3px; }
+/* Links carry an underline in both themes, so they stay distinguishable
+   without relying on colour (WCAG 1.4.1). */
+a.text-link,
+.text-link a { text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- Ask: the lookup beside the chat ----------
    Threat lookup is an independent search, not the model's evidence, so it sits

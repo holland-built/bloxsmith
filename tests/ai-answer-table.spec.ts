@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/api/query', (r) => r.fulfill(json({ answer, trace, suggestions: [] })));
   await page.goto('/#ai');
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('how many DNS zones do I have');
   await box.press('Enter');
   await expect(page.getByRole('log').getByRole('table')).toBeVisible();
@@ -76,7 +76,7 @@ test('a table wider than the chat column scrolls instead of being cut off on the
     `| 10.0.0.0/8 | ${'subnetname'.repeat(12)} | ${'a long comment '.repeat(10)} |`].join('\n');
   await page.unroute('**/api/query');
   await page.route('**/api/query', (r) => r.fulfill(json({ answer: wide, suggestions: [] })));
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('list subnets');
   await box.press('Enter');
   const tables = page.getByRole('log').getByRole('table');

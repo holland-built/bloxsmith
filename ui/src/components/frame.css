@@ -120,20 +120,28 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   .frame-rail:not([data-open], :has(:focus-visible)) .frame-link-text {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
   }
-  .frame-rail:not([data-open], :has(:focus-visible)) :is(.frame-fold, .frame-sub) { display: none; }
+  .frame-rail:not([data-open], :has(:focus-visible)) .frame-fold { display: none; }
+  /* Hidden from sight only: display:none would take these links out of the Tab order. */
+  .frame-rail:not([data-open], :has(:focus-visible)) .frame-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
 @media (hover: hover) {
   .frame-rail[data-hover] { width: var(--frame-rail-open); margin-inline-end: calc(var(--frame-rail) - var(--frame-rail-open)); box-shadow: var(--frame-pop); }
   .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-link-text {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
   }
-  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) :is(.frame-fold, .frame-sub) { display: none; }
+  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-fold { display: none; }
+  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .frame-rail:is([data-hover], [data-open], :has(:focus-visible)) .frame-rail-toggle { display: none; }
 
   .frame-icon:hover, .frame-menu-btn:hover, .frame-refresh button:not(:disabled):hover, .frame-tools [data-theme-toggle]:hover { background: var(--frame-hover); color: var(--color-txt); }
   .frame-link:not([aria-current='page']):hover { background: var(--frame-hover); color: var(--color-txt); }
   .frame-dock-item:not([aria-current='page']):hover { color: var(--color-txt); }
 }
+
+/* The first Tab stop: off screen until it has focus. */
+.frame-skip { position: fixed; top: 8px; left: 8px; z-index: 60; padding: 6px 12px; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); font-size: 14px; font-weight: 600; }
+.frame-skip:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.frame-skip:focus-visible { outline: 2px solid var(--color-txt); outline-offset: 2px; }
 
 /* ---------- panel cards ---------- */
 [data-panel-menu-toggle], [data-panel-help-toggle] {

@@ -189,7 +189,7 @@ Everything about DNS. Refreshes every 30 seconds.
 Threats and exposures. This tab reads several Infoblox feeds, so its panels can load at different speeds. The Triage Inbox comes first, because that is where you act.
 
 - **Triage Inbox**: events waiting for you.
-- **Threat Events — by Severity** and **Threat Feed Activity**.
+- **Threat Events by hour** and **Threat Feed Activity**.
 - **Lookalike Domains**: domains pretending to be yours. Set your own domain from the header.
 - **Axur Supplier Risk**: problems Axur found at your suppliers, worst first, one row per supplier.
 - **CTEM Exposure**, **Exposures**, **Exposed Surface**, **CTEM Assets**: what of yours can be reached from the internet.
@@ -596,7 +596,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | DNS | DNSSEC Health | the DNS zone list | No | the signing checks are worked out in the app |
 | DNS | RPZ Policy Zones | the response policy zone list | No | it is a list, not a chart |
 | DNS | DTC Load-Balanced Names | the load-balanced name list | No | it is a list, not a chart |
-| Security | Threat Events — by Severity | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
+| Security | Threat Events by hour | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
 | Security | Response Summary | a sample of the last hour's DNS security events | No | it reads a sample of the last hour's events, not a full count |
 | Security | Triage Inbox | a sample of the last hour's DNS security events | No | it is a list to work through, not a chart |
 | Security | Security Inventory | the security policy, feed and service lists | No | it counts several lists in the app |

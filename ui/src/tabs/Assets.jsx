@@ -340,7 +340,16 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 // ---------- the list ----------
 
 function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
-  const d = list.data
+  // A new sort order keeps the current rows up until it lands. Swapping the
+  // table for a skeleton would destroy the heading that holds keyboard focus.
+  // Only for a sort: rows from another search must never show under this one.
+  const scope = `${searched}|${type}|${gap}`
+  const lastShown = useRef(null)
+  if (list.data) lastShown.current = { scope, sort, data: list.data }
+  const held = lastShown.current
+  const resorting = !list.data && list.loading && !list.error && held?.scope === scope
+    && (held.sort.key !== sort.key || held.sort.dir !== sort.dir)
+  const d = resorting ? held.data : list.data
   const unavailable = !!list.error || d?.availability === 'error'
   const rows = d?.rows ?? []
   const total = typeof d?.total === 'number' ? d.total : null
@@ -516,6 +525,17 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
   const d = detail.data
   const unavailable = !!detail.error || d?.availability === 'error'
 
+  // Opening a row moves focus here, and Close gives it back to the row. Only a
+  // keyboard user is scrolled, so a mouse click does not jump the page.
+  const closeRef = useRef(null)
+  const openedFrom = useRef(null)
+  useEffect(() => {
+    openedFrom.current = document.activeElement
+    const close = closeRef.current
+    close?.focus({ preventScroll: true })
+    if (close?.matches(':focus-visible')) close.scrollIntoView({ block: 'nearest' })
+  }, [cqid])
+
   // Each address opens its own page.
   const ipLinks = d?.detail?.ip_addresses
     ? String(d.detail.ip_addresses).split(/[,\s]+/).filter(Boolean).map((ip, i) => (
@@ -542,7 +562,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
       title={row.name || row.cqid}
       note="asset detail"
       right={
-        <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
+        <button ref={closeRef} type="button" onClick={() => { openedFrom.current?.focus?.(); onClose() }} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
           Close
         </button>
       }

@@ -381,13 +381,13 @@ function ChatCard({ panelId }) {
 
   const composer = (
     <div className="mx-auto w-full max-w-[760px]">
-      <div className="flex items-end gap-2 rounded-surface border border-field-border bg-field px-3 py-2 focus-within:border-border-hover">
+      <div className="flex items-end gap-2 rounded-surface border border-field-border bg-field px-3 py-2 has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-accent">
         <textarea
           ref={inRef}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-field-txt text-copy py-1.5 outline-none max-h-40"
+          className="min-w-0 flex-1 resize-none bg-transparent text-field-txt text-copy py-1.5 outline-none max-h-40"
           aria-label="Ask about your network"
-          placeholder="Ask about your network…"
+          placeholder="Ask a question…"
           value={input}
           onChange={(e) => {
             setInput(e.target.value)
@@ -677,7 +677,7 @@ function LookupCard({ panelId }) {
     <Card panelId={panelId} title="Threat lookup" span={2}>
       <div className="flex gap-2 mb-3">
         <input {...MACHINE_TEXT}
-          className={`${inputCls} flex-1 text-copy`}
+          className={`${inputCls} min-w-0 flex-1 text-copy`}
           aria-label="Look up a domain, IP, or host"
           placeholder="domain, IP, or host…"
           value={q}
@@ -693,7 +693,7 @@ function LookupCard({ panelId }) {
           {busy ? 'Looking up…' : 'Lookup'}
         </button>
       </div>
-      {err && <div className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
+      {err && <div role="alert" className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} onRetry={lookup} />}
       {keptEntities && (
@@ -795,8 +795,7 @@ function EgressNotice({ egress, accepted, onAccept }) {
             type="button"
             disabled={!host}
             onClick={onAccept}
-            className="px-3 py-1 rounded-control font-semibold disabled:opacity-40"
-            style={{ background: 'var(--color-warn)', color: 'var(--color-bg)' }}
+            className="px-3 py-1 rounded-control border border-border bg-field text-field-txt font-semibold disabled:opacity-40"
           >
             Understood
           </button>

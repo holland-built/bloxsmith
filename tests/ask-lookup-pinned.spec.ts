@@ -25,7 +25,7 @@ async function fillChat(page) {
   await page.route('**/api/query', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ answer: long, trace: [] }) }),
   );
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   for (let i = 0; i < 4; i++) {
     await box.fill(`Question ${i}`);
     await box.press('Enter');

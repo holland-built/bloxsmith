@@ -32,7 +32,7 @@ function sevRank(s) {
 const SEV_ORDER = ['critical', 'high', 'medium', 'low']
 
 function sevColorMap(COLORS) {
-  return { critical: COLORS.crit, high: COLORS.sevHigh, medium: COLORS.warn, low: COLORS.accent }
+  return { critical: COLORS.crit, high: COLORS.sevHigh, medium: COLORS.warn, low: 'var(--color-muted)' }
 }
 
 function ackKey(e) {
@@ -131,7 +131,6 @@ export default function Security() {
 
 function SeverityHero({ panelId, hub, events }) {
   const { COLORS } = useChartTheme()
-  const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
   // hub.error covers the transport path (any non-2xx, or the 12s abort in
   // lib/api.js) — availability:"error" alone only covers the upstream-
@@ -153,7 +152,7 @@ function SeverityHero({ panelId, hub, events }) {
   const otherSev = countedOf(hub.data) - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
 
   return (
-    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
+    <Card panelId={panelId} span={4} title="Threat Events by hour" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -164,9 +163,8 @@ function SeverityHero({ panelId, hub, events }) {
         <>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3">
             {SEV_ORDER.map((s) => (
-              <div key={s} className="flex items-center gap-1.5 text-note">
-                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: SEV_COLOR[s] }} />
-                <span className="text-muted capitalize">{s}</span>
+              <div key={s} className="flex items-center gap-1.5 text-note text-muted">
+                <span className="capitalize">{s}</span>
                 <b>{counts[s] || 0}</b>
               </div>
             ))}
@@ -174,9 +172,8 @@ function SeverityHero({ panelId, hub, events }) {
                 but were in no legend entry, so the legend added up to 6 over
                 bars holding 50. */}
             {otherSev > 0 && (
-              <div className="flex items-center gap-1.5 text-note">
-                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.other }} />
-                <span className="text-muted">Other</span>
+              <div className="flex items-center gap-1.5 text-note text-muted">
+                <span>Other</span>
                 <b>{otherSev}</b>
               </div>
             )}
@@ -189,7 +186,7 @@ function SeverityHero({ panelId, hub, events }) {
                right-hand count uses. Recharts' default said `value : 0`. */
             <Suspense fallback={<Skeleton h={180} />}>
               <CategoryBars
-                label="Threat Events — by Severity"
+                label="Threat Events by hour"
                 data={hourly}
                 unit="events"
                 height={180}
@@ -414,7 +411,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
             {r.severity || '—'}
           </span>
         )
@@ -666,7 +663,7 @@ function CtemPanel({ panelId, ctem }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
             {r.severity || '—'}
           </span>
         )
@@ -739,14 +736,14 @@ function ThreatFeed({ panelId, threats }) {
       ) : rows.length === 0 ? <Empty /> : (
         <>
           <div className="flex gap-5 mb-2">
-            <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="text-note text-muted">Blocked</div></div>
-            <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="text-note text-muted">Allowed</div></div>
+            <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />Blocked</div></div>
+            <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.other }} />Allowed</div></div>
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
               label="Threat Feed Activity"
               data={chartData}
-              blockedColor={COLORS.accent}
+              blockedColor={COLORS.series}
               allowedColor={COLORS.other}
               tickFormat={fmtShortDay}
               height={150}

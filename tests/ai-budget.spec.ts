@@ -29,7 +29,7 @@ function fulfillJson(route: import('@playwright/test').Route, body: unknown) {
 // and fail loudly if a second control ever takes that exact name again.
 async function askSomething(page: import('@playwright/test').Page) {
   await page.goto('/#ai');
-  await page.getByPlaceholder('Ask about your network…').fill('Which hosts are offline?');
+  await page.getByPlaceholder('Ask a question…').fill('Which hosts are offline?');
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
 }
 

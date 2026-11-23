@@ -50,7 +50,7 @@ test.describe('Security tab — hub/security availability branching', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, HUB_SECURITY_DEAD));
     await page.goto('/#security');
 
-    const heroCard = page.locator('text=Threat Events — by Severity').locator('..').locator('..');
+    const heroCard = page.locator('text=Threat Events by hour').locator('..').locator('..');
     await expect(heroCard.getByText(/threat feed unavailable/i)).toBeVisible();
     await expect(heroCard.getByText('threat-event feed unavailable')).toBeVisible();
 
@@ -69,7 +69,7 @@ test.describe('Security tab — hub/security availability branching', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, HUB_SECURITY_EMPTY_OK));
     await page.goto('/#security');
 
-    const heroCard = page.locator('text=Threat Events — by Severity').locator('..').locator('..');
+    const heroCard = page.locator('text=Threat Events by hour').locator('..').locator('..');
     await expect(heroCard.getByText(/threat feed unavailable/i)).toHaveCount(0);
 
     const summaryCard = page.locator('text=Response Summary').locator('..').locator('..');

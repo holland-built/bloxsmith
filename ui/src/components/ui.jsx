@@ -43,7 +43,7 @@ export const COLORS = {
   // measured 3.79:1 on dark crit, 1.74:1 on dark ok and 3.30:1 on light ok, all
   // below WCAG AA's 4.5:1, and all three were shipping as `color: '#fff'`.
   // index.css carries the full table and the reasoning.
-  onAccent: 'var(--color-on-accent)', onCrit: 'var(--color-on-crit)', onOk: 'var(--color-on-ok)',
+  onAccent: 'var(--color-on-accent)', onCrit: 'var(--color-on-crit)',
 }
 
 // THE ONE FOCUS RING, AND WHY IT IS A RING RATHER THAN AN OUTLINE.
@@ -2965,17 +2965,17 @@ export function PreviewApply({
         onClick={onApply}
         disabled={applyDisabled}
         className={PA_BTN}
-        style={{ background: destructive ? COLORS.crit : COLORS.ok, color: destructive ? COLORS.onCrit : COLORS.onOk }}
+        style={{ background: destructive ? COLORS.crit : COLORS.accent, color: destructive ? COLORS.onCrit : COLORS.onAccent }}
       >
         {applyLabel}
       </button>
       {applyDisabled && applyNote && (
-        <span className="text-note" style={{ color: COLORS.warn }}>{applyNote}</span>
+        <span className="text-note text-muted">{applyNote}</span>
       )}
     </>
   )
   const whyNote = why && (
-    <span id={needsId} className="text-note" style={{ color: COLORS.warn }}>{why}</span>
+    <span id={needsId} className="text-note text-muted">{why}</span>
   )
   const staleNote = status === 'previewed' && stale && (
     <span className="text-note" style={{ color: COLORS.warn }}>

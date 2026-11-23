@@ -81,7 +81,7 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
         {saveMsg && <span className="text-note" style={{ color: saveMsg.bad ? COLORS.crit : COLORS.ok }} role="status">{saveMsg.text}</span>}
       </div>
       {problems.length > 0 && !saveMsg && (
-        <ul className="text-note list-disc pl-5" style={{ color: COLORS.warn }}>
+        <ul className="text-note text-muted list-disc pl-5">
           {problems.map((p) => <li key={p}>{p}</li>)}
         </ul>
       )}

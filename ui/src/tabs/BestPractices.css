@@ -25,7 +25,7 @@
 .bp-ring.sm { width: 18px; height: 18px; font-size: 10.5px }
 .bp-ring.ok { color: var(--ov-ok); background: color-mix(in srgb, var(--ov-ok) 12%, transparent) }
 .bp-ring.unknown { color: var(--bp-unknown); border: 1.5px dashed var(--bp-unknown) }
-.bp-ring.crit { color: #fff; background: var(--ov-crit) } .bp-ring.warn { color: #17171a; background: var(--ov-warn) }
+.bp-ring.crit { color: var(--color-on-crit); background: var(--ov-crit) } .bp-ring.warn { color: #17171a; background: var(--ov-warn) }
 .bp-ring.none { color: var(--ov-muted); border: 1.5px solid var(--ov-line2) }
 
 /* the list: one row per check, the number in front */

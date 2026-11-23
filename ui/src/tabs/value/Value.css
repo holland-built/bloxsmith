@@ -41,16 +41,16 @@
 .vl-spark { display: flex; align-items: flex-end; gap: 2px; height: 96px }
 .vl-spark.is-live { cursor: pointer; border-radius: 4px; touch-action: pan-y; -webkit-tap-highlight-color: transparent }
 .vl-spark.is-live:focus-visible { outline: 2px solid var(--color-link); outline-offset: 3px }
-.vl-bar { flex: 1 1 0; min-width: 0; height: var(--h); border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--color-accent) 42%, transparent); transition: background-color 120ms ease-out }
-.vl-bar.is-peak, .vl-bar.is-active { background: var(--color-accent) }
-.vl-bar.is-latest { background: transparent; border: 1px dashed var(--color-accent); border-bottom: 0 }
-.vl-bar.is-latest.is-active { background: color-mix(in srgb, var(--color-accent) 40%, transparent) }
+.vl-bar { flex: 1 1 0; min-width: 0; height: var(--h); border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--color-series) 42%, transparent); transition: background-color 120ms ease-out }
+.vl-bar.is-peak, .vl-bar.is-active { background: var(--color-series) }
+.vl-bar.is-latest { background: transparent; border: 1px dashed var(--color-series); border-bottom: 0 }
+.vl-bar.is-latest.is-active { background: color-mix(in srgb, var(--color-series) 40%, transparent) }
 .vl-bar.is-missing { height: 100%; background: transparent; border: 1px dashed var(--color-border) }
 .vl-bar.is-missing.is-active { border-color: var(--color-txt) }
 .vl-axis { display: flex; justify-content: space-between; gap: 8px; color: var(--color-tick); font-size: 12px }
 .vl-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--color-muted); font-size: 12px }
 .vl-legend span { display: inline-flex; align-items: center; gap: 6px }
-.vl-key { flex: none; width: 12px; height: 12px; border-radius: 2px; border: 1.5px dashed var(--color-accent) }
+.vl-key { flex: none; width: 12px; height: 12px; border-radius: 2px; border: 1.5px dashed var(--color-series) }
 .vl-key.is-missing { border: 1px dashed var(--color-border) }
 .vl-chart-note { padding: 14px; border: 1px dashed var(--color-border); border-radius: 8px; color: var(--color-muted); font-size: 14px; text-align: center }
 

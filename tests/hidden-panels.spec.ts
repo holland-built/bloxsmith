@@ -90,7 +90,7 @@ test.describe('a service the tenant does not own', () => {
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('3 panels hidden');
     await expect(row).toContainText('no threat-defense service detected');
-    await expect(page.getByText('Threat Events — by Severity')).toHaveCount(0);
+    await expect(page.getByText('Threat Events by hour')).toHaveCount(0);
     await expect(page.getByText('Response Summary')).toHaveCount(0);
     await expect(page.getByText('Triage Inbox')).toHaveCount(0);
 
@@ -112,7 +112,7 @@ test.describe('a service the tenant does not own', () => {
     await expect(page.getByRole('heading', { name: 'CTEM Exposure' })).toBeVisible();
 
     await showAnyway(page).click();
-    await expect(page.getByText('Threat Events — by Severity')).toBeVisible();
+    await expect(page.getByText('Threat Events by hour')).toBeVisible();
     await expect(page.getByText('Response Summary')).toBeVisible();
     await expect(page.getByText('Triage Inbox')).toBeVisible();
   });
@@ -150,7 +150,7 @@ test.describe('fail open — every non-authoritative answer hides nothing', () =
     await expect(hiddenRow(page)).toHaveCount(0);
 
     await page.goto('/#security');
-    await expect(page.getByText('Threat Events — by Severity')).toBeVisible();
+    await expect(page.getByText('Threat Events by hour')).toBeVisible();
     await expect(hiddenRow(page)).toHaveCount(0);
 
     await page.goto('/#network');

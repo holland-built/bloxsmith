@@ -69,7 +69,7 @@
                 - /url: "#dns"
             - cell "None open"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-          - 'row /DHCP DHCP services: 1 of 2 up Open: DHCP services: 1 of 2 up Ask the AI: Which DHCP services are not running\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
+          - 'row /DHCP DHCP services: 1 of 2 up Open: DHCP services: 1 of 2 up Ask the AI: Which DHCP services are not running\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
             - rowheader "DHCP":
               - link "DHCP":
                 - /url: "#network?focus=leases"
@@ -83,14 +83,14 @@
                   - 'link "Ask the AI: Which DHCP services are not running?"':
                     - /url: "#ai?q=Which%20DHCP%20services%20are%20not%20running%3F"
                     - text: Ask AI
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-          - row /IPAM None open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
+            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
+          - row /IPAM None open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/:
             - rowheader "IPAM":
               - link "IPAM":
                 - /url: "#network?minUtil=90&links=1"
             - cell "None open"
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-          - 'row /Hosts 1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
+            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
+          - 'row /Hosts 1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/':
             - rowheader "Hosts":
               - link "Hosts":
                 - /url: "#infra?status=offline"
@@ -104,8 +104,8 @@
                   - 'link "Ask the AI: Which hosts are not online?"':
                     - /url: "#ai?q=Which%20hosts%20are%20not%20online%3F"
                     - text: Ask AI
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-          - 'row /Security 3 critical or high security events Open: 3 critical or high security events Ask the AI: Which domains are on threat feeds\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
+            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/
+          - 'row /Security 3 critical or high security events Open: 3 critical or high security events Ask the AI: Which domains are on threat feeds\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/':
             - rowheader "Security":
               - link "Security":
                 - /url: "#security"
@@ -119,8 +119,8 @@
                   - 'link "Ask the AI: Which domains are on threat feeds?"':
                     - /url: "#ai?q=Which%20domains%20are%20on%20threat%20feeds%3F"
                     - text: Ask AI
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
-          - 'row /Other 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/':
+            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/
+          - 'row /Other 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
             - rowheader "Other":
               - link "Other":
                 - /url: "#incidents"
@@ -131,7 +131,7 @@
                   - 'link "Open: 2 subnets close to full"':
                     - /url: "#incidents"
                     - text: ""
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
+            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
   - heading "Charts" [level=2]
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:

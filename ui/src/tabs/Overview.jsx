@@ -340,6 +340,9 @@ function Tiles({ board, dns, health }) {
 // only when an issue open now was already open then; every other past day is
 // an outline ("no record"), never a green day. Today also takes the service's
 // own state, and is green only when the row is Healthy.
+// A day's severity in words, so a tile never relies on its colour alone.
+const DAY_WORD = { warn: 'Warning, ', crit: 'Critical, ' }
+
 function Strip({ issues, state, v, days = 10 }) {
   const now = Date.now() / 1000
   // Local midnights by calendar date, so a daylight-saving change never
@@ -359,8 +362,8 @@ function Strip({ issues, state, v, days = 10 }) {
     <div className="ov-strip">
       {cells.map((c) => (
         <Tip key={c.start} className={`ov-day ${c.sev ?? 'none'}`}
-          tip={c.sev == null ? `${seenDay(c.start)}: no record` : `${seenDay(c.start)}: ${c.n ? `${c.n} open` : 'nothing open'}${c.today && state?.meta ? ` · ${state.meta}` : ''}`}>
-          <span className="sr-only">{seenDay(c.start)}</span>
+          tip={c.sev == null ? `${seenDay(c.start)}: no record` : `${DAY_WORD[c.sev] ?? ''}${seenDay(c.start)}: ${c.n ? `${c.n} open` : 'nothing open'}${c.today && state?.meta ? ` · ${state.meta}` : ''}`}>
+          <span className="sr-only">{DAY_WORD[c.sev] ?? ''}{seenDay(c.start)}</span>
         </Tip>
       ))}
     </div>

@@ -23,7 +23,7 @@ function sevMeta(s, COLORS) {
   if (v === 'high') return { key: 'high', label: 'High', color: COLORS.sevHigh }
   if (v === 'warn' || v === 'medium') return { key: 'medium', label: 'Medium', color: COLORS.warn }
   // info: a minor item such as unsigned public zones (signals.go).
-  if (v === 'low' || v === 'info' || v === 'ok') return { key: 'low', label: 'Low', color: COLORS.accent }
+  if (v === 'low' || v === 'info' || v === 'ok') return { key: 'low', label: 'Low', color: 'var(--color-muted)' }
   return { key: 'unknown', label: v || 'Unknown', color: COLORS.other }
 }
 
@@ -51,11 +51,14 @@ function ageLabel(epoch) {
   return `${Math.floor(secs / 86400)}d`
 }
 
+const SEV_PILL = { critical: 'crit', high: 'crit', medium: 'warn' }
+
 function SeverityPill({ severity }) {
   const { COLORS } = useChartTheme()
   const m = sevMeta(severity, COLORS)
+  const pill = SEV_PILL[m.key] ?? 'neutral'
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `${m.color}22`, color: m.color }}>
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: `var(--pill-${pill}-bg)`, color: `var(--pill-${pill}-fg)` }}>
       {m.label}
     </span>
   )
@@ -459,7 +462,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
           type="checkbox"
           checked={!!acks[ackKey(s)]}
           onChange={() => onToggleAck(s)}
-          aria-label="Mark signal as seen"
+          aria-label={`Mark ${s.entity_id || ackKey(s)} as seen`}
         />
       ),
     },
@@ -802,12 +805,12 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
               minTickGap={20}
             />
           </Suspense>
-          <div className="flex items-center justify-between mt-2 text-note">
-            <span style={{ color: COLORS.sevHigh }}>High {byPriority.high}</span>
-            <span style={{ color: COLORS.warn }}>Medium {byPriority.medium}</span>
-            <span style={{ color: COLORS.accent }}>Low {byPriority.low}</span>
+          <div className="flex items-center justify-between mt-2 text-note text-muted">
+            <span>High {byPriority.high}</span>
+            <span>Medium {byPriority.medium}</span>
+            <span>Low {byPriority.low}</span>
             {Object.entries(byPriority).filter(([k, n]) => !['low', 'medium', 'high'].includes(k) && n > 0).map(([k, n]) => (
-              <span key={k} className="text-muted capitalize">{k} {n}</span>
+              <span key={k} className="capitalize">{k} {n}</span>
             ))}
           </div>
         </>

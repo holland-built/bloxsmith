@@ -34,17 +34,17 @@
         - columnheader "Age":
           - button "Age"
     - rowgroup:
-      - row /Mark signal as seen Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
-        - cell "Mark signal as seen":
-          - checkbox "Mark signal as seen"
+      - row /Mark ipam\/subnet\/baseline-3 as seen Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
+        - cell "Mark ipam/subnet/baseline-3 as seen":
+          - checkbox "Mark ipam/subnet/baseline-3 as seen"
         - cell "Capacity"
         - cell "ipam/subnet/baseline-3"
         - cell "Critical"
         - cell /baseline-net-c is \d+% used/
         - cell /\d+[hmsp]+/
-      - row /Mark signal as seen DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
-        - cell "Mark signal as seen":
-          - checkbox "Mark signal as seen"
+      - row /Mark dns\/auth_zone\/baseline-2 as seen DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
+        - cell "Mark dns/auth_zone/baseline-2 as seen":
+          - checkbox "Mark dns/auth_zone/baseline-2 as seen"
         - cell "DNS"
         - cell "dns/auth_zone/baseline-2"
         - cell "Medium"

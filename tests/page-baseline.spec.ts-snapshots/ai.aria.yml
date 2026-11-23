@@ -8,7 +8,7 @@
   - paragraph: What do you want to know about your network?
   - paragraph: Ask in plain words. Each answer shows the lookups behind it.
   - textbox "Ask about your network":
-    - /placeholder: Ask about your network…
+    - /placeholder: Ask a question…
   - button "Ask" [disabled]
   - paragraph: Enter to send, Shift+Enter for a new line.
   - button "Which subnets are nearly full?"

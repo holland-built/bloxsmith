@@ -557,6 +557,8 @@ export default function App() {
             below it see exactly the box tree they saw before. */}
         <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
           <div className="frame-root">
+            {/* A button, not a link: the address hash is the router. */}
+            <button type="button" className="frame-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
             <JobRail tab={tab} groups={GROUPS} tabs={TABS} logo={logo} />
             <div className="frame-col">
               <header className="frame-top">

@@ -61,8 +61,8 @@ test('Security: a complete hour counts the hour and says what the list shows', a
   // Acknowledgements are per listed row, so this figure names its scope.
   await expect(summary).toContainText('newest 50');
   await expect(card(page, 'Triage Inbox')).toContainText('Showing the newest 50 of 354 events.');
-  await expect(card(page, 'Threat Events — by Severity')).toContainText('354 events');
-  await expect(card(page, 'Threat Events — by Severity')).toContainText('Showing the newest 50 of 354 events.');
+  await expect(card(page, 'Threat Events by hour')).toContainText('354 events');
+  await expect(card(page, 'Threat Events by hour')).toContainText('Showing the newest 50 of 354 events.');
 });
 
 test('Security: a capped read keeps its caveat with the real number', async ({ page }) => {

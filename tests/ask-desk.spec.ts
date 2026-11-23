@@ -33,7 +33,7 @@ test('an answer keeps its tool facts and has no AI-generated label; an error sho
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
   await page.goto('/#ai');
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('Which hosts are offline?');
   await box.press('Enter');
   const log = page.getByRole('log');
