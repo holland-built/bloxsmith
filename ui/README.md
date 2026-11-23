@@ -24,4 +24,4 @@ the repo-root `SHIP.md`:
 cd ui && npm run build && cp -R dist/* ../go/web/
 ```
 
-`ci.yml` rebuilds and diffs `ui/dist` against `go/web`, and fails if they differ.
+`ci.yml` rebuilds and fails if any file in `ui/dist` is missing from `go/web` or differs. Old hashed files may stay in `go/web`.
