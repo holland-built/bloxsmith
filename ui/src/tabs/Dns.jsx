@@ -769,7 +769,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
           {canCompare && (
             <button type="button" aria-expanded={comparing} onClick={() => setComparing((v) => !v)}
               title="The same zone name in two views: see which records differ"
-              className="text-copy text-accent underline whitespace-nowrap px-1 py-1.5">
+              className="text-copy text-link underline whitespace-nowrap px-1 py-1.5">
               Compare views
             </button>
           )}

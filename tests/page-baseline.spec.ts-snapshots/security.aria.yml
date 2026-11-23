@@ -52,12 +52,12 @@
   - 'button "About: Response Summary"': "About: ⓘ"
   - 'button "Options: Response Summary"'
   - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
-  - heading "Threat Events — by Severity" [level=2]
+  - heading "Threat Events by hour" [level=2]
   - text: 2 events
-  - 'button "About: Threat Events — by Severity"': "About: ⓘ"
-  - 'button "Options: Threat Events — by Severity"'
+  - 'button "About: Threat Events by hour"': "About: ⓘ"
+  - 'button "Options: Threat Events by hour"'
   - text: critical 1 high 2 medium 3 low 4
-  - application "Threat Events — by Severity chart": /\d+:\d+( \d+:\d+)+/
+  - application "Threat Events by hour chart": /\d+:\d+( \d+:\d+)+/
   - heading "Threat Feed Activity" [level=2]
   - 'button "About: Threat Feed Activity"': "About: ⓘ"
   - 'button "Options: Threat Feed Activity"'

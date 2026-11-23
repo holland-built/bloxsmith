@@ -37,7 +37,7 @@ test('a failed AI question offers Try again, which asks the same question', asyn
     return route.fulfill(json(asked.length === 1 ? { error: 'provider refused' } : { answer: 'Two subnets are over 80%.' }));
   });
   await page.goto('/#ai');
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('Which subnets are nearly full?');
   await box.press('Enter');
   const log = page.getByRole('log');
@@ -55,7 +55,7 @@ test('while a question runs, the chat says it is working and counts the seconds'
     return route.fulfill(json({ answer: 'Done.' }));
   });
   await page.goto('/#ai');
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('Which hosts are offline?');
   await box.press('Enter');
   await expect(page.getByText(/Looking this up in your Infoblox account… \d+ s/)).toBeVisible();

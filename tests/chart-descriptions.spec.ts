@@ -45,7 +45,7 @@ const PAGES: [string, string[]][] = [
   ['overview', ['DNS Query Rate — 24h chart']],
   ['dns', ['DNS Query Rate — 24h chart', 'Query Volume — 7d chart']],
   ['network', ['Utilization Distribution chart']],
-  ['security', ['Threat Events — by Severity chart', 'Threat Feed Activity chart']],
+  ['security', ['Threat Events by hour chart', 'Threat Feed Activity chart']],
   ['infra', ['Host Status chart']],
   ['incidents', ['Action Volume chart']],
 ];

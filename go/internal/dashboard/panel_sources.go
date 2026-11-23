@@ -104,7 +104,7 @@ var panelSources = []PanelSource{
 	restPanel("dns-dtc-lbdn", "DNS", "DTC Load-Balanced Names", "the load-balanced name list", whyList),
 
 	// ---- Security ----
-	restPanel("security-threat-events", "Security", "Threat Events — by Severity", srcEvents, whySample),
+	restPanel("security-threat-events", "Security", "Threat Events by hour", srcEvents, whySample),
 	restPanel("security-response-summary", "Security", "Response Summary", srcEvents, whySample),
 	restPanel("security-triage-inbox", "Security", "Triage Inbox", srcEvents, "it is a list to work through, not a chart"),
 	restPanel("security-inventory", "Security", "Security Inventory", "the security policy, feed and service lists", "it counts several lists in the app"),

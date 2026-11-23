@@ -108,7 +108,7 @@ test.describe('Security → Threat Events by Severity panel (hub.error transport
   test('a non-2xx transport failure shows unavailable wording and no zeroed count', async ({ page }) => {
     await page.route('**/api/hub/security*', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
     await page.goto('/#security');
-    const card = page.locator('text=Threat Events — by Severity').locator('..').locator('..');
+    const card = page.locator('text=Threat Events by hour').locator('..').locator('..');
     await expect(card.getByText(/threat feed unavailable/i)).toBeVisible();
     await expect(card.getByText('0 events', { exact: true })).toHaveCount(0);
   });
@@ -116,7 +116,7 @@ test.describe('Security → Threat Events by Severity panel (hub.error transport
   test('a genuinely empty read still renders the real "0 events" count', async ({ page }) => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#security');
-    const card = page.locator('text=Threat Events — by Severity').locator('..').locator('..');
+    const card = page.locator('text=Threat Events by hour').locator('..').locator('..');
     await expect(card.getByText('0 events', { exact: true })).toBeVisible();
     await expect(card.getByText(/threat feed unavailable/i)).toHaveCount(0);
   });

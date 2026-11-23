@@ -229,7 +229,7 @@
   {
     "id": "security-threat-events",
     "page": "Security",
-    "name": "Threat Events — by Severity",
+    "name": "Threat Events by hour",
     "kind": "rest",
     "source": "a sample of the last hour's DNS security events",
     "builder": "no",

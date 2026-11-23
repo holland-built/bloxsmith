@@ -329,14 +329,14 @@ const APPLY_BUTTON_PROOFS = [
     expect: 'the Apply button exists only after a preview, and only while that preview has not gone stale',
   },
   {
-    // The FILL is what the help copy claims ("the green Provision button", "the
+    // The FILL is what the help copy claims ("the blue Provision button", "the
     // red button"), so the fill is what this proves. The foreground moved off a
     // hard-coded '#fff' and onto COLORS.onCrit / COLORS.onOk, because white
     // measured 3.79:1 on dark crit and 1.74:1 on dark ok — both below AA. That
     // changed the line without touching the claim, so the pointer is re-aimed
     // at the background alone rather than the whole style object.
-    re: /background: destructive \? COLORS\.crit : COLORS\.ok/,
-    expect: 'Apply is COLORS.crit (red) on a panel that declares itself destructive, COLORS.ok (green) otherwise',
+    re: /background: destructive \? COLORS\.crit : COLORS\.accent/,
+    expect: 'Apply is COLORS.crit (red) on a panel that declares itself destructive, COLORS.accent (blue) otherwise',
   },
 ]
 
@@ -352,7 +352,7 @@ const SEV_COLOUR_PROOFS = [
   { re: /critical: COLORS\.crit/, expect: 'critical painted COLORS.crit (red)' },
   { re: /high: COLORS\.sevHigh/, expect: 'high painted COLORS.sevHigh (pink)' },
   { re: /medium: COLORS\.warn/, expect: 'medium painted COLORS.warn (amber)' },
-  { re: /low: COLORS\.accent/, expect: 'low painted COLORS.accent (blue)' },
+  { re: /low: 'var\(--color-muted\)'/, expect: 'low painted --color-muted (grey)' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -754,19 +754,19 @@ const CLAIMS = [
   },
   {
     panel: 'security-threat-events',
-    says: /red for critical, pink for high, amber for medium, blue for low/,
+    says: /The figures on top count each severity/,
     file: SECURITY,
-    proofs: SEV_COLOUR_PROOFS,
+    proofs: [{ re: /SEV_ORDER\.map\(\(s\) => \(\n\s+<div key=\{s\}/, expect: 'one figure per severity' }],
   },
   {
     panel: 'security-ctem-exposure',
-    says: /Severity is red for critical, pink for high, amber for medium, blue for low/,
+    says: /Severity is red for critical, pink for high, amber for medium, grey for low/,
     file: SECURITY,
     proofs: SEV_COLOUR_PROOFS,
   },
   {
     panel: 'security-threat-feed-activity',
-    says: /the blue part was blocked, the grey cap on top was let through/,
+    says: /the green part was blocked, the grey cap on top was let through/,
     file: SECURITY,
     proofs: [
       // RE-POINTED 2026-08-10, and the copy is unchanged because the colours
@@ -777,13 +777,13 @@ const CLAIMS = [
       // where the proof belongs. Which series sits on TOP — the other half of
       // "the blue cap on top" — is proven in the entry immediately below, in
       // the module that now owns the stacking.
-      { re: /blockedColor=\{COLORS\.accent\}/, expect: 'the blocked series is COLORS.accent (blue)' },
+      { re: /blockedColor=\{COLORS\.series\}/, expect: 'the blocked series is COLORS.series (green)' },
       { re: /allowedColor=\{COLORS\.other\}/, expect: 'the allowed series is COLORS.other (grey)' },
     ],
   },
   {
     panel: 'security-threat-feed-activity',
-    says: /the blue part was blocked, the grey cap on top was let through/,
+    says: /the green part was blocked, the grey cap on top was let through/,
     file: CHART_STACKED,
     proofs: [
       { re: /dataKey="blocked" stackId="day" fill=\{blockedColor\}/, expect: 'blocked is the lower half of the stack' },
@@ -895,7 +895,7 @@ const CLAIMS = [
       { re: /return \{ key: 'critical', label: 'Critical', color: COLORS\.crit \}/, expect: 'critical maps to COLORS.crit (red)' },
       { re: /return \{ key: 'high', label: 'High', color: COLORS\.sevHigh \}/, expect: 'high maps to COLORS.sevHigh (pink)' },
       { re: /return \{ key: 'medium', label: 'Medium', color: COLORS\.warn \}/, expect: 'medium maps to COLORS.warn (amber)' },
-      { re: /return \{ key: 'low', label: 'Low', color: COLORS\.accent \}/, expect: 'low maps to COLORS.accent (blue)' },
+      { re: /return \{ key: 'low', label: 'Low', color: 'var\(--color-muted\)' \}/, expect: 'low maps to --color-muted (grey)' },
       { re: /return \{ key: 'unknown', label: v \|\| 'Unknown', color: COLORS\.other \}/, expect: 'anything else maps to COLORS.other (grey)' },
     ],
   },
@@ -904,9 +904,9 @@ const CLAIMS = [
     says: /The three figures underneath split those items by how urgent they are/,
     file: INCIDENTS,
     proofs: [
-      { re: /color: COLORS\.sevHigh \}\}>High \{byPriority\.high\}/, expect: 'the High figure is COLORS.sevHigh (pink)' },
-      { re: /color: COLORS\.warn \}\}>Medium \{byPriority\.medium\}/, expect: 'the Medium figure is COLORS.warn (amber)' },
-      { re: /color: COLORS\.accent \}\}>Low \{byPriority\.low\}/, expect: 'the Low figure is COLORS.accent (blue)' },
+      { re: /<span>High \{byPriority\.high\}/, expect: 'the High figure is shown' },
+      { re: /<span>Medium \{byPriority\.medium\}/, expect: 'the Medium figure is shown' },
+      { re: /<span>Low \{byPriority\.low\}/, expect: 'the Low figure is shown' },
     ],
   },
   {
@@ -1057,13 +1057,13 @@ const CLAIMS = [
   },
   {
     panel: 'provision-subnet-request',
-    says: /the green Provision button appears only after that, and disappears again the moment you edit a field/,
+    says: /the blue Provision button appears only after that, and disappears again the moment you edit a field/,
     file: UI,
     proofs: APPLY_BUTTON_PROOFS,
   },
   {
     panel: 'provision-subnet-request',
-    says: /the green Provision button appears only after that, and disappears again the moment you edit a field/,
+    says: /the blue Provision button appears only after that, and disappears again the moment you edit a field/,
     file: PROVISION,
     proofs: [
       { re: /applyLabel="Provision"/, expect: 'the button on this panel is the one labelled Provision' },

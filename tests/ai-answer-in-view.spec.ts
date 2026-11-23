@@ -16,7 +16,7 @@ const answer = [
 ].join('\n');
 
 async function ask(page, q: string) {
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill(q);
   await box.press('Enter');
 }
@@ -53,7 +53,7 @@ test('the chat fills the window below the title, with the composer still on scre
   await ask(page, 'how many zones do I have');
   await expect(page.getByRole('log').locator('strong').first()).toBeVisible();
   const log = (await page.getByRole('log').boundingBox())!;
-  const composer = (await page.getByPlaceholder('Ask about your network…').boundingBox())!;
+  const composer = (await page.getByPlaceholder('Ask a question…').boundingBox())!;
   const card = (await page.locator('[data-panel-id="ai-ask"]').boundingBox())!;
   // The card ends near the bottom of the window, not 60% of the way down it.
   expect(card.y + card.height).toBeLessThanOrEqual(900);

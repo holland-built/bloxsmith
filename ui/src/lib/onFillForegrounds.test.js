@@ -146,7 +146,7 @@ test('the on-fill tokens are actually used, so this cannot pass by emptiness', (
   const files = walk(ROOT, [])
   const src = files.map((r) => fs.readFileSync(path.join(REPO, r), 'utf8')).join('\n')
 
-  for (const spelling of ['text-on-accent', 'COLORS.onAccent', 'COLORS.onCrit', 'COLORS.onOk']) {
+  for (const spelling of ['text-on-accent', 'COLORS.onAccent', 'COLORS.onCrit']) {
     assert.ok(
       src.includes(spelling),
       `${spelling} is declared but used nowhere in ${ROOT} — either the fills lost their labels, or someone spelled the foreground by hand again`

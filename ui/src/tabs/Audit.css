@@ -26,7 +26,8 @@
 .au-clip .ov-tipwrap { white-space: nowrap }
 /* The tips in this strip sit below their words: the strip is the top of the
    page and a tip above would run under the page bar. */
-.au-strip .ov-tip { bottom: auto; top: calc(100% + 8px); left: 0; transform: none }
+.au-strip .ov-tip { bottom: auto; top: calc(100% + 8px); left: 0; transform: translateX(var(--tip-shift, 0px)) }
+.au-strip .ov-tip::after { top: auto; bottom: 100% }
 
 /* A phone: the verdict takes the whole first row, the two counts share the next. */
 @media (max-width: 640px) {

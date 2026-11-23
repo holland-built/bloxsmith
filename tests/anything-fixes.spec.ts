@@ -78,10 +78,10 @@ test('an incident ack is still ticked after a reload', async ({ page }) => {
     signals: [s], signals_total: 1, signals_truncated: false, signals_degraded: false, snoozes: {},
   } }));
   await page.goto('/#incidents');
-  const box = page.getByRole('checkbox', { name: 'Mark signal as seen' }).first();
+  const box = page.getByRole('checkbox', { name: /^Mark .* as seen$/ }).first();
   await box.check();
   await page.reload();
-  await expect(page.getByRole('checkbox', { name: 'Mark signal as seen' }).first()).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /^Mark .* as seen$/ }).first()).toBeChecked();
 });
 
 test('a follow-up question carries the earlier answer, and the chat survives a page change', async ({ page }) => {

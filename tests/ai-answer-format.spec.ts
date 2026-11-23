@@ -18,7 +18,7 @@ test('an AI answer shows its bold line and its table, not markdown characters', 
   ].join('\n');
   await page.route('**/api/query', (route) => route.fulfill(json({ answer, suggestions: [] })));
   await page.goto('/#ai');
-  const box = page.getByPlaceholder('Ask about your network…');
+  const box = page.getByPlaceholder('Ask a question…');
   await box.fill('show me example networks');
   await box.press('Enter');
   const log = page.getByRole('log');

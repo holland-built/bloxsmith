@@ -303,11 +303,12 @@ function EventPill({ event }) {
   const color = eventColor(event || '', COLORS)
   // Routine kinds are a plain grey chip; only a refusal or a failure is tinted.
   const routine = color === COLORS.other
+  const pill = color === COLORS.crit || color === COLORS.sevHigh ? 'crit' : color === COLORS.warn ? 'warn' : color === COLORS.ok ? 'ok' : 'neutral'
   return (
     <span
       title={event || undefined}
-      className={`inline-block rounded-full px-2.5 py-0.5 text-note font-medium${routine ? ' text-muted' : ''}`}
-      style={routine ? { background: `${color}26` } : { background: `${color}22`, color }}
+      className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium"
+      style={{ background: `var(--pill-${routine ? 'neutral' : pill}-bg)`, color: `var(--pill-${routine ? 'neutral' : pill}-fg)` }}
     >
       {event ? eventWord(event) : '—'}
     </span>
