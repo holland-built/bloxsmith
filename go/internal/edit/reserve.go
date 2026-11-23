@@ -139,6 +139,8 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		res["address"], res["mac"] = address, mac
 		return M{CreatedUnreadableKey: true, "addresses": []any{M{"address": address}},
 			"fixed_address": res, "error": res["error"]}, statusOr(fstatus, 502)
+	case fstatus != 200 && fstatus != 201 && rest.UnclearFailure(fstatus):
+		return M{"ok": false, "error": rest.OutcomeUnknown, "detail": resp}, unclearStatus(fstatus)
 	case fstatus != 200 && fstatus != 201:
 		return M{"ok": false, "error": fmt.Sprintf("the reservation was refused (%s); nothing was created. "+
 			"If the address was just taken, preview again", statusPhrase(fstatus)), "detail": resp}, statusOr(fstatus, 502)

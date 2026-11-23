@@ -92,7 +92,7 @@ func TestRetagBlock_PartialRetagWritesErrorAuditEntry(t *testing.T) {
 			detail["count"], detail)
 	}
 	msg, ok := detail["error"].(string)
-	if !ok || !strings.Contains(msg, "to retag block") {
+	if !ok || !strings.Contains(msg, "No clear answer to retag block") {
 		t.Fatalf("audit error = %v, want the mid-loop PATCH failure — if the run failed before any "+
 			"PATCH, this test proves nothing about the case that matters", detail["error"])
 	}

@@ -515,6 +515,10 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 					"the clean %s may have been created, but Infoblox's answer was lost (status %d). "+
 					"Check for it in the Editor before running again", made, sdef.Name, clean, st)
 			}
+			if st != 200 && st != 201 && rest.UnclearFailure(st) {
+				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed. %s",
+					made, sdef.Name, failedWrite("create the clean subnet", clean.String(), st).Msg)
+			}
 			if st != 200 && st != 201 {
 				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
 					"creating the clean %s instead failed: status %d %v", made, sdef.Name, clean, st, resp)

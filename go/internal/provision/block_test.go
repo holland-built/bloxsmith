@@ -793,7 +793,7 @@ func TestRetagBlockUpstreamRefusalIsAnError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("RetagBlock() error = nil (result %v), want the upstream refusal reported", out)
 	}
-	if !strings.Contains(err.Error(), "to retag block 10.0.0.0/16") || !strings.Contains(err.Error(), "500") {
+	if !strings.Contains(err.Error(), "No clear answer to retag block 10.0.0.0/16") || !strings.Contains(err.Error(), "500") {
 		t.Fatalf("RetagBlock() error = %q, want it to name the block and the upstream status", err.Error())
 	}
 	if out != nil {

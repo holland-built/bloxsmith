@@ -1093,10 +1093,17 @@ func recordMaybe(resp any, status int, also string) (M, int) {
 	if writeUnreadable(resp, status) {
 		return createdUnreadable("DNS record", status, also), statusOr(status, 502)
 	}
+	return createdMaybe("DNS record", status, also), unclearStatus(status)
+}
+
+// unclearStatus is the status to answer with after a write with no clear
+// answer. A 2xx becomes 502, so no client reads it as success and a 204 cannot
+// drop the message.
+func unclearStatus(status int) int {
 	if status >= 500 {
-		return createdMaybe("DNS record", status, also), status
+		return status
 	}
-	return createdMaybe("DNS record", status, also), 502
+	return 502
 }
 
 // cleanupLeft ends a sentence about a just-made object whose cleanup delete did

@@ -86,3 +86,43 @@ func TestSiteSharedPick_CleanupWithNoAnswerIsNotCalledFailed(t *testing.T) {
 		}
 	}
 }
+
+func TestSiteCleanCreate_NoClearAnswerIsNotCalledFailed(t *testing.T) {
+	for _, tc := range []struct {
+		st     int
+		failed bool
+	}{{500, false}, {501, false}, {202, false}, {403, true}} {
+		e, f := newSiteRollbackHarness(t)
+		f.inventorySubnets = sharedSubnet
+		f.createStatus = tc.st
+		cfg := siteRollbackConfig(false)
+		cfg.CreateReverseZone = false
+		_, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+		if err == nil {
+			t.Fatalf("status %d: want an error", tc.st)
+		}
+		if got := strings.Contains(err.Error(), "instead failed"); got != tc.failed {
+			t.Fatalf("status %d: error = %q, want failed=%v", tc.st, err, tc.failed)
+		}
+		if !tc.failed && !strings.Contains(err.Error(), "No clear answer to create the clean subnet 10.10.0.0/24") {
+			t.Fatalf("status %d: error = %q, want the shared message", tc.st, err)
+		}
+	}
+}
+
+// The tests that used to read "Failed to ..." on a 500 now read the unknown
+// wording, so this keeps the refused wording pinned for every action.
+func TestFailedWrite_OnlyAClearRefusalSaysFailed(t *testing.T) {
+	for _, action := range []string{"create host", "delete block", "retag block"} {
+		for _, st := range []int{400, 401, 403, 404, 409} {
+			if got := failedWrite(action, "x", st).Error(); !strings.HasPrefix(got, "Failed to "+action+" x: status") {
+				t.Fatalf("%s %d = %q", action, st, got)
+			}
+		}
+		for _, st := range []int{0, 500, 502, 503, 504, 200, 202, 204} {
+			if got := failedWrite(action, "x", st).Error(); !strings.HasPrefix(got, "No clear answer to "+action+" x") {
+				t.Fatalf("%s %d = %q", action, st, got)
+			}
+		}
+	}
+}

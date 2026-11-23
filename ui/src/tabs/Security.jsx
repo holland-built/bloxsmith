@@ -333,7 +333,7 @@ function BlockCell({ domain, readOnly, urgent }) {
         <span className="text-note" style={{ color: COLORS.warn }} title={msg}>
           unconfirmed — {msg}
         </span>
-        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted">Re-check</button>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted">{`Send the ${lastActionRef.current} again`}</button>
       </div>
     )
   }

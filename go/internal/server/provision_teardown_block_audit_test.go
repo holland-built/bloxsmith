@@ -93,7 +93,7 @@ func TestTeardownBlock_PartialDeleteWritesErrorAuditEntry(t *testing.T) {
 	// Pins that this really is the PARTIAL-delete path and not some earlier
 	// failure that destroyed nothing: only deleteBlocks produces this message,
 	// and it only gets there after the first block is gone.
-	if !strings.Contains(msg, "to delete block") {
+	if !strings.Contains(msg, "No clear answer to delete block") {
 		t.Fatalf("audit error = %q, want the mid-delete failure — if the run failed before any "+
 			"DELETE, this test proves nothing about the case that matters", msg)
 	}

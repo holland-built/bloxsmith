@@ -153,7 +153,7 @@ func TestRBSiteProvisionFailureReportsIncompleteWithNamedResiduals(t *testing.T)
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the host-create failure (out %v)", out)
 	}
-	if !strings.Contains(err.Error(), "to create host") {
+	if !strings.Contains(err.Error(), "No clear answer to create host") {
 		t.Fatalf("Provision() error = %q, want the host-create failure — the fixture broke somewhere else "+
 			"and this test is not exercising a rollback over a fully-built site", err.Error())
 	}

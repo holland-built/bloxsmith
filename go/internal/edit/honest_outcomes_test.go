@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"bloxsmith/internal/rest"
 )
 
 // A DNS record write with no clear answer may have landed, so the addresses it
@@ -28,6 +30,12 @@ func TestAllocateDNS_NoClearAnswerKeepsTheAddress(t *testing.T) {
 		}
 		if status < 500 {
 			t.Fatalf("status %d: returned %d, which a browser reads as success", st, status)
+		}
+		if rec := asMap(res["record"]); rec["status"] != st {
+			t.Fatalf("status %d: record = %v, want the real upstream status", st, rec)
+		}
+		if addrs, _ := res["addresses"].([]any); len(addrs) != 2 {
+			t.Fatalf("status %d: addresses = %v, want both still named", st, res["addresses"])
 		}
 	}
 }
@@ -174,5 +182,48 @@ func TestDelete_AnOddSuccessStatusIsUnknownNotFailed(t *testing.T) {
 	res, _ := f.client().Delete("/api/ddi/v1/dns/record/r-1")
 	if resultOK(res) || !strings.Contains(pyStr(res["error"]), "may or may not") {
 		t.Fatalf("202 on a delete = %v, want an unknown result", res)
+	}
+}
+
+func TestReserveCreate_NoClearAnswerIsNotCalledRefused(t *testing.T) {
+	for _, st := range []int{500, 501, 202, 204} {
+		f := newResvFake(t, resvConfig{fixedStatus: st})
+		res, status := f.client().SelfserviceAllocate(reserveBody(false, M{"mac": "aa:bb:cc:dd:ee:01"}))
+		if msg := pyStr(res["error"]); msg != rest.OutcomeUnknown {
+			t.Fatalf("status %d: error = %q, want the unknown wording", st, msg)
+		}
+		if status < 500 {
+			t.Fatalf("status %d: returned %d, which a browser reads as success", st, status)
+		}
+	}
+	f := newResvFake(t, resvConfig{fixedStatus: 403})
+	res, status := f.client().SelfserviceAllocate(reserveBody(false, M{"mac": "aa:bb:cc:dd:ee:01"}))
+	if status != 403 || !strings.Contains(pyStr(res["error"]), "refused") {
+		t.Fatalf("403 = %d %v, want the refusal kept", status, res)
+	}
+}
+
+func TestSubnetReplace_CleanCreateWithAnOddSuccessIsNotCalledFailed(t *testing.T) {
+	for _, tc := range []struct {
+		st   int
+		want string
+	}{{202, "may have been created"}, {204, "may have been created"}, {403, "instead failed"}} {
+		var writes []string
+		inner := inventoryServer(t, &writes)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ipam/subnet") {
+				w.WriteHeader(tc.st)
+				return
+			}
+			inner.Config.Handler.ServeHTTP(w, r)
+		}))
+		t.Cleanup(srv.Close)
+		res, status := newTestClient(srv).SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+		if msg := pyStr(res["error"]); !strings.Contains(msg, tc.want) {
+			t.Fatalf("status %d: error = %q, want %q", tc.st, msg, tc.want)
+		}
+		if tc.st < 300 && status < 500 {
+			t.Fatalf("status %d: returned %d, which a browser reads as success", tc.st, status)
+		}
 	}
 }

@@ -379,7 +379,7 @@ func TestSiteRollbackNeverDeletesAReusedForwardZone(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the host-create failure (result %v)", result)
 	}
-	if !strings.Contains(err.Error(), "to create host") {
+	if !strings.Contains(err.Error(), "No clear answer to create host") {
 		t.Fatalf("Provision() error = %q, want the host-create failure — the fixture failed somewhere "+
 			"else and this test is not exercising what it claims", err.Error())
 	}
@@ -751,7 +751,7 @@ func TestSiteRollbackDeletesHostsCreatedBeforeAMidListFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Provision() error = nil, want the third host's create failure")
 	}
-	if !strings.Contains(err.Error(), "to create host gw03") {
+	if !strings.Contains(err.Error(), "No clear answer to create host gw03") {
 		t.Fatalf("Provision() error = %q, want gw03's create failure — the run broke somewhere else and "+
 			"this test is not exercising a mid-list host failure", err.Error())
 	}
