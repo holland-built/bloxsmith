@@ -90,7 +90,7 @@ function healthProblem(b) {
   if (st !== 'crit' && st !== 'warn') return null
   const up = upCount(b.state.meta)
   const title = up ? `${b.name} services: ${up.up} of ${up.total} up` : `${b.name} services: ${b.state.statusLabel || 'not healthy'}`
-  return { key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: '#infra', ask: `Which ${b.name} services are not running?`, seen: null, health: true, partial: b.state.availability === 'partial' }
+  return { key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: `#infra?service=${encodeURIComponent(b.name)}&status=down`, ask: `Which ${b.name} services are not running?`, seen: null, health: true, partial: b.state.availability === 'partial' }
 }
 
 /** Everything open on one service: its failing health check, then its incidents. */

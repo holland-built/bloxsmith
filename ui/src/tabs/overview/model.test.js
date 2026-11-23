@@ -85,6 +85,15 @@ test('a failing health check is an open problem on its own service', () => {
   assert.deepEqual(openProblems({ name: 'DNS', state: { status: 'ok' }, issues: [] }), [])
 })
 
+test('a failing service links to its own down list', () => {
+  const b = (name) => ({ name, state: { status: 'crit', meta: '1 error · 10/18 up' }, issues: [] })
+  assert.deepEqual(['DHCP', 'DNS', 'Security'].map((n) => openProblems(b(n))[0].href), [
+    '#infra?service=DHCP&status=down',
+    '#infra?service=DNS&status=down',
+    '#infra?service=Security&status=down',
+  ])
+})
+
 test('a failed feed is an error, never a zero', () => {
   assert.equal(dnsTrend({ data: { status: 'error', rows: [] } }).state, 'error')
   assert.equal(licenseSummary({ data: { status: 'error', licenses: [] } }, NOW * 1000).state, 'error')

@@ -1,13 +1,14 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
 import { dnsHosts, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED, splitPerHost } from '../lib/dnsHealth.js'
 import { sliceState } from '../lib/data.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, useGridLayout, TabIntro } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { statusBucket } from '../lib/statusBucket.js'
@@ -88,6 +89,9 @@ export default function Infra() {
   const dataLoading = data.loading && !data.data
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
+  // Overview's "View services" lands here. status=down belongs to this list,
+  // and is not a host status for the inventory to filter on.
+  const downService = hp.service && hp.status === 'down' ? hp.service : null
 
   return (
     <div className="w-full px-6 py-5">
@@ -108,12 +112,13 @@ export default function Infra() {
       </div>
       <TabIntro>Host and service health: hosts, jobs and DNS forwarding proxies.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={[...headlines(hosts, totalHosts, hostsStatus), discoveryTile(discovery)]} />
+      {downService && <ServicesDown key={downService} service={downService} feed={svcHealth} />}
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="infra">
-        <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+        <HostTable panelId="infra-host-inventory" hosts={hosts} status={downService ? undefined : hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} hostMetrics={hostMetrics} dnsHealth={dnsHealth} />
         <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
         {/* Host Health listed the same machines as Host Inventory, with a
@@ -161,6 +166,71 @@ export default function Infra() {
         {savedCharts}
       </CardGrid>
     </div>
+  )
+}
+
+// ---------- services that are down (Overview's landing) ----------
+
+const SERVICE_DOWN_COLUMNS = [
+  { key: 'host', label: 'Host', render: (v) => v || 'No host listed' },
+  { key: 'ip', label: 'IP', mono: true },
+  { key: 'name', label: 'Service', grow: true },
+  { key: 'state', label: 'State', badge: true, render: (v) => renderStatus(v || 'unknown') },
+]
+
+// What the list can honestly say. Only a complete read may say none are down.
+function servicesDownLine(service, feed) {
+  if (feed.loading && !feed.data) return { state: 'loading', line: `Checking ${service} services…` }
+  const bucket = Array.isArray(feed.data) ? feed.data.find((b) => b.name === service) : null
+  if (feed.error || !Array.isArray(feed.data) || bucket?.availability === 'error') {
+    return { state: 'failed', line: `${service} services could not be loaded, so it is not known which are down.` }
+  }
+  if (!bucket) return { state: 'failed', line: `There is no service group called ${service}.` }
+  const rows = bucket.not_running
+  const cut = bucket.availability !== 'ok'
+  if (!Array.isArray(rows)) {
+    return { state: 'failed', line: `The ${service} service list could not be ${cut ? 'fully checked' : 'read'}, so it is not known which are down.` }
+  }
+  const more = cut ? ' The service list was cut off, so there may be more.' : ''
+  if (!rows.length) {
+    return { state: 'empty', rows, line: cut ? `${service} services could not be fully checked. None of those read are down, but the list was cut off.` : `No ${service} services are down.` }
+  }
+  return { state: 'ok', rows, line: `Showing ${rows.length.toLocaleString()} ${service} ${rows.length === 1 ? 'service that is' : 'services that are'} down.${more}` }
+}
+
+function ServicesDown({ service, feed }) {
+  const ref = useRef(null)
+  const headingId = useId()
+  const view = servicesDownLine(service, feed)
+  const rows = view.rows ?? []
+  const settled = view.state !== 'loading'
+
+  // Once per landing, when the answer is in. The 30-second refresh must not
+  // pull the page back here while someone is reading further down.
+  const landed = useRef(false)
+  useEffect(() => {
+    if (!settled || landed.current) return
+    landed.current = true
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ref.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    ref.current?.focus({ preventScroll: true })
+  }, [settled])
+
+  return (
+    <section ref={ref} tabIndex={-1} aria-labelledby={headingId} data-services-down={service} className={`bg-card border border-card-border rounded-surface p-3 mb-4 scroll-mt-[72px] outline-none ${FOCUS_RING}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id={headingId} className="text-copy font-semibold text-txt min-w-0"><span role="status">{view.line}</span></h2>
+        <button type="button" onClick={() => { location.hash = 'infra' }} className={`text-copy font-medium text-link px-2 py-1 rounded-control cursor-pointer outline-none ${FOCUS_RING}`}>
+          Show all
+        </button>
+      </div>
+      {view.state === 'loading' && <div className="mt-2"><Skeleton h={120} /></div>}
+      {view.state === 'ok' && (
+        <div className="mt-2.5">
+          <DataTable rows={rows} columns={SERVICE_DOWN_COLUMNS} maxHeight={420} rowCap={500} stickyHeader rowKey={(r, i) => `${r.name}|${i}`} />
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -424,6 +494,40 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
 
   const feedDead = hostsStatus === 'error' && hosts.length === 0
   const total = totalHosts ?? hosts.length
+
+  // A filtered address lands on this table, once per filter, when its answer
+  // is in. The refresh must not pull the page back here.
+  // A saved layout can hide this panel, and it arrives after the first render,
+  // so the landing is redone if the answer changes. Once a filter has opened
+  // the hosts, they stay for this visit, so Show all really shows all of them.
+  // Nothing here writes to the saved layout.
+  const grid = useGridLayout()
+  const panelHidden = !!grid?.hidden?.includes(panelId)
+  const [keepShown, setKeepShown] = useState(false)
+  useEffect(() => {
+    if (!panelHidden) setKeepShown(false)
+    else if (statusFilter) setKeepShown(true)
+  }, [panelHidden, statusFilter])
+  const offPage = panelHidden && (!!statusFilter || keepShown)
+  const landingRef = useRef(null)
+  const landedOn = useRef(null)
+  useEffect(() => {
+    if (!statusFilter) { landedOn.current = null; return }
+    const spot = `${statusFilter}|${offPage}`
+    if (loading || landedOn.current === spot) return
+    landedOn.current = spot
+    if (!offPage) { jumpToPanel(panelId); return }
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    landingRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    landingRef.current?.focus({ preventScroll: true })
+  }, [statusFilter, offPage, loading, panelId])
+  const statusWord = statusFilter === 'offline' ? 'not online' : String(statusFilter).replace('-', ' ')
+  const partialHosts = totalHosts != null && totalHosts !== hosts.length
+  const filterLine = feedDead
+    ? `Hosts could not be loaded, so it is not known which are ${statusWord}.`
+    : filtered.length === 0
+      ? `No ${partialHosts ? 'loaded ' : ''}hosts are ${statusWord}.`
+      : `Showing ${filtered.length.toLocaleString()} ${filtered.length === 1 ? 'host' : 'hosts'} ${statusWord}${partialHosts ? ` of ${hosts.length.toLocaleString()} loaded` : ''}.`
   // A dead read knows no counts. "0 hosts" is a claim about the estate; "—" is
   // the truth, which is that nothing came back to count.
   const countLabel = feedDead
@@ -434,43 +538,8 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
           : `${hosts.length.toLocaleString()} hosts`)
       : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()} loaded (${total.toLocaleString()} total)`
 
-  return (
-    <Card
-      span={4}
-      panelId={panelId}
-      // Same shape as Dns.jsx's zone table: the heading turns into a React node
-      // while a status filter is on, so the popup's row for this panel flipped
-      // between "Host Inventory" and the raw "infra-host-inventory" depending
-      // on how the tab had been drilled into.
-      panelName="Host Inventory"
-      title={
-        statusFilter ? (
-          <span className="inline-flex items-center gap-2">
-            Host Inventory
-            {/* A <span onClick> with no role, no tabIndex and no key handler:
-                the only way to clear the status filter was a mouse. A real
-                <button> is the whole fix — it brings the role, the tab stop and
-                Enter/Space with it, and the ✕ stops being the accessible name. */}
-            <button
-              type="button"
-              onClick={() => { location.hash = 'infra' }}
-              // NOT aria-label. The panel chrome's About/Hide/Move buttons are
-              // aria-labelledby the panel TITLE, and this button is inside it,
-              // so an aria-label here is hoisted into all three of their
-              // accessible names: measured, "Hide Host Inventory" became "Hide
-              // Host Inventory Clear the offline status filter". The visible
-              // text is the name instead, and `title` carries the verb.
-              title="Clear this filter"
-              className={`text-note font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
-              style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
-            >
-              status: {statusFilter.replace('-', ' ')} <span aria-hidden="true">✕</span>
-            </button>
-          </span>
-        ) : 'Host Inventory'
-      }
-      right={
-        <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+  const controls = (
+    <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
           <span className="text-note text-muted">{countLabel}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search name or IP"
@@ -491,8 +560,17 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
             ))}
           </select>
         </div>
-      }
-    >
+  )
+  const body = (
+    <>
+      {statusFilter && !loading && (
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-1" data-host-filter-line="">
+          <span role="status" className="text-copy text-txt min-w-0">{filterLine}</span>
+          <button type="button" onClick={() => { location.hash = 'infra' }} className={`text-copy font-medium text-link px-2 py-1 rounded-control cursor-pointer outline-none ${FOCUS_RING}`}>
+            Show all
+          </button>
+        </div>
+      )}
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -515,7 +593,61 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
         </div>
       )}
       {configHost && <HostConfigViewer host={configHost} onClose={() => setConfigHost(null)} />}
-    </Card>
+    </>
+  )
+
+  // The hidden Card stays mounted beside this: it renders nothing, and it is
+  // what keeps the panel's name on the grid's bring-it-back strip.
+  return (
+    <>
+      {offPage && (
+        <section ref={landingRef} tabIndex={-1} aria-label="Host Inventory, filtered" data-hosts-landing="" className={`col-span-full bg-card border border-card-border rounded-surface p-[var(--sp-card-pad)] scroll-mt-[72px] outline-none ${FOCUS_RING}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-copy font-semibold text-txt">Host Inventory</h2>
+            {controls}
+          </div>
+          {body}
+        </section>
+      )}
+      <Card
+        span={4}
+        panelId={panelId}
+        // Same shape as Dns.jsx's zone table: the heading turns into a React node
+        // while a status filter is on, so the popup's row for this panel flipped
+        // between "Host Inventory" and the raw "infra-host-inventory" depending
+        // on how the tab had been drilled into.
+        panelName="Host Inventory"
+        title={
+          statusFilter ? (
+            <span className="inline-flex items-center gap-2">
+              Host Inventory
+              {/* A <span onClick> with no role, no tabIndex and no key handler:
+                  the only way to clear the status filter was a mouse. A real
+                  <button> is the whole fix — it brings the role, the tab stop and
+                  Enter/Space with it, and the ✕ stops being the accessible name. */}
+              <button
+                type="button"
+                onClick={() => { location.hash = 'infra' }}
+                // NOT aria-label. The panel chrome's About/Hide/Move buttons are
+                // aria-labelledby the panel TITLE, and this button is inside it,
+                // so an aria-label here is hoisted into all three of their
+                // accessible names: measured, "Hide Host Inventory" became "Hide
+                // Host Inventory Clear the offline status filter". The visible
+                // text is the name instead, and `title` carries the verb.
+                title="Clear this filter"
+                className={`text-note font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
+                style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
+              >
+                status: {statusFilter.replace('-', ' ')} <span aria-hidden="true">✕</span>
+              </button>
+            </span>
+          ) : 'Host Inventory'
+        }
+        right={controls}
+      >
+        {body}
+      </Card>
+    </>
   )
 }
 
