@@ -1023,6 +1023,12 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			if rest.NoClearAnswer(rstatus) {
 				out["error"] = "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox"
 			}
+			if len(orphaned) > 0 {
+				out["error"] = fmt.Sprintf("dns record creation failed, but %d address(es) are still reserved. Remove them in the Editor", len(orphaned))
+				if rest.NoClearAnswer(rstatus) {
+					out["error"] = fmt.Sprintf("the DNS record may or may not exist, but %d address(es) are still reserved. Remove them in the Editor, and check for the record in Infoblox", len(orphaned))
+				}
+			}
 			return out, 502
 		}
 	}
@@ -1155,7 +1161,7 @@ func addressSummaries(addresses []any) []any {
 // writeFailed words a create, update or allocation that did not succeed. Only
 // a clear refusal may say it failed.
 func writeFailed(what string, status int) string {
-	if rest.NoClearAnswer(status) {
+	if rest.NoClearAnswer(status) || (status >= 200 && status < 300) {
 		return rest.OutcomeUnknown
 	}
 	return fmt.Sprintf("%s failed (%s)", what, statusPhrase(status))

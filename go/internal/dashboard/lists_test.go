@@ -35,6 +35,8 @@ type fakeTenant struct {
 	lookups     int
 	threatBody  string // when set, the threat lookup answers this as it is
 	threatClass string // class of every threat (default Scam)
+
+	patchCode int // answer to a list PATCH (0 => 200)
 }
 
 func newFakeTenant() *fakeTenant {
@@ -130,6 +132,10 @@ func (f *fakeTenant) serve(t *testing.T) *Service {
 			l := f.lists[id]
 			if l == nil {
 				w.WriteHeader(404)
+				return
+			}
+			if r.Method == "PATCH" && f.patchCode != 0 {
+				w.WriteHeader(f.patchCode)
 				return
 			}
 			if r.Method == "PATCH" {

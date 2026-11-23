@@ -161,7 +161,7 @@ func (d *Deps) listsNeverAddSet(w http.ResponseWriter, r *http.Request, b map[st
 	}
 	st := d.siteState()
 	if st == nil {
-		d.json(w, r, 500, map[string]any{"ok": false, "error": "there is nowhere to keep the list"})
+		d.json(w, r, 500, map[string]any{"ok": false, "outcome": "not-sent", "error": "there is nowhere to keep the list, so nothing was changed"})
 		return
 	}
 	raw, ok := b["sites"].([]any)

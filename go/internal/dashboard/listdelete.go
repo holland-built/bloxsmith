@@ -125,8 +125,12 @@ func (s *Service) RemoveRule(policyID int, list, action, fp string) (map[string]
 		return map[string]any{"ok": false, "detail": resp, "error": rest.OutcomeUnknown}, 502
 	}
 	if st < 200 || st > 299 {
-		return map[string]any{"ok": false, "detail": resp,
-			"error": fmt.Sprintf("Infoblox did not take the change (%s). Check the policy in Infoblox before trying again", httpWord(st))}, 502
+		res := map[string]any{"ok": false, "detail": resp,
+			"error": fmt.Sprintf("Infoblox did not take the change (%s). Check the policy in Infoblox before trying again", httpWord(st))}
+		if st >= 400 {
+			res["outcome"] = "refused"
+		}
+		return res, 502
 	}
 	got, _, err := s.readPolicy(policyID)
 	if err != nil {

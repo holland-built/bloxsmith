@@ -202,7 +202,7 @@ func (s *Service) verifyOutcome(blockListID, domain string, wantPresent bool, de
 }
 
 // writeSessionFailure is the answer when the MCP session for a block or unblock
-// cannot be opened, or nil when it can. No write was sent, so it is "rejected"
+// cannot be opened, or nil when it can. No write was sent, so it is "not-sent"
 // (safe to retry), and the error says why when Infoblox said.
 func (s *Service) writeSessionFailure(ctx context.Context) map[string]any {
 	if s.Mcp == nil {
@@ -210,7 +210,7 @@ func (s *Service) writeSessionFailure(ctx context.Context) map[string]any {
 	}
 	if err := s.Mcp.Initialize(ctx); err != nil {
 		if r := mcp.Reason(err); r != "" {
-			return map[string]any{"ok": false, "outcome": "rejected", "error": r}
+			return map[string]any{"ok": false, "outcome": "not-sent", "error": r + " Nothing was sent."}
 		}
 		return map[string]any{"ok": false, "outcome": "invalid", "error": "internal error"}
 	}

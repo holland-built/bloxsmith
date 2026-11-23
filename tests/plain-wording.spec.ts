@@ -383,6 +383,17 @@ test('a block with no clear answer says the outcome is unknown', async ({ page }
   await expect(page.getByText(UNKNOWN).first()).toBeVisible();
 });
 
+test('a block that was never sent says so instead of unknown', async ({ page }) => {
+  const notSent = 'Infoblox did not answer within 30s. Nothing was sent.';
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/block-domain', (r) => r.fulfill({ status: 502, json: { ok: false, outcome: 'not-sent', error: notSent } }));
+  await page.goto('/#security');
+  await page.locator('button.sec-block').first().click({ force: true });
+  await expect(page.getByText(notSent).first()).toBeVisible();
+  await expect(page.getByText(UNKNOWN)).toHaveCount(0);
+});
+
 test('an Automate remove with no answer says the outcome is unknown', async ({ page }) => {
   await installBaselineWorld(page);
   const run = { id: 'r-1', job: 'ip', title: 'IP address', created: '2026-11-05T12:00:00Z', status: 'built',

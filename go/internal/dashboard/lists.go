@@ -538,6 +538,9 @@ func (s *Service) ApplyList(p ListPlan) (map[string]any, int) {
 			if done == 0 {
 				summary["outcome"] = "rejected"
 			}
+			if st >= 400 && st < 500 {
+				summary["outcome"] = "refused" // steps still holds how many went in
+			}
 			summary["error"] = fmt.Sprintf("Infoblox stopped taking domains (%s) after about %d of %d. The policy was not changed. Preview again to add the rest",
 				httpWord(st), done, len(pl.toAdd))
 			return summary, 502

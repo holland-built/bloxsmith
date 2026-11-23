@@ -133,3 +133,12 @@ test('every write failure goes through the shared helper', () => {
   const lists = readFileSync(new URL('../tabs/SiteLists.jsx', import.meta.url), 'utf8')
   assert.match(lists, /writeFailureText\([^\n]*'save the never-add list'/)
 })
+
+test('a reply the server marks as refused or not sent keeps its message, even on a 5xx', () => {
+  for (const outcome of ['refused', 'not-sent']) {
+    const error = 'Infoblox did not take the change (HTTP 403). Check the policy in Infoblox before trying again'
+    assert.equal(writeFailureText(502, { outcome, error }, 'save this'), error)
+    assert.equal(writeFailureText(502, { outcome }, 'save this'), WRITE_UNKNOWN)
+  }
+  assert.equal(writeFailureText(502, { outcome: 'partial', error: 'Infoblox stopped taking domains' }, 'save this'), WRITE_UNKNOWN)
+})
