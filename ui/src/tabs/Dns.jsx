@@ -765,7 +765,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
         ) : 'DNS Zones'
       }
       right={
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-2.5">
           {canCompare && (
             <button type="button" aria-expanded={comparing} onClick={() => setComparing((v) => !v)}
               title="The same zone name in two views: see which records differ"
@@ -779,7 +779,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className={`${FIELD_CLS} w-[170px]`}
+            className={`${FIELD_CLS} w-full max-w-[170px]`}
           />
         </div>
       }

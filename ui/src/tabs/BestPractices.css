@@ -53,10 +53,10 @@
 .bp-body { margin-top: 8px; font-size: 13px; display: flex; flex-direction: column; gap: 6px }
 .bp-body p { margin: 0 }
 .bp-items { list-style: none; margin: 4px 0 0; padding: 0; max-width: 640px }
-.bp-items li { display: flex; justify-content: space-between; gap: 24px; padding: 5px 0; border-top: 1px solid var(--ov-line) }
+.bp-items li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 24px; padding: 5px 0; border-top: 1px solid var(--ov-line) }
 .bp-items li:first-child { border-top: 0 }
-.bp-item-name { color: var(--ov-ink); word-break: break-all }
-.bp-items li > .ov-muted { flex: none }
+.bp-item-name { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; color: var(--ov-ink) }
+.bp-items li > .ov-muted { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere }
 
 @media (prefers-reduced-motion: reduce) { .bp-main summary::after { transition: none } }
 

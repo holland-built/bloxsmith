@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartTip } from '../components/ui.jsx'
 import { chartA11y, describePoints } from '../lib/chartSummary.js'
@@ -39,6 +40,8 @@ import { BAR_HOVER } from './hoverCursor.js'
 // `values` is Build a chart's: it prints each bar's number on the bar and
 // keeps a tiny bar a few pixels wide. Without it one big bar hid the rest, so
 // a top 10 looked like a single row with three blank names under it.
+const MIN_BAR_WIDTH = 56
+
 export default function CategoryBars({
   label,
   data,
@@ -54,13 +57,19 @@ export default function CategoryBars({
   values = false,
   barHref,
 }) {
+  // Printed numbers need about 56px a bar. A narrower chart lays its bars
+  // sideways so each number has a row to itself.
+  const [chartWidth, setChartWidth] = useState(0)
+  const onResize = values ? (w) => setChartWidth(w) : undefined
+  const tooNarrow = values && chartWidth > 0 && chartWidth < (data?.length ?? 0) * MIN_BAR_WIDTH
+  const sideways = horizontal || tooNarrow
   // One decimal, except below 1, where that would print a real 0.04 as 0.
   const fmt = (v) =>
     typeof v !== 'number' ? v
       : Math.abs(v) > 0 && Math.abs(v) < 1 ? v.toLocaleString(undefined, { maximumSignificantDigits: 2 })
         : v.toLocaleString(undefined, { maximumFractionDigits: 1 })
   const valueLabel = values ? (
-    <LabelList dataKey={yKey} position={horizontal ? 'right' : 'top'} formatter={fmt} fill="var(--color-tick)" className="text-note tabular-nums" />
+    <LabelList dataKey={yKey} position={sideways ? 'right' : 'top'} formatter={fmt} fill="var(--color-tick)" className="text-note tabular-nums" />
   ) : null
   // Build a chart's asset bars open the Infoblox Portal on those assets. A bar
   // with no link (a blank value, a split the portal has no field for) is not
@@ -77,13 +86,13 @@ export default function CategoryBars({
   )
   // Build a chart lays bars sideways when their names are too long to sit
   // under them (domains, policies): each name then gets a row to itself.
-  if (horizontal) {
+  if (sideways) {
     // Wide enough for the longest name and no wider (about 7px a character at
     // the note size), so short names leave the bars the rest of a narrow card.
     const longest = Math.max(...data.map((d) => String(tickFormat ? tickFormat(d[xKey]) : d[xKey]).length))
-    const labelWidth = Math.min(260, longest * 7 + 12)
+    const labelWidth = Math.min(260, longest * 7 + 12, chartWidth > 0 ? Math.round(chartWidth * 0.45) : 260)
     return (
-      <ResponsiveContainer width="100%" height={height}>
+      <ResponsiveContainer width="100%" height={horizontal ? height : Math.max(height, data.length * 26 + 8)} onResize={onResize}>
         <BarChart layout="vertical" data={data} margin={{ top: 4, right: values ? 56 : 12, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
           <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" hide />
@@ -107,7 +116,7 @@ export default function CategoryBars({
     )
   }
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={height} onResize={onResize}>
       <BarChart data={data} margin={{ top: values ? 18 : 4, right: 4, left: 0, bottom: 0 }} {...chartA11y(label, summary)}>
         <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
         <XAxis

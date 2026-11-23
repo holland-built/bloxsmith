@@ -63,7 +63,9 @@ function assetsStub() {
   };
 }
 
-const FROM = 760;
+// Starts at 768 because below that a phone table keeps full-width columns and
+// swipes sideways on purpose (tests/phone-layout.spec.ts).
+const FROM = 768;
 const TO = 1200;
 
 test('the Assets table never overflows its wrapper, at any width', async ({ page }) => {

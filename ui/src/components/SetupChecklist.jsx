@@ -70,7 +70,7 @@ export default function SetupChecklist({ onClose, onOpenBrand, brandOpen }) {
         <div className="flex items-center mb-1">
           <h2 id="setup-title" className="text-copy font-semibold">Finish setting up</h2>
           <span className="flex-1" />
-          <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
+          <button className="w-8 h-8 shrink-0 inline-flex items-center justify-center text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <p className="text-note text-muted mb-3">
           The dashboard works already. Everything here is optional; skip what you do not need, and

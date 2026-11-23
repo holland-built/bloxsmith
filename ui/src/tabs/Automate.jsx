@@ -959,6 +959,7 @@ export default function Automate() {
               </button>
             ))}
           </nav>
+          <div className="min-w-0">
           <Card panelId="automate-job" panelName="The job you picked" title={current.title} span={6}>
             {job === 'ip' && <IpJob key={start.n} start={start.answers} ro={ro.readOnly} onBuilt={runsApi.refetch} />}
             {job === 'dns' && <DnsJob key={start.n} start={start.answers} ro={ro.readOnly} onBuilt={runsApi.refetch} />}
@@ -966,6 +967,7 @@ export default function Automate() {
             {job === 'branch' && <BranchJob key={start.n} start={start.answers} ro={ro.readOnly} onBuilt={runsApi.refetch} />}
             {job === 'demo' && <DemoJob key={start.n} start={start.answers} ro={ro.readOnly} onBuilt={runsApi.refetch} />}
           </Card>
+          </div>
         </div>
         <RecentChanges api={runsApi} ro={ro.readOnly} />
       </div>
