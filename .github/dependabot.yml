@@ -78,7 +78,7 @@ updates:
     open-pull-requests-limit: 5
 
   # Build tooling and the embedded UI. A bump here changes go/web, so these
-  # PRs need `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/`
+  # PRs need `cd ui && npm run build && cp -R dist/* ../go/web/`
   # before CI's "UI dist up to date" step will pass — expect red until then.
   - package-ecosystem: npm
     directory: /ui

@@ -18,12 +18,12 @@ section instead of that one — this copy exists so the reference below has
 something to attach to.
 
 1. **Rebuild the UI into `go/web` before anything else.**
-   `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/`, then
+   `cd ui && npm run build && cp -R dist/* ../go/web/`, then
    commit `go/web` if it changed. The Go binary embeds `go/web` (`go:embed all:web`
    in `go/embed.go`), so a release built without this step ships the *previous*
-   UI while every local check passes. `ci.yml`'s first job diffs `ui/dist` against
-   `go/web` and fails the build if they differ — its error message is this exact
-   command. This step was missing from this file entirely until 2026-08-11.
+   UI while every local check passes. `ci.yml`'s first job fails the build if any
+   file in `ui/dist` is missing from `go/web` or differs. Old hashed files may stay
+   in `go/web`. Its error message is this exact command. This step was missing from this file entirely until 2026-08-11.
 2. Commit + push to `master`. Single-branch repo: the Go single-binary app
    (plan 030) lives on `master` and releases are cut from it via goreleaser.
 3. Ask `bash scripts/needs-tag.sh` whether this push is a release, and do what it

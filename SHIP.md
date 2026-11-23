@@ -15,7 +15,7 @@ existed at all.
 | prod | master | *       | tag vX.Y.Z → GitHub release + ghcr image; :8080 self-updates |
 
 ## Steps
-1. Ensure UI is current: `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/` (commit go/web if changed). Legacy no-build JSX pipeline retired at v3.0.0 — the old app was deleted; it lives on only in git history.
+1. Ensure UI is current: `cd ui && npm run build && cp -R dist/* ../go/web/` (commit go/web if changed). Legacy no-build JSX pipeline retired at v3.0.0 — the old app was deleted; it lives on only in git history.
 2. Commit all with a feat/fix message. The first line states WHAT changed, in
    ≤60 characters — GitHub shows it, truncated, as the label next to every file
    and folder the commit touched, so a story-shaped subject reads as gibberish
