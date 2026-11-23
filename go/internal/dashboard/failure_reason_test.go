@@ -57,8 +57,8 @@ func TestRefusedCallsNameTheMissingGroup(t *testing.T) {
 	} {
 		wantGroupNamed(t, name, str(res["error"]))
 		// The handshake was refused, so nothing was sent: safe to retry.
-		if res["outcome"] != "rejected" {
-			t.Errorf("%s: outcome = %v, want rejected (nothing was sent)", name, res["outcome"])
+		if res["outcome"] != "not-sent" {
+			t.Errorf("%s: outcome = %v, want not-sent (nothing was sent)", name, res["outcome"])
 		}
 	}
 }
