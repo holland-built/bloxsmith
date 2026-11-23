@@ -225,10 +225,10 @@ test.describe('ManageRecordsPanel', () => {
     await selectZone(page);
 
     const row = rowLocator(page, rec.dns_rdata);
-    await row.getByRole('button', { name: 'Delete' }).click();
+    await row.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(row.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
-    await expect(row.getByText(`Not made by Bloxsmith. Are you sure? Click again to delete A www -> ${rec.dns_rdata}`)).toBeVisible();
+    await expect(row.getByText(`Not made by Bloxsmith. Are you sure? This deletes A www -> ${rec.dns_rdata}`)).toBeVisible();
     expect(deletes).toHaveLength(0);
 
     await row.getByRole('button', { name: 'Confirm delete' }).click();
@@ -238,7 +238,7 @@ test.describe('ManageRecordsPanel', () => {
     await expect(page.getByText('DNS record deleted.')).toBeVisible();
   });
 
-  test('delete arm auto-disarms after 4s with no DELETE ever fired', async ({ page }) => {
+  test('the delete confirm stays open past 4s and Cancel closes it with no DELETE fired', async ({ page }) => {
     await stubZones(page);
     await stubIpamPickers(page);
     const rec = { id: 'rec-del2', type: 'A', name_in_zone: 'www', ttl: 300, dns_rdata: '192.0.2.11', comment: '' };
@@ -249,12 +249,14 @@ test.describe('ManageRecordsPanel', () => {
     await selectZone(page);
 
     const row = rowLocator(page, rec.dns_rdata);
-    await row.getByRole('button', { name: 'Delete' }).click();
+    await row.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(row.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
 
-    await page.waitForTimeout(4300); // legitimately needs a real wait past the 4000ms auto-disarm timer
+    await page.waitForTimeout(4300); // a real wait: there used to be a 4000ms auto-disarm timer
 
-    await expect(row.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+    await row.getByRole('button', { name: 'Cancel' }).click();
+    await expect(row.getByRole('button', { name: 'Confirm delete' })).toHaveCount(0);
     expect(deletes).toHaveLength(0);
   });
 });
@@ -272,9 +274,9 @@ test.describe('ManageAddressesPanel', () => {
     const card = await openTask(page, 'addresses');
     const row = card.locator('.rounded-control.border.border-border.p-2').filter({ hasText: addr.address });
 
-    await row.getByRole('button', { name: 'Release' }).click();
+    await row.getByRole('button', { name: 'Release', exact: true }).click();
     await expect(row.getByRole('button', { name: 'Confirm release' })).toBeVisible();
-    await expect(row.getByText(/^Made by Bloxsmith on .+\. Safe to delete\. Click again to release 10\.0\.0\.5/)).toBeVisible();
+    await expect(row.getByText(/^Made by Bloxsmith on .+\. Safe to delete\. This releases 10\.0\.0\.5/)).toBeVisible();
     expect(deletes).toHaveLength(0);
 
     await row.getByRole('button', { name: 'Confirm release' }).click();

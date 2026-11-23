@@ -40,7 +40,7 @@ test('a record past the first 200 can be shown, re-checked and deleted', async (
 
   const row = card.locator('.rounded-control.border.border-border.p-2').filter({ hasText: '10.0.1.0' });
   await row.getByRole('button', { name: 'Delete' }).click();
-  await expect(row.getByText('Click again to delete A host250 -> 10.0.1.0')).toBeVisible();
+  await expect(row.getByText('This deletes A host250 -> 10.0.1.0')).toBeVisible();
   const reread = seen.find((u) => u.searchParams.get('name'));
   expect(reread?.searchParams.get('name')).toBe('host250');
   expect(reread?.searchParams.get('type')).toBe('A');

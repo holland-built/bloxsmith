@@ -184,6 +184,15 @@ export function useFeedRecovery() {
   return useSyncExternalStore(subscribeFeeds, getFeedSnapshot, getFeedSnapshot)
 }
 
+// 401 and 403 will not change on a retry. An error from useApi carries `.status`;
+// the many panels pass only its message, as "403 Forbidden" or with a lead-in
+// such as "could not load incidents: 403 Forbidden".
+export const NO_PERMISSION = "You don't have permission to see this. Check the key in Settings."
+export function isNoPermission(error) {
+  if (error?.status === 401 || error?.status === 403) return true
+  return /(?:^|:\s*)(?:401|403)(?:\s+(?:Unauthorized|Forbidden))?\s*$/.test(String(error?.message ?? error ?? ''))
+}
+
 /**
  * Load every currently-failed feed again with its attempt budget reset —
  * including polling ones, which otherwise wait out their interval. Spread over

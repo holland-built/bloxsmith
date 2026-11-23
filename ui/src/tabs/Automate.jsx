@@ -821,7 +821,7 @@ function RecentChanges({ api, ro }) {
     <Card panelId="automate-recent" title="Your recent changes" span={6}
       note="only changes made on this page; each one can be removed">
       {list.length === 0
-        ? (!api.loading && <Empty>Nothing built here yet.</Empty>)
+        ? (!api.loading && !api.error && <Empty>Nothing built here yet.</Empty>)
         : <ul data-recent-changes="">{list.map((r) => <RunRow key={r.id} run={r} ro={ro} demo={demo} onChanged={refetch} />)}</ul>}
       {older.length > 0 && (
         <div data-older-demos="" className="mt-3">

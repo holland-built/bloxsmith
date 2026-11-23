@@ -13,6 +13,7 @@ import {
   groupByResource,
   isDeletion,
   isFailure,
+  isSuccess,
   isOutOfHours,
   newActors,
   notability,
@@ -141,16 +142,17 @@ test('a deletion is any action spelled with "delete", whatever the case', () => 
   assert.equal(isDeletion({}), false)
 })
 
-test('anything that did not report success counts as a failed change', () => {
+test('a reported non-success is a failed change, and no recorded result is not', () => {
   assert.equal(isFailure({ result: 'success' }), false)
   assert.equal(isFailure({ result: 'SUCCESS' }), false)
   assert.equal(isFailure({ result: ' success ' }), false)
   assert.equal(isFailure({ result: 'failed: permission denied' }), true)
-  // A blank result is not evidence of success. Reading it as success would
-  // invent an outcome nobody checked, so it is listed and the caption says
-  // "not reported successful" rather than "failed".
-  assert.equal(isFailure({ result: '' }), true)
-  assert.equal(isFailure({}), true)
+  // No recorded result is neither a success nor a failure.
+  assert.equal(isFailure({ result: '' }), false)
+  assert.equal(isFailure({}), false)
+  assert.equal(isFailure({ result: null }), false)
+  assert.equal(isFailure({ result: ' Unknown ' }), false)
+  assert.equal(isSuccess({ result: 'unknown' }), false)
 })
 
 // ---------- notability 3: out of hours ----------

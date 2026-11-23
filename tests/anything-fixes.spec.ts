@@ -47,7 +47,7 @@ test('Delete does not arm when the record cannot be re-checked', async ({ page }
   await page.goto('/#selfservice');
   const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
-  await card.getByRole('button', { name: 'Delete' }).click();
+  await card.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(card.getByText("Couldn't re-check that record, so it wasn't deleted. Try again.")).toBeVisible();
   await expect(card.getByRole('button', { name: 'Confirm delete' })).toHaveCount(0);
 });
@@ -78,10 +78,10 @@ test('an incident ack is still ticked after a reload', async ({ page }) => {
     signals: [s], signals_total: 1, signals_truncated: false, signals_degraded: false, snoozes: {},
   } }));
   await page.goto('/#incidents');
-  const box = page.getByRole('checkbox', { name: 'Acknowledge signal' }).first();
+  const box = page.getByRole('checkbox', { name: 'Mark signal as seen' }).first();
   await box.check();
   await page.reload();
-  await expect(page.getByRole('checkbox', { name: 'Acknowledge signal' }).first()).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Mark signal as seen' }).first()).toBeChecked();
 });
 
 test('a follow-up question carries the earlier answer, and the chat survives a page change', async ({ page }) => {

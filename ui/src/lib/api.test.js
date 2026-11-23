@@ -13,6 +13,7 @@ import {
   __resetAdoptionForTests,
   noteTenant,
   refreshFeeds,
+  isNoPermission,
   retryFailedFeeds,
   shareResult,
   useApi,
@@ -1663,4 +1664,15 @@ test('a panel waiting to adopt stands down when Refresh now takes it over', asyn
   assert.deepEqual(second.current.data, { v: 'refreshed' })
   first.unmount()
   second.unmount()
+})
+
+test('isNoPermission spots a 401 or 403, and nothing that merely contains the number', () => {
+  assert.equal(isNoPermission({ status: 403 }), true)
+  assert.equal(isNoPermission('401 Unauthorized'), true)
+  assert.equal(isNoPermission('403 '), true)
+  assert.equal(isNoPermission('could not load incidents: 403 Forbidden'), true)
+  assert.equal(isNoPermission({ status: 500, message: '500 Internal Server Error' }), false)
+  assert.equal(isNoPermission('403 of 500 rows read: timeout'), false)
+  assert.equal(isNoPermission('subnet 10.0.0.403 is full'), false)
+  assert.equal(isNoPermission(null), false)
 })

@@ -3,7 +3,7 @@
 // fetches. Nothing is estimated, and a feed that did not answer stays
 // "not checked" rather than becoming a 0 or a green mark.
 
-import { feedState, isSuccess, windowLabel, withinWindow } from '../../lib/changes.js'
+import { feedState, hasNoResult, isSuccess, windowLabel, withinWindow } from '../../lib/changes.js'
 
 const DAY_S = 86400
 const SEV_RANK = { crit: 0, warn: 1, note: 2 }
@@ -140,10 +140,6 @@ export function dnsTrend(dns) {
   const pct = was > 0 && Number.isFinite(hours) && hours > 0 ? Math.round(((now - was) / was) * 100) : null
   return { state: 'ok', now, was, hours, pct }
 }
-
-// The server writes the literal "unknown" when no status code was recorded
-// (normAudit). That and a blank are no outcome at all, so never a failure.
-const hasNoResult = (row) => ['', 'unknown'].includes(String(row?.result ?? '').trim().toLowerCase())
 
 /** The change log over the last day, saying how far back it really reaches. */
 export function changeSummary(audit, nowMs) {

@@ -69,6 +69,7 @@ function Unlock({ onDone }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [resetErr, setResetErr] = useState('')
 
   const go = async () => {
     if (!p) return
@@ -114,18 +115,24 @@ function Unlock({ onDone }) {
           <div className="text-note text-muted leading-relaxed mb-2">
             Permanently deletes the vault and all stored keys. No recovery. You will set a new passphrase.
           </div>
+          {resetErr && <div role="alert" className="text-note text-crit mb-2">{resetErr}</div>}
           <div className="flex gap-2">
             <button
               className="px-2.5 py-1 rounded-control border border-crit text-crit text-note"
               onClick={async () => {
+                setResetErr('')
+                const { ok, data } = await vpost('/api/vault/reset', {})
+                if (!ok || data.ok === false) {
+                  setResetErr(data.error || 'Could not reset the vault.')
+                  return
+                }
                 setConfirmReset(false)
-                await vpost('/api/vault/reset', {})
                 onDone()
               }}
             >
               Reset vault
             </button>
-            <button className="px-2.5 py-1 rounded-control border border-border text-field-txt text-note" autoFocus onClick={() => setConfirmReset(false)}>
+            <button className="px-2.5 py-1 rounded-control border border-border text-field-txt text-note" autoFocus onClick={() => { setConfirmReset(false); setResetErr('') }}>
               Cancel
             </button>
           </div>

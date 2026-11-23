@@ -70,14 +70,15 @@ test('a Delete armed for one host is disarmed by picking another', async ({ page
   await page.getByPlaceholder('Find by name or comment').fill('a');
   await page.getByRole('button', { name: 'alpha' }).click();
   await page.getByRole('button', { name: 'Delete Host' }).click();
-  await expect(page.getByRole('button', { name: 'Click again to permanently delete' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Permanently delete' })).toBeVisible();
   await expect(page.getByText('Not made by Bloxsmith. Are you sure?')).toBeVisible();
   await page.getByRole('button', { name: 'beta' }).click();
-  // Straight away, well inside the 4 s the arm lasts: this click must only arm.
-  await page.locator('button', { hasText: /Delete Host|Click again to permanently delete/ }).click();
+  // Picking another host closes the confirm, so this press only opens a new one.
+  await expect(page.getByRole('button', { name: 'Permanently delete' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Delete Host' }).click();
   await page.waitForTimeout(300);
   expect(deletes).toHaveLength(0);
-  await expect(page.getByRole('button', { name: 'Click again to permanently delete' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Permanently delete' })).toBeVisible();
 });
 
 test('each host address keeps its own IP space when the addresses change', async ({ page }) => {

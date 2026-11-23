@@ -122,6 +122,10 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   // an operator staring at a wall of "feed unavailable" panels had no way to
   // tell a broken tenant from a broken upstream.
   const [connTest, setConnTest] = useState({ busy: false, result: '' })
+  // Why the last remove or switch of a saved tenant failed.
+  const [tenantErr, setTenantErr] = useState('')
+  // Which saved integration login is waiting on Remove / Keep.
+  const [confirmKey, setConfirmKey] = useState(null)
 
   const saveToken = (v) => {
     setDashToken(v)
@@ -134,6 +138,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   const setActive = async (id) => {
     if (id === activeId) return
     setSwitchingAcct(true)
+    setTenantErr('')
     const { ok, data } = await vpost('/api/vault/active', { id })
     if (ok && data.ok) {
       // RELOAD, not load(). load() refreshes this sheet's own state and nothing
@@ -146,6 +151,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
       window.location.reload()
       return
     }
+    setTenantErr(data.error || 'Could not switch to that connection.')
     setSwitchingAcct(false)
   }
 
@@ -178,9 +184,11 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
   }
 
   const remove = async (id) => {
-    await vpost('/api/vault/tenant-remove', { id })
+    setTenantErr('')
+    const { ok, data } = await vpost('/api/vault/tenant-remove', { id })
     setConfirmRm(null)
-    load()
+    if (ok && data.ok) load()
+    else setTenantErr(data.error || 'Could not remove that connection.')
   }
 
   const submitAdd = async () => {
@@ -494,7 +502,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                         <>
                           <button className={rowBtn} disabled={switchingAcct} onClick={() => setActive(t.id)}>
                             <span>{t.id === activeId ? '●' : '○'}</span>
-                            <span className="truncate">{t.label}</span>
+                            <span className="min-w-0 break-words">{t.label}</span>
                           </button>
                           <button className={miniBtn} aria-label={`Change key for ${t.label}`} onClick={() => openEdit(t)}>Change key</button>
                           <button className={miniBtn + ' hover:text-crit hover:border-crit'} aria-label={`Remove ${t.label}`} onClick={() => setConfirmRm(t.id)}>Remove</button>
@@ -505,6 +513,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   {tenants.length === 0 && <div className="text-note text-dim px-1">No tenants saved.</div>}
                 </div>
                 )}
+                {tenantErr && <div role="alert" className="mb-3 text-note text-crit">{tenantErr}</div>}
                 {activeId && (
                   <div className="mb-3">
                     <button
@@ -514,7 +523,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                     >
                       {connTest.busy ? 'Testing connection…' : 'Test active connection'}
                     </button>
-                    {connTest.result && <div className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
+                    {connTest.result && <div role="status" className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
                   </div>
                 )}
                 <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
@@ -581,7 +590,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                       the change and the list stays where it was.
                     </div>
                     {acctSwitchErr && (
-                      <div className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
+                      <div role="alert" className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
                     )}
                     {!acctSwitchErr && <div className="mb-4" />}
                   </>
@@ -698,7 +707,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   the &ldquo;Bearer&rdquo; word is added for you.
                 </div>
                 {axur.err && <div role="alert" className="mt-2 text-note text-crit">{axur.err}</div>}
-                {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
+                {axur.msg && <div role="status" className="mt-2 text-note text-ok">{axur.msg}</div>}
                 <div className="flex gap-2 mt-2">
                   <button
                     className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
@@ -707,16 +716,23 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   >
                     {axur.busy ? 'Saving…' : 'Save Axur key'}
                   </button>
-                  {axur.stored && (
+                  {axur.stored && confirmKey !== 'axur' && (
                     <button
                       className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
-                      onClick={clearAxur}
+                      onClick={() => setConfirmKey('axur')}
                       disabled={axur.busy}
                     >
-                      Remove
+                      Remove Axur key
                     </button>
                   )}
                 </div>
+                {axur.stored && confirmKey === 'axur' && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
+                    <span className="flex-1 text-note text-crit">Remove the saved Axur key?</span>
+                    <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove Axur key" onClick={() => { setConfirmKey(null); clearAxur() }}>Remove</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Axur key" onClick={() => setConfirmKey(null)}>Keep</button>
+                  </div>
+                )}
               </div>
 
               <div className="text-copy font-medium mb-2">Kentik (network traffic)</div>
@@ -746,7 +762,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   Encrypted in the vault. Used by search: look up an IP to see its traffic for the last hour.
                 </div>
                 {kentik.err && <div role="alert" className="mt-2 text-note text-crit">{kentik.err}</div>}
-                {kentik.msg && <div className="mt-2 text-note text-ok">{kentik.msg}</div>}
+                {kentik.msg && <div role="status" className="mt-2 text-note text-ok">{kentik.msg}</div>}
                 <div className="flex gap-2 mt-2">
                   <button
                     className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
@@ -755,16 +771,23 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   >
                     {kentik.busy ? 'Saving…' : 'Save Kentik login'}
                   </button>
-                  {kentik.stored && (
+                  {kentik.stored && confirmKey !== 'kentik' && (
                     <button
                       className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
-                      onClick={() => putKentik('', '', 'Kentik login removed from the vault.')}
+                      onClick={() => setConfirmKey('kentik')}
                       disabled={kentik.busy}
                     >
-                      Remove
+                      Remove Kentik login
                     </button>
                   )}
                 </div>
+                {kentik.stored && confirmKey === 'kentik' && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
+                    <span className="flex-1 text-note text-crit">Remove the saved Kentik login?</span>
+                    <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove Kentik login" onClick={() => { setConfirmKey(null); putKentik('', '', 'Kentik login removed from the vault.') }}>Remove</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Kentik login" onClick={() => setConfirmKey(null)}>Keep</button>
+                  </div>
+                )}
               </div>
 
               {/* The AI tab's provider. Any provider that takes OpenAI-style

@@ -23,7 +23,7 @@ export default function MadeList({ sources, ro, empty = 'Nothing made here yet.'
   return (
     <>
       {list.length === 0
-        ? (!api.loading && <Empty>{empty}</Empty>)
+        ? (!api.loading && !api.error && <Empty>{empty}</Empty>)
         : (
           <ul data-made-list="">
             {list.map((r) => (

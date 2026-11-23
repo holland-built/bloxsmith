@@ -1,7 +1,7 @@
 import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { PageRail } from '../components/kit.jsx'
-import { Card, CardGrid, COLORS, Empty, FetchError, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, FeedUnavailable, FetchError, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { withToken } from '../lib/authFetch.js'
 import DemoSettingsForm from '../components/DemoSettingsForm.jsx'
@@ -188,7 +188,9 @@ export default function DemoServer() {
           </Card>
 
           <Card panelId="demo-runs" span={6} title="Runs" note="each run is tagged with its ID in Infoblox and on the VM">
-            {runs.length === 0 ? <Empty>No demo runs yet.</Empty> : (
+            {runs.length === 0 ? (status.error
+              ? <FeedUnavailable label="Runs unavailable" reason={status.error.message || undefined} />
+              : <Empty>No demo runs yet.</Empty>) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-copy">
                   <thead>

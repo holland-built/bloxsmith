@@ -6,6 +6,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import MadeList from '../components/MadeList.jsx'
+import { ConfirmStep } from '../components/DeleteCheck.jsx'
 import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
 import { useHashParams } from '../lib/hash.js'
@@ -361,43 +362,37 @@ export default function Editor() {
     })
   }
 
-  // Two-click arm instead of window.confirm — blocking dialogs freeze browser automation
+  // A separate confirm box instead of window.confirm — blocking dialogs freeze
+  // browser automation. The Delete button only opens and closes the box.
   const [delArmed, setDelArmed] = useState(false)
   const [delSay, setDelSay] = useState('')
   const delConfirmRef = useRef('')
-  const delArmTimerRef = useRef(null)
-  useEffect(() => () => clearTimeout(delArmTimerRef.current), [])
   // A Delete armed for one item must never fire on another.
   function disarmDelete() {
-    clearTimeout(delArmTimerRef.current)
     setDelArmed(false)
   }
   function del() {
     if (!spec || !editId.trim() || status === 'busy') return
+    if (delArmed) { disarmDelete(); return }
     const id = editId.trim()
     // Kinds Made with Bloxsmith deletes go through it, so the one "are you
     // sure" says whether Bloxsmith made the item and the delete is recorded.
-    const tracked = madeKind(type)
-    if (!delArmed) {
-      const arm = () => {
-        setDelArmed(true)
-        clearTimeout(delArmTimerRef.current)
-        delArmTimerRef.current = setTimeout(() => setDelArmed(false), 4000)
+    if (!madeKind(type)) { setDelSay(''); setDelArmed(true); return }
+    setResult(null)
+    checkDelete(type, id).then((c) => {
+      if (!c.ok || c.data?.blocked || c.data?.gone) {
+        setResult({ ok: false, msg: c.data?.blocked || (c.data?.gone ? 'That item is already gone.' : c.data?.error || 'could not check it, so nothing was deleted') })
+        return
       }
-      if (!tracked) { setDelSay(''); arm(); return }
-      setResult(null)
-      checkDelete(type, id).then((c) => {
-        if (!c.ok || c.data?.blocked || c.data?.gone) {
-          setResult({ ok: false, msg: c.data?.blocked || (c.data?.gone ? 'That item is already gone.' : c.data?.error || 'could not check it, so nothing was deleted') })
-          return
-        }
-        delConfirmRef.current = c.data.confirm
-        setDelSay(whoMade(c.data))
-        arm()
-      })
-      return
-    }
-    clearTimeout(delArmTimerRef.current)
+      delConfirmRef.current = c.data.confirm
+      setDelSay(whoMade(c.data))
+      setDelArmed(true)
+    })
+  }
+  function confirmDel() {
+    if (!spec || !editId.trim() || status === 'busy') return
+    const id = editId.trim()
+    const tracked = madeKind(type)
     setDelArmed(false)
     setStatus('busy')
     setResult(null)
@@ -436,7 +431,7 @@ export default function Editor() {
         {EDITOR_TYPES.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setType(t.key); setEditId(''); setLoaded(null); setDeep(null) }}
+            onClick={() => { disarmDelete(); setType(t.key); setEditId(''); setLoaded(null); setDeep(null) }}
             // Not mid-request: the answer would land on the new type's form.
             disabled={status === 'busy'}
             className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
@@ -537,17 +532,18 @@ export default function Editor() {
               <button
                 onClick={del}
                 disabled={status === 'busy'}
+                aria-expanded={delArmed}
                 className="mt-3 px-3 py-1.5 rounded-control text-copy border ml-auto disabled:opacity-50"
-                style={delArmed
-                  ? { borderColor: COLORS.crit, color: COLORS.onCrit, background: COLORS.crit }
-                  : { borderColor: COLORS.crit, color: COLORS.crit, background: 'transparent' }}
+                style={{ borderColor: COLORS.crit, color: COLORS.crit, background: 'transparent' }}
               >
-                {delArmed ? 'Click again to permanently delete' : `Delete ${spec.label}`}
+                {`Delete ${spec.label}`}
               </button>
             </div>
           )}
-          {canDelete && delArmed && delSay && (
-            <p className="text-note text-right" style={{ color: COLORS.warn }} data-delete-say="">{delSay}</p>
+          {canDelete && delArmed && (
+            <ConfirmStep warn takeFocus yesLabel="Permanently delete" yesDisabled={status === 'busy'} onYes={confirmDel} onCancel={disarmDelete}>
+              {delSay || `This permanently deletes this ${spec.label}.`}
+            </ConfirmStep>
           )}
         </div>
         </section>
