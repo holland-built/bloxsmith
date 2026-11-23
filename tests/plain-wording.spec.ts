@@ -79,6 +79,24 @@ test('an empty message names what is empty, and a failed load never shows it', a
   await expect(card).not.toContainText('No lookalike domains found');
 });
 
+test('a query-rate chart with no readings does not claim there were no queries', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/csp/dns-qps*', (r) => r.fulfill({ json: { status: 'ok', rows: [] } }));
+  await page.goto('/#dns');
+  const card = page.locator('[data-panel-id="dns-query-rate"]');
+  await expect(card).toContainText('No DNS query rate readings for this period');
+  await expect(card).not.toContainText('No DNS queries');
+});
+
+test('a failed Axur tile does not blame Infoblox', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/axur*', (r) => r.fulfill({ status: 500, json: {} }));
+  await page.goto('/#security');
+  const tile = page.getByRole('region', { name: 'Headline numbers' }).locator('[data-key="credentials"]');
+  await expect(tile.locator('.sec-num')).toHaveText('Unknown');
+  await expect(tile).toHaveAccessibleDescription('Not reported, so this is not known');
+});
+
 test('Security marks an event as seen in the same words as Incidents', async ({ page }) => {
   await installBaselineWorld(page);
   await page.goto('/#security');

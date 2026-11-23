@@ -662,7 +662,7 @@ function DnsHero({ dns, health, panelId }) {
       ) : dns.error || status === 'error' ? (
         <FeedUnavailable label="DNS query rate information is unavailable" />
       ) : chartData.length === 0 ? (
-        <Empty>No DNS queries in this period</Empty>
+        <Empty>No DNS query rate readings for this period</Empty>
       ) : (
         <>
           <div className="flex items-center gap-4 my-2">
