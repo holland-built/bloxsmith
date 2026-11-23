@@ -252,7 +252,7 @@ func TestBlockRollbackReportsAFailedDeleteAndKeepsGoing(t *testing.T) {
 
 	found := false
 	for _, s := range steps {
-		if strings.Contains(s, "failed to delete block id=ipam/address_block/b-2") {
+		if strings.Contains(s, "no clear answer deleting block id=ipam/address_block/b-2") {
 			found = true
 		}
 	}
@@ -1554,5 +1554,16 @@ func TestTemplateToBlockConfigStillBuildsWhenEveryEntryIsAMapping(t *testing.T) 
 	}
 	if n := len(getList(asMap(cfg.Blocks[0]), "children")); n != 1 {
 		t.Fatalf("parsed %d child block(s) under address_blocks[0], want 1", n)
+	}
+}
+
+func TestRollbackDeleteStep_SaysUnknownWithoutAClearAnswer(t *testing.T) {
+	for _, st := range []int{0, 500, 502, 504} {
+		if got := rollbackDeleteStep("host", "h-1", st); !strings.Contains(got, "may or may not be gone") {
+			t.Errorf("status %d: %q", st, got)
+		}
+	}
+	if got := rollbackDeleteStep("host", "h-1", 409); !strings.Contains(got, "failed to delete host id=h-1") {
+		t.Errorf("a clear refusal changed: %q", got)
 	}
 }

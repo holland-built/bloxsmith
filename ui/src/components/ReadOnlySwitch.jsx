@@ -2,6 +2,7 @@
 // Its own file so #provision downloads it only after the switch is pressed.
 import { useState } from 'react'
 import { authFetch } from '../lib/authFetch.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 
 export default function ReadOnlySwitch({ wt, onClose }) {
   const [busy, setBusy] = useState(false)
@@ -21,7 +22,7 @@ export default function ReadOnlySwitch({ wt, onClose }) {
       // The tenant chip in the top bar shows this same permission.
       window.dispatchEvent(new Event('bx:write-target'))
     }
-    else setErr(r.data?.error || 'Could not change the write permission.')
+    else setErr(writeFailureText(r.status, r.data, 'change the write permission'))
   }
 
   return (

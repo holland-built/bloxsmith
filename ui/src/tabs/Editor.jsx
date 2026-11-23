@@ -312,10 +312,10 @@ export default function Editor() {
   async function doFetch(url, method, body) {
     try {
       const res = await tokenFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const data = await res.json().catch(() => ({}))
-      return { ok: res.ok, data }
+      const data = await res.json().catch(() => null)
+      return { ok: res.ok, status: res.status, data }
     } catch {
-      return { ok: false, data: { error: 'network error' } }
+      return { ok: false, status: 0, data: null }
     }
   }
 
@@ -338,10 +338,10 @@ export default function Editor() {
     setStatus('busy')
     setResult(null)
 
-    doFetch(url, method, body).then(({ ok, data }) => {
+    doFetch(url, method, body).then(({ ok, status: code, data }) => {
       const j = data || {}
-      if (!ok || j.error || j.ok === false) {
-        setResult({ ok: false, msg: j.error || 'request failed' })
+      if (!ok || j.error || j.ok === false || (!dry && !data)) {
+        setResult({ ok: false, msg: dry ? j.error || 'request failed' : writeFailureText(code, data, 'complete this change') })
         setPreview(null)
         setStatus('idle')
         return

@@ -23,6 +23,10 @@ const LazyReadOnly = lazy(() => import('../components/ReadOnlySwitch.jsx'))
 // f is a stream flow; res is what to word, its done frame unless given.
 const CheckedAgainst = ({ f, res = f.result }) => f.status === 'previewed' && <Suspense><LazyChecked res={res} /></Suspense>
 
+// lib/writeFailure.js WRITE_UNKNOWN, written out because importing that file
+// puts #provision over tests/bundle-budget.spec.ts. wording.test.js keeps them equal.
+const WRITE_UNKNOWN = 'Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.'
+
 const inputCls = `${FIELD_CLS} w-full`
 
 // ---------- write permission ----------
@@ -248,7 +252,7 @@ function useStreamFlow(path) {
     }
     es.onerror = () => {
       if (!esRef.current) return
-      setError((p) => p || 'The server closed the connection before sending anything. If this tenant was just made read-only, the notice at the top of this page says so.')
+      setError((p) => p || `${dryRef.current ? 'The server closed the connection before sending anything.' : WRITE_UNKNOWN} If this tenant was just made read-only, the notice at the top of this page says so.`)
       stop('idle')
       // The permission may have changed since the page loaded; re-read it so
       // the notice at the top reflects what the server just enforced.
@@ -274,7 +278,7 @@ function useStreamFlow(path) {
 // unknown answer must never be painted as a reassuring one.
 // A cleanup delete with no clear answer may have worked. An entry with a reason
 // is one the server knows is still there (it had no id to delete).
-const cleanupUnknown = (o) => !o?.reason && [0, 502, 504].includes(o?.status)
+const cleanupUnknown = (o) => !o?.reason && (o?.status === 0 || o?.status >= 500)
 
 function RollbackReport({ report }) {
   if (!report) return null

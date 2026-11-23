@@ -1007,7 +1007,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
 		if !(status >= 200 && status < 300) {
-			p.emit(M{"step": fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", kind, objID, status)})
+			p.emit(M{"step": rollbackDeleteStep(kind, objID, status)})
 			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status})
 			return
 		}
@@ -1071,7 +1071,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 
 	partial["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
+		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
 	}
 
 	return rollbackReport(attempted, deleted, residual)

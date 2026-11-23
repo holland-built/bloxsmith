@@ -206,7 +206,7 @@ func statusOr(status, fallback int) int {
 // deliberately changes no status code and introduces no new status word.
 func statusPhrase(status int) string {
 	if status == 0 {
-		return "could not reach the tenant — no request completed"
+		return "no answer from the tenant"
 	}
 	return fmt.Sprintf("status %d", status)
 }
@@ -547,7 +547,7 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 		return createdUnreadable("DNS record", status, ""), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "record": resultOrSelf(resp)}, status
 }
@@ -716,7 +716,7 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 
 	resp, status, method := c.patchThenPut(objPath, updateBody)
 	if updateFailed(status) {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("update", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	if updateUnreadable(resp, status) {
 		// The record is LIVE with its new values in the customer's DNS. The old
@@ -903,8 +903,12 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	// 2026-11-13), so the name and the made-by tag go on each address after.
 	resp, status, _ := c.Rest.Write("POST", objPath+"/nextavailableip",
 		nil, map[string]string{"count": strconv.Itoa(count)})
-	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("allocation failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+	if (status == 200 || status == 201) && resp == nil {
+		// Accepted with an unreadable body: the address may be reserved.
+		return M{"ok": false, "error": rest.OutcomeUnknown}, 502
+	}
+	if status != 200 && status != 201 {
+		return M{"ok": false, "error": writeFailed("allocation", status), "detail": resp}, statusOr(status, 502)
 	}
 
 	addresses := respAddresses(resp)
@@ -1016,6 +1020,9 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				out["orphaned"] = orphaned
 			}
 			out["error"] = "dns record creation failed; reserved address(es) released"
+			if rest.NoClearAnswer(rstatus) {
+				out["error"] = "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox"
+			}
 			return out, 502
 		}
 	}
@@ -1143,4 +1150,13 @@ func addressSummaries(addresses []any) []any {
 		out = append(out, M{"id": am["id"], "address": am["address"]})
 	}
 	return out
+}
+
+// writeFailed words a create, update or allocation that did not succeed. Only
+// a clear refusal may say it failed.
+func writeFailed(what string, status int) string {
+	if rest.NoClearAnswer(status) {
+		return rest.OutcomeUnknown
+	}
+	return fmt.Sprintf("%s failed (%s)", what, statusPhrase(status))
 }

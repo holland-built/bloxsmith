@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
-import { failureText, useApi } from '../lib/api.js'
+import { useApi } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
 import { authFetch } from '../lib/authFetch.js'
@@ -312,7 +313,7 @@ function BlockCell({ domain, readOnly, urgent }) {
     // "rejected" (upstream refused, or a local guard like missing
     // BLOCK_LIST_ID) — nothing was applied, safe to retry.
     setState('rejected')
-    setMsg(body.error || failureText(res.status, 'apply this change'))
+    setMsg(writeFailureText(res.status, res.data, 'apply this change'))
   }
 
   if (!domain) return <span className="text-dim text-note">—</span>

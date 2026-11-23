@@ -96,7 +96,11 @@ function allocateSentence(preview, subnet, name, dnsName, ptr, mac) {
 
 // A refused delete keeps the server's reason and says the item was not changed.
 function deleteFailure(status, data, what, notDone) {
-  if (isNoPermission({ status })) return `${data?.error || NO_PERMISSION} ${notDone}`
+  if (isNoPermission({ status })) {
+    const said = (data?.error || '').trim()
+    if (!said || /^delete failed \(status 40[13]\)/.test(said)) return `${NO_PERMISSION} ${notDone}`
+    return `${said}${/[.!?]$/.test(said) ? '' : '.'} ${notDone}`
+  }
   return writeFailureText(status, data, what)
 }
 

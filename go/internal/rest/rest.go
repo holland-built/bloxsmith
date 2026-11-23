@@ -526,8 +526,8 @@ func (e *UpstreamError) PublicFor(service string) string {
 const OutcomeUnknown = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
 
 // NoClearAnswer reports whether a write's status leaves its outcome unknown:
-// 0 is no response at all, and a 502 or 504 is a gateway without an answer.
-func NoClearAnswer(status int) bool { return status == 0 || status == 502 || status == 504 }
+// 0 is no response at all, and a 5xx does not say whether the change landed.
+func NoClearAnswer(status int) bool { return status == 0 || status >= 500 }
 
 // GetStrict is Get with the failures surfaced. Empty is still a legitimate
 // result — only a non-nil error means the read failed. Unlike Get, it does

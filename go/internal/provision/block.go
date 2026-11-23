@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/freecheck"
+	"bloxsmith/internal/rest"
 )
 
 // BlockConfig is server.py's BlockConfig dataclass (1311).
@@ -310,7 +311,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 		if !(status >= 200 && status < 300) {
-			p.emit(M{"step": fmt.Sprintf("  Rollback: failed to delete block id=%s", blockID)})
+			p.emit(M{"step": rollbackDeleteStep("block", blockID, status)})
 			residual = append(residual, M{
 				"kind":   "address_block",
 				"id":     blockID,
@@ -324,7 +325,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 
 	result["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
+		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
 	}
 
 	return rollbackReport(attempted, deleted, residual)
@@ -710,3 +711,12 @@ func appendTo(result M, key string, v any) {
 
 // itoa is used where a query param must be a string.
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// rollbackDeleteStep is the log line for a cleanup delete that did not succeed.
+// Only a clear refusal may say the delete failed.
+func rollbackDeleteStep(what, id string, status int) string {
+	if rest.NoClearAnswer(status) {
+		return fmt.Sprintf("  Rollback: no clear answer deleting %s id=%s, so it may or may not be gone", what, id)
+	}
+	return fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", what, id, status)
+}

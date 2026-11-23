@@ -515,8 +515,10 @@ func TestAllocateDNSFailureReleasesBothReservedAddresses(t *testing.T) {
 	if v, present := res["orphaned"]; present {
 		t.Fatalf("orphaned = %v, want the key absent when every release succeeded", v)
 	}
-	if res["error"] != "dns record creation failed; reserved address(es) released" {
-		t.Fatalf("error = %v, want the inherited release message", res["error"])
+	// A 500 does not say whether the record landed, so the message must not
+	// claim it failed; the release is known, so it stays in the sentence.
+	if res["error"] != "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox" {
+		t.Fatalf("error = %v, want the unknown-record release message", res["error"])
 	}
 	rec := asMap(res["record"])
 	if rec["ok"] != false || rec["status"] != 500 {

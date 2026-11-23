@@ -5,9 +5,12 @@ import { failureText, isNoPermission } from './api.js'
 // go/internal/edit OutcomeUnknown holds the same sentence.
 export const WRITE_UNKNOWN = 'Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.'
 export const WRITE_NO_PERMISSION = "You don't have permission to do this. Nothing was changed."
-// The server's generic write errors for a missing answer. Any other message on
-// a 502 is specific, such as a read that failed before anything was sent.
-const NO_ANSWER_ERROR = /^(?:create|update|allocation|delete) failed \((?:could not reach the tenant|status 50[24]\))/
+// A 5xx does not say whether a write landed, so its message is kept only when
+// the server knows: a read that failed before anything was sent, a refusal
+// passed on, or a sentence naming the part that did happen. Anything else, new
+// messages included, reads as unknown.
+const KNOWN_5XX = /nothing was sent|so it was not made|^could not (?:read|list|check)\b|^Couldn't read|^subnet lookup failed|^no free subnet|could not be read$|^record not found|will not save over it|Infoblox refused the call|MAY EXIST|may already have applied|\bbut\b|address\(es\) released|not confirmed as removed|^Bloxsmith could not save what Remove did|\blocked\b/
+const GENERIC_REFUSAL = /^(?:create|update|allocation|delete) failed \(status 40[13]\)/
 
 /**
  * A failed real write in words. `data` is the parsed reply, or null when it
@@ -17,8 +20,7 @@ const NO_ANSWER_ERROR = /^(?:create|update|allocation|delete) failed \((?:could 
 export function writeFailureText(status, data, what) {
   const said = typeof data?.error === 'string' ? data.error : ''
   const unreadable = status >= 200 && status < 300 && data == null
-  const gateway = (status === 502 || status === 504) && (!said || NO_ANSWER_ERROR.test(said))
-  if (status === 0 || unreadable || gateway) return WRITE_UNKNOWN
-  if (!said && isNoPermission({ status })) return WRITE_NO_PERMISSION
+  if (status === 0 || unreadable || (status >= 500 && !KNOWN_5XX.test(said))) return WRITE_UNKNOWN
+  if ((!said || GENERIC_REFUSAL.test(said)) && isNoPermission({ status })) return WRITE_NO_PERMISSION
   return said || failureText(status, what)
 }

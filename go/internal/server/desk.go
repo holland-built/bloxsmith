@@ -483,7 +483,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 		x.Objects = objs
 		if failed > 0 {
 			x.Status = runs.RemoveFailed
-			x.Error = fmt.Sprintf("%d item(s) could not be removed. Remove again to retry them.", failed)
+			x.Error = fmt.Sprintf("%d item(s) were not confirmed as removed. Check them, then Remove again to retry.", failed)
 		} else {
 			x.Status = runs.Removed
 			x.Error = ""

@@ -9,6 +9,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import { parseInline } from '../lib/markdown.js'
 import { answerBlocks } from '../lib/aiAnswer.js'
 import { failureText } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
@@ -566,7 +567,7 @@ function BlockDomainButton({ domain, disabled }) {
     } else {
       setState('error')
       setUnconfirmed(res.data?.outcome === 'unverified')
-      setMsg((res.data && res.data.error) || failureText(res.status, 'apply this action'))
+      setMsg(writeFailureText(res.status, res.data, 'apply this action'))
     }
   }
 

@@ -71,7 +71,7 @@ func (c *Client) ZoneCreate(body M) (M, int) {
 		return createdUnreadable("DNS zone", status, ""), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "zone": resultOrSelf(resp)}, status
 }
@@ -248,7 +248,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			"Its teardown tags could not be applied either, so no tag filter will find it"), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	rows := respAddresses(resp) // same results/result unwrap shape
 	var subnet M
@@ -335,6 +335,9 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		// writing nothing at all (an orphan with no record it was created).
 		out := M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
 			"detail": presp, "id": sid, "tagging_failed": true}
+		if rest.NoClearAnswer(pstatus) {
+			out["error"] = "subnet created, but the tagging needed for teardown got no clear answer and may or may not have worked. Check its tags in Infoblox"
+		}
 		if held := CloudHeld(cloud, made.Masked()); perr == nil && held != nil {
 			notHeld := []any{}
 			for _, h := range held {
@@ -413,7 +416,7 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 	if writeUnreadable(resp, st) {
 		return createdUnreadable("subnet", st, "Its teardown tags could not be applied either, so no tag filter will find it"), st, true
 	}
-	if outcomeUnknown(st) {
+	if outcomeUnknown(st) || rest.NoClearAnswer(st) {
 		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
 			"%s may have been created, but Infoblox's answer was lost (%s). Check for it in the Editor before trying again",
 			made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true
@@ -542,7 +545,7 @@ func (c *Client) BlockCreate(body M) (M, int) {
 		return createdUnreadable("address block", status, ""), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "block": resultOrSelf(resp)}, status
 }
@@ -589,7 +592,7 @@ func (c *Client) RangeCreate(body M) (M, int) {
 		return createdUnreadable("DHCP range", status, ""), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "range": resultOrSelf(resp)}, status
 }
@@ -687,7 +690,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 		return createdUnreadable("host", status, ""), status
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("create", status), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "host": resultOrSelf(resp)}, status
 }
@@ -731,7 +734,7 @@ func (c *Client) applyUpdate(body M, id, objPath string, up M, fields, noun, key
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
 	if updateFailed(status) {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": writeFailed("update", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	if updateUnreadable(resp, status) {
 		return updatedUnreadable(noun, id, method, status), bodyStatus(status)

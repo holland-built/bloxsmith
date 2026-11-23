@@ -4,8 +4,15 @@ import { Card, Empty, FeedUnavailable, Skeleton, useGridLayout } from './ui.jsx'
 import ChartView from './ChartView.jsx'
 import { chartLink, chartUrl } from '../lib/chartBuilder.js'
 import { removeChart } from '../lib/savedCharts.js'
-import { NO_PERMISSION } from '../lib/api.js'
 import { saveLayout } from '../lib/layout.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
+
+// saveLayout throws "...: HTTP 502", or a TypeError when no answer came back.
+function layoutError(e) {
+  if (e instanceof TypeError) return WRITE_UNKNOWN
+  const status = /HTTP (\d+)$/.exec(e.message)?.[1]
+  return status ? writeFailureText(Number(status), {}, 'save the layout') : e.message
+}
 
 // A chart made in Build a chart and added to a page. It is an ordinary panel
 // (panelId saved-<id>), so Arrange panels moves and hides it like any other.
@@ -32,7 +39,7 @@ function AboutControls({ chart, onRemoved }) {
       await removeChart(chart.id)
       onRemoved()
     } catch (e) {
-      setState({ busy: false, error: /HTTP 40[13]$/.test(e.message) ? NO_PERMISSION : /HTTP \d+$/.test(e.message) ? 'Could not save the layout. Try again in a moment.' : e.message })
+      setState({ busy: false, error: layoutError(e) })
     }
   }
   const label = chart.replaces ? 'Restore original' : 'Remove from this page'

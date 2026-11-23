@@ -1,6 +1,6 @@
 import { tokenFetch } from './authFetch.js'
 import { loadLayout, saveLayout } from './layout.js'
-import { failureText } from './api.js'
+import { WRITE_UNKNOWN, writeFailureText } from './writeFailure.js'
 
 // Charts saved from Build a chart onto a page (savedCharts.test.js).
 //
@@ -92,21 +92,22 @@ export async function loadSavedChart(id, fetchImpl = tokenFetch) {
 
 /** Saves one chart; throws with the server's reason when it is refused. */
 export async function saveChart(chart, fetchImpl = tokenFetch) {
+  const blob = buildChartBlob(chart)
   const res = await fetchImpl('/api/views', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildChartBlob(chart)),
-  })
+    body: JSON.stringify(blob),
+  }).catch(() => { throw new Error(WRITE_UNKNOWN) })
   if (!res.ok) {
-    const why = (await res.json().catch(() => null))?.error
-    throw new Error(why || failureText(res.status, 'save the chart'))
+    throw new Error(writeFailureText(res.status, await res.json().catch(() => null), 'save the chart'))
   }
 }
 
 /** Takes one saved chart off its page. */
 export async function removeChart(id, fetchImpl = tokenFetch) {
   const res = await fetchImpl(`/api/views/${encodeURIComponent(chartViewName(id))}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(failureText(res.status, 'remove the chart'))
+    .catch(() => { throw new Error(WRITE_UNKNOWN) })
+  if (!res.ok) throw new Error(writeFailureText(res.status, await res.json().catch(() => null), 'remove the chart'))
 }
 
 // Hides one panel in a page's saved layout, keeping the rest of it. It is the

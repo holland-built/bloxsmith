@@ -397,7 +397,7 @@ func TestRBSubnetCreatedThenTaggingFailedIsStillRolledBack(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the tagging failure (out %v)", out)
 	}
-	if !strings.Contains(err.Error(), "tagging failed") {
+	if !strings.Contains(err.Error(), "tagging") {
 		t.Fatalf("Provision() error = %q, want the tagging failure — the run broke somewhere else and this "+
 			"test is not exercising a created-but-untagged subnet", err.Error())
 	}

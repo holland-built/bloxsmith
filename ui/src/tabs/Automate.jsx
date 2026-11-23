@@ -674,7 +674,7 @@ const STATUS_WORDS = {
   failed: 'Did not finish',
   removing: 'Removing',
   removed: 'Removed',
-  'remove-failed': 'Some items could not be removed',
+  'remove-failed': 'Some items were not confirmed as removed',
   ready: 'Ready',
 }
 
@@ -739,7 +739,7 @@ function RunRow({ run, onChanged, ro, demo = {}, removeBody }) {
       return
     }
     setPlan(null)
-    if (!r.ok || j.ok === false) setError(j.error || failureText(r.status, 'remove these items'))
+    if (!r.ok || !r.data || j.ok === false) setError(writeFailureText(r.status, r.data, 'remove these items'))
     onChanged()
   }
 

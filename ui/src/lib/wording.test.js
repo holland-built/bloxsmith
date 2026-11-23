@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { removeChart, saveChart } from './savedCharts.js'
 import { NO_PERMISSION, failureText } from './api.js'
 import { WRITE_NO_PERMISSION, WRITE_UNKNOWN, writeFailureText } from './writeFailure.js'
 import { formatDay, formatTime, formatWhen } from './dates.js'
@@ -68,4 +70,66 @@ test('an empty 401 or 403 on a write says nothing was changed', () => {
   assert.equal(WRITE_NO_PERMISSION, "You don't have permission to do this. Nothing was changed.")
   for (const status of [401, 403]) assert.equal(writeFailureText(status, {}, 'update the record'), WRITE_NO_PERMISSION)
   assert.equal(writeFailureText(403, { error: 'Mark this tenant writable' }, 'update the record'), 'Mark this tenant writable')
+})
+
+test('any 5xx on a write is unknown, even with an error message', () => {
+  for (const [status, data] of [
+    [502, { error: 'update failed (status 502)' }],
+    [504, { error: 'update failed' }],
+    [500, null],
+    [500, {}],
+    [500, { error: 'create failed (status 500)' }],
+    [503, { error: 'internal error' }],
+    [502, { error: 'block request rejected: EOF' }],
+  ]) assert.equal(writeFailureText(status, data, 'save this'), WRITE_UNKNOWN, JSON.stringify([status, data]))
+})
+
+test('a 5xx keeps its message only when the code knows what happened', () => {
+  for (const error of [
+    'could not read it from Infoblox (502)',
+    'could not read the never-add list, so nothing was sent',
+    'could not record the change, so it was not made: disk full',
+    'the reservation was made, but the DNS record may or may not exist. Check it in Infoblox.',
+    'Infoblox answered yes, but a.com is still in the list',
+    'the tenant did not confirm this subnet (no answer from the tenant): the subnet MAY EXIST.',
+  ]) assert.equal(writeFailureText(502, { error }, 'save this'), error)
+})
+
+test('a generic 401 or 403 from the server reads as no permission', () => {
+  for (const status of [401, 403]) {
+    assert.equal(writeFailureText(status, { error: `delete failed (status ${status})` }, 'delete this'), WRITE_NO_PERMISSION)
+  }
+})
+
+test('saved charts word a write with no answer as unknown', async () => {
+  const chart = { id: 'k3x9q2m7ab12', title: 'x', tab: 'dns', picks: { source: 'dns', metric: 'count', group: 'none' } }
+  const bad = async () => ({ ok: false, status: 502, json: async () => { throw new Error('html') } })
+  const dead = async () => { throw new TypeError('Failed to fetch') }
+  await assert.rejects(removeChart(chart.id, bad), { message: WRITE_UNKNOWN })
+  await assert.rejects(removeChart(chart.id, dead), { message: WRITE_UNKNOWN })
+  await assert.rejects(saveChart(chart, dead), { message: WRITE_UNKNOWN })
+})
+
+// These screens need a whole page of setup each; the helper's rule is tested
+// above, and this holds each write to it.
+test('every write failure goes through the shared helper', () => {
+  const uses = {
+    '../components/ReadOnlySwitch.jsx': "'change the write permission'",
+    '../components/SavedChart.jsx': "'save the layout'",
+    '../components/DemoSettingsForm.jsx': "'save the demo settings'",
+    '../components/TenantManager.jsx': "'switch account'",
+    '../tabs/Security.jsx': "'apply this change'",
+    '../tabs/SiteLists.jsx': "'save the watch setting'",
+    '../tabs/Ai.jsx': "'apply this action'",
+    '../tabs/Incidents.jsx': "'update this action'",
+    '../tabs/Automate.jsx': "'remove these items'",
+    '../tabs/Editor.jsx': "'complete this change'",
+  }
+  for (const [file, what] of Object.entries(uses)) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, new RegExp(`writeFailureText\\([^\\n]*${what}`), file)
+  }
+  assert.ok(readFileSync(new URL('../tabs/Provision.jsx', import.meta.url), 'utf8').includes(`const WRITE_UNKNOWN = '${WRITE_UNKNOWN}'`))
+  const lists = readFileSync(new URL('../tabs/SiteLists.jsx', import.meta.url), 'utf8')
+  assert.match(lists, /writeFailureText\([^\n]*'save the never-add list'/)
 })

@@ -279,8 +279,7 @@ for (const [what, panelTask, url] of [['record', 'records', 'dns'], ['address', 
     }
     await card.getByRole('button', { name: /^(Delete|Release)/ }).first().click();
     await card.getByRole('button', { name: /^Confirm/ }).click();
-    await expect(card).toContainText('Mark this tenant writable');
-    await expect(card).toContainText(what === 'record' ? 'The record was not deleted.' : 'The address was not released.');
+    await expect(card).toContainText(`Mark this tenant writable. ${what === 'record' ? 'The record was not deleted.' : 'The address was not released.'}`);
   });
 }
 
@@ -354,4 +353,58 @@ test('first load shows neither an empty network list nor an empty connection', a
   await expect(page.locator('[data-panel-id="network-exhaustion"]')).not.toContainText('No subnets found');
   await expect(page.locator('.frame-conn-body [data-state]')).toHaveText('checking');
   release();
+});
+
+test('a generic 403 on a record delete reads as no permission', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/dns/zones*', (r) => r.fulfill({ json: { zones: [ZONE] } }));
+  await page.route('**/api/dns/records*', (r) => r.fulfill({ json: { records: [RECORD] } }));
+  await page.route('**/api/made/delete', (r) => {
+    const b = r.request().postDataJSON();
+    if (b.dry) return r.fulfill({ json: { ok: true, dry_run: true, kind: b.kind, id: b.id, label: b.id, made: true, made_on: '2026-11-13T10:00:00Z', gone: false, blocked: '', confirm: 'c' } });
+    return r.fulfill({ status: 403, json: { ok: false, error: 'delete failed (status 403)' } });
+  });
+  await page.goto('/#selfservice');
+  const card = await openTask(page, 'records');
+  await card.locator('select').selectOption(ZONE.id);
+  await card.getByRole('button', { name: /^Delete/ }).first().click();
+  await card.getByRole('button', { name: /^Confirm/ }).click();
+  await expect(card).toContainText("You don't have permission to see this. Check the key in Settings. The record was not deleted.");
+  await expect(card).not.toContainText('delete failed');
+});
+
+test('a block with no clear answer says the outcome is unknown', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/block-domain', (r) => r.fulfill({ status: 502, json: { ok: false, outcome: 'rejected', error: 'block request rejected: EOF' } }));
+  await page.goto('/#security');
+  await page.locator('button.sec-block').first().click({ force: true });
+  await expect(page.getByText(UNKNOWN).first()).toBeVisible();
+});
+
+test('an Automate remove with no answer says the outcome is unknown', async ({ page }) => {
+  await installBaselineWorld(page);
+  const run = { id: 'r-1', job: 'ip', title: 'IP address', created: '2026-11-05T12:00:00Z', status: 'built',
+    objects: [{ id: 'ipam/address/a1', kind: 'address', label: '10.2.1.7', state: 'created' }] };
+  await page.route('**/api/desk/spaces', (r) => r.fulfill({ json: { spaces: [] } }));
+  await page.route('**/api/desk/runs', (r) => r.fulfill({ json: { runs: [run] } }));
+  await page.route('**/api/desk/remove', (r) => (r.request().postDataJSON().dry
+    ? r.fulfill({ json: { dry_run: true, run, would_remove: [{ id: 'ipam/address/a1', label: '10.2.1.7', exists: true }] } })
+    : r.fulfill({ status: 504, json: {} })));
+  await page.goto('/#automate');
+  const row = page.locator('[data-run="r-1"]');
+  await row.getByRole('button', { name: 'Remove' }).click();
+  await row.locator('[data-remove-plan]').getByRole('button').first().click();
+  await expect(row).toContainText(UNKNOWN);
+});
+
+test('a made item with an unknown delete is not called undeletable', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/desk/runs', (r) => r.fulfill({ json: { tenant: 't/-', runs: [{ id: 'r-1', title: 'IP address', created: '2026-11-05T12:00:00Z', tenant: 't/-', status: 'remove-failed',
+    objects: [{ id: 'ipam/address/a1', kind: 'address', label: '10.2.1.7', state: 'failed', error: UNKNOWN }] }] } }));
+  await page.goto('/#made');
+  const row = page.locator('[data-made-run="r-1"]');
+  await expect(row).toContainText('result unknown');
+  await expect(row).not.toContainText('could not be deleted');
 });

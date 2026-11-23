@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import ItemLink from '../components/ItemLink.jsx'
-import { failureText, useApi } from '../lib/api.js'
+import { useApi } from '../lib/api.js'
+import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
@@ -152,15 +153,15 @@ export default function Incidents() {
         return
       }
       if (!res.ok || !body?.ok) {
-        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: body?.error || failureText(res.status, 'update this action') } }))
+        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: writeFailureText(res.status, body, 'update this action') } }))
         return
       }
       // Not optimistic: only clear pending + drop error once the server confirms,
       // then let a refetch drive the real row status.
       setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: null } }))
       await actionsApi.refetch()
-    } catch (e) {
-      setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: e?.message || 'network error' } }))
+    } catch {
+      setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: WRITE_UNKNOWN } }))
     }
   }
 

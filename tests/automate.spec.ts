@@ -118,7 +118,7 @@ test('a run that could not be fully removed says so and offers Remove again', as
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [stuck] }));
   await page.goto('/#automate');
   const row = page.locator(`[data-run="${RUN.id}"]`);
-  await expect(row).toContainText('Some items could not be removed');
+  await expect(row).toContainText('Some items were not confirmed as removed');
   await expect(row).toContainText('10.2.1.7: could not be removed (delete failed (500))');
   await expect(row.getByRole('button', { name: 'Remove' })).toBeVisible();
 });

@@ -261,7 +261,7 @@ func TestDelete_RealFailuresAreNotReportedAsSuccess(t *testing.T) {
 				t.Errorf("upstream %d: want returned status %d, got %d", upstream, upstream, status)
 			}
 			wantMsg := "delete failed"
-			if upstream == 502 { // a gateway with no answer: the outcome is unknown
+			if upstream >= 500 { // no clear answer: the outcome is unknown
 				wantMsg = "may or may not have happened"
 			}
 			if msg, _ := res["error"].(string); !strings.Contains(msg, wantMsg) {
@@ -684,5 +684,36 @@ func TestDelete_GatewayWithNoAnswerSaysTheOutcomeIsUnknown(t *testing.T) {
 	res, _ := dispatchStatic(t, 409, `{}`).client().Delete("/api/ddi/v1/ipam/host/h-1")
 	if msg, _ := res["error"].(string); msg != "delete failed (status 409)" {
 		t.Errorf("a clear refusal changed wording: %q", msg)
+	}
+}
+
+// A 200 or 201 means Infoblox may have reserved the address even when the body
+// cannot be read, so the reply must not call the allocation failed.
+func TestAllocate_AcceptedWithUnreadableBodyIsUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+	}{{200, ""}, {201, "not json"}} {
+		f := builderFakeServer(t, func(r builderReq) (int, string) {
+			if r.Method == "POST" && strings.HasSuffix(r.Path, "/nextavailableip") {
+				return tc.status, tc.body
+			}
+			return 200, `{"results":[]}`
+		})
+		res, status := f.client().SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
+		if status != 502 || res["error"] != "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again." {
+			t.Errorf("%d %q: status %d, error %v", tc.status, tc.body, status, res["error"])
+		}
+	}
+}
+
+func TestWriteFailed_SaysUnknownOnlyWithoutAClearAnswer(t *testing.T) {
+	for _, st := range []int{0, 500, 502, 503, 504} {
+		if got := writeFailed("create", st); got != "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again." {
+			t.Errorf("status %d: %q", st, got)
+		}
+	}
+	if got := writeFailed("update", 409); got != "update failed (status 409)" {
+		t.Errorf("a clear refusal changed: %q", got)
 	}
 }

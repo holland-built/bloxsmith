@@ -9,6 +9,7 @@
 // applies only what it previewed; see go/internal/dashboard/lists.go.
 import { useId, useRef, useState } from 'react'
 import { failureText, useApi } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
 import { compareTop, neverAdd, parseCsv, parsePasted } from '../lib/siteList.js'
@@ -241,7 +242,7 @@ function DailyProposals({ setup, why }) {
     setBusy(true)
     const r = await authFetch('/api/lists/watch', { method: 'POST', body: JSON.stringify(b) })
     setBusy(false)
-    if (!r.ok) { setMsg({ err: true, text: r.data?.error || failureText(r.status, 'save the watch setting') }); return }
+    if (!r.ok || !r.data) { setMsg({ err: true, text: writeFailureText(r.status, r.data, 'save the watch setting') }); return }
     setMsg({ err: false, text: done })
     watches.refetch()
     props.refetch()
@@ -401,7 +402,7 @@ export default function SiteLists() {
     setNeverBusy(true)
     const r = await authFetch('/api/lists/never-add', { method: 'POST', body: JSON.stringify({ sites: parsed.domains }) })
     setNeverBusy(false)
-    if (!r.ok) { setNeverMsg({ err: true, text: r.data?.error || failureText(r.status, 'save the never-add list') }); return }
+    if (!r.ok || !r.data) { setNeverMsg({ err: true, text: writeFailureText(r.status, r.data, 'save the never-add list') }); return }
     setNeverText(null)
     setNeverMsg({ err: false, text: `Saved: ${plural(r.data.sites.length, 'site')} never to add.` })
     neverApi.refetch()

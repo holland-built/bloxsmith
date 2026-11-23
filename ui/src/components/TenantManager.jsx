@@ -9,6 +9,7 @@ import AiProviderForm from './AiProviderForm.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 import { tokenFetch, vpost } from '../lib/authFetch.js'
 import { failureText } from '../lib/api.js'
+import { writeFailureText } from '../lib/writeFailure.js'
 
 const inCls =
   `${FIELD_CLS} w-full`
@@ -171,9 +172,9 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
-    })
-    const d = await r.json().catch(() => ({}))
-    if (d.ok) {
+    }).catch(() => null)
+    const d = r ? await r.json().catch(() => null) : null
+    if (d?.ok) {
       window.location.reload()
       return
     }
@@ -189,7 +190,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
     // bare "could not switch" under a control that looks untouched reads as a
     // click that never registered.
     const attempted = accounts.find((a) => a.id === id)?.name
-    const why = d.error || failureText(r.status, 'switch account')
+    const why = writeFailureText(r?.status ?? 0, d, 'switch account')
     setAcctSwitchErr(attempted ? `${attempted}: ${why}` : why)
   }
 
