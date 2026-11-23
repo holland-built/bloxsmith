@@ -39,12 +39,23 @@ const firstScreenReach = (page: Page) => page.evaluate(() => {
   return { available, reach: Math.max(...seen.map((b) => b.right)) };
 });
 
-for (const width of [1440, 2000]) {
+for (const width of [961, 1100, 1320, 1440, 2000]) {
   test(`Overview uses the available width at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await busyWorld(page);
     const { available, reach } = await firstScreenReach(page);
     expect(reach).toBeGreaterThanOrEqual(available - 24);
+  });
+}
+
+for (const width of [961, 1100, 1320]) {
+  test(`attention list and summaries sit side by side at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await busyWorld(page);
+    const look = await page.locator('section:has(#br-look)').boundingBox();
+    const since = await page.locator('section:has(#br-since)').boundingBox();
+    expect(since!.x).toBeGreaterThanOrEqual(look!.x + look!.width);
+    expect(Math.abs(since!.y - look!.y)).toBeLessThanOrEqual(1);
   });
 }
 
@@ -73,7 +84,7 @@ test('reading and Tab order follow the screen: attention list first', async ({ p
 });
 
 test('the page does not scroll sideways at the width where the wide layout starts', async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.setViewportSize({ width: 961, height: 800 });
   await busyWorld(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);

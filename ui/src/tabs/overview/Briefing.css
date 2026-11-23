@@ -85,7 +85,7 @@
 
 /* Wide screens: the headline becomes one band across the top, so the space
    under it goes to the lists instead of a tall narrow column. */
-@media (min-width: 1200px) {
+@media (min-width: 961px) {
   .br-rail { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "date verdict primary" "title line updated"; gap: 2px 40px; align-items: center }
   .br-date { grid-area: date } .br-rail h1 { grid-area: title; font-size: 26px }
   .br .br-verdict { grid-area: verdict; margin: 0; font-size: 28px } .br-verdict .br-mark { width: 22px; height: 22px }
