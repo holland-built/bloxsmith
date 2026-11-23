@@ -212,7 +212,9 @@ func TestRBSiteProvisionFailureReportsIncompleteWithNamedResiduals(t *testing.T)
 // it verifiable rather than a claim.
 func TestRBSiteProvisionFailureCleanRollbackReportsComplete(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
-	f.hostStatus = 500
+	// A clear refusal: a create with no clear answer may exist, so it is not
+	// "complete" (TestSiteProvision_UnknownHostCreateIsNotComplete).
+	f.hostStatus = 403
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))

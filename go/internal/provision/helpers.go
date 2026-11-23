@@ -47,6 +47,8 @@ type M = map[string]any
 type Error struct {
 	Msg string
 	Err error // wrapped cause, e.g. a *rest.UpstreamError; nil for perr-built errors
+	// Unclear marks a write that got no clear answer, so it may have landed.
+	Unclear bool
 }
 
 func (e *Error) Error() string { return e.Msg }

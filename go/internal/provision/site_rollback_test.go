@@ -683,7 +683,7 @@ func TestSiteRollbackReportsAFailedDeleteAndKeepsGoing(t *testing.T) {
 
 	wantResidual := []any{M{
 		"kind": "host", "id": "ipam/host/h-2",
-		"label": "gw02.site-hq.example.com", "status": 500,
+		"label": "gw02.site-hq.example.com", "status": 500, "unknown": true,
 	}}
 	if got := getList(result, "rollback_residual"); !reflect.DeepEqual(got, wantResidual) {
 		t.Fatalf("rollback_residual = %v, want %v — the operator needs the kind and the id of what "+

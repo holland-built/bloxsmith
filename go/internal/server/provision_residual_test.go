@@ -173,7 +173,8 @@ func siteUpstream(refuseSubnetDeletes bool) http.HandlerFunc {
 			fmt.Fprintf(w, `{"result":{"id":"%s","address":"10.1.%s.0","cidr":25}}`,
 				id, strings.TrimPrefix(id, "ipam/subnet/sn-"))
 		case strings.HasSuffix(path, "/ipam/host"):
-			w.WriteHeader(500)
+			// A clear refusal, so cleanup can honestly report on all it made.
+			w.WriteHeader(400)
 			io.WriteString(w, `{"error":"host create refused"}`)
 		case strings.HasSuffix(path, "/ipam/range"):
 			fmt.Fprintf(w, `{"result":{"id":"ipam/range/rg-%d"}}`, next(&ranges))

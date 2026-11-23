@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"sort"
@@ -461,7 +462,8 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	subnet := firstRow(resp)
 	sid := pyStr(subnet["id"])
 	if pyStr(subnet["address"]) == "" || sid == "" {
-		return nil, perr("No free /%d subnet available in block for %s", cidr, sdef.Name)
+		// A 2xx that names no subnet says nothing about whether one was made.
+		return nil, failedWrite("create subnet", sdef.Name, status)
 	}
 	// Recorded the moment the subnet EXISTS upstream, before the tagging PATCH —
 	// same rule as createDHCPRange and createSubnets' reverse zones, and the same
@@ -511,13 +513,17 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 				M{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": p.spaceID}, nil)
 			nsub := asMap(asMap(resp)["result"])
 			if st == 0 || st == 502 || st == 503 || st == 504 || ((st == 200 || st == 201) && pyStr(nsub["id"]) == "") {
-				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
+				e := perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
 					"the clean %s may have been created, but Infoblox's answer was lost (status %d). "+
 					"Check for it in the Editor before running again", made, sdef.Name, clean, st)
+				e.Unclear = true
+				return nil, e
 			}
 			if st != 200 && st != 201 && rest.UnclearFailure(st) {
-				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed. %s",
+				e := perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed. %s",
 					made, sdef.Name, failedWrite("create the clean subnet", clean.String(), st).Msg)
+				e.Unclear = true
+				return nil, e
 			}
 			if st != 200 && st != 201 {
 				return nil, perr("Infoblox picked %s for %s, which another IP space also uses, so it was removed; "+
@@ -546,6 +552,10 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	patchBody := M{"name": sdef.Name,
 		"comment": fmt.Sprintf("%s site - %s network", capitalize(p.cfg.Site), sdef.Purpose), "tags": tags}
 	presp, pstatus, _ := p.e.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
+	if pstatus != 200 && pstatus != 201 && rest.UnclearFailure(pstatus) {
+		return nil, perr("Subnet %s was created, but the tagging needed for teardown got no clear answer (status %d) "+
+			"and may or may not have worked. Check its tags in the Editor", sdef.Name, pstatus)
+	}
 	if pstatus != 200 && pstatus != 201 {
 		return nil, perr("Subnet %s created but tagging failed (needed for teardown): status %d %v", sdef.Name, pstatus, presp)
 	}
@@ -1017,7 +1027,8 @@ func (p *SiteProvisioner) rollback(partial M) M {
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
 		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep(kind, objID, status)})
-			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status})
+			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status,
+				"unknown": rest.UnclearFailure(status)})
 			return
 		}
 		deleted++
@@ -1117,6 +1128,23 @@ func rollbackReport(attempted, deleted int, residual []any) M {
 		outcome = "incomplete"
 	}
 	return M{"outcome": outcome, "attempted": attempted, "deleted": deleted, "residual": residual}
+}
+
+// noteCreateInDoubt records on a rollback report that the create which stopped
+// the run got no clear answer, so it may exist though rollback has no id for it.
+func noteCreateInDoubt(report M, runErr error) {
+	var e *Error
+	if !errors.As(runErr, &e) || !e.Unclear {
+		return
+	}
+	note := "The last create got no clear answer, so it may exist. Check it in the Editor before trying again."
+	if report["outcome"] != "incomplete" {
+		if n, _ := report["deleted"].(int); n > 0 {
+			note = fmt.Sprintf("Cleanup removed %d object(s) it had created. %s", n, note)
+		}
+		report["outcome"] = "unknown"
+	}
+	report["note"] = note
 }
 
 // Provision is SiteProvisioner.provision (server.py:1894).
@@ -1275,6 +1303,7 @@ func (p *SiteProvisioner) Provision() (M, error) {
 		if !p.cfg.DryRun {
 			p.emit(M{"step": fmt.Sprintf("Provisioning failed (%s) — initiating rollback", runErr.Error())})
 			report = p.rollback(result)
+			noteCreateInDoubt(report, runErr)
 		}
 		return M{"rollback": report}, runErr
 	}

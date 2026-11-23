@@ -83,33 +83,33 @@ func TestSubnetStream_AllocationFailures_ReportFailureAndAuditOnlyTheError(t *te
 			// status is all there is — and it must still be a failure.
 			name:       "5xx with a non-JSON body",
 			upstream:   subnetUpstream(502, `<html>gateway</html>`, 0, ""),
-			wantInText: "HTTP 502",
+			wantInText: "no clear answer (status 502)",
 		},
 		{
 			// The one shape rest.Write DOES return an error for.
 			name:       "transport failure",
 			upstream:   nil, // wired below
-			wantInText: "could not be sent",
+			wantInText: "no clear answer (status 0)",
 		},
 		{
 			// A 2xx that allocated nothing. Just as empty as a 400, and it used to be
 			// the exact shape that produced "Provisioned — subnet ".
 			name:       "2xx with an empty results list",
 			upstream:   subnetUpstream(200, `{"results":[]}`, 0, ""),
-			wantInText: "no subnet address",
+			wantInText: "may or may not have been created",
 		},
 		{
 			// The address is the field every consumer needs; an id alone cannot be
 			// reconciled, displayed, or turned into a reverse zone.
 			name:       "2xx with an id but no address",
 			upstream:   subnetUpstream(200, `{"results":[{"id":"ipam/subnet/sn-1","cidr":25}]}`, 0, ""),
-			wantInText: "no subnet address",
+			wantInText: "may or may not have been created",
 		},
 		{
 			// A non-string address cannot become a usable one by coercion.
 			name:       "2xx with a non-string address",
 			upstream:   subnetUpstream(200, `{"results":[{"id":"ipam/subnet/sn-1","address":{"v":"10.1.7.0"},"cidr":25}]}`, 0, ""),
-			wantInText: "no subnet address",
+			wantInText: "may or may not have been created",
 		},
 	}
 	for _, tc := range cases {

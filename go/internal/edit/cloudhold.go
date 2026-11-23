@@ -3,6 +3,8 @@ package edit
 import (
 	"fmt"
 	"net/netip"
+
+	"bloxsmith/internal/rest"
 )
 
 // Each public cloud keeps a few addresses of every network for itself. The
@@ -84,7 +86,7 @@ func (c *Client) holdCloudAddresses(cloud string, made netip.Prefix, space strin
 		switch {
 		case (status == 200 || status == 201) && id != "":
 			held = append(held, M{"id": id, "address": h.Address, "label": h.Label})
-		case writeUnreadable(resp, status) || status == 200 || status == 201:
+		case rest.UnclearFailure(status):
 			notHeld = append(notHeld, M{"address": h.Address, "label": h.Label,
 				"reason": "Infoblox did not say whether it was held, so check it by hand"})
 		default:

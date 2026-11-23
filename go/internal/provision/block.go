@@ -313,10 +313,11 @@ func (p *BlockProvisioner) rollback(result M) M {
 		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep("block", blockID, status)})
 			residual = append(residual, M{
-				"kind":   "address_block",
-				"id":     blockID,
-				"label":  label,
-				"status": status,
+				"kind":    "address_block",
+				"id":      blockID,
+				"label":   label,
+				"status":  status,
+				"unknown": rest.UnclearFailure(status),
 			})
 			continue
 		}
@@ -420,6 +421,7 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		if !p.cfg.DryRun {
 			p.emit(M{"step": fmt.Sprintf("Block provisioning failed (%s) — initiating rollback", runErr.Error())})
 			report = p.rollback(result)
+			noteCreateInDoubt(report, runErr)
 		}
 		return M{"rollback": report}, runErr
 	}
@@ -530,6 +532,9 @@ type BlockDecommissioner struct {
 	// unconfirmed lists deletes Infoblox accepted without saying they finished.
 	unconfirmed []any
 }
+
+// Unconfirmed lists the deletes Infoblox accepted without saying they finished.
+func (d *BlockDecommissioner) Unconfirmed() []any { return d.unconfirmed }
 
 func (e *Engine) NewBlockDecommissioner(name, ipSpace string, dryRun bool, emit Emitter) *BlockDecommissioner {
 	return &BlockDecommissioner{e: e, name: name, ipSpace: ipSpace, dryRun: dryRun, emit: emit}
@@ -734,8 +739,10 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // Only a clear refusal may say it failed. detail, when given, is the reply.
 func failedWrite(action, what string, status int, detail ...any) *Error {
 	if rest.UnclearFailure(status) {
-		return perr("No clear answer to %s %s (status %d), so it may or may not have happened. "+
+		e := perr("No clear answer to %s %s (status %d), so it may or may not have happened. "+
 			"Check it in the Editor before trying again", action, what, status)
+		e.Unclear = true
+		return e
 	}
 	if len(detail) > 0 {
 		return perr("Failed to %s %s: status %d %v", action, what, status, detail[0])

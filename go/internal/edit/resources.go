@@ -260,7 +260,9 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		sid = pyStr(subnet["id"])
 	}
 	if sid == "" {
-		return M{"ok": false, "error": "no free subnet available in block"}, 502
+		// A 2xx naming no subnet says nothing about whether one was carved out.
+		return createdMaybe("subnet", status,
+			"Its teardown tags could not be applied either, so no tag filter will find it"), unclearStatus(status)
 	}
 	scidr := cidr
 	if v, ok := intCoerce(subnet["cidr"]); ok {
@@ -334,7 +336,9 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		// writing nothing at all (an orphan with no record it was created).
 		out := M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
 			"detail": presp, "id": sid, "tagging_failed": true}
-		if rest.NoClearAnswer(pstatus) {
+		code := statusOr(pstatus, 502)
+		if rest.UnclearFailure(pstatus) {
+			code = unclearStatus(pstatus)
 			out["error"] = "subnet created, but the tagging needed for teardown got no clear answer and may or may not have worked. Check its tags in Infoblox"
 		}
 		if held := CloudHeld(cloud, made.Masked()); perr == nil && held != nil {
@@ -344,7 +348,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 			}
 			out["not_held"] = notHeld
 		}
-		return out, statusOr(pstatus, 502)
+		return out, code
 	}
 	if r := asMap(presp); r != nil && asMap(r["result"]) != nil {
 		subnet = asMap(r["result"])
@@ -407,7 +411,13 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 		return nil, 0, false
 	}
 	if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-		return nil, 0, false
+		if !rest.UnclearFailure(dst) {
+			return nil, 0, false
+		}
+		// The shared pick may be gone or may not, so nothing is built on it.
+		return M{CreatedUnreadableKey: true, "id": sid, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, "+
+			"but it may or may not have been removed (%s). The clean %s was not made. Check it in the Editor",
+			made, statusPhrase(dst), clean)}, unclearStatus(dst), true
 	}
 	label := clean.String()
 	resp, st, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/subnet",

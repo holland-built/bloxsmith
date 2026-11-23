@@ -681,19 +681,19 @@ func TestSubnetCreate_TaggingFailureNamesTheId(t *testing.T) {
 	}
 }
 
-// TestSubnetCreate_NoFreeSubnetIsNotSuccess: a 200 carrying no rows is a real
-// "the block is full" answer, not a created subnet — and nothing must be
-// PATCHed afterwards.
+// TestSubnetCreate_NoFreeSubnetIsNotSuccess: a 2xx carrying no rows does not say
+// what happened, so it is neither a created subnet nor a "the block is full"
+// answer — and nothing must be PATCHed afterwards.
 func TestSubnetCreate_NoFreeSubnetIsNotSuccess(t *testing.T) {
 	f := builderFakeServer(t, func(builderReq) (int, string) {
 		return 201, `{"results":[]}`
 	})
 	res, status := f.client().SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": float64(24), "dry": false})
-	if res["ok"] != false || status != 502 {
-		t.Fatalf("= (%v, %d), want ok:false 502", res, status)
+	if resultOK(res) || res[CreatedUnreadableKey] != true || status != 502 {
+		t.Fatalf("= (%v, %d), want a may-exist result with 502", res, status)
 	}
-	if res["error"] != "no free subnet available in block" {
-		t.Fatalf("error = %v, want the block-full message", res["error"])
+	if msg := pyStr(res["error"]); !strings.Contains(msg, "MAY EXIST") || strings.Contains(msg, "no free") {
+		t.Fatalf("error = %v, want the may-exist message", res["error"])
 	}
 	if got := f.count(); got != 1 {
 		t.Fatalf("%d upstream requests, want 1 (nothing to tag)", got)

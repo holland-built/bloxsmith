@@ -912,6 +912,10 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	}
 
 	addresses := respAddresses(resp)
+	if len(addresses) == 0 {
+		// A 2xx naming no address: one may have been reserved all the same.
+		return M{"ok": false, "error": rest.OutcomeUnknown}, 502
+	}
 	// Infoblox picked these itself. One that a DHCP range, reservation or host
 	// already uses is not kept, and neither is any when that cannot be
 	// checked: every address just made is released. The check is a fresh read
@@ -962,7 +966,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		}
 	}
 	out := M{"ok": true, "addresses": addressSummaries(addresses)}
-	unset := 0
+	unset, nameUnclear := 0, 0
 	for _, a := range addresses {
 		patch := M{"tags": withMadeTag(nil)}
 		if name != "" {
@@ -970,14 +974,26 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		}
 		path, err := ObjectPath("ipam/address", pyStr(asMap(a)["id"]))
 		if err == nil {
-			if _, st, _ := c.Rest.Write("PATCH", path, patch, nil); st == 200 || st == 201 {
+			_, st, _ := c.Rest.Write("PATCH", path, patch, nil)
+			if st == 200 || st == 201 {
+				continue
+			}
+			if rest.UnclearFailure(st) {
+				nameUnclear++
 				continue
 			}
 		}
 		unset++
 	}
-	if unset > 0 && name != "" {
-		out["warning"] = fmt.Sprintf("the address is reserved, but the name %q could not be set on %d of them. Set it in the Editor", name, unset)
+	if name != "" && unset+nameUnclear > 0 {
+		parts := []string{}
+		if unset > 0 {
+			parts = append(parts, fmt.Sprintf("the name %q could not be set on %d of them", name, unset))
+		}
+		if nameUnclear > 0 {
+			parts = append(parts, fmt.Sprintf("the name %q may or may not have been set on %d of them", name, nameUnclear))
+		}
+		out["warning"] = "the address is reserved, but " + strings.Join(parts, " and ") + ". Check it in the Editor"
 	}
 
 	if dns != nil && len(addresses) > 0 {

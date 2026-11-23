@@ -119,8 +119,8 @@ test('a cleanup delete with no clear answer says the result is unknown', async (
   await stubSeedStream(page, failureBody({
     outcome: 'incomplete', attempted: 2, deleted: 0,
     residual: [
-      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 504 },
-      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 502 },
+      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 504, unknown: true },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 502, unknown: true },
     ],
   }));
   await seedApply(page);
@@ -134,7 +134,7 @@ test('a mixed cleanup separates what is still there from what is unknown', async
     outcome: 'incomplete', attempted: 2, deleted: 0,
     residual: [
       { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 409 },
-      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 504 },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 504, unknown: true },
     ],
   }));
   await seedApply(page);
@@ -146,11 +146,63 @@ test('a mixed cleanup separates what is still there from what is unknown', async
 test('a cleanup delete that got a 500 is unknown too', async ({ page }) => {
   await stubSeedStream(page, failureBody({
     outcome: 'incomplete', attempted: 1, deleted: 0,
-    residual: [{ kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 500 }],
+    residual: [{ kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 500, unknown: true }],
   }));
   await seedApply(page);
   await expect(page.getByText(/Cleanup result unknown for 1 object/).first()).toBeVisible();
   await expect(page.getByText(STILL_LIVE)).toHaveCount(0);
+});
+
+test('a cleanup delete the server marks unknown is not called still live', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 1, deleted: 0,
+    residual: [{ kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 202, unknown: true }],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup result unknown for 1 object/).first()).toBeVisible();
+  await expect(page.getByText(STILL_LIVE)).toHaveCount(0);
+});
+
+test('a create in doubt is not called nothing created', async ({ page }) => {
+  const note = 'The last create got no clear answer, so it may exist. Check it in the Editor before trying again.';
+  await stubSeedStream(page, failureBody({ outcome: 'unknown', attempted: 0, deleted: 0, residual: [], note }));
+  await seedApply(page);
+  await expect(page.getByText(note).first()).toBeVisible();
+  await expect(page.getByText(/Nothing had been created/)).toHaveCount(0);
+  await expect(page.getByText(/nothing was left behind/)).toHaveCount(0);
+});
+
+test('a create in doubt beside a failed cleanup shows both', async ({ page }) => {
+  const note = 'The last create got no clear answer, so it may exist. Check it in the Editor before trying again.';
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 1, deleted: 0, note,
+    residual: [{ kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 403 }],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(note).first()).toBeVisible();
+  await expect(page.getByText(/Cleanup could not remove 1 object\b/).first()).toBeVisible();
+});
+
+test('a demo teardown with an unconfirmed delete does not say complete', async ({ page }) => {
+  const note = '1 template(s) may or may not be fully removed: blocks/regional_address_blocks.yaml. Check them in the Editor.';
+  await page.route('**/api/vault/write-target*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ known: true, tenant: 't/-', label: 'Test Tenant', writable: true }) }));
+  await page.route('**/api/teardown/seed-demo/stream*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/event-stream',
+    body: route.request().url().includes('dry=1')
+      ? PREVIEW_OK
+      : sseFrame({ done: true, succeeded: 2, failed: 0, skipped: 0, unconfirmed: 1, total: 3, unconfirmed_note: note }),
+  }));
+  await page.goto('/#provision');
+  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByPlaceholder('DELETE').fill('DELETE');
+  await page.getByRole('button', { name: 'Preview', exact: true }).last().click();
+  await expect(page.getByText(/Review the plan, then Tear down demo/)).toBeVisible();
+  // The side rail has a button of the same name; the Apply button comes after it.
+  await page.getByRole('button', { name: 'Tear down demo', exact: true }).last().click();
+  await expect(page.getByText(note).first()).toBeVisible();
+  await expect(page.getByText('Teardown complete.')).toHaveCount(0);
 });
 
 test('a real run whose connection drops says the outcome is unknown', async ({ page }) => {

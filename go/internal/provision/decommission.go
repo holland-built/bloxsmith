@@ -76,6 +76,9 @@ func (e *Engine) NewSiteDecommissioner(cfg *DecommissionConfig, emit Emitter) *S
 
 // --- PLAN phase: reads only, no deletes -------------------------------------
 
+// Unconfirmed lists the deletes Infoblox accepted without saying they finished.
+func (d *SiteDecommissioner) Unconfirmed() []any { return d.unconfirmed }
+
 func (d *SiteDecommissioner) resolveIPSpace() error {
 	space, err := cspq(d.cfg.IPSpace)
 	if err != nil {

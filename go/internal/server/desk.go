@@ -482,8 +482,12 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 				o.State, o.Error = runs.Deleted, ""
 			default:
 				o.State, o.Error, o.Outcome = runs.Error, anyStr(res["error"]), outcomeRefused
-				if rest.UnclearFailure(status) {
+				switch {
+				case rest.UnclearFailure(status):
 					o.Outcome = outcomeUnknown
+				case earlier == outcomeUnknown:
+					// This retry was refused, but the first delete may have landed.
+					o.Error, o.Outcome = rest.OutcomeUnknown, outcomeUnknown
 				}
 				failed++
 			}

@@ -276,21 +276,24 @@ function useStreamFlow(path) {
 // attempted (a preview writes nothing, so there is nothing to report), and an
 // absent/unrecognised outcome means the server did not tell us — and an
 // unknown answer must never be painted as a reassuring one.
-// A cleanup delete with no clear answer may have worked. An entry with a reason
-// is one the server knows is still there (it had no id to delete).
-const cleanupUnknown = (o) => !o?.reason && (o?.status === 0 || o?.status >= 500)
+// The server marks a cleanup delete with no clear answer: it may have worked.
+const cleanupUnknown = (o) => o?.unknown
 
 function RollbackReport({ report }) {
   if (!report) return null
   const residual = Array.isArray(report.residual) ? report.residual : []
   const deleted = report.deleted ?? 0
   const attempted = report.attempted ?? 0
+  // The create that stopped the run got no clear answer, so it may exist.
+  const doubt = report.note && <div className="text-copy font-semibold" style={{ color: COLORS.warn }}>{report.note}</div>
 
+  if (report.outcome === 'unknown') return <div role="alert">{doubt}</div>
   if (report.outcome === 'incomplete') {
     const unknown = residual.filter(cleanupUnknown).length
     const stuck = (residual.length || attempted - deleted) - unknown
     return (
       <div role="alert" className="flex flex-col gap-0.5">
+        {doubt}
         {stuck > 0 && (
           <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
             Cleanup could not remove {stuck} object{stuck === 1 ? '' : 's'} — {stuck === 1 ? 'it is' : 'they are'} still live on the customer&rsquo;s
@@ -522,6 +525,7 @@ function SiteMode({ isAdmin }) {
 
   const build = useStreamFlow('/api/provision/site/stream')
   const teardown = useStreamFlow('/api/teardown/site/stream')
+  const torn = teardown.result?.result
 
   function baseQs(dry) {
     const q = new URLSearchParams({ template: siteTemplate, dry: dry ? '1' : '0' })
@@ -698,20 +702,20 @@ function SiteMode({ isAdmin }) {
           <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
-      {teardown.result?.result && (
+      {torn && (
         <Card key="provision-site-teardown-result" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
           <div className="font-mono text-note flex flex-col gap-0.5">
-            <div><span className="text-muted">Site: </span><ItemLink kind="site" value={teardown.result.result.site || siteTemplate} /></div>
+            <div><span className="text-muted">Site: </span><ItemLink kind="site" value={torn.site || siteTemplate} /></div>
             <div>
-              <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_deleted ? teardown.result.result.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={teardown.result.result.dns_zone_fqdn} />}{' '}
-              {teardown.result.result.dns_zone_deleted ? '(deleted)' : teardown.result.result.dns_zone_unknown ? '(result unknown)' : '(kept)'}
+              <span className="text-muted">DNS zone: </span>{torn.dns_zone_deleted ? torn.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={torn.dns_zone_fqdn} />}{' '}
+              {torn.dns_zone_deleted ? '(deleted)' : torn.dns_zone_unknown ? '(result unknown)' : '(kept)'}
             </div>
             <div>
-              <span className="text-muted">Subnets: </span>{(teardown.result.result.subnets_deleted || []).length} ·{' '}
-              <span className="text-muted">DHCP ranges: </span>{(teardown.result.result.dhcp_ranges_deleted || []).length} ·{' '}
-              <span className="text-muted">Hosts: </span>{(teardown.result.result.hosts_deleted || []).length} deleted
+              <span className="text-muted">Subnets: </span>{(torn.subnets_deleted || []).length} ·{' '}
+              <span className="text-muted">DHCP ranges: </span>{(torn.dhcp_ranges_deleted || []).length} ·{' '}
+              <span className="text-muted">Hosts: </span>{(torn.hosts_deleted || []).length} deleted
             </div>
-            {teardown.result.result.unconfirmed_note && <div style={{ color: COLORS.warn }}>{teardown.result.result.unconfirmed_note}</div>}
+            {torn.unconfirmed_note && <div style={{ color: COLORS.warn }}>{torn.unconfirmed_note}</div>}
             {teardown.status === 'previewed' && <div style={{ color: COLORS.warn }}>Preview — nothing was deleted.</div>}
           </div>
         </Card>
@@ -873,7 +877,8 @@ function SeedMode({ isAdmin }) {
                 : null)
             }
             message={
-              teardown.status === 'previewed' ? previewMsg('Tear down demo')
+              teardown.result?.unconfirmed_note ? teardown.result.unconfirmed_note
+                : teardown.status === 'previewed' ? previewMsg('Tear down demo')
                 : teardown.status === 'applied' && teardownOutcome?.kind === 'partial'
                   ? `Teardown partial — ${teardownOutcome.succeeded} of ${teardownOutcome.total} succeeded, ${teardownOutcome.failed} failed.`
                 : teardown.status === 'applied' && teardownOutcome?.kind === 'success' ? 'Teardown complete.'

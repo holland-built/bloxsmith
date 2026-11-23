@@ -195,8 +195,9 @@ func TestReserveCreate_NoClearAnswerIsAudited(t *testing.T) {
 			if !strings.Contains(rr.Body.String(), "MAY EXIST") {
 				t.Fatalf("body = %s", rr.Body.String())
 			}
-			if n := len(auditEntries(t, logPath, "selfservice-allocate-record-unreadable")); n != 1 {
-				t.Fatalf("%d audit rows, want 1", n)
+			detail := uaOnly(t, logPath, "selfservice-allocate-record-unreadable", "the reservation may exist")
+			if _, claimed := detail["still_reserved"]; claimed {
+				t.Fatalf("audit says the address is still reserved, which is not known: %v", detail)
 			}
 		})
 	}

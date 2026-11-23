@@ -190,10 +190,16 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		// releasing them would strip a live record of its addresses). The
 		// addresses ARE known, so they go in the row; the record's id is not, so
 		// nothing stands in for it.
-		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), map[string]any{
+		detail := map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"], "tag_value": b["tag_value"],
-			"addresses": res["addresses"], "still_reserved": true, "created_unreadable": true,
-			"fixed_address": res["fixed_address"]})
+			"addresses": res["addresses"], "created_unreadable": true,
+			"fixed_address": res["fixed_address"]}
+		// When the reservation itself got no clear answer, whether it holds the
+		// address is not known, so the row does not say it does.
+		if fa, _ := res["fixed_address"].(map[string]any); !createdUnreadable(fa) {
+			detail["still_reserved"] = true
+		}
+		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), detail)
 	case !isDry(res):
 		// The ok-only gate left the same hole editCreate had: an ok:false that
 		// nonetheless left live objects on the tenant. Here they are IP addresses
