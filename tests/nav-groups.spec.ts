@@ -345,6 +345,7 @@ const JOB_TAB_LABELS = new Set(['Overview', 'Get an address', 'Automate', 'Daily
 test('the page menu reaches every page, and lists each once', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Full menu' }).click();
   const nav = page.locator('nav[aria-label="Pages"]');
   for (const label of GROUP_LABELS) {
     const btn = nav.getByRole('button', { name: `${label} pages` });
@@ -361,6 +362,7 @@ test('the page menu reaches every page, and lists each once', async ({ page }) =
 test('a group folds, stays as you left it after a reload, and opens itself for the page you are on', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#overview');
+  await page.getByRole('button', { name: 'Full menu' }).click();
   const nav = page.locator('nav[aria-label="Pages"]');
   const risk = nav.getByRole('button', { name: 'Risk pages' });
   await expect(risk).toHaveAttribute('aria-expanded', 'false');

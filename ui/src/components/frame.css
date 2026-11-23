@@ -3,7 +3,7 @@
 
 :root {
   --frame-top: 56px;
-  --frame-rail: 56px;
+  --frame-rail: 84px;
   --frame-rail-open: 232px;
   --frame-tint: color-mix(in srgb, var(--color-accent) 16%, transparent);
   --frame-ring: color-mix(in srgb, var(--color-accent) 38%, transparent);
@@ -79,60 +79,63 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
 .frame-menu-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 6px 8px 2px; border-top: 1px solid var(--color-card-border); font-size: 12px; color: var(--color-muted); }
 .frame-menu-foot .frame-refresh-off { display: none; }
 
-/* ---------- side rail ---------- */
+/* ---------- side bar ---------- */
+/* It changes size only when the caret is pressed, and then the page moves over. */
 .frame-rail {
   flex: none; width: var(--frame-rail); position: relative; z-index: 20;
   background: var(--color-card); border-inline-end: 1px solid var(--color-card-border);
-  transition: width 180ms cubic-bezier(.2, 0, 0, 1);
 }
+.frame-rail[data-full] { width: var(--frame-rail-open); }
 .frame-rail-inner { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-.frame-rail-head { height: var(--frame-top); flex: none; display: flex; align-items: center; gap: 10px; padding: 0 17px; white-space: nowrap; }
-.frame-rail-toggle { display: none; margin-inline-start: auto; }
-.frame-nav { flex: 1; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; padding: 4px 8px 16px; display: flex; flex-direction: column; gap: 2px; }
-.frame-nav-gap { height: 14px; flex: none; }
+.frame-rail-head { height: var(--frame-top); flex: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px 0 12px; white-space: nowrap; }
+.frame-rail[data-full] .frame-rail-head { justify-content: flex-start; gap: 10px; padding-inline: 17px 8px; }
+.frame-rail-name { min-width: 0; flex: 1; }
+.frame-rail-toggle svg { rotate: -90deg; transition: rotate 150ms ease-out; }
+.frame-rail-toggle[aria-expanded='true'] svg { rotate: 90deg; }
+.frame-nav { flex: 1; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; padding: 4px 6px 16px; display: flex; flex-direction: column; gap: 2px; }
+.frame-rail[data-full] .frame-nav { padding-inline: 8px; }
+.frame-nav-gap { height: 10px; flex: none; }
 .frame-link {
-  width: 100%; min-height: 34px; display: flex; align-items: center; gap: 10px; padding: 6px 11px;
+  position: relative; width: 100%; min-height: 34px; display: flex; align-items: center; gap: 10px; padding: 6px 11px;
   border: 0; border-radius: 8px; background: transparent; white-space: nowrap;
   font-size: 13px; text-align: start; text-decoration: none; cursor: pointer;
 }
 .frame-link > svg { flex: none; }
 .frame-link-text { min-width: 0; flex: 1; }
-.frame-link[aria-current='page'] {
-  background: var(--frame-tint); box-shadow: inset 0 0 0 1px var(--frame-ring);
+
+/* Narrow: the icon with its word underneath. Long names wrap. */
+.frame-rail:not([data-full]) :is(.frame-nav > .frame-link, .frame-group) {
+  flex-direction: column; justify-content: center; gap: 3px; min-height: 50px; padding: 5px 3px;
+  white-space: normal; text-align: center; font-size: 11px; line-height: 1.2;
+}
+.frame-rail:not([data-full]) :is(.frame-nav > .frame-link, .frame-group) > svg { width: 18px; height: 18px; }
+.frame-rail:not([data-full]) :is(.frame-nav > .frame-link, .frame-group) > .frame-link-text { flex: none; width: 100%; overflow-wrap: break-word; }
+.frame-group[aria-expanded='true'] { background: var(--frame-hover); color: var(--color-txt); }
+.frame-rail[data-full] .frame-group[aria-expanded='true'] { background: transparent; }
+
+/* Where you are: a solid outline and bold text, so colour is not the only sign. */
+.frame-link:is([aria-current='page'], [aria-current='true']) {
+  background: var(--frame-tint); box-shadow: inset 0 0 0 2px var(--color-link);
   color: var(--color-txt); font-weight: 600;
 }
-.frame-link[aria-current='page'] > svg { color: var(--color-link); }
+.frame-link:is([aria-current='page'], [aria-current='true']) > svg { color: var(--color-link); }
 .frame-group[data-holds-page] { color: var(--color-txt); }
 .frame-fold { display: inline-grid; flex: none; transition: rotate 150ms ease-out; }
 .frame-fold[data-open] { rotate: 180deg; }
 .frame-sub { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 6px 26px; }
 .frame-sublink { min-height: 30px; padding-block: 4px; }
 
-/* Open over the page, so the content never moves. */
-.frame-rail:is([data-open], :has(:focus-visible)) {
-  width: var(--frame-rail-open); margin-inline-end: calc(var(--frame-rail) - var(--frame-rail-open)); box-shadow: var(--frame-pop);
+/* The small panel beside the narrow bar. Fixed, so the bar's scrolling cannot clip it. */
+.frame-panel {
+  position: fixed; inset-inline-start: calc(var(--frame-rail) + 6px); top: 8px; z-index: 30;
+  width: 216px; max-height: calc(100dvh - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  background: var(--color-card); border-radius: 8px; box-shadow: var(--frame-pop);
 }
-/* Shut: the words leave the screen but keep naming the controls. */
-@media (hover: none) {
-  .frame-rail-head { padding-inline: 9px; }
-  .frame-rail-head .frame-logo { display: none; }
-  .frame-rail-toggle { display: inline-grid; margin-inline-start: 0; }
-  .frame-rail:not([data-open], :has(:focus-visible)) .frame-link-text {
-    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
-  }
-  .frame-rail:not([data-open], :has(:focus-visible)) .frame-fold { display: none; }
-  /* Hidden from sight only: display:none would take these links out of the Tab order. */
-  .frame-rail:not([data-open], :has(:focus-visible)) .frame-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-}
-@media (hover: hover) {
-  .frame-rail[data-hover] { width: var(--frame-rail-open); margin-inline-end: calc(var(--frame-rail) - var(--frame-rail-open)); box-shadow: var(--frame-pop); }
-  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-link-text {
-    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
-  }
-  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-fold { display: none; }
-  .frame-rail:not([data-hover], [data-open], :has(:focus-visible)) .frame-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .frame-rail:is([data-hover], [data-open], :has(:focus-visible)) .frame-rail-toggle { display: none; }
+.frame-panel-title { padding: 2px 11px 6px; font-size: 13px; font-weight: 600; color: var(--color-txt); }
+.frame-panel .frame-sublink { min-height: 34px; white-space: normal; }
 
+@media (hover: hover) {
   .frame-icon:hover, .frame-menu-btn:hover, .frame-refresh button:not(:disabled):hover, .frame-tools [data-theme-toggle]:hover { background: var(--frame-hover); color: var(--color-txt); }
   .frame-link:not([aria-current='page']):hover { background: var(--frame-hover); color: var(--color-txt); }
   .frame-dock-item:not([aria-current='page']):hover { color: var(--color-txt); }
@@ -202,6 +205,6 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
 
 @media (prefers-reduced-motion: reduce) {
   .frame-icon, .frame-menu-btn, .frame-link, .frame-dock-item { transition-property: background-color, color; }
-  .frame-rail, .frame-fold { transition: none; }
+  .frame-rail-toggle svg, .frame-fold { transition: none; }
   .frame-icon:active, .frame-menu-btn:active, .frame-dock-item:active { scale: none; }
 }

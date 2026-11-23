@@ -51,6 +51,7 @@ test.describe('side menu', () => {
 
       test('Shift+Tab from the page top reaches the last link of an open group, and Tab returns', async ({ page }) => {
         await open(page, 'overview');
+        await page.locator('.frame-rail').getByRole('button', { name: 'Full menu' }).click();
         const last = page.locator('.frame-rail .frame-sublink').last();
         await expect(last).toHaveCount(1);
         await page.locator('.frame-top').locator('a:visible,button:visible,input:visible').first().focus();

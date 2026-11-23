@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // The everyday jobs, always one click away: at the top of the side rail from
 // md up, a bar along the bottom on a phone.
@@ -46,12 +46,24 @@ function readOpen() {
   }
 }
 
-// THE SIDE RAIL (owner's pick, 2026-11-21). A slim column of icons that opens
-// over the page on hover, keyboard focus or tap, so the content keeps the room.
-// Inside it: the five everyday jobs, then the groups, each folding open or
-// shut. The open groups are remembered, a job is not listed again inside its
-// group, and the group holding the current page always opens. On a phone the
-// header's All pages menu and the bottom bar (JobBar) do this job instead.
+// Whether the full menu is open, kept in this browser only (owner, 2026-11-23).
+const FULL_KEY = 'bloxsmith.nav.full'
+
+function readFull() {
+  try {
+    return localStorage.getItem(FULL_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+// THE SIDE BAR (owner, 2026-11-23: "this constantly popping is terrible"). It
+// never moves on hover or focus. Narrow, it shows each icon with its word: a job
+// goes to its page, and a group opens one small panel beside the bar. The caret
+// opens the full menu, which moves the page over and stays open across a refresh.
+// In the full menu the groups fold in place, the open groups are remembered, and
+// the group holding the current page opens. On a phone the header's All pages
+// menu and the bottom bar (JobBar) do this job instead.
 export function JobRail({ tab, groups, tabs, logo }) {
   const rest = groups.map((g) => ({ ...g, tabIds: g.tabIds.filter((id) => !JOB_IDS.has(id)) })).filter((g) => g.tabIds.length)
   const groupOf = (id) => rest.find((g) => g.tabIds.includes(id))?.id
@@ -60,15 +72,16 @@ export function JobRail({ tab, groups, tabs, logo }) {
     if (groupOf(tab)) s.add(groupOf(tab))
     return s
   })
-  // Tap to open on a touch screen; hover and keyboard focus are CSS.
-  const [railOpen, setRailOpen] = useState(false)
+  const [full, setFull] = useState(readFull)
+  // The group whose small panel is showing beside the narrow bar.
+  const [panel, setPanel] = useState(null)
   const railRef = useRef(null)
   // Reaching a page in a shut group (from search, a link or the back button)
-  // opens that group, so the page you are on is always shown in the menu.
+  // opens that group, so the page you are on is always shown in the full menu.
   const [seenTab, setSeenTab] = useState(tab)
   if (tab !== seenTab) {
     setSeenTab(tab)
-    setRailOpen(false)
+    setPanel(null)
     const g = groupOf(tab)
     if (g && !open.has(g)) setOpen(new Set(open).add(g))
   }
@@ -79,80 +92,113 @@ export function JobRail({ tab, groups, tabs, logo }) {
       // Storage off or full: the groups just start shut next time.
     }
   }, [open])
-  useEffect(() => {
-    if (!railOpen) return undefined
-    const away = (e) => { if (!railRef.current?.contains(e.target)) setRailOpen(false) }
-    document.addEventListener('pointerdown', away)
-    return () => document.removeEventListener('pointerdown', away)
-  }, [railOpen])
+  const iconOf = (id) => railRef.current?.querySelector(`[data-nav-group="${id}"] > button`)
+  const closePanel = () => {
+    iconOf(panel)?.focus()
+    setPanel(null)
+  }
+  // The panel is fixed to the screen so the bar's scrolling cannot clip it. It
+  // lines up with its icon and stays on screen.
+  useLayoutEffect(() => {
+    if (!panel) return undefined
+    const away = (e) => {
+      if (e.target.closest?.('[data-nav-group]')?.dataset.navGroup !== panel) setPanel(null)
+    }
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      iconOf(panel)?.focus()
+      setPanel(null)
+    }
+    const place = () => {
+      const icon = iconOf(panel)
+      const room = window.innerHeight - icon.nextSibling.offsetHeight - 8
+      icon.nextSibling.style.top = `${Math.max(8, Math.min(icon.getBoundingClientRect().top, room))}px`
+    }
+    place()
+    // Capture, because a scroll inside the bar does not bubble up to the window.
+    const events = [['pointerdown', away], ['keydown', onKey], ['resize', place, true], ['scroll', place, true]]
+    events.forEach((e) => window.addEventListener(...e))
+    return () => events.forEach((e) => window.removeEventListener(...e))
+  }, [panel])
+  const toggleFull = () => {
+    const next = !full
+    setFull(next)
+    setPanel(null)
+    try {
+      localStorage.setItem(FULL_KEY, next ? '1' : '0')
+    } catch {
+      // Storage off or full: the choice just lasts until the next refresh.
+    }
+  }
   const toggle = (id) => {
+    if (!full) {
+      setPanel(panel === id ? null : id)
+      return
+    }
     const n = new Set(open)
     if (n.has(id)) n.delete(id)
     else n.add(id)
     setOpen(n)
   }
   const labelOf = (id) => tabs.find((t) => t.id === id)?.label || id
-  // Escape leaves the rail for the page, which is what lets it close while a
-  // keyboard user is inside it.
-  const onKeyDown = (e) => {
-    if (e.key !== 'Escape') return
-    setRailOpen(false)
-    if (railRef.current?.contains(document.activeElement)) document.querySelector('main')?.focus()
-  }
   return (
     // The outer div is the column: a flex child of App's row, so it stretches to
     // the full height of the page and paints the card background and border all
     // the way down. The part inside stays one screen tall and sticky.
-    // data-hover is set on real pointer movement, not CSS :hover, so a pointer
-    // already resting here while a page loads cannot hold the rail open over it.
-    <div
-      ref={railRef}
-      data-job-column=""
-      className="frame-rail"
-      data-open={railOpen ? '' : undefined}
-      onKeyDown={onKeyDown}
-      onPointerMove={(e) => { if (e.pointerType === 'mouse') e.currentTarget.setAttribute('data-hover', '') }}
-      onPointerLeave={(e) => e.currentTarget.removeAttribute('data-hover')}
-    >
+    <div ref={railRef} data-job-column="" className="frame-rail" data-full={full ? '' : undefined}>
       <div className="frame-rail-inner">
         <div className="frame-rail-head">
           {logo}
-          <strong className="frame-link-text">Bloxsmith</strong>
-          <button type="button" className="frame-icon frame-rail-toggle" aria-label={railOpen ? 'Close menu' : 'Open menu'} aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
-            <NavIcon name={railOpen ? 'close' : 'menu'} />
+          {full && <strong className="frame-rail-name">Bloxsmith</strong>}
+          <button type="button" className="frame-icon frame-rail-toggle" aria-label="Full menu" aria-expanded={full} title={full ? 'Close full menu' : 'Open full menu'} onClick={toggleFull}>
+            <NavIcon name="caret" />
           </button>
         </div>
         <nav aria-label="Pages" data-job-rail="" className="frame-nav">
           {JOBS.map((j) => (
-            <a key={j.id} href={`#${j.id}`} aria-current={j.id === tab ? 'page' : undefined} className={`frame-link ${j.id === tab ? '' : 'text-muted'}`} title={j.label}>
+            <a key={j.id} href={`#${j.id}`} aria-current={j.id === tab ? 'page' : undefined} className={`frame-link ${j.id === tab ? '' : 'text-muted'}`}>
               <NavIcon name={j.id} />
               <span className="frame-link-text">{j.label}</span>
             </a>
           ))}
           <div className="frame-nav-gap" />
           {rest.map((g) => {
-            const isOpen = open.has(g.id)
+            const isOpen = full ? open.has(g.id) : panel === g.id
+            const holdsPage = g.tabIds.includes(tab)
             return (
-              <div key={g.id} data-nav-group={g.id}>
+              <div
+                key={g.id}
+                data-nav-group={g.id}
+                onBlur={(e) => {
+                  if (panel === g.id && e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setPanel(null)
+                }}
+              >
                 <button
                   type="button"
                   className="frame-link frame-group text-muted"
-                  data-holds-page={g.tabIds.includes(tab) ? '' : undefined}
+                  data-holds-page={holdsPage ? '' : undefined}
+                  aria-current={holdsPage && !(full && isOpen) ? 'true' : undefined}
                   aria-expanded={isOpen}
                   aria-controls={isOpen ? `nav-${g.id}` : undefined}
                   onClick={() => toggle(g.id)}
-                  title={g.label}
                 >
                   <NavIcon name={g.id} />
                   {/* "Ask pages", not "Ask": the AI page's send button is already
                       called Ask, and two controls with one name cannot be told apart. */}
                   <span className="frame-link-text">{g.label}<span className="sr-only"> pages</span></span>
-                  <span className="frame-fold" data-open={isOpen ? '' : undefined}><NavIcon name="caret" size={12} /></span>
+                  {full && <span className="frame-fold" data-open={isOpen ? '' : undefined}><NavIcon name="caret" size={12} /></span>}
                 </button>
                 {isOpen && (
-                  <div id={`nav-${g.id}`} role="group" aria-label={g.label} className="frame-sub">
+                  <div id={`nav-${g.id}`} role="group" aria-label={g.label} className={full ? 'frame-sub' : 'frame-panel'}>
+                    {!full && <div className="frame-panel-title" aria-hidden="true">{g.label}</div>}
                     {g.tabIds.map((id) => (
-                      <a key={id} href={`#${id}`} aria-current={id === tab ? 'page' : undefined} className={`frame-link frame-sublink ${id === tab ? '' : 'text-muted'}`}>
+                      <a
+                        key={id}
+                        href={`#${id}`}
+                        aria-current={id === tab ? 'page' : undefined}
+                        className={`frame-link frame-sublink ${id === tab ? '' : 'text-muted'}`}
+                        onClick={full ? undefined : closePanel}
+                      >
                         <span className="frame-link-text">{labelOf(id)}</span>
                       </a>
                     ))}
