@@ -496,7 +496,7 @@ You need Go 1.26.9 or newer and Node.js 24.
 # get the code
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
 # build the web UI, clear out the old copy, and copy the new one into the Go program's folder
-cd ui && npm ci && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/ && cd ..
+cd ui && npm ci && npm run build && cp -R dist/* ../go/web/ && cd ..
 # build and start the program at http://localhost:8080
 cd go && go build -o bloxsmith . && ./bloxsmith
 ```

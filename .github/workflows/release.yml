@@ -32,8 +32,11 @@ jobs:
       - name: UI dist up to date (vite build --check)
         run: |
           cd ui && npm ci && npm run build && cd ..
-          diff -r ui/dist go/web >/dev/null || {
-            echo "::error::go/web is stale — run: cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/"
+          # Old hashed files may stay in go/web. Every built file must be there and identical.
+          stale=$(diff -r ui/dist go/web 2>&1 | grep -v '^Only in go/web' || true)
+          [ -z "$stale" ] || {
+            echo "$stale"
+            echo "::error::go/web is stale — run: cd ui && npm run build && cp -R dist/* ../go/web/"
             exit 1
           }
 

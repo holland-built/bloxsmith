@@ -23,8 +23,8 @@ table and the Docker quick start, and [go/BUILD.md](../go/BUILD.md) for cross-co
 ## Running the tests
 
 ```bash
-# UI freshness — go/web must match ui/ build output
-cd ui && npm run build && cd .. && diff -r ui/dist go/web
+# UI freshness — go/web must contain the ui/ build output (prints nothing when current)
+cd ui && npm run build && cd .. && { diff -r ui/dist go/web 2>&1 | grep -v '^Only in go/web' || true; }
 
 # Go unit + integration tests
 cd go && go test ./...

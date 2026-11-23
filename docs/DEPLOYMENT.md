@@ -88,8 +88,8 @@ the image. Requires **Go 1.26+** and **Node 24** (the version CI builds the UI w
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
 # build the web UI into ui/dist
 cd ui && npm ci && npm run build && cd ..
-# replace the UI copy that gets built into the program
-rm -rf go/web/* && cp -R ui/dist/* go/web/
+# copy the new UI over the one that gets built into the program
+cp -R ui/dist/* go/web/
 # build one program file with the UI inside it
 cd go && go build -o bloxsmith .
 # start it at http://localhost:8080
@@ -98,8 +98,8 @@ cd go && go build -o bloxsmith .
 
 The copy step is not optional and its absence is silent. `go/web` is committed, so
 `go build` succeeds whether or not you rebuilt the UI — it just bakes in whatever was
-already there. CI runs the same two commands and then `diff -r ui/dist go/web`, which
-is what catches a bundle that was never refreshed.
+already there. CI runs the same build and checks that every file in `ui/dist` is in
+`go/web` and identical, which is what catches a bundle that was never refreshed.
 
 Keys are read from the environment or the in-app vault at runtime — nothing is baked
 into the binary. Point at a `.env` by exporting the vars (`set -a; . ../.env; set +a`)

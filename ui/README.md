@@ -21,7 +21,7 @@ the repo-root `SHIP.md`:
 
 ```bash
 # build the UI, clear out the old copy, and copy the new one into the Go program's folder
-cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/
+cd ui && npm run build && cp -R dist/* ../go/web/
 ```
 
-`ci.yml` rebuilds and diffs `ui/dist` against `go/web`, and fails if they differ.
+`ci.yml` rebuilds and fails if any file in `ui/dist` is missing from `go/web` or differs. Old hashed files may stay in `go/web`.
