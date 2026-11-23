@@ -119,7 +119,7 @@ export default function ConnStatus() {
   // gate reads this url to decide whether to draw the app, and hands its answer
   // over (shareResult) just before this mounts. Every 30s poll after that still
   // asks for itself, so the lock check in lib/api.js stays this poll's own.
-  const { data: status, error: statusError } = useApi('/api/vault/status', { poll: 30000, adoptIfFresherThan: 2000, live: true })
+  const { data: status, error: statusError, loading: statusLoading } = useApi('/api/vault/status', { poll: 30000, adoptIfFresherThan: 2000, live: true })
   // ADOPTS, because this dot and the Overview tab want the same 294KB and used
   // to fetch it separately — this one at t=39ms and Overview at t=331ms on every
   // load, measured 2026-08-27. Whichever of the two asks second now takes the
@@ -140,7 +140,7 @@ export default function ConnStatus() {
   // from the tick before. On every other page nobody else asks and it fetches as
   // it always did, which also keeps the server's full aggregate warm for the
   // pages above.
-  const { data: rows, error: dataError } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 45000, live: true })
+  const { data: rows, error: dataError, loading: dataLoading } = useApi('/api/data', { poll: 60000, adoptIfFresherThan: 45000, live: true })
 
   // The write state sits beside the tenant name because it is the one fact an
   // operator needs before pressing Provision.
@@ -209,6 +209,11 @@ export default function ConnStatus() {
   let stateTone = 'text-crit'
   if (isLocked) {
     stateWord = 'locked'
+  } else if ((!status && statusLoading) || (statusOk && !rows && !dataError && dataLoading)) {
+    // No answer yet is not "offline" or "empty".
+    color = 'var(--color-muted)'
+    stateWord = 'checking'
+    stateTone = 'text-muted'
   } else if (statusOk && hasData) {
     color = 'var(--color-ok)'
     stateWord = ''

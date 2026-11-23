@@ -72,7 +72,7 @@ function FindOther({ ro }) {
                   {f.label}
                   <span className="block text-muted">{f.made_on ? `Made by Bloxsmith, ${when(f.made_on)}` : 'Not made by Bloxsmith'}</span>
                 </span>
-                <DeleteCheck kind={kind} id={f.id} what={f.label} ro={ro} onDone={() => setFound((xs) => xs.filter((x) => x.id !== f.id))} />
+                <DeleteCheck kind={kind} id={f.id} what={f.label} ro={ro} onDone={(r) => { if (r.ok && r.data && r.data.ok !== false) setFound((xs) => xs.filter((x) => x.id !== f.id)) }} />
               </li>
             ))}
           </ul>

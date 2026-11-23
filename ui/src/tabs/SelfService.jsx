@@ -10,7 +10,7 @@
 // that is what carries the notice.
 import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { failureText, isNoPermission, NO_PERMISSION, SHARE_PICKER, useApi } from '../lib/api.js'
+import { failureText, isNoPermission, NO_PERMISSION, SHARE_PICKER, useApi, WRITE_UNKNOWN, writeFailureText } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -91,6 +91,12 @@ function allocateSentence(preview, subnet, name, dnsName, ptr, mac) {
   const dns = dnsName ? ` It will also point ${dnsName} to it${ptr ? ', with a reverse record' : ''}.` : ''
   const device = mac ? ` Only the device ${mac} will get it from DHCP.` : ''
   return `This will take ${list}${where}${called}.${device}${dns}`
+}
+
+// A refused delete keeps the server's reason and says the item was not changed.
+function deleteFailure(status, data, what, notDone) {
+  if (isNoPermission({ status })) return `${data?.error || NO_PERMISSION} ${notDone}`
+  return writeFailureText(status, data, what)
 }
 
 function AllocatePanel() {
@@ -695,9 +701,10 @@ function ManageRecordsPanel() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...buildBody(held), dry: false }),
         }).then(async (r) => {
-          const j2 = await r.json().catch(() => ({}))
-          if (!r.ok || j2.error) {
-            setError(j2.error || failureText(r.status, 'update the record'))
+          const sent = await r.json().catch(() => null)
+          const j2 = sent ?? {}
+          if (!r.ok || j2.error || sent === null) {
+            setError(writeFailureText(r.status, sent, 'update the record'))
             setStatus('idle'); setPreview(null); setHeld(null)
             return
           }
@@ -711,6 +718,10 @@ function ManageRecordsPanel() {
             ...(b.comment !== undefined && { comment: b.comment }),
           })
           recordsApi.refetch()
+        }, () => {
+          // The update was already sent, so this is not a failed re-check.
+          setError(WRITE_UNKNOWN)
+          setStatus('idle'); setPreview(null); setHeld(null)
         })
       })
       .catch(() => {
@@ -775,15 +786,15 @@ function ManageRecordsPanel() {
       .then(({ ok: rOk, status, data }) => {
         const r = { ok: rOk, status }
         const j = data || {}
-        if (!r.ok || j.error || j.ok === false) {
-          setDeleteError(isNoPermission({ status: r.status }) ? `${NO_PERMISSION} The record was not deleted.` : j.error || failureText(r.status, 'delete the record'))
+        if (!r.ok || !data || j.error || j.ok === false) {
+          setDeleteError(deleteFailure(r.status, data, 'delete the record', 'The record was not deleted.'))
           return
         }
         setPanelMessage(deletedMsg(j, 'DNS record'))
         patchMore(paged, row.id)
         recordsApi.refetch()
       })
-      .catch((e) => setDeleteError(String(e?.message || e) || 'delete failed, record still exists'))
+      .catch(() => setDeleteError(WRITE_UNKNOWN))
   }
 
   const note = truncNote(paged.extra.data ?? recordsApi.data, records)
@@ -990,14 +1001,14 @@ function ManageAddressesPanel() {
       .then(({ ok: rOk, status, data }) => {
         const r = { ok: rOk, status }
         const j = data || {}
-        if (!r.ok || j.error || j.ok === false) {
-          setReleaseError(isNoPermission({ status: r.status }) ? `${NO_PERMISSION} The address was not released.` : j.error || failureText(r.status, 'release the address'))
+        if (!r.ok || !data || j.error || j.ok === false) {
+          setReleaseError(deleteFailure(r.status, data, 'release the address', 'The address was not released.'))
           return
         }
         patchMore(paged, row.id)
         addressesApi.refetch()
       })
-      .catch((e) => setReleaseError(String(e?.message || e) || 'release failed, address still allocated'))
+      .catch(() => setReleaseError(WRITE_UNKNOWN))
   }
 
   const note = truncNote(paged.extra.data ?? addressesApi.data, addresses)

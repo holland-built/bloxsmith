@@ -262,7 +262,7 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
       <TruncationNote chain={chain} loaded={entries.length} />
       {chain.loading ? (
         <Skeleton h={200} />
-      ) : chain.error ? (
+      ) : chain.error || (total === 0 && readShortfall(chain.data)) ? (
         <FeedUnavailable label="Audit log unavailable" />
       ) : total === 0 ? (
         <Empty>No audit entries yet</Empty>
@@ -602,7 +602,7 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
       <LoadOlder more={more} />
       {chain.loading ? (
         <Skeleton h={250} />
-      ) : chain.error ? (
+      ) : chain.error || (entries.length === 0 && readShortfall(chain.data)) ? (
         <FeedUnavailable label="Audit log unavailable" />
       ) : entries.length === 0 ? (
         <Empty>No audit entries yet</Empty>

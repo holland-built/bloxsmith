@@ -5,7 +5,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { COLORS } from './ui.jsx'
 import { checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
-import { failureText } from '../lib/api.js'
+import { failureText, writeFailureText } from '../lib/api.js'
 
 // The "are you sure" box: a separate red button, a Cancel, and no timer. With
 // takeFocus, keyboard focus lands on Cancel, so a second Enter cannot delete,
@@ -60,7 +60,7 @@ export default function DeleteCheck({ kind, id, what, ro, onDone }) {
     const r = await confirmDelete(kind, id, check.confirm)
     setBusy(false)
     setCheck(null)
-    if (!r.ok || r.data?.ok === false) setError(r.data?.error || failureText(r.status, 'delete this item'))
+    if (!r.ok || !r.data || r.data.ok === false) setError(writeFailureText(r.status, r.data, 'delete this item'))
     onDone?.(r)
   }
 

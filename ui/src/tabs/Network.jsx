@@ -123,7 +123,7 @@ export default function Network() {
           components/ui.jsx logs. Each wrapper below forwards the id to its
           Card, which is what registers the saved span. */}
       <CardGrid layoutKey="network">
-        <UtilBands panelId="network-utilization-distribution" subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
+        <UtilBands panelId="network-utilization-distribution" subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} loading={data.loading} />
         <IpamSpaces panelId="network-ipam-spaces" ipam={ipam} />
         <Overlaps panelId="network-overlaps" overlaps={overlaps} only={hp.overlaps} hp={hp} />
         {/* Leases are issued by a deployed DHCP service. The IPAM panels above
@@ -227,7 +227,7 @@ function Tiles({ items, label }) {
 const paleOk = (ok = 'var(--color-ok)') => `color-mix(in srgb, ${ok} 35%, transparent)`
 const barColor = (status) => (status.label === 'Healthy' ? paleOk() : status.color)
 
-function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
+function UtilBands({ panelId, subnets, totals, subnetsStatus, loading }) {
   const { COLORS } = useChartTheme()
   const BANDS = [
     // Healthy is pale, as on Infra's host donut, so the full bands are what
@@ -260,7 +260,9 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   return (
     <Card panelId={panelId} span={4} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>
       {!hasData ? (
-        subnetsStatus === 'error' ? (
+        loading && subnets.length === 0 ? (
+          <Skeleton h={220} />
+        ) : subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnet information is unavailable" />
         ) : subnets.length > 0 ? (
           <Empty>no loaded subnet reports utilisation</Empty>
@@ -323,7 +325,7 @@ function IpamSpaces({ panelId, ipam }) {
       ) : ipam.error || status === 'error' ? (
         <FeedUnavailable label="IPAM information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>No IPAM spaces found</Empty>
+        <Empty>{ipam.data?.rows?.length > 0 ? 'No IPAM spaces report capacity' : 'No IPAM spaces found'}</Empty>
       ) : (
         <div className="flex flex-col gap-2 mt-1">
           {rows.map((r, i) => {
@@ -905,8 +907,11 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
       )}
       {unused && !unusedApi.data ? (
         unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
+      ) : !unused && loading && subnets.length === 0 ? (
+        <Skeleton />
       ) : base.length === 0 ? (
-        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnet information is unavailable" /> : <Empty>No subnets found</Empty>
+        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnet information is unavailable" />
+          : <Empty>{unused ? 'No unused networks found' : subnets.length > 0 ? 'No networks of /28 or larger' : 'No subnets found'}</Empty>
       ) : tableRows.length === 0 ? (
         landing && listFailed ? <FeedUnavailable label="Subnet information is unavailable" />
           : <Empty>{landing && !listComplete ? 'none in the subnets loaded' : 'no subnets match'}</Empty>

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { NO_PERMISSION, failureText } from './api.js'
+import { NO_PERMISSION, WRITE_NO_PERMISSION, WRITE_UNKNOWN, failureText, writeFailureText } from './api.js'
 import { formatDay, formatTime, formatWhen } from './dates.js'
 import { SOURCES } from './valueWork.js'
 
@@ -42,4 +42,29 @@ test('the Value row does not repeat a word', () => {
   const name = new Map(SOURCES)
   assert.equal(name.get('address'), 'Get an address: assigned IPs')
   assert.equal(name.get('dns'), 'Get an address: DNS names')
+})
+
+test('a write with no clear answer says the outcome is unknown', () => {
+  assert.equal(WRITE_UNKNOWN, 'Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.')
+  for (const [status, data] of [
+    [0, { error: 'network error' }], [502, null], [504, {}],
+    [502, { error: 'create failed (could not reach the tenant — no request completed)' }],
+    [504, { error: 'update failed (status 504)' }],
+    [200, null],
+  ]) assert.equal(writeFailureText(status, data, 'delete this item'), WRITE_UNKNOWN)
+})
+
+test('a clear refusal keeps its own message', () => {
+  assert.equal(writeFailureText(409, { error: 'Still in use' }, 'delete this item'), 'Still in use')
+  assert.equal(writeFailureText(400, {}, 'delete this item'), failureText(400, 'delete this item'))
+  assert.equal(writeFailureText(404, null, 'delete this item'), failureText(404, 'delete this item'))
+  // The pre-delete read failed, so nothing was sent; the server says exactly that.
+  assert.equal(writeFailureText(502, { error: 'could not read it from Infoblox (502)' }, 'delete this item'),
+    'could not read it from Infoblox (502)')
+})
+
+test('an empty 401 or 403 on a write says nothing was changed', () => {
+  assert.equal(WRITE_NO_PERMISSION, "You don't have permission to do this. Nothing was changed.")
+  for (const status of [401, 403]) assert.equal(writeFailureText(status, {}, 'update the record'), WRITE_NO_PERMISSION)
+  assert.equal(writeFailureText(403, { error: 'Mark this tenant writable' }, 'update the record'), 'Mark this tenant writable')
 })

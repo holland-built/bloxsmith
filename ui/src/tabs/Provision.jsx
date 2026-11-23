@@ -307,6 +307,10 @@ function useStreamFlow(path) {
 // attempted (a preview writes nothing, so there is nothing to report), and an
 // absent/unrecognised outcome means the server did not tell us — and an
 // unknown answer must never be painted as a reassuring one.
+// A cleanup delete with no clear answer may have worked. An entry with a reason
+// is one the server knows is still there (it had no id to delete).
+const cleanupUnknown = (o) => !o?.reason && [0, 502, 504].includes(o?.status)
+
 function RollbackReport({ report }) {
   if (!report) return null
   const residual = Array.isArray(report.residual) ? report.residual : []
@@ -314,19 +318,29 @@ function RollbackReport({ report }) {
   const attempted = report.attempted ?? 0
 
   if (report.outcome === 'incomplete') {
+    const unknown = residual.filter(cleanupUnknown).length
+    const stuck = (residual.length || attempted - deleted) - unknown
     return (
       <div role="alert" className="flex flex-col gap-0.5">
-        <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
-          Cleanup could not remove {residual.length || attempted - deleted} object
-          {(residual.length || attempted - deleted) === 1 ? '' : 's'} — they are still live on the customer&rsquo;s
-          network
-        </div>
+        {stuck > 0 && (
+          <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
+            Cleanup could not remove {stuck} object{stuck === 1 ? '' : 's'} — {stuck === 1 ? 'it is' : 'they are'} still live on the customer&rsquo;s
+            network
+          </div>
+        )}
+        {unknown > 0 && (
+          <div className="text-copy font-semibold" style={{ color: COLORS.warn }}>
+            Cleanup result unknown for {unknown} object{unknown === 1 ? '' : 's'}. Bloxsmith did not get an answer.
+          </div>
+        )}
         <div className="text-note text-dim mb-1">{deleted} of {attempted} removed</div>
         {residual.map((o, i) => (
           <div key={o?.id || i} className="font-mono text-note" style={{ color: COLORS.crit }}>
             ✕ {o?.kind || 'object'}{' '}
             <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">{o?.label || o?.id || '—'}</code>
-            {o?.status ? <span className="text-dim"> (could not remove it)</span> : null}
+            {cleanupUnknown(o)
+              ? <span className="text-dim"> (result unknown: check whether it still exists)</span>
+              : o?.status ? <span className="text-dim"> (could not remove it)</span> : null}
           </div>
         ))}
       </div>

@@ -114,3 +114,31 @@ test.describe('Provision → rollback report on a failed run', () => {
     await expect(page.getByText(/left behind/i)).toHaveCount(0);
   });
 });
+
+test('a cleanup delete with no clear answer says the result is unknown', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 2, deleted: 0,
+    residual: [
+      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 504 },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 502 },
+    ],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup result unknown for 2 objects/).first()).toBeVisible();
+  await expect(page.getByText(/check whether it still exists/)).toHaveCount(2);
+  await expect(page.getByText(STILL_LIVE)).toHaveCount(0);
+});
+
+test('a mixed cleanup separates what is still there from what is unknown', async ({ page }) => {
+  await stubSeedStream(page, failureBody({
+    outcome: 'incomplete', attempted: 2, deleted: 0,
+    residual: [
+      { kind: 'subnet', id: 'ipam/subnet/s-1', label: '10.10.1.0/24', status: 409 },
+      { kind: 'host', id: 'ipam/host/h-1', label: 'web-1', status: 504 },
+    ],
+  }));
+  await seedApply(page);
+  await expect(page.getByText(/Cleanup could not remove 1 object\b/).first()).toBeVisible();
+  await expect(page.getByText(/could not remove it/)).toHaveCount(1);
+  await expect(page.getByText(/check whether it still exists/)).toHaveCount(1);
+});

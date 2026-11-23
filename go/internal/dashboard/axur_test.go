@@ -247,8 +247,8 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 	}{
 		{"403", 403, "Axur supplier monitoring is not included for this key", true},
 		{"401", 401, "Axur rejected the credential — check the key under Settings", false},
-		{"500", 500, "Axur service unavailable — Infoblox returned an error (status 500).", false},
-		{"404", 404, "Axur service unavailable — Infoblox returned an error (status 404).", false},
+		{"500", 500, "Axur service unavailable — Axur returned an error (status 500).", false},
+		{"404", 404, "Axur service unavailable — Axur returned an error (status 404).", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

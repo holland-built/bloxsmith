@@ -339,7 +339,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
       ) : feedDead ? (
         <FeedUnavailable label="Subnet information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>No subnets found</Empty>
+        <Empty>{subnets.length > 0 ? 'No networks of /28 or larger in the loaded data' : 'No subnets found'}</Empty>
       ) : (
         <DataTable
           rows={rows}

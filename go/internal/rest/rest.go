@@ -501,20 +501,33 @@ func (e *UpstreamError) Error() string {
 }
 
 // Public is one sanitized sentence fit to show a user — no path, no snippet.
-func (e *UpstreamError) Public() string {
+func (e *UpstreamError) Public() string { return e.PublicFor("Infoblox") }
+
+// PublicFor is Public naming the service that actually failed, for a client
+// pointed at something other than Infoblox.
+func (e *UpstreamError) PublicFor(service string) string {
 	switch e.Category {
 	case "network":
-		return "Could not reach Infoblox."
+		return fmt.Sprintf("Could not reach %s.", service)
 	case "status":
-		return fmt.Sprintf("Infoblox returned an error (status %d).", e.Status)
+		return fmt.Sprintf("%s returned an error (status %d).", service, e.Status)
 	case "decode":
-		return "Infoblox's response could not be read."
+		return fmt.Sprintf("%s's response could not be read.", service)
 	case "shape":
-		return "Infoblox returned an unexpected response."
+		return fmt.Sprintf("%s returned an unexpected response.", service)
 	default:
-		return "The Infoblox request failed."
+		return fmt.Sprintf("The %s request failed.", service)
 	}
 }
+
+// OutcomeUnknown is the message for a write that was sent with no clear answer
+// back. The change may have landed, so the message must not say that it failed
+// or that no request completed. ui/src/lib/api.js WRITE_UNKNOWN is the same text.
+const OutcomeUnknown = "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."
+
+// NoClearAnswer reports whether a write's status leaves its outcome unknown:
+// 0 is no response at all, and a 502 or 504 is a gateway without an answer.
+func NoClearAnswer(status int) bool { return status == 0 || status == 502 || status == 504 }
 
 // GetStrict is Get with the failures surfaced. Empty is still a legitimate
 // result — only a non-nil error means the read failed. Unlike Get, it does

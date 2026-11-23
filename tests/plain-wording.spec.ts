@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { installBaselineWorld, openTask } from './page-fixtures';
+import { dataPayload, installBaselineWorld, openTask } from './page-fixtures';
 import type { Page, Route } from '@playwright/test';
 
 // The words customers should never read, checked in the text each main page
@@ -136,3 +136,222 @@ for (const status of [401, 403]) {
     await expect(card).toContainText('The record was not deleted.');
   });
 }
+
+// ---------- a message never claims more than Bloxsmith knows ----------
+
+const UNKNOWN = 'Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.';
+const WRITABLE = { known: true, tenant: 't/-', label: 'Test Tenant', writable: true };
+type Reply = (r: Route) => Promise<void>;
+const noAnswer: [string, Reply][] = [
+  ['no connection', (r) => r.abort()],
+  ['502', (r) => r.fulfill({ status: 502, contentType: 'text/html', body: '<h1>Bad gateway</h1>' })],
+  ['504', (r) => r.fulfill({ status: 504, json: {} })],
+  ['an unreadable 200', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'not json' })],
+];
+
+async function findOne(page: Page, reply: Reply) {
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/made/find*', (r) => r.fulfill({ json: { results: [{ id: 'dns/record/r1', label: 'printer-02' }] } }));
+  await page.route('**/api/made/delete', (r) => {
+    const b = r.request().postDataJSON();
+    if (b.dry) return r.fulfill({ json: { ok: true, dry_run: true, kind: b.kind, id: b.id, label: 'printer-02', made: true, gone: false, blocked: '', confirm: 'code-1' } });
+    return reply(r);
+  });
+  await page.goto('/#made');
+  await page.getByLabel('Name or address').fill('printer-02');
+  await page.getByRole('button', { name: 'Find item' }).click();
+  const row = page.locator('[data-delete-check="dns/record/r1"]');
+  await row.getByRole('button', { name: /^Delete/ }).click();
+  await row.getByRole('button', { name: 'Delete it' }).click();
+  return row;
+}
+
+test('a refused delete keeps the row and its message', async ({ page }) => {
+  const row = await findOne(page, (r) => r.fulfill({ status: 409, json: { ok: false, error: 'Still in use by a policy.' } }));
+  await expect(row.getByRole('alert')).toHaveText('Still in use by a policy.');
+  await expect(page.locator('[data-found]')).toContainText('printer-02');
+});
+
+for (const [name, reply] of noAnswer) {
+  test(`a delete with ${name} says the outcome is unknown and keeps the row`, async ({ page }) => {
+    const row = await findOne(page, reply);
+    await expect(row.getByRole('alert')).toHaveText(UNKNOWN);
+    await expect(page.locator('[data-found]')).toContainText('printer-02');
+  });
+}
+
+async function allocate(page: Page, reply: Reply) {
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/desk/spaces*', (r) => r.fulfill({ status: 404, body: '{}' }));
+  await page.route('**/api/ipam/spaces*', (r) => r.fulfill({ json: { spaces: [{ id: 'ipam/ip_space/1', name: 'acme' }] } }));
+  await page.route('**/api/ipam/blocks*', (r) => r.fulfill({ json: { blocks: [] } }));
+  await page.route('**/api/ipam/subnets*', (r) => r.fulfill({ json: { subnets: [{ id: 'ipam/subnet/1', address: '10.0.42.0', cidr: 24, name: 's', utilization: { free: 200 } }] } }));
+  await page.route('**/api/selfservice/allocate', (r) => (r.request().postDataJSON().dry
+    ? r.fulfill({ json: { ok: true, dry_run: true, addresses: [{ address: '10.0.42.7' }] } }) : reply(r)));
+  await page.goto('/#selfservice');
+  const panel = await openTask(page, 'address');
+  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('button', { name: 'Preview' }).click();
+  await expect(panel.getByText('10.0.42.7').first()).toBeVisible();
+  await panel.getByRole('button', { name: /^(Allocate|Reserve|Get)/ }).last().click();
+  return panel;
+}
+
+for (const [name, reply] of noAnswer) {
+  test(`a create with ${name} does not invite a blind retry`, async ({ page }) => {
+    const panel = await allocate(page, reply);
+    await expect(panel).toContainText(UNKNOWN);
+    await expect(panel).not.toContainText('Address allocated');
+  });
+}
+
+test('a create the tenant could not be reached for does not claim no request completed', async ({ page }) => {
+  const panel = await allocate(page, (r) => r.fulfill({ status: 502, json: { error: 'allocation failed (could not reach the tenant — no request completed)' } }));
+  await expect(panel).toContainText(UNKNOWN);
+  await expect(panel).not.toContainText('no request completed');
+});
+
+test('an empty 403 on a create says nothing was changed', async ({ page }) => {
+  const panel = await allocate(page, (r) => r.fulfill({ status: 403, json: {} }));
+  await expect(panel).toContainText("You don't have permission to do this. Nothing was changed.");
+});
+
+async function automateBuild(page: Page, reply: Reply) {
+  await installBaselineWorld(page);
+  await page.route('**/api/desk/spaces', (r) => r.fulfill({ json: { spaces: [{ id: 'ipam/ip_space/a', name: 'Lab', yours: false, reason: 'free' }] } }));
+  await page.route('**/api/ipam/subnets*', (r) => r.fulfill({ json: { subnets: [{ id: 'ipam/subnet/s2', address: '10.2.1.0', cidr: 24, name: 'office-b' }] } }));
+  await page.route('**/api/desk/runs', (r) => r.fulfill({ json: { runs: [] } }));
+  await page.route('**/api/desk/run', (r) => (r.request().postDataJSON().dry
+    ? r.fulfill({ json: { ok: true, dry_run: true, addresses: [{ address: '10.2.1.7' }] } }) : reply(r)));
+  await page.goto('/#automate');
+  const job = page.locator('[data-panel-id="automate-job"]');
+  await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
+  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
+  await job.getByRole('button', { name: 'Preview' }).click();
+  await job.getByRole('button', { name: 'Build it' }).click();
+  return job;
+}
+
+test('an Automate build with no answer says the outcome is unknown', async ({ page }) => {
+  const job = await automateBuild(page, (r) => r.fulfill({ status: 504, json: {} }));
+  await expect(job).toContainText(UNKNOWN);
+});
+
+test('an Automate preview that fails keeps its normal message', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/desk/spaces', (r) => r.fulfill({ json: { spaces: [{ id: 'ipam/ip_space/a', name: 'Lab', yours: false, reason: 'free' }] } }));
+  await page.route('**/api/ipam/subnets*', (r) => r.fulfill({ json: { subnets: [{ id: 'ipam/subnet/s2', address: '10.2.1.0', cidr: 24, name: 'office-b' }] } }));
+  await page.route('**/api/desk/runs', (r) => r.fulfill({ json: { runs: [] } }));
+  await page.route('**/api/desk/run', (r) => r.fulfill({ status: 502, json: {} }));
+  await page.goto('/#automate');
+  const job = page.locator('[data-panel-id="automate-job"]');
+  await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
+  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
+  await job.getByRole('button', { name: 'Preview' }).click();
+  await expect(job).toContainText('Could not run this job.');
+  await expect(job).not.toContainText(UNKNOWN);
+});
+
+for (const [what, panelTask, url] of [['record', 'records', 'dns'], ['address', 'addresses', 'ipam']] as const) {
+  test(`a 403 with a reason on a ${what} delete keeps the reason and says it was not changed`, async ({ page }) => {
+    await installBaselineWorld(page);
+    await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+    await page.route('**/api/dns/zones*', (r) => r.fulfill({ json: { zones: [ZONE] } }));
+    await page.route('**/api/dns/records*', (r) => r.fulfill({ json: { records: [RECORD] } }));
+    await page.route('**/api/ipam/spaces*', (r) => r.fulfill({ json: { spaces: [{ id: 'space1', name: 'Default' }] } }));
+    await page.route('**/api/ipam/subnets*', (r) => r.fulfill({ json: { subnets: [{ id: 'subnet1', address: '10.0.0.0', cidr: 24, name: 'sub' }] } }));
+    await page.route('**/api/ipam/addresses*', (r) => r.fulfill({ json: { addresses: [{ id: 'ipam/address/a1', address: '10.0.0.9', state: 'used', usage: ['IPAM RESERVED'] }] } }));
+    await page.route('**/api/made/delete', (r) => {
+      const b = r.request().postDataJSON();
+      if (b.dry) return r.fulfill({ json: { ok: true, dry_run: true, kind: b.kind, id: b.id, label: b.id, made: true, made_on: '2026-11-13T10:00:00Z', gone: false, blocked: '', confirm: 'c' } });
+      return r.fulfill({ status: 403, json: { ok: false, error: 'Mark this tenant writable' } });
+    });
+    await page.goto('/#selfservice');
+    const card = await openTask(page, panelTask);
+    if (url === 'dns') await card.locator('select').selectOption(ZONE.id);
+    else {
+      await card.locator('select').first().selectOption('space1');
+      await card.locator('select').nth(1).selectOption('subnet1');
+    }
+    await card.getByRole('button', { name: /^(Delete|Release)/ }).first().click();
+    await card.getByRole('button', { name: /^Confirm/ }).click();
+    await expect(card).toContainText('Mark this tenant writable');
+    await expect(card).toContainText(what === 'record' ? 'The record was not deleted.' : 'The address was not released.');
+  });
+}
+
+test('an empty 403 on a record update says nothing was changed', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/vault/write-target*', (r) => r.fulfill({ json: WRITABLE }));
+  await page.route('**/api/dns/zones*', (r) => r.fulfill({ json: { zones: [ZONE] } }));
+  await page.route('**/api/dns/records*', (r) => {
+    const req = r.request();
+    if (req.method() === 'GET') return r.fulfill({ json: { records: [RECORD] } });
+    const body = req.postDataJSON();
+    return body.dry ? r.fulfill({ json: { would_update: body } }) : r.fulfill({ status: 403, json: {} });
+  });
+  await page.goto('/#selfservice');
+  const card = await openTask(page, 'records');
+  await card.locator('select').selectOption(ZONE.id);
+  const row = card.locator('.rounded-control.border.border-border.p-2').filter({ hasText: RECORD.dns_rdata });
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await row.locator('input').first().fill('10.0.0.2');
+  await row.getByRole('button', { name: 'Preview' }).click();
+  await row.getByRole('button', { name: 'Update' }).click();
+  await expect(card).toContainText("You don't have permission to do this. Nothing was changed.");
+});
+
+test('an audit log that could not be read is not called empty', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/audit/log*', (r) => r.fulfill({ json: { entries: [], chain_valid: true, read_error: 'is a directory' } }));
+  await page.goto('/#audit');
+  await expect(page.getByText('Audit log unavailable').first()).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('No audit entries yet');
+});
+
+const tinyOnly = () => ({ ...dataPayload(), subnets: [{ id: 'ipam/subnet/t1', addr: '10.9.0.0', cidr: 30, util: 50, used: 1, total: 2, site: 'x' }] });
+
+test('Network names what is missing from the list', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/data', (r) => r.fulfill({ json: tinyOnly() }));
+  await page.route('**/api/ipam/subnets/unused*', (r) => r.fulfill({ json: { subnets: [], more: false } }));
+  await page.goto('/#network');
+  const card = page.locator('[data-panel-id="network-exhaustion"]');
+  await expect(card).toContainText('No networks of /28 or larger');
+  await page.goto('/#network?unused=1');
+  await expect(card).toContainText('No unused networks found');
+});
+
+test('Daily says only that no network of /28 or larger was loaded', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/data', (r) => r.fulfill({ json: tinyOnly() }));
+  await page.goto('/#daily');
+  await expect(page.locator('[data-panel-id="daily-top-capacity-risks"]')).toContainText('No networks of /28 or larger in the loaded data');
+});
+
+test('IPAM spaces with no capacity figure are not called missing', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.route('**/api/csp/ipam-util*', (r) => r.fulfill({ json: { status: 'ok', rows: [{ id: 'a', label: 'A', used: 0, total: 0 }] } }));
+  await page.goto('/#network');
+  const card = page.locator('[data-panel-id="network-ipam-spaces"]');
+  await expect(card).toContainText('No IPAM spaces report capacity');
+  await expect(card).not.toContainText('No IPAM spaces found');
+});
+
+test('first load shows neither an empty network list nor an empty connection', async ({ page }) => {
+  await installBaselineWorld(page);
+  let release = () => {};
+  const held = new Promise<void>((done) => { release = done; });
+  await page.route('**/api/data', async (r) => { await held; await r.fulfill({ json: dataPayload() }).catch(() => {}); });
+  await page.goto('/#network');
+  const bands = page.locator('[data-panel-id="network-utilization-distribution"]');
+  await expect(bands).toBeVisible();
+  await expect(bands).not.toContainText('No subnets found');
+  await expect(page.locator('[data-panel-id="network-exhaustion"]')).not.toContainText('No subnets found');
+  await expect(page.locator('.frame-conn-body [data-state]')).toHaveText('checking');
+  release();
+});

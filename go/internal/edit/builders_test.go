@@ -1048,7 +1048,7 @@ func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
 		}, "allocation failed (could not reach the tenant — no request completed)"},
 		{"Delete", func(c *Client) (M, int) {
 			return c.Delete("/api/ddi/v1/ipam/host/h-1")
-		}, "delete failed (could not reach the tenant — no request completed)"},
+		}, "Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again."},
 	}
 
 	for _, tc := range cases {

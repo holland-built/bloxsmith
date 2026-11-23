@@ -805,5 +805,8 @@ func (c *Client) Delete(fullPath string) (M, int) {
 	if status == 200 || status == 204 {
 		return M{"ok": true, "already_gone": false}, 200
 	}
+	if rest.NoClearAnswer(status) {
+		return M{"ok": false, "error": rest.OutcomeUnknown, "detail": resp}, statusOr(status, 502)
+	}
 	return M{"ok": false, "error": fmt.Sprintf("delete failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 }

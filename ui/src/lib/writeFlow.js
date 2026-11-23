@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { tokenFetch } from './authFetch.js'
-import { failureText } from './api.js'
+import { failureText, WRITE_UNKNOWN, writeFailureText } from './api.js'
 
 // Shared Preview -> Apply driver for both cards. Preview posts with dry:true so
 // the server does the validating; apply re-posts the same body with dry:false.
@@ -34,9 +34,11 @@ export function useWriteFlow(url) {
       body: JSON.stringify({ ...body, dry }),
     })
       .then(async (r) => {
-        const j = await r.json().catch(() => ({}))
-        if (!r.ok || j.error || j.ok === false) {
-          setError(j.error || failureText(r.status, 'complete this change'))
+        const data = await r.json().catch(() => null)
+        const j = data ?? {}
+        if (!r.ok || j.error || j.ok === false || (!dry && data === null)) {
+          // A preview changes nothing, so only a real write can have an unknown outcome.
+          setError(dry ? j.error || failureText(r.status, 'complete this change') : writeFailureText(r.status, data, 'complete this change'))
           setStatus('idle')
           setPreview(null)
           return null
@@ -44,7 +46,7 @@ export function useWriteFlow(url) {
         return j
       })
       .catch((e) => {
-        setError(String(e?.message || e))
+        setError(dry ? String(e?.message || e) : WRITE_UNKNOWN)
         setStatus('idle')
         setPreview(null)
         return null

@@ -4,8 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+
+	"bloxsmith/internal/rest"
 )
 
 // Deleting a custom list or one policy rule, for the Made with Bloxsmith page
@@ -41,6 +44,8 @@ func (s *Service) DeleteList(id int) (gone bool, status int, err error) {
 	switch {
 	case st == 404:
 		return true, 200, nil
+	case rest.NoClearAnswer(st):
+		return false, st, errors.New(rest.OutcomeUnknown)
 	case st < 200 || st > 299:
 		return false, st, fmt.Errorf("Infoblox refused the delete (%s): %v", httpWord(st), resp)
 	}
@@ -115,6 +120,9 @@ func (s *Service) RemoveRule(policyID int, list, action, fp string) (map[string]
 	resp, st, _ := s.Rest.WriteIfMatch("PUT", fmt.Sprintf("%s/security_policies/%d", atcfw, policyID), pol, nil, etag)
 	if st == 412 {
 		return map[string]any{"ok": false, "error": "the policy changed while Bloxsmith was saving, so nothing was changed. Preview again"}, 409
+	}
+	if rest.NoClearAnswer(st) {
+		return map[string]any{"ok": false, "detail": resp, "error": rest.OutcomeUnknown}, 502
 	}
 	if st < 200 || st > 299 {
 		return map[string]any{"ok": false, "detail": resp,
@@ -200,6 +208,8 @@ func (s *Service) RemoveListItems(id int, domains []string) (map[string]any, int
 		switch {
 		case st == 404:
 			return map[string]any{"ok": true, "already_gone": true}, 200
+		case rest.NoClearAnswer(st):
+			return map[string]any{"ok": false, "error": rest.OutcomeUnknown}, statusOr(st)
 		case st < 200 || st > 299:
 			return map[string]any{"ok": false, "error": fmt.Sprintf("Infoblox refused to remove the sites (%s): %v", httpWord(st), resp)}, statusOr(st)
 		}
