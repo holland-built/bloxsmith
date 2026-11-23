@@ -263,12 +263,31 @@ test('Assets: sorting keeps keyboard focus on the column heading', async ({ page
   release();
 });
 
+test('Assets: sorting back to the first order before it loads keeps focus', async ({ page }) => {
+  await open(page, 'assets', 'table');
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  await page.route('**/api/csp/assets*', async (route) => { await held; await route.fallback(); });
+  const head = page.getByRole('columnheader', { name: /Last seen/i }).first();
+  const sorter = head.locator('button').first();
+  await sorter.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main table').first()).toBeVisible();
+  expect(await page.evaluate(() => !!document.activeElement?.closest('th'))).toBe(true);
+  release();
+});
+
 test('Assets: opening a row moves focus to its detail', async ({ page }) => {
   await open(page, 'assets', 'table');
-  await page.getByText('baseline-asset-a').first().click();
+  await page.getByRole('row', { name: /baseline-asset-a/ }).getByRole('button').first().focus();
+  await page.keyboard.press('Enter');
   const detail = page.locator('[data-panel-id="assets-detail"]');
   await expect(detail).toBeVisible();
   await expect.poll(() => detail.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(detail).toHaveCount(0);
+  expect(await page.evaluate(() => !!document.activeElement?.closest('table'))).toBe(true);
 });
 
 test('Incidents: each acknowledge box names its item', async ({ page }) => {

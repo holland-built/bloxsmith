@@ -345,10 +345,12 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
   // Only for a sort: rows from another search must never show under this one.
   const scope = `${searched}|${type}|${gap}`
   const lastShown = useRef(null)
-  if (list.data) lastShown.current = { scope, sort, data: list.data }
+  if (list.data) lastShown.current = { scope, sort, page, data: list.data }
   const held = lastShown.current
+  // Same page counts too: toggling a sort away and back before it loads returns
+  // to the held order, and those rows are still the right ones.
   const resorting = !list.data && list.loading && !list.error && held?.scope === scope
-    && (held.sort.key !== sort.key || held.sort.dir !== sort.dir)
+    && (held.sort.key !== sort.key || held.sort.dir !== sort.dir || held.page === page)
   const d = resorting ? held.data : list.data
   const unavailable = !!list.error || d?.availability === 'error'
   const rows = d?.rows ?? []
@@ -530,8 +532,9 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
   const closeRef = useRef(null)
   const openedFrom = useRef(null)
   useEffect(() => {
-    openedFrom.current = document.activeElement
     const close = closeRef.current
+    // StrictMode runs this twice: the second run must not record Close itself.
+    if (document.activeElement !== close) openedFrom.current = document.activeElement
     close?.focus({ preventScroll: true })
     if (close?.matches(':focus-visible')) close.scrollIntoView({ block: 'nearest' })
   }, [cqid])

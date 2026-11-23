@@ -320,7 +320,7 @@
   --color-warn: #b45309;
   --color-crit: #c81e1e;
   --color-other: #888888;
-  --color-sev-high: #cf2a38;
+  --color-sev-high: #c62633;
 
   /* Light ok and crit are used as TEXT as well as fills, on the page background
      (#f4f5f5) and on --color-line-2. The earlier #16a34a / #dc2626 scored 3.04
