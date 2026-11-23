@@ -159,11 +159,14 @@ func TestSiteTeardown_AcceptedDeleteIsUnknownAndCarriesOn(t *testing.T) {
 			t.Fatalf("%s: unconfirmed = %v", tc.id, got)
 		}
 		if tc.key == "dns_zone_deleted" {
-			if result[tc.key] != false {
-				t.Fatalf("zone with a 202 reported as deleted: %v", result[tc.key])
+			if result[tc.key] != false || result["dns_zone_unknown"] != true {
+				t.Fatalf("zone with a 202 = deleted %v, unknown %v", result[tc.key], result["dns_zone_unknown"])
 			}
 		} else if n := len(getList(result, tc.key)); n != 1 {
 			t.Fatalf("%s: %s has %d rows, want only the confirmed one", tc.id, tc.key, n)
+		}
+		if note := pyStr(result["unconfirmed_note"]); !strings.HasPrefix(note, "1 item(s) may or may not have been deleted: ") {
+			t.Fatalf("%s: note = %q", tc.id, note)
 		}
 		if !strings.Contains(strings.Join(steps, "\n"), "may or may not") {
 			t.Fatalf("%s: no step says the result is unknown: %v", tc.id, steps)

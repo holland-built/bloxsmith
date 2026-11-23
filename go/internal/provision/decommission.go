@@ -594,7 +594,16 @@ func (d *SiteDecommissioner) Decommission() (M, error) {
 	}
 
 	if len(d.unconfirmed) > 0 {
+		labels := make([]string, 0, len(d.unconfirmed))
+		for _, u := range d.unconfirmed {
+			labels = append(labels, pyStr(asMap(u)["label"]))
+			if asMap(u)["action"] == "delete DNS zone" {
+				result["dns_zone_unknown"] = true
+			}
+		}
 		result["unconfirmed"] = d.unconfirmed
+		result["unconfirmed_note"] = fmt.Sprintf("%d item(s) may or may not have been deleted: %s. Check them in the Editor.",
+			len(labels), strings.Join(labels, ", "))
 	}
 	return result, nil
 }

@@ -247,7 +247,8 @@ test('a teardown delete with an unconfirmed answer is not called deleted or kept
   const body = sse({ step: 'plan' }, { done: true, result: {
     site: 'amer-lab', dry_run: false, dns_zone_deleted: false, dns_zone_fqdn: 'site-amer-lab.example.com',
     subnets_deleted: [], dhcp_ranges_deleted: [], hosts_deleted: [],
-    unconfirmed: [{ action: 'delete DNS zone', label: 'site-amer-lab.example.com', id: 'dns/auth_zone/z', status: 202 }],
+    dns_zone_unknown: true,
+    unconfirmed_note: '1 item(s) may or may not have been deleted: site-amer-lab.example.com. Check them in the Editor.',
   } });
   await page.route('**/api/teardown/site/stream*', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
   await page.route('**/api/desk/spaces*', (r) => r.fulfill({ status: 404, body: '{}' }));
