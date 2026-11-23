@@ -668,7 +668,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
   // Only a real percentage is a filter. Anything else in the address is ignored.
-  const askedUtil = hp.minUtil ? Number(hp.minUtil) : NaN
+  const askedUtil = hp.minUtil?.trim() ? Number(hp.minUtil) : NaN
   const minUtil = isPercent(askedUtil) ? askedUtil : null
 
   useEffect(() => {

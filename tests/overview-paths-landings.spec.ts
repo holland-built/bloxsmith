@@ -223,7 +223,7 @@ for (const c of [
   });
 }
 
-for (const bad of ['abc', '150', '-5']) {
+for (const bad of ['abc', '150', '-5', '%20']) {
   test(`minUtil=${bad} is no filter and no landing message`, async ({ page }) => {
     await world(page);
     await page.goto(`/#network?minUtil=${bad}&links=1`);
