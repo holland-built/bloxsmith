@@ -82,3 +82,26 @@
 }
 @keyframes br-in { from { opacity: 0; filter: blur(4px); transform: translateY(12px) } }
 @keyframes br-fade { from { opacity: 0 } }
+
+/* Wide screens: the headline becomes one band across the top, so the space
+   under it goes to the lists instead of a tall narrow column. */
+@media (min-width: 961px) {
+  .br .br-updated .ov-tip { left: auto; right: 0 }
+  .br-rail { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "date verdict primary" "title line updated"; gap: 2px 40px; align-items: center }
+  .br-date { grid-area: date } .br-rail h1 { grid-area: title; font-size: 26px }
+  .br .br-verdict { grid-area: verdict; margin: 0; font-size: 28px } .br-verdict .br-mark { width: 22px; height: 22px }
+  .br .br-line { grid-area: line; margin: 0; font-size: 15px }
+  .br a.br-primary { grid-area: primary; justify-self: end } .br-updated { grid-area: updated; justify-self: end; margin: 0 }
+  .br-read { max-width: none } .br-fact { grid-template-columns: 150px minmax(0, 1fr); padding-block: 8px; font-size: 14px }
+  .br-read h2 { font-size: 16px; padding-block-end: 8px }
+  .br-list li { padding-block: 7px }
+  .ov-look.br { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 24px }
+  .br-read { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-rows: auto 1fr; gap: 16px }
+  .br-read > section { background: var(--ov-card); border: 1px solid var(--ov-line); border-radius: 16px; box-shadow: var(--ov-shadow); padding: 14px 18px }
+  .br-read > section:has(#br-look) { grid-area: 1 / 1 / span 2 / 2 } .br-read > section:has(#br-since) { grid-area: 1 / 2 } .br-read > section:has(#br-fine) { grid-area: 2 / 2 }
+  .br-read h2 { border-bottom-width: 1px }
+  .br-read li:last-child { border-bottom: 0 }
+}
+@media (min-width: 1700px) {
+  .br-list:has(li:nth-child(9)) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px }
+}
