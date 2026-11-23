@@ -14,7 +14,7 @@ function barClass(d, i, daily, active) {
 }
 
 function dayWords(d, i, daily) {
-  if (d.value == null) return `${d.label}: no data`
+  if (d.value == null) return `${d.label}: no reading`
   const latest = i === daily.days.length - 1 ? ', may be incomplete' : ''
   return `${d.label}: ${fmt(d.value)} blocked${latest}`
 }

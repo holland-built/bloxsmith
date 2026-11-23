@@ -167,7 +167,7 @@ export default function DemoServer() {
             </div>
           </Card>
 
-          <Card panelId="demo-code" span={6} title="The Infoblox code" note={`what ${st?.terraform || 'OpenTofu'} runs for each step`}>
+          <Card panelId="demo-code" span={6} title="The Infoblox code" note={`what ${!st?.terraform || st.terraform === 'tofu' ? 'OpenTofu' : st.terraform} runs for each step`}>
             {!plan ? <Empty>Press Preview to see the code each step runs.</Empty> : (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-1 flex-wrap" role="tablist">
@@ -219,7 +219,7 @@ export default function DemoServer() {
                               <ul className="text-note list-disc pl-5">{removing.removes.map((x) => <li key={x}>{x}</li>)}</ul>
                               <div className="flex gap-2">
                                 <button className={btnCls} style={danger} onClick={() => removeRun(r.change)}>Remove these</button>
-                                <button className={btnCls} onClick={() => setRemoving(null)}>Keep</button>
+                                <button className={btnCls} onClick={() => setRemoving(null)}>Keep these</button>
                               </div>
                             </div>
                           )}

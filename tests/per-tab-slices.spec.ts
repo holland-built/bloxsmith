@@ -64,8 +64,8 @@ test.describe('DNS tab on a narrowed /api/data', () => {
     await page.goto('/#dns');
 
     const table = page.locator('text=DNS Zones').first().locator('..').locator('..');
-    await expect(table.getByText(/dns zones feed unavailable/i)).toBeVisible();
-    await expect(table.getByText('no data', { exact: true })).toHaveCount(0);
+    await expect(table.getByText(/dns zone information is unavailable/i)).toBeVisible();
+    await expect(table.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('a genuinely empty zones feed still renders the empty state, not an outage', async ({ page }) => {
@@ -86,8 +86,8 @@ test.describe('DNS tab on a narrowed /api/data', () => {
     await page.goto('/#dns');
 
     const table = page.locator('text=DNS Zones').first().locator('..').locator('..');
-    await expect(table.getByText('no data', { exact: true })).toBeVisible();
-    await expect(table.getByText(/dns zones feed unavailable/i)).toHaveCount(0);
+    await expect(table.getByText('No DNS zones found', { exact: true })).toBeVisible();
+    await expect(table.getByText(/dns zone information is unavailable/i)).toHaveCount(0);
   });
 
   test('the tab fetches ?only=zones and renders zones from that response', async ({ page }) => {

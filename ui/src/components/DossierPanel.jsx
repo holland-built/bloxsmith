@@ -111,7 +111,7 @@ function ThreatIntelTable({ records }) {
             <th className="pr-3 pb-1 font-medium">class</th>
             <th className="pr-3 pb-1 font-medium">property</th>
             <th className="pr-3 pb-1 font-medium">threat level</th>
-            <th className="pr-3 pb-1 font-medium">feed</th>
+            <th className="pr-3 pb-1 font-medium">Threat feed</th>
             <th className="pr-3 pb-1 font-medium">detected</th>
           </tr>
         </thead>

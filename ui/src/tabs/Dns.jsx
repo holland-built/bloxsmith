@@ -18,6 +18,7 @@ import Tip from '../components/Tip.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
 import './Dns.css'
+import { formatTime } from '../lib/dates.js'
 
 // THE DNS PAGE IN THE OVERVIEW'S LOOK (2026-11-10).
 //
@@ -53,7 +54,7 @@ const SERVICES_LIMIT = 200
 const fmtQps = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1))
 const clock = (h) => {
   const d = new Date(h)
-  return isNaN(d) ? String(h) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return isNaN(d) ? String(h) : formatTime(d)
 }
 
 // The signing counts, read once so the headline and the DNSSEC panel cannot
@@ -96,12 +97,12 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
   const unchecked = zonesOk ? zones.length - checked : 0
   const withIssues = zonesOk ? zones.filter(hasIssues).length : null
   const zoneWord = zonesLoading ? ['Checking', 'none'] : !zonesOk ? ['Unavailable', 'none']
-    : withIssues > 0 ? ['Act', 'crit'] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
+    : withIssues > 0 ? ['Needs action', 'crit'] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const sg = signing(dnssec)
   const sgOk = !dnssec.loading && !sg.failed
   const sgWord = dnssec.loading ? ['Checking', 'none'] : !sgOk ? ['Unavailable', 'none']
-    : sg.unsigned > 0 ? ['Look', 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
+    : sg.unsigned > 0 ? ['Review', 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const svc = services.data?.rows
   const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
@@ -132,7 +133,7 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
       key: 'services', label: 'DNS services', panelId: 'dns-services',
       value: svcOk ? `${svc.length.toLocaleString()}${svcCapped ? '+' : ''}` : null, loading: services.loading, unit: '',
       sub: '',
-      tip: svcOk ? `DNS services on this tenant.${svcCapped ? ` The list stops at ${SERVICES_LIMIT}.` : ''} The feed gives no up or down state, so this is a count, not a health check.` : null,
+      tip: svcOk ? `DNS services on this tenant.${svcCapped ? ` The list stops at ${SERVICES_LIMIT}.` : ''} Infoblox gives no up or down state, so this is a count, not a health check.` : null,
     },
   ]
 }
@@ -171,7 +172,7 @@ function Tiles(props) {
 
 // "Updated 11:02 PM" from when the zones arrived, not when the page drew.
 function Updated({ at, failed }) {
-  const label = failed ? 'Zones feed unavailable' : at ? `Updated ${at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Checking…'
+  const label = failed ? 'Zone information is unavailable' : at ? `Updated ${formatTime(at)}` : 'Checking…'
   return (
     <Tip tip="Every number here is fetched again every 30 seconds." className="ov-pill" data-updated="">
       <span className={`ov-live ${failed ? 'down' : at ? '' : 'wait'}`} aria-hidden="true" />{label}
@@ -278,9 +279,9 @@ function QpsHero({ panelId, qps }) {
       {qps.loading ? (
         <Skeleton h={250} />
       ) : qps.error || status === 'error' ? (
-        <FeedUnavailable label="DNS query rate feed unavailable" />
+        <FeedUnavailable label="DNS query rate information is unavailable" />
       ) : chartData.length === 0 ? (
-        <Empty />
+        <Empty>No DNS queries in this period</Empty>
       ) : (
         <>
           <div className="flex items-baseline gap-3 my-2">
@@ -351,7 +352,7 @@ function DnsAnswers({ panelId, health }) {
       {health.loading && !health.data ? (
         <Skeleton h={180} />
       ) : dead ? (
-        <FeedUnavailable label="DNS answer health feed unavailable" />
+        <FeedUnavailable label="DNS answer health information is unavailable" />
       ) : (
         <>
           <div className="text-note text-muted pt-1">Average time to answer</div>
@@ -498,7 +499,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
       <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
-        <FeedUnavailable label="DNS zones feed unavailable" />
+        <FeedUnavailable label="DNS zone information is unavailable" />
       </Card>
     )
   }
@@ -568,9 +569,9 @@ function DnsServices({ panelId, services }) {
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
-        <FeedUnavailable label="DNS services feed unavailable" />
+        <FeedUnavailable label="DNS service information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty />
+        <Empty>No DNS services found</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowKey={(r, i) => `${r.id ?? ''}|${i}`} />
       )}
@@ -608,7 +609,7 @@ function QueryVolume7d({ panelId, analytics }) {
         // "no data" in the body with "feed unavailable" in small grey beside
         // the title was the wrong way round: the empty-looking half was the
         // one people read.
-        <FeedUnavailable label="DNS query volume feed unavailable" reason={analytics.error?.message || undefined} />
+        <FeedUnavailable label="DNS query volume information is unavailable" reason={analytics.error?.message || undefined} />
       ) : (
         /* The label is now the day itself, so both the axis and the hover
            have to spell it — an ISO timestamp on the axis would just be a
@@ -832,11 +833,11 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
         // nor "the feed is dead".
         <Skeleton h={250} />
       ) : notSigned && signingFailed ? (
-        <FeedUnavailable label="DNSSEC feed unavailable" />
+        <FeedUnavailable label="DNSSEC information is unavailable" />
       ) : issuesOnly && listFailed ? (
-        <FeedUnavailable label="DNS zones feed unavailable" />
+        <FeedUnavailable label="DNS zone information is unavailable" />
       ) : !notSigned && zones.length === 0 ? (
-        zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty />
+        zonesStatus === 'error' ? <FeedUnavailable label="DNS zone information is unavailable" /> : <Empty>No DNS zones found</Empty>
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>
       ) : (
@@ -908,7 +909,7 @@ function DnssecHealth({ panelId, dnssec }) {
       {dnssec.loading ? (
         <Skeleton h={280} />
       ) : failed ? (
-        <FeedUnavailable label="DNSSEC feed unavailable" />
+        <FeedUnavailable label="DNSSEC information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no DNSSEC data</Empty>
       ) : (
@@ -979,7 +980,7 @@ function RpzPanel({ panelId, rpz }) {
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
-        <FeedUnavailable label="RPZ feed unavailable" />
+        <FeedUnavailable label="RPZ information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no RPZ zones</Empty>
       ) : (
@@ -1019,7 +1020,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (
-        <FeedUnavailable label="DTC LBDN feed unavailable" />
+        <FeedUnavailable label="DTC LBDN information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no LBDN records</Empty>
       ) : (

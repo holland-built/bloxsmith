@@ -8,7 +8,7 @@
 // the place in the policy's order you pick. The server previews first and
 // applies only what it previewed; see go/internal/dashboard/lists.go.
 import { useId, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
 import { compareTop, neverAdd, parseCsv, parsePasted } from '../lib/siteList.js'
@@ -24,7 +24,7 @@ import DeleteCheck from '../components/DeleteCheck.jsx'
 // them, each with what it means for someone visiting one of the sites.
 const ACTIONS = [
   { id: 'action_block', label: 'Block', says: 'People cannot reach these sites. Each attempt is logged.' },
-  { id: 'action_allow', label: 'Allow', says: 'These sites are always allowed, even if a feed lower down would block them.' },
+  { id: 'action_allow', label: 'Allow', says: 'These sites are always allowed, even if a threat feed lower down would block them.' },
   { id: 'action_log', label: 'Log only', says: 'Nothing is blocked. Each visit is logged so you can see who goes there.' },
   { id: 'action_redirect', label: 'Redirect', says: 'People are sent to a block page instead. Each attempt is logged.' },
   { id: 'action_block_nolog', label: 'Block without logging', says: 'People cannot reach these sites, and nothing is logged.' },
@@ -241,7 +241,7 @@ function DailyProposals({ setup, why }) {
     setBusy(true)
     const r = await authFetch('/api/lists/watch', { method: 'POST', body: JSON.stringify(b) })
     setBusy(false)
-    if (!r.ok) { setMsg({ err: true, text: r.data?.error || `HTTP ${r.status}` }); return }
+    if (!r.ok) { setMsg({ err: true, text: r.data?.error || failureText(r.status, 'save the watch setting') }); return }
     setMsg({ err: false, text: done })
     watches.refetch()
     props.refetch()
@@ -401,7 +401,7 @@ export default function SiteLists() {
     setNeverBusy(true)
     const r = await authFetch('/api/lists/never-add', { method: 'POST', body: JSON.stringify({ sites: parsed.domains }) })
     setNeverBusy(false)
-    if (!r.ok) { setNeverMsg({ err: true, text: r.data?.error || `HTTP ${r.status}` }); return }
+    if (!r.ok) { setNeverMsg({ err: true, text: r.data?.error || failureText(r.status, 'save the never-add list') }); return }
     setNeverText(null)
     setNeverMsg({ err: false, text: `Saved: ${plural(r.data.sites.length, 'site')} never to add.` })
     neverApi.refetch()
@@ -423,7 +423,7 @@ export default function SiteLists() {
     setLoadErr(null)
     setTops(null)
     flow.markStale()
-    const get = (url) => authFetch(url).then((r) => (r.ok && r.data?.ok !== false ? r.data : { error: r.data?.error || `HTTP ${r.status}` }))
+    const get = (url) => authFetch(url).then((r) => (r.ok && r.data?.ok !== false ? r.data : { error: r.data?.error || failureText(r.status, 'read the site list') }))
     Promise.all([get(`/api/lists/inforank?top=${n}`), get(`/api/lists/busiest?top=${n}`)]).then(([inforank, network]) => {
       if (seq !== loadSeq.current) return
       setTops({ n, inforank, network })

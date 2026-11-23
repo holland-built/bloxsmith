@@ -4,6 +4,7 @@ import { Card, Empty, FeedUnavailable, Skeleton, useGridLayout } from './ui.jsx'
 import ChartView from './ChartView.jsx'
 import { chartLink, chartUrl } from '../lib/chartBuilder.js'
 import { removeChart } from '../lib/savedCharts.js'
+import { NO_PERMISSION } from '../lib/api.js'
 import { saveLayout } from '../lib/layout.js'
 
 // A chart made in Build a chart and added to a page. It is an ordinary panel
@@ -31,7 +32,7 @@ function AboutControls({ chart, onRemoved }) {
       await removeChart(chart.id)
       onRemoved()
     } catch (e) {
-      setState({ busy: false, error: e.message })
+      setState({ busy: false, error: /HTTP 40[13]$/.test(e.message) ? NO_PERMISSION : /HTTP \d+$/.test(e.message) ? 'Could not save the layout. Try again in a moment.' : e.message })
     }
   }
   const label = chart.replaces ? 'Restore original' : 'Remove from this page'

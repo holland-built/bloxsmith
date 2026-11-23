@@ -209,7 +209,7 @@ export function DataTable({
   onRowClick,
   rowStyle,
   stickyHeader = true,
-  emptyText = 'no data',
+  emptyText = 'No rows to show',
 }) {
   const theme = useThemeColors()
   const fit = usePanelFit()

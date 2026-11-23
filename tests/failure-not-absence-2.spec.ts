@@ -57,7 +57,7 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
 // ---------- 2. Security → SOC Insights (FetchInsights availability) ----------
 
 test.describe('Security → IQ for Threat Defense panel (InsightsPanel)', () => {
-  const DEAD = { data: [], unavailable: 'IQ for Threat Defense insights unavailable (upstream error).', availability: 'error' };
+  const DEAD = { data: [], unavailable: 'IQ for Threat Defense insights unavailable.', availability: 'error' };
   const EMPTY_OK = { data: [], availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no data"', async ({ page }) => {
@@ -65,14 +65,14 @@ test.describe('Security → IQ for Threat Defense panel (InsightsPanel)', () => 
     await page.goto('/#security');
     const card = page.locator('[data-panel-id="security-soc-insights"]');
     await expect(card.getByText(/iq for threat defense unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('a genuinely empty tenant still renders "no data"', async ({ page }) => {
     await page.route('**/api/insights*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#security');
     const card = page.locator('[data-panel-id="security-soc-insights"]');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
+    await expect(card.getByText(/^No IQ insights found$/i)).toBeVisible();
     await expect(card.getByText(/iq for threat defense unavailable/i)).toHaveCount(0);
   });
 });
@@ -84,16 +84,16 @@ test.describe('Security → Threat Feed Activity panel', () => {
     await page.route('**/api/csp/threats*', (route) => fulfillJson(route, { rows: [], status: 'error' }));
     await page.goto('/#security');
     const card = page.locator('text=Threat Feed Activity').locator('..').locator('..');
-    await expect(card.getByText(/threat feed activity unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/threat feed activity is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('a genuinely empty response still renders "no data"', async ({ page }) => {
     await page.route('**/api/csp/threats*', (route) => fulfillJson(route, { rows: [], status: 'ok' }));
     await page.goto('/#security');
     const card = page.locator('text=Threat Feed Activity').locator('..').locator('..');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
-    await expect(card.getByText(/threat feed activity unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/^No threat feed activity found$/i)).toBeVisible();
+    await expect(card.getByText(/threat feed activity is unavailable/i)).toHaveCount(0);
   });
 });
 
@@ -109,7 +109,7 @@ test.describe('Security → Threat Events by Severity panel (hub.error transport
     await page.route('**/api/hub/security*', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
     await page.goto('/#security');
     const card = page.locator('text=Threat Events by hour').locator('..').locator('..');
-    await expect(card.getByText(/threat feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/threat information is unavailable/i)).toBeVisible();
     await expect(card.getByText('0 events', { exact: true })).toHaveCount(0);
   });
 
@@ -118,7 +118,7 @@ test.describe('Security → Threat Events by Severity panel (hub.error transport
     await page.goto('/#security');
     const card = page.locator('text=Threat Events by hour').locator('..').locator('..');
     await expect(card.getByText('0 events', { exact: true })).toBeVisible();
-    await expect(card.getByText(/threat feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/threat information is unavailable/i)).toHaveCount(0);
   });
 });
 
@@ -138,8 +138,8 @@ test.describe('Topbar connection pill (ConnStatus _meta / _totals.degraded)', ()
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({ hosts: 'error', subnets: 'error', leases: 'error' }, true)));
     await page.goto('/#overview');
     const pill = page.locator('span[title*="last data fetch"]');
-    await expect(pill).toContainText('feed error');
-    await expect(pill).not.toContainText('no data');
+    await expect(pill).toContainText('load error');
+    await expect(pill).not.toContainText('empty');
   });
 
   test('a genuinely empty tenant still shows "no data"', async ({ page }) => {
@@ -147,8 +147,8 @@ test.describe('Topbar connection pill (ConnStatus _meta / _totals.degraded)', ()
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({}, false)));
     await page.goto('/#overview');
     const pill = page.locator('span[title*="last data fetch"]');
-    await expect(pill).toContainText('no data');
-    await expect(pill).not.toContainText('feed error');
+    await expect(pill).toContainText('empty');
+    await expect(pill).not.toContainText('load error');
   });
 });
 
@@ -159,7 +159,7 @@ test.describe('Overview → License Inventory panel', () => {
     await page.route('**/api/csp/license-alerts*', (route) => fulfillJson(route, { licenses: [], status: 'error' }));
     await page.goto('/#overview');
     const card = page.locator('text=License Inventory').locator('..').locator('..');
-    await expect(card.getByText(/license feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/license information is unavailable/i)).toBeVisible();
     await expect(card.getByText('0 licenses', { exact: true })).toHaveCount(0);
   });
 
@@ -169,7 +169,7 @@ test.describe('Overview → License Inventory panel', () => {
     const card = page.locator('text=License Inventory').locator('..').locator('..');
     await expect(card.getByText(/no license data available/i)).toBeVisible();
     await expect(card.getByText('0 licenses', { exact: true })).toBeVisible();
-    await expect(card.getByText(/license feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/license information is unavailable/i)).toHaveCount(0);
   });
 });
 

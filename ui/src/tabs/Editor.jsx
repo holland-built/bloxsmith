@@ -11,6 +11,7 @@ import CheckedAgainst from '../components/CheckedAgainst.jsx'
 import { useNetworkPrefill } from '../lib/prefill.js'
 import { useHashParams } from '../lib/hash.js'
 import { canDelete as madeKind, checkDelete, confirmDelete, whoMade } from '../lib/madeDelete.js'
+import { failureText } from '../lib/api.js'
 
 const inputCls = `${FIELD_CLS} w-full`
 
@@ -146,7 +147,7 @@ function FindExisting({ type, label, picked, busy, onPick, onClear, initialQ = '
       fetch(`/api/edit/${type}/find?q=${encodeURIComponent(q)}${itemId ? `&id=${encodeURIComponent(itemId)}` : ''}`)
         .then(async (r) => {
           const j = await r.json().catch(() => ({}))
-          if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+          if (!r.ok || j.error) throw new Error(j.error || failureText(r.status, 'find that item'))
           return j.items ?? []
         })
     const id = setTimeout(() => {

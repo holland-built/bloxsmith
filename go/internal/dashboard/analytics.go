@@ -35,7 +35,7 @@ func (s *Service) FetchActions(ctx context.Context) map[string]any {
 	raw, ok, err := s.actionsAsync(ctx)
 	if !ok {
 		return map[string]any{"actions": []any{},
-			"unavailable":  failReason(err, "IQ Actions service unavailable (upstream error)."),
+			"unavailable":  failReason(err, "IQ Actions service unavailable."),
 			"availability": "error"}
 	}
 	data, isMap := raw.(map[string]any)
@@ -221,7 +221,7 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool, error) {
 // GetAction is a single-action read via iq-actions_get_action. Degrades to
 // {"unavailable": ...} on any error, matching FetchActions' degrade style.
 func (s *Service) GetAction(ctx context.Context, id string) map[string]any {
-	const unavailable = "IQ Actions service unavailable (upstream error)."
+	const unavailable = "IQ Actions service unavailable."
 	if s.Mcp == nil {
 		return map[string]any{"unavailable": unavailable}
 	}
@@ -287,10 +287,10 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 		return nil, fmt.Errorf("invalid status %q: must be \"active\" or \"resolved\"", status)
 	}
 	if s.Mcp == nil {
-		return nil, fmt.Errorf("IQ Actions service unavailable (upstream error)")
+		return nil, fmt.Errorf("IQ Actions service unavailable")
 	}
 	if err := s.Mcp.Initialize(ctx); err != nil {
-		return nil, fmt.Errorf("%s", failReason(err, "IQ Actions service unavailable (upstream error)"))
+		return nil, fmt.Errorf("%s", failReason(err, "IQ Actions service unavailable"))
 	}
 
 	oldStatus := "unknown"
@@ -361,7 +361,7 @@ func (s *Service) fetchInsights() map[string]any {
 	if err != nil {
 		return map[string]any{
 			"data":         []any{},
-			"unavailable":  "IQ for Threat Defense insights unavailable (upstream error).",
+			"unavailable":  "IQ for Threat Defense insights unavailable.",
 			"availability": "error",
 		}
 	}
@@ -526,7 +526,7 @@ func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 		return map[string]any{
 			"volume": []any{}, "top_clients": []any{}, "query_types": []any{},
 			"availability": "error",
-			"reason":       "DNS analytics (DnsActivityV1) unavailable (upstream error).",
+			"reason":       "DNS analytics is unavailable.",
 		}
 	}
 	return map[string]any{
@@ -646,7 +646,7 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 		return map[string]any{
 			"metrics":      []any{},
 			"availability": "error",
-			"reason":       "Host metrics (HostMetrics) unavailable (upstream error).",
+			"reason":       "Host metrics are unavailable.",
 		}
 	}
 	return map[string]any{"metrics": metrics, "availability": "ok"}
@@ -678,6 +678,6 @@ func (s *Service) ThreatLookup(ctx context.Context, query string) map[string]any
 		"entities":     []any{},
 		"query":        query,
 		"availability": "error",
-		"reason":       failReason(err, "Entity search (entity_search) unavailable (upstream error)."),
+		"reason":       failReason(err, "Search is unavailable."),
 	}
 }

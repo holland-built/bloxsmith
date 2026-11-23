@@ -3,7 +3,7 @@
   - region "Can you trust this log":
     - text: /Audit log Intact \d+ entries checked Check it yourself:/
     - code: bloxsmith audit verify
-    - text: /Last entry \d+:\d+ AM Jan \d+ Couldn't delete a DNS record Not saved \d+ since the app started/
+    - text: /Last entry \d+:\d+ AM Jan \d+, \d+ Couldn't delete a DNS record Not saved \d+ since the app started/
   - button "Arrange panels"
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
@@ -31,11 +31,11 @@
         - columnheader "Detail":
           - button "Detail"
     - rowgroup:
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn't delete a DNS record error=upstream refused · id=dns\/record\/baseline-1/:
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn't delete a DNS record error=request refused · id=dns\/record\/baseline-1/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Couldn't delete a DNS record"
-        - cell "error=upstream refused · id=dns/record/baseline-1"
+        - cell "error=request refused · id=dns/record/baseline-1"
       - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) method=POST · path=\/api\/edit\/dnsrecord · reason=tenant-read-only · tenant=baseline\/-/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"

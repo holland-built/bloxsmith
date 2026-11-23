@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { tokenFetch } from './authFetch.js'
+import { failureText } from './api.js'
 
 // Shared Preview -> Apply driver for both cards. Preview posts with dry:true so
 // the server does the validating; apply re-posts the same body with dry:false.
@@ -35,7 +36,7 @@ export function useWriteFlow(url) {
       .then(async (r) => {
         const j = await r.json().catch(() => ({}))
         if (!r.ok || j.error || j.ok === false) {
-          setError(j.error || `HTTP ${r.status}`)
+          setError(j.error || failureText(r.status, 'complete this change'))
           setStatus('idle')
           setPreview(null)
           return null

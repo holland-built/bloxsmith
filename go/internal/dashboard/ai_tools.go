@@ -418,7 +418,7 @@ func aiUpstreamDetail(err error) string {
 	if ue, ok := err.(*rest.UpstreamError); ok {
 		return ue.Public()
 	}
-	return "upstream error"
+	return "Infoblox error"
 }
 
 // aiExDetail renders the sanitized detail clause for the GetEx-based cases
@@ -429,9 +429,9 @@ func aiUpstreamDetail(err error) string {
 // instead of switching call sites.
 func aiExDetail(status int, err error) string {
 	if err != nil || status == 0 {
-		return "could not reach the upstream server"
+		return "could not reach Infoblox"
 	}
-	return fmt.Sprintf("upstream returned status %d", status)
+	return fmt.Sprintf("Infoblox returned status %d", status)
 }
 
 // aiSampleCap is the ONE shared row-sample size for every list-shaped AI

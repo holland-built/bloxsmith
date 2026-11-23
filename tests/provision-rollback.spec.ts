@@ -82,8 +82,8 @@ test.describe('Provision → rollback report on a failed run', () => {
     await expect(page.getByText('10.10.1.0/24').first()).toBeVisible();
     await expect(page.getByText('dns/record/r-9').first()).toBeVisible();
     await expect(page.getByText(/4 of 6 removed/).first()).toBeVisible();
-    await expect(page.getByText(/HTTP 500/).first()).toBeVisible();
-    await expect(page.getByText(/HTTP 409/).first()).toBeVisible();
+    await expect(page.getByText(/could not remove it/).first()).toBeVisible();
+    await expect(page.getByText(/could not remove it/)).toHaveCount(2);
   });
 
   test('complete: one calm line, and none of the critical wording', async ({ page }) => {

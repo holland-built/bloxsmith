@@ -89,7 +89,7 @@ test.describe('Lookalike Domains (/api/lookalikes fails twice, then answers)', (
     await page.clock.install();
     await page.goto('/#security');
     const panel = card(page, 'Lookalike Domains');
-    await expect(panel.getByText('Lookalike domain feed unavailable')).toBeVisible();
+    await expect(panel.getByText('Lookalike domain information is unavailable')).toBeVisible();
 
     // A sentinel on the window object, planted after the only navigation this
     // test performs. It survives every client-side re-render and cannot
@@ -131,7 +131,7 @@ test.describe('Lookalike Domains (/api/lookalikes permanently dead)', () => {
     await page.clock.install();
     await page.goto('/#security');
     const panel = card(page, 'Lookalike Domains');
-    await expect(panel.getByText('Lookalike domain feed unavailable')).toBeVisible();
+    await expect(panel.getByText('Lookalike domain information is unavailable')).toBeVisible();
 
     // The same budget as before, now counted in the page's fake time.
     for (let t = 0; t < MAX_RETRY_WINDOW_MS + 15_000 && requests < 3; t += 1000) {

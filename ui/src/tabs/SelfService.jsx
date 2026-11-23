@@ -10,7 +10,7 @@
 // that is what carries the notice.
 import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { SHARE_PICKER, useApi } from '../lib/api.js'
+import { failureText, isNoPermission, NO_PERMISSION, SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
@@ -529,7 +529,8 @@ function showMore(list, key, shown) {
   fetch(`${url}&_offset=${shown}`, { cache: 'no-store' })
     .then(async (r) => {
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`)
+      if (r.status === 401 || r.status === 403) throw new Error(NO_PERMISSION)
+      if (!r.ok || j.error) throw new Error(j.error || failureText(r.status, 'load more rows'))
       setMore((m) => (m.url === url ? { ...m, rows: [...m.rows, ...(j[key] ?? [])], data: j, busy: false } : m))
     })
     .catch((e) => setMore((m) => (m.url === url ? { ...m, busy: false, error: String(e?.message || e) } : m)))
@@ -553,7 +554,7 @@ function ShowMore({ list }) {
           {list.extra.busy ? 'Loading…' : 'Show 200 more'}
         </button>
       )}
-      {list.extra.error && <span className="text-note" style={{ color: 'var(--color-crit)' }}>Couldn't load more: {list.extra.error}</span>}
+      {list.extra.error && <span className="text-note" style={{ color: 'var(--color-crit)' }}>{list.extra.error === NO_PERMISSION ? `${NO_PERMISSION} No more rows were loaded.` : `Couldn't load more: ${list.extra.error}`}</span>}
     </div>
   )
 }
@@ -649,7 +650,7 @@ function ManageRecordsPanel() {
       .then(async (r) => {
         const j = await r.json().catch(() => ({}))
         if (!r.ok || j.error) {
-          setError(j.error || `HTTP ${r.status}`)
+          setError(j.error || failureText(r.status, 'preview the change'))
           setStatus('idle'); setPreview(null)
           return
         }
@@ -673,7 +674,7 @@ function ManageRecordsPanel() {
     setStatus('busy'); setError(null)
     fetch(rereadUrl(editing), { cache: 'no-store' })
       .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        if (!r.ok) throw new Error(failureText(r.status, 're-check the record'))
         return r.json()
       })
       .then((j) => {
@@ -696,7 +697,7 @@ function ManageRecordsPanel() {
         }).then(async (r) => {
           const j2 = await r.json().catch(() => ({}))
           if (!r.ok || j2.error) {
-            setError(j2.error || `HTTP ${r.status}`)
+            setError(j2.error || failureText(r.status, 'update the record'))
             setStatus('idle'); setPreview(null); setHeld(null)
             return
           }
@@ -739,14 +740,15 @@ function ManageRecordsPanel() {
       // Arm only on a fresh read that still finds the row, so the confirm
       // label never shows details that may have changed.
       const run = ++checkRef.current
+      let checkStatus = 0
       fetch(rereadUrl(row), { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
+        .then((r) => { checkStatus = r.status; return r.ok ? r.json() : null })
         .catch(() => null)
         .then((j) => {
           if (run !== checkRef.current) return
           const fresh = j && (j.records || []).find((x) => x.id === row.id)
           if (!fresh) {
-            setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : "Couldn't re-check that record, so it wasn't deleted. Try again.")
+            setDeleteError(j ? 'That record is no longer there. The list has been refreshed.' : isNoPermission({ status: checkStatus }) ? `${NO_PERMISSION} The record was not deleted.` : "Couldn't re-check that record, so it wasn't deleted. Try again.")
             if (j) { patchMore(paged, row.id); recordsApi.refetch() }
             return
           }
@@ -774,7 +776,7 @@ function ManageRecordsPanel() {
         const r = { ok: rOk, status }
         const j = data || {}
         if (!r.ok || j.error || j.ok === false) {
-          setDeleteError(j.error || `HTTP ${r.status} — delete failed, record still exists`)
+          setDeleteError(isNoPermission({ status: r.status }) ? `${NO_PERMISSION} The record was not deleted.` : j.error || failureText(r.status, 'delete the record'))
           return
         }
         setPanelMessage(deletedMsg(j, 'DNS record'))
@@ -954,14 +956,15 @@ function ManageAddressesPanel() {
     {
       setReleaseError(null)
       const run = ++checkRef.current
+      let checkStatus = 0
       fetch(rereadUrl(row), { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
+        .then((r) => { checkStatus = r.status; return r.ok ? r.json() : null })
         .catch(() => null)
         .then((j) => {
           if (run !== checkRef.current) return
           const fresh = j && (j.addresses || []).find((x) => x.id === row.id)
           if (!fresh) {
-            setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : "Couldn't re-check that address, so it wasn't released. Try again.")
+            setReleaseError(j ? 'That address is no longer there. The list has been refreshed.' : isNoPermission({ status: checkStatus }) ? `${NO_PERMISSION} The address was not released.` : "Couldn't re-check that address, so it wasn't released. Try again.")
             if (j) { patchMore(paged, row.id); addressesApi.refetch() }
             return
           }
@@ -988,7 +991,7 @@ function ManageAddressesPanel() {
         const r = { ok: rOk, status }
         const j = data || {}
         if (!r.ok || j.error || j.ok === false) {
-          setReleaseError(j.error || `HTTP ${r.status} — release failed, address still allocated`)
+          setReleaseError(isNoPermission({ status: r.status }) ? `${NO_PERMISSION} The address was not released.` : j.error || failureText(r.status, 'release the address'))
           return
         }
         patchMore(paged, row.id)

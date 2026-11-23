@@ -610,7 +610,7 @@ const CLAIMS = [
   },
   {
     panel: 'daily-security-today',
-    says: /A dash means the feed could not be read/,
+    says: /A dash means the data could not be read/,
     file: DAILY,
     proofs: [{ re: /\{sec\.loading \|\| secDead \? '— events'/, expect: 'a dead feed renders a dash rather than a count' }],
   },
@@ -815,7 +815,7 @@ const CLAIMS = [
   },
   {
     panel: 'daily-open-issues',
-    says: /A count reading "unavailable" in red means that one feed failed/,
+    says: /A count reading "unavailable" in red means that one source failed/,
     file: DAILY,
     proofs: [{ re: /style=\{\{ color: COLORS\.crit \}\}>unavailable</, expect: 'the "unavailable" row text is COLORS.crit (red)' }],
   },
@@ -970,7 +970,7 @@ const CLAIMS = [
   },
   {
     panel: 'security-lookalike-domains',
-    says: /A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found\./,
+    says: /A dash instead of a count means the source could not be reached, so nothing was checked; 0 means checked and none found\./,
     file: SECURITY,
     proofs: [
       { re: /const counted = !lookalikes\.error && !d\.unavailable/, expect: 'a count is only claimed when the fetch worked and upstream did not declare itself unavailable' },
@@ -1212,7 +1212,7 @@ const EXCLUDED = [
     // it is kept rather than tuned away on purpose: this is what over-flagging
     // is supposed to look like — loud, in the table, with a reason.
     panel: 'infra-dfp-services',
-    phrase: 'so the two never look the same',
+    phrase: 'A failed read says "unavailable"',
     why: 'A FALSE FLAG. "the two" is a pronoun for the two states the same sentence just named, not a count of anything, so there is no value to bind. What is left underneath is a rendering-branch claim (Empty for a configured-none, FeedUnavailable for a failed read, both inside a shared FeedCard) — a behavioural shape of rule, which is the sibling file\'s machine, not this one\'s.',
   },
 ]

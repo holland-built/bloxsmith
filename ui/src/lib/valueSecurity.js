@@ -45,7 +45,7 @@ export function aheadText(minutes) {
  */
 export function blockedNote(m, value) {
   if (m.covered === false) {
-    if (!m.days_from) return 'Infoblox holds no data for these 30 days'
+    if (!m.days_from) return 'Infoblox holds no readings for these 30 days'
     // Days missing between the first and last held: neither "since" nor a range is true.
     if (m.days_held < daysSpanned(m.days_from, m.days_to)) return `Counted ${m.days_held} of these 30 days, the days Infoblox holds`
     const [first, last] = Array.isArray(m.window_range) ? m.window_range : []

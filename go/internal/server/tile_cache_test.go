@@ -274,7 +274,7 @@ func TestExposure403MemoryStillAnswersLocally(t *testing.T) {
 	if n := up.total("/api/attack-surface/v1/exposures/hostnames"); n != 1 {
 		t.Fatalf("a remembered 403 went upstream again (%d calls, want 1)", n)
 	}
-	if !strings.Contains(rr.Body.String(), "not entitled") {
+	if !strings.Contains(rr.Body.String(), "not included in this account") {
 		t.Fatalf("body = %s, want the entitlement reason", rr.Body.String())
 	}
 }

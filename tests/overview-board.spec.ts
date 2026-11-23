@@ -75,16 +75,16 @@ test('a dead inventory feed says unavailable and not checked, never a number or 
   await page.route('**/api/data*', down);
   await page.goto('/#overview');
   for (const name of ['IPAM', 'Hosts', 'DHCP']) await expect(tile(page, name)).toContainText('unavailable', { timeout: 20_000 });
-  await expect(row(page, 'Hosts')).toContainText('not checked: feed unavailable');
+  await expect(row(page, 'Hosts')).toContainText('not checked: information unavailable');
   await expect(row(page, 'Hosts')).not.toContainText('None open');
-  await expect(page.locator('[data-coverage]')).toContainText('Inventory feed unavailable');
+  await expect(page.locator('[data-coverage]')).toContainText('Inventory information is unavailable');
 });
 
 test('a dead incidents feed leaves the service rows "not checked", not "None open"', async ({ page }) => {
   await installBaselineWorld(page);
   await page.route('**/api/incidents*', down);
   await page.goto('/#overview');
-  await expect(row(page, 'DNS')).toContainText('not checked: feed unavailable', { timeout: 20_000 });
+  await expect(row(page, 'DNS')).toContainText('not checked: information unavailable', { timeout: 20_000 });
   await expect(row(page, 'IPAM')).not.toContainText('None open');
 });
 

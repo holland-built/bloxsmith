@@ -85,8 +85,8 @@
         - columnheader "Status"
         - columnheader "User"
     - rowgroup:
-      - row /1\/1\/\d+, 9:\d+:\d+ AM discovery completed baseline-operator/:
-        - cell /1\/1\/\d+, 9:\d+:\d+ AM/
+      - row /Jan 1, \d+, 9:\d+ AM discovery completed baseline-operator/:
+        - cell /Jan 1, \d+, 9:\d+ AM/
         - cell "discovery"
         - cell "completed"
         - cell "baseline-operator"

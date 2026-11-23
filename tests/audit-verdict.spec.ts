@@ -51,7 +51,7 @@ test.describe('CSP Portal Audit — loads on mount', () => {
     );
     await page.goto('/#audit');
     const card = page.getByText('CSP Portal Audit', { exact: true }).locator('..').locator('..');
-    await expect(card.getByText(/CSP audit feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/Portal audit information is unavailable/i)).toBeVisible();
   });
 
   test('a genuinely empty feed on mount gets its own wording, not the error one', async ({ page }) => {
@@ -61,7 +61,7 @@ test.describe('CSP Portal Audit — loads on mount', () => {
     await page.goto('/#audit');
     const card = page.getByText('CSP Portal Audit', { exact: true }).locator('..').locator('..');
     await expect(card.getByText(/nothing here yet/i)).toBeVisible();
-    await expect(card.getByText(/CSP audit feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/Portal audit information is unavailable/i)).toHaveCount(0);
   });
 });
 

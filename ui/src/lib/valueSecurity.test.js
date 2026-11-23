@@ -90,7 +90,7 @@ test('days missing from the middle says how many are counted, with no trend', ()
 })
 
 test('no days held, or coverage not checked, never shows a trend', () => {
-  assert.equal(blockedNote({ ...win, covered: false, days_from: null, days_to: null }, 900), 'Infoblox holds no data for these 30 days')
+  assert.equal(blockedNote({ ...win, covered: false, days_from: null, days_to: null }, 900), 'Infoblox holds no readings for these 30 days')
   assert.equal(blockedNote({ ...win, covered: null }, 900), "Could not confirm that Infoblox holds all 30 days")
 })
 

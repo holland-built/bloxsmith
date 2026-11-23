@@ -646,7 +646,7 @@ func TestBlockProvisionRefusesAChildOutsideItsParent(t *testing.T) {
 	// have been sent.
 	for _, post := range f.posts() {
 		if pyStr(post["address"]) == "192.168.5.0" {
-			t.Fatalf("the out-of-parent child was created upstream anyway: %v", post)
+			t.Fatalf("the out-of-parent child was created in Infoblox anyway: %v", post)
 		}
 	}
 }

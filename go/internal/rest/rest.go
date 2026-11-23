@@ -504,15 +504,15 @@ func (e *UpstreamError) Error() string {
 func (e *UpstreamError) Public() string {
 	switch e.Category {
 	case "network":
-		return "Could not reach the upstream server."
+		return "Could not reach Infoblox."
 	case "status":
-		return fmt.Sprintf("The upstream server returned an error (status %d).", e.Status)
+		return fmt.Sprintf("Infoblox returned an error (status %d).", e.Status)
 	case "decode":
-		return "The upstream server's response could not be parsed."
+		return "Infoblox's response could not be read."
 	case "shape":
-		return "The upstream server returned an unexpected response format."
+		return "Infoblox returned an unexpected response."
 	default:
-		return "The upstream request failed."
+		return "The Infoblox request failed."
 	}
 }
 

@@ -19,7 +19,7 @@ const HOSTNAMES_OK = {
 const HOSTNAMES_DEAD = {
   availability: 'error',
   status: 'error',
-  reason: 'upstream response too large',
+  reason: 'Infoblox sent too much data to read',
   data: {},
 };
 const IPS_OK = {
@@ -61,10 +61,10 @@ test.describe('Exposed Surface panel — availability branching', () => {
     await mockSurface(page, HOSTNAMES_DEAD, IPS_OK);
     await page.goto('/#security');
     const card = page.locator('text=Exposed Surface').locator('..').locator('..');
-    await expect(card.getByText(/hostname feed unavailable/i)).toBeVisible();
-    await expect(card.getByText('upstream response too large')).toBeVisible();
+    await expect(card.getByText(/hostname information is unavailable/i)).toBeVisible();
+    await expect(card.getByText('Infoblox sent too much data to read')).toBeVisible();
     await expect(card.getByText('203.0.113.5')).toBeVisible(); // healthy neighbour unaffected
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
     await expect(card.getByText(/^0$/)).toHaveCount(0);
   });
 
@@ -72,7 +72,7 @@ test.describe('Exposed Surface panel — availability branching', () => {
     await mockSurface(page, HOSTNAMES_OK, IPS_DEAD);
     await page.goto('/#security');
     const card = page.locator('text=Exposed Surface').locator('..').locator('..');
-    await expect(card.getByText(/ip feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/ip information is unavailable/i)).toBeVisible();
     await expect(card.getByText('upstream timed out')).toBeVisible();
     await expect(card.getByText('evil.example.com')).toBeVisible(); // healthy neighbour unaffected
   });
@@ -81,8 +81,8 @@ test.describe('Exposed Surface panel — availability branching', () => {
     await mockSurface(page, HOSTNAMES_DEAD, IPS_DEAD);
     await page.goto('/#security');
     const card = page.locator('text=Exposed Surface').locator('..').locator('..');
-    await expect(card.getByText(/exposed surface feeds unavailable/i)).toBeVisible();
-    await expect(card.getByText(/^no data$/i)).toHaveCount(0);
+    await expect(card.getByText(/exposed surface information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
   test('metadata-degraded IPs feed is labeled as loaded rows, never a total', async ({ page }) => {
@@ -114,7 +114,7 @@ test.describe('Exposures panel — total vs sample caption', () => {
     // By panel id: the headline row above the grid also says "Exposures".
     const card = page.locator('[data-panel-id="security-exposures"]');
     await expect(card.getByText('121,957 total')).toBeVisible();
-    await expect(card.getByText(/of 121,957, upstream order/i)).toBeVisible();
+    await expect(card.getByText(/of 121,957, Infoblox order/i)).toBeVisible();
     // caption must say NOT ranked by severity, never imply these rows are the worst
     await expect(card.getByText(/not ranked by severity/i)).toBeVisible();
     await expect(card.getByText(/worst/i)).toHaveCount(0);

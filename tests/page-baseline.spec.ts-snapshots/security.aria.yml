@@ -30,22 +30,22 @@
           - button "Time"
         - columnheader "Block"
     - rowgroup:
-      - row /Acknowledge bad\.baseline\.example HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM Block/:
-        - cell "Acknowledge bad.baseline.example":
-          - checkbox "Acknowledge bad.baseline.example"
+      - row /Mark bad\.baseline\.example as seen HIGH bad\.baseline\.example BLOCK Jan 1, \d+, \d+:\d+ AM Block/:
+        - cell "Mark bad.baseline.example as seen":
+          - checkbox "Mark bad.baseline.example as seen"
         - cell "HIGH"
         - cell "bad.baseline.example"
         - cell "BLOCK"
-        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell /Jan 1, \d+, \d+:\d+ AM/
         - cell "Block":
           - button "Block"
-      - row /Acknowledge watch\.baseline\.example MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM Block/:
-        - cell "Acknowledge watch.baseline.example":
-          - checkbox "Acknowledge watch.baseline.example"
+      - row /Mark watch\.baseline\.example as seen MEDIUM watch\.baseline\.example LOG Jan 1, \d+, 8:\d+ AM Block/:
+        - cell "Mark watch.baseline.example as seen":
+          - checkbox "Mark watch.baseline.example as seen"
         - cell "MEDIUM"
         - cell "watch.baseline.example"
         - cell "LOG"
-        - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+        - cell /Jan 1, \d+, 8:\d+ AM/
         - cell "Block":
           - button "Block"
   - heading "Response Summary" [level=2]
@@ -81,12 +81,12 @@
         - columnheader "Last Seen":
           - button "Last Seen"
     - rowgroup:
-      - row /Baseline Insight HIGH Active 9 1\/1\/\d+/:
+      - row /Baseline Insight HIGH Active 9 Jan 1, \d+/:
         - cell "Baseline Insight"
         - cell "HIGH"
         - cell "Active"
         - cell "9"
-        - cell /1\/1\/\d+/
+        - cell /Jan 1, \d+/
   - heading "Lookalike Domains" [level=2]
   - text: 1 detected
   - 'button "About: Lookalike Domains"': "About: ⓘ"
@@ -138,7 +138,7 @@
   - heading "CTEM Exposure" [level=2]
   - 'button "About: CTEM Exposure"': "About: ⓘ"
   - 'button "Options: CTEM Exposure"'
-  - text: no data
+  - text: No CTEM exposures found
   - heading "Asset Insights" [level=2]
   - 'button "About: Asset Insights"': "About: ⓘ"
   - 'button "Options: Asset Insights"'

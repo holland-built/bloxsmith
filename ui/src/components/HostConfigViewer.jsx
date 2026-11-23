@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Empty, FeedUnavailable, FOCUS_RING, Skeleton } from './ui.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
+import { failureText } from '../lib/api.js'
+import { formatWhen } from '../lib/dates.js'
 
 // The DNS or DHCP settings one host loaded, read through GET /api/host-config.
 // The server hides every password and secret key before the text gets here
@@ -18,7 +20,7 @@ export const NIOS_GRID_MEMBER = '6'
 
 function fmtWhen(v) {
   const t = Date.parse(v)
-  return Number.isNaN(t) ? '' : new Date(t).toLocaleString()
+  return Number.isNaN(t) ? '' : formatWhen(t)
 }
 
 // The server withholds a whole file when it holds a secret it cannot safely
@@ -61,7 +63,7 @@ export default function HostConfigViewer({ host, onClose }) {
         } catch (e) {
           if (e.name === 'AbortError') throw e
         }
-        if (!r.ok || !body) throw new Error(body?.error || `The server answered ${r.status}.`)
+        if (!r.ok || !body) throw new Error(body?.error || failureText(r.status, 'load the host settings'))
         if (live()) setState({ data: body })
       })
       .catch((e) => {

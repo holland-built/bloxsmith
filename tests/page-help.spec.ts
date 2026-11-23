@@ -64,13 +64,13 @@ test('nothing is sent to the AI until the notice is understood, then it shrinks 
   expect(asked).toEqual([]);
   await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Understood' }).click();
+  await page.getByRole('button', { name: 'Allow AI questions' }).click();
   await expect(page.getByText('Questions send tenant data to api.groq.com.')).toBeVisible();
   await box.press('Enter');
   await expect.poll(() => asked).toEqual(['Which hosts are offline?']);
 
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Understood' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Allow AI questions' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Details' }).click();
   await expect(page.getByRole('note')).toContainText('Nothing is sent until you ask.');
 });
@@ -84,7 +84,7 @@ test('a different AI provider asks again', async ({ page }) => {
   });
   await page.goto('/#ai');
   await expect(page.getByRole('note')).toContainText('to llm.example.net.');
-  await expect(page.getByRole('button', { name: 'Understood' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Allow AI questions' })).toBeVisible();
 });
 
 test('when the AI address cannot be read, nothing can be sent', async ({ page }) => {
@@ -97,7 +97,7 @@ test('when the AI address cannot be read, nothing can be sent', async ({ page })
   await page.route('**/api/query**', (r) => { sent++; return r.abort(); });
   await page.goto('/#ai');
   await expect(page.getByRole('note')).toContainText('could not be read');
-  await expect(page.getByRole('button', { name: 'Understood' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Allow AI questions' })).toBeDisabled();
   const box = page.getByRole('textbox', { name: 'Ask about your network' });
   await box.fill('Which hosts are offline?');
   await box.press('Enter');

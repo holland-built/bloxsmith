@@ -110,7 +110,7 @@ test.describe('the page never claims none are down without knowing', () => {
   });
 
   test('dead feed bucket', async ({ page }) => {
-    await health(page, [{ name: 'DHCP', status: 'error', statusLabel: 'unavailable', meta: 'feed unavailable', availability: 'error' }]);
+    await health(page, [{ name: 'DHCP', status: 'error', statusLabel: 'unavailable', meta: 'information unavailable', availability: 'error' }]);
     await page.goto('/#infra?service=DHCP&status=down');
     await expect(page.locator('[data-services-down="DHCP"]').getByRole('heading')).toContainText('could not be loaded');
   });

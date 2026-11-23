@@ -41,7 +41,7 @@ function dataPayload(overrides: {
 test.describe('Daily → Security Today panel (threat-event feed)', () => {
   const DEAD = {
     events: [], counts: { critical: 0, high: 0, medium: 0, low: 0 }, blocked: 0, logged: 0, total: 0,
-    availability: 'error', reason: 'threat-event feed unavailable',
+    availability: 'error', reason: 'Threat event information is unavailable',
   };
   const EMPTY_OK = {
     events: [], counts: { critical: 0, high: 0, medium: 0, low: 0 }, blocked: 0, logged: 0, total: 0,
@@ -52,7 +52,7 @@ test.describe('Daily → Security Today panel (threat-event feed)', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#daily');
     const card = page.locator('text=Security Today').locator('..').locator('..');
-    await expect(card.getByText(/threat feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/threat information is unavailable/i)).toBeVisible();
     await expect(card.getByText('critical', { exact: true })).toHaveCount(0);
   });
 
@@ -60,7 +60,7 @@ test.describe('Daily → Security Today panel (threat-event feed)', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#daily');
     const card = page.locator('text=Security Today').locator('..').locator('..');
-    await expect(card.getByText(/threat feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/threat information is unavailable/i)).toHaveCount(0);
     await expect(card.getByText('critical', { exact: true })).toBeVisible();
   });
 });
@@ -92,14 +92,14 @@ test.describe('Daily → Open Issues panel (hosts feed, one of three KPI rows)',
 // ---------- 3. Incidents → SOC Queue (FetchActions availability) ----------
 
 test.describe('Incidents → IQ Actions panel (IQ Actions feed)', () => {
-  const DEAD = { actions: [], unavailable: 'IQ Actions service unavailable (upstream error).', availability: 'error' };
+  const DEAD = { actions: [], unavailable: 'IQ Actions service unavailable.', availability: 'error' };
   const EMPTY_OK = { actions: [], unavailable: 'No IQ Actions for this tenant.', availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no pending actions"', async ({ page }) => {
     await page.route('**/api/actions*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#incidents');
     const card = page.locator('[data-panel-id="incidents-soc-queue"]');
-    await expect(card.getByText(/iq actions feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/iq actions information is unavailable/i)).toBeVisible();
     await expect(card.getByText(/no pending actions/i)).toHaveCount(0);
   });
 
@@ -108,7 +108,7 @@ test.describe('Incidents → IQ Actions panel (IQ Actions feed)', () => {
     await page.goto('/#incidents');
     const card = page.locator('[data-panel-id="incidents-soc-queue"]');
     await expect(card.getByText(/no pending actions/i)).toBeVisible();
-    await expect(card.getByText(/iq actions feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/iq actions information is unavailable/i)).toHaveCount(0);
   });
 });
 
@@ -146,7 +146,7 @@ test.describe('Incidents → Triage panel (signals_degraded)', () => {
 test.describe('AI → Threat lookup panel (entity_search)', () => {
   const DEAD = {
     entities: [], query: 'evil.example.com', availability: 'error',
-    reason: 'Entity search (entity_search) unavailable (upstream error).',
+    reason: 'Search is unavailable.',
   };
   const EMPTY_OK = { entities: [], query: 'benign.example.com', availability: 'ok' };
 
@@ -176,7 +176,7 @@ test.describe('AI → Threat lookup panel (entity_search)', () => {
 // ---------- 6. Security → Lookalike Domains (not_entitled vs plain outage) ----------
 
 test.describe('Security → Lookalike Domains panel (not_entitled vs plain outage)', () => {
-  const NOT_ENTITLED = { domains: [], targets: [], unavailable: 'Lookalike Domains not entitled', not_entitled: true };
+  const NOT_ENTITLED = { domains: [], targets: [], unavailable: 'Lookalike Domains is not included in your subscription', not_entitled: true };
   const PLAIN_OUTAGE = { domains: [], targets: [], unavailable: 'Lookalike Domains service unavailable', not_entitled: false };
   const GENUINE_EMPTY = { domains: [], targets: [], unavailable: null };
 
@@ -184,7 +184,7 @@ test.describe('Security → Lookalike Domains panel (not_entitled vs plain outag
     await page.route('**/api/lookalikes*', (route) => fulfillJson(route, NOT_ENTITLED));
     await page.goto('/#security');
     const card = page.locator('text=Lookalike Domains').locator('..').locator('..');
-    await expect(card.getByText(/not entitled — Lookalike Domains not entitled/i)).toBeVisible();
+    await expect(card.getByText(/^Lookalike Domains is not included in your subscription$/i)).toBeVisible();
   });
 
   test('a plain outage (not a 403) never claims "not entitled"', async ({ page }) => {
@@ -192,15 +192,15 @@ test.describe('Security → Lookalike Domains panel (not_entitled vs plain outag
     await page.goto('/#security');
     const card = page.locator('text=Lookalike Domains').locator('..').locator('..');
     await expect(card.getByText('Lookalike Domains service unavailable', { exact: true })).toBeVisible();
-    await expect(card.getByText(/not entitled/i)).toHaveCount(0);
+    await expect(card.getByText(/not included in your subscription/i)).toHaveCount(0);
   });
 
   test('a genuinely empty tenant renders the ordinary empty state', async ({ page }) => {
     await page.route('**/api/lookalikes*', (route) => fulfillJson(route, GENUINE_EMPTY));
     await page.goto('/#security');
     const card = page.locator('text=Lookalike Domains').locator('..').locator('..');
-    await expect(card.getByText(/^no data$/i)).toBeVisible();
-    await expect(card.getByText(/not entitled/i)).toHaveCount(0);
+    await expect(card.getByText(/^No lookalike domains found$/i)).toBeVisible();
+    await expect(card.getByText(/not included in your subscription/i)).toHaveCount(0);
   });
 });
 
@@ -211,7 +211,7 @@ test.describe('DNS → DNSSEC Health panel (CSPDnssec status field)', () => {
     await page.route('**/api/csp/dnssec*', (route) => fulfillJson(route, { rows: [], count: 0, status: 'error' }));
     await page.goto('/#dns');
     const card = page.locator('text=DNSSEC Health').locator('..').locator('..');
-    await expect(card.getByText(/dnssec feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/dnssec information is unavailable/i)).toBeVisible();
     await expect(card.getByText(/no dnssec data/i)).toHaveCount(0);
   });
 
@@ -220,6 +220,6 @@ test.describe('DNS → DNSSEC Health panel (CSPDnssec status field)', () => {
     await page.goto('/#dns');
     const card = page.locator('text=DNSSEC Health').locator('..').locator('..');
     await expect(card.getByText(/no dnssec data/i)).toBeVisible();
-    await expect(card.getByText(/dnssec feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/dnssec information is unavailable/i)).toHaveCount(0);
   });
 });

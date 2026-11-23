@@ -56,8 +56,8 @@ func TestRetagBlock_UpstreamErrorIs502NotBadIPSpace(t *testing.T) {
 		t.Fatalf("status = %d, want 502 (upstream 500 must NOT become the 'IP space not found' 400); body=%s", rr.Code, rr.Body.String())
 	}
 	body := decodeBody(t, rr)
-	if body["error"] != "upstream request failed" {
-		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	if body["error"] != "Infoblox request failed" {
+		t.Fatalf("error = %v, want 'Infoblox request failed'", body["error"])
 	}
 	// 2: the failed read is asked once more on purpose (rest.doGet).
 	if calls != 2 {

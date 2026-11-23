@@ -3,6 +3,7 @@ import { COLORS, FIELD_CLS } from './ui.jsx'
 import { tokenFetch } from '../lib/authFetch.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { API_KEY_BOX } from '../lib/secretBox.js'
+import { failureText } from '../lib/api.js'
 
 // The demo server's settings: one form, used on the Demo server page and in
 // the setup checklist. `st` is /api/demo/status; onSaved refreshes it.
@@ -44,7 +45,7 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
         body: JSON.stringify({ ...form, joinToken: token }),
       })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok || j.ok === false) setSaveMsg({ bad: true, text: j.error === 'locked' ? 'Unlock the vault first.' : (j.error || `HTTP ${r.status}`) })
+      if (!r.ok || j.ok === false) setSaveMsg({ bad: true, text: j.error === 'locked' ? 'Unlock the vault first.' : (j.error || failureText(r.status, 'save the demo settings')) })
       else {
         setToken('')
         setSaveMsg(j.problems?.length ? { bad: true, text: `Saved. Still to fix: ${j.problems.join('; ')}` } : { text: 'Saved.' })

@@ -7,7 +7,7 @@ Tabs fall into two groups:
 - **Read-only**: Overview, Daily, Value, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section. The refresh times on this page are the normal ones. The list at the top of the screen can slow them to 1, 5 or 15 minutes or turn them off, and the round arrow beside it reloads the page now. Connection status and job progress keep updating whatever the list says.
 - **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
 
-Almost every panel follows one rule: a feed that failed to load never looks like a feed that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
+Almost every panel follows one rule: information that failed to load never looks like information that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
 
 ## Finish setting up
 
@@ -97,14 +97,14 @@ Asking for an address ("give me an address in Dublin") opens Get an address, and
 What is wrong right now, service by service, and the page the app opens on. Refreshes every 30 seconds.
 
 - **Updated** (top right) is when the inventory arrived. Hover or tap it to see how much of the network the page could read: how many subnets and hosts loaded out of the total, and whether the service list was cut short. If the inventory could not be read, it says so in red.
-- **Five tiles**, one each for DNS, DHCP, IPAM, Hosts and Security. Each shows the main number and a one-word state: **Act** (something critical), **Look** (a warning), **Healthy**, or **Not checked** when a feed that would report a problem did not answer. Click a tile to show its detail underneath: for DNS, the last 24 hours of queries per second (the last hour is dashed because it is not finished; hover or tap a point for its value), plus the average time to answer a lookup and the share answered without an error, both over the last 24 hours. For the others it is a bar of how much is affected, with a link to its page.
+- **Five tiles**, one each for DNS, DHCP, IPAM, Hosts and Security. Each shows the main number and a one-word state: **Needs action** (something critical), **Review** (a warning), **Healthy**, or **Not checked** when a source that would report a problem did not answer. Click a tile to show its detail underneath: for DNS, the last 24 hours of queries per second (the last hour is dashed because it is not finished; hover or tap a point for its value), plus the average time to answer a lookup and the share answered without an error, both over the last 24 hours. For the others it is a bar of how much is affected, with a link to its page.
 - **The service board**: one row each for DNS, DHCP, IPAM, Hosts and Security. Each row shows:
   - **The number**, with what it was counted over in its tip, such as "of 334 leases loaded" or "last hour". On a very busy hour, Security says how many of the newest events it counted.
   - **Open issues**, as tags. Hover or tap one to see Critical or Warning, what is wrong, and since when. An issue open longer than a day has a hollow dot, so old problems don't look like a new outage. The tag links to the page where you fix it, and **Ask why** (shown when you point at an issue) opens the AI with a question about it. An issue that belongs to no service is listed under **Other**.
   - **Last 10 days**: a coloured day means an issue still open now was already open that day. Bloxsmith keeps no daily history, so any other past day is an empty outline ("no record"), never a green day.
   - **State**: the service's health from Infoblox when it has one, otherwise the tile's word.
 
-  "none open" means the feed answered and found nothing. A feed that could not be read says "not checked", never "none". **Hide** folds the board to one line of counts.
+  "none open" means Infoblox answered and found nothing. A source that could not be read says "not checked", never "none". **Hide** folds the board to one line of counts.
 - **DNS Query Rate — 24h**: the average queries-per-second trend, with the change since the first hour shown. Under the big number: the average answer time and the share of lookups answered without an error, over the last 24 hours. Either one says "not checked" if it could not be read, and "no readings" if Infoblox had none for that day.
 - **License Inventory**: each licence's SKU, state, expiry date and time left. Under 30 days is red, under 90 is amber.
 
@@ -196,7 +196,7 @@ Threats and exposures. This tab reads several Infoblox feeds, so its panels can 
 - **Asset Insights** and **Asset Risk**.
 - **IQ for Threat Defense** (formerly SOC Insights).
 
-An empty panel means the feed returned nothing. It doesn't mean you are safe. Check the panel's note.
+An empty panel means Infoblox returned nothing. It doesn't mean you are safe. Check the panel's note.
 
 ### Axur, in four points
 
@@ -216,7 +216,7 @@ Host and service health. Jobs refresh every 15 seconds, the rest every 30 to 60.
 - **Host Status** also lists each host's CPU and memory use, from the latest reading Infoblox holds, busiest first. A host with no reading says "not checked", never 0%. Under the list are the DNS answer time and timeouts over the last 24 hours. Each one Infoblox reports per host becomes a column, and any host with a reading is listed even if it sent no CPU or memory. One reported only for all hosts together stays on the line.
 - **Host Apps**: each on-prem box and how many Infoblox apps it runs.
 - **Jobs**: recent job runs.
-- **DFP Services**: each DNS forwarding proxy, and its state when the feed has one.
+- **DFP Services**: each DNS forwarding proxy, and its state when Infoblox reports one.
 
 You can link straight to a view: `#infra?status=offline`.
 
@@ -521,7 +521,7 @@ These features need your Infoblox Portal user to be in the `ib-mcp-server-user` 
 | Block a bad domain | **Block domain** in **Threat lookup**. This changes your block list | `infoblox-portal_make_patch_request` |
 | Unblock it again | **Unblock** in **Threat lookup** | `infoblox-portal_make_delete_request` |
 | Ask a question in plain words | **AI** > **Ask AI**, which uses this to pick which Infoblox data to read | `infoblox-portal_search_available_services` |
-| Count assets when Infoblox's direct data feed fails | **Assets**, automatically, as a backup | `infoblox-portal_query_cube` |
+| Count assets when Infoblox's direct data source fails | **Assets**, automatically, as a backup | `infoblox-portal_query_cube` |
 | Read a large backup answer in pieces | **Assets**, with the action above | `infoblox-portal_query_stored_data` |
 
 The rest are not used:
@@ -558,7 +558,7 @@ The picks decide the chart type, and the sentence above the chart says what it s
 
 **Add to a page** puts the chart on Overview, DNS, Security, Network or Infra under a name you choose. There it becomes a normal panel. Arrange panels moves or hides it, and **Remove from this page** in its About (ⓘ) takes it off. Only the picks are saved, so the chart is drawn again from your Infoblox account each time the page opens, using whichever account is active. Saved charts are stored on this computer with the panel layouts, and every account sees the same ones.
 
-**Show cube names** swaps the plain names for the real cube and field names, for anyone who wants to copy them. This browser remembers the setting.
+**Show technical names** swaps the plain names for the technical data and field names, for anyone who wants to copy them. This browser remembers the setting.
 
 If Infoblox doesn't answer, the chart says so in red. That is different from "no activity", which means Infoblox answered and there was nothing to count.
 

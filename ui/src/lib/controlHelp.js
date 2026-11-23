@@ -52,7 +52,7 @@ export const CONTROL_HELP = {
   },
   'connection-status': {
     label: 'The tenant name',
-    what: "The dot: green is connected with data arriving, amber is connected but nothing came back, red is a locked vault or a failed feed. Beside the name: Read-only, Changes allowed, or Can't tell.",
+    what: "The dot: green is connected with data arriving, amber is connected but nothing came back, red is a locked vault or a failed load. Beside the name: Read-only, Changes allowed, or Can't tell.",
   },
   refresh: {
     label: 'Refresh',

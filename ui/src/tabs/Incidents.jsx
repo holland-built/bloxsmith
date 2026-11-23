@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import ItemLink from '../components/ItemLink.jsx'
-import { useApi } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
@@ -13,6 +13,7 @@ import Tip from '../components/Tip.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 import './Overview.css'
 import './Incidents.css'
+import { formatTime } from '../lib/dates.js'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -151,7 +152,7 @@ export default function Incidents() {
         return
       }
       if (!res.ok || !body?.ok) {
-        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: body?.error || `failed (${res.status})` } }))
+        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: body?.error || failureText(res.status, 'update this action') } }))
         return
       }
       // Not optimistic: only clear pending + drop error once the server confirms,
@@ -220,7 +221,7 @@ export default function Incidents() {
 // refresh says so, and the time stays on the last list that did arrive.
 function Updated({ api }) {
   const at = useMemo(() => (api.data ? new Date() : null), [api.data])
-  const time = at ? at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  const time = at ? formatTime(at) : null
   const dot = api.error ? 'down' : at ? '' : 'wait'
   const text = api.error ? (time ? `Couldn't refresh · ${time}` : "Couldn't load") : time ? `Updated ${time}` : 'Loading…'
   return (
@@ -274,7 +275,7 @@ function CategoryChips({ categories, signals = [], truncated = false, loading, e
       ) : categories.length === 0 && degraded ? (
         <FeedUnavailable
           label="Category check incomplete"
-          reason={failed.length ? `feeds unavailable: ${failed.join(', ')}` : undefined}
+          reason={failed.length ? `Information unavailable for: ${failed.join(', ')}` : undefined}
         />
       ) : categories.length === 0 ? (
         <Empty>no active categories</Empty>
@@ -518,7 +519,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
             <span role="group" aria-label="Clear seen marks?" className="flex items-center gap-2 px-2.5 py-1 rounded-control bg-crit/10 border border-crit/40">
               <span className="text-note text-crit">Clear all seen marks?</span>
               <button aria-label="Confirm clear seen marks" onClick={() => { setConfirmClear(false); onClearAcks() }} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note">Clear</button>
-              <button aria-label="Keep seen marks" onClick={() => setConfirmClear(false)} className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt">Keep</button>
+              <button aria-label="Keep seen marks" onClick={() => setConfirmClear(false)} className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt">Keep seen marks</button>
             </span>
           ) : (
             <button onClick={() => setConfirmClear(true)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
@@ -532,11 +533,11 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       {loading ? (
         <Skeleton h={280} />
       ) : error ? (
-        <FeedUnavailable label="Incidents feed unavailable" reason={error.message || undefined} />
+        <FeedUnavailable label="Incidents information is unavailable" reason={error.message || undefined} />
       ) : signals.length === 0 && degraded ? (
         <FeedUnavailable
           label="Check could not be completed"
-          reason={failedFeeds.length ? `feeds unavailable: ${failedFeeds.join(', ')}` : 'one or more feeds failed'}
+          reason={failedFeeds.length ? `Information unavailable for: ${failedFeeds.join(', ')}` : 'one or more checks failed'}
         />
       ) : signals.length === 0 ? (
         <Empty>no issues detected — all metrics within normal thresholds</Empty>
@@ -546,7 +547,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
         <>
           {degraded && (
             <div className="text-note mb-1.5" style={{ color: COLORS.warn }}>
-              incomplete check — {failedFeeds.length ? `could not read: ${failedFeeds.join(', ')}` : 'one or more feeds failed'}, some issues may be missing
+              incomplete check — {failedFeeds.length ? `could not read: ${failedFeeds.join(', ')}` : 'one or more checks failed'}, some issues may be missing
             </div>
           )}
           {signalsTruncated && (
@@ -667,9 +668,9 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       {loading ? (
         <Skeleton h={280} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
+        <FeedUnavailable label="IQ Actions information is unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" reason={error.message || undefined} onRetry={onRetry} />
+        <FeedUnavailable label="IQ Actions information is unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
@@ -786,9 +787,9 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" reason={reason} onRetry={onRetry} />
+        <FeedUnavailable label="IQ Actions information is unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <FeedUnavailable label="IQ Actions feed unavailable" reason={error.message || undefined} onRetry={onRetry} />
+        <FeedUnavailable label="IQ Actions information is unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>no IQ actions to trend</Empty>
       ) : (

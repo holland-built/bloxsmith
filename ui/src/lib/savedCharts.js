@@ -1,5 +1,6 @@
 import { tokenFetch } from './authFetch.js'
 import { loadLayout, saveLayout } from './layout.js'
+import { failureText } from './api.js'
 
 // Charts saved from Build a chart onto a page (savedCharts.test.js).
 //
@@ -98,14 +99,14 @@ export async function saveChart(chart, fetchImpl = tokenFetch) {
   })
   if (!res.ok) {
     const why = (await res.json().catch(() => null))?.error
-    throw new Error(why || `the chart could not be saved (HTTP ${res.status})`)
+    throw new Error(why || failureText(res.status, 'save the chart'))
   }
 }
 
 /** Takes one saved chart off its page. */
 export async function removeChart(id, fetchImpl = tokenFetch) {
   const res = await fetchImpl(`/api/views/${encodeURIComponent(chartViewName(id))}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(`the chart could not be removed (HTTP ${res.status})`)
+  if (!res.ok) throw new Error(failureText(res.status, 'remove the chart'))
 }
 
 // Hides one panel in a page's saved layout, keeping the rest of it. It is the

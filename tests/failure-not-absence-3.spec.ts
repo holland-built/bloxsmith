@@ -21,7 +21,7 @@ test.describe('Audit → CSP Portal Audit panel (CspAuditTable)', () => {
     const card = page.locator('text=CSP Portal Audit').locator('..').locator('..');
     await card.getByPlaceholder('Search user or resource…').fill('who deleted this zone');
     await card.getByRole('button', { name: 'Search', exact: true }).click();
-    await expect(card.getByText(/csp audit feed unavailable/i)).toBeVisible();
+    await expect(card.getByText(/portal audit information is unavailable/i)).toBeVisible();
     await expect(card.getByText('no entries match', { exact: true })).toHaveCount(0);
   });
 
@@ -34,6 +34,6 @@ test.describe('Audit → CSP Portal Audit panel (CspAuditTable)', () => {
     await card.getByPlaceholder('Search user or resource…').fill('nobody-matches-this-query');
     await card.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(card.getByText('no entries match', { exact: true })).toBeVisible();
-    await expect(card.getByText(/csp audit feed unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/portal audit information is unavailable/i)).toHaveCount(0);
   });
 });

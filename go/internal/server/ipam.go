@@ -234,7 +234,7 @@ func logUpstreamError(ue *rest.UpstreamError) { rest.LogUpstreamError(ue) }
 // would double load on an already-failing upstream and risk reporting a
 // different failure than the one that actually occurred.
 func (d *Deps) writeUpstreamError(w http.ResponseWriter, r *http.Request, ue *rest.UpstreamError) {
-	resp := map[string]any{"error": "upstream request failed", "status": ue.Status}
+	resp := map[string]any{"error": "Infoblox request failed", "status": ue.Status}
 	logUpstreamError(ue)
 	if msg, found := extractUpstreamMessage(ue.Snippet); found {
 		resp["upstream"] = msg

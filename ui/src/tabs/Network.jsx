@@ -19,6 +19,7 @@ import { DHCP_REQUEST_ROWS, DHCP_REQUEST_WINDOWS, dhcpTotal, HA_NOTE } from '../
 // this page's own few rules.
 import './Overview.css'
 import './Network.css'
+import { formatWhen } from '../lib/dates.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -260,11 +261,11 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
     <Card panelId={panelId} span={4} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         subnetsStatus === 'error' ? (
-          <FeedUnavailable label="Subnets feed unavailable" />
+          <FeedUnavailable label="Subnet information is unavailable" />
         ) : subnets.length > 0 ? (
           <Empty>no loaded subnet reports utilisation</Empty>
         ) : (
-          <Empty />
+          <Empty>No subnets found</Empty>
         )
       ) : (
         /* Already said "<70% · 486 subnets" before ChartTip existed; that
@@ -320,9 +321,9 @@ function IpamSpaces({ panelId, ipam }) {
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
-        <FeedUnavailable label="IPAM feed unavailable" />
+        <FeedUnavailable label="IPAM information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty />
+        <Empty>No IPAM spaces found</Empty>
       ) : (
         <div className="flex flex-col gap-2 mt-1">
           {rows.map((r, i) => {
@@ -482,7 +483,7 @@ function Overlaps({ panelId, overlaps, only, hp }) {
 // date nobody reads as "never", so it says so.
 function endsWord(ms, raw) {
   if (isNaN(ms)) return raw || '—'
-  return new Date(ms).getUTCFullYear() >= 9999 ? 'never' : new Date(ms).toLocaleString()
+  return new Date(ms).getUTCFullYear() >= 9999 ? 'never' : formatWhen(ms)
 }
 
 // Some DHCP clients send their name wrapped in quote marks ("Mac"); the marks
@@ -579,9 +580,9 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       {dhcp.loading ? (
         <Skeleton h={200} />
       ) : dhcp.error || status === 'error' ? (
-        <FeedUnavailable label="DHCP leases feed unavailable" />
+        <FeedUnavailable label="DHCP lease information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty />
+        <Empty>No DHCP leases found</Empty>
       ) : tableRows.length === 0 ? (
         <Empty>no leases match</Empty>
       ) : (
@@ -905,9 +906,9 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
       {unused && !unusedApi.data ? (
         unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
       ) : base.length === 0 ? (
-        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnet information is unavailable" /> : <Empty>No subnets found</Empty>
       ) : tableRows.length === 0 ? (
-        landing && listFailed ? <FeedUnavailable label="Subnets feed unavailable" />
+        landing && listFailed ? <FeedUnavailable label="Subnet information is unavailable" />
           : <Empty>{landing && !listComplete ? 'none in the subnets loaded' : 'no subnets match'}</Empty>
       ) : (
         <div className="mt-2.5">

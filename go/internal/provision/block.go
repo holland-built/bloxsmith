@@ -241,7 +241,7 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 				// saying there had been nothing to undo. See idUnknown in site.go
 				// for why the marker has to be its own value rather than a blank.
 				bid = idUnknown
-				p.emit(M{"step": fmt.Sprintf("  Warning: address block %s was created upstream but the "+
+				p.emit(M{"step": fmt.Sprintf("  Warning: address block %s was created in Infoblox but the "+
 					"response carried no id — it cannot be rolled back automatically or found again by id",
 					cidrStr(n))})
 			}
@@ -300,7 +300,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 				"id":     "",
 				"label":  label,
 				"status": 0,
-				"reason": "created upstream but the create response carried no id, so rollback could not delete it",
+				"reason": "created in Infoblox but the create response carried no id, so rollback could not delete it",
 			})
 			continue
 		}

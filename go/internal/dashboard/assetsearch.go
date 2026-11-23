@@ -147,7 +147,7 @@ func assembleAddressSearch(aq AssetQuery, field, value string, body any, status 
 	case status == 400:
 		return fail("Infoblox did not accept that address")
 	case status >= 300:
-		return fail("the address search failed upstream (status " + strconv.Itoa(status) + ")")
+		return fail("the address search failed in Infoblox (status " + strconv.Itoa(status) + ")")
 	}
 	m, _ := body.(map[string]any)
 	data, ok := m["data"].([]any)

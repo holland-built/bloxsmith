@@ -213,10 +213,10 @@ export default function ConnStatus() {
     color = 'var(--color-ok)'
     stateWord = ''
   } else if (statusOk && feedsDegraded) {
-    stateWord = 'feed error'
+    stateWord = 'load error'
   } else if (statusOk) {
     color = 'var(--color-warn)'
-    stateWord = 'no data'
+    stateWord = 'empty'
     stateTone = 'text-warn'
   }
   // The name, when the vault can say which tenant is active.

@@ -15,6 +15,7 @@ import { statusBucket } from '../lib/statusBucket.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import HostConfigViewer from '../components/HostConfigViewer.jsx'
+import { formatWhen } from '../lib/dates.js'
 
 // ---------- helpers ----------
 
@@ -23,7 +24,7 @@ import HostConfigViewer from '../components/HostConfigViewer.jsx'
 function fmtDate(v) {
   if (!v) return '—'
   const ms = new Date(v).getTime()
-  return isNaN(ms) ? '—' : new Date(ms).toLocaleString()
+  return isNaN(ms) ? '—' : formatWhen(ms)
 }
 
 // Per-slice status for a RAW useApi('/api/data') read.
@@ -56,7 +57,7 @@ function statusColumn(feed) {
   return noStatus(feed) ? [] : [{ key: 'status', label: 'Status', badge: true }]
 }
 function statusNote(feed, fallback) {
-  return noStatus(feed) ? 'no status in feed' : fallback
+  return noStatus(feed) ? 'no status reported' : fallback
 }
 
 // ---------- main ----------
@@ -297,9 +298,9 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetr
       ) : hostsStatus === 'error' && loaded === 0 ? (
         // Checked BEFORE the zero test: a dead read has no total, and printing
         // the empty state for it claims an estate with no hosts in it.
-        <FeedUnavailable label="Hosts feed unavailable" />
+        <FeedUnavailable label="Host information is unavailable" />
       ) : total === 0 ? (
-        <Empty />
+        <Empty>No hosts found</Empty>
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0">
@@ -431,7 +432,7 @@ function renderStatus(v) {
       <span
         className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium italic"
         style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
-        title="upstream reported no status for this host"
+        title="Infoblox reported no status for this host"
       >
         unknown
       </span>
@@ -574,9 +575,9 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
-        <FeedUnavailable label="Hosts feed unavailable" />
+        <FeedUnavailable label="Host information is unavailable" />
       ) : hosts.length === 0 ? (
-        <Empty />
+        <Empty>No hosts found</Empty>
       ) : filtered.length === 0 ? (
         <Empty>no hosts match</Empty>
       ) : (
@@ -692,7 +693,7 @@ function ServiceHealth({ panelId, feed }) {
       ) : dead ? (
         <FeedUnavailable label="Service inventory unavailable" />
       ) : rows.length === 0 ? (
-        <Empty />
+        <Empty>No services found</Empty>
       ) : (
         <div className="flex flex-col gap-2 mt-1">
           {rows.map((b) => (

@@ -155,8 +155,8 @@ func TestSearchStatusToAvailability(t *testing.T) {
 		{429, "error", "the tenant API is rate-limiting these requests — wait and retry"},
 		// Not a 4xx at all: a dead feed, already covered by the contract test
 		// above; pinned here so the whole ladder is in one place.
-		{500, "error", "The upstream server returned an error (status 500)."},
-		{503, "error", "The upstream server returned an error (status 503)."},
+		{500, "error", "Infoblox returned an error (status 500)."},
+		{503, "error", "Infoblox returned an error (status 503)."},
 	}
 	for _, tc := range cases {
 		for _, h := range searchHandlers {

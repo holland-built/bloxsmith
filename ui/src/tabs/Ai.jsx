@@ -8,6 +8,7 @@ import { dossierHasVerdict } from '../lib/dossierVerdict.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { parseInline } from '../lib/markdown.js'
 import { answerBlocks } from '../lib/aiAnswer.js'
+import { failureText } from '../lib/api.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
@@ -337,7 +338,7 @@ function ChatCard({ panelId }) {
           return
         }
         if (!r.ok && !(j && typeof j.answer === 'string')) {
-          setItems((list) => [...list, { role: 'assistant', error: `HTTP ${r.status}`, question: q }])
+          setItems((list) => [...list, { role: 'assistant', error: failureText(r.status, 'answer that question'), question: q }])
           return
         }
         setItems((list) => [
@@ -565,7 +566,7 @@ function BlockDomainButton({ domain, disabled }) {
     } else {
       setState('error')
       setUnconfirmed(res.data?.outcome === 'unverified')
-      setMsg((res.data && res.data.error) || `HTTP ${res.status}`)
+      setMsg((res.data && res.data.error) || failureText(res.status, 'apply this action'))
     }
   }
 
@@ -642,7 +643,7 @@ function LookupCard({ panelId }) {
         // never pass its error body through as if it were dossier data — that is
         // how a lookup that never ran got painted CLEAN.
         if (!r.ok) {
-          const reason = (body && (body.error || body.reason)) || `HTTP ${r.status}`
+          const reason = (body && (body.error || body.reason)) || failureText(r.status, 'load the details')
           setDossier({ unavailable: reason })
           return
         }
@@ -657,7 +658,7 @@ function LookupCard({ panelId }) {
       const body = await r.json().catch(() => null)
       if (!current()) return
       // A 200 that is not readable JSON is a failure too, not "No matches".
-      if (!r.ok || !body || body.error) setErr((body && body.error) || (r.ok ? 'unreadable response' : `HTTP ${r.status}`))
+      if (!r.ok || !body || body.error) setErr((body && body.error) || (r.ok ? 'unreadable response' : failureText(r.status, 'search for that item')))
       else {
         setRes(body)
         if (body.availability !== 'error') setKept((k) => ({ ...k, entities: { q: query, at: Date.now(), data: body } }))
@@ -797,7 +798,7 @@ function EgressNotice({ egress, accepted, onAccept }) {
             onClick={onAccept}
             className="px-3 py-1 rounded-control border border-border bg-field text-field-txt font-semibold disabled:opacity-40"
           >
-            Understood
+            Allow AI questions
           </button>
         )}
       </div>

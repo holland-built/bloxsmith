@@ -10,7 +10,7 @@ export const MINUTES_PER_JOB = 10
 // delete ("delete") is not work made, so it is left out.
 export const SOURCES = [
   ['', 'Automate'],
-  ['address', 'Get an address: addresses'],
+  ['address', 'Get an address: assigned IPs'],
   ['dns', 'Get an address: DNS names'],
   ['lists', 'Site lists'],
   ['editor', 'Editor'],

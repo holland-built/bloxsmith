@@ -57,11 +57,11 @@ export const PANEL_HELP = {
   // ---- Daily ----
   'daily-open-issues': {
     what: 'Three counts: subnets 90% full or more (tiny /29 to /32 links included), machines offline or in error, and DNS zones with a problem recorded.',
-    look: 'Click a count to open the list behind it, or hover or tap the number to see what is behind it. A count reading "unavailable" in red means that one feed failed — the other two counts are still real.',
+    look: 'Click a count to open the list behind it, or hover or tap the number to see what is behind it. A count reading "unavailable" in red means that one source failed — the other two counts are still real.',
   },
   'daily-security-today': {
     what: 'Threat events seen in the last hour, counted by how serious each one was, and how many were stopped rather than only written down.',
-    look: 'When the hour holds more events than were fetched, the count by the title says so, and its tip says the figures were counted from that sample. A dash means the feed could not be read.',
+    look: 'When the hour holds more events than were fetched, the count by the title says so, and its tip says the figures were counted from that sample. A dash means the data could not be read.',
   },
   'daily-top-capacity-risks': {
     what: 'A big network with only 40 addresses spare is a worse problem than a tiny one sitting at 99% full, so this ranks by addresses left, not by fullness.',
@@ -133,7 +133,7 @@ export const PANEL_HELP = {
   },
   'dns-query-volume-7d': {
     what: 'The total number of lookups your DNS servers answered on each of the last seven days.',
-    look: 'When this feed cannot be read the heading says "feed unavailable" and the panel stays empty, rather than drawing a flat line you could mistake for silence.',
+    look: 'If this cannot be read, the heading says "unavailable" and no line is drawn.',
   },
   'dns-zones': {
     what: 'Every DNS zone that loaded, which view it sits in, how many records it holds, and how long answers are cached. Zones with a problem come first.',
@@ -165,11 +165,11 @@ export const PANEL_HELP = {
   },
   'security-inventory': {
     what: 'How many security policies, threat feeds, named lists, roaming endpoints and Anycast members are configured on this tenant.',
-    look: 'A count of what is set up, not a measure of what is protected. A row reads "unavailable" when that one feed failed, and "none configured" when it really is empty.',
+    look: 'A count of what is set up, not a measure of what is protected. A row reads "unavailable" when that one source failed, and "none configured" when it really is empty.',
   },
   'security-lookalike-domains': {
     what: 'Domains somebody else registered that are spelled to look like yours, and which of your real domains each one imitates.',
-    look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found.',
+    look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the source could not be reached, so nothing was checked; 0 means checked and none found.',
   },
   'security-axur-incidents': {
     what: 'Security problems Axur found in the suppliers you depend on — exposed logins, dark-web mentions, weak certificates. Axur is a separate service.',
@@ -177,7 +177,7 @@ export const PANEL_HELP = {
   },
   'security-ctem-exposure': {
     what: 'Weaknesses found on your internet-facing assets, grouped by how serious they are and how urgent the source rates fixing them.',
-    look: 'Severity is red for critical, pink for high, amber for medium, grey for low. Click a heading to re-sort. If the outside feed cannot be read the panel says so.',
+    look: 'Severity is red for critical, pink for high, amber for medium, grey for low. Click a heading to re-sort. If the outside source cannot be read the panel says so.',
   },
   'security-threat-feed-activity': {
     what: 'How many requests matched the threat feed each day, split into ones that were stopped and ones that were let through.',
@@ -227,7 +227,7 @@ export const PANEL_HELP = {
   },
   'infra-dfp-services': {
     what: 'The on-site relays that forward your DNS queries to Infoblox for filtering, and whether each one is up.',
-    look: 'An empty panel means none are configured; a read that failed says "feed unavailable" instead, so the two never look the same.',
+    look: 'An empty panel means none are configured. A failed read says "unavailable".',
   },
   'infra-host-inventory': {
     what: 'Every machine that loaded, with its address, what state it is in, and what type of machine it is.',

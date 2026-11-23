@@ -34,9 +34,9 @@ func TestOnlyCriticalHighKeepsMatchingEventsAndLeavesCacheAlone(t *testing.T) {
 
 func TestOnlyCriticalHighKeepsAFailedReadFailed(t *testing.T) {
 	got := onlyCriticalHigh(map[string]any{
-		"events": []map[string]any{}, "availability": "error", "reason": "threat-event feed unavailable",
+		"events": []map[string]any{}, "availability": "error", "reason": "Threat event information is unavailable",
 	})
-	if got["availability"] != "error" || got["reason"] != "threat-event feed unavailable" {
+	if got["availability"] != "error" || got["reason"] != "Threat event information is unavailable" {
 		t.Fatalf("a failed read lost its failure: %v", got)
 	}
 }

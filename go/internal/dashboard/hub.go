@@ -62,8 +62,8 @@ func (s *Service) fetchHubHealth() []map[string]any {
 		for _, b := range hubBuckets {
 			rollup = append(rollup, map[string]any{
 				"name": b.name, "status": "error",
-				"statusLabel": "unavailable", "meta": "feed unavailable",
-				"availability": "error", "reason": "service inventory feed unavailable",
+				"statusLabel": "unavailable", "meta": "information unavailable",
+				"availability": "error", "reason": "Service inventory information is unavailable",
 			})
 		}
 		s.Cache.SetGen(ck, rollup, g)
@@ -269,7 +269,7 @@ func (s *Service) fetchServiceInventory() map[string]any {
 		result := map[string]any{
 			"service_types": []string(nil),
 			"availability":  "error",
-			"reason":        "service inventory feed unavailable",
+			"reason":        "Service inventory information is unavailable",
 		}
 		s.Cache.SetGen(ck, result, g)
 		return result
@@ -358,7 +358,7 @@ func (s *Service) fetchHubSecurity(windowSecs, limit int) map[string]any {
 			"truncated":    false,
 			"complete":     false,
 			"availability": "error",
-			"reason":       "threat-event feed unavailable",
+			"reason":       "Threat event information is unavailable",
 		}
 		s.Cache.SetGen(ck, result, g)
 		return result

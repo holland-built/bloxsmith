@@ -3108,7 +3108,7 @@ export function FetchError({ error, stale }) {
   )
 }
 
-export function Empty({ children = 'no data' }) {
+export function Empty({ children = 'Nothing to show' }) {
   return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-copy">{children}</div>
 }
 
@@ -3119,7 +3119,7 @@ export function Empty({ children = 'no data' }) {
 // in the useApi registry (VaultGate, TenantManager). Everyone else gets the
 // page-wide answer, which is the point: threading a callback through 75 render
 // sites is the per-call-site mistake this codebase has already had to undo.
-export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry }) {
+export function FeedUnavailable({ reason, label = 'Information unavailable', onRetry }) {
   const { COLORS } = useChartTheme()
   // failed = something on this page is broken; retrying = something is already
   // loading again. The pair separates "hold on" from "this is as far as it got".

@@ -662,7 +662,7 @@ const AUDIT_ENTRIES = [
   { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/provision/subnet' }, event: 'write-authorized', hash: 'baselinehash2', prev_hash: 'baselinehash1', seq: 1, ts: epochSec(5 * HOUR) },
   { actor: 'baseline-operator', detail: { block: 'ipam/address_block/baseline-1', cidr: '24', subnet: '10.10.0.0' }, event: 'provision-subnet', hash: 'baselinehash3', prev_hash: 'baselinehash2', seq: 2, ts: epochSec(4 * HOUR) },
   { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/edit/dnsrecord', reason: 'tenant-read-only', tenant: 'baseline/-' }, event: 'write-refused-read-only', hash: 'baselinehash4', prev_hash: 'baselinehash3', seq: 3, ts: epochSec(2 * HOUR) },
-  { actor: 'baseline-operator', detail: { error: 'upstream refused', id: 'dns/record/baseline-1' }, event: 'dns-record-delete-error', hash: 'baselinehash5', prev_hash: 'baselinehash4', seq: 4, ts: epochSec(1 * HOUR) },
+  { actor: 'baseline-operator', detail: { error: 'request refused', id: 'dns/record/baseline-1' }, event: 'dns-record-delete-error', hash: 'baselinehash5', prev_hash: 'baselinehash4', seq: 4, ts: epochSec(1 * HOUR) },
 ];
 const AUDIT_LOG = {
   chain_valid: true,

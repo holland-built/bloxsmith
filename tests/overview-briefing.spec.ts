@@ -100,7 +100,7 @@ test('a capped change log with no usable dates does not say nothing changed', as
 
 const auditRow = (id: number, result: string) => ({ id: `a${id}`, ts: agoIso(10 + id), user: 'admin@example.com', who_kind: 'person', who_role: '', action: 'UPDATE', resource: 'dns/zone', result });
 const partialRow = (name: string, status = 'ok', meta = '2/2 online') => ({ name, status, statusLabel: status === 'ok' ? 'healthy' : 'critical', meta, availability: 'partial', reason: 'service inventory truncated at the 500-row limit' });
-const errorRows = () => ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'error', statusLabel: 'unavailable', meta: 'feed unavailable', availability: 'error', reason: 'service inventory feed unavailable' }));
+const errorRows = () => ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'error', statusLabel: 'unavailable', meta: 'information unavailable', availability: 'error', reason: 'Service inventory information is unavailable' }));
 const oldIncident = () => incident('dns-ttl-anomaly', 'warn', nowS - 3 * DAY);
 
 test('the server\'s literal "unknown" result is no result reported, never failed', async ({ page }) => {

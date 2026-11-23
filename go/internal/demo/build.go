@@ -124,7 +124,7 @@ func writeStage(stage, dir string) error {
 func (d *Demo) tf(ctx context.Context, step, dir string, emit func(Event), args ...string) error {
 	bin := TerraformBin()
 	if bin == "" {
-		return errors.New("neither tofu nor terraform is installed")
+		return errors.New("neither OpenTofu nor Terraform is installed")
 	}
 	_ = os.MkdirAll(d.Store.pluginCache(), 0o700)
 	red := d.secrets()

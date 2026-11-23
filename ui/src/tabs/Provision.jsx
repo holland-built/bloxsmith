@@ -326,7 +326,7 @@ function RollbackReport({ report }) {
           <div key={o?.id || i} className="font-mono text-note" style={{ color: COLORS.crit }}>
             ✕ {o?.kind || 'object'}{' '}
             <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">{o?.label || o?.id || '—'}</code>
-            {o?.status ? <span className="text-dim"> (HTTP {o.status})</span> : null}
+            {o?.status ? <span className="text-dim"> (could not remove it)</span> : null}
           </div>
         ))}
       </div>

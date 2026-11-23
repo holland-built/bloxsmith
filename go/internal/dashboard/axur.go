@@ -593,7 +593,7 @@ func axurUnavailable(err error) map[string]any {
 	if ue, ok := err.(*rest.UpstreamError); ok {
 		switch ue.Status {
 		case 403:
-			reason = "Axur supplier monitoring not entitled for this key"
+			reason = "Axur supplier monitoring is not included for this key"
 			notEntitled = true
 		case 401:
 			reason = "Axur rejected the credential — check the key under Settings"

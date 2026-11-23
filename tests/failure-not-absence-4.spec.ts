@@ -89,24 +89,24 @@ test.describe('Overview → service board (/api/data empty)', () => {
     await expect(tile('Hosts')).toContainText('0 of 0 not online');
     await expect(row('Hosts')).toContainText('None open');
     for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
-    await expect(page.locator('[data-coverage]')).not.toContainText('Inventory feed unavailable');
+    await expect(page.locator('[data-coverage]')).not.toContainText('Inventory information is unavailable');
   });
 });
 
 // ---------- 2. Network ← /api/data ----------
 
 test.describe('Network → Utilization Distribution + exhaustion table (/api/data down)', () => {
-  test('a dead /api/data shows "Subnets feed unavailable" and "— loaded", not "0 loaded"', async ({ page }) => {
+  test('a dead /api/data shows "Subnet information is unavailable" and "— loaded", not "0 loaded"', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#network');
 
     const bands = card(page, 'Utilization Distribution');
-    await expect(bands.getByText('Subnets feed unavailable')).toBeVisible();
+    await expect(bands.getByText('Subnet information is unavailable')).toBeVisible();
     await expect(bands.getByText('— loaded (count unavailable)', { exact: true })).toBeVisible();
     await expect(bands.getByText(/\b0 loaded\b/)).toHaveCount(0);
 
     const exhaustion = card(page, 'Which Subnets Run Out First?');
-    await expect(exhaustion.getByText('Subnets feed unavailable')).toBeVisible();
+    await expect(exhaustion.getByText('Subnet information is unavailable')).toBeVisible();
     await expect(exhaustion.locator('tbody tr')).toHaveCount(0);
   });
 
@@ -118,7 +118,7 @@ test.describe('Network → Utilization Distribution + exhaustion table (/api/dat
 
     const bands = card(page, 'Utilization Distribution');
     await expect(bands.getByText('0 loaded of 0 total', { exact: true })).toBeVisible();
-    await expect(bands.getByText('Subnets feed unavailable')).toHaveCount(0);
+    await expect(bands.getByText('Subnet information is unavailable')).toHaveCount(0);
     await expect(bands.getByText('— loaded (count unavailable)', { exact: true })).toHaveCount(0);
   });
 });
@@ -126,14 +126,14 @@ test.describe('Network → Utilization Distribution + exhaustion table (/api/dat
 // ---------- 3. Infra ← /api/data ----------
 
 test.describe('Infra → Host Status + Host Inventory (/api/data down)', () => {
-  test('a dead /api/data shows "Hosts feed unavailable" and "— hosts", not "0 hosts"', async ({ page }) => {
+  test('a dead /api/data shows "Host information is unavailable" and "— hosts", not "0 hosts"', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#infra');
 
-    await expect(card(page, 'Host Status').getByText('Hosts feed unavailable')).toBeVisible();
+    await expect(card(page, 'Host Status').getByText('Host information is unavailable')).toBeVisible();
 
     const inventory = card(page, 'Host Inventory');
-    await expect(inventory.getByText('Hosts feed unavailable')).toBeVisible();
+    await expect(inventory.getByText('Host information is unavailable')).toBeVisible();
     await expect(inventory.getByText('— hosts', { exact: true })).toBeVisible();
     await expect(inventory.getByText('0 hosts', { exact: true })).toHaveCount(0);
     await expect(inventory.locator('tbody tr')).toHaveCount(0);
@@ -148,7 +148,7 @@ test.describe('Infra → Host Status + Host Inventory (/api/data down)', () => {
     const inventory = card(page, 'Host Inventory');
     await expect(inventory.getByText('0 hosts', { exact: true })).toBeVisible();
     await expect(inventory.getByText('— hosts', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Hosts feed unavailable')).toHaveCount(0);
+    await expect(page.getByText('Host information is unavailable')).toHaveCount(0);
   });
 });
 
@@ -163,14 +163,14 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
     await expect(page.getByText('no DNS zone issues')).toHaveCount(0);
 
     const hosts = card(page, 'Hosts Needing Attention');
-    await expect(hosts.getByText('Hosts feed unavailable')).toBeVisible();
+    await expect(hosts.getByText('Host information is unavailable')).toBeVisible();
     await expect(hosts.getByText('— listed', { exact: true })).toBeVisible();
     await expect(hosts.getByText('0 listed', { exact: true })).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
-    await expect(zones.getByText('DNS zones feed unavailable')).toBeVisible();
+    await expect(zones.getByText('DNS zone information is unavailable')).toBeVisible();
 
-    await expect(card(page, 'Top Capacity Risks').getByText('Subnets feed unavailable')).toBeVisible();
+    await expect(card(page, 'Top Capacity Risks').getByText('Subnet information is unavailable')).toBeVisible();
 
     for (const key of ['subnets', 'hosts', 'zones'] as const) {
       const row = kpi(page, key);
@@ -189,7 +189,7 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
     const hosts = card(page, 'Hosts Needing Attention');
     await expect(hosts.getByText('all hosts online')).toBeVisible();
     await expect(hosts.getByText('0 listed', { exact: true })).toBeVisible();
-    await expect(hosts.getByText('Hosts feed unavailable')).toHaveCount(0);
+    await expect(hosts.getByText('Host information is unavailable')).toHaveCount(0);
 
     const zones = card(page, 'DNS Zone Issues');
     await expect(zones.getByText('no DNS zone issues')).toBeVisible();
@@ -327,7 +327,7 @@ test.describe('Daily → Security Today (/api/hub/security down)', () => {
     await page.goto('/#daily');
 
     const sec = card(page, 'Security Today');
-    await expect(sec.getByText('Threat feed unavailable')).toBeVisible();
+    await expect(sec.getByText('Threat information is unavailable')).toBeVisible();
     await expect(sec.getByText('— events', { exact: true })).toBeVisible();
     await expect(sec.getByText('0 events', { exact: true })).toHaveCount(0);
     await expect(sec.getByText('critical', { exact: true })).toHaveCount(0);
@@ -341,7 +341,7 @@ test.describe('Daily → Security Today (/api/hub/security down)', () => {
     const sec = card(page, 'Security Today');
     await expect(sec.getByText('0 events', { exact: true })).toBeVisible();
     await expect(sec.getByText('critical', { exact: true })).toBeVisible();
-    await expect(sec.getByText('Threat feed unavailable')).toHaveCount(0);
+    await expect(sec.getByText('Threat information is unavailable')).toHaveCount(0);
   });
 });
 
@@ -354,11 +354,11 @@ test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () =>
     await page.goto('/#security');
 
     const exposures = card(page, 'Exposures');
-    await expect(exposures.getByText('Exposures feed unavailable')).toBeVisible();
+    await expect(exposures.getByText('Exposure information is unavailable')).toBeVisible();
     await expect(exposures.getByText('no exposures reported')).toHaveCount(0);
 
     const lookalikes = card(page, 'Lookalike Domains');
-    await expect(lookalikes.getByText('Lookalike domain feed unavailable')).toBeVisible();
+    await expect(lookalikes.getByText('Lookalike domain information is unavailable')).toBeVisible();
     await expect(lookalikes.getByText('— detected', { exact: true })).toBeVisible();
     await expect(lookalikes.getByText('0 detected', { exact: true })).toHaveCount(0);
   });
@@ -372,12 +372,12 @@ test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () =>
 
     const exposures = card(page, 'Exposures');
     await expect(exposures.getByText('no exposures reported')).toBeVisible();
-    await expect(exposures.getByText('Exposures feed unavailable')).toHaveCount(0);
+    await expect(exposures.getByText('Exposure information is unavailable')).toHaveCount(0);
 
     const lookalikes = card(page, 'Lookalike Domains');
     await expect(lookalikes.getByText('0 detected', { exact: true })).toBeVisible();
     await expect(lookalikes.getByText('— detected', { exact: true })).toHaveCount(0);
-    await expect(lookalikes.getByText('Lookalike domain feed unavailable')).toHaveCount(0);
+    await expect(lookalikes.getByText('Lookalike domain information is unavailable')).toHaveCount(0);
   });
 });
 
@@ -469,7 +469,7 @@ test.describe('Infra → host inventory (host with status "unknown")', () => {
     // Its OWN badge — the generic status pill carries no explanation, so the
     // tooltip is what separates "we were not told" from any lifecycle state.
     await expect(
-      unknownRow.locator('[title="upstream reported no status for this host"]'),
+      unknownRow.locator('[title="Infoblox reported no status for this host"]'),
     ).toHaveText('unknown');
     await expect(unknownRow.getByText('pending', { exact: true })).toHaveCount(0);
 

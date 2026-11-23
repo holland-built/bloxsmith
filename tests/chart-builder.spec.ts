@@ -119,7 +119,7 @@ test('every pick sends an allowed GET', async ({ page }) => {
 
 test('the switch swaps the labels for cube names and is kept on reload', async ({ page }) => {
   await page.goto('/#chart');
-  const sw = page.getByRole('switch', { name: 'Show cube names' });
+  const sw = page.getByRole('switch', { name: 'Show technical names' });
   await expect(sw).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DNS queries');
   await expect(page.locator('[data-chart-how] th').first()).toHaveText('Device');
@@ -134,13 +134,13 @@ test('the switch swaps the labels for cube names and is kept on reload', async (
   await expect(page.getByText('The question, in plain words')).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByRole('switch', { name: 'Show cube names' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('switch', { name: 'Show technical names' })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByLabel('What to count').locator('option:checked')).toHaveText('DnsActivityV1.total_query_count');
 });
 
 test('an upstream failure says so, and is not shown as no activity', async ({ page }) => {
   await page.route('**/api/chart?*', (route) =>
-    route.fulfill({ json: { status: 'error', reason: 'Infoblox didn\'t answer this query (upstream error).', rows: [] } }),
+    route.fulfill({ json: { status: 'error', reason: 'Infoblox didn\'t answer this query.', rows: [] } }),
   );
   await page.goto('/#chart');
   await expect(page.locator('[data-feed-unavailable="This chart could not be drawn"]')).toBeVisible();

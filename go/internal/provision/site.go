@@ -244,7 +244,7 @@ func (e *Engine) NewSiteProvisioner(cfg *SiteConfig, emit Emitter) *SiteProvisio
 // loop and not from provisionHosts, which has no result map — appending in both
 // would list the same host twice.
 func (p *SiteProvisioner) noteUnknownID(result M, kind, label string) {
-	p.emit(M{"step": fmt.Sprintf("  Warning: %s %s was created upstream but the response carried no id — "+
+	p.emit(M{"step": fmt.Sprintf("  Warning: %s %s was created in Infoblox but the response carried no id — "+
 		"it cannot be rolled back automatically or found again by id", kind, label)})
 	appendTo(result, "unknown_ids", M{"kind": kind, "label": label})
 }
@@ -990,7 +990,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 			p.emit(M{"step": fmt.Sprintf("  Rollback: cannot delete %s %s — it was created but the "+
 				"response carried no id. It is still there; remove it by hand.", kind, label)})
 			residual = append(residual, M{"kind": kind, "id": "", "label": label, "status": 0,
-				"reason": "created upstream but the create response carried no id, so rollback could not delete it"})
+				"reason": "created in Infoblox but the create response carried no id, so rollback could not delete it"})
 			return
 		}
 		// None of these three are ids. "" is a REUSED or legacy entry whose row

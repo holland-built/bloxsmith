@@ -1,6 +1,6 @@
 - main "Build a chart tab":
   - heading "Build a chart" [level=1]
-  - switch "Show cube names"
+  - switch "Show technical names"
   - paragraph: Pick what to count and how to slice it. Every number comes straight from Infoblox.
   - region "Choose":
     - heading "Choose" [level=2]

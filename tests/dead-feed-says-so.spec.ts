@@ -24,8 +24,8 @@ test('DNS: a dead query-volume feed says so, and does not say "no data"', async 
   await page.goto('/#dns');
   const block = unavailable(page, 'dns-query-volume-7d');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('DNS query volume feed unavailable');
-  await expect(page.locator('[data-panel-id="dns-query-volume-7d"]').getByText('no data', { exact: true })).toHaveCount(0);
+  await expect(block).toContainText('DNS query volume information is unavailable');
+  await expect(page.locator('[data-panel-id="dns-query-volume-7d"]').getByText(/^(No .* (found|yet|in this period)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
 });
 
 test('Incidents: a dead incidents feed says so in the triage panel', async ({ page }) => {
@@ -33,7 +33,7 @@ test('Incidents: a dead incidents feed says so in the triage panel', async ({ pa
   await page.goto('/#incidents');
   const block = unavailable(page, 'incidents-triage');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('Incidents feed unavailable');
+  await expect(block).toContainText('Incidents information is unavailable');
   await expect(page.getByText('failed to load incidents')).toHaveCount(0);
 });
 
@@ -43,7 +43,7 @@ test('Incidents: a dead actions feed says so in both panels that read it', async
   for (const id of ['incidents-soc-queue', 'incidents-action-volume']) {
     const block = unavailable(page, id);
     await expect(block, `${id} did not draw the feed-unavailable block`).toBeVisible({ timeout: 20_000 });
-    await expect(block).toContainText('IQ Actions feed unavailable');
+    await expect(block).toContainText('IQ Actions information is unavailable');
   }
   await expect(page.getByText('failed to load actions')).toHaveCount(0);
 });
@@ -53,7 +53,7 @@ test('Audit: a portal search that fails outright says the feed is unavailable', 
   await page.goto('/#audit');
   const block = unavailable(page, 'audit-csp-portal');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('CSP audit feed unavailable');
+  await expect(block).toContainText('Portal audit information is unavailable');
   await expect(page.getByText('search failed', { exact: true })).toHaveCount(0);
 });
 
@@ -62,7 +62,7 @@ test('Infra: a dead on-prem host feed draws the block, not a grey line', async (
   await page.goto('/#infra');
   const block = unavailable(page, 'infra-onprem-hosts');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('Feed unavailable');
+  await expect(block).toContainText('Information unavailable');
 });
 
 test('Audit: Try again re-runs the portal search, which is not one of the page-wide feeds', async ({ page }) => {

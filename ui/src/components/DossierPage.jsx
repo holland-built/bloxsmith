@@ -6,13 +6,14 @@ import ItemPage from './ItemPage.jsx'
 import { itemActions } from '../lib/itemActions.js'
 import { parseItem } from '../lib/itemHref.js'
 import { Empty, Skeleton } from './ui.jsx'
-import { abortAfter, useApi } from '../lib/api.js'
+import { abortAfter, failureText, useApi } from '../lib/api.js'
 import { dossierSummary } from '../lib/dossierSummary.js'
 import { useHashParams } from '../lib/hash.js'
 import { dossierMoreLine } from '../lib/dossierMore.js'
 import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '../lib/indicator.js'
 import { DASH } from '../lib/measured.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
+import { formatWhen } from '../lib/dates.js'
 
 // Everything about one thing — the page a palette search lands on.
 //
@@ -77,7 +78,7 @@ function fmtTime(v) {
   if (!v) return null
   const t = Date.parse(v)
   if (Number.isNaN(t)) return String(v)
-  return new Date(t).toLocaleString()
+  return formatWhen(t)
 }
 
 // CSP object ids read "ipam/ip_space/78d386a0-3b18-11f0-…". The lane is 226px
@@ -416,7 +417,7 @@ function useSource(src, q) {
         // these routes answer 200), so it can only be an error — and it must
         // never fall through to a "none" reading.
         if (!r.ok) {
-          setRes({ state: 'error', rows: [], reason: (body && (body.error || body.reason)) || `HTTP ${r.status}`, body: null })
+          setRes({ state: 'error', rows: [], reason: (body && (body.error || body.reason)) || failureText(r.status, 'run this lookup'), body: null })
           return
         }
         const state = src.state ? src.state(body) : stateOf(body, rowsOf(body))

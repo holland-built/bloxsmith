@@ -11,6 +11,7 @@ import Tip from '../components/Tip.jsx'
 import Briefing from './overview/Briefing.jsx'
 import { openProblems } from './overview/model.js'
 import './Overview.css'
+import { formatDay, formatTime } from '../lib/dates.js'
 
 // OVERVIEW IS A SERVICE BOARD, NOT A PANEL WALL (2026-11-09).
 //
@@ -187,8 +188,8 @@ function useBoard(dns) {
   const fetchedAt = useMemo(() => (data.data ? new Date() : null), [data.data])
   const coverage = [
     data.loading && !data.data && 'Checking inventory…',
-    feedDown && 'Inventory feed unavailable',
-    fetchedAt && `Inventory fetched ${fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+    feedDown && 'Inventory information is unavailable',
+    fetchedAt && `Inventory fetched ${formatTime(fetchedAt)}`,
     typeof totals.subnets === 'number' && `subnets: ${n0(subnets.length)} of ${n0(totals.subnets)} loaded`,
     typeof totals.hosts === 'number' && `hosts: ${n0(hosts.length)} of ${n0(totals.hosts)} loaded`,
     svcRows.some((s) => s.availability === 'partial') && 'services: partial list (500-row limit)',
@@ -394,7 +395,7 @@ function Issue({ r }) {
 function IssueList({ b, checked, none }) {
   const open = openProblems(b)
   if (open.length) return <ul className="ov-issues">{open.map((r) => <Issue key={r.key} r={r} />)}</ul>
-  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'None open' : 'not checked: feed unavailable'}</span>
+  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'None open' : 'not checked: information unavailable'}</span>
 }
 
 // The board can be folded to one line of counts, so the charts below come up
@@ -423,7 +424,7 @@ function boardSummary(rows, checked) {
     })
     .filter(Boolean)
   const states = rows.map((b) => checked[b.name])
-  const tail = states.some((c) => !c) ? 'some feeds not checked' : states.includes('loading') ? 'still checking' : null
+  const tail = states.some((c) => !c) ? 'some items not checked' : states.includes('loading') ? 'still checking' : null
   if (!parts.length) return tail ? `none found yet, ${tail}` : 'no open issues'
   return tail ? `${parts.join(' · ')} · ${tail}` : parts.join(' · ')
 }
@@ -476,7 +477,7 @@ function ServiceBoard({ board, dns }) {
 // "Updated 11:02 PM" from when the inventory arrived, not when the page drew.
 // Its tip is the coverage line: what was loaded, and what could not be.
 function Updated({ board }) {
-  const label = board.feedDown ? 'Inventory feed unavailable' : board.fetchedAt ? `Updated ${board.fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Checking…'
+  const label = board.feedDown ? 'Inventory information is unavailable' : board.fetchedAt ? `Updated ${formatTime(board.fetchedAt)}` : 'Checking…'
   return (
     <Tip tip={board.coverage || null} className="ov-pill" data-coverage="">
       <span className={`ov-live ${board.feedDown ? 'down' : board.fetchedAt ? '' : 'wait'}`} aria-hidden="true" />{label}
@@ -555,7 +556,7 @@ function LicenseInventory({ licenses, panelId }) {
     if (l.expiry) {
       const d = new Date(l.expiry)
       if (!isNaN(d)) {
-        expiry = d.toLocaleDateString()
+        expiry = formatDay(d)
         days = Math.round((d.getTime() - now) / 86400000)
       } else {
         expiry = l.expiry
@@ -589,7 +590,7 @@ function LicenseInventory({ licenses, panelId }) {
       {licenses.loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
-        <FeedUnavailable label="License feed unavailable" />
+        <FeedUnavailable label="License information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no license data available</Empty>
       ) : (
@@ -632,7 +633,7 @@ function DnsHero({ dns, health, panelId }) {
   const chartData = rows.map((r) => {
     let label = r.hour
     const d = new Date(r.hour)
-    if (!isNaN(d)) label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (!isNaN(d)) label = formatTime(d)
     return { label, value: Number(r.avg_value) || 0 }
   })
   const current = chartData.at(-1)?.value
@@ -659,9 +660,9 @@ function DnsHero({ dns, health, panelId }) {
       {dns.loading ? (
         <Skeleton h={250} />
       ) : dns.error || status === 'error' ? (
-        <FeedUnavailable label="DNS query rate feed unavailable" />
+        <FeedUnavailable label="DNS query rate information is unavailable" />
       ) : chartData.length === 0 ? (
-        <Empty />
+        <Empty>No DNS queries in this period</Empty>
       ) : (
         <>
           <div className="flex items-center gap-4 my-2">

@@ -115,8 +115,8 @@ func TestDNSRecordsGet_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
 	if _, has := body["records"]; has {
 		t.Fatalf("body has 'records' key on upstream failure, want error-only response: %v", body)
 	}
-	if body["error"] != "upstream request failed" {
-		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	if body["error"] != "Infoblox request failed" {
+		t.Fatalf("error = %v, want 'Infoblox request failed'", body["error"])
 	}
 }
 
@@ -864,8 +864,8 @@ func TestIPAMSpaces_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
 	if _, has := body["spaces"]; has {
 		t.Fatalf("body has 'spaces' key on upstream failure, want error-only response: %v", body)
 	}
-	if body["error"] != "upstream request failed" {
-		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	if body["error"] != "Infoblox request failed" {
+		t.Fatalf("error = %v, want 'Infoblox request failed'", body["error"])
 	}
 }
 
@@ -1028,8 +1028,8 @@ func TestDNSZones_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
 	if _, has := body["zones"]; has {
 		t.Fatalf("body has 'zones' key on upstream failure: %v", body)
 	}
-	if body["error"] != "upstream request failed" {
-		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	if body["error"] != "Infoblox request failed" {
+		t.Fatalf("error = %v, want 'Infoblox request failed'", body["error"])
 	}
 }
 
@@ -1150,8 +1150,8 @@ func TestIPAMSubnets_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
 	if _, has := body["subnets"]; has {
 		t.Fatalf("body has 'subnets' key on upstream failure: %v", body)
 	}
-	if body["error"] != "upstream request failed" {
-		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	if body["error"] != "Infoblox request failed" {
+		t.Fatalf("error = %v, want 'Infoblox request failed'", body["error"])
 	}
 }
 

@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { ColumnHeading, FormColumns } from '../components/kit.jsx'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
-import { useApi } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
 // lives in lib/ so npm test can reach it — inside this file it was a
@@ -48,7 +48,7 @@ export default function Drift() {
       .then(async (r) => {
         let body = null
         try { body = await r.json() } catch { body = null }
-        if (!r.ok || body?.error) { setErr(body?.error || `HTTP ${r.status}`); setChecking(false); return }
+        if (!r.ok || body?.error) { setErr(body?.error || failureText(r.status, 'check for drift')); setChecking(false); return }
         setResult(body)
         setChecking(false)
       })

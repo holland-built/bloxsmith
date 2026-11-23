@@ -8,6 +8,7 @@ import { UpdateCheck } from './UpdateCheck.jsx'
 import AiProviderForm from './AiProviderForm.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 import { tokenFetch, vpost } from '../lib/authFetch.js'
+import { failureText } from '../lib/api.js'
 
 const inCls =
   `${FIELD_CLS} w-full`
@@ -60,7 +61,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
     // A failed status read must not read as "no tenants saved" — that's a
     // real answer ("you have zero"), this is "we don't know".
     fetch('/api/vault/status', { cache: 'no-store' })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((r) => { if (!r.ok) throw new Error(failureText(r.status, 'read the saved accounts')); return r.json() })
       .then((d) => {
         setStatus(d)
         setStatusError(false)
@@ -76,7 +77,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
     // work out where a write would go" — the last is not read-only, it is
     // unknown, and it must not render as though we checked and it was fine.
     fetch('/api/vault/write-target', { cache: 'no-store' })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((r) => { if (!r.ok) throw new Error(failureText(r.status, 'check where changes would go')); return r.json() })
       .then((d) => { setWriteTarget(d); setWriteTargetError(null) })
       .catch(() => setWriteTargetError('Could not read the write permission — retry.'))
     // go/internal/server/account.go:51 already computes {error,status} on a CSP
@@ -188,7 +189,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
     // bare "could not switch" under a control that looks untouched reads as a
     // click that never registered.
     const attempted = accounts.find((a) => a.id === id)?.name
-    const why = d.error || `Could not switch account (HTTP ${r.status}).`
+    const why = d.error || failureText(r.status, 'switch account')
     setAcctSwitchErr(attempted ? `${attempted}: ${why}` : why)
   }
 
@@ -510,7 +511,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                         <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                           <span className="flex-1 text-note text-crit">Remove {t.label}?</span>
                           <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label={`Confirm remove ${t.label}`} onClick={() => remove(t.id)}>Remove</button>
-                          <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label={`Keep ${t.label}`} onClick={() => setConfirmRm(null)}>Keep</button>
+                          <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label={`Keep ${t.label}`} onClick={() => setConfirmRm(null)}>Keep account</button>
                         </div>
                       ) : (
                         <>
@@ -744,7 +745,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                     <span className="flex-1 text-note text-crit">Remove the saved Axur key?</span>
                     <button disabled={axur.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Axur key" onClick={() => { setConfirmKey(null); clearAxur() }}>Remove</button>
-                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Axur key" onClick={() => setConfirmKey(null)}>Keep</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Axur key" onClick={() => setConfirmKey(null)}>Keep key</button>
                   </div>
                 )}
               </div>
@@ -799,7 +800,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   <div className="mt-2 flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                     <span className="flex-1 text-note text-crit">Remove the saved Kentik login?</span>
                     <button disabled={kentik.busy} className="px-2 py-0.5 rounded-control border border-crit text-crit text-note disabled:opacity-50" aria-label="Confirm remove Kentik login" onClick={() => { setConfirmKey(null); putKentik('', '', 'Kentik login removed from the vault.') }}>Remove</button>
-                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Kentik login" onClick={() => setConfirmKey(null)}>Keep</button>
+                    <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Keep Kentik login" onClick={() => setConfirmKey(null)}>Keep login</button>
                   </div>
                 )}
               </div>

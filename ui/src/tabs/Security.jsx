@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
-import { useApi } from '../lib/api.js'
+import { failureText, useApi } from '../lib/api.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ReadOnlyNote } from '../components/kit.jsx'
 import { authFetch } from '../lib/authFetch.js'
@@ -15,6 +15,7 @@ import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { SecurityHeadline } from './SecurityHeadline.jsx'
 import { setHashParams, useHashParams } from '../lib/hash.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
+import { formatDay, formatWhen } from '../lib/dates.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -162,9 +163,9 @@ function SeverityHero({ panelId, hub, events }) {
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
-        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
+        <FeedUnavailable reason={hub.data?.reason} label="Threat information is unavailable" />
       ) : events.length === 0 ? (
-        <Empty />
+        <Empty>No threat events found</Empty>
       ) : (
         <>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3">
@@ -243,7 +244,7 @@ function KpiStack({ panelId, hub, events, acks }) {
   return (
     <Card panelId={panelId} span={2} title="Response Summary">
       {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
-        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
+        <FeedUnavailable reason={hub.data?.reason} label="Threat information is unavailable" />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -311,7 +312,7 @@ function BlockCell({ domain, readOnly, urgent }) {
     // "rejected" (upstream refused, or a local guard like missing
     // BLOCK_LIST_ID) — nothing was applied, safe to retry.
     setState('rejected')
-    setMsg(body.error || `HTTP ${res.status}`)
+    setMsg(body.error || failureText(res.status, 'apply this change'))
   }
 
   if (!domain) return <span className="text-dim text-note">—</span>
@@ -430,7 +431,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
         // it the honest answer and keeps the two in step.
         <input
           type="checkbox"
-          aria-label={`Acknowledge ${r.qname || ackKey(r)}`}
+          aria-label={`Mark ${r.qname || ackKey(r)} as seen`}
           checked={!!acks[ackKey(r)]}
           onChange={() => toggleAck(r)}
         />
@@ -469,7 +470,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
           style={{ maxWidth: 180 }}
           title={r.event_time || undefined}
         >
-          {!r.event_time ? '—' : isNaN(new Date(r.event_time)) ? r.event_time : new Date(r.event_time).toLocaleString()}
+          {!r.event_time ? '—' : isNaN(new Date(r.event_time)) ? r.event_time : formatWhen(r.event_time)}
         </span>
       ),
     },
@@ -514,7 +515,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
         </div>
       )}
       {hub.loading ? <Skeleton h={260} /> : unavailable ? (
-        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
+        <FeedUnavailable reason={hub.data?.reason} label="Threat information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no events match</Empty>
       ) : (
@@ -568,9 +569,9 @@ function LookalikeTable({ panelId, lookalikes }) {
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
-        <FeedUnavailable reason={lookalikes.error.message || undefined} label="Lookalike domain feed unavailable" />
+        <FeedUnavailable reason={lookalikes.error.message || undefined} label="Lookalike domain information is unavailable" />
       ) : d.unavailable || rows.length === 0 ? (
-        <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no data'}</Empty>
+        <Empty>{d.unavailable || 'No lookalike domains found'}</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
       )}
@@ -653,13 +654,13 @@ function AxurPanel({ panelId, axur }) {
       }
     >
       {axur.loading ? <Skeleton h={220} /> : axur.error ? (
-        <FeedUnavailable reason={axur.error.message || undefined} label="Axur feed unavailable" />
+        <FeedUnavailable reason={axur.error.message || undefined} label="Axur information is unavailable" />
       ) : d.configured === false ? (
         // Names both places a key can go, Settings first: that is a box on this
         // screen, where AXUR_API_KEY needs a file edit and a restart.
         <Empty>Axur not configured — add a key under ⋯ Settings, or set AXUR_API_KEY</Empty>
       ) : d.unavailable ? (
-        <Empty>{d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable}</Empty>
+        <Empty>{d.unavailable}</Empty>
       ) : rows.length === 0 ? (
         // NOT "no findings". Zero suppliers monitored and zero findings across
         // monitored suppliers are opposite pieces of news, and this panel exists
@@ -716,8 +717,8 @@ function CtemPanel({ panelId, ctem }) {
   return (
     <Card panelId={panelId} span={3} title="CTEM Exposure" right={ctemRecent(d)}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
-        <FeedUnavailable label="CTEM exposure feed unavailable" />
-      ) : empty ? <Empty /> : (
+        <FeedUnavailable label="CTEM exposure information is unavailable" />
+      ) : empty ? <Empty>No CTEM exposures found</Empty> : (
         <DataTable rows={matrix} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
@@ -772,8 +773,8 @@ function ThreatFeed({ panelId, threats }) {
   return (
     <Card panelId={panelId} span={3} title="Threat Feed Activity">
       {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
-        <FeedUnavailable reason={threats.error?.message || threats.data?.reason || undefined} label="Threat feed activity unavailable" />
-      ) : rows.length === 0 ? <Empty /> : (
+        <FeedUnavailable reason={threats.error?.message || threats.data?.reason || undefined} label="Threat feed activity is unavailable" />
+      ) : rows.length === 0 ? <Empty>No threat feed activity found</Empty> : (
         <>
           <div className="flex gap-5 mb-2">
             <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />Blocked</div></div>
@@ -840,7 +841,7 @@ function InsightsPanel({ panelId, insights }) {
     { key: 'currentStatus', label: 'Status', sortable: true },
     { key: 'totalEvents', label: 'Events', align: 'right', mono: true, sortable: true },
     { key: 'totalVerifiedAssets', label: 'Assets', align: 'right', mono: true, sortable: true, hideWhenConstant: true },
-    { key: 'feedSource', label: 'Feed', sortable: true, hideWhenConstant: true },
+    { key: 'feedSource', label: 'Threat feed', sortable: true, hideWhenConstant: true },
     { key: 'lastSeen', label: 'Last Seen', sortable: true, sortAccessor: (r) => r.lastSeenAt },
   ]
 
@@ -848,7 +849,7 @@ function InsightsPanel({ panelId, insights }) {
     <Card panelId={panelId} span={3} title="IQ for Threat Defense" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
         <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="IQ for Threat Defense unavailable" />
-      ) : rows.length === 0 ? <Empty /> : (
+      ) : rows.length === 0 ? <Empty>No IQ insights found</Empty> : (
         <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
@@ -875,7 +876,7 @@ function AssetInsights({ panelId, assetInsights }) {
             <div className="text-figure font-semibold tracking-tight my-1">{d.total.toLocaleString()}</div>
           </div>
           {d.breakdown_available === false ? (
-            <div className="text-note text-dim">{d.note || 'severity breakdown unavailable upstream'}</div>
+            <div className="text-note text-dim">{d.note || 'Severity breakdown is unavailable from Infoblox'}</div>
           ) : null}
         </div>
       )}
@@ -888,7 +889,7 @@ function AssetInsights({ panelId, assetInsights }) {
 function fmtDate(v) {
   if (!v) return '—'
   const ms = new Date(v).getTime()
-  return isNaN(ms) ? '—' : new Date(ms).toLocaleDateString()
+  return isNaN(ms) ? '—' : formatDay(ms)
 }
 
 function ExposuresPanel({ panelId, exposures }) {
@@ -915,11 +916,11 @@ function ExposuresPanel({ panelId, exposures }) {
   return (
     <Card panelId={panelId} span={4} title="Exposures" right={rightNode}>
       {exposures.loading ? <Skeleton h={260} /> : availability === 'error' ? (
-        <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
+        <FeedUnavailable reason={payload.reason} label="Exposure information is unavailable" />
       ) : exposures.error ? (
         // A transport failure/500/abort used to fall into "no exposures
         // reported" — an all-clear attack surface produced by a dead fetch.
-        <FeedUnavailable reason={exposures.error.message || undefined} label="Exposures feed unavailable" />
+        <FeedUnavailable reason={exposures.error.message || undefined} label="Exposure information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no exposures reported</Empty>
       ) : (
@@ -928,8 +929,8 @@ function ExposuresPanel({ panelId, exposures }) {
             {availability === 'metadata-degraded'
               ? `Total unavailable, ${count.toLocaleString()} rows loaded`
               : typeof total === 'number'
-                ? `${count.toLocaleString()} of ${total.toLocaleString()}, upstream order — not ranked by severity`
-                : `${count.toLocaleString()} rows, upstream order`}
+                ? `${count.toLocaleString()} of ${total.toLocaleString()}, Infoblox order — not ranked by severity`
+                : `${count.toLocaleString()} rows, Infoblox order`}
           </div>
           <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r) => r.id} />
         </>
@@ -963,7 +964,7 @@ function AssetRiskPanel({ panelId, assetRisk }) {
   return (
     <Card panelId={panelId} span={4} title="Asset Risk" right={count ? <span className="text-note text-muted">{count.toLocaleString()}</span> : null}>
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
-        <FeedUnavailable label="Asset risk feed unavailable" />
+        <FeedUnavailable label="Asset risk information is unavailable" />
       ) : rows.length === 0 ? (
         <Empty>no asset risk data</Empty>
       ) : (
@@ -1015,7 +1016,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
       }
     >
       {loading ? <Skeleton h={260} /> : bothDead ? (
-        <FeedUnavailable reason={hPayload.reason || iPayload.reason} label="Exposed surface feeds unavailable" />
+        <FeedUnavailable reason={hPayload.reason || iPayload.reason} label="Exposed surface information is unavailable" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -1023,7 +1024,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
               {hDead ? 'Hostnames' : `Showing ${Math.min(SAMPLE, hRows.length).toLocaleString()} of ${countLabel(hCount, hAvail)}`}
             </div>
             {hDead ? (
-              <FeedUnavailable reason={hPayload.reason} label="Hostname feed unavailable" />
+              <FeedUnavailable reason={hPayload.reason} label="Hostname information is unavailable" />
             ) : hRows.length === 0 ? (
               <Empty>no hostnames reported</Empty>
             ) : (
@@ -1035,7 +1036,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
               {iDead ? 'IPs' : `Showing ${Math.min(SAMPLE, iRows.length).toLocaleString()} of ${countLabel(iCount, iAvail)}`}
             </div>
             {iDead ? (
-              <FeedUnavailable reason={iPayload.reason} label="IP feed unavailable" />
+              <FeedUnavailable reason={iPayload.reason} label="IP information is unavailable" />
             ) : iRows.length === 0 ? (
               <Empty>no IPs reported</Empty>
             ) : (
@@ -1087,7 +1088,7 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
       right={assetCount ? <span className="text-note text-muted">{assetCount.toLocaleString()} assets</span> : null}
     >
       {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || status === 'error' ? (
-        <FeedUnavailable label="CTEM assets feed unavailable" />
+        <FeedUnavailable label="CTEM asset information is unavailable" />
       ) : empty ? (
         <Empty>no CTEM asset data</Empty>
       ) : (

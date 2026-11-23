@@ -11,6 +11,7 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 import MadeList from '../components/MadeList.jsx'
 import DeleteCheck from '../components/DeleteCheck.jsx'
 import { FIND_KINDS, KIND_WORDS, when } from '../lib/madeDelete.js'
+import { failureText } from '../lib/api.js'
 
 const HINTS = {
   dns_record: 'part of the name, like printer',
@@ -38,7 +39,7 @@ function FindOther({ ro }) {
     setError(null)
     const r = await authFetch(`/api/made/find?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(q.trim())}`)
     setBusy(false)
-    if (!r.ok) { setFound(null); setError(r.data?.error || `HTTP ${r.status}`); return }
+    if (!r.ok) { setFound(null); setError(r.data?.error || failureText(r.status, 'find that item')); return }
     setFound(r.data?.results ?? [])
   }
 
@@ -58,7 +59,7 @@ function FindOther({ ro }) {
             onChange={(e) => setQ(e.target.value)} />
         </label>
         <button type="submit" disabled={!q.trim() || busy} className="text-copy font-medium px-4 py-1.5 rounded-control"
-          style={{ background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Finding…' : 'Find'}</button>
+          style={{ background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Finding…' : 'Find item'}</button>
       </form>
       {error && <p role="alert" className="text-note px-3" style={{ color: COLORS.crit }}>{error}</p>}
       {found && (found.length === 0

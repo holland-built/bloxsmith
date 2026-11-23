@@ -83,7 +83,7 @@ test('something else is found and its check says it was not made by Bloxsmith', 
   });
   await page.goto('/#made');
   await page.getByRole('textbox', { name: 'Name or address' }).fill('printer');
-  await page.getByRole('button', { name: 'Find' }).click();
+  await page.getByRole('button', { name: 'Find item' }).click();
   await expect(page.locator('[data-found] li')).toHaveCount(1);
   expect(finds).toEqual(['?kind=dns_record&q=printer']);
 

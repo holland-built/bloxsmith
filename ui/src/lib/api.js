@@ -202,6 +202,17 @@ export function noPermissionText(error) {
   return REFUSED_CALL.test(text) ? text : NO_PERMISSION
 }
 
+const SERVER_PROBLEM = 'The server had a problem. Try again in a moment.'
+
+/**
+ * A failed request in words: what could not be done and what to do next, for
+ * when the server sent no message of its own. `what` starts with a verb.
+ */
+export function failureText(status, what) {
+  if (isNoPermission({ status })) return NO_PERMISSION
+  return `Could not ${what}. Try again in a moment.`
+}
+
 /**
  * Load every currently-failed feed again with its attempt budget reset —
  * including polling ones, which otherwise wait out their interval. Spread over
@@ -687,7 +698,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
               })
             }
           }
-          throw Object.assign(new Error(`${res.status} ${res.statusText}`), {
+          throw Object.assign(new Error(isNoPermission(res) ? `${res.status} ${res.statusText}` : SERVER_PROBLEM), {
             status: res.status,
           })
         }
