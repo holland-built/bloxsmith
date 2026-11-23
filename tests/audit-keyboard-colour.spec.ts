@@ -292,7 +292,7 @@ test('Assets: opening a row moves focus to its detail', async ({ page }) => {
 
 test('Incidents: each acknowledge box names its item', async ({ page }) => {
   await open(page, 'incidents');
-  await expect(page.getByRole('checkbox', { name: 'Acknowledge ipam/subnet/baseline-3' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('checkbox', { name: 'Mark ipam/subnet/baseline-3 as seen' })).toBeVisible({ timeout: 20_000 });
 });
 
 test('Skip to content is the first Tab stop and moves focus to the page', async ({ page }) => {
