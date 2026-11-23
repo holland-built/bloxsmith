@@ -99,12 +99,13 @@ func (s *Service) fetchHubHealth() []map[string]any {
 			rollup = append(rollup, map[string]any{
 				"name": b.name, "status": "ok",
 				"statusLabel": "no services", "meta": "0 deployed",
-				"availability": "ok",
+				"availability": "ok", "not_running": []map[string]any{},
 			})
 			continue
 		}
 		worst := 0
 		errs, stopped, online := 0, 0, 0
+		notRunning := []map[string]any{}
 		for _, m := range members {
 			cs := getStr(m["composite_status"])
 			key := cs
@@ -121,6 +122,11 @@ func (s *Service) fetchHubHealth() []map[string]any {
 				stopped++
 			case "online":
 				online++
+			}
+			// Anything not counted as up above, including a blank status, so
+			// the list length is always total minus up.
+			if cs != "online" {
+				notRunning = append(notRunning, notRunningRow(m))
 			}
 		}
 		severity := hubRankSeverity[worst]
@@ -139,6 +145,7 @@ func (s *Service) fetchHubHealth() []map[string]any {
 			"statusLabel":  hubSeverityLabel[severity],
 			"meta":         meta,
 			"availability": "ok",
+			"not_running":  notRunning,
 		}
 		// A bucket with members is marked partial too. The severity and the
 		// counts describe the members actually seen and stay exactly as
@@ -153,6 +160,28 @@ func (s *Service) fetchHubHealth() []map[string]any {
 	}
 	s.Cache.SetGen(ck, rollup, g)
 	return rollup
+}
+
+// notRunningRow is one service the "n/m up" count did not count as up, so the
+// Infra page lists exactly the services behind that number. A service can run
+// on several hosts and is still one row, because the count is of services.
+func notRunningRow(m map[string]any) map[string]any {
+	var names, ips []string
+	for _, item := range asSlice(m["hosts"]) {
+		h := asMap(item)
+		if n := getStr(h["display_name"]); n != "" {
+			names = append(names, n)
+		}
+		if ip := getStr(h["ip_address"]); ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return map[string]any{
+		"name":  getStr(m["name"]),
+		"state": getStr(m["composite_status"]),
+		"host":  strings.Join(names, ", "),
+		"ip":    strings.Join(ips, ", "),
+	}
 }
 
 // --- service inventory -------------------------------------------------------

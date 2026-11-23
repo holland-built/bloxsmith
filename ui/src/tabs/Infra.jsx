@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { bucketWord } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
@@ -8,6 +8,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
+import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { HeadlineStrip } from '../components/kit.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { statusBucket } from '../lib/statusBucket.js'
@@ -88,6 +89,9 @@ export default function Infra() {
   const dataLoading = data.loading && !data.data
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
+  // Overview's "View services" lands here. status=down belongs to this list,
+  // and is not a host status for the inventory to filter on.
+  const downService = hp.service && hp.status === 'down' ? hp.service : null
 
   return (
     <div className="w-full px-6 py-5">
@@ -108,12 +112,13 @@ export default function Infra() {
       </div>
       <TabIntro>Host and service health: hosts, jobs and DNS forwarding proxies.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={[...headlines(hosts, totalHosts, hostsStatus), discoveryTile(discovery)]} />
+      {downService && <ServicesDown key={downService} service={downService} feed={svcHealth} />}
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="infra">
-        <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+        <HostTable panelId="infra-host-inventory" hosts={hosts} status={downService ? undefined : hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} hostMetrics={hostMetrics} dnsHealth={dnsHealth} />
         <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
         {/* Host Health listed the same machines as Host Inventory, with a
@@ -161,6 +166,69 @@ export default function Infra() {
         {savedCharts}
       </CardGrid>
     </div>
+  )
+}
+
+// ---------- services that are down (Overview's landing) ----------
+
+const SERVICE_DOWN_COLUMNS = [
+  { key: 'host', label: 'Host', render: (v) => v || 'No host listed' },
+  { key: 'ip', label: 'IP', mono: true },
+  { key: 'name', label: 'Service', grow: true },
+  { key: 'state', label: 'State', badge: true, render: (v) => renderStatus(v || 'unknown') },
+]
+
+// What the list can honestly say. Only a complete read may say none are down.
+function servicesDownLine(service, feed) {
+  if (feed.loading && !feed.data) return { state: 'loading', line: `Checking ${service} services…` }
+  const bucket = Array.isArray(feed.data) ? feed.data.find((b) => b.name === service) : null
+  if (feed.error || !Array.isArray(feed.data) || bucket?.availability === 'error') {
+    return { state: 'failed', line: `${service} services could not be loaded, so it is not known which are down.` }
+  }
+  if (!bucket) return { state: 'failed', line: `There is no service group called ${service}.` }
+  const rows = bucket.not_running
+  if (!Array.isArray(rows)) return { state: 'failed', line: `The ${service} service list could not be read, so it is not known which are down.` }
+  const cut = bucket.availability !== 'ok'
+  const more = cut ? ' The service list was cut off, so there may be more.' : ''
+  if (!rows.length) {
+    return { state: 'empty', rows, line: cut ? `None of the ${service} services read are down.${more}` : `No ${service} services are down.` }
+  }
+  return { state: 'ok', rows, line: `Showing ${rows.length.toLocaleString()} ${service} ${rows.length === 1 ? 'service that is' : 'services that are'} down.${more}` }
+}
+
+function ServicesDown({ service, feed }) {
+  const ref = useRef(null)
+  const headingId = useId()
+  const view = servicesDownLine(service, feed)
+  const rows = view.rows ?? []
+  const settled = view.state !== 'loading'
+
+  // Once per landing, when the answer is in. The 30-second refresh must not
+  // pull the page back here while someone is reading further down.
+  const landed = useRef(false)
+  useEffect(() => {
+    if (!settled || landed.current) return
+    landed.current = true
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ref.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    ref.current?.focus({ preventScroll: true })
+  }, [settled])
+
+  return (
+    <section ref={ref} tabIndex={-1} aria-labelledby={headingId} data-services-down={service} className={`bg-card border border-card-border rounded-surface p-3 mb-4 scroll-mt-[72px] outline-none ${FOCUS_RING}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id={headingId} className="text-copy font-semibold text-txt min-w-0"><span role="status">{view.line}</span></h2>
+        <button type="button" onClick={() => { location.hash = 'infra' }} className={`text-copy font-medium text-link px-2 py-1 rounded-control cursor-pointer outline-none ${FOCUS_RING}`}>
+          Show all
+        </button>
+      </div>
+      {view.state === 'loading' && <div className="mt-2"><Skeleton h={120} /></div>}
+      {view.state === 'ok' && (
+        <div className="mt-2.5">
+          <DataTable rows={rows} columns={SERVICE_DOWN_COLUMNS} maxHeight={420} rowCap={500} stickyHeader rowKey={(r, i) => `${r.name}|${i}`} />
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -424,6 +492,23 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
 
   const feedDead = hostsStatus === 'error' && hosts.length === 0
   const total = totalHosts ?? hosts.length
+
+  // A filtered address lands on this table, once per filter, when its answer
+  // is in. The refresh must not pull the page back here.
+  const landedOn = useRef(null)
+  useEffect(() => {
+    if (!statusFilter) { landedOn.current = null; return }
+    if (loading || landedOn.current === statusFilter) return
+    landedOn.current = statusFilter
+    jumpToPanel(panelId)
+  }, [statusFilter, loading, panelId])
+  const statusWord = statusFilter === 'offline' ? 'not online' : String(statusFilter).replace('-', ' ')
+  const partialHosts = totalHosts != null && totalHosts !== hosts.length
+  const filterLine = feedDead
+    ? `Hosts could not be loaded, so it is not known which are ${statusWord}.`
+    : filtered.length === 0
+      ? `No ${partialHosts ? 'loaded ' : ''}hosts are ${statusWord}.`
+      : `Showing ${filtered.length.toLocaleString()} ${filtered.length === 1 ? 'host' : 'hosts'} ${statusWord}${partialHosts ? ` of ${hosts.length.toLocaleString()} loaded` : ''}.`
   // A dead read knows no counts. "0 hosts" is a claim about the estate; "—" is
   // the truth, which is that nothing came back to count.
   const countLabel = feedDead
@@ -493,6 +578,14 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
         </div>
       }
     >
+      {statusFilter && !loading && (
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-1" data-host-filter-line="">
+          <span role="status" className="text-copy text-txt min-w-0">{filterLine}</span>
+          <button type="button" onClick={() => { location.hash = 'infra' }} className={`text-copy font-medium text-link px-2 py-1 rounded-control cursor-pointer outline-none ${FOCUS_RING}`}>
+            Show all
+          </button>
+        </div>
+      )}
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (

@@ -482,3 +482,51 @@ func TestFetchHubSecurity_FailedReadClaimsNoCompleteCount(t *testing.T) {
 		t.Errorf("counted should be absent on a failed read, got %v", v)
 	}
 }
+
+// The list behind "n/m up": every service not counted as up, with its host, so
+// the Infra page's count can never differ from the Overview's.
+func TestFetchHubHealth_NotRunningMatchesUpCount(t *testing.T) {
+	host := func(name, ip string) []map[string]any {
+		return []map[string]any{{"display_name": name, "ip_address": ip, "ophid": "must-not-be-sent"}}
+	}
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		writeResults(w, []map[string]any{
+			{"name": "dhcp_a", "service_type": "dhcp", "composite_status": "online", "hosts": host("a", "10.0.0.1")},
+			{"name": "dhcp_b", "service_type": "ndhcp", "composite_status": "stopped", "hosts": host("b", "10.0.0.2")},
+			{"name": "dhcp_c", "service_type": "dhcp", "composite_status": "error", "hosts": host("c", "10.0.0.3")},
+			{"name": "dhcp_d", "service_type": "dhcp", "composite_status": "", "hosts": host("d", "10.0.0.4")},
+			{"name": "dns_a", "service_type": "dns", "composite_status": "online", "hosts": host("a", "10.0.0.1")},
+		})
+	})
+
+	byName := map[string]map[string]any{}
+	for _, b := range s.FetchHubHealth() {
+		byName[getStr(b["name"])] = b
+	}
+	if got := getStr(byName["DHCP"]["meta"]); got != "1 error · 1/4 up" {
+		t.Fatalf("existing meta changed: %q", got)
+	}
+	rows := byName["DHCP"]["not_running"].([]map[string]any)
+	if len(rows) != 3 {
+		t.Fatalf("not_running has %d rows, want 3 (4 total minus 1 up): %v", len(rows), rows)
+	}
+	want := map[string]any{"name": "dhcp_b", "state": "stopped", "host": "b", "ip": "10.0.0.2"}
+	if !reflect.DeepEqual(rows[0], want) {
+		t.Fatalf("row = %v, want exactly %v", rows[0], want)
+	}
+	if got := byName["DNS"]["not_running"].([]map[string]any); len(got) != 0 {
+		t.Fatalf("DNS is all up but listed %v", got)
+	}
+}
+
+// A failed read has no list at all, so the page cannot read it as "none down".
+func TestFetchHubHealth_FailedReadHasNoNotRunningList(t *testing.T) {
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	for _, b := range s.FetchHubHealth() {
+		if _, ok := b["not_running"]; ok {
+			t.Fatalf("%v: a dead feed must not carry a list", b["name"])
+		}
+	}
+}
