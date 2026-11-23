@@ -310,7 +310,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 		}
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
-		if !(status >= 200 && status < 300) {
+		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep("block", blockID, status)})
 			residual = append(residual, M{
 				"kind":   "address_block",
@@ -788,7 +788,7 @@ func rollbackIncompleteStep(residual []any) string {
 // rollbackDeleteStep is the log line for a cleanup delete that did not succeed.
 // Only a clear refusal may say the delete failed.
 func rollbackDeleteStep(what, id string, status int) string {
-	if rest.NoClearAnswer(status) {
+	if rest.UnclearFailure(status) {
 		return fmt.Sprintf("  Rollback: no clear answer deleting %s id=%s, so it may or may not be gone", what, id)
 	}
 	return fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", what, id, status)

@@ -263,8 +263,12 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				errDetail = map[string]any{"phase": "verify", "subnet": addr}
 				if errors.Is(err, errPickKept) {
-					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
-						"block": block, "cidr": cidr, "subnet": addr})
+					detail := map[string]any{"block": block, "cidr": cidr, "subnet": addr}
+					var maybe pickMaybeKept
+					if errors.As(err, &maybe) {
+						detail["outcome"] = "unknown"
+					}
+					d.auditAppend("provision-subnet", httpx.Actor(r), detail)
 				}
 				return err
 			}
@@ -432,18 +436,12 @@ func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN
 	if res, ok := result.(map[string]any); ok {
 		nsub, _ = res["result"].(map[string]any)
 	}
-	if status == 0 || status == 502 || status == 503 || status == 504 ||
-		(status >= 200 && status <= 299 && provision.PyStr(nsub["id"]) == "") {
+	if rest.NoClearAnswer(status) || (status >= 200 && status <= 299 && provision.PyStr(nsub["id"]) == "") {
 		// The create may have been applied: its answer was lost or names no
 		// subnet. It is not looked for or removed blind.
-		return nil, clean.Addr().String(), false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
-			"the clean %s may have been created, but Infoblox's answer was lost%s. Check for it in the Editor before trying again (%w)",
-			made, clean, upstreamDetail(status, result), errPickKept)
-	}
-	if rest.NoClearAnswer(status) {
-		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed. "+
-			"No clear answer to create the clean subnet %s (status %d), so it may or may not have happened. "+
-			"Check it in the Editor before trying again", made, clean, status)
+		return nil, clean.Addr().String(), false, pickMaybeKept(fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed. "+
+			"No clear answer to create the clean subnet %s (status %d). It may have been created, or it may not. "+
+			"Check it in the Editor before trying again", made, clean, status))
 	}
 	if werr != nil || status < 200 || status > 299 {
 		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+

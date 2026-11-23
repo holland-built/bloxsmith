@@ -1015,7 +1015,7 @@ func (p *SiteProvisioner) rollback(partial M) M {
 		}
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
-		if !(status >= 200 && status < 300) {
+		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep(kind, objID, status)})
 			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status})
 			return
