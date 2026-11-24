@@ -2655,21 +2655,30 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
         // wrap and shrink once even a whole line is not enough for them. `right`
         // stays shrink-0 relative to the title — squeezing a live control to
         // keep a heading on one line is the wrong way round.
-        <div ref={headRef} className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
-          <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
-          {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
-          <span className="flex-1" />
-          {/* The drag handle goes in the buttons span below, and headNeed
-              measures both that span and `right`: a header element outside
-              those two would be invisible to the width floor, and the header
-              would overflow the card by exactly that element's width. */}
-          {/* On a phone `right` takes its own line, so a wide control cannot
-              carry the help and menu buttons away from the title. */}
-          {right && (
-            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
-              {right}
-            </span>
-          )}
+        //
+        // THE BUTTONS SIT OUTSIDE THE WRAPPING BOX (fix 3, 2026-11-24). In one
+        // wrapping row, a title, caption or `right` that did not fit pushed the
+        // About and menu buttons onto a line of their own under the title: on
+        // every phone, and on Assets at desktop width. Now the title, caption and
+        // `right` wrap inside the first box, and the buttons stay at the top
+        // right, on the title line.
+        <div ref={headRef} className="flex items-start gap-2 mb-2 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+            <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
+            {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
+            <span className="flex-1" />
+            {/* The drag handle goes in the buttons span below, and headNeed
+                measures both that span and `right`: a header element outside
+                those two would be invisible to the width floor, and the header
+                would overflow the card by exactly that element's width. */}
+            {/* On a phone `right` takes its own line, so a wide control cannot
+                carry the help and menu buttons away from the title. */}
+            {right && (
+              <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+                {right}
+              </span>
+            )}
+          </div>
           {(infoBtn || menu) && (
             <span ref={headButtonsRef} className="shrink-0 flex items-center gap-2">
               {infoBtn}
