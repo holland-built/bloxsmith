@@ -851,10 +851,10 @@ function InsightsPanel({ panelId, insights }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="IQ for Threat Defense" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={3} title="Threat insights" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
-        <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="IQ for Threat Defense unavailable" />
-      ) : rows.length === 0 ? <Empty>No IQ insights found</Empty> : (
+        <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="Threat insights unavailable" />
+      ) : rows.length === 0 ? <Empty>No threat insights found</Empty> : (
         <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>

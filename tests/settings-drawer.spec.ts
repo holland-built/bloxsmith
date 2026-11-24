@@ -95,7 +95,7 @@ test('each section holds what it should, and nothing from the others', async ({ 
   const go = (name: string) => sheet.getByRole('button', { name, exact: true }).click();
 
   await expect(sheet.getByRole('button', { name: 'Test active connection' })).toBeVisible();
-  await expect(sheet.getByLabel('Active CSP account')).toBeVisible();
+  await expect(sheet.getByLabel('Active Infoblox account')).toBeVisible();
   await expect(sheet.getByLabel('Axur API key')).toBeHidden();
 
   await go('Write access');

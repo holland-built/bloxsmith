@@ -91,7 +91,7 @@ func (s *Service) fetchHubHealth() []map[string]any {
 				// at the row cap, and this bucket's services may sit past it.
 				rollup = append(rollup, map[string]any{
 					"name": b.name, "status": hubStatusUnknown,
-					"statusLabel": "not listed", "meta": "beyond the row cap",
+					"statusLabel": "not listed", "meta": "list cut off",
 					"availability": "partial", "reason": truncReason,
 				})
 				continue

@@ -43,7 +43,7 @@ test('Incidents: a dead actions feed says so in both panels that read it', async
   for (const id of ['incidents-soc-queue', 'incidents-action-volume']) {
     const block = unavailable(page, id);
     await expect(block, `${id} did not draw the feed-unavailable block`).toBeVisible({ timeout: 20_000 });
-    await expect(block).toContainText('IQ Actions information is unavailable');
+    await expect(block).toContainText('Suggested actions are unavailable');
   }
   await expect(page.getByText('failed to load actions')).toHaveCount(0);
 });

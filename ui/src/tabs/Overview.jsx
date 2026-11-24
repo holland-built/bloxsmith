@@ -12,6 +12,8 @@ import Briefing from './overview/Briefing.jsx'
 import { dnsTrend, openProblems, vsWords } from './overview/model.js'
 import './Overview.css'
 import { formatDay, formatTime } from '../lib/dates.js'
+import { noun } from '../lib/plainWords.js'
+import { SEV_WORD } from '../lib/severity.js'
 
 // OVERVIEW IS A SERVICE BOARD, NOT A PANEL WALL (2026-11-09).
 //
@@ -170,9 +172,9 @@ function useBoard(dns) {
     { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps,
       measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: 'hourly average, last hour' },
     { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), partial: notFull(svcState('DHCP')), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
-      measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active leases`), scope: sliceOk('leases') ? `of ${n0(leases.length)} leases loaded` : '' },
+      measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active ${noun(activeLeases, 'lease')}`), scope: sliceOk('leases') ? `of ${n0(leases.length)} ${noun(leases.length, 'lease')} loaded` : '' },
     { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, partial: totals.degraded === true, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
-      measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} subnets ≥90%`),
+      measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} ${noun(totals.subnets, 'subnet')} ≥90%`),
       scope: crit !== null && typeof totals.subnetsWarn === 'number' ? `${n0(totals.subnetsWarn - crit)} more at 70–89% · all subnets` : '' },
     { name: 'Hosts', href: '#infra?status=offline', state: null, partial: hostsShort, n: offline, of: sliceOk('hosts') ? hosts.length : null,
       measure: m(offline !== null, data.loading, `${n0(offline)} of ${n0(hosts.length)} not online`),
@@ -243,11 +245,11 @@ function verdict(b, checked) {
   if (b.measure === 'Loading…' || checked === 'loading' || b.state?.loading) return { word: 'Checking', sev: 'none' }
   const w = worst(b.issues)
   const st = b.state?.status
-  if (w === 'crit' || st === 'crit') return { word: 'Action required', sev: 'crit' }
-  if (w === 'warn' || st === 'warn') return { word: 'Review', sev: 'warn' }
+  if (w === 'crit' || st === 'crit') return { word: SEV_WORD.crit, sev: 'crit' }
+  if (w === 'warn' || st === 'warn') return { word: SEV_WORD.warn, sev: 'warn' }
   // Subnets 90% full are worth a look even before an incident is raised, so
   // the tile never says Healthy beside a count of them.
-  if (b.name === 'IPAM' && b.n > 0) return { word: 'Review', sev: 'warn' }
+  if (b.name === 'IPAM' && b.n > 0) return { word: SEV_WORD.warn, sev: 'warn' }
   if (b.measure === 'unavailable') return { word: 'Unavailable', sev: 'none' }
   if (checked !== true || b.state?.failed) return { word: 'Not checked', sev: 'none' }
   if (HAS_HEALTH.has(b.name) && st !== 'ok') return { word: 'Not checked', sev: 'none' }
@@ -265,8 +267,8 @@ function tiles(board, dns) {
   const outOf = (b) => (up(b) ? `${up(b).up} of ${up(b).total} up` : null)
   const t = [
     { name: 'DNS', value: fmt(by.DNS?.n, 1), unit: 'queries/s', right: outOf(by.DNS), was: trend.was ?? null, hours: trend.hours },
-    { name: 'DHCP', value: fmt(by.DHCP?.n), unit: 'active leases', right: outOf(by.DHCP) },
-    { name: 'IPAM', value: fmt(by.IPAM?.n), unit: 'subnets ≥90%', right: typeof by.IPAM?.of === 'number' ? `of ${fmt(by.IPAM.of)}` : null, fill: by.IPAM?.n / by.IPAM?.of },
+    { name: 'DHCP', value: fmt(by.DHCP?.n), unit: `active ${noun(by.DHCP?.n, 'lease')}`, right: outOf(by.DHCP) },
+    { name: 'IPAM', value: fmt(by.IPAM?.n), unit: `${noun(by.IPAM?.n, 'subnet')} ≥90%`, right: typeof by.IPAM?.of === 'number' ? `of ${fmt(by.IPAM.of)}` : null, fill: by.IPAM?.n / by.IPAM?.of },
     { name: 'Hosts', value: fmt(by.Hosts?.n), unit: 'not online', right: typeof by.Hosts?.of === 'number' ? `of ${fmt(by.Hosts.of)}` : null, fill: by.Hosts?.n / by.Hosts?.of },
     { name: 'Security', value: fmt(by.Security?.n), unit: 'critical or high', right: outOf(by.Security) },
   ]

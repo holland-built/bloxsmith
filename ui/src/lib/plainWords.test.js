@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { categoryWord, issueWord, plainMessage } from './plainWords.js'
+import { categoryWord, countOf, issueWord, noun, plainMessage, subjectName } from './plainWords.js'
 
 test('known categories read as words, unknown ones are de-dashed', () => {
   assert.equal(categoryWord('dns-ttl-anomaly'), 'DNS zone timing')
@@ -34,4 +34,22 @@ test('audit event kinds read as words, failures say so', async () => {
   assert.equal(eventWord('selfservice-allocate-orphaned'), 'Address taken (left behind)')
   assert.equal(eventWord('dns-record-create-unreadable'), "DNS record added (couldn't read it back)")
   assert.equal(eventWord('brand-new-kind'), 'Brand new kind')
+})
+
+test('a count of 1 takes the singular, anything else the plural', () => {
+  assert.equal(countOf(1, 'service'), '1 service')
+  assert.equal(countOf(2, 'zone'), '2 zones')
+  assert.equal(countOf(0, 'name'), '0 names')
+  assert.equal(countOf(1200, 'zone'), '1,200 zones')
+  assert.equal(countOf(1, 'address', 'addresses'), '1 address')
+  assert.equal(countOf(3, 'address', 'addresses'), '3 addresses')
+  assert.equal(noun(1, 'lease'), 'lease')
+  assert.equal(noun(null, 'subnet'), 'subnets')
+})
+
+test('an incident names its subject, not its id', () => {
+  assert.equal(subjectName({ entity_type: 'subnet', entity_id: 'ipam/subnet/abc', message: 'Windows Wireless at 80% utilization' }), 'Windows Wireless')
+  assert.equal(subjectName({ entity_type: 'zone', entity_id: 'dns/auth_zone/abc', message: 'aws.private.: High Neg-TTL' }), 'aws.private.')
+  assert.equal(subjectName({ entity_type: 'lease', entity_id: 'dhcp/lease/abc', message: 'Lease 10.0.0.5 (printer) expired' }), '10.0.0.5')
+  assert.equal(subjectName({ entity_type: 'posture', entity_id: 'x', message: '2 of 3 DNS zones with public names unsigned (DNSSEC)' }), 'All DNS zones')
 })

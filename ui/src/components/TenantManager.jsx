@@ -562,14 +562,14 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                   </div>
                 ) : accounts.length > 0 && (
                   <>
-                    <label htmlFor="tm-csp" className="block text-copy font-medium mb-2">CSP account</label>
+                    <label htmlFor="tm-csp" className="block text-copy font-medium mb-2">Infoblox account</label>
                     {/* CONTROLLED, on the active id. It was `defaultValue=""` over a
                         disabled "Switch active account…" placeholder, so the list
                         never showed which account you were actually on — the one
                         thing a picker has to say. */}
                     <select
                       id="tm-csp"
-                      aria-label="Active CSP account"
+                      aria-label="Active Infoblox account"
                       className={inCls}
                       value={activeAccount}
                       onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
@@ -604,7 +604,7 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
                         unmeasured claim this panel was fixed for. The measured
                         version appears below, from CSP, once an attempt is made. */}
                     <div className="text-note text-dim mt-1.5">
-                      Switching needs a User API key with multi-account access. Without it CSP refuses
+                      Switching needs a User API key with multi-account access. Without it Infoblox refuses
                       the change and the list stays where it was.
                     </div>
                     {acctSwitchErr && (

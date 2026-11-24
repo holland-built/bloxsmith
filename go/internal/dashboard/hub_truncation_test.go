@@ -76,9 +76,9 @@ func TestFetchHubHealth_TruncatedInventoryIsNotAnAllClear(t *testing.T) {
 			rows: mixedServiceRows(500, 0),
 			page: map[string]any{"total_size": "900"},
 			wants: []wantBucket{
-				{"DNS", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"DHCP", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"Security", "unknown", "not listed", "beyond the row cap", "partial", true},
+				{"DNS", "unknown", "not listed", "list cut off", "partial", true},
+				{"DHCP", "unknown", "not listed", "list cut off", "partial", true},
+				{"Security", "unknown", "not listed", "list cut off", "partial", true},
 			},
 		},
 		{
@@ -90,8 +90,8 @@ func TestFetchHubHealth_TruncatedInventoryIsNotAnAllClear(t *testing.T) {
 			page: map[string]any{"total_size": "900"},
 			wants: []wantBucket{
 				{"DNS", "ok", "healthy", "2/2 online", "partial", true},
-				{"DHCP", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"Security", "unknown", "not listed", "beyond the row cap", "partial", true},
+				{"DHCP", "unknown", "not listed", "list cut off", "partial", true},
+				{"Security", "unknown", "not listed", "list cut off", "partial", true},
 			},
 		},
 		{
@@ -99,9 +99,9 @@ func TestFetchHubHealth_TruncatedInventoryIsNotAnAllClear(t *testing.T) {
 			rows: mixedServiceRows(500, 0),
 			page: nil,
 			wants: []wantBucket{
-				{"DNS", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"DHCP", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"Security", "unknown", "not listed", "beyond the row cap", "partial", true},
+				{"DNS", "unknown", "not listed", "list cut off", "partial", true},
+				{"DHCP", "unknown", "not listed", "list cut off", "partial", true},
+				{"Security", "unknown", "not listed", "list cut off", "partial", true},
 			},
 		},
 		{
@@ -111,9 +111,9 @@ func TestFetchHubHealth_TruncatedInventoryIsNotAnAllClear(t *testing.T) {
 			rows: mixedServiceRows(3, 0),
 			page: map[string]any{"total_size": "1"},
 			wants: []wantBucket{
-				{"DNS", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"DHCP", "unknown", "not listed", "beyond the row cap", "partial", true},
-				{"Security", "unknown", "not listed", "beyond the row cap", "partial", true},
+				{"DNS", "unknown", "not listed", "list cut off", "partial", true},
+				{"DHCP", "unknown", "not listed", "list cut off", "partial", true},
+				{"Security", "unknown", "not listed", "list cut off", "partial", true},
 			},
 		},
 	}

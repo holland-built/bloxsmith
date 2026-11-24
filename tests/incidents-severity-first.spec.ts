@@ -27,8 +27,8 @@ test('the severity tiles sit above Triage, and a tile filters it', async ({ page
   await critical.click();
   await expect(critical).toHaveAttribute('aria-pressed', 'true');
   await expect(triage.getByRole('row')).toHaveCount(2);
-  await expect(triage).toContainText('baseline-net-c is 98% used');
-  await expect(triage).not.toContainText('other.example is unsigned');
+  await expect(triage).toContainText('baseline-net-c is 98% full');
+  await expect(triage).not.toContainText('other.example.: cache time too short');
   await triage.getByRole('button', { name: 'Clear filter' }).click();
   await expect(triage.getByRole('row')).toHaveCount(3);
 });

@@ -10,7 +10,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
-import { issueWord } from '../lib/plainWords.js'
+import { countOf, issueWord } from '../lib/plainWords.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import { healthMetric } from '../lib/dnsHealth.js'
@@ -523,7 +523,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
         <ul className="dns-kinds" aria-label="Zone issues by kind">
           {kinds.map(([k, n]) => (
             <li key={k}>
-              <button type="button" className="dns-kind" onClick={() => open(k)} aria-label={`${issueWord(k)}: ${n.toLocaleString()} zones. Show them.`}>
+              <button type="button" className="dns-kind" onClick={() => open(k)} aria-label={`${issueWord(k)}: ${countOf(n, 'zone')}. Show them.`}>
                 <span className="dns-kind-name">{issueWord(k)}</span>
                 <span className="dns-kind-n">{n.toLocaleString()}</span>
                 <i className="dns-kind-bar" aria-hidden="true" style={{ '--w': `${(n / top) * 100}%`, '--c': COLORS[PROBLEM_SEV.zoneIssues] }} />
@@ -557,7 +557,7 @@ function DnsServices({ panelId, services }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-note text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-note text-muted">{rows.length ? countOf(rows.length, 'service') : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
@@ -681,7 +681,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
   const landingLine = listLoading ? `Checking ${landingWhat}…`
     : listFailed ? `Could not load zones, so the ${landingWhat} are not known.`
     : filtered.length === 0 ? (filter.trim() ? `None of the ${landingWhat} match your search.`
-      : `No ${landingWhat}.${uncheckedCount ? ` ${uncheckedCount.toLocaleString()} zones could not be checked.` : ''}`)
+      : `No ${landingWhat}.${uncheckedCount ? ` ${countOf(uncheckedCount, 'zone')} could not be checked.` : ''}`)
     : `Showing ${filtered.length > 150 ? `the first 150 of ${filtered.length.toLocaleString()}` : filtered.length.toLocaleString()} ${filtered.length === 1 ? landingWhat.replace('zones', 'zone') : landingWhat}.${!notSigned && readFailed ? ' The latest read failed, so this list may be out of date.' : ''}`
 
   const sorted = useMemo(() => {
@@ -798,7 +798,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
               Compare views
             </button>
           )}
-          <span className="text-note text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
+          <span className="text-note text-muted whitespace-nowrap">{countOf(sorted.length, 'zone')}</span>
           <input {...MACHINE_TEXT}
             aria-label="Filter zones"
             placeholder="Filter…"
@@ -968,7 +968,7 @@ function RpzPanel({ panelId, rpz }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-note text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'zone') : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
@@ -1008,7 +1008,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-note text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'name') : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (

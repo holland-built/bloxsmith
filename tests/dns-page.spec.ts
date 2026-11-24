@@ -70,7 +70,7 @@ test('Zone Counts lists issue kinds; a kind opens just those zones', async ({ pa
   await setup(page, qps(3, () => 10));
   await page.goto('/#dns');
   const kpis = page.locator('[data-panel-id="dns-zone-kpis"]');
-  await expect(kpis.getByRole('button', { name: /^cache time too short: 1 zones/ })).toBeVisible();
+  await expect(kpis.getByRole('button', { name: /^cache time too short: 1 zone\. Show them/ })).toBeVisible();
   await expect(kpis).toContainText('Forward5');
   await expect(kpis).toContainText('Reverse1');
   // The server's "unusual settings" flag is still counted (it was dropped once).

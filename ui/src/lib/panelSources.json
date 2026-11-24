@@ -308,7 +308,7 @@
   {
     "id": "security-soc-insights",
     "page": "Security",
-    "name": "IQ for Threat Defense",
+    "name": "Threat insights",
     "kind": "rest",
     "source": "Infoblox IQ for Threat Defense insights",
     "builder": "no",
@@ -488,7 +488,7 @@
   {
     "id": "incidents-soc-queue",
     "page": "Incidents",
-    "name": "IQ Actions",
+    "name": "Suggested actions",
     "kind": "rest",
     "source": "Infoblox IQ actions",
     "builder": "no",
@@ -524,7 +524,7 @@
   {
     "id": "audit-csp-portal",
     "page": "Audit",
-    "name": "CSP Portal Audit",
+    "name": "Infoblox Portal Audit",
     "kind": "rest",
     "source": "the Infoblox audit log",
     "builder": "no",

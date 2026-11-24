@@ -1,7 +1,7 @@
 - main "Overview tab":
   - paragraph: Thursday, January 1
   - heading "Overview" [level=1]
-  - paragraph: Action required
+  - paragraph: Needs action
   - paragraph: 2 of 5 services require action
   - 'link "Start with: View hosts"':
     - /url: "#infra?status=offline"
@@ -43,10 +43,10 @@
   - heading "Service details" [level=2]
   - region "Services at a glance":
     - button /DNS Healthy \d+ queries\/s ▲ \d+% vs \d+[hmsp]+ ago \d+ queries\/s · hourly average, last hour · 2\/2 online/ [pressed]
-    - button "DHCP Review 1 active leases 1 of 2 up 1 active leases · of 2 leases loaded · 1 stopped · 1/2 up"
-    - button /IPAM Review 1 subnets ≥\d+% of 3 1 of 3 subnets ≥\d+% · 0 more at \d+–\d+% · all subnets/
-    - button "Hosts Action required 1 not online of 3 1 of 3 not online · all hosts"
-    - button "Security Action required 3 critical or high 3 critical or high events · whole window · beyond the row cap"
+    - button "DHCP Review 1 active lease 1 of 2 up 1 active lease · of 2 leases loaded · 1 stopped · 1/2 up"
+    - button /IPAM Review 1 subnet ≥\d+% of 3 1 of 3 subnets ≥\d+% · 0 more at \d+–\d+% · all subnets/
+    - button "Hosts Needs action 1 not online of 3 1 of 3 not online · all hosts"
+    - button "Security Needs action 3 critical or high 3 critical or high events · whole window · list cut off"
   - region "DNS detail":
     - heading "DNS" [level=2]
     - text: /Average answer time \d+ ms Answered without an error \d+% last \d+ hours \d+ queries\/s · hourly average, last hour · 2\/2 online/

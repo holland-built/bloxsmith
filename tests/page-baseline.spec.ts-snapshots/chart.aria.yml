@@ -64,10 +64,7 @@
     - button "Add to a page"
   - region "How this chart was made":
     - heading "How this chart was made" [level=2]
-    - paragraph:
-      - text: Sent to
-      - code: /api/cubejs/v1/query
-      - text: on your Infoblox account. No AI was used.
+    - paragraph: Sent to Infoblox's reporting service on your account. No AI was used.
     - button "Download all 2 rows as CSV"
     - term: Counted
     - definition: DNS queries

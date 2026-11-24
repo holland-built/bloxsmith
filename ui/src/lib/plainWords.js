@@ -113,3 +113,33 @@ export function eventWord(kind) {
   }
   return categoryWord(s)
 }
+
+/**
+ * The noun that goes after a count: "service" after 1, "services" after
+ * anything else. Pages built their own "N things" strings and printed
+ * "1 services" (sweep, 2026-11-24), so every count label says it through here.
+ * A count that is not a number (still loading, not checked) takes the plural.
+ */
+export function noun(n, one, many = `${one}s`) {
+  return n === 1 ? one : many
+}
+
+/** A count with its noun: countOf(1, 'zone') -> "1 zone", countOf(1200, 'zone') -> "1,200 zones". */
+export function countOf(n, one, many = `${one}s`) {
+  const shown = typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : String(n ?? '—')
+  return `${shown} ${noun(n, one, many)}`
+}
+
+// The thing an incident signal is about, by name. Zone and subnet messages start with it
+// ("aws.private.: High Neg-TTL", "Windows Wireless at 80% utilization"), and a
+// lease message names its address ("Lease 10.0.0.5 (printer) expired"). The id
+// ("ipam/subnet/abc") is the last resort: it means nothing to a reader.
+export function subjectName(s) {
+  const msg = String(s.message || '')
+  if (s.entity_type === 'zone' && msg.includes(': ')) return msg.split(': ')[0]
+  if (s.entity_type === 'subnet' && / at \d+% utilization$/.test(msg)) return msg.replace(/ at \d+% utilization$/, '') || s.entity_id
+  const lease = s.entity_type === 'lease' && msg.match(/^Lease (\S+) /)
+  if (lease) return lease[1]
+  if (s.entity_type === 'posture') return 'All DNS zones'
+  return s.entity_id || '—'
+}

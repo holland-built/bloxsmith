@@ -55,13 +55,13 @@
   - text: Issues by kind
   - list "Zone issues by kind":
     - listitem:
-      - 'button /low ttl: \d+ zones\. Show them\./'
+      - 'button /low ttl: \d+ zones?\. Show them\./'
   - term: Forward
   - definition: /\d+/
   - term: Reverse
   - definition: /\d+/
   - heading "DNS Services" [level=2]
-  - text: 1 services
+  - text: 1 service
   - 'button "About: DNS Services"': "About: ⓘ"
   - 'button "Options: DNS Services"'
   - table:
@@ -133,7 +133,7 @@
         - cell "other.example."
         - cell "baseline-view"
   - heading "RPZ Policy Zones" [level=2]
-  - text: 1 zones
+  - text: 1 zone
   - 'button "About: RPZ Policy Zones"': "About: ⓘ"
   - 'button "Options: RPZ Policy Zones"'
   - table:
@@ -152,7 +152,7 @@
         - cell "local"
         - cell "Enabled"
   - heading "DTC Load-Balanced Names" [level=2]
-  - text: 1 names
+  - text: 1 name
   - 'button "About: DTC Load-Balanced Names"': "About: ⓘ"
   - 'button "Options: DTC Load-Balanced Names"'
   - table:

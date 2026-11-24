@@ -35,26 +35,30 @@
         - columnheader "Age":
           - button "Age"
     - rowgroup:
-      - row /Mark ipam\/subnet\/baseline-3 as seen Capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
-        - cell "Mark ipam/subnet/baseline-3 as seen":
-          - checkbox "Mark ipam/subnet/baseline-3 as seen"
+      - row /Mark baseline-net-c as seen Capacity baseline-net-c Critical baseline-net-c is \d+% full \d+[hmsp]+/:
+        - cell "Mark baseline-net-c as seen":
+          - checkbox "Mark baseline-net-c as seen"
         - cell "Capacity"
-        - cell "ipam/subnet/baseline-3"
+        - cell "baseline-net-c":
+          - link "baseline-net-c":
+            - /url: "#dossier?kind=network&q=baseline-net-c&id=ipam%2Fsubnet%2Fbaseline-3"
         - cell "Critical"
-        - cell /baseline-net-c is \d+% used/
+        - cell /baseline-net-c is \d+% full/
         - cell /\d+[hmsp]+/
-      - row /Mark dns\/auth_zone\/baseline-2 as seen DNS dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
-        - cell "Mark dns/auth_zone/baseline-2 as seen":
-          - checkbox "Mark dns/auth_zone/baseline-2 as seen"
+      - 'row /Mark other\.example\. as seen DNS other\.example\. Medium other\.example\.: cache time too short \d+[hmsp]+/':
+        - cell "Mark other.example. as seen":
+          - checkbox "Mark other.example. as seen"
         - cell "DNS"
-        - cell "dns/auth_zone/baseline-2"
+        - cell "other.example.":
+          - link "other.example.":
+            - /url: "#dossier?kind=zone&q=other.example.&id=dns%2Fauth_zone%2Fbaseline-2"
         - cell "Medium"
-        - cell "other.example is unsigned"
+        - 'cell "other.example.: cache time too short"'
         - cell /\d+[hmsp]+/
-  - heading "IQ Actions" [level=2]
-  - text: IQ for Threat Defense 1 open · 1 resolved
-  - 'button "About: IQ Actions"': "About: ⓘ"
-  - 'button "Options: IQ Actions"'
+  - heading "Suggested actions" [level=2]
+  - text: From Infoblox threat insights 1 open · 1 resolved
+  - 'button "About: Suggested actions"': "About: ⓘ"
+  - 'button "Options: Suggested actions"'
   - table:
     - rowgroup:
       - row "Sev Action Status":

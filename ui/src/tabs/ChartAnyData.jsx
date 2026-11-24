@@ -154,7 +154,7 @@ export function AnyHow({ any: { set, result } }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-note text-muted">
-        Sent to <code>{result.data.endpoint}</code> on your Infoblox account. No AI was used.
+        Sent to Infoblox's reporting service on your account. No AI was used.
       </p>
       <details>
         <summary className="text-note font-semibold cursor-pointer select-none">The query as sent</summary>

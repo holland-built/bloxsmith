@@ -56,15 +56,26 @@ test('an unusable timestamp is null, never a guess', () => {
 
 // --- detail ----------------------------------------------------------------
 
-test('detail drops the two keys every entry carries and sorts the rest', () => {
+test('detail drops the two keys every entry carries and says the rest in words', () => {
   assert.equal(
     detailText(REAL_ENTRY.detail),
-    'method=GET · path=/api/teardown/seed-demo/stream · reason=tenant-read-only · tenant=a1b2c3d4e5f6/-',
+    'Request: GET /api/teardown/seed-demo/stream · Reason: tenant-read-only · Account: a1b2c3d4e5f6/-',
   )
 })
 
+test('detail names known keys in words and de-underscores unknown ones', () => {
+  assert.equal(
+    detailText({ block: 'ipam/address_block/1', cidr: 24, subnet: '10.10.0.0' }),
+    'Address block: ipam/address_block/1 · Prefix length: 24 · Subnet: 10.10.0.0',
+  )
+  assert.equal(detailText({ error: 'request refused', id: 'dns/record/1' }), 'Error: request refused · Item: dns/record/1')
+  assert.equal(detailText({ from: 'v1.0.0' }), 'From version: v1.0.0')
+  assert.equal(detailText({ demo_change: true }), 'Demo change: true')
+  assert.equal(detailText({ path: '/api/x' }), 'Request: /api/x')
+})
+
 test('detail survives a nested value, a null and a non-object', () => {
-  assert.equal(detailText({ a: { b: 1 }, c: null }), 'a={"b":1} · c=')
+  assert.equal(detailText({ a: { b: 1 }, c: null }), 'A: {"b":1} · C: —')
   for (const bad of [undefined, null, 'string', 42, ['a']]) assert.equal(detailText(bad), '')
 })
 

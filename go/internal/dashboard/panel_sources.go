@@ -114,7 +114,7 @@ var panelSources = []PanelSource{
 	restPanel("security-ctem-exposure", "Security", "CTEM Exposure", srcASM, whyAPI),
 	{ID: "security-threat-feed-activity", Page: "Security", Name: "Threat Feed Activity", Kind: "cube", Source: "Infoblox's security hit records",
 		Builder: "copy", Why: "the blocked and allowed totals above the bars are worked out in the app", Picks: picksThreats},
-	restPanel("security-soc-insights", "Security", "IQ for Threat Defense", "Infoblox IQ for Threat Defense insights", whyAPI),
+	restPanel("security-soc-insights", "Security", "Threat insights", "Infoblox IQ for Threat Defense insights", whyAPI),
 	{ID: "security-asset-insights", Page: "Security", Name: "Asset Insights", Kind: "cube", Source: "Infoblox's asset insight records",
 		Builder: "no", Why: whyTotal},
 	restPanel("security-exposures", "Security", "Exposures", srcASM, whyAPI),
@@ -144,14 +144,14 @@ var panelSources = []PanelSource{
 	restPanel("incidents-categories", "Incidents", "Categories", "the app's incident checks over the Infoblox API", whyIncident),
 	restPanel("incidents-severity", "Incidents", "Severity Counts", "the app's incident checks over the Infoblox API", whyIncident),
 	restPanel("incidents-triage", "Incidents", "Triage", "the app's incident checks over the Infoblox API", whyIncident),
-	restPanel("incidents-soc-queue", "Incidents", "IQ Actions", "Infoblox IQ actions", "it is a list of actions to work through, not a chart"),
+	restPanel("incidents-soc-queue", "Incidents", "Suggested actions", "Infoblox IQ actions", "it is a list of actions to work through, not a chart"),
 	restPanel("incidents-action-volume", "Incidents", "Action Volume", "Infoblox IQ actions", "the actions are counted by day in the app, not read from activity records"),
 
 	// ---- Audit ----
 	{ID: "audit-activity-summary", Page: "Audit", Name: "Activity Summary", Kind: "local", Source: "this app's own audit log",
 		Builder: "no", Why: "it is this app's own record, not Infoblox's"},
 	{ID: "audit-log", Page: "Audit", Name: "Audit Log", Kind: "local", Source: "this app's own audit log", Builder: "no", Why: whyList},
-	restPanel("audit-csp-portal", "Audit", "CSP Portal Audit", srcAudit, whyList),
+	restPanel("audit-csp-portal", "Audit", "Infoblox Portal Audit", srcAudit, whyList),
 
 	// ---- Changes ----
 	restPanel("changes-notability", "Changes", "Worth a look", srcAudit, "how notable each change is, is worked out in the app"),

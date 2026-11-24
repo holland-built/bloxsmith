@@ -254,7 +254,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       span={2}
       panelId={panelId}
       title="Asset Inventory"
-      note="CSP discovery"
+      note="Infoblox Portal discovery"
       right={
         <div className="flex items-center gap-2 min-w-0">
           {/* Shrinks on a phone: at a fixed 220px the box ran off the left

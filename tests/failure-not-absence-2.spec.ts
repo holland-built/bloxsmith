@@ -64,7 +64,7 @@ test.describe('Security → IQ for Threat Defense panel (InsightsPanel)', () => 
     await page.route('**/api/insights*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#security');
     const card = page.locator('[data-panel-id="security-soc-insights"]');
-    await expect(card.getByText(/iq for threat defense unavailable/i)).toBeVisible();
+    await expect(card.getByText(/^threat insights unavailable$/i)).toBeVisible();
     await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
@@ -72,8 +72,8 @@ test.describe('Security → IQ for Threat Defense panel (InsightsPanel)', () => 
     await page.route('**/api/insights*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#security');
     const card = page.locator('[data-panel-id="security-soc-insights"]');
-    await expect(card.getByText(/^No IQ insights found$/i)).toBeVisible();
-    await expect(card.getByText(/iq for threat defense unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/^No threat insights found$/i)).toBeVisible();
+    await expect(card.getByText(/^threat insights unavailable$/i)).toHaveCount(0);
   });
 });
 

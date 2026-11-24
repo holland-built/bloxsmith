@@ -3,7 +3,7 @@
   - paragraph: "Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more."
   - button "Arrange panels"
   - heading "Asset Inventory" [level=2]
-  - text: CSP discovery
+  - text: Infoblox Portal discovery
   - textbox "Search assets by name, IP or MAC address":
     - /placeholder: Search by name, IP or MAC…
   - button "Search"

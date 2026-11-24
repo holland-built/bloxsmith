@@ -18,7 +18,7 @@ test.describe('Audit → CSP Portal Audit panel (CspAuditTable)', () => {
       fulfillJson(route, { rows: [], count: 0, truncated: false, status: 'error' }),
     );
     await page.goto('/#audit');
-    const card = page.locator('text=CSP Portal Audit').locator('..').locator('..');
+    const card = page.locator('text=Infoblox Portal Audit').locator('..').locator('..');
     await card.getByPlaceholder('Search user or resource…').fill('who deleted this zone');
     await card.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(card.getByText(/portal audit information is unavailable/i)).toBeVisible();
@@ -30,7 +30,7 @@ test.describe('Audit → CSP Portal Audit panel (CspAuditTable)', () => {
       fulfillJson(route, { rows: [], count: 0, truncated: false, status: 'ok' }),
     );
     await page.goto('/#audit');
-    const card = page.locator('text=CSP Portal Audit').locator('..').locator('..');
+    const card = page.locator('text=Infoblox Portal Audit').locator('..').locator('..');
     await card.getByPlaceholder('Search user or resource…').fill('nobody-matches-this-query');
     await card.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(card.getByText('no entries match', { exact: true })).toBeVisible();

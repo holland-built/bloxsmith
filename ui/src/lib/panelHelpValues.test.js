@@ -644,7 +644,7 @@ const CLAIMS = [
     // the fall-through: anything this file does not recognise, "unknown"
     // included, takes the neutral pill instead of dropping into a coloured one.
     panel: 'infra-service-health',
-    says: /A grey badge means that service was not listed because the inventory hit its row cap, so it is unknown rather than absent/,
+    says: /A grey badge means that service was not listed because Infoblox sent only part of the list, so it is unknown rather than absent/,
     file: INFRA,
     proofs: [
       { re: /return \{ background: theme\.pillNeutralBg, color: theme\.pillNeutralFg \}/, expect: 'an unrecognised status falls through to the neutral pill' },

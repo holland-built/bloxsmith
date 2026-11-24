@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
-import { bucketWord } from '../lib/plainWords.js'
+import { bucketWord, countOf } from '../lib/plainWords.js'
 import { useApi } from '../lib/api.js'
 import { dnsHosts, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED, splitPerHost } from '../lib/dnsHealth.js'
 import { sliceState } from '../lib/data.js'
@@ -136,12 +136,12 @@ export default function Infra() {
           span={2}
           panelId="infra-onprem-hosts"
           title="Host Apps"
-          note="CSP"
+          note="Infoblox Portal"
           feed={onprem}
           count
           columns={[
             { key: 'name', label: 'Name' },
-            { key: 'ophid', label: 'OPH ID', mono: true, priority: 'low' },
+            { key: 'ophid', label: 'Host ID', mono: true, priority: 'low' },
             { key: 'app_count', label: 'Apps', mono: true },
           ]}
         />
@@ -164,7 +164,7 @@ export default function Infra() {
           span={3}
           panelId="infra-dfp-services"
           title="DFP Services"
-          note={statusNote(dfp, 'CSP')}
+          note={statusNote(dfp, 'Infoblox Portal')}
           feed={dfp}
           count
           columns={[
@@ -544,7 +544,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
     : filtered.length === hosts.length
       ? (totalHosts != null && totalHosts !== hosts.length
           ? `${hosts.length.toLocaleString()} loaded of ${total.toLocaleString()} hosts`
-          : `${hosts.length.toLocaleString()} hosts`)
+          : countOf(hosts.length, 'host'))
       : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()} loaded (${total.toLocaleString()} total)`
 
   const controls = (

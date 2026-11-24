@@ -89,15 +89,39 @@ export function entryTimeMs(ts) {
  */
 const DETAIL_NOISE = new Set(['image_digest', 'instance_id'])
 
+// Each key in words, as "Reason: tenant-read-only" rather than
+// "reason=tenant-read-only" (owner, 2026-11-24: key=value is internal). A key
+// not listed here is de-underscored ("demo_change" -> "Demo change"). The
+// values stay as written: they are the record.
+const DETAIL_WORDS = {
+  block: 'Address block', category: 'Kind', cidr: 'Prefix length', domain: 'Domain', entries: 'Entries',
+  error: 'Error', from: 'From version', id: 'Item', outcome: 'Result', reason: 'Reason', route: 'Page',
+  subnet: 'Subnet', tenant: 'Account', to: 'To version',
+}
+
+function detailWord(k) {
+  if (DETAIL_WORDS[k]) return DETAIL_WORDS[k]
+  const s = k.replace(/[_-]+/g, ' ').trim()
+  return s ? s[0].toUpperCase() + s.slice(1) : k
+}
+
+function detailValue(v) {
+  if (v === null || v === undefined || v === '') return '—'
+  return typeof v === 'object' ? JSON.stringify(v) : String(v)
+}
+
 export function detailText(detail) {
   if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return ''
   return Object.keys(detail)
     .filter((k) => !DETAIL_NOISE.has(k))
     .sort()
-    .map((k) => {
-      const v = detail[k]
-      const s = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)
-      return `${k}=${s}`
+    .flatMap((k) => {
+      // method and path are one request, said together: "Request: POST /api/edit".
+      if (k === 'path' && detail.method != null) return []
+      if (k === 'method' || k === 'path') {
+        return [`Request: ${[detail.method, detail.path].filter((x) => x != null && x !== '').join(' ') || '—'}`]
+      }
+      return [`${detailWord(k)}: ${detailValue(detail[k])}`]
     })
     .join(' · ')
 }
