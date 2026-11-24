@@ -61,8 +61,10 @@ test('Threat Events by hour says its bars come from fewer rows than its legend c
   await expect(page.locator('[data-panel-id="daily-security-today"] [data-legend-note]')).toHaveText('Showing the newest 2 of 10 events.');
 });
 
-test('a subnet is labelled by its usable addresses, which Used plus Free add up to', async ({ page }) => {
+test('a subnet is labelled with the count Infoblox reports, which Used plus Free add up to', async ({ page }) => {
   await page.goto('/#network');
-  await expect(page.getByText('10.30.0.0/24 (254 usable)')).toBeVisible();
+  // The fixture reports 254 for this /24; a live tenant reports 256. Either way
+  // the label is the server's count, never one worked out from the prefix.
+  await expect(page.getByText('10.30.0.0/24 (254 addresses)')).toBeVisible();
   await expect(page.getByText('(256 addresses)')).toHaveCount(0);
 });
