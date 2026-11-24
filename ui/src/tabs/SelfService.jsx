@@ -306,7 +306,7 @@ function AllocatePanel() {
             className={inputCls}
             value={name}
             onChange={(e) => { setName(e.target.value); flow.markStale() }}
-            placeholder="host-01"
+            placeholder="e.g. host-01"
           />
         </Field>
       </div>
@@ -350,7 +350,7 @@ function AllocatePanel() {
                 className={inputCls}
                 value={mac}
                 onChange={(e) => { setMac(e.target.value); flow.markStale() }}
-                placeholder="aa:bb:cc:dd:ee:ff"
+                placeholder="e.g. aa:bb:cc:dd:ee:ff"
                 aria-invalid={mac.trim() !== '' && !macOk}
               />
             </Field>
@@ -465,7 +465,7 @@ function DnsPanel() {
           <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="host or @" />
         </Field>
         <Field label="Value">
-          <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); flow.markStale() }} placeholder="192.0.2.10" />
+          <input {...MACHINE_TEXT} className={inputCls} value={value} onChange={(e) => { setValue(e.target.value); flow.markStale() }} placeholder="e.g. 192.0.2.10" />
         </Field>
       </div>
       <details className="mb-3 text-note text-muted" open={ttl !== ''}>

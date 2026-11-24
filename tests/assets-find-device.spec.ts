@@ -19,7 +19,7 @@ test('an IP in the search box finds the device and says which sources saw it', a
   await page.goto('/#assets');
 
   const box = page.getByRole('textbox', { name: 'Search assets by name, IP or MAC address' });
-  await expect(box).toHaveAttribute('placeholder', 'Search by name, IP or MAC…');
+  await expect(box).toHaveAttribute('placeholder', 'Name, IP or MAC');
   await box.fill('172.17.0.4');
   await box.press('Enter');
 

@@ -539,7 +539,7 @@ export default function SiteLists() {
               {source === 'paste' && (
                 <Field label="One site per line, or separated by commas">
                   <textarea {...MACHINE_TEXT} className={FIELD_CLS} rows={6} value={pasted}
-                    onChange={(e) => { setPasted(e.target.value); flow.markStale() }} placeholder={'example.com\nexample.org'} />
+                    onChange={(e) => { setPasted(e.target.value); flow.markStale() }} placeholder={'e.g. example.com\nexample.org'} />
                 </Field>
               )}
               {loadErr && <p role="alert" className="text-note" style={{ color: COLORS.crit }}>{loadErr}</p>}
@@ -557,7 +557,7 @@ export default function SiteLists() {
           <div className="flex flex-col gap-2">
             <Field label="Sites never to add, one per line (kept for this tenant)">
               <textarea {...MACHINE_TEXT} className={FIELD_CLS} rows={3} value={neverText ?? savedNever.join('\n')}
-                onChange={(e) => { setNeverText(e.target.value); setNeverMsg(null) }} placeholder="example.com" />
+                onChange={(e) => { setNeverText(e.target.value); setNeverMsg(null) }} placeholder="e.g. example.com" />
             </Field>
             <div className="flex items-center gap-3">
               <button type="button" onClick={saveNever} disabled={neverBusy || neverText === null}
@@ -582,7 +582,7 @@ export default function SiteLists() {
             <div className="pl-6">
               {listMode === 'new' ? (
                 <Field label="New list name">
-                  <input {...MACHINE_TEXT} className={FIELD_CLS} value={listName} onChange={(e) => edit(setListName)(e.target.value)} placeholder="top-sites" />
+                  <input {...MACHINE_TEXT} className={FIELD_CLS} value={listName} onChange={(e) => edit(setListName)(e.target.value)} placeholder="e.g. top-sites" />
                 </Field>
               ) : (
                 <Field label="List" group>

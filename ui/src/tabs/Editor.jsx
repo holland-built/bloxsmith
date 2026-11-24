@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ColumnHeading, DevicesInput, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { PrefixInput } from '../components/PrefixInput.jsx'
-import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { COLORS, deletedMsg, Empty, FieldError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
@@ -15,14 +15,15 @@ import { failureText } from '../lib/api.js'
 import { writeFailureText } from '../lib/writeFailure.js'
 
 const inputCls = `${FIELD_CLS} w-full`
+const MISSING = 'Fill in this field.'
 
 const FIELD_SPECS = {
   dns_zone: {
     label: 'DNS Zone', endpoint: '/api/edit/dns_zone', fields: [
-      { key: 'fqdn', label: 'Zone name', kind: 'text', placeholder: 'zone.example.com.', required: true },
+      { key: 'fqdn', label: 'Zone name', kind: 'text', placeholder: 'e.g. zone.example.com.', required: true },
       { key: 'view', label: 'DNS view ID', kind: 'text', placeholder: 'view id', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
-      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text', placeholder: 'env=prod,team=noc' },
+      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text', placeholder: 'e.g. env=prod,team=noc' },
     ],
   },
   subnet: {
@@ -36,25 +37,25 @@ const FIELD_SPECS = {
   },
   address_block: {
     label: 'Address Block', endpoint: '/api/edit/address_block', fields: [
-      { key: 'address', label: 'Address', kind: 'text', placeholder: '10.20.0.0', required: true },
+      { key: 'address', label: 'Address', kind: 'text', placeholder: 'e.g. 10.20.0.0', required: true },
       { key: 'cidr', label: 'How many devices need an address?', kind: 'devices', required: true },
-      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space', required: true },
+      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
     ],
   },
   dhcp_range: {
     label: 'DHCP Range', endpoint: '/api/edit/dhcp_range', fields: [
-      { key: 'start', label: 'Start address', kind: 'text', placeholder: '10.20.0.100', required: true },
-      { key: 'end', label: 'End address', kind: 'text', placeholder: '10.20.0.200', required: true },
-      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space', required: true },
+      { key: 'start', label: 'Start address', kind: 'text', placeholder: 'e.g. 10.20.0.100', required: true },
+      { key: 'end', label: 'End address', kind: 'text', placeholder: 'e.g. 10.20.0.200', required: true },
+      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space', required: true },
       { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
     ],
   },
   host: {
     label: 'Host', endpoint: '/api/edit/host', fields: [
-      { key: 'name', label: 'Name', kind: 'text', placeholder: 'host.example.com', required: true },
-      { key: 'addresses', label: 'Addresses (comma-separated)', kind: 'text', placeholder: '10.0.0.5, 10.0.0.6', required: true },
+      { key: 'name', label: 'Name', kind: 'text', placeholder: 'e.g. host.example.com', required: true },
+      { key: 'addresses', label: 'Addresses (comma-separated)', kind: 'text', placeholder: 'e.g. 10.0.0.5, 10.0.0.6', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
     ],
   },
@@ -62,10 +63,10 @@ const FIELD_SPECS = {
     label: 'Tags (block re-tag)', endpoint: '/api/retag/block', fields: [
       { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
       { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
-      { key: 'address', label: 'Block address', kind: 'text', placeholder: '10.20.0.0' },
+      { key: 'address', label: 'Block address', kind: 'text', placeholder: 'e.g. 10.20.0.0' },
       { key: 'cidr', label: 'Block size: the number after the slash', kind: 'prefix' },
-      { key: 'status', label: 'Status', kind: 'text', placeholder: 'available' },
-      { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'my-ip-space' },
+      { key: 'status', label: 'Status', kind: 'text', placeholder: 'e.g. available' },
+      { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space' },
     ],
   },
 }
@@ -239,6 +240,14 @@ export default function Editor() {
   const [stale, setStale] = useState(false)
   const [preview, setPreview] = useState(null)
   const [result, setResult] = useState(null) // { ok, msg }
+  // The required field Preview or Create found empty: marked, explained under
+  // it, and given the cursor, so the person is not sent hunting for it.
+  const [missingKey, setMissingKey] = useState(null)
+  const formRef = useRef(null)
+  const [missingTick, setMissingTick] = useState(0)
+  useEffect(() => {
+    if (missingKey) formRef.current?.querySelector(`[data-field-key="${missingKey}"] input`)?.focus()
+  }, [missingKey, missingTick])
 
   // Re-seed the form whenever the type changes so deep-link params prefill it.
   useEffect(() => {
@@ -250,6 +259,7 @@ export default function Editor() {
     setStatus('idle')
     setStale(false)
     setResult(null)
+    setMissingKey(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type])
 
@@ -289,6 +299,7 @@ export default function Editor() {
 
   function setField(k, v) {
     setFields((prev) => ({ ...prev, [k]: v }))
+    if (k === missingKey) setMissingKey(null)
     markStale()
   }
 
@@ -324,10 +335,13 @@ export default function Editor() {
     if (!isUpdate) {
       const missing = spec.fields.find((f) => f.required && !String(fields[f.key] || '').trim())
       if (missing) {
-        setResult({ ok: false, msg: `Missing required field: ${missing.label}` })
+        setResult(null)
+        setMissingKey(missing.key)
+        setMissingTick((n) => n + 1)
         return
       }
     }
+    setMissingKey(null)
     const body = buildBody()
     const sent = fields
     body.dry = dry
@@ -454,7 +468,7 @@ export default function Editor() {
       {/* Inputs on the left, the preview and the button that applies it on the
           right (owner, 2026-11-11). Below lg they stack, form first. */}
       {spec ? <FormColumns form={
-        <section aria-labelledby="editor-form-h" data-editor-form="">
+        <section aria-labelledby="editor-form-h" data-editor-form="" ref={formRef}>
         <ColumnHeading id="editor-form-h">{`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}</ColumnHeading>
         <div data-form-cols="" className="flex flex-col gap-3">
           {EDIT_DELETE_TYPES.includes(type) && (
@@ -491,20 +505,20 @@ export default function Editor() {
 
           {type === 'dhcp_range' && rangeNet && <p className="text-note text-muted">For network {rangeNet}.</p>}
           {spec.fields.map((f) => (f.kind === 'devices' || f.kind === 'prefix' ? (
-            <div key={`${type}-${f.key}`} data-field="">
+            <div key={`${type}-${f.key}`} data-field="" data-field-key={f.key}>
               {/* A device count is only for making a new IPv4 network. A size
                   that names an existing one, or an IPv6 size, is typed exactly. */}
               {f.kind === 'devices' && !isUpdate && !isV6
                 ? <DevicesInput label={f.label} required={f.required} prefix={fields[f.key] ?? ''}
-                    onPrefix={(p) => setField(f.key, p)} />
+                    onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''} />
                 : <PrefixInput label={f.kind === 'prefix' ? f.label : 'Size: the number after the slash'} required={f.required}
                     prefix={fields[f.key] ?? ''} family={isV6 ? 6 : 4}
-                    onPrefix={(p) => setField(f.key, p)}
+                    onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''}
                     disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
                     title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />}
             </div>
           ) : (
-            <label key={f.key} data-field="" className="text-note text-muted flex flex-col gap-1">
+            <label key={f.key} data-field="" data-field-key={f.key} className="text-note text-muted flex flex-col gap-1">
               <span>{f.label}{f.required ? ' *' : ''}</span>
               <input {...(f.key === 'comment' ? null : MACHINE_TEXT)}
                 className={`${inputCls} disabled:opacity-60`}
@@ -514,7 +528,10 @@ export default function Editor() {
                 value={fields[f.key] || ''}
                 placeholder={f.placeholder || ''}
                 onChange={(e) => setField(f.key, e.target.value)}
+                aria-invalid={missingKey === f.key || undefined}
+                aria-describedby={missingKey === f.key ? `ed-missing-${f.key}` : undefined}
               />
+              {missingKey === f.key && <FieldError id={`ed-missing-${f.key}`}>{MISSING}</FieldError>}
               {f.key === 'space' && rangeSpaceMissed && (
                 <span role="status" style={{ color: COLORS.warn }}>
                   The IP space of {rangeNet || 'this network'} could not be filled in. Type its ID, which starts ipam/ip_space/.

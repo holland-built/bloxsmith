@@ -454,12 +454,13 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
               )}
               {add.err && <div role="alert" className="mt-2 text-note text-crit">{add.err}</div>}
               <div className="flex gap-2 mt-3">
-                <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
+                <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key} aria-describedby={add.key ? undefined : 'tm-add-why'}>
                   {add.busy ? 'Adding…' : 'Add'}
                 </button>
                 <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
                 <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50" disabled={add.busy} onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
               </div>
+              {!add.key && <p id="tm-add-why" className="mt-2 text-note text-muted">Paste an API key to add the connection.</p>}
             </div>
               ) : edit ? (
             <div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
+import { FeedUnavailable, FieldError, FIELD_CLS } from './ui.jsx'
 import { API_KEY_BOX } from '../lib/secretBox.js'
 import { vpost } from '../lib/authFetch.js'
 import { shareResult } from '../lib/api.js'
@@ -71,8 +71,13 @@ function Unlock({ onDone }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetErr, setResetErr] = useState('')
 
+  const passRef = useRef(null)
   const go = async () => {
-    if (!p) return
+    if (!p) {
+      setErr('Enter your passphrase.')
+      passRef.current?.focus()
+      return
+    }
     setErr('')
     setBusy(true)
     const { ok, data } = await vpost('/api/vault/unlock', { passphrase: p })
@@ -89,16 +94,19 @@ function Unlock({ onDone }) {
       <label className="block text-note text-dim mb-1" htmlFor="vu-pass">Passphrase</label>
       <input
         id="vu-pass"
+        ref={passRef}
         className={inCls}
         type="password"
         autoComplete="current-password"
         value={p}
-        onChange={(e) => setP(e.target.value)}
+        onChange={(e) => { setP(e.target.value); if (err === 'Enter your passphrase.') setErr('') }}
         onKeyDown={(e) => e.key === 'Enter' && go()}
+        aria-invalid={err ? true : undefined}
+        aria-describedby={err ? 'vu-err' : undefined}
         autoFocus
       />
-      {err && <div role="alert" className="mt-2 text-note text-crit">{err}</div>}
-      <button className={btnCls} onClick={go} disabled={busy || !p}>
+      {err && <div className="mt-2"><FieldError id="vu-err" alert>{err}</FieldError></div>}
+      <button className={btnCls} onClick={go} disabled={busy}>
         {busy ? 'Unlocking…' : 'Unlock'}
       </button>
       <div className="text-center mt-3.5">

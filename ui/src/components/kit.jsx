@@ -4,8 +4,8 @@
 // Colours come only from tokens in index.css, so both themes and the contrast
 // tests cover them. Red means critical, amber means warning and green means
 // healthy, the same meaning the charts already use.
-import { useEffect, useRef, useState } from 'react'
-import { FIELD_CLS, FOCUS_RING } from './ui.jsx'
+import { useEffect, useId, useRef, useState } from 'react'
+import { FieldError, FIELD_CLS, FOCUS_RING } from './ui.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { prefixForDevices, sizeLine, usableCount } from '../lib/sizes.js'
@@ -197,7 +197,8 @@ export function ColumnHeading({ id, children }) {
 // A count too small for the smallest size offered gets that smallest size; a
 // count too big for the largest says so instead of picking a size.
 // held: addresses a cloud keeps in every network, counted on top of the devices.
-export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, held = 0, label = 'How many devices need an address?', required = false, disabled, title }) {
+export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, held = 0, label = 'How many devices need an address?', required = false, disabled, title, error = '' }) {
+  const errId = useId()
   const [typed, setTyped] = useState(null)
   // The size this box last handed the form. When the form empties the size
   // itself (a reset), what was typed goes too, so the box never shows a count
@@ -250,6 +251,7 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, 
         <span>{label}{required ? ' *' : ''}</span>
         <input {...MACHINE_TEXT} type="number" min="1" step="1" inputMode="numeric" className={`${FIELD_CLS} w-full disabled:opacity-60`}
           value={shown} disabled={disabled} title={title} data-devices-input=""
+          aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
           onChange={(e) => {
             const v = e.target.value
             setTyped(v)
@@ -259,6 +261,7 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, 
           }} />
       </label>
       {note && <p data-size-words="" aria-live="polite" className={`text-note ${tooMany || tooBig ? 'text-warn' : 'text-muted'}`}>{note}</p>}
+      {error && <FieldError id={errId}>{error}</FieldError>}
     </div>
   )
 }

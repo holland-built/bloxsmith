@@ -65,7 +65,16 @@ export const COLORS = {
 // FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent ${FOCUS_RING}`
+// A box marked aria-invalid gets a red outline, so the mark a screen reader
+// hears and the one a person sees are the same mark.
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit ${FOCUS_RING}`
+
+// The line under a box that says what is wrong with it. The box points at it
+// with aria-describedby={id} and aria-invalid, so the reason is read out when
+// the cursor lands in the box. One place, so every form says it the same way.
+export function FieldError({ id, children, alert = false }) {
+  return <p id={id} role={alert ? 'alert' : undefined} className="text-note text-crit">{children}</p>
+}
 
 export function useChartTheme() {
   const colors = useThemeColors()

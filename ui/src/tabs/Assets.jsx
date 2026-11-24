@@ -260,7 +260,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
           {/* Shrinks on a phone: at a fixed 220px the box ran off the left
               edge of the card. */}
           <input {...MACHINE_TEXT}
-            placeholder="Search by name, IP or MAC…"
+            placeholder="Name, IP or MAC"
             aria-label="Search assets by name, IP or MAC address"
             value={input}
             onChange={(e) => onInput(e.target.value)}

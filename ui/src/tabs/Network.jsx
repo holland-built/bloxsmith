@@ -576,7 +576,7 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
           <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search address, hostname, MAC"
-            placeholder="Search address, hostname, MAC…"
+            placeholder="Address, name or MAC"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className={`${FIELD_CLS} w-[220px] max-w-full`}
