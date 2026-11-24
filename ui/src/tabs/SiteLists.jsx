@@ -280,7 +280,7 @@ function DailyProposals({ setup, why }) {
       )}
       {waiting.length > 0
         ? <ul>{waiting.map((p) => <Proposal key={`${p.list_id}-${p.proposal.at}`} p={p} />)}</ul>
-        : ws.length > 0 && !props.loading && <p className="text-note text-muted">No changes waiting.</p>}
+        : ws.length > 0 && !props.loading && !props.error && <p className="text-note text-muted">No changes waiting.</p>}
       <FetchError error={watches.error} what="watched lists" />
       <FetchError error={props.error} what="changes waiting for review" />
     </section>

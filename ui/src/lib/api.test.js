@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import React from 'react'
 import {
+  serverReason,
   COLD_TIMEOUT_MS,
   WARM_TIMEOUT_MS,
   abortAfter,
@@ -1716,4 +1717,12 @@ test('a failed load with no readable reason falls back to the plain sentence', a
   await settle()
   assert.equal(c.current.error.message, 'The server had a problem. Try again in a moment.')
   c.unmount()
+})
+
+test('a server message keeps its sentence but never a wrapped local path', () => {
+  assert.equal(
+    serverReason({ error: 'could not read the list of changes: open /Users/someone/state/runs.json: permission denied' }),
+    'could not read the list of changes',
+  )
+  assert.equal(serverReason({ upstream: 'Access denied' }), 'Infoblox said: Access denied')
 })

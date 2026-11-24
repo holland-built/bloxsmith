@@ -213,7 +213,10 @@ const SERVER_PROBLEM = 'The server had a problem. Try again in a moment.'
 export function serverReason(body) {
   const upstream = typeof body?.upstream === 'string' ? body.upstream.trim() : ''
   if (upstream) return `Infoblox said: ${upstream}`
-  return typeof body?.error === 'string' ? body.error.trim() : ''
+  // Bloxsmith's own messages wrap Go errors ("could not read the list of
+  // changes: open /Users/…/runs.json: …"). Keep the sentence, drop the wrapped
+  // part, which can carry a local file path.
+  return typeof body?.error === 'string' ? body.error.split(': ')[0].trim() : ''
 }
 
 /**
