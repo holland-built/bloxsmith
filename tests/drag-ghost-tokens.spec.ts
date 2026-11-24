@@ -247,13 +247,13 @@ test('moving the tokens moves the ghost with them', async ({ page }) => {
 });
 
 test('on a tab that scopes the corner token, the ghost takes the panel\'s corner', async ({ page }) => {
-  // The Risk tabs set --radius-surface: 0 on [data-layout="record"]. The ghost
-  // is appended to body, outside that scope, so reading the token there would
-  // give a rounded ghost for a square panel.
+  // The Risk tabs set their own --radius-surface on [data-layout="record"]
+  // until 2026-11-24 (0px, square); since the owner's pick of that day they
+  // share the app's corner. The ghost is appended to body, outside any such
+  // scope, so it must take the corner from the panel, not the token.
   await gotoTab(page, 'audit', 3);
   const id = 'audit-log';
   const panelCorner = await page.locator(`[data-panel-id="${id}"]`).evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
-  expect(panelCorner, 'the record layout did not square the panel').toBe('0px');
   let got: Awaited<ReturnType<typeof ghostStyle>> = null;
   try {
     await beginPanelDrag(page, id);
