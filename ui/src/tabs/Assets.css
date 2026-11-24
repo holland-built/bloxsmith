@@ -38,7 +38,7 @@
 .as-row.gap .as-name { color: var(--as-ink); font-weight: 600 }
 .as-row.gap .as-bar i, .as-row.gap:hover .as-bar i { background: var(--as-warn) }
 
-.as-more { all: unset; box-sizing: border-box; cursor: pointer; margin-top: 4px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--as-accent) }
+.as-more { all: unset; box-sizing: border-box; cursor: pointer; margin-top: 4px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--color-link) }
 .as-more:hover { text-decoration: underline }
 .as-more:focus-visible { outline: 2px solid var(--as-accent) }
 
