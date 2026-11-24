@@ -59,9 +59,8 @@ test('each service row shows its state from the health feed, and a partial servi
   await expect(measure(page, 'DHCP').locator('.ov-verdict')).toHaveText('Review', { timeout: 20_000 });
   await expect(measure(page, 'DHCP')).toContainText('1 stopped · 1/2 up');
   await expect(page.locator('[data-coverage]')).toContainText('services: partial list (500-row limit)');
-  // An incident no service claims is still shown, and leads to Incidents.
-  await expect(row(page, 'Other')).toContainText('subnets close to full');
-  await expect(row(page, 'Other').getByRole('link', { name: 'Other', exact: true })).toHaveAttribute('href', '#incidents');
+  // An incident about subnets is on the IPAM row, beside the IPAM tile.
+  await expect(row(page, 'IPAM')).toContainText('subnets close to full');
 });
 
 test('below the board, only the DNS chart and licences remain as panels', async ({ page }) => {

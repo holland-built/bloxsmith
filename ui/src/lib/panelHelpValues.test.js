@@ -800,7 +800,7 @@ const CLAIMS = [
     panel: 'security-lookalike-domains',
     says: /A red "yes" means it was judged suspicious/,
     file: SECURITY,
-    proofs: [{ re: /color: r\.suspicious \? COLORS\.crit : COLORS\.other/, expect: 'suspicious rows are COLORS.crit (red), the rest COLORS.other (grey)' }],
+    proofs: [{ re: /className=\{r\.suspicious \? undefined : 'text-muted'\} style=\{r\.suspicious \? \{ color: COLORS\.crit \} : undefined\}/, expect: 'suspicious rows are COLORS.crit (red), the rest the muted text colour (grey)' }],
   },
   {
     panel: 'changes-changed-objects',

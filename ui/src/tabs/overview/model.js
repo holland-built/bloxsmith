@@ -93,10 +93,31 @@ function healthProblem(b) {
   return { key: `svc-${b.name}`, sev: st, title, sub: b.state.meta || '', href: `#infra?service=${encodeURIComponent(b.name)}&status=down`, ask: `Which ${b.name} services are not running?`, seen: null, health: true, partial: b.state.availability === 'partial' }
 }
 
+/**
+ * Subnets 90% full or more with no incident raised for them yet. The IPAM tile
+ * reads Review on that count alone (Overview.jsx verdict), so it is an open
+ * problem too, or the tile would say Review over an empty list and row.
+ */
+function fullProblem(b) {
+  if (b.name !== 'IPAM' || !(b.n > 0) || b.issues.some((r) => r.sev === 'crit' || r.sev === 'warn')) return null
+  const title = `${b.n.toLocaleString()} ${b.n === 1 ? 'subnet is' : 'subnets are'} 90% full or more`
+  return { key: 'subnet-full', sev: 'warn', title, sub: '', href: b.href, ask: 'Which subnets are nearly full?', seen: null, health: true }
+}
+
 /** Everything open on one service: its failing health check, then its incidents. */
 export function openProblems(b) {
-  const health = healthProblem(b)
-  return health ? [health, ...b.issues] : b.issues
+  const extra = [healthProblem(b), fullProblem(b)].filter(Boolean)
+  return extra.length ? [...extra, ...b.issues] : b.issues
+}
+
+/**
+ * What the attention list says when it is empty. "No items" needs every
+ * service checked; when none could be checked at all, the list proves nothing.
+ */
+export function emptyListWords(services, verdict) {
+  if (verdict.tone === 'ok') return 'No items require attention.'
+  const none = services.length > 0 && services.every((s) => s.v.word === 'Not checked' || s.v.word === 'Unavailable')
+  return none ? 'No services could be checked, so issues may be missing from this list.' : 'No issues found so far.'
 }
 
 /**
@@ -125,6 +146,11 @@ export function rankProblems(board, nowS) {
   return all
     .map((r) => ({ ...r, action: ACTION(r.key), isNew: provable && typeof r.seen === 'number' && nowS - r.seen < DAY_S }))
     .sort((a, b) => SEV_RANK[a.sev] - SEV_RANK[b.sev] || KIND_RANK(a.key) - KIND_RANK(b.key))
+}
+
+/** "vs 2h ago": how far back a DNS change is measured, from dnsTrend's hours. */
+export function vsWords(hours) {
+  return Number.isFinite(hours) && hours > 0 ? `vs ${hours}h ago` : 'vs first hour'
 }
 
 /** DNS traffic now against the oldest hour in the feed, with the real gap. */

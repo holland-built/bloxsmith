@@ -556,7 +556,7 @@ function LookalikeTable({ panelId, lookalikes }) {
       keep: true,
       sortable: true,
       render: (_v, r) => (
-        <span style={{ color: r.suspicious ? COLORS.crit : COLORS.other }}>{r.suspicious ? 'yes' : 'no'}</span>
+        <span className={r.suspicious ? undefined : 'text-muted'} style={r.suspicious ? { color: COLORS.crit } : undefined}>{r.suspicious ? 'yes' : 'no'}</span>
       ),
     },
   ]

@@ -29,8 +29,8 @@
         - 'link "Open: 2 subnets close to full"':
           - /url: "#incidents"
           - text: ""
-  - region "Since yesterday":
-    - heading "Since yesterday" [level=2]
+  - region "Recent changes":
+    - heading "Recent changes" [level=2]
     - list:
       - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
       - listitem: Changes (last 6 h only) 5 changes, 0 by users, 1 failed
@@ -84,11 +84,17 @@
                     - /url: "#ai?q=Which%20DHCP%20services%20are%20not%20running%3F"
                     - text: Ask AI
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
-          - row /IPAM None open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/:
+          - 'row /IPAM 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
             - rowheader "IPAM":
               - link "IPAM":
                 - /url: "#network?minUtil=90&links=1"
-            - cell "None open"
+            - 'cell "2 subnets close to full Open: 2 subnets close to full"':
+              - list:
+                - listitem:
+                  - text: 2 subnets close to full
+                  - 'link "Open: 2 subnets close to full"':
+                    - /url: "#incidents"
+                    - text: ""
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
           - 'row /Hosts 1 of 3 hosts is not online Open: 1 of 3 hosts is not online Ask the AI: Which hosts are not online\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/':
             - rowheader "Hosts":
@@ -120,18 +126,6 @@
                     - /url: "#ai?q=Which%20domains%20are%20on%20threat%20feeds%3F"
                     - text: Ask AI
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/
-          - 'row /Other 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
-            - rowheader "Other":
-              - link "Other":
-                - /url: "#incidents"
-            - 'cell "2 subnets close to full Open: 2 subnets close to full"':
-              - list:
-                - listitem:
-                  - text: 2 subnets close to full
-                  - 'link "Open: 2 subnets close to full"':
-                    - /url: "#incidents"
-                    - text: ""
-            - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
   - heading "Charts" [level=2]
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:

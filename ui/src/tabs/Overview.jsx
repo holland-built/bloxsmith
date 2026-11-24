@@ -9,7 +9,7 @@ import { statusBucket } from '../lib/statusBucket.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import Tip from '../components/Tip.jsx'
 import Briefing from './overview/Briefing.jsx'
-import { openProblems } from './overview/model.js'
+import { dnsTrend, openProblems, vsWords } from './overview/model.js'
 import './Overview.css'
 import { formatDay, formatTime } from '../lib/dates.js'
 
@@ -73,10 +73,11 @@ const seenDay = (t) => new Date(t * 1000).toLocaleDateString([], { weekday: 'sho
 const TONE_WORD = { crit: 'Critical', warn: 'Warning', note: 'Note', ok: 'Healthy', neutral: 'Unknown' }
 
 // Which board row an issue from lib/inboxRows.js belongs to, by key.
-// Anything that matches none of them goes to "Other", so a new kind of
-// incident is shown somewhere instead of silently dropped.
+// An incident about subnets goes to IPAM whatever its key, so the IPAM tile
+// and row agree. Anything that matches none of them goes to "Other", so a new
+// kind of incident is shown somewhere instead of silently dropped.
 const ROW_OF = [['dns', 'DNS'], ['dhcp', 'DHCP'], ['subnet', 'IPAM'], ['hosts', 'Hosts'], ['security', 'Security']]
-const rowOf = (key) => (ROW_OF.find(([p]) => String(key).startsWith(p)) ?? [null, 'Other'])[1]
+const rowOf = (r) => (r.entity === 'subnet' ? 'IPAM' : (ROW_OF.find(([p]) => String(r.key).startsWith(p)) ?? [null, 'Other'])[1])
 
 export default function Overview() {
   const savedCharts = useSavedChartPanels('overview')
@@ -164,7 +165,7 @@ function useBoard(dns) {
   const notFull = (s) => !!s && !s.loading && !s.failed && s.availability !== 'ok'
   const hostsPartial = sliceOk('hosts') && typeof totals.hosts === 'number' && hosts.length < totals.hosts
   const hostsShort = hostsPartial || (sliceOk('hosts') && typeof totals.hosts !== 'number')
-  const issuesFor = (name) => issues.filter((r) => rowOf(r.key) === name)
+  const issuesFor = (name) => issues.filter((r) => rowOf(r) === name)
   const board = [
     { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps,
       measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: 'hourly average, last hour' },
@@ -258,12 +259,12 @@ function verdict(b, checked) {
 // tip. Built from the board rows, so a tile and its row never disagree.
 function tiles(board, dns) {
   const by = Object.fromEntries(board.board.map((b) => [b.name, b]))
-  const rows = board.dnsOk ? dns.data?.rows ?? [] : []
-  const first = rows.length > 1 ? Number(rows[0].avg_value) : null
+  // The same comparison the briefing and the chart make, with its real gap.
+  const trend = board.dnsOk ? dnsTrend(dns) : {}
   const up = (b) => upOf(b?.state?.meta)
   const outOf = (b) => (up(b) ? `${up(b).up} of ${up(b).total} up` : null)
   const t = [
-    { name: 'DNS', value: fmt(by.DNS?.n, 1), unit: 'queries/s', right: outOf(by.DNS), was: first },
+    { name: 'DNS', value: fmt(by.DNS?.n, 1), unit: 'queries/s', right: outOf(by.DNS), was: trend.was ?? null, hours: trend.hours },
     { name: 'DHCP', value: fmt(by.DHCP?.n), unit: 'active leases', right: outOf(by.DHCP) },
     { name: 'IPAM', value: fmt(by.IPAM?.n), unit: 'subnets ≥90%', right: typeof by.IPAM?.of === 'number' ? `of ${fmt(by.IPAM.of)}` : null, fill: by.IPAM?.n / by.IPAM?.of },
     { name: 'Hosts', value: fmt(by.Hosts?.n), unit: 'not online', right: typeof by.Hosts?.of === 'number' ? `of ${fmt(by.Hosts.of)}` : null, fill: by.Hosts?.n / by.Hosts?.of },
@@ -279,10 +280,10 @@ function tiles(board, dns) {
 }
 
 // A volume change is neither good nor bad, so it stays grey.
-function Change({ was, now }) {
+function Change({ was, now, hours }) {
   if (!was || typeof now !== 'number') return null
   const d = Math.round(((now - was) / was) * 100)
-  return <span className="ov-delta">{d === 0 ? '±0%' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%`} <span className="ov-muted">vs 24h ago</span></span>
+  return <span className="ov-delta">{d === 0 ? '±0%' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%`} <span className="ov-muted">{vsWords(hours)}</span></span>
 }
 
 // Ticks filled to a share. Good-when-full bars (servers up) go green and turn
@@ -314,7 +315,7 @@ function Tiles({ board, dns, health }) {
             <span className="ov-kpi-in">
               <span className="ov-kpi-top"><span>{t.name}</span><span className={`ov-verdict ${t.v.sev}`}>{t.v.word}</span></span>
               <span className="ov-num">{t.value} <small>{t.unit}</small></span>
-              {t.was != null ? <Change was={t.was} now={t.b?.n} /> : <span className="ov-muted ov-small">{t.right ?? ' '}</span>}
+              {t.was != null ? <Change was={t.was} now={t.b?.n} hours={t.hours} /> : <span className="ov-muted ov-small">{t.right ?? ' '}</span>}
             </span>
             {t.tip && <span id={`ov-tip-${t.name}`} className="sr-only">{t.tip}</span>}
           </button>
@@ -641,9 +642,8 @@ function DnsHero({ dns, health, panelId }) {
   const delta = first ? ((current - first) / first) * 100 : null
   const flat = delta != null && Math.abs(delta) < 0.05
   // Say how far back the first point is, read from the rows themselves, not
-  // "first hour". Grey either way: more DNS traffic is not good or bad news.
-  const spanH = rows.length > 1 ? Math.round((new Date(rows.at(-1).hour) - new Date(rows[0].hour)) / 3600000) : null
-  const vs = Number.isFinite(spanH) && spanH > 0 ? `vs ${spanH}h ago` : 'vs first hour'
+  // "first hour". Muted either way: more DNS traffic is not good or bad news.
+  const vs = vsWords(dnsTrend(dns).hours)
 
   return (
     <Card
@@ -668,7 +668,7 @@ function DnsHero({ dns, health, panelId }) {
           <div className="flex items-center gap-4 my-2">
             <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {delta != null && (
-              <span className="text-note" style={{ color: COLORS.other }}>
+              <span className="text-note text-muted">
                 {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} {vs}
               </span>
             )}

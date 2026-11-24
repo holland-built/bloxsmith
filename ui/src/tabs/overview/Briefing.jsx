@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../../lib/api.js'
 import { sinceIso } from '../../lib/changes.js'
 import Tip from '../../components/Tip.jsx'
-import { changeSummary, dnsTrend, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
+import { changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
 import './Briefing.css'
 
 // The top of Overview, picked by the owner on 2026-11-21: is the network OK,
-// what changed since yesterday, what needs a look, what is fine. The tiles,
+// what changed recently, what needs a look, what is fine. The tiles,
 // Services board and arrangeable charts stay below it in Overview.jsx.
 
 const SEV_WORD = { crit: 'Critical', warn: 'Warning', note: 'Note', ok: 'Healthy', none: 'Not checked' }
@@ -108,10 +108,10 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
                   </li>
                 ))}
               </ol>
-            ) : <p className="br-empty">{verdict.tone === 'ok' ? 'No items require attention.' : 'No issues found so far.'}</p>}
+            ) : <p className="br-empty" data-empty-list="">{emptyListWords(services, verdict)}</p>}
           </section>
           <section aria-labelledby="br-since">
-            <h2 id="br-since">Since yesterday</h2>
+            <h2 id="br-since">Recent changes</h2>
             <ul className="br-facts">
               <Fact label="DNS traffic">{trendWords(trend)}</Fact>
               <Fact label={changes.state === 'ok' ? `Changes (${changes.window.toLowerCase()})` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
