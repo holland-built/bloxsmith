@@ -44,3 +44,30 @@ for (const [hash, w, h] of [
     expect(await buttonsOffTitleLine(page)).toEqual([]);
   });
 }
+
+// On desktop the buttons stay centred on the title line, as before fix 3: a
+// search box on the right makes the row taller, and buttons pinned to its top
+// edge sat about 5px above the title.
+for (const hash of ['assets', 'network', 'infra'] as const) {
+  test(`#${hash} at 1440px: About and menu buttons are centred on the title line`, async ({ page }) => {
+    await installBaselineWorld(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/#${hash}`);
+    await expect(page.locator('[data-panel-id] h2').first()).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const off = await page.evaluate(() => {
+      const bad: string[] = [];
+      for (const card of Array.from(document.querySelectorAll('[data-panel-id]'))) {
+        const title = card.querySelector('h2');
+        const menu = card.querySelector('[data-panel-menu-toggle]');
+        if (!title || !menu || title.closest('[data-panel-id]') !== card) continue;
+        const t = title.getBoundingClientRect();
+        const b = menu.getBoundingClientRect();
+        if (!b.width) continue;
+        if (Math.abs((t.top + t.bottom) / 2 - (b.top + b.bottom) / 2) > 2) bad.push(card.getAttribute('data-panel-id') || '?');
+      }
+      return bad;
+    });
+    expect(off).toEqual([]);
+  });
+}
