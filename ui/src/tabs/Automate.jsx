@@ -42,10 +42,10 @@ const SIZE_MIN = 24
 const SIZE_MAX = 29
 
 const DNS_TYPES = [
-  { value: 'A', label: 'A: points at an IPv4 address', hint: '10.1.2.3' },
-  { value: 'AAAA', label: 'AAAA: points at an IPv6 address', hint: '2001:db8::10' },
-  { value: 'CNAME', label: 'CNAME: points at another name', hint: 'web.example.com' },
-  { value: 'TXT', label: 'TXT: holds a line of text', hint: 'v=spf1 -all' },
+  { value: 'A', label: 'A: points at an IPv4 address', hint: 'e.g. 10.1.2.3' },
+  { value: 'AAAA', label: 'AAAA: points at an IPv6 address', hint: 'e.g. 2001:db8::10' },
+  { value: 'CNAME', label: 'CNAME: points at another name', hint: 'e.g. web.example.com' },
+  { value: 'TXT', label: 'TXT: holds a line of text', hint: 'e.g. v=spf1 -all' },
 ]
 
 const subnetLabel = (s) => withSize((s.address || '') + (s.cidr ? `/${s.cidr}` : '')) + (s.name ? `, ${s.name}` : '')
@@ -229,7 +229,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
       </Field>
       <label className="flex flex-col gap-1 text-note text-muted">
         What is it for? (optional)
-        <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="printer-02"
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="e.g. printer-02"
           onChange={(e) => { setName(e.target.value); flow.reset() }} />
       </label>
       <PreviewApply
@@ -358,7 +358,7 @@ function DnsJob({ onBuilt, ro, start = {} }) {
       </Field>
       <label className="flex flex-col gap-1 text-note text-muted">
         Name (@ for the zone itself)
-        <input {...MACHINE_TEXT} className={FIELD_CLS} value={nameInZone} placeholder="www"
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={nameInZone} placeholder="e.g. www"
           onChange={(e) => change(setNameInZone)(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-note text-muted">
@@ -450,7 +450,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
       </Field>
       <label className="flex flex-col gap-1 text-note text-muted">
         Site name
-        <input {...MACHINE_TEXT} className={FIELD_CLS} value={site} placeholder="branch-boston"
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={site} placeholder="e.g. branch-boston"
           onChange={(e) => { setSite(siteText(e.target.value)); reset() }} />
       </label>
       <SpacePicker value={space.id} onChange={pickSpace} want={start.space || undefined} />
@@ -495,7 +495,7 @@ function DemoJob({ onBuilt, ro, start = {} }) {
       <SpacePicker value={space.id} onChange={pickSpace} />
       <label className="flex flex-col gap-1 text-note text-muted">
         Customer or call name
-        <input {...MACHINE_TEXT} className={FIELD_CLS} value={customer} placeholder="acme-bank"
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={customer} placeholder="e.g. acme-bank"
           onChange={(e) => { setCustomer(siteText(e.target.value)); reset() }} />
       </label>
       <fieldset className="flex flex-col gap-1 text-note text-muted">
@@ -622,7 +622,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
       <DevicesInput prefix={cidr} minPrefix={SIZE_MIN} maxPrefix={sizeMax} held={cloudDef.held ?? 0} onPrefix={(p) => { setCidr(p); flow.reset() }} />
       <label className="flex flex-col gap-1 text-note text-muted">
         Name (optional)
-        <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="demo-lab"
+        <input {...MACHINE_TEXT} className={FIELD_CLS} value={name} placeholder="e.g. demo-lab"
           onChange={(e) => { setName(e.target.value); flow.reset() }} />
       </label>
       <PreviewApply
@@ -875,7 +875,7 @@ function FindBox() {
     <form role="search" aria-label="Find" className="flex gap-2"
       onSubmit={(e) => { e.preventDefault(); if (q.trim()) window.location.hash = `dossier?q=${encodeURIComponent(q.trim())}` }}>
       <input {...MACHINE_TEXT} aria-label="Find an address, network or name" className={`${FIELD_CLS} flex-1`}
-        value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an address, network or name, like 10.2.1.7 or printer-02" />
+        value={q} onChange={(e) => setQ(e.target.value)} placeholder="IP, network or name" />
       <button type="submit" disabled={!q.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
         style={{ background: COLORS.accent, color: COLORS.onAccent }}>Find item</button>
     </form>
@@ -906,7 +906,7 @@ function PlanBox({ onOpen }) {
     <div className="flex flex-col gap-2">
       <form aria-label="Describe it in one sentence" className="flex gap-2" onSubmit={ask}>
         <input aria-label="Or describe it in one sentence" className={`${FIELD_CLS} flex-1`} value={text}
-          onChange={(e) => setText(e.target.value)} placeholder="Or describe it: set up a lab in Austin and a demo for acme-bank" />
+          onChange={(e) => setText(e.target.value)} placeholder="Or describe the job" />
         <button type="submit" disabled={busy || !text.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
           style={{ background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Planning…' : 'Plan it'}</button>
       </form>

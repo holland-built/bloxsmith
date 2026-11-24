@@ -95,6 +95,9 @@ test('hovering About reveals the help, and moving the pointer away closes it', a
   const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeHidden();
+  // Let the panels finish loading first: a panel above that grows when its data
+  // or error arrives moves this button out from under a mouse that has stopped.
+  await page.waitForLoadState('networkidle');
 
   // hover() moves a real mouse; it dispatches no click, so this fails if the
   // affordance still needs one.

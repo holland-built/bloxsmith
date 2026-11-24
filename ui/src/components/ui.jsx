@@ -65,7 +65,16 @@ export const COLORS = {
 // FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent ${FOCUS_RING}`
+// A box marked aria-invalid gets a red outline, so the mark a screen reader
+// hears and the one a person sees are the same mark.
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit ${FOCUS_RING}`
+
+// The line under a box that says what is wrong with it. The box points at it
+// with aria-describedby={id} and aria-invalid, so the reason is read out when
+// the cursor lands in the box. One place, so every form says it the same way.
+export function FieldError({ id, children, alert = false }) {
+  return <p id={id} role={alert ? 'alert' : undefined} className="text-note text-crit">{children}</p>
+}
 
 export function useChartTheme() {
   const colors = useThemeColors()
@@ -1789,6 +1798,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
     const pad = btns ? `${btns.offsetWidth + (parseFloat(getComputedStyle(head).columnGap) || 0)}px` : ''
     const minH = btns ? `${btns.offsetHeight}px` : ''
     if (head.style.paddingInlineEnd !== pad) head.style.paddingInlineEnd = pad
+    // On a phone `right` has a line of its own under the buttons, so it may
+    // use the strip kept clear for them (the right span's max-md classes).
+    if (head.style.getPropertyValue('--hb') !== pad) head.style.setProperty('--hb', pad || '0px')
     if (head.style.minHeight !== minH) head.style.minHeight = minH
     // Centred on the first line, not stuck to the row's top edge: a search
     // box on that line makes it taller than the buttons.
@@ -1797,8 +1809,15 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
       const top0 = Math.min(...first.map((el) => el.offsetTop))
       const line = first.filter((el) => el.offsetTop === top0)
       const lineH = line.length ? Math.max(...line.map((el) => el.offsetHeight)) : btns.offsetHeight
-      const top = `${Math.max(0, (Number.isFinite(top0) ? top0 : 0) + (lineH - btns.offsetHeight) / 2)}px`
+      const y0 = Number.isFinite(top0) ? top0 : 0
+      const topPx = Math.max(0, y0 + (lineH - btns.offsetHeight) / 2)
+      const top = `${topPx}px`
       if (btns.style.top !== top) btns.style.top = top
+      // ...and the phone's `right` line starts below them: 44px touch buttons
+      // are taller than a one-line title.
+      const rowGap = parseFloat(getComputedStyle(head).rowGap) || 0
+      const clear = `${Math.max(0, topPx + btns.offsetHeight - (y0 + lineH) - rowGap)}px`
+      if (head.style.getPropertyValue('--hbt') !== clear) head.style.setProperty('--hbt', clear)
     }
   })
 
@@ -2696,7 +2715,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
           {/* On a phone `right` takes its own line, so a wide control cannot
               carry the help and menu buttons away from the title. */}
           {right && (
-            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full max-md:grow max-md:max-w-none max-md:-me-(--hb) max-md:mt-(--hbt,0px) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
             </span>
           )}
