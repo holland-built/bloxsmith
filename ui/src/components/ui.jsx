@@ -1797,7 +1797,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
       const top0 = Math.min(...first.map((el) => el.offsetTop))
       const line = first.filter((el) => el.offsetTop === top0)
       const lineH = line.length ? Math.max(...line.map((el) => el.offsetHeight)) : btns.offsetHeight
-      const top = `${(Number.isFinite(top0) ? top0 : 0) + Math.max(0, (lineH - btns.offsetHeight) / 2)}px`
+      const top = `${Math.max(0, (Number.isFinite(top0) ? top0 : 0) + (lineH - btns.offsetHeight) / 2)}px`
       if (btns.style.top !== top) btns.style.top = top
     }
   })
