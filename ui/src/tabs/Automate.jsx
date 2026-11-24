@@ -9,7 +9,7 @@ import { failureText, useApi } from '../lib/api.js'
 import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { DevicesInput, ReadOnlyNote } from '../components/kit.jsx'
+import { DevicesInput, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
@@ -968,7 +968,7 @@ export default function Automate() {
     <>
       <div className="w-full px-6 py-5 flex flex-col gap-4">
         <div>
-          <h1 className="text-copy font-semibold tracking-tight mb-1">Automate</h1>
+          <PageTitle className="mb-1">Automate</PageTitle>
           <TabIntro>Pick a job, answer a few questions, and check what will be made before you build it.</TabIntro>
         </div>
         <FindBox />

@@ -1,7 +1,7 @@
 /* Network in the dashboard look (Overview.css holds the tokens and the tile
    parts). Only what differs from Overview lives here. */
 .net-top { margin-bottom: var(--sp-grid-gap, 16px) }
-.net-h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -.01em }
+.net-h1 { margin: 0 0 4px }
 .net-top p { margin-bottom: 0 }
 
 /* Tiles report and jump; they do not select, so there is no pressed fill.

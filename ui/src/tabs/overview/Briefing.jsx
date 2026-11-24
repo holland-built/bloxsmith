@@ -4,6 +4,7 @@ import { sinceIso } from '../../lib/changes.js'
 import Tip from '../../components/Tip.jsx'
 import { changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
 import './Briefing.css'
+import { PageTitle } from '../../components/kit.jsx'
 
 // The top of Overview, picked by the owner on 2026-11-21: is the network OK,
 // what changed recently, what needs a look, what is fine. The tiles,
@@ -89,7 +90,7 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
       <div className="ov-look br">
         <header className="br-rail">
           <p className="br-date">{clock.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-          <h1>Overview</h1>
+          <PageTitle>Overview</PageTitle>
           <p className={`br-verdict ${verdict.tone}`}><Mark sev={verdict.tone} /><span data-verdict="">{verdict.word}</span></p>
           <p className="br-line">{verdict.line}</p>
           {problems[0] && <a className="br-primary" href={problems[0].href}>Start with: {problems[0].action}</a>}

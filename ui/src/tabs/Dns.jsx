@@ -19,6 +19,8 @@ import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
 import './Dns.css'
 import { formatTime } from '../lib/dates.js'
+import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 
 // THE DNS PAGE IN THE OVERVIEW'S LOOK (2026-11-10).
 //
@@ -170,16 +172,6 @@ function Tiles(props) {
   )
 }
 
-// "Updated 11:02 PM" from when the zones arrived, not when the page drew.
-function Updated({ at, failed }) {
-  const label = failed ? 'Zone information is unavailable' : at ? `Updated ${formatTime(at)}` : 'Checking…'
-  return (
-    <Tip tip="Every number here is fetched again every 30 seconds." className="ov-pill" data-updated="">
-      <span className={`ov-live ${failed ? 'down' : at ? '' : 'wait'}`} aria-hidden="true" />{label}
-    </Tip>
-  )
-}
-
 export default function Dns() {
   // Charts added from Build a chart; they join the grid as ordinary panels.
   const savedCharts = useSavedChartPanels('dns')
@@ -203,14 +195,13 @@ export default function Dns() {
   // 'ok' | 'empty' | 'error' — 'error' also when the payload arrived without
   // the zones slice, because that read did not deliver.
   const zonesStatus = data.status('zones')
-  // The time the zones payload arrived, not the time of this render.
-  const fetchedAt = useMemo(() => (data.data ? new Date() : null), [data.data])
 
   return (
     <div className="w-full px-6 py-5 ov-look dns-page">
       <div className="ov-head">
-        <h1>DNS</h1>
-        <Updated at={fetchedAt} failed={!!data.error && !data.loading} />
+        <PageTitle>DNS</PageTitle>
+        {/* When the zones payload arrived, not the time of this render. */}
+        <UpdatedPill api={data} tip="Every number here is fetched again every 30 seconds." unavailable="Zone information is unavailable" />
       </div>
       <Tiles qps={qps} services={services} zones={zones} zonesStatus={zonesStatus} zonesFailed={!!data.error} zonesLoading={data.loading} dnssec={dnssec} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:

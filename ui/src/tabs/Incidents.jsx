@@ -4,17 +4,16 @@ import { useApi } from '../lib/api.js'
 import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
-import { ReadOnlyNote } from '../components/kit.jsx'
+import { PageTitle, ReadOnlyNote } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { categoryWord, plainMessage } from '../lib/plainWords.js'
-import Tip from '../components/Tip.jsx'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 import './Overview.css'
 import './Incidents.css'
-import { formatTime } from '../lib/dates.js'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -169,8 +168,8 @@ export default function Incidents() {
     <div data-layout="record" className="w-full px-6 py-5">
       <div className="ov-look inc-head">
         <div className="ov-head">
-          <h1>Incidents</h1>
-          <Updated api={incApi} />
+          <PageTitle>Incidents</PageTitle>
+          <UpdatedPill api={incApi} tip="Incidents to triage, by category and severity. The list refreshes every 20 seconds." unavailable="Couldn't load" />
         </div>
       </div>
       <CardGrid layoutKey="incidents">
@@ -213,23 +212,6 @@ export default function Incidents() {
         <ActionTrendStrip panelId="incidents-action-volume" rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} reason={actionsReason} onRetry={retryActions} />
       </CardGrid>
     </div>
-  )
-}
-
-// ---------- the head: when the list was last read ----------
-
-// The time the incidents list arrived, not the time of this render. A failed
-// refresh says so, and the time stays on the last list that did arrive.
-function Updated({ api }) {
-  const at = useMemo(() => (api.data ? new Date() : null), [api.data])
-  const time = at ? formatTime(at) : null
-  const dot = api.error ? 'down' : at ? '' : 'wait'
-  const text = api.error ? (time ? `Couldn't refresh · ${time}` : "Couldn't load") : time ? `Updated ${time}` : 'Loading…'
-  return (
-    <Tip className="ov-pill" tip="Incidents to triage, by category and severity. The list refreshes every 20 seconds.">
-      <span aria-hidden="true" className={`ov-live ${dot}`} />
-      {text}
-    </Tip>
   )
 }
 

@@ -9,13 +9,16 @@ import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.j
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
-import { HeadlineStrip } from '../components/kit.jsx'
+import { HeadlineStrip, PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 import { alarmTone } from '../lib/measured.js'
 import { statusBucket } from '../lib/statusBucket.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import HostConfigViewer from '../components/HostConfigViewer.jsx'
 import { formatWhen } from '../lib/dates.js'
+// Overview.css: the pill the Updated label wears (ov-pill, ov-live).
+import './Overview.css'
 
 // ---------- helpers ----------
 
@@ -96,20 +99,25 @@ export default function Infra() {
 
   return (
     <div className="w-full px-6 py-5">
-      <div className="flex items-center gap-2 mb-1">
-        <h1 className="text-copy font-semibold tracking-tight">Infrastructure</h1>
-        {/* Only when maintenance is ON. With it off this used to be a green
-            "Operational" pill, and all it knew was that maintenance was off:
-            it said so beside four offline hosts out of ten. Whether the estate
-            is healthy is what the tiles below measure. */}
-        {maintOk && maintEnabled && (
-          <span
-            className="text-note font-medium px-2 py-0.5 rounded-full"
-            style={{ background: theme.pillWarnBg, color: theme.pillWarnFg }}
-          >
-            Maintenance ON
+      <div className="ov-look mb-1">
+        <div className="ov-head">
+          <span className="flex items-center gap-2">
+            <PageTitle>Infrastructure</PageTitle>
+            {/* Only when maintenance is ON. With it off this used to be a green
+                "Operational" pill, and all it knew was that maintenance was off:
+                it said so beside four offline hosts out of ten. Whether the estate
+                is healthy is what the tiles below measure. */}
+            {maintOk && maintEnabled && (
+              <span
+                className="text-note font-medium px-2 py-0.5 rounded-full"
+                style={{ background: theme.pillWarnBg, color: theme.pillWarnFg }}
+              >
+                Maintenance ON
+              </span>
+            )}
           </span>
-        )}
+          <UpdatedPill api={data} tip="When the host inventory last arrived. It refreshes every 30 seconds." />
+        </div>
       </div>
       <TabIntro>Host and service health: hosts, jobs and DNS forwarding proxies.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={[...headlines(hosts, totalHosts, hostsStatus), discoveryTile(discovery)]} />

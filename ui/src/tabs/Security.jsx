@@ -3,7 +3,8 @@ import { itemCell } from '../components/itemCell.jsx'
 import { useApi } from '../lib/api.js'
 import { writeFailureText } from '../lib/writeFailure.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { ReadOnlyNote } from '../components/kit.jsx'
+import { PageTitle, ReadOnlyNote } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
@@ -90,7 +91,8 @@ export default function Security() {
           a jump to the panel it came from. Same look as Overview's tiles. */}
       <div className="ov-look sec-top">
         <div className="ov-head">
-          <h1>Security</h1>
+          <PageTitle>Security</PageTitle>
+          <UpdatedPill api={hub} tip="When the security summary last arrived. It is read again when the page opens." />
         </div>
         <SecurityHeadline hub={hub} lookalikes={lookalikes} exposures={exposures} axur={axur} />
       </div>

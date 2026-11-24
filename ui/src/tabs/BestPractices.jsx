@@ -4,6 +4,8 @@ import { order, SEVERITY, sevOf, splitCount, tally } from '../lib/bestPractices.
 import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './BestPractices.css'
+import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 
 // Design rules checked against the tenant, worked out on the server
 // (go/internal/dashboard/best_practices.go). Read-only. A check whose data
@@ -136,8 +138,11 @@ export default function BestPractices() {
     <div className="w-full px-6 py-5">
       <div className="ov-look">
         <div className="ov-head">
-          <h1>Best practices</h1>
-          <Tip className="ov-pill" tip="Checks your Infoblox design against best practices and lists what to fix. It changes nothing.">Read only</Tip>
+          <PageTitle>Best practices</PageTitle>
+          <span className="inline-flex flex-wrap gap-2">
+            <Tip className="ov-pill" tip="Checks your Infoblox design against best practices and lists what to fix. It changes nothing.">Read only</Tip>
+            <UpdatedPill api={api} tip="When these checks were last read. They are read again when the page opens." />
+          </span>
         </div>
         <Tiles checks={checks} loading={api.loading} />
       </div>

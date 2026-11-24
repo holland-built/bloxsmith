@@ -81,6 +81,14 @@ export function HeadlineStrip({ items, label }) {
   )
 }
 
+// Every page's title, one size on every page (owner, 2026-11-24: titles had
+// drifted to 26px, 20px and 14px). The size is set here, inline, so no page's
+// own stylesheet can move it again; spacing stays the page's (className).
+const PAGE_TITLE = { fontSize: 20, fontWeight: 600, lineHeight: 1.2, letterSpacing: '-.01em' }
+export function PageTitle({ children, className = '' }) {
+  return <h1 className={className} style={PAGE_TITLE}>{children}</h1>
+}
+
 // The Change tabs' task rail: a list of the panels on the page, beside them,
 // each jumping to its panel. It reads the panels off the page itself, so it
 // follows Provision's mode switch, a Drift result appearing, and a panel taken

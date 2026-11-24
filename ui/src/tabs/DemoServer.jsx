@@ -1,6 +1,6 @@
 import ItemLink from '../components/ItemLink.jsx'
 import { useEffect, useRef, useState } from 'react'
-import { PageRail } from '../components/kit.jsx'
+import { PageRail, PageTitle } from '../components/kit.jsx'
 import { Card, CardGrid, COLORS, Empty, FeedUnavailable, FetchError, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { withToken } from '../lib/authFetch.js'
@@ -107,7 +107,7 @@ export default function DemoServer() {
   return (
     <PageRail>
       <div className="w-full px-6 py-5">
-        <h1 className="text-copy font-semibold tracking-tight mb-1">Demo server</h1>
+        <PageTitle className="mb-1">Demo server</PageTitle>
         <TabIntro>Builds a NIOS-X server on Proxmox, gives it DNS, and proves it answers.</TabIntro>
 
         <CardGrid layoutKey="demo">

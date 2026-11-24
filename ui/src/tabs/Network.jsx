@@ -20,6 +20,8 @@ import { DHCP_REQUEST_ROWS, DHCP_REQUEST_WINDOWS, dhcpTotal, HA_NOTE } from '../
 import './Overview.css'
 import './Network.css'
 import { formatWhen } from '../lib/dates.js'
+import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -110,7 +112,10 @@ export default function Network() {
     <div className="w-full px-6 py-5">
       <div className="ov-look net-top">
         <div>
-          <h1 className="net-h1">Network</h1>
+          <div className="ov-head net-h1">
+            <PageTitle>Network</PageTitle>
+            <UpdatedPill api={data} tip="When the subnet inventory last arrived. It refreshes every 30 seconds." />
+          </div>
           <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
         </div>
         <Tiles label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />

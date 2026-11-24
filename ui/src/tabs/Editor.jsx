@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ColumnHeading, DevicesInput, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, DevicesInput, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { PrefixInput } from '../components/PrefixInput.jsx'
 import { COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
@@ -430,7 +430,7 @@ export default function Editor() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Editor</h1>
+      <PageTitle className="mb-1">Editor</PageTitle>
       <TabIntro>Make, change or delete one DNS or DHCP item at a time.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply and Delete are off." />
 

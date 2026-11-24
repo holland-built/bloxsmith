@@ -9,7 +9,7 @@ import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, Tab
 import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
-import { DevicesInput, PageRail } from '../components/kit.jsx'
+import { DevicesInput, PageRail, PageTitle } from '../components/kit.jsx'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { authFetch, withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
@@ -132,7 +132,7 @@ export default function Provision() {
     <PageRail>
     <div className="max-w-[820px] p-5">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-copy font-semibold tracking-tight">Provision</h1>
+        <PageTitle>Provision</PageTitle>
         <span
           className="text-note font-medium px-2 py-0.5 rounded-full"
           // A role is not a state. This was green for an admin, amber for an

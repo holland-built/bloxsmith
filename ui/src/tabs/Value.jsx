@@ -8,7 +8,10 @@ import ValuePlatform from './value/ValuePlatform.jsx'
 import ValueWork from './value/ValueWork.jsx'
 import ValueReport from './value/ValueReport.jsx'
 import { buildModel } from './value/valueModel.js'
+import './Overview.css'
 import './value/Value.css'
+import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 
 export default function Value() {
   // Thirty-day totals move slowly; once every five minutes is plenty.
@@ -25,11 +28,18 @@ export default function Value() {
     <div className="vl-page">
       <header className="vl-head">
         <div>
-          <h1 className="text-copy font-semibold tracking-tight mb-1">Value</h1>
+          <PageTitle className="mb-1">Value</PageTitle>
           <TabIntro>Results from Infoblox and Bloxsmith over the last 30 days. This page is read-only.</TabIntro>
           {m.range && <p className="vl-range">{m.range}</p>}
         </div>
-        <button type="button" className="vl-print" disabled={stillLoading} onClick={() => window.print()}>Print report</button>
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {/* display: contents keeps the pill in this row while .ov-look
+              lends it Overview's pill colours. */}
+          <span className="ov-look" style={{ display: 'contents' }}>
+            <UpdatedPill api={security} tip="When the 30-day security totals last arrived. They refresh every five minutes." />
+          </span>
+          <button type="button" className="vl-print" disabled={stillLoading} onClick={() => window.print()}>Print report</button>
+        </span>
       </header>
       <CardGrid layoutKey="value">
         <ValueSecurity key="value-security" panelId="value-security" m={m} loading={securityLoading} />

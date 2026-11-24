@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses — /api/templates
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
 // collapse into the same empty list a tenant that owns nothing produces.
-import { ColumnHeading, FormColumns } from '../components/kit.jsx'
+import { ColumnHeading, FormColumns, PageTitle } from '../components/kit.jsx'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { failureText, useApi } from '../lib/api.js'
@@ -212,7 +212,7 @@ export default function Drift() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Drift</h1>
+      <PageTitle className="mb-1">Drift</PageTitle>
       <TabIntro>Lists the gaps between a site template and what is in Infoblox, without changing anything.</TabIntro>
       <FormColumns form={form} result={resultCol} />
     </div>
