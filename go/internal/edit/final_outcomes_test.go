@@ -106,3 +106,47 @@ func TestCloudHold_OnlyAClearRefusalSaysRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestAllocate_EmptyAnswerIsMarkedUnknown(t *testing.T) {
+	f := newAllocFake(t, allocConfig{allocBody: `{"results":[]}`})
+	res, _ := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": float64(1), "dry": false})
+	if res["outcome"] != "unknown" {
+		t.Fatalf("result = %v", res)
+	}
+}
+
+func TestSubnetReplace_UnknownDeleteKeepsTheID(t *testing.T) {
+	var writes []string
+	srv := deleteAnswerServer(t, inventoryServer(t, &writes), 1, 503, "")
+	res, _ := newTestClient(srv).SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false})
+	if res["id"] != "ipam/subnet/new-1" || res["pick_unknown"] != true || res["address"] != "10.0.5.0/24" {
+		t.Fatalf("result = %v", res)
+	}
+}
+
+// The first tag write got no answer and the retry was refused: the first may
+// have landed, so the result stays unknown, and so does the hold's reason.
+func TestSubnetTagging_RefusedRetryAfterUnknownStaysUnknown(t *testing.T) {
+	for _, second := range []int{403, 409} {
+		var writes []string
+		inner := inventoryServer(t, &writes)
+		patches := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPatch {
+				patches++
+				w.WriteHeader(map[int]int{1: 504, 2: second}[patches])
+				return
+			}
+			inner.Config.Handler.ServeHTTP(w, r)
+		}))
+		t.Cleanup(srv.Close)
+		res, status := newTestClient(srv).SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": 24.0, "dry": false, "cloud": "aws"})
+		if msg := pyStr(res["error"]); !strings.Contains(msg, "may or may not") || strings.Contains(msg, "tagging failed") || status < 500 || patches != 2 {
+			t.Fatalf("second %d: = %d %v (%d patches)", second, status, res, patches)
+		}
+		held, _ := res["not_held"].([]any)
+		if len(held) == 0 || strings.Contains(pyStr(asMap(held[0])["reason"]), "failed") {
+			t.Fatalf("second %d: not_held = %v", second, res["not_held"])
+		}
+	}
+}

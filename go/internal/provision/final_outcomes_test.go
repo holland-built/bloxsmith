@@ -111,3 +111,28 @@ func TestSiteSubnetTagging_UnknownIsNotCalledFailed(t *testing.T) {
 		}
 	}
 }
+
+// The first delete of a shared pick got no answer, and rollback's own delete
+// finds it gone, so it is not reported as still live.
+func TestSiteRollback_404AfterUnknownPickDeleteIsNotStillLive(t *testing.T) {
+	e, f := newSiteRollbackHarness(t)
+	f.inventorySubnets = sharedSubnet
+	calls := 0
+	f.deleteStatus = func(string) int {
+		calls++
+		if calls == 1 {
+			return 503
+		}
+		return 404
+	}
+	cfg := siteRollbackConfig(false)
+	cfg.CreateReverseZone = false
+	out, err := e.NewSiteProvisioner(cfg, func(M) {}).Provision()
+	if err == nil || !strings.Contains(err.Error(), "may or may not have been removed") {
+		t.Fatalf("err = %v", err)
+	}
+	rb := asMap(out["rollback"])
+	if res := getList(rb, "residual"); len(res) != 0 || rb["outcome"] != "complete" {
+		t.Fatalf("rollback = %v, want nothing reported as left", rb)
+	}
+}

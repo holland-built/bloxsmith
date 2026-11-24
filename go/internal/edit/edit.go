@@ -914,7 +914,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	addresses := respAddresses(resp)
 	if len(addresses) == 0 {
 		// A 2xx naming no address: one may have been reserved all the same.
-		return M{"ok": false, "error": rest.OutcomeUnknown}, 502
+		return M{"ok": false, "error": rest.OutcomeUnknown, "outcome": "unknown"}, 502
 	}
 	// Infoblox picked these itself. One that a DHCP range, reservation or host
 	// already uses is not kept, and neither is any when that cannot be

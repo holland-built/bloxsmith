@@ -192,7 +192,8 @@ test('a demo teardown with an unconfirmed delete does not say complete', async (
     contentType: 'text/event-stream',
     body: route.request().url().includes('dry=1')
       ? PREVIEW_OK
-      : sseFrame({ done: true, succeeded: 2, failed: 0, skipped: 0, unconfirmed: 1, total: 3, unconfirmed_note: note }),
+      : sseFrame({ template: 'blocks/regional_address_blocks.yaml', phase: 'unconfirmed', step: 'result unknown' })
+        + sseFrame({ done: true, succeeded: 2, failed: 0, skipped: 0, unconfirmed: 1, total: 3, unconfirmed_note: note }),
   }));
   await page.goto('/#provision');
   await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
@@ -203,6 +204,11 @@ test('a demo teardown with an unconfirmed delete does not say complete', async (
   await page.getByRole('button', { name: 'Tear down demo', exact: true }).last().click();
   await expect(page.getByText(note).first()).toBeVisible();
   await expect(page.getByText('Teardown complete.')).toHaveCount(0);
+  await expect(page.getByText('0/1 done · 1 result unknown')).toBeVisible();
+  await expect(page.getByText(/\d failed/)).toHaveCount(0);
+  // Not in the green success box.
+  const background = await page.getByText(note).first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(background).toBe('rgba(0, 0, 0, 0)');
 });
 
 test('a real run whose connection drops says the outcome is unknown', async ({ page }) => {

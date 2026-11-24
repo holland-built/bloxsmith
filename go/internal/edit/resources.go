@@ -326,7 +326,10 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	// the wrong reflex — and the same compensating-delete pattern in
 	// SelfserviceAllocate was broken for its entire life before being fixed.
 	presp, pstatus, _ := c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
+	// A refused retry does not undo a first write that may have landed.
+	tagUnclear := false
 	if pstatus != 200 && pstatus != 201 {
+		tagUnclear = rest.UnclearFailure(pstatus)
 		presp, pstatus, _ = c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
 	}
 	if pstatus != 200 && pstatus != 201 {
@@ -337,14 +340,16 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		out := M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
 			"detail": presp, "id": sid, "tagging_failed": true}
 		code := statusOr(pstatus, 502)
-		if rest.UnclearFailure(pstatus) {
+		holdReason := "the network's tags failed first"
+		if tagUnclear || rest.UnclearFailure(pstatus) {
+			holdReason = "the network's tags got no clear answer first"
 			code = unclearStatus(pstatus)
 			out["error"] = "subnet created, but the tagging needed for teardown got no clear answer and may or may not have worked. Check its tags in Infoblox"
 		}
 		if held := CloudHeld(cloud, made.Masked()); perr == nil && held != nil {
 			notHeld := []any{}
 			for _, h := range held {
-				notHeld = append(notHeld, M{"address": h.Address, "label": h.Label, "reason": "the network's tags failed first"})
+				notHeld = append(notHeld, M{"address": h.Address, "label": h.Label, "reason": holdReason})
 			}
 			out["not_held"] = notHeld
 		}
@@ -415,7 +420,7 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 			return nil, 0, false
 		}
 		// The shared pick may be gone or may not, so nothing is built on it.
-		return M{CreatedUnreadableKey: true, "id": sid, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, "+
+		return M{CreatedUnreadableKey: true, "pick_unknown": true, "id": sid, "address": made.String(), "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, "+
 			"but it may or may not have been removed (%s). The clean %s was not made. Check it in the Editor",
 			made, statusPhrase(dst), clean)}, unclearStatus(dst), true
 	}

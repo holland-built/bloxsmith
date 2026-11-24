@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/runs"
 )
 
@@ -247,5 +248,114 @@ func TestDeskRemove_RefusedRetryAfterUnknownStaysUnknown(t *testing.T) {
 	}
 	if strings.Contains(got.Error, "not removed") {
 		t.Fatalf("summary = %q", got.Error)
+	}
+}
+
+func TestAllocateRoute_EmptyAnswerIsAuditedAsUnknown(t *testing.T) {
+	for _, body := range []string{`{"results":[]}`, `{}`} {
+		d, logPath := newDeleteDeps(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.Method == http.MethodPost {
+				io.WriteString(w, body)
+				return
+			}
+			io.WriteString(w, `{"results":[]}`)
+		})
+		r := httptest.NewRequest("POST", "/api/selfservice/allocate", nil)
+		r.RemoteAddr = "127.0.0.1:12345"
+		rr := httptest.NewRecorder()
+		d.selfserviceAllocate(rr, r, map[string]any{"subnet_id": "s-42", "count": float64(1), "dry": false})
+		if rr.Code < 500 {
+			t.Fatalf("%s: = %d %s", body, rr.Code, rr.Body.String())
+		}
+		detail := uaOnly(t, logPath, "selfservice-allocate", "the allocation may have landed")
+		if _, claimed := detail["still_reserved"]; claimed || detail["outcome"] != "unknown" {
+			t.Fatalf("%s: audit = %v", body, detail)
+		}
+	}
+}
+
+func TestEditCreate_UnknownPickDeleteKeepsItsID(t *testing.T) {
+	d, logPath := newInventoryDeps(t, subnetStreamUpstream(true, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(503)
+			return true
+		}
+		return false
+	}))
+	d.StateDir = t.TempDir()
+	d.Edit = edit.New(d.Rest)
+	rr := httptest.NewRecorder()
+	d.editCreate(rr, editRequest("POST", "/api/edit/subnet"), map[string]any{"block_id": uaBlockID, "cidr": float64(24), "dry": false})
+	if !strings.Contains(rr.Body.String(), "may or may not have been removed") {
+		t.Fatalf("= %d %s", rr.Code, rr.Body.String())
+	}
+	detail := uaOnly(t, logPath, "edit-subnet-create-unreadable", "the pick may still be there")
+	if detail["id"] != "ipam/subnet/new-1" || detail["outcome"] != "unknown" {
+		t.Fatalf("audit = %v", detail)
+	}
+	o := onlyRun(t, d).Objects[0]
+	if o.ID != "ipam/subnet/new-1" || o.State != runs.Error || o.Outcome != outcomeUnknown {
+		t.Fatalf("object = %+v", o)
+	}
+}
+
+func TestSubnetObjects_UnknownPickDeleteCanBeRemoved(t *testing.T) {
+	objs, note := subnetObjects(map[string]any{"created_unreadable": true, "pick_unknown": true,
+		"id": "ipam/subnet/new-1", "address": "10.0.5.0/24", "error": "may or may not"}, map[string]any{"name": "lab"})
+	if len(objs) != 1 || objs[0].ID != "ipam/subnet/new-1" || objs[0].State != runs.Error ||
+		objs[0].Outcome != outcomeUnknown || objs[0].Label != "10.0.5.0/24, lab" {
+		t.Fatalf("objects = %+v", objs)
+	}
+	if strings.Contains(note, "did not say which") {
+		t.Fatalf("note = %q", note)
+	}
+}
+
+func TestSubnetStream_UnusableZoneReplyIsUnknown(t *testing.T) {
+	for _, st := range []int{200, 201} {
+		for _, reply := range []string{`{"result":null}`, `[]`, `"ok"`} {
+			d, logPath := newInventoryDeps(t, subnetStreamUpstream(false, func(w http.ResponseWriter, r *http.Request) bool {
+				if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/dns/auth_zone") {
+					w.WriteHeader(st)
+					io.WriteString(w, reply)
+					return true
+				}
+				return false
+			}))
+			rr := httptest.NewRecorder()
+			d.provisionSubnetStream(rr, uaSubnetRequest("block="+uaBlockID+"&cidr=24&dry=0&make_zone=1"))
+			if body := rr.Body.String(); !strings.Contains(body, "may or may not") || strings.Contains(body, `"done":true`) {
+				t.Fatalf("%d %s: %s", st, reply, body)
+			}
+			if detail := uaOnly(t, logPath, "provision-subnet-error", "the zone is unknown"); detail["outcome"] != "unknown" {
+				t.Fatalf("%d %s: audit = %v", st, reply, detail)
+			}
+		}
+	}
+}
+
+func TestSeedTeardown_UnconfirmedRowIsNotAnError(t *testing.T) {
+	d, _ := newResidualDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" {
+			w.WriteHeader(202)
+			return
+		}
+		teardownSuccessUpstream(w, r)
+	})
+	d.StateDir = t.TempDir()
+	rr := httptest.NewRecorder()
+	d.teardownSeedDemoStream(rr, teardownSeedStreamRequest("regions=amer&dry=0&confirm=DELETE"))
+	seen := false
+	for _, f := range parseSSEFrames(t, rr.Body.String()) {
+		if f["phase"] == "unconfirmed" {
+			seen = true
+			if _, isErr := f["error"]; isErr || !strings.Contains(anyStr(f["step"]), "may or may not") {
+				t.Fatalf("frame = %v", f)
+			}
+		}
+	}
+	if !seen {
+		t.Fatal("no unconfirmed frame")
 	}
 }

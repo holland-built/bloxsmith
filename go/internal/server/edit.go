@@ -183,6 +183,11 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"],
 			"fixed_address": res["fixed_address"]})
+	case res["outcome"] == "unknown":
+		// Infoblox answered without naming an address, so one may be reserved.
+		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
+			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
+			"tag_value": b["tag_value"], "count": b["count"], "outcome": "unknown"})
 	case createdUnreadable(res):
 		// The allocate path's DNS record write was accepted and could not be read
 		// back, so the record is live and the addresses stayed reserved for it on
@@ -385,7 +390,13 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	defer d.recoverEdit(w, r, "/api/edit/"+resource)
 	result, status := res.Create(b)
 	d.json(w, r, status, result)
-	if !isDry(result) && (resultOK(result) || taggingFailed(result)) {
+	if result["pick_unknown"] == true {
+		// Whether this subnet still exists is not known, but its id is, so it
+		// can be found and Remove can act on it.
+		label := anyStr(result["address"])
+		d.recordMade(r, "editor", strings.ReplaceAll(resource, "_", " ")+" "+label, []runs.Object{{ID: anyStr(result["id"]), Kind: resource,
+			Label: label, State: runs.Error, Error: anyStr(result["error"]), Outcome: outcomeUnknown}}, "", false)
+	} else if !isDry(result) && (resultOK(result) || taggingFailed(result)) {
 		obj, _ := result[res.ResultKey].(map[string]any)
 		id := anyStr(obj["id"])
 		if id == "" {
@@ -409,8 +420,11 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 		// name because this row can never carry the id that
 		// "edit-<resource>-create" rows are read for — filing it under that name
 		// would put an idless row among rows whose id is the point.
-		d.auditAppend("edit-"+resource+"-create-unreadable", httpx.Actor(r),
-			unreadableDetail(resource, res.Identity, b))
+		detail := unreadableDetail(resource, res.Identity, b)
+		if result["pick_unknown"] == true {
+			detail["id"], detail["outcome"] = result["id"], "unknown"
+		}
+		d.auditAppend("edit-"+resource+"-create-unreadable", httpx.Actor(r), detail)
 	case taggingFailed(result):
 		// The audit-only-when-ok rule leaves exactly one hole: SubnetCreate can
 		// fail AFTER the subnet exists upstream, when only its teardown tags

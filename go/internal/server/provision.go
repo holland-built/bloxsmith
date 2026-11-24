@@ -311,7 +311,10 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 				zresult, zstatus, zerr := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
 					map[string]any{"fqdn": fqdn}, nil)
 				emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
-				plainZone := zstatus == 204 || ((zstatus == 200 || zstatus == 201) && zresult != nil)
+				// A reply with no zone in it says nothing about whether one was made.
+				zreply, zIsMap := zresult.(map[string]any)
+				zval, zHasResult := zreply["result"]
+				plainZone := zstatus == 204 || ((zstatus == 200 || zstatus == 201) && zIsMap && (!zHasResult || zval != nil))
 				switch {
 				case zerr != nil || (!plainZone && rest.UnclearFailure(zstatus)):
 					return zoneUnknown(zstatus)
@@ -997,8 +1000,8 @@ func (s *seedRun) tornDown(tpl string, unconfirmed []any) {
 	}
 	s.unconfirmed = append(s.unconfirmed, unconfirmed...)
 	summaryAppend(s.summary, "unconfirmed", tpl)
-	s.emit(map[string]any{"template": tpl, "phase": "unconfirmed", "error": fmt.Sprintf(
-		"%d item(s) may or may not have been deleted. Check them in the Editor.", len(unconfirmed))})
+	s.emit(map[string]any{"template": tpl, "phase": "unconfirmed", "step": fmt.Sprintf(
+		"[%s] result unknown: %d item(s) may or may not have been deleted. Check them in the Editor.", tpl, len(unconfirmed))})
 }
 
 // sites runs step once per site template of regions. A template that will not

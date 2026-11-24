@@ -264,6 +264,15 @@ func dnsObjects(res, in map[string]any) ([]runs.Object, string) {
 // subnetObjects reads the network ID a create result proves was made. A
 // network whose tags failed still exists, so it is recorded and can be removed.
 func subnetObjects(res, in map[string]any) ([]runs.Object, string) {
+	if res["pick_unknown"] == true {
+		label := anyStr(res["address"])
+		if n := inStr(in, "name"); n != "" {
+			label += ", " + n
+		}
+		return []runs.Object{{ID: anyStr(res["id"]), Kind: "subnet", Label: label, State: runs.Error,
+				Error: anyStr(res["error"]), Outcome: outcomeUnknown}},
+			"This network may or may not still exist. Check it, then Remove it if it is there."
+	}
 	id := ""
 	label := ""
 	if sub, _ := res["subnet"].(map[string]any); resultOK(res) && sub != nil {
