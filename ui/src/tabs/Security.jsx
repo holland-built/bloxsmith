@@ -495,7 +495,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
             <button
               key={s}
               onClick={() => { if (landing) setHashParams('security', {}); setSevFilter(s) }}
-              className="px-2 py-1 rounded-control text-note capitalize border"
+              className={`px-2 py-1 rounded-control text-note capitalize border pick${!landing && sevFilter === s ? ' pick-on' : ''}`}
               style={{
                 borderColor: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
                 color: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',

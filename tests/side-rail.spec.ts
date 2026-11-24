@@ -172,7 +172,9 @@ const expectMarked = async (page: Page, selector: string) => {
     return { shadow: s.boxShadow, weight: Number(s.fontWeight) };
   });
   expect(m.shadow).toContain('inset');
-  expect(m.shadow).toContain('2px');
+  // A faint 1px ring since the owner's pick of 2026-11-24; bold text is the
+  // second sign, so colour is never the only one.
+  expect(m.shadow).toContain('1px');
   expect(m.weight).toBeGreaterThanOrEqual(600);
 };
 

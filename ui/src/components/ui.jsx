@@ -2619,7 +2619,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
       // The ring is drawn OUTSIDE the border box (ring, not an extra border),
       // so entering move mode does not change the card's content width and
       // cannot nudge a measured table by a pixel.
-      className={`relative bg-card border border-card-border rounded-surface p-[var(--sp-card-pad)] ${moveActive ? 'ring-2 ring-accent' : ''} ${spanClass} ${className}`}
+      className={`relative bg-card border border-card-border rounded-surface shadow-[var(--shadow-surface)] p-[var(--sp-card-pad)] ${moveActive ? 'ring-2 ring-accent' : ''} ${spanClass} ${className}`}
     >
       {managed && (
         // An 8px strip over the card's own right padding, not over its

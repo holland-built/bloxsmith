@@ -441,7 +441,7 @@ export default function Editor() {
             onClick={() => { disarmDelete(); setType(t.key); setEditId(''); setLoaded(null); setDeep(null) }}
             // Not mid-request: the answer would land on the new type's form.
             disabled={status === 'busy'}
-            className="px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
+            className={`px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50 pick${type === t.key ? ' pick-on' : ''}`}
             style={type === t.key
               ? { borderColor: COLORS.accent, background: 'var(--color-line-2)', color: 'var(--color-txt)' }
               : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}

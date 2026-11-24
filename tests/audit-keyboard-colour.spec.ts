@@ -246,7 +246,10 @@ test('Automate: a chosen job has no side stripe', async ({ page }) => {
   const job = page.getByRole('navigation', { name: 'Jobs to automate' }).getByRole('button').first();
   await job.click();
   await expect(job).toHaveAttribute('aria-pressed', 'true');
-  expect(await job.evaluate((el) => getComputedStyle(el).boxShadow)).toBe('none');
+  // Since 2026-11-24 a pick is a soft tint with an even 1px ring on every side
+  // (the owner's mix), never a stripe down one side.
+  const shadow = await job.evaluate((el) => getComputedStyle(el).boxShadow);
+  expect(shadow === 'none' || / 0px 0px 0px 1px inset$/.test(shadow), shadow).toBe(true);
 });
 
 test('Assets: sorting keeps keyboard focus on the column heading', async ({ page }) => {

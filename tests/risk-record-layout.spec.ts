@@ -4,8 +4,10 @@ import { installBaselineWorld } from './page-fixtures';
 // The Risk tabs are where the operator acts (ack, block, filter, load older),
 // so each one leads with its working table ("C · Record-first", picked over a
 // headline strip and a section rail). Incidents keeps its category chips
-// directly above Triage because they filter it. The lead table sits on the page
-// under one rule, and the tabs run square and dense. Incidents now puts its
+// directly above Triage because they filter it. The tabs run dense. Since the
+// owner's pick of 2026-11-24 (the mix) the lead table is a card like every
+// other panel, round and filled; until then it sat square on the page under
+// one rule. Incidents now puts its
 // severity tiles first (owner, 2026-11-10): the counts used to sit under the
 // whole Triage table, so the page's answer was the last thing on it. Triage is
 // still the lead table, with the chips that filter it directly above it.
@@ -26,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const c of CASES) {
-  test(`#${c.tab} leads with its working table, on the page and square`, async ({ page }) => {
+  test(`#${c.tab} leads with its working table, in a card like the rest`, async ({ page }) => {
     await page.goto(`/#${c.tab}`);
     const lead = page.locator(`[data-panel-id="${c.lead}"]`);
     await expect(lead).toBeVisible();
@@ -38,9 +40,9 @@ for (const c of CASES) {
       const s = getComputedStyle(el);
       return { bg: s.backgroundColor, radius: s.borderTopLeftRadius, side: s.borderLeftColor };
     });
-    expect(style.bg).toBe('rgba(0, 0, 0, 0)');
-    expect(style.radius).toBe('0px');
-    expect(style.side).toBe('rgba(0, 0, 0, 0)');
+    expect(style.bg).not.toBe('rgba(0, 0, 0, 0)');
+    expect(style.radius).toBe('16px');
+    expect(style.side).not.toBe('rgba(0, 0, 0, 0)');
   });
 }
 

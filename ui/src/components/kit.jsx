@@ -22,14 +22,15 @@ const TONE = {
 // the detail lives on another tab, is a link to that tab. A value that is null
 // was not measured and shows a dash, never a zero.
 //
-// A tile that reports a state says so twice: the figure takes the state's
-// colour and the tile is tinted with it. The label carries the meaning in
-// words ("Hosts offline"), so the colour is never the only signal, and a tile
-// whose value is unknown takes no tone at all: a dash is not good news.
-// min-h is the height of a tile holding all three lines (label, figure, note)
-// plus its border, so a tile with a dash and no note is already that box.
-// tests/overview-cls.spec.ts measures it.
-const TILE = 'w-full h-full min-h-[88px] flex flex-col text-left px-3 pt-2.5 pb-2 rounded-surface border no-underline text-txt cursor-pointer'
+// One design for every row of headline numbers (the owner's pick 4,
+// 2026-11-24): Security's, one card split by thin lines (.kpi-strip in
+// index.css). A tile that reports a problem says so with the number itself in
+// red or amber, on a faint wash of the same colour. The label carries the
+// meaning in words ("Hosts offline"), so the colour is never the only signal,
+// and a tile whose value is unknown takes no tone at all: a dash is not good
+// news. "ok" keeps its data-tone but stays plain, so good news never competes
+// with a red tile.
+const TILE = `kpi-tile no-underline cursor-pointer`
 
 // Columns by how many tiles there are, so every row of tiles is a full row at
 // every width: six go 2, 3, then 6 across; four go 2 then 4; two share the row.
@@ -50,27 +51,18 @@ const TILE_COLS_DEFAULT = 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
 
 export function HeadlineStrip({ items, label }) {
   return (
-    <ul aria-label={label} className={`grid gap-[var(--sp-grid-gap)] mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
+    <ul aria-label={label} className={`kpi-strip grid mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
       {items.map((it, i) => {
         const tone = it.value != null && TONE[it.tone] && it.tone !== 'neutral' ? it.tone : null
-        // Only a tile that needs action is tinted. "ok" keeps its data-tone
-        // but stays plain, so good news never competes with a red tile.
-        const fill = tone && tone !== 'ok' ? tone : null
-        const style = fill
-          ? {
-              background: `color-mix(in srgb, ${TONE[fill].dot} 14%, var(--color-card))`,
-              borderColor: `color-mix(in srgb, ${TONE[fill].dot} 40%, var(--color-card-border))`,
-            }
-          : undefined
-        const cls = `${TILE} ${fill ? 'hover:brightness-110' : 'bg-card border-card-border hover:bg-line'} ${FOCUS_RING}`
+        const cls = `${TILE} ${FOCUS_RING}`
         const body = (
           <>
-            <span className="text-note text-muted">{it.label}</span>
-            <span className="text-figure font-semibold tabular-nums mt-1" style={fill ? { color: TONE[fill].dot } : undefined}>
-              {it.value == null ? (it.loading ? <span className="text-copy font-normal text-muted">Loading…</span> : '—') : it.value}
-              {it.unit ? <span className="text-note font-normal text-muted"> {it.unit}</span> : null}
+            <span className="kpi-label">{it.label}</span>
+            <span className={`kpi-num tabular-nums${it.value == null ? ' kpi-none' : ''}`}>
+              {it.value == null ? (it.loading ? 'Loading…' : '—') : it.value}
+              {it.unit ? <small> {it.unit}</small> : null}
             </span>
-            {it.note ? <span className="text-note text-muted mt-auto pt-1">{it.note}</span> : null}
+            {it.note ? <span className="kpi-note">{it.note}</span> : null}
           </>
         )
         return (
@@ -78,9 +70,9 @@ export function HeadlineStrip({ items, label }) {
           // it takes the whole row until the strip goes to five columns.
           <li key={it.label} className={`min-w-0${items.length === 5 && i === 4 ? ' col-span-2 md:col-span-1' : ''}`}>
             {it.href ? (
-              <a href={it.href} data-tone={tone || undefined} className={cls} style={style}>{body}</a>
+              <a href={it.href} data-tone={tone || undefined} className={cls}>{body}</a>
             ) : (
-              <button type="button" data-tone={tone || undefined} onClick={() => jumpToPanel(it.panelId)} className={cls} style={style}>{body}</button>
+              <button type="button" data-tone={tone || undefined} onClick={() => jumpToPanel(it.panelId)} className={cls}>{body}</button>
             )}
           </li>
         )

@@ -439,7 +439,7 @@ function ChatCard({ panelId }) {
               <button
                 key={i}
                 type="button"
-                className={`text-left text-copy px-3 py-2.5 rounded-surface border border-border text-field-txt hover:bg-line-2 ${i >= 4 ? 'hidden sm:block' : ''}`}
+                className={`text-left text-copy px-3 py-2.5 rounded-control border border-border text-field-txt hover:bg-line-2 ${i >= 4 ? 'hidden sm:block' : ''}`}
                 onClick={() => ask(sg)}
               >
                 {sg}
