@@ -1,15 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // The everyday jobs, always one click away: at the top of the side rail from
-// md up, a bar along the bottom on a phone.
-const JOBS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'selfservice', label: 'Get an address' },
-  { id: 'automate', label: 'Automate' },
-  { id: 'daily', label: 'Daily report' },
-  { id: 'chart', label: 'Charts' },
-]
-const JOB_IDS = new Set(JOBS.map((j) => j.id))
+// md up, a bar along the bottom on a phone. Their names come from the page list
+// (TABS in App.jsx), so the side bar, the bottom bar and the All pages menu
+// cannot call one page two things.
+const JOB_IDS = new Set(['overview', 'selfservice', 'automate', 'daily', 'chart'])
+const jobsOf = (tabs) => [...JOB_IDS].map((id) => ({ id, label: tabs.find((t) => t.id === id)?.label || id }))
 
 const ICONS = {
   overview: 'M2.5 2.5h4.5v5h-4.5zM9 2.5h4.5v3H9zM9 7.5h4.5v6H9zM2.5 9.5h4.5v4h-4.5z',
@@ -155,7 +151,7 @@ export function JobRail({ tab, groups, tabs, logo }) {
           </button>
         </div>
         <nav aria-label="Pages" data-job-rail="" className="frame-nav">
-          {JOBS.map((j) => (
+          {jobsOf(tabs).map((j) => (
             <a key={j.id} href={`#${j.id}`} aria-current={j.id === tab ? 'page' : undefined} className={`frame-link ${j.id === tab ? '' : 'text-muted'}`}>
               <NavIcon name={j.id} />
               <span className="frame-link-text">{j.label}</span>
@@ -215,10 +211,10 @@ export function JobRail({ tab, groups, tabs, logo }) {
 
 // The phone's bottom bar: an icon for each job, and the current page in words.
 // The other labels stay available to screen readers and voice control.
-export function JobBar({ tab }) {
+export function JobBar({ tab, tabs }) {
   return (
     <nav aria-label="Jobs" data-job-bar="" className="frame-dock">
-      {JOBS.map((j) => (
+      {jobsOf(tabs).map((j) => (
         <a key={j.id} href={`#${j.id}`} aria-current={j.id === tab ? 'page' : undefined} title={j.label} className="frame-dock-item">
           <NavIcon name={j.id} size={18} />
           <span>{j.label}</span>
