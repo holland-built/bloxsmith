@@ -5,11 +5,12 @@ import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus, TabIntro } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { sortRows } from '../lib/sortCompare.js'
-import { withSize } from '../lib/sizes.js'
+import { usableCount, withSize } from '../lib/sizes.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
+import { PROBLEM_SEV } from '../lib/severity.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
@@ -186,7 +187,7 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   return [
     { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null),
       tip: 'Every subnet, all sizes.' },
-    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit'),
+    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, PROBLEM_SEV.subnetsFull),
       tip: `Subnets ${UTIL_CRIT}% full or more, tiny networks of 8 addresses or fewer included.${loadedWord}` },
     { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn'),
       tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny networks of 8 addresses or fewer included.${loadedWord}` },
@@ -224,6 +225,16 @@ function Tiles({ items, label }) {
       })}
     </ul>
   )
+}
+
+// A subnet's size as the addresses devices can use, which is what Used plus
+// Free add up to: "10.30.0.0/24 (254 usable)". It said "(256 addresses)"
+// beside a Used and Free of 249 and 5, and Daily shows the same subnet as
+// 249 / 254 (2026-11-24). IPv6 and anything unparsed keep withSize's words.
+function subnetSize(network) {
+  const m = String(network).match(/^[\d.]+\/(\d{1,2})$/)
+  const u = m && usableCount(m[1])
+  return u == null ? withSize(network) : `${network} (${u.toLocaleString('en-US')} usable)`
 }
 
 // ---------- utilization distribution ----------
@@ -769,7 +780,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
         util: num(s.util),
         used: num(s.used),
         free: freeOf(s),
-        network: (s.addr ? withSize(s.cidr ? `${s.addr}/${s.cidr}` : s.addr) : s.cidr) || '—',
+        network: (s.addr ? subnetSize(s.cidr ? `${s.addr}/${s.cidr}` : s.addr) : s.cidr) || '—',
       })),
     [sorted],
   )

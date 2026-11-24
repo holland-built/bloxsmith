@@ -493,7 +493,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
       // "Hosts Not Online" linked to until 2026-11-10; it now links to
       // 'offline'. Kept so old links still work.
       if (statusFilter === 'not-online') {
-        if (/online|active/i.test(h.status || '')) return false
+        if (statusBucket(h.status) === 'active') return false
       } else if (statusFilter && statusBucket(h.status) !== statusFilter) return false
       if (type && h.type !== type) return false
       if (!q) return true

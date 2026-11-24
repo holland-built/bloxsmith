@@ -21,9 +21,15 @@ export function fmtAnswerTime(sec) {
   return `${Math.round(ms).toLocaleString()} ms`
 }
 
-/** A 0-100 share. One decimal under 10%, whole numbers above. */
+/**
+ * A 0-100 share. One decimal under 10%, whole numbers above, and one decimal
+ * again between 99 and 100, cut down rather than rounded, so a gap is never
+ * rounded away: 99.5% uptime used to read "100%", and 99.97% reads "99.9%",
+ * never "100.0%".
+ */
 export function fmtShare(pct) {
   if (pct > 0 && pct < 0.1) return 'under 0.1%'
+  if (pct > 99 && pct < 100) return `${(Math.floor(pct * 10) / 10).toFixed(1)}%`
   return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`
 }
 

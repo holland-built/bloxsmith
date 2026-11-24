@@ -15,6 +15,11 @@ test('shares and rates', () => {
   assert.equal(fmtShare(62.138), '62%')
   assert.equal(fmtShare(1.589), '1.6%')
   assert.equal(fmtShare(0.02), 'under 0.1%')
+  // Between 99 and 100 a gap is never rounded away (99.5% uptime read "100%").
+  assert.equal(fmtShare(99.5), '99.5%')
+  assert.equal(fmtShare(99.97), '99.9%')
+  assert.equal(fmtShare(100), '100%')
+  assert.equal(fmtShare(98.6), '99%')
   assert.equal(fmtPerSecond(14.3165), '14 a second')
   assert.equal(fmtPerSecond(1.62), '1.6 a second')
 })

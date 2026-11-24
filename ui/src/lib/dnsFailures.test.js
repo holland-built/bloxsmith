@@ -16,8 +16,8 @@ test('a good read shows counts and says where they came from', () => {
   assert.equal(v.total.text, '539,374')
   assert.equal(v.codes.find((c) => c.key === 'servfail').text, '315')
   assert.deepEqual(v.names, [{ name: 'a.example.', count: 390793, text: '390,793' }])
-  assert.equal(v.source, 'From the last 3 days of failure records')
-  assert.equal(failuresView(feed(ok({ source: 'query_logs' })), 'today').source, 'From the query logs')
+  assert.equal(v.source, 'Every number is for today, from the failed-lookup records.')
+  assert.equal(failuresView(feed(ok({ source: 'query_logs' })), 'today').source, 'Every number is for today, from the query logs.')
 })
 
 test('a failed read is not checked, never 0', () => {

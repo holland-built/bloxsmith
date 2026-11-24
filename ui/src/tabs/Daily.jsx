@@ -5,12 +5,13 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilSt
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCount.js'
+import { sampleCountLabel, sampleScopeNote, sampleSince, shownNote } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 import { issueWord } from '../lib/plainWords.js'
 import Tip from '../components/Tip.jsx'
 import { statusBucket } from '../lib/statusBucket.js'
+import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import './Daily.css'
 import { formatTime } from '../lib/dates.js'
 import { PageTitle } from '../components/kit.jsx'
@@ -145,18 +146,18 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
   // is the number's tip. `of` is what the number is out of.
   const cells = [
     {
-      key: 'subnets', name: 'Subnets', unit: `≥${UTIL_CRIT}% full`, value: critSubnets.length, sev: 'warn', hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
+      key: 'subnets', name: 'Subnets', unit: `≥${UTIL_CRIT}% full`, value: critSubnets.length, sev: PROBLEM_SEV.subnetsFull, hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
       of: typeof totals?.subnets === 'number' ? totals.subnets : null,
       detail: `${critReal.length.toLocaleString()} without tiny networks (8 addresses or fewer).`,
     },
     {
-      key: 'hosts', name: 'Hosts', unit: 'not online', value: badHosts.length, sev: 'crit', hash: 'infra?status=offline', status: meta.hosts,
+      key: 'hosts', name: 'Hosts', unit: 'not online', value: badHosts.length, sev: PROBLEM_SEV.hostsDown, hash: 'infra?status=offline', status: meta.hosts,
       of: hosts.length,
       detail: `${hosts.length.toLocaleString()} hosts loaded.` +
         (badHosts.length ? ' ' + Object.entries(byStatus).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n.toLocaleString()} ${k}`).join(', ') + '.' : ''),
     },
     {
-      key: 'zones', name: 'DNS zones', unit: 'with issues', value: zonesWithIssues.length, sev: 'warn', hash: 'dns?issues=1', status: meta.zones,
+      key: 'zones', name: 'DNS zones', unit: 'with issues', value: zonesWithIssues.length, sev: PROBLEM_SEV.zoneIssues, hash: 'dns?issues=1', status: meta.zones,
       of: zones.length,
       detail: commonTypes.length ? `Most common: ${commonTypes.map(([t, n]) => `${issueWord(t)} (${n.toLocaleString()})`).join(', ')}.` : '',
     },
@@ -173,7 +174,7 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
           {cells.map((c) => {
             const unavailable = c.status === 'error'
             const bad = !unavailable && c.value > 0
-            const word = unavailable ? '' : bad ? (c.sev === 'crit' ? 'Needs action' : 'Review') : 'Healthy'
+            const word = unavailable ? '' : bad ? SEV_WORD[c.sev] : 'Healthy'
             // A click anywhere on the tile opens the list behind it, except on
             // the number, where a tap opens its tip. The name is the link a
             // keyboard or screen reader uses.
@@ -247,6 +248,9 @@ function SecurityToday({ sec, panelId }) {
   // The count by the title is the sample it was counted from; its tip says
   // so, and when the sample started, instead of two lines under the figures.
   const scopeTip = [scopeNote, since && `The oldest is from ${since}.`].filter(Boolean).join(' ') || null
+  // The count by the title is the rows listed; when the four severity figures
+  // add up to more, say so under them, as Security does under its bars.
+  const legendNote = shownNote(sec.data, 'events', chips.slice(0, 4).reduce((n, c) => n + c.value, 0))
 
   return (
     <Card
@@ -273,6 +277,7 @@ function SecurityToday({ sec, panelId }) {
           ))}
         </dl>
       )}
+      {!sec.loading && !secDead && legendNote && <p className="text-note text-dim mt-2" data-legend-note="">{legendNote}</p>}
     </Card>
   )
 }
@@ -362,7 +367,8 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
   // a red dot; degraded is amber and the rest grey.
   const rank = { offline: 0, degraded: 1 }
   const rows = hosts
-    .filter((h) => !/online|active/i.test(h.status || ''))
+    // Not online by the shared rule, the same set the Open Infra link shows.
+    .filter((h) => statusBucket(h.status) !== 'active')
     .map((h, i) => ({ h, i, r: rank[statusBucket(h.status)] ?? 2 }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map(({ h }) => h)
