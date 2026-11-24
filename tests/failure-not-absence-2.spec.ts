@@ -163,11 +163,11 @@ test.describe('Overview → License Inventory panel', () => {
     await expect(card.getByText('0 licenses', { exact: true })).toHaveCount(0);
   });
 
-  test('a genuinely empty tenant still renders "no license data available" and a real 0 count', async ({ page }) => {
+  test('a genuinely empty tenant still renders "No licenses found" and a real 0 count', async ({ page }) => {
     await page.route('**/api/csp/license-alerts*', (route) => fulfillJson(route, { licenses: [], status: 'ok' }));
     await page.goto('/#overview');
     const card = page.locator('text=License Inventory').locator('..').locator('..');
-    await expect(card.getByText(/no license data available/i)).toBeVisible();
+    await expect(card.getByText('No licenses found', { exact: true })).toBeVisible();
     await expect(card.getByText('0 licenses', { exact: true })).toBeVisible();
     await expect(card.getByText(/license information is unavailable/i)).toHaveCount(0);
   });

@@ -95,7 +95,7 @@ function exposures(feed) {
   // counted by `count` or by the rows themselves.
   const loaded = fin(count) ? count : Array.isArray(rows) ? rows.length : null
   // The Exposures panel's own rule: an answer that did not fail but holds no
-  // rows reads "no exposures reported". Without a total, the tile says the
+  // rows reads "No exposures found". Without a total, the tile says the
   // same thing in grey ("None reported") rather than Unknown or a 0.
   const noRows = !Array.isArray(rows) || rows.length === 0
   let state = feedState(feed, !!feed.error || p.availability === 'error', fin(total) || !noRows)

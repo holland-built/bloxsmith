@@ -65,7 +65,7 @@ test.describe('Security → Asset Insights panel (asset-insights feed)', () => {
     await page.goto('/#security');
     const card = page.locator('text=Asset Insights').locator('..').locator('..');
     await expect(card.getByText(/asset insights unavailable/i)).toBeVisible();
-    await expect(card.getByText(/no asset insights for this tenant/i)).toHaveCount(0);
+    await expect(card.getByText(/No asset insights found/)).toHaveCount(0);
   });
 
   test('asset insights feed empty renders the original empty-state wording', async ({ page }) => {
@@ -74,7 +74,7 @@ test.describe('Security → Asset Insights panel (asset-insights feed)', () => {
     );
     await page.goto('/#security');
     const card = page.locator('text=Asset Insights').locator('..').locator('..');
-    await expect(card.getByText(/no asset insights for this tenant/i)).toBeVisible();
+    await expect(card.getByText(/No asset insights found/)).toBeVisible();
     await expect(card.getByText(/asset insights unavailable/i)).toHaveCount(0);
   });
 
@@ -86,6 +86,6 @@ test.describe('Security → Asset Insights panel (asset-insights feed)', () => {
     const card = page.locator('text=Asset Insights').locator('..').locator('..');
     await expect(card.getByText('7')).toBeVisible();
     await expect(card.getByText(/asset insights unavailable/i)).toHaveCount(0);
-    await expect(card.getByText(/no asset insights for this tenant/i)).toHaveCount(0);
+    await expect(card.getByText(/No asset insights found/)).toHaveCount(0);
   });
 });

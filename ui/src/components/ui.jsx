@@ -3087,14 +3087,22 @@ export function deletedMsg(j, label) {
   return `${label} delete accepted — the server did not report whether it still existed.`
 }
 
-export function FetchError({ error, stale }) {
+// `what` names the list, as a person would say it ("IP spaces"), so a page
+// with several failed lists says which one each line is about.
+export function fetchErrorText(error, what = 'current data') {
+  const reason = (isNoPermission(error) ? noPermissionText(error) : String(error?.message || error)).trim()
+  // A server reason often has no full stop, and the next sentence follows it.
+  return `Could not load ${what}. ${reason}${/[.!?]$/.test(reason) ? '' : '.'}`
+}
+
+export function FetchError({ error, stale, what }) {
   const { failed, retrying } = useFeedRecovery()
   if (!error) return null
   const denied = isNoPermission(error)
   return (
     <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>
-      {denied ? noPermissionText(error) : `Could not load current data: ${String(error?.message || error)}`}
-      {stale && (denied ? ' The list below may be out of date.' : ' — the list below may be out of date.')}
+      {fetchErrorText(error, what)}
+      {stale && ' The list below may be out of date.'}
       {!denied && failed && !retrying && (
         <button
           type="button"
@@ -3105,6 +3113,17 @@ export function FetchError({ error, stale }) {
         </button>
       )}
     </div>
+  )
+}
+
+// The "pick one and press a button" line beside a form. While a list the form
+// needs has failed with nothing to show, that cannot be done, so the line says
+// which list did not load instead. `missing` names that list, or is falsy.
+export function FormHint({ missing, children }) {
+  return (
+    <p className="text-copy text-muted">
+      {missing ? `${missing[0].toUpperCase()}${missing.slice(1)} did not load, so there is nothing to pick yet.` : children}
+    </p>
   )
 }
 

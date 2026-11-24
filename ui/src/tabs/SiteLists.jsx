@@ -191,7 +191,7 @@ function ListSites({ listId, ro }) {
       </ul>
       {match.length > SHOW_SITES && <p className="text-note text-muted mt-1">Showing {SHOW_SITES} of {match.length.toLocaleString()}. Type above to find others.</p>}
       {api.data && needle && match.length === 0 && <p className="text-note text-muted mt-1">No site in this list matches.</p>}
-      <FetchError error={api.error} stale={items.length > 0} />
+      <FetchError error={api.error} stale={items.length > 0} what="the sites in this list" />
     </section>
   )
 }
@@ -281,7 +281,8 @@ function DailyProposals({ setup, why }) {
       {waiting.length > 0
         ? <ul>{waiting.map((p) => <Proposal key={`${p.list_id}-${p.proposal.at}`} p={p} />)}</ul>
         : ws.length > 0 && !props.loading && <p className="text-note text-muted">No changes waiting.</p>}
-      <FetchError error={props.error || watches.error} />
+      <FetchError error={watches.error} what="watched lists" />
+      <FetchError error={props.error} what="changes waiting for review" />
     </section>
   )
 }
@@ -571,7 +572,7 @@ export default function SiteLists() {
                 {plural(split.left.length, 'site')} on the never-add list will be left out: {split.left.slice(0, 5).join(', ')}{split.left.length > 5 ? ', …' : ''}
               </p>
             )}
-            <FetchError error={neverApi.error} />
+            <FetchError error={neverApi.error} what="the never-add list" />
           </div>
 
           <fieldset className="flex flex-col gap-2">
@@ -624,7 +625,7 @@ export default function SiteLists() {
           </Field>
 
           <PreviewApply {...applyProps} part="start" />
-          <FetchError error={targets.error} stale={policies.length > 0} />
+          <FetchError error={targets.error} stale={policies.length > 0} what="security policies" />
         </section>
       } result={
         <section aria-labelledby="sl-result-h" data-result-of="lists">

@@ -130,11 +130,11 @@
   - heading "Exposures" [level=2]
   - 'button "About: Exposures"': "About: ⓘ"
   - 'button "Options: Exposures"'
-  - text: no exposures reported
+  - text: No exposures found
   - heading "Asset Risk" [level=2]
   - 'button "About: Asset Risk"': "About: ⓘ"
   - 'button "Options: Asset Risk"'
-  - text: no asset risk data
+  - text: No asset risk scores found
   - heading "CTEM Exposure" [level=2]
   - 'button "About: CTEM Exposure"': "About: ⓘ"
   - 'button "Options: CTEM Exposure"'
@@ -147,11 +147,11 @@
   - text: 0 hostnames · 0 IPs
   - 'button "About: Exposed Surface"': "About: ⓘ"
   - 'button "Options: Exposed Surface"'
-  - text: Showing 0 of 0 no hostnames reported Showing 0 of 0 no IPs reported
+  - text: Showing 0 of 0 No hostnames found Showing 0 of 0 No IP addresses found
   - heading "CTEM Assets" [level=2]
   - 'button "About: CTEM Assets"': "About: ⓘ"
   - 'button "Options: CTEM Assets"'
-  - text: no CTEM asset data
+  - text: No CTEM assets found
   - heading "Security Inventory" [level=2]
   - text: what is configured
   - 'button "About: Security Inventory"': "About: ⓘ"

@@ -189,7 +189,7 @@ function SeverityHero({ panelId, hub, events }) {
             )}
           </div>
           {hourly.length === 0 ? (
-            <Empty>events lack timestamps</Empty>
+            <Empty>No event times found, so there is nothing to chart</Empty>
           ) : (
             /* The bar is a count of flagged lookups in that hour of the
                day, so the unit IS "events" — the same word the panel's own
@@ -520,7 +520,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       {hub.loading ? <Skeleton h={260} /> : unavailable ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no events match</Empty>
+        <Empty>No events match</Empty>
       ) : (
         <>
           <DataTable
@@ -668,7 +668,7 @@ function AxurPanel({ panelId, axur }) {
         // NOT "no findings". Zero suppliers monitored and zero findings across
         // monitored suppliers are opposite pieces of news, and this panel exists
         // because the difference was invisible once already.
-        <Empty>no suppliers monitored in Axur</Empty>
+        <Empty>No suppliers are monitored in Axur</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
       )}
@@ -871,7 +871,7 @@ function AssetInsights({ panelId, assetInsights }) {
       {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
         <FeedUnavailable label="Asset insights unavailable" />
       ) : status === 'empty' || !hasTotal ? (
-        <Empty>no asset insights for this tenant</Empty>
+        <Empty>No asset insights found</Empty>
       ) : (
         <div className="flex flex-col gap-2">
           <div>
@@ -925,7 +925,7 @@ function ExposuresPanel({ panelId, exposures }) {
         // reported" — an all-clear attack surface produced by a dead fetch.
         <FeedUnavailable reason={exposures.error.message || undefined} label="Exposure information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no exposures reported</Empty>
+        <Empty>No exposures found</Empty>
       ) : (
         <>
           <div className="text-note text-muted mb-1">
@@ -969,7 +969,7 @@ function AssetRiskPanel({ panelId, assetRisk }) {
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
         <FeedUnavailable label="Asset risk information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no asset risk data</Empty>
+        <Empty>No asset risk scores found</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r, i) => `${r.domain_name}|${r.ip_address}|${i}`} />
       )}
@@ -1029,7 +1029,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
             {hDead ? (
               <FeedUnavailable reason={hPayload.reason} label="Hostname information is unavailable" />
             ) : hRows.length === 0 ? (
-              <Empty>no hostnames reported</Empty>
+              <Empty>No hostnames found</Empty>
             ) : (
               <DataTable rows={hRows} columns={hCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.hostname}|${i}`} />
             )}
@@ -1041,7 +1041,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
             {iDead ? (
               <FeedUnavailable reason={iPayload.reason} label="IP information is unavailable" />
             ) : iRows.length === 0 ? (
-              <Empty>no IPs reported</Empty>
+              <Empty>No IP addresses found</Empty>
             ) : (
               <DataTable rows={iRows} columns={iCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.ip}|${i}`} />
             )}
@@ -1093,7 +1093,7 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
       {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || status === 'error' ? (
         <FeedUnavailable label="CTEM asset information is unavailable" />
       ) : empty ? (
-        <Empty>no CTEM asset data</Empty>
+        <Empty>No CTEM assets found</Empty>
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map((g) => (

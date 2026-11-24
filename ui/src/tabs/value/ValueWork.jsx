@@ -18,7 +18,7 @@ export default function ValueWork({ panelId, runs: api, w: counted, loading }) {
   return (
     <Card panelId={panelId} title="Bloxsmith activity — 30 days" span={6}>
       <div className="vl-panel" data-value-work="">
-        <FetchError error={api.error} />
+        <FetchError error={api.error} what="Bloxsmith jobs" />
         {loading && !api.error ? <Skeleton h={100} /> : null}
         {!loading && noPeriod ? (
           <dl className="vl-strip"><ValueStat s={{ key: 'jobs', label: 'Jobs completed', state: 'unavailable', text: 'Not available' }} /></dl>

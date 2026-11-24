@@ -55,7 +55,7 @@ export default function MadeList({ sources, ro, empty = 'Nothing made here yet.'
             ))}
           </ul>
         )}
-      <FetchError error={api.error} stale={list.length > 0} />
+      <FetchError error={api.error} stale={list.length > 0} what="what was made here" />
     </>
   )
 }

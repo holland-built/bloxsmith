@@ -1,4 +1,4 @@
-import { Card, CardGrid, FetchError, Skeleton } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FetchError, Skeleton } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { order, SEVERITY, sevOf, splitCount, tally } from '../lib/bestPractices.js'
 import Tip from '../components/Tip.jsx'
@@ -133,7 +133,10 @@ function Tiles({ checks, loading }) {
 
 export default function BestPractices() {
   const api = useApi('/api/best-practices')
-  const checks = api.data?.checks ? order(api.data.checks) : null
+  // An answer with no checks in it proves nothing, so the tiles treat it like
+  // no answer: unavailable, never "0 of 0".
+  const checks = api.data?.checks?.length ? order(api.data.checks) : null
+  const noneRan = !api.loading && !api.error && api.data != null && !checks
   return (
     <div className="w-full px-6 py-5">
       <div className="ov-look">
@@ -149,8 +152,9 @@ export default function BestPractices() {
       <div className="mt-4">
         <CardGrid layoutKey="best-practices">
           <Card key="bp-checks" panelId="bp-checks" span={6} title="Checks">
-            <FetchError error={api.error} stale={!!checks} />
+            <FetchError error={api.error} stale={!!checks} what="best practice checks" />
             {!checks && api.loading ? <Skeleton h={160} /> : null}
+            {noneRan ? <Empty>No checks ran, so nothing here is known to pass or fail.</Empty> : null}
             {checks ? (
               <div className="ov-look">
                 <ul aria-label="Best practice checks" className="bp-list">

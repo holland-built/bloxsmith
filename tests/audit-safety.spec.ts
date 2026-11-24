@@ -552,7 +552,7 @@ test('R3. another upstream failure on a list read is still an outage', async ({ 
   await page.goto('/#selfservice');
   const card = await openTask(page, 'records');
   await card.locator('select').selectOption(ZONE.id);
-  await expect(card.getByText(/Could not load current data: The server had a problem\./)).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText('Could not load DNS records. Infoblox request failed.')).toBeVisible({ timeout: 20_000 });
   await expect(card.getByText(NO_PERM)).toHaveCount(0);
 });
 
