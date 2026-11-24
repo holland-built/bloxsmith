@@ -6,7 +6,7 @@ import { statusBucket } from './statusBucket.js'
 
 test('each host status lands in its bucket', () => {
   const cases = {
-    online: 'active', UP: 'active', Active: 'active',
+    online: 'active', UP: 'active', Active: 'active', ok: 'active', OK: 'active',
     degraded: 'degraded', warning: 'degraded',
     offline: 'offline', down: 'offline', error: 'offline', failed: 'offline',
     unknown: 'unknown', UNKNOWN: 'unknown',
@@ -15,6 +15,11 @@ test('each host status lands in its bucket', () => {
   for (const [s, want] of Object.entries(cases)) assert.equal(statusBucket(s), want, s)
   assert.equal(statusBucket(undefined), 'other')
   assert.equal(statusBucket(null), 'other')
+})
+
+test('"ok" only as the whole word', () => {
+  assert.equal(statusBucket('ok'), 'active')
+  assert.equal(statusBucket('broken'), 'other')
 })
 
 test('"unknown" only as the whole word; anything else with it in falls through', () => {

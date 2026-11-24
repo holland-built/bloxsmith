@@ -115,13 +115,18 @@ export function sampleScopeNote(data, noun) {
 /**
  * What a list shows when it is shorter than the count above it, or null when
  * it shows everything counted.
+ *
+ * `legend` is the sum of the severity counts printed beside the list, when
+ * there is one. A payload without `counted` used to get no note at all, so
+ * Security printed "2 events" over a legend of 1 + 2 + 3 + 4 = 10 and bars
+ * drawn from the 2 listed rows, with nothing saying why (2026-11-24).
  */
-export function shownNote(data, noun) {
-  if (!Number.isFinite(data?.counted)) return null
+export function shownNote(data, noun, legend = 0) {
+  const total = Math.max(Number.isFinite(data?.counted) ? data.counted : 0, Number(legend) || 0)
   const returned = returnedOf(data)
-  if (returned >= data.counted) return null
+  if (!total || returned >= total) return null
   const shown = returned.toLocaleString()
-  const counted = data.counted.toLocaleString()
+  const counted = total.toLocaleString()
   return isSample(data)
     ? `Showing the newest ${shown} of the ${counted} ${noun} counted.`
     : `Showing the newest ${shown} of ${counted} ${noun}.`

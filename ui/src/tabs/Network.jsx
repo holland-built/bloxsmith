@@ -10,6 +10,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 import { alarmTone, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, UTIL_WARN, utilBand } from '../lib/utilBands.js'
+import { PROBLEM_SEV } from '../lib/severity.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
@@ -186,7 +187,7 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   return [
     { panelId: 'network-utilization-distribution', label: 'Subnets', value: fmt(subOk && Number.isFinite(t.subnets) ? t.subnets : null),
       tip: 'Every subnet, all sizes.' },
-    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, 'crit'),
+    { panelId: 'network-utilization-distribution', label: `≥${UTIL_CRIT}%${scope}`, value: fmt(over), tone: alarmTone(over, PROBLEM_SEV.subnetsFull),
       tip: `Subnets ${UTIL_CRIT}% full or more, tiny networks of 8 addresses or fewer included.${loadedWord}` },
     { panelId: 'network-utilization-distribution', label: `${UTIL_WARN}–${UTIL_CRIT - 1}%${scope}`, value: fmt(mid), tone: alarmTone(mid, 'warn'),
       tip: `Subnets ${UTIL_WARN}% to ${UTIL_CRIT - 1}% full, tiny networks of 8 addresses or fewer included.${loadedWord}` },
@@ -224,6 +225,16 @@ function Tiles({ items, label }) {
       })}
     </ul>
   )
+}
+
+// A subnet's size as the count Infoblox reports, which is what Used plus Free
+// add up to. It used to be worked out from the prefix ("(256 addresses)"),
+// which disagreed with Used and Free when Infoblox counted 254 (2026-11-24).
+// A live tenant reports 256 for a /24, so the prefix cannot be trusted either
+// way. With no count from the server, withSize's words stay.
+function subnetSize(network, total) {
+  const t = num(total)
+  return Number.isFinite(t) && t > 0 ? `${network} (${t.toLocaleString('en-US')} addresses)` : withSize(network)
 }
 
 // ---------- utilization distribution ----------
@@ -769,7 +780,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
         util: num(s.util),
         used: num(s.used),
         free: freeOf(s),
-        network: (s.addr ? withSize(s.cidr ? `${s.addr}/${s.cidr}` : s.addr) : s.cidr) || '—',
+        network: (s.addr ? subnetSize(s.cidr ? `${s.addr}/${s.cidr}` : s.addr, s.total) : s.cidr) || '—',
       })),
     [sorted],
   )

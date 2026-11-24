@@ -27,9 +27,20 @@ export const FAILURE_CODES = [
   { key: 'other', label: 'Other', tip: 'Any other failure code, such as NOTAUTH.' },
 ]
 
+// Where the numbers came from. Every number in the panel is for the time
+// picked, whichever source the server read (dns_failures.go passes the window
+// as the query's date range). The line used to say "From the last 3 days of
+// failure records", naming how long those records are kept, and under "Today"
+// it read as though the numbers covered 3 days (2026-11-24).
 export const SOURCE_LINE = {
-  failure_records: 'From the last 3 days of failure records',
-  query_logs: 'From the query logs',
+  failure_records: 'the failed-lookup records',
+  query_logs: 'the query logs',
+}
+const sourceLine = (source, window) => {
+  const from = SOURCE_LINE[source]
+  if (!from) return null
+  const label = FAILURE_WINDOWS.find((w) => w.value === window)?.label ?? window
+  return `Every number is for ${label.toLowerCase()}, from ${from}.`
 }
 
 // Remembered per viewer, in this browser, like the other panel settings.
@@ -94,6 +105,6 @@ export function failuresView(feed, window) {
       : null,
     namesText: namesOk ? null : namesRead ? CANT_TELL : NOT_CHECKED,
     note: mine?.status === 'empty' ? NO_RECORDS : null,
-    source: SOURCE_LINE[mine?.source] ?? null,
+    source: sourceLine(mine?.source, window),
   }
 }

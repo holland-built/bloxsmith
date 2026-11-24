@@ -7,7 +7,7 @@
   - 'button "Options: Open Issues"'
   - link "Subnets":
     - /url: "#network?minUtil=90&links=1"
-  - text: /Review 1 ≥\d+% full of \d+/
+  - text: /Needs action 1 ≥\d+% full of \d+/
   - link "Hosts":
     - /url: "#infra?status=offline"
   - text: Needs action 1 not online of 3
@@ -30,6 +30,7 @@
   - definition: /\d+/
   - term: logged
   - definition: "8"
+  - paragraph: Showing the newest 2 of 10 events.
   - heading "Top Capacity Risks" [level=2]
   - text: /least room left top \d+/
   - 'button "About: Top Capacity Risks"': "About: ⓘ"
@@ -68,7 +69,7 @@
         - cell /\d+ \/ \d+/
         - cell /\d+/
   - heading "Hosts Needing Attention" [level=2]
-  - text: 3 listed
+  - text: 2 listed
   - link "Open Infra":
     - /url: "#infra?status=not-online"
   - 'button "About: Hosts Needing Attention"': "About: ⓘ"
@@ -89,11 +90,6 @@
           - button "View details for baseline-host-b"
           - link "baseline-host-b"
         - cell "degraded"
-      - row /View details for baseline-host-a/:
-        - cell /View details for baseline-host-a/:
-          - button "View details for baseline-host-a"
-          - link "baseline-host-a"
-        - cell "ok"
   - heading "DNS Zone Issues" [level=2]
   - link "Open DNS":
     - /url: "#dns?issues=1"

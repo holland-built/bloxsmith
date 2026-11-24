@@ -11,6 +11,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
 import { issueWord } from '../lib/plainWords.js'
+import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import { healthMetric } from '../lib/dnsHealth.js'
 import { FAILURE_WINDOWS, failuresUrl, failuresView, readWindow, saveWindow } from '../lib/dnsFailures.js'
@@ -99,12 +100,12 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
   const unchecked = zonesOk ? zones.length - checked : 0
   const withIssues = zonesOk ? zones.filter(hasIssues).length : null
   const zoneWord = zonesLoading ? ['Checking', 'none'] : !zonesOk ? ['Unavailable', 'none']
-    : withIssues > 0 ? ['Needs action', 'crit'] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
+    : withIssues > 0 ? [SEV_WORD[PROBLEM_SEV.zoneIssues], PROBLEM_SEV.zoneIssues] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const sg = signing(dnssec)
   const sgOk = !dnssec.loading && !sg.failed
   const sgWord = dnssec.loading ? ['Checking', 'none'] : !sgOk ? ['Unavailable', 'none']
-    : sg.unsigned > 0 ? ['Review', 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
+    : sg.unsigned > 0 ? [SEV_WORD.warn, 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const svc = services.data?.rows
   const svcOk = !services.loading && !services.error && services.data?.status !== 'error' && Array.isArray(svc)
@@ -525,7 +526,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
               <button type="button" className="dns-kind" onClick={() => open(k)} aria-label={`${issueWord(k)}: ${n.toLocaleString()} zones. Show them.`}>
                 <span className="dns-kind-name">{issueWord(k)}</span>
                 <span className="dns-kind-n">{n.toLocaleString()}</span>
-                <i className="dns-kind-bar" aria-hidden="true" style={{ '--w': `${(n / top) * 100}%`, '--c': COLORS.crit }} />
+                <i className="dns-kind-bar" aria-hidden="true" style={{ '--w': `${(n / top) * 100}%`, '--c': COLORS[PROBLEM_SEV.zoneIssues] }} />
               </button>
             </li>
           ))}
@@ -715,8 +716,8 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
   const rows = useMemo(() => sorted.map((z) => {
     const issues = hasIssues(z)
     const issuesCell = issues ? (
-      <span className="text-note inline-flex items-center gap-1.5" style={{ color: COLORS.crit }}>
-        <i aria-hidden="true" className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
+      <span className="text-note inline-flex items-center gap-1.5" style={{ color: COLORS[PROBLEM_SEV.zoneIssues] }}>
+        <i aria-hidden="true" className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS[PROBLEM_SEV.zoneIssues] }} />
         {z.issues.map(issueWord).join(', ')}
       </span>
     ) : z.anomaly ? (

@@ -5,7 +5,7 @@
     - listitem:
       - button /DNS queries \d+ a second/
     - listitem:
-      - link /Zones Needs action \d+ with issues of \d+/:
+      - link /Zones Review \d+ with issues of \d+/:
         - /url: "#dns?issues=1"
     - listitem:
       - button /Signing Review \d+ not signed of \d+ public/
@@ -49,7 +49,7 @@
       - row /old-printer\.baseline\.example\. \d+/:
         - cell "old-printer.baseline.example."
         - cell /\d+/
-  - text: From the last 3 days of failure records
+  - text: Every number is for today, from the failed-lookup records.
   - button "About dns-zone-kpis": ⓘ
   - button "Options for Zone Counts": ⋯
   - text: Issues by kind

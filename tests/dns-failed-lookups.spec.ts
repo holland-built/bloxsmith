@@ -33,12 +33,12 @@ test('changing the window asks for that window and shows its numbers', async ({ 
   await page.goto('/#dns');
   const p = panel(page);
   await expect(p.locator('[data-failed-total] dd')).toHaveText('120');
-  await expect(p.locator('[data-failed-source]')).toHaveText('From the last 3 days of failure records');
+  await expect(p.locator('[data-failed-source]')).toHaveText('Every number is for today, from the failed-lookup records.');
   expect(asked[0]).toBe('today');
 
   await p.getByLabel('Time window').selectOption('this week');
   await expect(p.locator('[data-failed-total] dd')).toHaveText('5,600');
-  await expect(p.locator('[data-failed-source]')).toHaveText('From the query logs');
+  await expect(p.locator('[data-failed-source]')).toHaveText('Every number is for this week, from the query logs.');
   expect(asked).toContain('this week');
 
   await p.getByLabel('Time window').selectOption('last 30 days');

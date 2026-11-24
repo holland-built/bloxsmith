@@ -159,7 +159,9 @@ function SeverityHero({ panelId, hub, events }) {
     }
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
-  const otherSev = countedOf(hub.data) - SEV_ORDER.reduce((n, s) => n + (counts[s] || 0), 0)
+  const legend = SEV_ORDER.reduce((n, s) => n + (Number(counts[s]) || 0), 0)
+  const otherSev = countedOf(hub.data) - legend
+  const barsNote = shownNote(hub.data, 'events', legend + Math.max(otherSev, 0))
 
   return (
     <Card panelId={panelId} span={4} title="Threat Events by hour" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
@@ -209,7 +211,7 @@ function SeverityHero({ panelId, hub, events }) {
           {/* The legend covers every event counted; the bars are drawn from the
               listed rows only, so they say so. A capped read's longer scope
               sentence is said once, under the Triage Inbox. */}
-          {shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
+          {barsNote && <div className="text-note text-dim mt-2">{barsNote}</div>}
         </>
       )}
     </Card>

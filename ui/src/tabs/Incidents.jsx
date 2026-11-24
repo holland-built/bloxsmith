@@ -241,8 +241,32 @@ function categorySplit(category, count, signals, truncated, COLORS) {
     .join(', ')
 }
 
-function CategoryChips({ categories, signals = [], truncated = false, loading, error, category, onCategory, degraded, meta = {}, panelId }) {
+// The chips, built from the rows Triage lists whenever those are the whole
+// list, so a chip's count, worst severity and category always match the table
+// under it. Until 2026-11-24 they came from the server's own grouping, which
+// could say "2 Capacity, worst: high" over a table holding one critical
+// Capacity row and a DNS row with no chip at all. When the server capped the
+// rows, the table is not the whole list and the server's totals are kept.
+// Server order first, then any category only the rows name.
+function chipsFromRows(categories, signals, truncated) {
+  if (truncated) return categories
+  const by = new Map()
+  for (const s of signals) {
+    const c = by.get(s.category)
+    if (!c) by.set(s.category, { category: s.category, count: 1, severity: s.severity })
+    else {
+      c.count++
+      if (sevRank(s.severity, {}) < sevRank(c.severity, {})) c.severity = s.severity
+    }
+  }
+  const order = categories.map((c) => c.category)
+  const at = (k) => (order.includes(k) ? order.indexOf(k) : order.length)
+  return [...by.values()].sort((a, b) => at(a.category) - at(b.category) || b.count - a.count)
+}
+
+function CategoryChips({ categories: fromServer, signals = [], truncated = false, loading, error, category, onCategory, degraded, meta = {}, panelId }) {
   const { COLORS } = useChartTheme()
+  const categories = chipsFromRows(fromServer, signals, truncated)
   const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
     <Card panelId={panelId} span={6} title="Categories">

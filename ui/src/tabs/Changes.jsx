@@ -23,6 +23,7 @@ import {
   withinWindow,
 } from '../lib/changes.js'
 import Tip from '../components/Tip.jsx'
+import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import './Overview.css'
 import './Changes.css'
 import { formatTime } from '../lib/dates.js'
@@ -200,7 +201,7 @@ function BandCell({ cell, listed }) {
   const unknown = cell.state === 'unknown'
   const populated = cell.state === 'populated'
   const alarm = populated && ALARM.has(cell.key)
-  const word = unknown ? 'Unknown' : populated ? (alarm ? 'Review' : '') : 'None'
+  const word = unknown ? 'Unknown' : populated ? (alarm ? SEV_WORD[PROBLEM_SEV.changeAlarm] : '') : 'None'
   const tip = (
     <>
       {unknown && <>{NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)}: {cell.reason}. </>}
@@ -213,7 +214,7 @@ function BandCell({ cell, listed }) {
     <Tip as="div" tip={tip} data-changes-cell={cell.key} data-state={cell.state} className="chg-tile">
       <span className="ov-kpi-top">
         <span>{TILE_LABEL[cell.key]}</span>
-        <span className={`ov-verdict ${alarm ? 'crit' : 'none'}`}>{word}</span>
+        <span className={`ov-verdict ${alarm ? PROBLEM_SEV.changeAlarm : 'none'}`}>{word}</span>
       </span>
       {/* An unknown answer is a dash, never a 0. A zero here would be read as
           "none happened", which is the exact misreading the cap guard exists

@@ -138,6 +138,10 @@ test('a list shorter than the count says how much it shows', () => {
   assert.equal(shownNote(CAPPED_READ, 'events'), 'Showing the newest 50 of the 5,000 events counted.')
   assert.equal(shownNote({ returned: 7, counted: 7, complete: true }, 'events'), null)
   assert.equal(shownNote(COMPLETE, 'events'), null)
+  // No `counted` from the server, but a legend that adds up to more than the
+  // rows listed: the gap gets its note (Security said "2 events" over 10).
+  assert.equal(shownNote({ events: [{}, {}] }, 'events', 10), 'Showing the newest 2 of 10 events.')
+  assert.equal(shownNote({ events: [{}, {}] }, 'events', 2), null)
 })
 
 test('a figure built from the listed rows names that scope', () => {
