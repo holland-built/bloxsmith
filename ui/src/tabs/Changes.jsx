@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardGrid, Empty, FeedUnavailable, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { NO_PERMISSION, useApi } from '../lib/api.js'
 import {
@@ -95,7 +95,11 @@ export default function Changes() {
   const win = windowLabel({ truncated, rows, nowMs })
   // When the payload arrived, not when this render ran: the half-minute
   // window tick must not make an old read look fresh.
-  const fetchedAt = useMemo(() => (data ? new Date() : null), [data])
+  // A 200 that carries {status: "error"} is a failed read, so it keeps the
+  // last good time instead of becoming one.
+  const goodAt = useRef({ data: null, at: null })
+  if (data && data !== goodAt.current.data && data.status !== 'error') goodAt.current = { data, at: new Date() }
+  const fetchedAt = goodAt.current.at
 
   return (
     <div className="w-full px-6 py-5">

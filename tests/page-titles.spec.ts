@@ -84,3 +84,17 @@ for (const id of DATA_PAGES) {
     await expect(pill).toContainText('12:00');
   });
 }
+
+// /api/csp-audit can answer 200 with {status: "error"}. That is a failed read,
+// so it must not become the "last good" time.
+test('"changes": an error reply keeps the last good time', async ({ page }) => {
+  await page.clock.install({ time: FIXED_NOW });
+  await installFixtures(page, ALL_PAGES);
+  await open(page, 'changes');
+  const pill = page.locator('main [data-updated]');
+  await expect(pill).toHaveText(/Updated 12:00/, { timeout: 15000 });
+  await page.route('**/api/csp-audit**', (r) => r.fulfill({ json: { status: 'error', error: 'upstream' } }));
+  await page.clock.runFor(10 * 60 * 1000);
+  await expect(pill).toContainText("Couldn't refresh");
+  await expect(pill).toContainText('12:00');
+});
