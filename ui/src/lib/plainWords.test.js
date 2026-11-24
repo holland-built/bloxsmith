@@ -50,6 +50,8 @@ test('a count of 1 takes the singular, anything else the plural', () => {
 test('an incident names its subject, not its id', () => {
   assert.equal(subjectName({ entity_type: 'subnet', entity_id: 'ipam/subnet/abc', message: 'Windows Wireless at 80% utilization' }), 'Windows Wireless')
   assert.equal(subjectName({ entity_type: 'zone', entity_id: 'dns/auth_zone/abc', message: 'aws.private.: High Neg-TTL' }), 'aws.private.')
+  // A zone with no name (the server sends ": TTL Too Low") falls back to its id, never a blank.
+  assert.equal(subjectName({ entity_type: 'zone', entity_id: 'dns/auth_zone/abc', message: ': TTL Too Low' }), 'dns/auth_zone/abc')
   assert.equal(subjectName({ entity_type: 'lease', entity_id: 'dhcp/lease/abc', message: 'Lease 10.0.0.5 (printer) expired' }), '10.0.0.5')
   assert.equal(subjectName({ entity_type: 'posture', entity_id: 'x', message: '2 of 3 DNS zones with public names unsigned (DNSSEC)' }), 'All DNS zones')
 })

@@ -136,7 +136,7 @@ export function countOf(n, one, many = `${one}s`) {
 // ("ipam/subnet/abc") is the last resort: it means nothing to a reader.
 export function subjectName(s) {
   const msg = String(s.message || '')
-  if (s.entity_type === 'zone' && msg.includes(': ')) return msg.split(': ')[0]
+  if (s.entity_type === 'zone' && msg.includes(': ')) return msg.split(': ')[0] || s.entity_id || '—'
   if (s.entity_type === 'subnet' && / at \d+% utilization$/.test(msg)) return msg.replace(/ at \d+% utilization$/, '') || s.entity_id
   const lease = s.entity_type === 'lease' && msg.match(/^Lease (\S+) /)
   if (lease) return lease[1]

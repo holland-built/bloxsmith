@@ -12,10 +12,12 @@ export const MINUTES_PER_JOB = 10
 // word for what each one makes. A recorded delete ("delete") is not work made,
 // so it is left out. Get an address makes two kinds of thing; its two rows
 // share the page name and say which by the noun ("Get an address: 1 job,
-// 2 addresses created"), not by a second label after a second colon.
+// 2 items created"), not by a second label after a second colon. "Items", not
+// "addresses": one address run also records its DNS record or reservation
+// (allocatedObjects in go/internal/server/desk.go).
 export const SOURCES = [
   ['', 'Automate', 'object'],
-  ['address', 'Get an address', 'address', 'addresses'],
+  ['address', 'Get an address', 'item'],
   ['dns', 'Get an address', 'DNS name'],
   ['lists', 'Site lists', 'object'],
   ['editor', 'Editor', 'object'],
@@ -73,7 +75,7 @@ export function countWork(data, range) {
   }
 }
 
-// One bySource row as the panel says it: "Get an address: 1 job, 2 addresses created".
+// One bySource row as the panel says it: "Get an address: 1 job, 2 items created".
 export function workLine([label, jobs, objects, one, many]) {
   return `${label}: ${countOf(jobs, 'job')}, ${countOf(objects, one, many)} created`
 }
