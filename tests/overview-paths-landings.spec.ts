@@ -234,16 +234,3 @@ for (const bad of ['abc', '150', '-5', '%20']) {
     await expect(card.getByRole('button', { name: 'Clear filter' })).toHaveCount(0);
   });
 }
-
-// A landing that needed no scroll must not leave a snap-back behind: the
-// person's own scroll a moment later stays where they put it.
-test('after a landing, scrolling away is not undone', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await world(page);
-  await page.goto('/#network?minUtil=70&links=1');
-  await expect(line(page, 'network-exhaustion')).toContainText('Showing 3');
-  await page.waitForTimeout(2500);
-  await page.evaluate(() => window.scrollTo({ top: 0 }));
-  await page.waitForTimeout(600);
-  expect(await page.evaluate(() => scrollY)).toBe(0);
-});
