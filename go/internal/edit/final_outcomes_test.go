@@ -160,3 +160,18 @@ func TestAllocate_UnreadableAnswerIsMarkedUnknown(t *testing.T) {
 		t.Fatalf("result = %v", res)
 	}
 }
+
+// An allocate with no clear answer may have reserved an address, so it is
+// marked unknown. A clear refusal is not.
+func TestAllocate_NoClearStatusIsMarkedUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		st      int
+		unknown bool
+	}{{500, true}, {504, true}, {202, true}, {204, true}, {403, false}, {409, false}} {
+		f := newAllocFake(t, allocConfig{allocStatus: tc.st, allocBody: `{}`})
+		res, _ := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": float64(1), "dry": false})
+		if (res["outcome"] == "unknown") != tc.unknown {
+			t.Fatalf("status %d: result = %v", tc.st, res)
+		}
+	}
+}

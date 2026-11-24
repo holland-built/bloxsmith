@@ -908,7 +908,11 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		return M{"ok": false, "error": rest.OutcomeUnknown, "outcome": "unknown"}, 502
 	}
 	if status != 200 && status != 201 {
-		return M{"ok": false, "error": writeFailed("allocation", status), "detail": resp}, statusOr(status, 502)
+		failed := M{"ok": false, "error": writeFailed("allocation", status), "detail": resp}
+		if rest.UnclearFailure(status) {
+			failed["outcome"] = "unknown"
+		}
+		return failed, statusOr(status, 502)
 	}
 
 	addresses := respAddresses(resp)

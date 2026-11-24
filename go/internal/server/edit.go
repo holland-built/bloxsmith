@@ -185,7 +185,8 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 			"fixed_address": res["fixed_address"]})
 	case res["outcome"] == "unknown":
 		// Infoblox answered without naming an address, so one may be reserved.
-		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
+		// Its own event, so it is never counted as an address taken.
+		d.auditAppend("selfservice-allocate-unknown", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"], "outcome": "unknown"})
 	case createdUnreadable(res):

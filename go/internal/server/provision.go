@@ -262,11 +262,14 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 				errDetail = map[string]any{"phase": "verify", "subnet": addr}
 				if errors.Is(err, errPickKept) {
 					detail := map[string]any{"block": block, "cidr": cidr, "subnet": addr}
+					event := "provision-subnet"
 					var maybe pickMaybeKept
 					if errors.As(err, &maybe) {
+						// Its own event, so it is never counted as a subnet created.
+						event = "provision-subnet-unknown"
 						detail["outcome"] = "unknown"
 					}
-					d.auditAppend("provision-subnet", httpx.Actor(r), detail)
+					d.auditAppend(event, httpx.Actor(r), detail)
 				}
 				return err
 			}

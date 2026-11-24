@@ -39,7 +39,7 @@ func TestReplaceSharedPick_NoClearAnswerIsAuditedAsUnknown(t *testing.T) {
 		if strings.Contains(body, "still there") || !strings.Contains(body, "may have been created") {
 			t.Fatalf("status %d: %s", st, body)
 		}
-		detail := uaOnly(t, logPath, "provision-subnet", "the clean subnet may exist")
+		detail := uaOnly(t, logPath, "provision-subnet-unknown", "the clean subnet may exist")
 		if detail["outcome"] != "unknown" || detail["subnet"] != "172.16.129.0" {
 			t.Fatalf("status %d: audit detail = %v", st, detail)
 		}

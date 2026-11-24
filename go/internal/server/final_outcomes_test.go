@@ -143,7 +143,7 @@ func TestReplaceSharedPick_UnknownDeleteStops(t *testing.T) {
 		if strings.Contains(body, `"done":true`) || !strings.Contains(body, "may or may not have been removed") || cleanPosts.Load() != 0 {
 			t.Fatalf("status %d (%d creates): %s", st, cleanPosts.Load(), body)
 		}
-		if detail := uaOnly(t, logPath, "provision-subnet", "the pick may still be there"); detail["outcome"] != "unknown" {
+		if detail := uaOnly(t, logPath, "provision-subnet-unknown", "the pick may still be there"); detail["outcome"] != "unknown" {
 			t.Fatalf("status %d: audit = %v", st, detail)
 		}
 	}
@@ -268,7 +268,7 @@ func TestAllocateRoute_EmptyAnswerIsAuditedAsUnknown(t *testing.T) {
 		if rr.Code < 500 {
 			t.Fatalf("%s: = %d %s", body, rr.Code, rr.Body.String())
 		}
-		detail := uaOnly(t, logPath, "selfservice-allocate", "the allocation may have landed")
+		detail := uaOnly(t, logPath, "selfservice-allocate-unknown", "the allocation may have landed")
 		if _, claimed := detail["still_reserved"]; claimed || detail["outcome"] != "unknown" {
 			t.Fatalf("%s: audit = %v", body, detail)
 		}
