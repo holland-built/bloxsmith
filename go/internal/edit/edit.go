@@ -905,7 +905,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		nil, map[string]string{"count": strconv.Itoa(count)})
 	if (status == 200 || status == 201) && resp == nil {
 		// Accepted with an unreadable body: the address may be reserved.
-		return M{"ok": false, "error": rest.OutcomeUnknown}, 502
+		return M{"ok": false, "error": rest.OutcomeUnknown, "outcome": "unknown"}, 502
 	}
 	if status != 200 && status != 201 {
 		return M{"ok": false, "error": writeFailed("allocation", status), "detail": resp}, statusOr(status, 502)

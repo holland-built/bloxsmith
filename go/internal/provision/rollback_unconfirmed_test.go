@@ -43,3 +43,17 @@ func TestRollback_AcceptedDeleteIsNotCountedAsDeleted(t *testing.T) {
 		}
 	}
 }
+
+// A block rollback delete answered 404 means the block is gone.
+func TestBlockRollback_404IsNotLeftBehind(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+	}))
+	t.Cleanup(srv.Close)
+	var steps []string
+	result := M{"blocks_created": []any{M{"id": "ipam/address_block/b1", "address": "10.0.0.0", "cidr": 16}}}
+	(&BlockProvisioner{e: newTestEngine(srv), emit: collectSteps(&steps)}).rollback(result)
+	if got := getList(result, "rollback_residual"); len(got) != 0 {
+		t.Fatalf("residual = %v, want none", got)
+	}
+}

@@ -310,6 +310,10 @@ func (p *BlockProvisioner) rollback(result M) M {
 		}
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
+		if status == 404 { // already gone, so it is not left behind
+			deleted++
+			continue
+		}
 		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep("block", blockID, status)})
 			residual = append(residual, M{

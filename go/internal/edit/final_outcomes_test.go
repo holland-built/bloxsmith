@@ -150,3 +150,13 @@ func TestSubnetTagging_RefusedRetryAfterUnknownStaysUnknown(t *testing.T) {
 		}
 	}
 }
+
+// An allocate with an empty or unreadable reply may have reserved an address,
+// so it is marked unknown and the route writes an audit row for it.
+func TestAllocate_UnreadableAnswerIsMarkedUnknown(t *testing.T) {
+	f := newAllocFake(t, allocConfig{allocBody: "not json"})
+	res, _ := f.client().SelfserviceAllocate(M{"subnet_id": "s-42", "count": float64(1), "dry": false})
+	if res["outcome"] != "unknown" {
+		t.Fatalf("result = %v", res)
+	}
+}
