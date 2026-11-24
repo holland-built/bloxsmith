@@ -103,3 +103,51 @@ test('"healthy" is drawn in the ok colour, not the button colour', () => {
   assert.match(kit, /ok:\s*\{[^}]*dot:\s*'var\(--color-ok\)'/, 'the headline tiles draw ok in something other than --color-ok')
   assert.match(ui, /label:\s*'Healthy',\s*color:\s*'var\(--color-ok\)'/, 'utilStatus draws Healthy in something other than --color-ok')
 })
+
+// THE BUTTON BLUE IS NOT A TEXT COLOUR.
+//
+// --color-accent is a fill: white sits on it at 4.60. As letters on the page it
+// measured 4.1:1 in dark and 4.2:1 in light (Security's Block action and its
+// "All" filter, 2026-11-24), under the 4.5 small text needs. --color-link is
+// the same blue tuned for text in each theme. This catches the three ways a
+// call site writes text in the fill colour: the Tailwind class, an inline
+// `color:` style, and a CSS `color:` rule.
+function filesEnding(dir, ext, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) filesEnding(p, ext, out)
+    else if (e.name.endsWith(ext)) out.push(p)
+  }
+  return out
+}
+
+test('no text is written in the button colour', () => {
+  const jsx = filesEnding(SRC, '.jsx')
+  const cssFiles = filesEnding(SRC, '.css')
+  assert.ok(jsx.length > 20 && cssFiles.length > 5, `scanned ${jsx.length} .jsx and ${cssFiles.length} .css files`)
+  const jsxText = [/\btext-accent\b/, /(^|[^A-Za-z])color:[^,}]*COLORS\.accent/]
+  const cssText = /(^|[;{\s])color:\s*var\(--color-accent\)/
+  const bad = []
+  for (const f of jsx) {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (jsxText.some((re) => re.test(line))) bad.push(`${path.relative(SRC, f)}:${i + 1}`)
+    })
+  }
+  for (const f of cssFiles) {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (cssText.test(line)) bad.push(`${path.relative(SRC, f)}:${i + 1}`)
+    })
+  }
+  assert.deepEqual(bad, [], `text drawn in the button colour; use text-link / COLORS.link / var(--color-link):\n  ${bad.join('\n  ')}`)
+})
+
+// A share bar is a measured amount, not something to click, so it takes the
+// series colour (or grey), never the button blue. Assets' type list drew its
+// bars in --as-accent until 2026-11-24.
+test('the Assets share bars are not drawn in the button colour', () => {
+  const assets = fs.readFileSync(path.join(SRC, 'tabs/Assets.css'), 'utf8')
+  const barRules = assets.split('\n').filter((l) => /\.as-bar i\b/.test(l) && /background/.test(l))
+  assert.ok(barRules.length > 0, 'found no .as-bar i background rule in Assets.css')
+  const blue = barRules.filter((l) => /accent/.test(l))
+  assert.deepEqual(blue, [], `a share bar uses the button blue:\n  ${blue.join('\n  ')}`)
+})

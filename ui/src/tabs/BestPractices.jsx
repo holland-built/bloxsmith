@@ -83,12 +83,14 @@ function Other({ c }) {
 }
 
 // One cell per check, in list order: bright only for a problem, a dashed
-// outline for couldn't tell, pale for passed.
+// outline for couldn't tell, pale for passed. Every problem takes the problem
+// colour whatever its severity, so a low one never reads as neutral grey; the
+// tile above says how many are high, medium and low.
 function Strip({ checks }) {
   return (
     <div className="bp-strip">
       {checks.map((c) => (
-        <Tip key={c.id} className={`bp-cell ${tone(c)}`} tip={`${word(c)}: ${c.title}`}>
+        <Tip key={c.id} className={`bp-cell ${c.status === 'problem' ? 'crit' : tone(c)}`} tip={`${word(c)}: ${c.title}`}>
           <span className="sr-only">{`${word(c)}: ${c.title}`}</span>
         </Tip>
       ))}

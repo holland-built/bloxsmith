@@ -359,6 +359,10 @@ function IpamSpaces({ panelId, ipam }) {
                   <div className="h-full" style={{ width: `${(r.used / maxUsed) * 100}%`, background: barColor(status) }} />
                 </div>
                 <span className="w-12 text-right text-muted">{r.used.toLocaleString()}</span>
+                {/* The bar's colour is how full the space is; its length is
+                    addresses used. Saying the percent in words means a short
+                    red bar on a small, nearly full space explains itself. */}
+                <span className="w-[64px] text-right text-muted whitespace-nowrap">{`${Math.round(r.pct)}% full`}</span>
               </div>
             )
           })}
@@ -918,7 +922,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
       {landing && (
         <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
           <span>{landingLine}</span>
-          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => setHashParams('network', {})}>Show all</button>
+          <button type="button" className="text-link underline whitespace-nowrap px-1 py-1.5" onClick={() => setHashParams('network', {})}>Show all</button>
         </div>
       )}
       {unused && !unusedApi.data ? (
@@ -939,10 +943,10 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
       )}
       {unused && (
         <div className="mt-2 flex items-center justify-end gap-3 text-note">
-          <button type="button" className="text-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          <button type="button" className="text-link disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={unusedPage === 0} onClick={() => setUnusedPage((p) => p - 1)}>Previous</button>
           <span className="text-muted">Page {unusedPage + 1}</span>
-          <button type="button" className="text-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          <button type="button" className="text-link disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={!unusedApi.data?.more} onClick={() => setUnusedPage((p) => p + 1)}>Next</button>
         </div>
       )}

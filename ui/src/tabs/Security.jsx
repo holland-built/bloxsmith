@@ -502,7 +502,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
               className={`px-2 py-1 rounded-control text-note capitalize border pick${!landing && sevFilter === s ? ' pick-on' : ''}`}
               style={{
                 borderColor: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
-                color: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
+                color: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.link) : 'var(--color-muted)',
               }}
             >
               {s}
@@ -516,7 +516,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       {landing && (
         <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
           <span>{landingLine}</span>
-          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => { setSevFilter('all'); setHashParams('security', {}) }}>Show all</button>
+          <button type="button" className="text-link underline whitespace-nowrap px-1 py-1.5" onClick={() => { setSevFilter('all'); setHashParams('security', {}) }}>Show all</button>
         </div>
       )}
       {hub.loading ? <Skeleton h={260} /> : unavailable ? (

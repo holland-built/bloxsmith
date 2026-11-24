@@ -37,7 +37,7 @@ function usePanelSource(panelId, open) {
 // theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
 // which resolves real hex per theme.
 export const COLORS = {
-  accent: 'var(--color-accent)', series: 'var(--color-series)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
+  accent: 'var(--color-accent)', link: 'var(--color-link)', series: 'var(--color-series)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
   crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
   // Foregrounds for the three FILLED buttons. These are not decoration: white
   // measured 3.79:1 on dark crit, 1.74:1 on dark ok and 3.30:1 on light ok, all
