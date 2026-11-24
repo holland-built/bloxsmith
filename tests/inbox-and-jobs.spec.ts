@@ -9,13 +9,13 @@ import { test, expect } from './fixtures';
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
-async function feeds(page: Page, { incidents, hosts, sec, signals }: { incidents?: unknown[] | null; hosts?: unknown[]; sec?: unknown; signals?: unknown[] }) {
+async function feeds(page: Page, { incidents, hosts, sec, signals, crit = 3 }: { incidents?: unknown[] | null; hosts?: unknown[]; sec?: unknown; signals?: unknown[]; crit?: number }) {
   await page.route('**/api/incidents', (r) =>
     incidents === null ? r.fulfill({ status: 500, body: 'boom' }) : r.fulfill(json({ incidents: incidents ?? [], signals: signals ?? [] })),
   );
   await page.route('**/api/hub/security*', (r) => r.fulfill(json(sec ?? { availability: 'ok', counts: { critical: 0, high: 0 } })));
   await page.route('**/api/data', (r) =>
-    r.fulfill(json({ _meta: { hosts: 'ok' }, _totals: { hosts: (hosts ?? []).length, subnets: 10, subnetsCrit: 3, subnetsWarn: 5 }, hosts: hosts ?? [] })),
+    r.fulfill(json({ _meta: { hosts: 'ok' }, _totals: { hosts: (hosts ?? []).length, subnets: 10, subnetsCrit: crit, subnetsWarn: 5 }, hosts: hosts ?? [] })),
   );
 }
 
@@ -107,15 +107,17 @@ test('unsigned public zones are a grey Note below warnings, "Ask AI" shows on ho
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await toggle.click();
   await expect(page.locator('[data-board]')).toBeHidden();
-  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note');
+  // IPAM's warning is the 3 subnets 90% full in the fake inventory.
+  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note · IPAM 1 warning');
   await page.reload();
-  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note', { timeout: 20_000 });
+  await expect(page.locator('[data-board-summary]')).toHaveText('DNS 1 warning, 1 note · IPAM 1 warning', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Show' }).click();
   await expect(page.locator('[data-board]')).toBeVisible();
 });
 
 test('a quiet day says "None open" on every service row', async ({ page }) => {
-  await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }] });
+  // No subnet 90% full either: those are an open IPAM item even with no incident.
+  await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }], crit: 0 });
   await page.goto('/');
   for (const name of ['DNS', 'DHCP', 'IPAM', 'Hosts', 'Security']) {
     await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('None open', { timeout: 20_000 });

@@ -39,12 +39,16 @@ test('an offline host is an open issue on the Hosts row, not "none"', async ({ p
 
 test('an issue first seen today says new; one the board cannot place goes under Other', async ({ page }) => {
   await installBaselineWorld(page);
+  // The baseline incident is about subnets, seen 8 hours ago, so it is on the
+  // IPAM row (fix 1, 2026-11-24). A kind no service row claims is still shown.
+  await page.route('**/api/incidents*', (route) => json(route, { incidents: [
+    { category: 'capacity', count: 2, entity_type: 'subnet', first_detected_at: Date.parse('2026-01-01T12:00:00Z') / 1000 - 8 * 3600, key: 'capacity-subnet', message: 'subnets close to full', severity: 'high' },
+    { category: 'mystery', count: 1, entity_type: 'widget', key: 'mystery', message: 'widgets out of step', severity: 'high' },
+  ], signals: [] }));
   await page.goto('/#overview');
-  // The baseline incident is a "capacity" kind seen 8 hours ago, which no
-  // service row claims, so it must still be shown.
-  const other = row(page, 'Other');
-  await expect(other).toContainText('subnets close to full', { timeout: 20_000 });
-  await expect(other).toContainText('Warning, new');
+  await expect(row(page, 'IPAM')).toContainText('subnets close to full', { timeout: 20_000 });
+  await expect(row(page, 'IPAM')).toContainText('Warning, new');
+  await expect(row(page, 'Other')).toContainText('widgets out of step');
 });
 
 test('a service failing its health check never says "None open" on its row', async ({ page }) => {

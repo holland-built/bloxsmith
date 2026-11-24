@@ -21,7 +21,7 @@ async function busyWorld(page: Page, extra = 0) {
     { name: 'Security', status: 'ok', statusLabel: 'healthy', meta: '4/4 up', availability: 'ok' },
   ]));
   await page.route('**/api/incidents', (r) => json(r, {
-    incidents: [incident('capacity', 'crit'), incident('dns-ttl-anomaly', 'warn'), incident('dnssec', 'warn'), incident('stale-leases', 'warn'), ...Array.from({ length: extra }, (_, i) => incident(`extra-${i}`, 'warn'))],
+    incidents: [{ ...incident('capacity', 'crit'), entity_type: 'subnet' }, incident('dns-ttl-anomaly', 'warn'), incident('dnssec', 'warn'), incident('stale-leases', 'warn'), ...Array.from({ length: extra }, (_, i) => incident(`extra-${i}`, 'warn'))],
     signals: [],
   }));
   await page.goto('/#overview');
@@ -79,7 +79,7 @@ test('reading and Tab order follow the screen: attention list first', async ({ p
   await busyWorld(page);
   const order = await page.locator('.br-read h2').allTextContents();
   expect(order[0]).toContain('Items requiring attention');
-  expect(order[1]).toContain('Since yesterday');
+  expect(order[1]).toContain('Recent changes');
   expect(order[2]).toContain('Current status');
 });
 
@@ -93,7 +93,7 @@ test('the page does not scroll sideways at the width where the wide layout start
 test('nothing is lost and the page does not scroll sideways on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await busyWorld(page);
-  for (const name of ['Since yesterday', 'Items requiring attention', 'Current status', 'Service details']) {
+  for (const name of ['Recent changes', 'Items requiring attention', 'Current status', 'Service details']) {
     await expect(page.getByRole('heading', { name })).toBeVisible();
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

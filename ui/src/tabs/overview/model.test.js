@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canTellNew, changeSummary, dnsTrend, licenseSummary, newIssuesWords, openProblems, pageVerdict, rankProblems, upCount } from './model.js'
+import { canTellNew, changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, openProblems, pageVerdict, rankProblems, upCount, vsWords } from './model.js'
 
 const svc = (word, sev) => ({ v: { word, sev } })
 const NOW = 1_800_000_000
@@ -112,4 +112,31 @@ test('licenses: expired, due soon and unreadable dates are counted apart', () =>
   const iso = (d) => new Date(nowMs + d * day).toISOString()
   const s = licenseSummary({ data: { licenses: [{ expiry: iso(-1) }, { expiry: iso(30) }, { expiry: iso(400) }, { expiry: 'never?' }] } }, nowMs)
   assert.deepEqual([s.expired, s.soon, s.undated, s.total], [1, 1, 1, 4])
+})
+
+test('an empty attention list never reads as fine when no service could be checked', () => {
+  const dead = [svc('Unavailable', 'none'), svc('Not checked', 'none')]
+  assert.equal(emptyListWords(dead, pageVerdict(dead)), 'No services could be checked, so issues may be missing from this list.')
+  const some = [svc('Healthy', 'ok'), svc('Not checked', 'none')]
+  assert.equal(emptyListWords(some, pageVerdict(some)), 'No issues found so far.')
+  const ok = [svc('Healthy', 'ok')]
+  assert.equal(emptyListWords(ok, pageVerdict(ok)), 'No items require attention.')
+})
+
+test('subnets 90% full with no incident are an open IPAM problem, so the list matches the Review tile', () => {
+  const ipam = { name: 'IPAM', href: '#network?minUtil=90&links=1', n: 1, issues: [], state: null }
+  const open = openProblems(ipam)
+  assert.equal(open.length, 1)
+  assert.equal(open[0].title, '1 subnet is 90% full or more')
+  assert.equal(open[0].sev, 'warn')
+  assert.equal(rankProblems({ board: [ipam] }, NOW)[0].action, 'View subnets')
+  // An incident already about it is enough; no second row.
+  assert.equal(openProblems({ ...ipam, issues: [{ key: 'subnet-utilization', sev: 'warn' }] }).length, 1)
+  assert.equal(openProblems({ ...ipam, n: 0 }).length, 0)
+})
+
+test('the DNS change says the real window, the same words on the tile and the chart', () => {
+  const t = dnsTrend({ data: { rows: [{ hour: '2026-01-01T04:00:00', avg_value: 100 }, { hour: '2026-01-01T06:00:00', avg_value: 125 }] } })
+  assert.equal(vsWords(t.hours), 'vs 2h ago')
+  assert.equal(vsWords(null), 'vs first hour')
 })

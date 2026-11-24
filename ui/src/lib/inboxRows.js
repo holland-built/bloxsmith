@@ -44,7 +44,7 @@ export function inboxRows({ hosts, incidents, signals, sec, sitelists }) {
     // The server's group message starts with its count ("11 dns ttl anomaly");
     // one that does not still gets it, so the row never loses the number.
     if (text !== own[0]?.message && !/^\d/.test(text)) text = `${i.count} ${text}`
-    rows.push({ key: i.key || i.category, sev: i.severity === 'crit' ? 'crit' : i.severity === 'info' ? 'note' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
+    rows.push({ key: i.key || i.category, entity: i.entity_type, sev: i.severity === 'crit' ? 'crit' : i.severity === 'info' ? 'note' : 'warn', title: plainMessage(text).replace(/^\d+/, (n) => fmt(n)), sub: '', ...(FIX[i.category] ?? { href: '#incidents', ask: '' }) })
   }
   // Site lists' daily proposals wait here for approval (owner, 2026-11-13).
   // The "security" key puts them on the board's Security row.
