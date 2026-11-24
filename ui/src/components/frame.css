@@ -176,7 +176,14 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   .frame-rail { display: none; }
   .frame-phone-logo, .frame-phone-search { display: inline-grid; }
   .frame-phone-logo { flex: none; }
-  .frame-top { padding: 6px 12px; gap: 6px; }
+  .frame-top { padding: 6px 12px; gap: 6px; flex-wrap: wrap; }
+  /* The account line goes under the icons, on a line of its own, so the name and
+     "Changes allowed" read across the screen instead of in four short lines
+     squeezed beside the icons. display: contents lets the logo, menu and
+     account line take part in the header's own rows. */
+  .frame-where { display: contents; }
+  .frame-where > :has(> .frame-conn) { order: 2; flex-basis: 100%; min-width: 0; }
+  .frame-tools { order: 1; margin-inline-start: auto; }
   /* On a phone the list spans the header, which is its positioning parent. */
   .frame-tenant { position: static; }
   .frame-tenant-list { left: 8px; right: 8px; width: auto; min-width: 0; max-width: none; }

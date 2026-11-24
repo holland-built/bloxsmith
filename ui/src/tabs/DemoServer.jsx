@@ -191,7 +191,10 @@ export default function DemoServer() {
             {runs.length === 0 ? (status.error
               ? <FeedUnavailable label="Runs unavailable" reason={status.error.message || undefined} />
               : <Empty>No demo runs yet.</Empty>) : (
-              <div className="overflow-x-auto">
+              /* `relative` keeps the table's screen-reader-only "Actions" label
+                 inside this scroll box. Without it that label is placed
+                 against the panel and pushed a 320px page 69px sideways. */
+              <div className="relative overflow-x-auto">
                 <table className="w-full text-copy">
                   <thead>
                     <tr className="text-left text-note text-muted">
