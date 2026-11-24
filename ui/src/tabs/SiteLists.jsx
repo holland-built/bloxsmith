@@ -14,7 +14,7 @@ import { useReadOnly } from '../lib/writeTarget.js'
 import { useWriteFlow } from '../lib/writeFlow.js'
 import { compareTop, neverAdd, parseCsv, parsePasted } from '../lib/siteList.js'
 import { authFetch } from '../lib/authFetch.js'
-import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
@@ -501,7 +501,7 @@ export default function SiteLists() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Site lists</h1>
+      <PageTitle className="mb-1">Site lists</PageTitle>
       <TabIntro>Put a list of websites into a security policy, to block, allow, log or redirect them.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Add to policy is off." />
       <FormColumns form={

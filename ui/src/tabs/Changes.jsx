@@ -26,6 +26,7 @@ import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Changes.css'
 import { formatTime } from '../lib/dates.js'
+import { PageTitle } from '../components/kit.jsx'
 
 // WHAT CHANGED (#changes)
 //
@@ -100,7 +101,7 @@ export default function Changes() {
     <div className="w-full px-6 py-5">
       <div className="ov-look chg">
         <div className="ov-head">
-          <h1>What changed</h1>
+          <PageTitle>What changed</PageTitle>
           <span className="chg-pills">
             {/* The window the page can honestly claim: "Last 24 hours" only
                 when the feed was not cut off at its row limit. */}
@@ -110,9 +111,9 @@ export default function Changes() {
                 {win.text}
               </Tip>
             )}
-            <span className="ov-pill">
+            <span className="ov-pill" data-updated="">
               <span aria-hidden="true" className={`ov-live${state === 'unavailable' ? ' down' : state === 'loading' ? ' wait' : ''}`} />
-              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? 'Not updated' : `Updated ${fetchedAt ? formatTime(fetchedAt) : ''}`}
+              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? (fetchedAt ? `Couldn't refresh · ${formatTime(fetchedAt)}` : 'Not updated') : `Updated ${fetchedAt ? formatTime(fetchedAt) : ''}`}
             </span>
           </span>
         </div>

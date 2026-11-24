@@ -10,6 +10,7 @@ import { parseInline } from '../lib/markdown.js'
 import { answerBlocks } from '../lib/aiAnswer.js'
 import { failureText } from '../lib/api.js'
 import { writeFailureText } from '../lib/writeFailure.js'
+import { PageTitle } from '../components/kit.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
@@ -815,7 +816,7 @@ function EgressNotice({ egress, accepted, onAccept }) {
 export default function Ai() {
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">AI Assistant</h1>
+      <PageTitle className="mb-1">AI Assistant</PageTitle>
       <TabIntro>Ask about your network in plain words, or look up a domain, IP or host.</TabIntro>
       {/* panelId sits on the wrapper component, not only on the Card inside it:
           CardGrid reads it off its own direct children to work out the saved

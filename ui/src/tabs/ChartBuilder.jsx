@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SHARE_PICKER, useApi } from '../lib/api.js'
 import { Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
-import { ColumnHeading, FormColumns } from '../components/kit.jsx'
+import { ColumnHeading, FormColumns, PageTitle } from '../components/kit.jsx'
 import ChartView from '../components/ChartView.jsx'
 import { AnyHow, AnyPickers, AnyResult } from './ChartAnyData.jsx'
 import { anySentence } from '../lib/chartAnyData.js'
@@ -536,7 +536,7 @@ export default function ChartBuilder() {
   return (
     <div className="w-full px-6 py-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3 mb-1">
-        <h1 className="text-copy font-semibold tracking-tight">Build a chart</h1>
+        <PageTitle>Build a chart</PageTitle>
         <Switch checked={cube} onChange={setCubeNames} label="Show technical names" />
       </div>
       <TabIntro>Pick what to count and how to slice it. Every number comes straight from Infoblox.</TabIntro>

@@ -8,10 +8,13 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, 
 import { DataTable } from '../components/DataTable.jsx'
 import AssetCoverage from '../components/AssetCoverage.jsx'
 import AssetConnectors from '../components/AssetConnectors.jsx'
-import { HeadlineStrip } from '../components/kit.jsx'
+import { HeadlineStrip, PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
 import { formatWhen } from '../lib/dates.js'
+// Overview.css: the pill the Updated label wears (ov-pill, ov-live).
+import './Overview.css'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
 // discovery found. Until this existed, asset data appeared only as scalar
@@ -130,7 +133,12 @@ export default function Assets() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Assets</h1>
+      <div className="ov-look mb-1">
+        <div className="ov-head">
+          <PageTitle>Assets</PageTitle>
+          <UpdatedPill api={list} tip="When this list of assets last arrived. It is read again when the search or type changes." />
+        </div>
+      </div>
       <TabIntro>Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(filters, type)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper

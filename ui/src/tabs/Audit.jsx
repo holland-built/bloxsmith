@@ -12,6 +12,8 @@ import Tip from '../components/Tip.jsx'
 import './Overview.css'
 import './Audit.css'
 import { formatDay, formatTime } from '../lib/dates.js'
+import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
 // are the two that get a colour. Everything else is one neutral tone rather than
@@ -123,7 +125,12 @@ export default function Audit() {
 
   return (
     <div data-layout="record" className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Audit</h1>
+      <div className="ov-look mb-1">
+        <div className="ov-head">
+          <PageTitle>Audit</PageTitle>
+          <UpdatedPill api={chain} tip="When Bloxsmith's change record last arrived. It refreshes every 30 seconds." />
+        </div>
+      </div>
       <TabIntro>Who changed what, in Bloxsmith and in the Infoblox Portal.</TabIntro>
       <TrustStrip chain={chain} entries={entries} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper

@@ -13,6 +13,7 @@ import Tip from '../components/Tip.jsx'
 import { statusBucket } from '../lib/statusBucket.js'
 import './Daily.css'
 import { formatTime } from '../lib/dates.js'
+import { PageTitle } from '../components/kit.jsx'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -68,7 +69,7 @@ export default function Daily() {
   return (
     <div className="w-full px-6 py-5">
       <div className="dy-head">
-        <h1>Daily report</h1>
+        <PageTitle>Daily report</PageTitle>
         <Updated asOf={asOf} failed={!!data.error} />
       </div>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
@@ -93,7 +94,7 @@ function Updated({ asOf, failed }) {
   const label = failed ? 'Refresh failed' : time ? `Updated ${time}` : 'Checking…'
   const tip = failed && time ? `Last good read ${time}. Tries again every 30 seconds.` : 'Refreshes every 30 seconds.'
   return (
-    <Tip tip={tip} prefix="dy" className="dy-pill">
+    <Tip tip={tip} prefix="dy" className="dy-pill" data-updated="">
       <span className={`dy-live ${failed ? 'down' : time ? '' : 'wait'}`} aria-hidden="true" />
       <span>{label}</span>
     </Tip>

@@ -23,7 +23,6 @@
 
 .br-rail { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0 }
 .br-date { font-size: 14px; color: var(--ov-muted) }
-.br-rail h1 { font-size: 34px; font-weight: 650; letter-spacing: -.025em; line-height: 1.1 }
 .br .br-verdict { margin-block-start: 14px }
 .br-verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.05 }
 .br-verdict .br-mark { width: 28px; height: 28px }
@@ -88,7 +87,7 @@
 @media (min-width: 961px) {
   .br .br-updated .ov-tip { left: auto; right: 0 }
   .br-rail { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "date verdict primary" "title line updated"; gap: 2px 40px; align-items: center }
-  .br-date { grid-area: date } .br-rail h1 { grid-area: title; font-size: 26px }
+  .br-date { grid-area: date } .br-rail h1 { grid-area: title }
   .br .br-verdict { grid-area: verdict; margin: 0; font-size: 28px } .br-verdict .br-mark { width: 22px; height: 22px }
   .br .br-line { grid-area: line; margin: 0; font-size: 15px }
   .br a.br-primary { grid-area: primary; justify-self: end } .br-updated { grid-area: updated; justify-self: end; margin: 0 }

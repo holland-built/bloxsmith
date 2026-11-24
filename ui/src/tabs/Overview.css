@@ -24,7 +24,7 @@
 .ov-muted { color: var(--ov-muted) } .ov-small { font-size: 12.5px } .ov-pad { padding: 14px 18px }
 
 .ov-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px }
-.ov-head h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -.01em }
+.ov-head h1 { margin: 0 }
 .ov-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ov-line2); background: var(--ov-card); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; color: var(--ov-ink2) }
 .ov-live { width: 7px; height: 7px; border-radius: 50%; background: var(--ov-ok) }
 .ov-live.down { background: var(--ov-crit) } .ov-live.wait { background: var(--ov-muted) }
@@ -59,6 +59,12 @@
 .ov-ticks i.on.warn { background: var(--ov-warn) } .ov-ticks i.on.crit { background: var(--ov-crit) }
 .ov-ticks i.on.none { background: var(--ov-muted) }
 .ov-ticks-none { background: repeating-linear-gradient(90deg, var(--ov-line) 0 2px, transparent 2px 4px) }
+/* Services up: running is grey and half height, stopped is full height in the
+   state colour, so the problem is the only colour and also the only tall mark. */
+.ov-ticks-good { align-items: flex-end }
+.ov-ticks-good i.run { height: 50%; background: color-mix(in srgb, var(--ov-ink2) 30%, transparent) }
+.ov-ticks-good i.stop { height: 100%; background: var(--ov-warn) }
+.ov-ticks-good i.stop.crit { background: var(--ov-crit) } .ov-ticks-good i.stop.none { background: var(--ov-muted) }
 
 
 /* the board: one row per service */

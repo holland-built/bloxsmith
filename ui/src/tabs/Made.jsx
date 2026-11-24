@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { authFetch } from '../lib/authFetch.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { ReadOnlyNote } from '../components/kit.jsx'
+import { PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { Card, COLORS, FIELD_CLS, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import MadeList from '../components/MadeList.jsx'
@@ -86,7 +86,7 @@ export default function Made() {
   return (
     <div className="w-full px-6 py-5 flex flex-col gap-4">
       <div>
-        <h1 className="text-copy font-semibold tracking-tight mb-1">Made with Bloxsmith</h1>
+        <PageTitle className="mb-1">Made with Bloxsmith</PageTitle>
         <TabIntro>Everything Bloxsmith made and deleted, newest first. Items made with Bloxsmith carry the tag made_by=bloxsmith in Infoblox where it allows tags.</TabIntro>
       </div>
       <ReadOnlyNote ro={ro} what="Delete still shows what it would remove and whether Bloxsmith made it. The final Delete is off." />

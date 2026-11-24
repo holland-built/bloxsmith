@@ -15,7 +15,7 @@ import { WRITE_UNKNOWN, writeFailureText } from '../lib/writeFailure.js'
 import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
-import { ColumnHeading, FormColumns, ReadOnlyNote } from '../components/kit.jsx'
+import { ColumnHeading, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
@@ -1127,7 +1127,7 @@ export default function SelfService() {
   const task = TASKS.some((t) => t.id === hp.task) ? hp.task : 'address'
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-copy font-semibold tracking-tight mb-1">Get an address</h1>
+      <PageTitle className="mb-1">Get an address</PageTitle>
       <TabIntro>Take the next free address from a subnet, or add a record to a DNS zone.</TabIntro>
       <ReadOnlyNote ro={ro} what="Preview works, because it changes nothing. Apply is off." />
       <div role="group" aria-label="Task" className="flex flex-wrap gap-1.5 mb-5">

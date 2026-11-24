@@ -286,14 +286,25 @@ function Change({ was, now, hours }) {
   return <span className="ov-delta">{d === 0 ? '±0%' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}%`} <span className="ov-muted">{vsWords(hours)}</span></span>
 }
 
-// Ticks filled to a share. Good-when-full bars (servers up) go green and turn
-// amber or red when short; bad-when-full bars (subnets full) stay pale until
-// there is something to see.
+// Ticks filled to a share. On a good-when-full bar (services up) only the
+// problem has colour (owner's pick, 2026-11-24): running services are plain
+// grey half-height marks, stopped ones full-height marks in the state colour,
+// so they read without colour too. One stopped service always shows, however
+// many run. A bad-when-full bar (subnets full) stays pale until there is
+// something to see.
 function TickBar({ fill, good, sev, label }) {
   if (fill == null || !Number.isFinite(fill)) return <div className="ov-ticks ov-ticks-none" aria-hidden="true" />
   const n = 48
   const on = Math.max(fill > 0 ? 1 : 0, Math.round(fill * n))
-  const tone = good ? sev : fill > 0 ? sev : 'ok'
+  if (good) {
+    const running = fill < 1 ? Math.min(on, n - 1) : n
+    return (
+      <div className="ov-ticks ov-ticks-good" role="img" aria-label={label}>
+        {Array.from({ length: n }, (_, i) => <i key={i} className={i < running ? 'run' : `stop ${sev}`} />)}
+      </div>
+    )
+  }
+  const tone = fill > 0 ? sev : 'ok'
   return (
     <div className="ov-ticks" role="img" aria-label={label}>
       {Array.from({ length: n }, (_, i) => <i key={i} className={i < on ? `on ${tone}` : ''} />)}
@@ -480,7 +491,7 @@ function ServiceBoard({ board, dns }) {
 function Updated({ board }) {
   const label = board.feedDown ? 'Inventory information is unavailable' : board.fetchedAt ? `Updated ${formatTime(board.fetchedAt)}` : 'Checking…'
   return (
-    <Tip tip={board.coverage || null} className="ov-pill" data-coverage="">
+    <Tip tip={board.coverage || null} className="ov-pill" data-coverage="" data-updated="">
       <span className={`ov-live ${board.feedDown ? 'down' : board.fetchedAt ? '' : 'wait'}`} aria-hidden="true" />{label}
     </Tip>
   )
