@@ -1809,8 +1809,15 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
       const top0 = Math.min(...first.map((el) => el.offsetTop))
       const line = first.filter((el) => el.offsetTop === top0)
       const lineH = line.length ? Math.max(...line.map((el) => el.offsetHeight)) : btns.offsetHeight
-      const top = `${Math.max(0, (Number.isFinite(top0) ? top0 : 0) + (lineH - btns.offsetHeight) / 2)}px`
+      const y0 = Number.isFinite(top0) ? top0 : 0
+      const topPx = Math.max(0, y0 + (lineH - btns.offsetHeight) / 2)
+      const top = `${topPx}px`
       if (btns.style.top !== top) btns.style.top = top
+      // ...and the phone's `right` line starts below them: 44px touch buttons
+      // are taller than a one-line title.
+      const rowGap = parseFloat(getComputedStyle(head).rowGap) || 0
+      const clear = `${Math.max(0, topPx + btns.offsetHeight - (y0 + lineH) - rowGap)}px`
+      if (head.style.getPropertyValue('--hbt') !== clear) head.style.setProperty('--hbt', clear)
     }
   })
 
@@ -2708,7 +2715,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
           {/* On a phone `right` takes its own line, so a wide control cannot
               carry the help and menu buttons away from the title. */}
           {right && (
-            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full max-md:grow max-md:max-w-none max-md:-me-(--hb) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full max-md:grow max-md:max-w-none max-md:-me-(--hb) max-md:mt-(--hbt,0px) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
             </span>
           )}

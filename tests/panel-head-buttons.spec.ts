@@ -71,3 +71,22 @@ for (const hash of ['assets', 'network', 'infra'] as const) {
     expect(off).toEqual([]);
   });
 }
+
+// On a touch phone the buttons are 44px, taller than a one-line title, and the
+// row under the title may use the width beside them. It must start below them.
+test('#assets on a touch phone: the search row never sits under the buttons', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await installBaselineWorld(page);
+  await page.goto('/#assets');
+  const box = page.getByLabel('Search assets by name, IP or MAC address', { exact: true });
+  await expect(box).toBeVisible({ timeout: 20_000 });
+  const overlap = await box.evaluate((el) => {
+    const card = el.closest('[data-panel-id]')!;
+    const menu = card.querySelector('[data-panel-menu-toggle]')!.parentElement!.getBoundingClientRect();
+    const row = el.parentElement!.getBoundingClientRect();
+    return row.top < menu.bottom && row.right > menu.left;
+  });
+  expect(overlap).toBe(false);
+  await ctx.close();
+});
