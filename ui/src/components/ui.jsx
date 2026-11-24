@@ -1798,6 +1798,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
     const pad = btns ? `${btns.offsetWidth + (parseFloat(getComputedStyle(head).columnGap) || 0)}px` : ''
     const minH = btns ? `${btns.offsetHeight}px` : ''
     if (head.style.paddingInlineEnd !== pad) head.style.paddingInlineEnd = pad
+    // On a phone `right` has a line of its own under the buttons, so it may
+    // use the strip kept clear for them (the right span's max-md classes).
+    if (head.style.getPropertyValue('--hb') !== pad) head.style.setProperty('--hb', pad || '0px')
     if (head.style.minHeight !== minH) head.style.minHeight = minH
     // Centred on the first line, not stuck to the row's top edge: a search
     // box on that line makes it taller than the buttons.
@@ -2705,7 +2708,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
           {/* On a phone `right` takes its own line, so a wide control cannot
               carry the help and menu buttons away from the title. */}
           {right && (
-            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full max-md:grow max-md:max-w-none max-md:-me-(--hb) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
             </span>
           )}
