@@ -106,3 +106,34 @@ for (const [hash, label, widths] of HINTS) {
     });
   }
 }
+
+test('Editor: picking an existing item clears a missing-field mark', async ({ page }) => {
+  await page.route('**/api/edit/dns_zone/find**', (r) => r.fulfill({ json: {
+    items: [{ id: 'dns/auth_zone/abc', label: 'lab.example.com.', fields: { fqdn: 'lab.example.com.', view: 'dns/view/1' } }],
+  } }));
+  await page.goto('/#editor');
+  const preview = page.getByRole('button', { name: 'Preview' }).first();
+  await expect(preview).toBeVisible({ timeout: 20_000 });
+  await preview.click();
+  const zone = page.getByRole('textbox', { name: 'Zone name *' });
+  await expect(zone).toHaveAttribute('aria-invalid', 'true');
+
+  await page.getByRole('searchbox').first().fill('lab');
+  await page.getByRole('button', { name: 'lab.example.com.' }).click();
+  await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
+  await expect(page.getByText('Fill in this field.')).toHaveCount(0);
+});
+
+test('Unlock: retyping after a wrong passphrase clears the red mark', async ({ page }) => {
+  await page.route('**/api/vault/status', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ vaultMode: true, exists: true, unlocked: false, ready: false, tenants: [] }) }));
+  await page.route('**/api/vault/unlock', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"ok":false,"error":"wrong passphrase"}' }));
+  await page.goto('/');
+  const box = page.locator('#vu-pass');
+  await expect(box).toBeVisible({ timeout: 20_000 });
+  await box.fill('not-it');
+  await box.press('Enter');
+  await expect(box).toHaveAttribute('aria-invalid', 'true');
+  await box.fill('another-try');
+  await expect(box).not.toHaveAttribute('aria-invalid', 'true');
+});

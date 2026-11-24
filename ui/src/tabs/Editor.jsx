@@ -279,6 +279,7 @@ export default function Editor() {
     const was = rangeFilled.current
     rangeFilled.current = rangeLookup.space
     setFields((prev) => (prev.space && prev.space !== was ? prev : { ...prev, space: rangeLookup.space }))
+    setMissingKey((k) => (k === 'space' ? null : k))
   }, [type, rangeLookup.pending, rangeLookup.space])
   const rangeSpaceMissed = type === 'dhcp_range' && rangeOn && !!(live.subnet || live.network) && !live.space &&
     !rangeLookup.pending && !rangeLookup.space && !fields.space
@@ -482,7 +483,7 @@ export default function Editor() {
               pickId={deep?.type === type ? deep.id : ''}
               onPick={(item) => {
                 disarmDelete()
-                setPreview(null); setStale(false); setStatus('idle'); setResult(null)
+                setPreview(null); setStale(false); setStatus('idle'); setResult(null); setMissingKey(null)
                 // Delete-only types (address blocks) just need the ID; filling
                 // the form would only set up an accidental second Create.
                 if (!EDIT_UPDATE_TYPES.includes(type)) { setEditId(item.id); setLoaded(null); return }
@@ -494,7 +495,7 @@ export default function Editor() {
               onClear={() => {
                 disarmDelete()
                 setEditId(''); setFields({}); setLoaded(null)
-                setPreview(null); setStale(false); setStatus('idle'); setResult(null)
+                setPreview(null); setStale(false); setStatus('idle'); setResult(null); setMissingKey(null)
               }}
             />
           )}

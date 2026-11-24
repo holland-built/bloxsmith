@@ -99,7 +99,7 @@ function Unlock({ onDone }) {
         type="password"
         autoComplete="current-password"
         value={p}
-        onChange={(e) => { setP(e.target.value); if (err === 'Enter your passphrase.') setErr('') }}
+        onChange={(e) => { setP(e.target.value); if (err) setErr('') }}
         onKeyDown={(e) => e.key === 'Enter' && go()}
         aria-invalid={err ? true : undefined}
         aria-describedby={err ? 'vu-err' : undefined}
