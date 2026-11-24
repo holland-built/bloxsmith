@@ -46,7 +46,7 @@ If the tenant you are using is read-only, the buttons that would write are greye
 | Tab | Writes? | Purpose |
 |---|---|---|
 | [Overview](#overview) | no | Your network at a glance |
-| [Daily](#daily) | no | What needs attention today |
+| [Daily report](#daily-report) | no | What needs attention today |
 | [Network](#network) | no | IP addresses and DHCP in detail |
 | [DNS](#dns) | no | Query rate, services, DNSSEC, RPZ, DTC |
 | [Security](#security) | no | Threats, exposures, lookalike domains |
@@ -110,7 +110,7 @@ What is wrong right now, service by service, and the page the app opens on. Refr
 
 Subnet and host detail lives on [Network](#network) and [Infra](#infra). The service names on the board link there.
 
-## Daily
+## Daily report
 
 The morning check. Also refreshes every 30 seconds.
 
