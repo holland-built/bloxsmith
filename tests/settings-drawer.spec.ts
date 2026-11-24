@@ -270,3 +270,18 @@ test('on a 390px phone the drawer fills the screen, every section is reachable, 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow, 'the page scrolls sideways').toBe(false);
 });
+
+// Fix 3 (2026-11-24): on a phone four of the six section tabs sat off to the
+// right of the tab row with only a cut-off word to hint at them. Every tab must
+// be fully on screen without scrolling the row.
+test('on a 320px phone every section tab is on screen', async ({ page }) => {
+  const sheet = await openSheet(page, 320, 700);
+  const nav = sheet.getByRole('navigation', { name: 'Settings sections' });
+  for (const name of SECTIONS) {
+    const box = await nav.getByRole('button', { name, exact: true }).boundingBox();
+    expect(box, `${name} has a box`).not.toBeNull();
+    expect(box!.x, `${name} starts on screen`).toBeGreaterThanOrEqual(0);
+    expect(Math.round(box!.x + box!.width), `${name} ends on screen`).toBeLessThanOrEqual(320);
+  }
+  expect(await nav.evaluate((el) => el.scrollWidth - el.clientWidth), 'the tab row does not scroll').toBeLessThanOrEqual(0);
+});

@@ -538,3 +538,27 @@ test('under 380px the light/dark button gives way and Settings still has the swi
   await sheet.getByRole('button', { name: 'Appearance', exact: true }).click();
   await expect(sheet.getByRole('button', { name: 'Dark theme' })).toBeVisible();
 });
+
+// Fix 3 (2026-11-24): on a phone the tenant name and "Changes allowed" were
+// squeezed beside the icons into four short lines. On narrow screens the
+// account line moves under the icons, where it has the whole width.
+for (const [w, h] of [
+  [390, 844],
+  [320, 640],
+] as const) {
+  test(`at ${w}px the account line sits under the icons, not squeezed beside them`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true })));
+    await page.goto('/#overview');
+    await expect(chip(page)).toHaveText('Changes allowed');
+    const conn = page.locator('header .frame-conn');
+    const settings = page.locator('header').getByRole('button', { name: 'Settings', exact: true });
+    const c = (await conn.boundingBox())!;
+    const s = (await settings.boundingBox())!;
+    expect(c.y, 'the account line starts below the icons').toBeGreaterThanOrEqual(s.y + s.height - 1);
+    // One line of 12px text is about 16px; the old squeeze was four lines.
+    expect(c.height, 'the account line is not stacked into several short lines').toBeLessThanOrEqual(24);
+    const pageScroll = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(pageScroll, 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+  });
+}

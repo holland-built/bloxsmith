@@ -66,7 +66,13 @@ import { test, expect } from './fixtures';
 // 153,093 -> 157,409 B (lib/refresh.js, the header control, and the request
 // ordering in useApi, which every tab needs). vendor-react did not move and no
 // charts chunk is on the route.
-const BUDGET_BYTES = 400 * 1024; // 409,600 B
+//
+// RAISED 400 -> 404 KB on 2026-11-24, with the chunk that grew identified.
+// Phone layouts (fix 3) took #provision from about 409,466 B to 410,076 B: the
+// entry chunk 150,295 -> 150,905 B (the Card header code in ui.jsx that keeps
+// a panel's About and menu buttons on the title line, which every tab shares).
+// vendor-react did not move and no charts chunk is on the route.
+const BUDGET_BYTES = 404 * 1024; // 413,696 B
 
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();

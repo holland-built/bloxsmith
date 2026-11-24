@@ -1772,6 +1772,36 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   // move mode had the same root cause: clearOverride blanked gridColumn and
   // applyLayout, with no measured span left to fall back on, skipped the card
   // down to its declared SPAN_CLASS.
+  // THE ABOUT AND MENU BUTTONS STAY ON THE TITLE LINE (fix 3, 2026-11-24).
+  // In the wrapping header row they used to come last, so a title, caption or
+  // `right` that did not fit beside them pushed them onto a line of their own
+  // under the title: on every phone, and on Assets at desktop width. They are
+  // now pinned to the row's top right corner, and the row keeps their width
+  // free on its right edge and is at least their height, so the title line is
+  // always beside them and the rest wraps underneath. Measured, not a fixed
+  // class: a touch screen makes each button 44px (index.css, pointer: coarse),
+  // and a panel can carry one button or two. The buttons stay inside the row,
+  // after the title, so the header's reading order and its tests are as before.
+  useLayoutEffect(() => {
+    const head = headRef.current
+    if (!head) return
+    const btns = headButtonsRef.current
+    const pad = btns ? `${btns.offsetWidth + (parseFloat(getComputedStyle(head).columnGap) || 0)}px` : ''
+    const minH = btns ? `${btns.offsetHeight}px` : ''
+    if (head.style.paddingInlineEnd !== pad) head.style.paddingInlineEnd = pad
+    if (head.style.minHeight !== minH) head.style.minHeight = minH
+    // Centred on the first line, not stuck to the row's top edge: a search
+    // box on that line makes it taller than the buttons.
+    if (btns) {
+      const first = Array.from(head.children).filter((el) => el !== btns && el.offsetHeight > 0)
+      const top0 = Math.min(...first.map((el) => el.offsetTop))
+      const line = first.filter((el) => el.offsetTop === top0)
+      const lineH = line.length ? Math.max(...line.map((el) => el.offsetHeight)) : btns.offsetHeight
+      const top = `${Math.max(0, (Number.isFinite(top0) ? top0 : 0) + (lineH - btns.offsetHeight) / 2)}px`
+      if (btns.style.top !== top) btns.style.top = top
+    }
+  })
+
   const evictRef = useRef(null)
   useLayoutEffect(() => {
     // A hidden tile renders null, so its element is gone from the DOM but this
@@ -2655,7 +2685,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
         // wrap and shrink once even a whole line is not enough for them. `right`
         // stays shrink-0 relative to the title — squeezing a live control to
         // keep a heading on one line is the wrong way round.
-        <div ref={headRef} className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
+        <div ref={headRef} className="relative flex flex-wrap items-center gap-2 mb-2 min-w-0">
           <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
           {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
           <span className="flex-1" />
@@ -2671,7 +2701,8 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
             </span>
           )}
           {(infoBtn || menu) && (
-            <span ref={headButtonsRef} className="shrink-0 flex items-center gap-2">
+            // Pinned top right; see the layout effect at the top of Card.
+            <span ref={headButtonsRef} className="absolute top-0 end-0 flex items-center gap-2">
               {infoBtn}
               {menu}
             </span>

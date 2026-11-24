@@ -374,11 +374,12 @@ export default function TenantManager({ onClose, onOpenHelp, onOpenSetup }) {
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
-          {/* The section list. A column at `sm` and up, a row of tabs below it that
-              scrolls sideways, so every section is reachable on a 390px phone. */}
+          {/* The section list. A column at `sm` and up, rows of tabs below it that
+              wrap, so all six sections are in view on a 320px phone. A row
+              that scrolled sideways hid four of them behind a cut-off word. */}
           <nav
             aria-label="Settings sections"
-            className="shrink-0 flex sm:flex-col gap-1 p-3 overflow-x-auto sm:overflow-x-visible sm:overflow-y-auto sm:w-[200px] border-b sm:border-b-0 sm:border-r border-line-2"
+            className="shrink-0 flex flex-wrap sm:flex-nowrap sm:flex-col gap-1 p-3 sm:overflow-y-auto sm:w-[200px] border-b sm:border-b-0 sm:border-r border-line-2"
           >
             {SECTIONS.map((s) => (
               <button

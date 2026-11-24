@@ -84,3 +84,17 @@ test('saved settings fold away, and the join token box opens empty saying a toke
   await expect(box).toHaveValue('');
   await expect(box).toHaveAttribute('placeholder', /Stored/);
 });
+
+// Fix 3 (2026-11-24): at 320 wide the Runs table pushed the whole page sideways,
+// with the VM column and Tear down off screen. The table must scroll inside its
+// panel instead, so the page never scrolls sideways.
+test('on a 320px phone the Runs table scrolls inside its panel, not the page', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/#demo');
+  const runs = page.locator('[data-panel-id="demo-runs"]');
+  await expect(runs.getByRole('button', { name: 'Tear down' })).toBeVisible();
+  const pageScroll = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(pageScroll, 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+  const box = await runs.boundingBox();
+  expect(Math.round(box!.x + box!.width), 'the Runs panel ends inside the screen').toBeLessThanOrEqual(320);
+});
