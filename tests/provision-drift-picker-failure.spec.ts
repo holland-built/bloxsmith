@@ -25,7 +25,7 @@ import type { Page, Route } from '@playwright/test';
 // differ.
 
 const CARD_XPATH = 'xpath=ancestor::div[contains(@class,"bg-card")]';
-const FETCH_ERROR = /could not load current data/i;
+const FETCH_ERROR = /could not load (IP spaces|site templates|address blocks)\./i;
 
 const SPACE = { id: 'space1', name: 'Default' };
 const BLOCK = { id: 'block1', name: 'core', address: '10.0.0.0', cidr: 16 };
@@ -64,7 +64,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
 
     const request = card(page, 'Request');
     await expect(request.getByText(FETCH_ERROR)).toBeVisible();
-    await expect(request.getByText(/could not load current data: the server had a problem\./i)).toBeVisible();
+    await expect(request.getByText('Could not load IP spaces. upstream failed.')).toBeVisible();
     await expect(request.getByText('no IP spaces', { exact: true })).toHaveCount(0);
   });
 
@@ -122,7 +122,7 @@ test.describe('Provision / Full site — failed read vs genuine empty', () => {
     await page.getByRole('button', { name: 'Full site' }).click();
 
     const request = card(page, 'Request');
-    await expect(request.getByText(/could not load current data: the server had a problem\./i)).toBeVisible();
+    await expect(request.getByText('Could not load site templates. upstream failed.')).toBeVisible();
     await expect(request.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toHaveCount(0);
   });
 
@@ -181,7 +181,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
     await page.goto('/#drift');
 
     const check = page.locator('[data-drift-form]');
-    await expect(check.getByText(/could not load current data: the server had a problem\./i)).toBeVisible();
+    await expect(check.getByText('Could not load site templates. upstream failed.')).toBeVisible();
     await expect(check.getByText("No site templates are installed. They come with the app's full release download.", { exact: true })).toHaveCount(0);
   });
 
@@ -203,7 +203,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
     await page.goto('/#drift');
 
     const check = page.locator('[data-drift-form]');
-    await expect(check.getByText(/could not load current data: the server had a problem\./i)).toBeVisible();
+    await expect(check.getByText('Could not load IP spaces. upstream failed.')).toBeVisible();
     await expect(check.getByText('no IP spaces', { exact: true })).toHaveCount(0);
   });
 

@@ -180,7 +180,7 @@ function SpacePicker({ value, onChange, want }) {
         options={spaces.map((s) => ({ value: s.id, label: s.reason ? `${s.name || s.id} (${s.reason})` : (s.name || s.id) }))}
         placeholder={api.loading ? 'Loading IP spaces…' : 'Or pick any IP space'}
       />
-      <FetchError error={api.error} stale={spaces.length > 0} />
+      <FetchError error={api.error} stale={spaces.length > 0} what="IP spaces" />
     </Field>
   )
 }
@@ -257,7 +257,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
         )}
       </PreviewApply>
       {showPlaybook(flow.status) && <><CopyPlaybook job="ip" input={input()} /><CopyTerraform job="ip" input={input()} /></>}
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="networks" />
     </div>
   )
 }
@@ -392,7 +392,7 @@ function DnsJob({ onBuilt, ro, start = {} }) {
         )}
       </PreviewApply>
       {showPlaybook(flow.status) && <><CopyPlaybook job="dns" input={input()} /><CopyTerraform job="dns" input={input()} /></>}
-      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+      <FetchError error={zonesApi.error} stale={zones.length > 0} what="DNS zones" />
     </div>
   )
 }
@@ -474,7 +474,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
           </PreviewBox>
         )}
       </PreviewApply>
-      <FetchError error={tplApi.error} stale={templates.length > 0} />
+      <FetchError error={tplApi.error} stale={templates.length > 0} what="site templates" />
     </div>
   )
 }
@@ -663,7 +663,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
         )}
       </PreviewApply>
       {showPlaybook(flow.status) && <><CopyPlaybook job="network" input={input()} /><CopyTerraform job="network" input={input()} /></>}
-      <FetchError error={blocksApi.error} stale={blocks.length > 0} />
+      <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
     </div>
   )
 }
@@ -862,7 +862,7 @@ function RecentChanges({ api, ro }) {
           </ul>
         </div>
       )}
-      <FetchError error={api.error} stale={list.length > 0} />
+      <FetchError error={api.error} stale={list.length > 0} what="recent jobs" />
     </Card>
   )
 }

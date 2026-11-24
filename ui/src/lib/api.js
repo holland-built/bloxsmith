@@ -205,6 +205,21 @@ export function noPermissionText(error) {
 const SERVER_PROBLEM = 'The server had a problem. Try again in a moment.'
 
 /**
+ * The reason a failed answer gives, or '' when it gives none. A list read that
+ * Infoblox failed carries Infoblox's own words in `upstream`
+ * (go/internal/server/ipam.go writeUpstreamError); everything else says why in
+ * `error`.
+ */
+export function serverReason(body) {
+  const upstream = typeof body?.upstream === 'string' ? body.upstream.trim() : ''
+  if (upstream) return `Infoblox said: ${upstream}`
+  // Bloxsmith's own messages wrap Go errors ("could not read the list of
+  // changes: open /Users/…/runs.json: …"). Keep the sentence, drop the wrapped
+  // part, which can carry a local file path.
+  return typeof body?.error === 'string' ? body.error.split(': ')[0].trim() : ''
+}
+
+/**
  * A failed request in words: what could not be done and what to do next, for
  * when the server sent no message of its own. `what` starts with a verb.
  */
@@ -663,8 +678,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
       : fetch(url, { cache: 'no-store', signal: budget.signal })
     const settled = asked
       .then(async (res) => {
+        // A failed answer's body is read once, here: it holds the lock flag, the
+        // refusal status and the reason the server gave.
+        const body = res.ok ? null : await res.json().catch(() => null)
         if (res.status === 503) {
-          const body = await res.json().catch(() => ({}))
           if (body && (body.locked === true || body.error === 'vault locked')) {
             cancel()
             // An older request's lock is not news: a newer one has already
@@ -691,14 +708,13 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
           // A list read answers 502 with Infoblox's own status in the body
           // (writeUpstreamError). A refusal there is a permission problem.
           if (res.status === 502) {
-            const body = await res.json().catch(() => null)
             if (body?.status === 401 || body?.status === 403) {
               throw Object.assign(new Error(`${body.status} ${body.status === 401 ? 'Unauthorized' : 'Forbidden'}`), {
                 status: body.status,
               })
             }
           }
-          throw Object.assign(new Error(isNoPermission(res) ? `${res.status} ${res.statusText}` : SERVER_PROBLEM), {
+          throw Object.assign(new Error(isNoPermission(res) ? `${res.status} ${res.statusText}` : serverReason(body) || SERVER_PROBLEM), {
             status: res.status,
           })
         }

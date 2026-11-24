@@ -203,7 +203,7 @@ test('when the new space\'s blocks fail to load, the old space\'s blocks cannot 
   await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeEnabled();
 
   await space.selectOption({ label: 'Berlin Office' });
-  await expect(page.getByText(/Could not load current data/)).toBeVisible();
+  await expect(page.getByText('Could not load address blocks. upstream.')).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeDisabled();
   await expect(page.getByRole('searchbox', { name: 'Search Block' })).toBeDisabled();
 });

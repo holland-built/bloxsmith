@@ -457,8 +457,8 @@ function SubnetMode() {
           <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
 
           <div>
-            <FetchError error={spaceOpts.error} stale={spaces.length > 0} />
-            <FetchError error={blocksApi.error} stale={blocks.length > 0} />
+            <FetchError error={spaceOpts.error} stale={spaces.length > 0} what="IP spaces" />
+            <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
             {!spaceOpts.loading && !spaceOpts.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>no address blocks</Empty>}
           </div>
@@ -595,8 +595,8 @@ function SiteMode({ isAdmin }) {
           )}
 
           <div>
-            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
-            <FetchError error={templatesApi.error} stale={templates.length > 0} />
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
+            <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
             {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
           </div>
@@ -798,7 +798,7 @@ function SeedMode({ isAdmin }) {
           </Field>
 
           <div>
-            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
             {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
           </div>
 

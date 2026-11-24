@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react'
 // collapse into the same empty list a tenant that owns nothing produces.
 import { ColumnHeading, FormColumns, PageTitle } from '../components/kit.jsx'
 import FilterSelect from '../components/FilterSelect.jsx'
-import { COLORS, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
+import { COLORS, Empty, FetchError, FormHint, Skeleton, TabIntro } from '../components/ui.jsx'
 import { failureText, useApi } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
@@ -107,8 +107,8 @@ export default function Drift() {
           />
         </div>
         <div>
-          <FetchError error={templatesApi.error} stale={templates.length > 0} />
-          <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+          <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
+          <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
           {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
           {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
         </div>
@@ -205,7 +205,7 @@ export default function Drift() {
       ) : result ? (
         <div role="status">{findings}</div>
       ) : (
-        <p className="text-copy text-muted">Pick a template and press Check drift. What Infoblox has that the template lacks, what it lacks, and what it holds differently are listed here.</p>
+        <FormHint missing={templatesApi.error && templates.length === 0 && 'site templates'}>Pick a template and press Check drift. What Infoblox has that the template lacks, what it lacks, and what it holds differently are listed here.</FormHint>
       )}
     </section>
   )

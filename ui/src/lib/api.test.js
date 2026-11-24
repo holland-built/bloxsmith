@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import React from 'react'
 import {
+  serverReason,
   COLD_TIMEOUT_MS,
   WARM_TIMEOUT_MS,
   abortAfter,
@@ -1688,4 +1689,40 @@ test('isNoPermission reads the server refusal sentence, and not other text with 
   assert.equal(isNoPermission('Row failed (HTTP 403) while saving a note'), false)
   assert.equal(isNoPermission('Infoblox refused the call (HTTP 500). Try later.'), false)
   assert.equal(isNoPermission('ticket 403 is still open'), false)
+})
+
+// A failed load says why in the server's words, not only that it failed.
+test('a failed load carries the reason the server gave, and a fallback when it gave none', async (t) => {
+  harness(t, [
+    jsonStatus(502, { error: 'Infoblox request failed', status: 500, upstream: 'Rate limit exceeded' }),
+  ])
+  const a = mountHook(() => useApi('/api/ipam/spaces'))
+  await settle()
+  assert.equal(a.current.error.message, 'Infoblox said: Rate limit exceeded')
+  assert.equal(a.current.error.status, 502)
+  a.unmount()
+})
+
+test('a failed load with only an error field shows that error', async (t) => {
+  harness(t, [jsonStatus(404, { error: 'list not found' })])
+  const b = mountHook(() => useApi('/api/lists/items?id=x'))
+  await settle()
+  assert.equal(b.current.error.message, 'list not found')
+  b.unmount()
+})
+
+test('a failed load with no readable reason falls back to the plain sentence', async (t) => {
+  harness(t, [() => Promise.resolve(new Response('<html>oops</html>', { status: 404 }))])
+  const c = mountHook(() => useApi('/api/x'))
+  await settle()
+  assert.equal(c.current.error.message, 'The server had a problem. Try again in a moment.')
+  c.unmount()
+})
+
+test('a server message keeps its sentence but never a wrapped local path', () => {
+  assert.equal(
+    serverReason({ error: 'could not read the list of changes: open /Users/someone/state/runs.json: permission denied' }),
+    'could not read the list of changes',
+  )
+  assert.equal(serverReason({ upstream: 'Access denied' }), 'Infoblox said: Access denied')
 })

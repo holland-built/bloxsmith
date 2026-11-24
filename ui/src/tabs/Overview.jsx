@@ -604,7 +604,7 @@ function LicenseInventory({ licenses, panelId }) {
       ) : unavailable ? (
         <FeedUnavailable label="License information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no license data available</Empty>
+        <Empty>No licenses found</Empty>
       ) : (
         <DataTable
           rows={tableRows}

@@ -348,14 +348,14 @@ test.describe('Daily → Security Today (/api/hub/security down)', () => {
 // ---------- 7. Security → Exposures + Lookalike Domains ----------
 
 test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () => {
-  test('failed fetches never say "no exposures reported" or "0 detected"', async ({ page }) => {
+  test('failed fetches never say "No exposures found" or "0 detected"', async ({ page }) => {
     await page.route('**/api/csp/exposures*', dead);
     await page.route('**/api/lookalikes*', dead);
     await page.goto('/#security');
 
     const exposures = card(page, 'Exposures');
     await expect(exposures.getByText('Exposure information is unavailable')).toBeVisible();
-    await expect(exposures.getByText('no exposures reported')).toHaveCount(0);
+    await expect(exposures.getByText('No exposures found')).toHaveCount(0);
 
     const lookalikes = card(page, 'Lookalike Domains');
     await expect(lookalikes.getByText('Lookalike domain information is unavailable')).toBeVisible();
@@ -363,7 +363,7 @@ test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () =>
     await expect(lookalikes.getByText('0 detected', { exact: true })).toHaveCount(0);
   });
 
-  test('genuinely empty reads still say "no exposures reported" and "0 detected"', async ({ page }) => {
+  test('genuinely empty reads still say "No exposures found" and "0 detected"', async ({ page }) => {
     await page.route('**/api/csp/exposures*', (route) =>
       fulfillJson(route, { availability: 'ok', data: { rows: [], count: 0, total_available: 0 } }),
     );
@@ -371,7 +371,7 @@ test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () =>
     await page.goto('/#security');
 
     const exposures = card(page, 'Exposures');
-    await expect(exposures.getByText('no exposures reported')).toBeVisible();
+    await expect(exposures.getByText('No exposures found')).toBeVisible();
     await expect(exposures.getByText('Exposure information is unavailable')).toHaveCount(0);
 
     const lookalikes = card(page, 'Lookalike Domains');

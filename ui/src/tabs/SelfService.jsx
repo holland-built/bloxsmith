@@ -16,7 +16,7 @@ import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ColumnHeading, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
-import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, FormHint, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
@@ -335,7 +335,7 @@ function AllocatePanel() {
               <input type="checkbox" checked={ptr} onChange={(e) => { setPtr(e.target.checked); flow.markStale() }} />
               Also create the reverse (PTR) record
             </label>
-            <FetchError error={zonesApi.error} stale={zones.length > 0} />
+            <FetchError error={zonesApi.error} stale={zones.length > 0} what="DNS zones" />
           </div>
         )}
         <label className="flex items-center gap-2">
@@ -363,9 +363,9 @@ function AllocatePanel() {
 
       <PreviewApply {...applyProps} part="start" />
 
-      <FetchError error={spacesApi.error} stale={spaces.length > 0} />
-      <FetchError error={blocksApi.error} stale={blocks.length > 0} />
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+      <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
+      <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
       {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
     </section>
     } result={
@@ -381,7 +381,7 @@ function AllocatePanel() {
             />
             <CheckedAgainst res={flow.previewReply} />
           </>
-        ) : !flow.message && <p className="text-copy text-muted">Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</p>}
+        ) : !flow.message && <FormHint missing={spacesApi.error && spaces.length === 0 && 'IP spaces'}>Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</FormHint>}
       </PreviewApply>
     </section>
     } />
@@ -485,7 +485,7 @@ function DnsPanel() {
 
       <PreviewApply {...applyProps} part="start" />
 
-      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+      <FetchError error={zonesApi.error} stale={zones.length > 0} what="DNS zones" />
       {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
     </section>
     } result={
@@ -494,7 +494,7 @@ function DnsPanel() {
       <PreviewApply {...applyProps} part="outcome">
         {flow.preview
           ? <><PreviewBox data={flow.preview} note="preview — the record has not been created yet" summary={sentence} />{!flow.stale && <CheckedAgainst res={flow.previewReply} />}</>
-          : !flow.message && <p className="text-copy text-muted">Fill in the record and press Preview. Infoblox checks it first, and nothing is created until you press Create.</p>}
+          : !flow.message && <FormHint missing={zonesApi.error && zones.length === 0 && 'DNS zones'}>Fill in the record and press Preview. Infoblox checks it first, and nothing is created until you press Create.</FormHint>}
       </PreviewApply>
     </section>
     } />
@@ -829,7 +829,7 @@ function ManageRecordsPanel() {
         </Field>
       </div>
 
-      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+      <FetchError error={zonesApi.error} stale={zones.length > 0} what="DNS zones" />
       {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
       {zoneId && (
           <input
@@ -846,10 +846,10 @@ function ManageRecordsPanel() {
     } result={
     <section aria-labelledby="ss-records-result-h" data-result-of="records">
       <ColumnHeading id="ss-records-result-h">Records</ColumnHeading>
-      {!zoneId && <p className="text-copy text-muted">Pick a zone to list its records. Each one can be changed or deleted here.</p>}
+      {!zoneId && <FormHint missing={zonesApi.error && zones.length === 0 && 'DNS zones'}>Pick a zone to list its records. Each one can be changed or deleted here.</FormHint>}
       {zoneId && (
         <>
-          <FetchError error={recordsApi.error} stale={records.length > 0} />
+          <FetchError error={recordsApi.error} stale={records.length > 0} what="DNS records" />
           {deleteError && <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
           {!deleteError && panelMessage && <div role="status" className="text-note mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
           {note && <div className="text-note text-dim mb-2">{note}</div>}
@@ -1044,8 +1044,8 @@ function ManageAddressesPanel() {
         </Field>
       </div>
 
-      <FetchError error={spacesApi.error} stale={spaces.length > 0} />
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+      <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
       {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
       {subnetId && (
           <input
@@ -1062,10 +1062,10 @@ function ManageAddressesPanel() {
     } result={
     <section aria-labelledby="ss-addresses-result-h" data-result-of="addresses">
       <ColumnHeading id="ss-addresses-result-h">Addresses</ColumnHeading>
-      {!subnetId && <p className="text-copy text-muted">Pick a space and a subnet to list the addresses in use. Release one to give it back.</p>}
+      {!subnetId && <FormHint missing={spacesApi.error && spaces.length === 0 && 'IP spaces'}>Pick a space and a subnet to list the addresses in use. Release one to give it back.</FormHint>}
       {subnetId && (
         <>
-          <FetchError error={addressesApi.error} stale={addresses.length > 0} />
+          <FetchError error={addressesApi.error} stale={addresses.length > 0} what="addresses" />
           {releaseError && <div className="text-note mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
           {note && <div className="text-note text-dim mb-2">{note}</div>}
           {!addressesApi.loading && !addressesApi.error && addresses.length === 0 && <Empty>{search.term ? 'no addresses match that search' : 'no addresses in this subnet'}</Empty>}

@@ -20,11 +20,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
     await page.goto('/#selfservice');
 
     const allocateCard = await openTask(page, 'address');
-    await expect(allocateCard.getByText(/could not load current data/i)).toBeVisible();
+    await expect(allocateCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
 
     const manageAddressesCard = await openTask(page, 'addresses');
-    await expect(manageAddressesCard.getByText(/could not load current data/i)).toBeVisible();
+    await expect(manageAddressesCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
     await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
   });
 
@@ -36,11 +36,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     const allocateCard = await openTask(page, 'address');
     await expect(allocateCard.getByText('no IP spaces', { exact: true })).toBeVisible();
-    await expect(allocateCard.getByText(/could not load current data/i)).toHaveCount(0);
+    await expect(allocateCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
 
     const manageAddressesCard = await openTask(page, 'addresses');
     await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toBeVisible();
-    await expect(manageAddressesCard.getByText(/could not load current data/i)).toHaveCount(0);
+    await expect(manageAddressesCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
   });
 });
 
@@ -52,11 +52,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (DNS zones)'
     await page.goto('/#selfservice');
 
     const dnsCard = await openTask(page, 'record');
-    await expect(dnsCard.getByText(/could not load current data/i)).toBeVisible();
+    await expect(dnsCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
     await expect(dnsCard.getByText('no DNS zones', { exact: true })).toHaveCount(0);
 
     const manageRecordsCard = await openTask(page, 'records');
-    await expect(manageRecordsCard.getByText(/could not load current data/i)).toBeVisible();
+    await expect(manageRecordsCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
     await expect(manageRecordsCard.getByText('no DNS zones', { exact: true })).toHaveCount(0);
   });
 
@@ -68,10 +68,10 @@ test.describe('SelfService pickers — failed read vs genuine empty (DNS zones)'
 
     const dnsCard = await openTask(page, 'record');
     await expect(dnsCard.getByText('no DNS zones', { exact: true })).toBeVisible();
-    await expect(dnsCard.getByText(/could not load current data/i)).toHaveCount(0);
+    await expect(dnsCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
 
     const manageRecordsCard = await openTask(page, 'records');
     await expect(manageRecordsCard.getByText('no DNS zones', { exact: true })).toBeVisible();
-    await expect(manageRecordsCard.getByText(/could not load current data/i)).toHaveCount(0);
+    await expect(manageRecordsCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
   });
 });

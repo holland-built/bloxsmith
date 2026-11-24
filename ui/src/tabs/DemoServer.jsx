@@ -114,14 +114,14 @@ export default function DemoServer() {
           <Card panelId="demo-settings" span={3} title="Settings" note="saved in the vault; the join token is never shown again">
             {status.loading && !st ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
               <div data-settings-folded="" className="flex flex-col gap-2 text-note">
-                <FetchError error={status.error} stale={!!st} />
+                <FetchError error={status.error} stale={!!st} what="the demo server status" />
                 <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the stored join token.</p>
                 <button type="button" className="self-start text-note font-medium underline underline-offset-2" style={{ color: COLORS.accent }}
                   onClick={() => setEditing(true)}>Change settings</button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <FetchError error={status.error} stale={!!st} />
+                <FetchError error={status.error} stale={!!st} what="the demo server status" />
                 <DemoSettingsForm st={st} onSaved={status.refetch} onChange={() => setPlan(null)} />
               </div>
             )}
