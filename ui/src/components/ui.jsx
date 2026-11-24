@@ -1772,6 +1772,26 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
   // move mode had the same root cause: clearOverride blanked gridColumn and
   // applyLayout, with no measured span left to fall back on, skipped the card
   // down to its declared SPAN_CLASS.
+  // THE ABOUT AND MENU BUTTONS STAY ON THE TITLE LINE (fix 3, 2026-11-24).
+  // In the wrapping header row they used to come last, so a title, caption or
+  // `right` that did not fit beside them pushed them onto a line of their own
+  // under the title: on every phone, and on Assets at desktop width. They are
+  // now pinned to the row's top right corner, and the row keeps their width
+  // free on its right edge and is at least their height, so the title line is
+  // always beside them and the rest wraps underneath. Measured, not a fixed
+  // class: a touch screen makes each button 44px (index.css, pointer: coarse),
+  // and a panel can carry one button or two. The buttons stay inside the row,
+  // after the title, so the header's reading order and its tests are as before.
+  useLayoutEffect(() => {
+    const head = headRef.current
+    if (!head) return
+    const btns = headButtonsRef.current
+    const pad = btns ? `${btns.offsetWidth + (parseFloat(getComputedStyle(head).columnGap) || 0)}px` : ''
+    const minH = btns ? `${btns.offsetHeight}px` : ''
+    if (head.style.paddingInlineEnd !== pad) head.style.paddingInlineEnd = pad
+    if (head.style.minHeight !== minH) head.style.minHeight = minH
+  })
+
   const evictRef = useRef(null)
   useLayoutEffect(() => {
     // A hidden tile renders null, so its element is gone from the DOM but this
@@ -2655,32 +2675,24 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
         // wrap and shrink once even a whole line is not enough for them. `right`
         // stays shrink-0 relative to the title — squeezing a live control to
         // keep a heading on one line is the wrong way round.
-        //
-        // THE BUTTONS SIT OUTSIDE THE WRAPPING BOX (fix 3, 2026-11-24). In one
-        // wrapping row, a title, caption or `right` that did not fit pushed the
-        // About and menu buttons onto a line of their own under the title: on
-        // every phone, and on Assets at desktop width. Now the title, caption and
-        // `right` wrap inside the first box, and the buttons stay at the top
-        // right, on the title line.
-        <div ref={headRef} className="flex items-start gap-2 mb-2 min-w-0">
-          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
-            <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
-            {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
-            <span className="flex-1" />
-            {/* The drag handle goes in the buttons span below, and headNeed
-                measures both that span and `right`: a header element outside
-                those two would be invisible to the width floor, and the header
-                would overflow the card by exactly that element's width. */}
-            {/* On a phone `right` takes its own line, so a wide control cannot
-                carry the help and menu buttons away from the title. */}
-            {right && (
-              <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
-                {right}
-              </span>
-            )}
-          </div>
+        <div ref={headRef} className="relative flex flex-wrap items-center gap-2 mb-2 min-w-0">
+          <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
+          {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
+          <span className="flex-1" />
+          {/* The drag handle goes in the buttons span below, and headNeed
+              measures both that span and `right`: a header element outside
+              those two would be invisible to the width floor, and the header
+              would overflow the card by exactly that element's width. */}
+          {/* On a phone `right` takes its own line, so a wide control cannot
+              carry the help and menu buttons away from the title. */}
+          {right && (
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+              {right}
+            </span>
+          )}
           {(infoBtn || menu) && (
-            <span ref={headButtonsRef} className="shrink-0 flex items-center gap-2">
+            // Pinned top right; see the layout effect at the top of Card.
+            <span ref={headButtonsRef} className="absolute top-0 end-0 flex items-center gap-2">
               {infoBtn}
               {menu}
             </span>
