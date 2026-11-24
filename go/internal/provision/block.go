@@ -227,7 +227,7 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 				"comment": pyStr(bdef["comment"]), "tags": tags}
 			resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", body, nil)
 			if (status != 200 && status != 201) || resp == nil {
-				return perr("Failed to create block %s: status %d %v", cidrStr(n), status, resp)
+				return failedWrite("create block", cidrStr(n), status, resp)
 			}
 			block := asMap(asMap(resp)["result"])
 			if block == nil {
@@ -310,13 +310,18 @@ func (p *BlockProvisioner) rollback(result M) M {
 		}
 		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
-		if !(status >= 200 && status < 300) {
+		if status == 404 { // already gone, so it is not left behind
+			deleted++
+			continue
+		}
+		if !(status >= 200 && status < 300) || acceptedUnconfirmed(status) {
 			p.emit(M{"step": rollbackDeleteStep("block", blockID, status)})
 			residual = append(residual, M{
-				"kind":   "address_block",
-				"id":     blockID,
-				"label":  label,
-				"status": status,
+				"kind":    "address_block",
+				"id":      blockID,
+				"label":   label,
+				"status":  status,
+				"unknown": rest.UnclearFailure(status),
 			})
 			continue
 		}
@@ -325,7 +330,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 
 	result["rollback_residual"] = residual
 	if len(residual) > 0 {
-		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted", len(residual))})
+		p.emit(M{"step": rollbackIncompleteStep(residual)})
 	}
 
 	return rollbackReport(attempted, deleted, residual)
@@ -420,6 +425,7 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		if !p.cfg.DryRun {
 			p.emit(M{"step": fmt.Sprintf("Block provisioning failed (%s) — initiating rollback", runErr.Error())})
 			report = p.rollback(result)
+			noteCreateInDoubt(report, runErr)
 		}
 		return M{"rollback": report}, runErr
 	}
@@ -505,7 +511,12 @@ func (e *Engine) RetagBlock(block M, status string, dryRun bool) (M, error) {
 	if !dryRun {
 		_, httpStatus, _ := e.Rest.Write("PATCH", "/api/ddi/v1/"+pyStr(block["id"]), M{"tags": tags}, nil)
 		if !(httpStatus >= 200 && httpStatus < 300) {
-			return nil, perr("Failed to retag block %s: status %d", addr, httpStatus)
+			return nil, failedWrite("retag block", addr, httpStatus)
+		}
+		// A PATCH may also answer 201 for done, as the Editor's updates accept.
+		if httpStatus != 201 && acceptedUnconfirmed(httpStatus) {
+			return M{"address": addr, "id": pyStr(block["id"]), "status": status, "unconfirmed": true,
+				"http_status": httpStatus}, nil
 		}
 	}
 	return M{"address": addr, "id": pyStr(block["id"]), "status": status}, nil
@@ -522,7 +533,12 @@ type BlockDecommissioner struct {
 	dryRun  bool
 	emit    Emitter
 	spaceID string
+	// unconfirmed lists deletes Infoblox accepted without saying they finished.
+	unconfirmed []any
 }
+
+// Unconfirmed lists the deletes Infoblox accepted without saying they finished.
+func (d *BlockDecommissioner) Unconfirmed() []any { return d.unconfirmed }
 
 func (e *Engine) NewBlockDecommissioner(name, ipSpace string, dryRun bool, emit Emitter) *BlockDecommissioner {
 	return &BlockDecommissioner{e: e, name: name, ipSpace: ipSpace, dryRun: dryRun, emit: emit}
@@ -574,7 +590,11 @@ func (d *BlockDecommissioner) deleteBlocks(blocks []any) (deleted []any, attempt
 			attempted++
 			_, httpStatus, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 			if !(httpStatus >= 200 && httpStatus < 300) {
-				return deleted, attempted, perr("Failed to delete block %s: status %d", addr, httpStatus)
+				return deleted, attempted, failedWrite("delete block", addr, httpStatus)
+			}
+			if acceptedUnconfirmed(httpStatus) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete block", addr, blockID, httpStatus)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "id": blockID, "status": status})
@@ -640,6 +660,9 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 			"blocks_deleted": deleted,
 			"export_path":    exportPath,
 		}
+		if len(d.unconfirmed) > 0 {
+			report["unconfirmed"] = d.unconfirmed
+		}
 		// Emitted for the SSE route (server/provision.go's seed-demo teardown),
 		// which only ever sees the stream. Same grammar as the site teardown's
 		// emitIncomplete — top-level incomplete/failed_step/error — so one SSE
@@ -656,8 +679,12 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 		// already gone.
 		return M{"incomplete": report}, err
 	}
-	return M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
-		"export_path": exportPath, "export_written": !d.dryRun}, nil
+	out := M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
+		"export_path": exportPath, "export_written": !d.dryRun}
+	if len(d.unconfirmed) > 0 {
+		out["unconfirmed"] = d.unconfirmed
+	}
+	return out, nil
 }
 
 // recordPlan writes the address blocks this teardown is about to delete. A dry
@@ -712,10 +739,67 @@ func appendTo(result M, key string, v any) {
 // itoa is used where a query param must be a string.
 func itoa(n int) string { return strconv.Itoa(n) }
 
+// failedWrite is the error for a create, delete or retag that did not succeed.
+// Only a clear refusal may say it failed. detail, when given, is the reply.
+func failedWrite(action, what string, status int, detail ...any) *Error {
+	if rest.UnclearFailure(status) {
+		e := perr("No clear answer to %s %s (status %d), so it may or may not have happened. "+
+			"Check it in the Editor before trying again", action, what, status)
+		e.Unclear = true
+		return e
+	}
+	if len(detail) > 0 {
+		return perr("Failed to %s %s: status %d %v", action, what, status, detail[0])
+	}
+	return perr("Failed to %s %s: status %d", action, what, status)
+}
+
+// acceptedUnconfirmed is a 2xx on a delete or tag change that is not the plain
+// "done" of a 200 or 204: Infoblox took the request but did not say it finished.
+func acceptedUnconfirmed(status int) bool {
+	return status > 200 && status < 300 && status != 204
+}
+
+// noteUnconfirmed logs and lists a delete with an acceptedUnconfirmed answer.
+// The teardown carries on as it always did; the object is just not called gone.
+func noteUnconfirmed(list *[]any, emit Emitter, action, label, id string, status int) {
+	emit(M{"step": "  " + failedWrite(action, label, status).Msg})
+	*list = append(*list, M{"action": action, "label": label, "id": id, "status": status})
+}
+
+// rollbackIncompleteStep is the log line for objects rollback left behind,
+// counted by what Bloxsmith knows about each one.
+func rollbackIncompleteStep(residual []any) string {
+	unknown, refused, notSent := 0, 0, 0
+	for _, r := range residual {
+		m := asMap(r)
+		st, _ := m["status"].(int)
+		switch {
+		case pyStr(m["reason"]) != "":
+			notSent++
+		case rest.UnclearFailure(st):
+			unknown++
+		default:
+			refused++
+		}
+	}
+	parts := []string{}
+	if unknown > 0 {
+		parts = append(parts, fmt.Sprintf("%d may or may not be deleted (no clear answer)", unknown))
+	}
+	if refused > 0 {
+		parts = append(parts, fmt.Sprintf("%d refused by Infoblox", refused))
+	}
+	if notSent > 0 {
+		parts = append(parts, fmt.Sprintf("%d never sent (no id)", notSent))
+	}
+	return fmt.Sprintf("  Rollback incomplete: %d object(s) not confirmed as deleted: %s", len(residual), strings.Join(parts, ", "))
+}
+
 // rollbackDeleteStep is the log line for a cleanup delete that did not succeed.
 // Only a clear refusal may say the delete failed.
 func rollbackDeleteStep(what, id string, status int) string {
-	if rest.NoClearAnswer(status) {
+	if rest.UnclearFailure(status) {
 		return fmt.Sprintf("  Rollback: no clear answer deleting %s id=%s, so it may or may not be gone", what, id)
 	}
 	return fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", what, id, status)

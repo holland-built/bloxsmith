@@ -7,6 +7,7 @@ import (
 
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
+	"bloxsmith/internal/rest"
 	"bloxsmith/internal/runs"
 )
 
@@ -136,15 +137,14 @@ func unreadableDetail(resource string, identity []string, b map[string]any) map[
 // the object may well be gone from the customer's tenant. Recording nothing
 // there loses the only trace of a destructive call.
 //
-// A definite upstream status (400/403/404/409/500 …) is upstream having
-// answered and refused. That is a genuine non-event and stays unrecorded, which
-// is what keeps the entry below from degenerating into "audit every failure".
+// A clear refusal (400/401/403/409 …) is upstream having answered and said no.
+// That is a genuine non-event and stays unrecorded, which is what keeps the
+// entry below from degenerating into "audit every failure".
 //
-// The conflation this accepts is one-way and deliberate: a real upstream 502 or
-// 504 is a gateway saying it could not get an answer from the backend, which is
-// the same unknown, so it belongs on the recorded side too. Nothing upstream
-// positively refused can land here.
-func deleteOutcomeUnknown(status int) bool { return status == 502 || status == 504 }
+// Any 5xx, and a 2xx the delete could not count as done, says nothing about
+// whether the object is gone, so they belong on the recorded side too. Nothing
+// upstream positively refused can land here.
+func deleteOutcomeUnknown(status int) bool { return rest.UnclearFailure(status) }
 
 // strandedReservations is taggingFailed's sibling for the allocate path, and
 // closes the same hole: edit.SelfserviceAllocate can return ok:false AFTER it
@@ -183,6 +183,12 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"],
 			"fixed_address": res["fixed_address"]})
+	case res["outcome"] == "unknown":
+		// Infoblox answered without naming an address, so one may be reserved.
+		// Its own event, so it is never counted as an address taken.
+		d.auditAppend("selfservice-allocate-unknown", httpx.Actor(r), map[string]any{
+			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
+			"tag_value": b["tag_value"], "count": b["count"], "outcome": "unknown"})
 	case createdUnreadable(res):
 		// The allocate path's DNS record write was accepted and could not be read
 		// back, so the record is live and the addresses stayed reserved for it on
@@ -190,10 +196,16 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		// releasing them would strip a live record of its addresses). The
 		// addresses ARE known, so they go in the row; the record's id is not, so
 		// nothing stands in for it.
-		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), map[string]any{
+		detail := map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"], "tag_value": b["tag_value"],
-			"addresses": res["addresses"], "still_reserved": true, "created_unreadable": true,
-			"fixed_address": res["fixed_address"]})
+			"addresses": res["addresses"], "created_unreadable": true,
+			"fixed_address": res["fixed_address"]}
+		// When the reservation itself got no clear answer, whether it holds the
+		// address is not known, so the row does not say it does.
+		if fa, _ := res["fixed_address"].(map[string]any); !createdUnreadable(fa) {
+			detail["still_reserved"] = true
+		}
+		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), detail)
 	case !isDry(res):
 		// The ok-only gate left the same hole editCreate had: an ok:false that
 		// nonetheless left live objects on the tenant. Here they are IP addresses
@@ -379,7 +391,13 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	defer d.recoverEdit(w, r, "/api/edit/"+resource)
 	result, status := res.Create(b)
 	d.json(w, r, status, result)
-	if !isDry(result) && (resultOK(result) || taggingFailed(result)) {
+	if result["pick_unknown"] == true {
+		// Whether this subnet still exists is not known, but its id is, so it
+		// can be found and Remove can act on it.
+		label := anyStr(result["address"])
+		d.recordMade(r, "editor", strings.ReplaceAll(resource, "_", " ")+" "+label, []runs.Object{{ID: anyStr(result["id"]), Kind: resource,
+			Label: label, State: runs.Error, Error: anyStr(result["error"]), Outcome: outcomeUnknown}}, "", false)
+	} else if !isDry(result) && (resultOK(result) || taggingFailed(result)) {
 		obj, _ := result[res.ResultKey].(map[string]any)
 		id := anyStr(obj["id"])
 		if id == "" {
@@ -403,8 +421,11 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 		// name because this row can never carry the id that
 		// "edit-<resource>-create" rows are read for — filing it under that name
 		// would put an idless row among rows whose id is the point.
-		d.auditAppend("edit-"+resource+"-create-unreadable", httpx.Actor(r),
-			unreadableDetail(resource, res.Identity, b))
+		detail := unreadableDetail(resource, res.Identity, b)
+		if result["pick_unknown"] == true {
+			detail["id"], detail["outcome"] = result["id"], "unknown"
+		}
+		d.auditAppend("edit-"+resource+"-create-unreadable", httpx.Actor(r), detail)
 	case taggingFailed(result):
 		// The audit-only-when-ok rule leaves exactly one hole: SubnetCreate can
 		// fail AFTER the subnet exists upstream, when only its teardown tags
@@ -519,7 +540,7 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 		// A distinct event name for the same reason they use one: filing it as
 		// "edit-<resource>-delete" would count an unknown outcome as a deletion.
 		// It claims nothing — outcome is "unknown" and the builder's own error text
-		// travels with it. A definite upstream refusal (400/403/404/409/500) is
+		// travels with it. A definite upstream refusal (400/403/409) is
 		// still not recorded; see deleteOutcomeUnknown for why that is not
 		// "audit every failure".
 		d.auditAppend("edit-"+resource+"-delete-error", httpx.Actor(r),

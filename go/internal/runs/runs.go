@@ -54,6 +54,9 @@ type Object struct {
 	Label string `json:"label"` // what a person recognises: the IP, or the name
 	State string `json:"state"`
 	Error string `json:"error,omitempty"`
+	// Outcome says what a failed Remove knows: "unknown" (sent, no clear
+	// answer), "refused", or "not-sent". Empty when it cannot say.
+	Outcome string `json:"outcome,omitempty"`
 	// Look is what the object looked like when it was made (server/made.go
 	// lookOf). A delete compares it with the object now, so something someone
 	// else has since changed is not called safe. Empty on older records.

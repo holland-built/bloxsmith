@@ -264,6 +264,15 @@ func dnsObjects(res, in map[string]any) ([]runs.Object, string) {
 // subnetObjects reads the network ID a create result proves was made. A
 // network whose tags failed still exists, so it is recorded and can be removed.
 func subnetObjects(res, in map[string]any) ([]runs.Object, string) {
+	if res["pick_unknown"] == true {
+		label := anyStr(res["address"])
+		if n := inStr(in, "name"); n != "" {
+			label += ", " + n
+		}
+		return []runs.Object{{ID: anyStr(res["id"]), Kind: "subnet", Label: label, State: runs.Error,
+				Error: anyStr(res["error"]), Outcome: outcomeUnknown}},
+			"This network may or may not still exist. Check it, then Remove it if it is there."
+	}
 	id := ""
 	label := ""
 	if sub, _ := res["subnet"].(map[string]any); resultOK(res) && sub != nil {
@@ -441,6 +450,8 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			if o.Kind != kind || (o.State != runs.Created && o.State != runs.Error) {
 				continue
 			}
+			earlier := o.Outcome
+			o.Outcome = ""
 			if o.Kind == "demo_server" {
 				if why := d.removeDemoServer(r, o.ID); why != "" {
 					o.State, o.Error = runs.Error, why
@@ -452,7 +463,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			}
 			p, perr := edit.ObjectPath(removeKinds[o.Kind], o.ID)
 			if perr != nil {
-				o.State, o.Error = runs.Error, "not a valid Infoblox ID"
+				o.State, o.Error, o.Outcome = runs.Error, "not a valid Infoblox ID", outcomeNotSent
 				failed++
 				continue
 			}
@@ -462,19 +473,31 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 			// "delete only if empty". The run's own held addresses were deleted
 			// just before (removeOrder), so nothing is skipped here: one whose
 			// delete failed is still inside and must keep the network.
-			if why := runBlocker(cli, *o, nil); why != "" {
-				o.State, o.Error = runs.Error, why
+			if why, unread := runCheck(cli, *o, nil); why != "" {
+				o.State, o.Error, o.Outcome = runs.Error, why, outcomeNotSent
+				// This pass sent nothing, but an earlier delete may have landed,
+				// and without a read of the object that is still not known.
+				if earlier == outcomeUnknown && unread {
+					o.Error, o.Outcome = rest.OutcomeUnknown, outcomeUnknown
+				}
 				failed++
 				continue
 			}
-			res, _ := cli.Delete(p)
+			res, status := cli.Delete(p)
 			switch {
 			case resultOK(res) && res["already_gone"] == true:
 				o.State, o.Error = runs.Gone, ""
 			case resultOK(res):
 				o.State, o.Error = runs.Deleted, ""
 			default:
-				o.State, o.Error = runs.Error, anyStr(res["error"])
+				o.State, o.Error, o.Outcome = runs.Error, anyStr(res["error"]), outcomeRefused
+				switch {
+				case rest.UnclearFailure(status):
+					o.Outcome = outcomeUnknown
+				case earlier == outcomeUnknown:
+					// This retry was refused, but the first delete may have landed.
+					o.Error, o.Outcome = rest.OutcomeUnknown, outcomeUnknown
+				}
 				failed++
 			}
 		}
@@ -483,7 +506,7 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 		x.Objects = objs
 		if failed > 0 {
 			x.Status = runs.RemoveFailed
-			x.Error = fmt.Sprintf("%d item(s) were not confirmed as removed. Check them, then Remove again to retry.", failed)
+			x.Error = removeSummary(objs)
 		} else {
 			x.Status = runs.Removed
 			x.Error = ""
@@ -505,6 +528,37 @@ func (d *Deps) deskRemove(w http.ResponseWriter, r *http.Request, b map[string]a
 	d.json(w, r, code, map[string]any{"ok": failed == 0, "run": run, "error": run.Error})
 }
 
+// What a failed Remove knows about one object (runs.Object.Outcome).
+const (
+	outcomeUnknown = "unknown"
+	outcomeRefused = "refused"
+	outcomeNotSent = "not-sent"
+)
+
+// removeSummary counts the objects Remove left, by what is known about each.
+func removeSummary(objs []runs.Object) string {
+	counts := map[string]int{}
+	for _, o := range objs {
+		if o.State == runs.Error {
+			counts[o.Outcome]++
+		}
+	}
+	parts := []string{}
+	for _, c := range []struct {
+		outcome, words string
+	}{
+		{outcomeUnknown, "%d item(s) may or may not have been removed, because Infoblox gave no clear answer."},
+		{outcomeRefused, "%d item(s) were refused by Infoblox and not removed."},
+		{outcomeNotSent, "%d item(s) were not removed because the delete was never sent."},
+		{"", "%d item(s) were not confirmed as removed."},
+	} {
+		if n := counts[c.outcome]; n > 0 {
+			parts = append(parts, fmt.Sprintf(c.words, n))
+		}
+	}
+	return strings.Join(append(parts, "Check them, then Remove again to retry."), " ")
+}
+
 func objectIDs(objs []runs.Object) []any {
 	out := []any{}
 	for _, o := range objs {
@@ -516,7 +570,11 @@ func objectIDs(objs []runs.Object) []any {
 func objectStates(objs []runs.Object) []any {
 	out := []any{}
 	for _, o := range objs {
-		out = append(out, map[string]any{"id": o.ID, "state": o.State})
+		row := map[string]any{"id": o.ID, "state": o.State}
+		if o.Outcome != "" {
+			row["outcome"] = o.Outcome
+		}
+		out = append(out, row)
 	}
 	return out
 }
@@ -542,13 +600,20 @@ func blocker(cli *edit.Client, o runs.Object) string { return runBlocker(cli, o,
 // runBlocker is blocker for a desk run: ours are the address IDs the run
 // recorded itself, which Remove deletes before the network.
 func runBlocker(cli *edit.Client, o runs.Object, ours map[string]bool) string {
+	why, _ := runCheck(cli, o, ours)
+	return why
+}
+
+// runCheck is runBlocker, and also says whether the object itself could not be
+// read, so whether it still exists is not known.
+func runCheck(cli *edit.Client, o runs.Object, ours map[string]bool) (why string, unread bool) {
 	switch o.Kind {
 	case "subnet":
 		return subnetBlocker(cli, o.ID, ours)
 	case "dns_zone":
 		return zoneBlocker(cli, o.ID)
 	}
-	return ""
+	return "", false
 }
 
 // subnetBlocker says why a network must not be deleted, or "" when it is safe.
@@ -556,32 +621,32 @@ func runBlocker(cli *edit.Client, o runs.Object, ours map[string]bool) string {
 // deletes one only when it holds nothing but its own network and broadcast
 // addresses (Infoblox lists those two as addresses in every IPv4 network) and
 // no DHCP range. When it cannot check, it does not delete.
-func subnetBlocker(cli *edit.Client, id string, ours map[string]bool) string {
+func subnetBlocker(cli *edit.Client, id string, ours map[string]bool) (why string, unread bool) {
 	const cantCheck = "Bloxsmith could not check whether this network holds anything else, so it was not deleted. Try again, or delete it on the Subnet page."
 	p, err := edit.ObjectPath("ipam/subnet", id)
 	if err != nil {
-		return "not a valid Infoblox ID"
+		return "not a valid Infoblox ID", false
 	}
 	body, st, _ := cli.Rest.GetEx(p, nil)
 	if st == 404 {
-		return "" // already gone; the delete reports that
+		return "", false // already gone; the delete reports that
 	}
 	sub, _ := body.(map[string]any)
 	if r, ok := sub["result"].(map[string]any); ok {
 		sub = r
 	}
 	if st != 200 || sub == nil {
-		return cantCheck
+		return cantCheck, true
 	}
 	own := subnetOwnAddresses(fmt.Sprintf("%v/%v", sub["address"], sub["cidr"]))
 	esc, err := rest.CSPQ(id)
 	if err != nil {
-		return cantCheck
+		return cantCheck, false
 	}
 	filter := map[string]string{"_filter": `parent=="` + esc + `"`, "_limit": "50"}
 	addrs, err := cli.Rest.GetStrict("/api/ddi/v1/ipam/address", filter)
 	if err != nil {
-		return cantCheck
+		return cantCheck, false
 	}
 	others := 0
 	for _, a := range addrs {
@@ -592,17 +657,17 @@ func subnetBlocker(cli *edit.Client, id string, ours map[string]bool) string {
 	}
 	ranges, err := cli.Rest.GetStrict("/api/ddi/v1/ipam/range", filter)
 	if err != nil {
-		return cantCheck
+		return cantCheck, false
 	}
 	switch {
 	case others > 0 && len(ranges) > 0:
-		return fmt.Sprintf("This network now holds %d address(es) and %d DHCP range(s) this change did not make, so it was not deleted. Remove those first.", others, len(ranges))
+		return fmt.Sprintf("This network now holds %d address(es) and %d DHCP range(s) this change did not make, so it was not deleted. Remove those first.", others, len(ranges)), false
 	case others > 0:
-		return fmt.Sprintf("This network now holds %d address(es) this change did not make, so it was not deleted. Release them first.", others)
+		return fmt.Sprintf("This network now holds %d address(es) this change did not make, so it was not deleted. Release them first.", others), false
 	case len(ranges) > 0:
-		return fmt.Sprintf("This network now holds %d DHCP range(s) this change did not make, so it was not deleted. Remove them first.", len(ranges))
+		return fmt.Sprintf("This network now holds %d DHCP range(s) this change did not make, so it was not deleted. Remove them first.", len(ranges)), false
 	}
-	return ""
+	return "", false
 }
 
 // subnetOwnAddresses is the network and broadcast address of an IPv4 prefix

@@ -36,6 +36,9 @@ type fakeTenant struct {
 	refuseHold     map[string]bool   // addresses whose POST ipam/address fails
 	held           map[string]string // reservation id -> address, while it exists
 	refuseDeleteOf map[string]bool   // ids whose DELETE fails
+	refuseStatus   int               // the refused DELETE's status; 0 is 500
+	readStatus     int               // when set, every read of one object answers this
+	failAddrList   bool              // the list of addresses inside a network fails
 }
 
 func (f *fakeTenant) subnetJSON() string {
@@ -56,6 +59,10 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 		f.writes = append(f.writes, r.Method+" "+p)
 	}
 	switch {
+	case r.Method == "GET" && f.readStatus != 0 && strings.Count(strings.TrimPrefix(p, "/api/ddi/v1/"), "/") == 2:
+		w.WriteHeader(f.readStatus)
+	case r.Method == "GET" && f.failAddrList && p == "/api/ddi/v1/ipam/address":
+		w.WriteHeader(503)
 	case r.Method == "POST" && p == "/api/ddi/v1/ipam/address":
 		var b map[string]any
 		json.NewDecoder(r.Body).Decode(&b)
@@ -136,7 +143,11 @@ func (f *fakeTenant) handler(w http.ResponseWriter, r *http.Request) {
 			f.mu.Lock()
 		}
 		if f.refuseDelete || f.refuseDeleteOf[id] {
-			w.WriteHeader(500)
+			if f.refuseStatus != 0 {
+				w.WriteHeader(f.refuseStatus)
+			} else {
+				w.WriteHeader(500)
+			}
 			io.WriteString(w, `{"error":"refused"}`)
 			return
 		}

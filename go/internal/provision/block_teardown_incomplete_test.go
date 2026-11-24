@@ -40,6 +40,7 @@ const (
 type partialBlockTenant struct {
 	mu           sync.Mutex
 	failDeleteID string
+	failStatus   int // what that DELETE answers; 0 is 500
 	deletes      []string
 }
 
@@ -52,6 +53,10 @@ func (f *partialBlockTenant) handler() http.HandlerFunc {
 			f.deletes = append(f.deletes, id)
 			fail := id == f.failDeleteID
 			f.mu.Unlock()
+			if fail && f.failStatus != 0 {
+				w.WriteHeader(f.failStatus)
+				return
+			}
 			if fail {
 				w.WriteHeader(500)
 				w.Write([]byte(`{"error":"block is in use"}`))
@@ -164,7 +169,7 @@ func TestBlockTeardown_PartialDeleteReportsWhatIsAlreadyGone(t *testing.T) {
 	if ev["operation"] != "decommission-block" || ev["failed_step"] != "delete address blocks" {
 		t.Fatalf("event = %v, want operation=decommission-block failed_step=\"delete address blocks\"", ev)
 	}
-	if msg, _ := ev["error"].(string); !strings.Contains(msg, "Failed to delete block") {
+	if msg, _ := ev["error"].(string); !strings.Contains(msg, "No clear answer to delete block") {
 		t.Fatalf("event error = %q, want the mid-delete failure", msg)
 	}
 	evReport := asMap(ev["report"])

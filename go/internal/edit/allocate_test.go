@@ -480,7 +480,7 @@ func TestAllocateDNSRecordDefaultsToTheFirstReservedAddress(t *testing.T) {
 // "released the last one only" are indistinguishable, so a leak that exhausts
 // the subnet would pass unnoticed.
 func TestAllocateDNSFailureReleasesBothReservedAddresses(t *testing.T) {
-	f := newAllocFake(t, allocConfig{dnsStatus: 500, dnsBody: `{"error":"zone is frozen"}`})
+	f := newAllocFake(t, allocConfig{dnsStatus: 400, dnsBody: `{"error":"zone is frozen"}`})
 
 	res, status := f.client().SelfserviceAllocate(M{
 		"subnet_id": "s-42", "count": float64(2), "dry": false,
@@ -515,14 +515,12 @@ func TestAllocateDNSFailureReleasesBothReservedAddresses(t *testing.T) {
 	if v, present := res["orphaned"]; present {
 		t.Fatalf("orphaned = %v, want the key absent when every release succeeded", v)
 	}
-	// A 500 does not say whether the record landed, so the message must not
-	// claim it failed; the release is known, so it stays in the sentence.
-	if res["error"] != "the DNS record may or may not exist, but the reserved address(es) were released. Check for the record in Infoblox" {
-		t.Fatalf("error = %v, want the unknown-record release message", res["error"])
+	if res["error"] != "dns record creation failed; reserved address(es) released" {
+		t.Fatalf("error = %v, want the refused-record release message", res["error"])
 	}
 	rec := asMap(res["record"])
-	if rec["ok"] != false || rec["status"] != 500 {
-		t.Fatalf("record = %v, want ok:false and the real upstream status 500", rec)
+	if rec["ok"] != false || rec["status"] != 400 {
+		t.Fatalf("record = %v, want ok:false and the real upstream status 400", rec)
 	}
 }
 
@@ -532,7 +530,7 @@ func TestAllocateDNSFailureReleasesBothReservedAddresses(t *testing.T) {
 // the two outcomes must be reported separately and never merged.
 func TestAllocateFailedReleaseIsOrphanedNotReleased(t *testing.T) {
 	f := newAllocFake(t, allocConfig{
-		dnsStatus: 500,
+		dnsStatus: 400,
 		// first release succeeds, second is refused
 		deleteStatuses: []int{204, 500},
 	})
@@ -561,7 +559,7 @@ func TestAllocateFailedReleaseIsOrphanedNotReleased(t *testing.T) {
 // released rather than orphaned. This is idempotency, not a failure being
 // hidden — the address genuinely is not reserved any more.
 func TestAllocateReleaseTreats404AsAlreadyReleased(t *testing.T) {
-	f := newAllocFake(t, allocConfig{dnsStatus: 500, deleteStatuses: []int{404, 200}})
+	f := newAllocFake(t, allocConfig{dnsStatus: 400, deleteStatuses: []int{404, 200}})
 
 	res, _ := f.client().SelfserviceAllocate(M{
 		"subnet_id": "s-42", "count": float64(2), "dry": false,
@@ -585,7 +583,7 @@ func TestAllocateReleaseTreats404AsAlreadyReleased(t *testing.T) {
 func TestAllocateReleaseSkipsAddressesWithNoID(t *testing.T) {
 	f := newAllocFake(t, allocConfig{
 		allocBody: `{"results":[{"id":"a-1111","address":"10.7.0.4"},{"address":"10.7.0.5"}]}`,
-		dnsStatus: 500,
+		dnsStatus: 400,
 	})
 
 	res, status := f.client().SelfserviceAllocate(M{
@@ -621,7 +619,7 @@ func TestAllocateReleaseSkipsAddressesWithNoID(t *testing.T) {
 func TestAllocateReleaseUsesObjectPathSoFullFormIDsAreNotDoubled(t *testing.T) {
 	f := newAllocFake(t, allocConfig{
 		allocBody: `{"results":[{"id":"ipam/address/a-1111","address":"10.7.0.4"},{"id":"ipam/address/a-2222","address":"10.7.0.5"}]}`,
-		dnsStatus: 500,
+		dnsStatus: 400,
 	})
 
 	res, status := f.client().SelfserviceAllocate(M{
@@ -664,7 +662,7 @@ func TestAllocateReleaseUsesObjectPathSoFullFormIDsAreNotDoubled(t *testing.T) {
 func TestAllocateReleaseOrphansAnIDItCannotTarget(t *testing.T) {
 	f := newAllocFake(t, allocConfig{
 		allocBody: `{"results":[{"id":"ipam/address/a-1111","address":"10.7.0.4"},{"id":"ipam/subnet/../../secret","address":"10.7.0.5"}]}`,
-		dnsStatus: 500,
+		dnsStatus: 400,
 	})
 
 	res, status := f.client().SelfserviceAllocate(M{

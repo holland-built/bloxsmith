@@ -79,7 +79,7 @@ import (
 // pretended otherwise would be naming an event that never exists.
 var tenantWriteAuditEvents = map[string][]string{
 	// --- provisioning and teardown streams (SSE, hence GET) ------------------
-	"GET /api/provision/stream":           {"provision-subnet", "provision-subnet-error"},
+	"GET /api/provision/stream":           {"provision-subnet", "provision-subnet-error", "provision-subnet-unknown"},
 	"GET /api/provision/site/stream":      {"provision-site", "provision-site-error"},
 	"GET /api/provision/seed-demo/stream": {"provision-seed-demo", "provision-site-error"},
 	"GET /api/teardown/site/stream":       {"teardown-site", "teardown-site-error"},
@@ -96,7 +96,7 @@ var tenantWriteAuditEvents = map[string][]string{
 	"POST /api/lists/apply":          {"site-list-apply"},
 	"POST /api/lists/proposal/apply": {"site-list-sync"},
 	"POST /api/made/delete":          {"made-delete"},
-	"POST /api/selfservice/allocate": {"selfservice-allocate", "selfservice-allocate-orphaned", "selfservice-allocate-record-unreadable", "selfservice-reserve-record-failed"},
+	"POST /api/selfservice/allocate": {"selfservice-allocate", "selfservice-allocate-unknown", "selfservice-allocate-orphaned", "selfservice-allocate-record-unreadable", "selfservice-reserve-record-failed"},
 	"POST /api/dns/records":          {"dns-record-create", "dns-record-create-unreadable"},
 	"POST /api/desk/run":             {"desk-build", "demo-build", "demo-build-error"},
 	"POST /api/desk/remove":          {"desk-remove", "demo-remove", "demo-remove-error"},

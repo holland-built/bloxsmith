@@ -276,21 +276,25 @@ function useStreamFlow(path) {
 // attempted (a preview writes nothing, so there is nothing to report), and an
 // absent/unrecognised outcome means the server did not tell us — and an
 // unknown answer must never be painted as a reassuring one.
-// A cleanup delete with no clear answer may have worked. An entry with a reason
-// is one the server knows is still there (it had no id to delete).
-const cleanupUnknown = (o) => !o?.reason && (o?.status === 0 || o?.status >= 500)
+// The server marks a cleanup delete with no clear answer: it may have worked.
+const cleanupUnknown = (o) => o?.unknown
+const Warn = (p) => <div {...p} className="text-copy font-semibold" style={{ color: COLORS.warn }} />
 
 function RollbackReport({ report }) {
   if (!report) return null
   const residual = Array.isArray(report.residual) ? report.residual : []
   const deleted = report.deleted ?? 0
   const attempted = report.attempted ?? 0
+  // The create that stopped the run got no clear answer, so it may exist.
+  const doubt = report.note && <Warn>{report.note}</Warn>
 
+  if (report.outcome === 'unknown') return <div role="alert">{doubt}</div>
   if (report.outcome === 'incomplete') {
     const unknown = residual.filter(cleanupUnknown).length
     const stuck = (residual.length || attempted - deleted) - unknown
     return (
       <div role="alert" className="flex flex-col gap-0.5">
+        {doubt}
         {stuck > 0 && (
           <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
             Cleanup could not remove {stuck} object{stuck === 1 ? '' : 's'} — {stuck === 1 ? 'it is' : 'they are'} still live on the customer&rsquo;s
@@ -298,9 +302,7 @@ function RollbackReport({ report }) {
           </div>
         )}
         {unknown > 0 && (
-          <div className="text-copy font-semibold" style={{ color: COLORS.warn }}>
-            Cleanup result unknown for {unknown} object{unknown === 1 ? '' : 's'}. Bloxsmith did not get an answer.
-          </div>
+          <Warn>Cleanup result unknown for {unknown} object{unknown === 1 ? '' : 's'}. Bloxsmith did not get an answer.</Warn>
         )}
         <div className="text-note text-dim mb-1">{deleted} of {attempted} removed</div>
         {residual.map((o, i) => (
@@ -347,12 +349,13 @@ function RowsRollup({ rows, failedLabel }) {
   const rs = Object.values(rows)
   const total = Object.keys(rows).length
   const failed = rs.filter((r) => r?.error).length
-  const done = rs.filter((r) => r && !r.error).length
+  const unknown = rs.filter((r) => r?.phase === 'unconfirmed').length
+  const done = rs.filter((r) => r && !r.error).length - unknown
   if (total === 0) return <Empty>Per-template status appears here once the run starts.</Empty>
   return (
     <div className="flex flex-col gap-0.5">
       <div className="font-mono text-note" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
-        {done}/{total} done{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
+        {done}/{total} done{unknown ? ` · ${unknown} result unknown` : ''}{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
       </div>
       {Object.entries(rows).filter(([, r]) => r?.error).map(([tpl, r]) => (
         <div key={tpl} className="font-mono text-note" style={{ color: COLORS.crit }}>
@@ -522,6 +525,7 @@ function SiteMode({ isAdmin }) {
 
   const build = useStreamFlow('/api/provision/site/stream')
   const teardown = useStreamFlow('/api/teardown/site/stream')
+  const torn = teardown.result?.result
 
   function baseQs(dry) {
     const q = new URLSearchParams({ template: siteTemplate, dry: dry ? '1' : '0' })
@@ -698,19 +702,20 @@ function SiteMode({ isAdmin }) {
           <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
-      {teardown.result?.result && (
+      {torn && (
         <Card key="provision-site-teardown-result" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
           <div className="font-mono text-note flex flex-col gap-0.5">
-            <div><span className="text-muted">Site: </span><ItemLink kind="site" value={teardown.result.result.site || siteTemplate} /></div>
+            <div><span className="text-muted">Site: </span><ItemLink kind="site" value={torn.site || siteTemplate} /></div>
             <div>
-              <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_deleted ? teardown.result.result.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={teardown.result.result.dns_zone_fqdn} />}{' '}
-              {teardown.result.result.dns_zone_deleted ? '(deleted)' : '(kept)'}
+              <span className="text-muted">DNS zone: </span>{torn.dns_zone_deleted ? torn.dns_zone_fqdn || '—' : <ItemLink kind="zone" value={torn.dns_zone_fqdn} />}{' '}
+              {torn.dns_zone_deleted ? '(deleted)' : torn.dns_zone_unknown ? '(result unknown)' : '(kept)'}
             </div>
             <div>
-              <span className="text-muted">Subnets: </span>{(teardown.result.result.subnets_deleted || []).length} ·{' '}
-              <span className="text-muted">DHCP ranges: </span>{(teardown.result.result.dhcp_ranges_deleted || []).length} ·{' '}
-              <span className="text-muted">Hosts: </span>{(teardown.result.result.hosts_deleted || []).length} deleted
+              <span className="text-muted">Subnets: </span>{(torn.subnets_deleted || []).length} ·{' '}
+              <span className="text-muted">DHCP ranges: </span>{(torn.dhcp_ranges_deleted || []).length} ·{' '}
+              <span className="text-muted">Hosts: </span>{(torn.hosts_deleted || []).length} deleted
             </div>
+            {torn.unconfirmed_note && <div style={{ color: COLORS.warn }}>{torn.unconfirmed_note}</div>}
             {teardown.status === 'previewed' && <div style={{ color: COLORS.warn }}>Preview — nothing was deleted.</div>}
           </div>
         </Card>
@@ -761,6 +766,9 @@ function SeedMode({ isAdmin }) {
 
   const seedOutcome = runOutcome(seed.result)
   const teardownOutcome = runOutcome(teardown.result)
+  const tdNote = teardown.result?.unconfirmed_note
+  const seedEnd = seed.status === 'applied' && seedOutcome?.kind
+  const tdEnd = teardown.status === 'applied' && teardownOutcome?.kind
 
   return (
     // Its own key, for the reason spelled out on the subnet grid above.
@@ -805,15 +813,15 @@ function SeedMode({ isAdmin }) {
             busyLabel="Running…"
             error={
               seed.error ||
-              (seed.status === 'applied' && seedOutcome?.kind === 'failed'
+              (seedEnd === 'failed'
                 ? `Seed failed — 0 of ${seedOutcome.total} template(s) succeeded.`
                 : null)
             }
             message={
               seed.status === 'previewed' ? previewMsg('Seed demo data')
-                : seed.status === 'applied' && seedOutcome?.kind === 'partial'
+                : seedEnd === 'partial'
                   ? `Seed partial — ${seedOutcome.succeeded} of ${seedOutcome.total} succeeded, ${seedOutcome.failed} failed.`
-                : seed.status === 'applied' && seedOutcome?.kind === 'success' ? 'Seed complete.'
+                : seedEnd === 'success' ? 'Seed complete.'
                 : null
             }
           >
@@ -867,18 +875,20 @@ function SeedMode({ isAdmin }) {
             destructive
             error={
               teardown.error ||
-              (teardown.status === 'applied' && teardownOutcome?.kind === 'failed'
+              (tdEnd === 'failed'
                 ? `Teardown failed — 0 of ${teardownOutcome.total} template(s) succeeded.`
                 : null)
             }
             message={
-              teardown.status === 'previewed' ? previewMsg('Tear down demo')
-                : teardown.status === 'applied' && teardownOutcome?.kind === 'partial'
+              tdNote ? null
+                : teardown.status === 'previewed' ? previewMsg('Tear down demo')
+                : tdEnd === 'partial'
                   ? `Teardown partial — ${teardownOutcome.succeeded} of ${teardownOutcome.total} succeeded, ${teardownOutcome.failed} failed.`
-                : teardown.status === 'applied' && teardownOutcome?.kind === 'success' ? 'Teardown complete.'
+                : tdEnd === 'success' ? 'Teardown complete.'
                 : null
             }
           />
+          {tdNote && <Warn role="status">{tdNote}</Warn>}
         </div>
       </Card>
 

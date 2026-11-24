@@ -65,6 +65,9 @@ type SiteDecommissioner struct {
 	// export can record them. See export.go.
 	spaceBody M
 	viewBody  M
+
+	// unconfirmed lists deletes Infoblox accepted without saying they finished.
+	unconfirmed []any
 }
 
 func (e *Engine) NewSiteDecommissioner(cfg *DecommissionConfig, emit Emitter) *SiteDecommissioner {
@@ -72,6 +75,9 @@ func (e *Engine) NewSiteDecommissioner(cfg *DecommissionConfig, emit Emitter) *S
 }
 
 // --- PLAN phase: reads only, no deletes -------------------------------------
+
+// Unconfirmed lists the deletes Infoblox accepted without saying they finished.
+func (d *SiteDecommissioner) Unconfirmed() []any { return d.unconfirmed }
 
 func (d *SiteDecommissioner) resolveIPSpace() error {
 	space, err := cspq(d.cfg.IPSpace)
@@ -264,7 +270,11 @@ func (d *SiteDecommissioner) execDeleteDNSZone(fqdn, zoneID string) (bool, error
 	if !d.cfg.DryRun {
 		_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+zoneID, nil, nil)
 		if !(status >= 200 && status < 300) {
-			return false, perr("Failed to delete DNS zone %s: status %d", fqdn, status)
+			return false, failedWrite("delete DNS zone", fqdn, status)
+		}
+		if acceptedUnconfirmed(status) {
+			noteUnconfirmed(&d.unconfirmed, d.emit, "delete DNS zone", fqdn, zoneID, status)
+			return false, nil
 		}
 	}
 	return true, nil
@@ -282,7 +292,11 @@ func (d *SiteDecommissioner) execDeleteRanges(ranges []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+rangeID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete DHCP range %s: status %d", rangeID, status)
+				return deleted, failedWrite("delete DHCP range", rangeID, status)
+			}
+			if acceptedUnconfirmed(status) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete DHCP range", rangeID, rangeID, status)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"id": rangeID, "start": pyStr(rm["start"]), "end": pyStr(rm["end"])})
@@ -299,7 +313,11 @@ func (d *SiteDecommissioner) execDeleteReverseZones(planned []reverseZonePlan) (
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+p.zoneID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete reverse zone %s: status %d", p.fqdn, status)
+				return deleted, failedWrite("delete reverse zone", p.fqdn, status)
+			}
+			if acceptedUnconfirmed(status) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete reverse zone", p.fqdn, p.zoneID, status)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"id": p.zoneID, "fqdn": p.fqdn})
@@ -319,7 +337,11 @@ func (d *SiteDecommissioner) execDeleteSubnets(subnets []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+subnetID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete subnet %s: status %d", addr, status)
+				return deleted, failedWrite("delete subnet", addr, status)
+			}
+			if acceptedUnconfirmed(status) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete subnet", addr, subnetID, status)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "name": pyStr(sm["name"]), "id": subnetID})
@@ -344,7 +366,11 @@ func (d *SiteDecommissioner) execDeleteHosts(hosts []any) ([]any, error) {
 		if !d.cfg.DryRun {
 			_, status, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+hostID, nil, nil)
 			if !(status >= 200 && status < 300) {
-				return deleted, perr("Failed to delete host %s: status %d", fqdn, status)
+				return deleted, failedWrite("delete host", fqdn, status)
+			}
+			if acceptedUnconfirmed(status) {
+				noteUnconfirmed(&d.unconfirmed, d.emit, "delete host", fqdn, hostID, status)
+				continue
 			}
 		}
 		deleted = append(deleted, M{"fqdn": fqdn, "id": hostID})
@@ -360,7 +386,7 @@ func (d *SiteDecommissioner) execDeleteHosts(hosts []any) ([]any, error) {
 // same M{...} shape every other d.emit call in this file uses — no parallel
 // event channel.
 func (d *SiteDecommissioner) emitIncomplete(result M, failedStep string, err error) {
-	d.emit(M{
+	ev := M{
 		"operation":   "decommission",
 		"site":        d.cfg.Site,
 		"incomplete":  true,
@@ -373,7 +399,11 @@ func (d *SiteDecommissioner) emitIncomplete(result M, failedStep string, err err
 			"subnets_deleted":       result["subnets_deleted"],
 			"hosts_deleted":         result["hosts_deleted"],
 		},
-	})
+	}
+	if len(d.unconfirmed) > 0 {
+		ev["unconfirmed"] = d.unconfirmed
+	}
+	d.emit(ev)
 }
 
 // recordPlan writes what this teardown is about to delete, and returns the path.
@@ -566,5 +596,17 @@ func (d *SiteDecommissioner) Decommission() (M, error) {
 		return nil, err
 	}
 
+	if len(d.unconfirmed) > 0 {
+		labels := make([]string, 0, len(d.unconfirmed))
+		for _, u := range d.unconfirmed {
+			labels = append(labels, pyStr(asMap(u)["label"]))
+			if asMap(u)["action"] == "delete DNS zone" {
+				result["dns_zone_unknown"] = true
+			}
+		}
+		result["unconfirmed"] = d.unconfirmed
+		result["unconfirmed_note"] = fmt.Sprintf("%d item(s) may or may not have been deleted: %s. Check them in the Editor.",
+			len(labels), strings.Join(labels, ", "))
+	}
 	return result, nil
 }

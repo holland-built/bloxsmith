@@ -379,7 +379,7 @@ func TestSiteRollbackNeverDeletesAReusedForwardZone(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the host-create failure (result %v)", result)
 	}
-	if !strings.Contains(err.Error(), "Failed to create host") {
+	if !strings.Contains(err.Error(), "No clear answer to create host") {
 		t.Fatalf("Provision() error = %q, want the host-create failure — the fixture failed somewhere "+
 			"else and this test is not exercising what it claims", err.Error())
 	}
@@ -683,7 +683,7 @@ func TestSiteRollbackReportsAFailedDeleteAndKeepsGoing(t *testing.T) {
 
 	wantResidual := []any{M{
 		"kind": "host", "id": "ipam/host/h-2",
-		"label": "gw02.site-hq.example.com", "status": 500,
+		"label": "gw02.site-hq.example.com", "status": 500, "unknown": true,
 	}}
 	if got := getList(result, "rollback_residual"); !reflect.DeepEqual(got, wantResidual) {
 		t.Fatalf("rollback_residual = %v, want %v — the operator needs the kind and the id of what "+
@@ -751,7 +751,7 @@ func TestSiteRollbackDeletesHostsCreatedBeforeAMidListFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Provision() error = nil, want the third host's create failure")
 	}
-	if !strings.Contains(err.Error(), "Failed to create host gw03") {
+	if !strings.Contains(err.Error(), "No clear answer to create host gw03") {
 		t.Fatalf("Provision() error = %q, want gw03's create failure — the run broke somewhere else and "+
 			"this test is not exercising a mid-list host failure", err.Error())
 	}

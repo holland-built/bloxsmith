@@ -153,7 +153,7 @@ func TestRBSiteProvisionFailureReportsIncompleteWithNamedResiduals(t *testing.T)
 	if err == nil {
 		t.Fatalf("Provision() error = nil, want the host-create failure (out %v)", out)
 	}
-	if !strings.Contains(err.Error(), "Failed to create host") {
+	if !strings.Contains(err.Error(), "No clear answer to create host") {
 		t.Fatalf("Provision() error = %q, want the host-create failure — the fixture broke somewhere else "+
 			"and this test is not exercising a rollback over a fully-built site", err.Error())
 	}
@@ -212,7 +212,9 @@ func TestRBSiteProvisionFailureReportsIncompleteWithNamedResiduals(t *testing.T)
 // it verifiable rather than a claim.
 func TestRBSiteProvisionFailureCleanRollbackReportsComplete(t *testing.T) {
 	e, f := newSiteRollbackHarness(t)
-	f.hostStatus = 500
+	// A clear refusal: a create with no clear answer may exist, so it is not
+	// "complete" (TestSiteProvision_UnknownHostCreateIsNotComplete).
+	f.hostStatus = 403
 
 	var steps []string
 	p := e.NewSiteProvisioner(siteRollbackConfig(false), collectSteps(&steps))

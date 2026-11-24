@@ -123,6 +123,25 @@ test('a run that could not be fully removed says so and offers Remove again', as
   await expect(row.getByRole('button', { name: 'Remove' })).toBeVisible();
 });
 
+test('a failed Remove says which items are unknown, refused or never sent', async ({ page }) => {
+  const cases = [
+    { outcome: 'unknown', status: 'Some items may or may not have been removed', item: '10.2.1.7: result unknown' },
+    { outcome: 'refused', status: 'Infoblox refused to remove some items', item: '10.2.1.7: could not be removed' },
+    { outcome: 'not-sent', status: 'Some items were kept, and their delete was never sent', item: '10.2.1.7: not removed, the delete was never sent' },
+  ];
+  for (const c of cases) {
+    const stuck = { ...RUN, status: 'remove-failed', error: '1 item(s) need checking.',
+      objects: [{ ...RUN.objects[0], state: 'failed', outcome: c.outcome, error: 'the reason' }] };
+    await page.unroute('**/api/desk/runs');
+    await page.route('**/api/desk/runs', (route) => json(route, { runs: [stuck] }));
+    await page.goto('/#automate');
+    await page.reload();
+    const row = page.locator(`[data-run="${RUN.id}"]`);
+    await expect(row).toContainText(c.status);
+    await expect(row).toContainText(c.item);
+  }
+});
+
 test('the rail and the Change menu both lead to Automate', async ({ page }) => {
   await page.route('**/api/desk/runs', (route) => json(route, { runs: [] }));
   await page.setViewportSize({ width: 1440, height: 900 });

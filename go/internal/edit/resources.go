@@ -260,7 +260,9 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		sid = pyStr(subnet["id"])
 	}
 	if sid == "" {
-		return M{"ok": false, "error": "no free subnet available in block"}, 502
+		// A 2xx naming no subnet says nothing about whether one was carved out.
+		return createdMaybe("subnet", status,
+			"Its teardown tags could not be applied either, so no tag filter will find it"), unclearStatus(status)
 	}
 	scidr := cidr
 	if v, ok := intCoerce(subnet["cidr"]); ok {
@@ -291,8 +293,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		if dpath, derr := ObjectPath("ipam/subnet", sid); derr != nil {
 			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s. Remove it in the Editor", label, reason)
 		} else if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s, and it could not be removed (%s). Remove it in the Editor",
-				label, reason, statusPhrase(dst))
+			out["id"], out["error"] = sid, fmt.Sprintf("Infoblox picked %s, but %s, and %s", label, reason, cleanupLeft(dst))
 		}
 		return out, 409
 	}
@@ -325,7 +326,10 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	// the wrong reflex — and the same compensating-delete pattern in
 	// SelfserviceAllocate was broken for its entire life before being fixed.
 	presp, pstatus, _ := c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
+	// A refused retry does not undo a first write that may have landed.
+	tagUnclear := false
 	if pstatus != 200 && pstatus != 201 {
+		tagUnclear = rest.UnclearFailure(pstatus)
 		presp, pstatus, _ = c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
 	}
 	if pstatus != 200 && pstatus != 201 {
@@ -335,17 +339,21 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		// writing nothing at all (an orphan with no record it was created).
 		out := M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
 			"detail": presp, "id": sid, "tagging_failed": true}
-		if rest.NoClearAnswer(pstatus) {
+		code := statusOr(pstatus, 502)
+		holdReason := "the network's tags failed first"
+		if tagUnclear || rest.UnclearFailure(pstatus) {
+			holdReason = "the network's tags got no clear answer first"
+			code = unclearStatus(pstatus)
 			out["error"] = "subnet created, but the tagging needed for teardown got no clear answer and may or may not have worked. Check its tags in Infoblox"
 		}
 		if held := CloudHeld(cloud, made.Masked()); perr == nil && held != nil {
 			notHeld := []any{}
 			for _, h := range held {
-				notHeld = append(notHeld, M{"address": h.Address, "label": h.Label, "reason": "the network's tags failed first"})
+				notHeld = append(notHeld, M{"address": h.Address, "label": h.Label, "reason": holdReason})
 			}
 			out["not_held"] = notHeld
 		}
-		return out, statusOr(pstatus, 502)
+		return out, code
 	}
 	if r := asMap(presp); r != nil && asMap(r["result"]) != nil {
 		subnet = asMap(r["result"])
@@ -408,7 +416,13 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 		return nil, 0, false
 	}
 	if _, dst, _ := c.Rest.Write("DELETE", dpath, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-		return nil, 0, false
+		if !rest.UnclearFailure(dst) {
+			return nil, 0, false
+		}
+		// The shared pick may be gone or may not, so nothing is built on it.
+		return M{CreatedUnreadableKey: true, "pick_unknown": true, "id": sid, "address": made.String(), "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, "+
+			"but it may or may not have been removed (%s). The clean %s was not made. Check it in the Editor",
+			made, statusPhrase(dst), clean)}, unclearStatus(dst), true
 	}
 	label := clean.String()
 	resp, st, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/subnet",
@@ -416,10 +430,10 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 	if writeUnreadable(resp, st) {
 		return createdUnreadable("subnet", st, "Its teardown tags could not be applied either, so no tag filter will find it"), st, true
 	}
-	if outcomeUnknown(st) || rest.NoClearAnswer(st) {
+	if st != 200 && st != 201 && rest.UnclearFailure(st) {
 		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
 			"%s may have been created, but Infoblox's answer was lost (%s). Check for it in the Editor before trying again",
-			made, label, statusPhrase(st)), "detail": resp}, statusOr(st, 502), true
+			made, label, statusPhrase(st)), "detail": resp}, unclearStatus(st), true
 	}
 	if st != 200 && st != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
@@ -437,8 +451,7 @@ func (c *Client) replaceSharedSubnet(space string, block, made netip.Prefix, sid
 		if dp, e := ObjectPath("ipam/subnet", nid); e != nil {
 			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s. Remove it in the Editor", label, made, reason)
 		} else if _, dst, _ := c.Rest.Write("DELETE", dp, nil, nil); dst != 200 && dst != 204 && dst != 404 {
-			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s, and it could not be removed (%s). Remove it in the Editor",
-				label, made, reason, statusPhrase(dst))
+			out["id"], out["error"] = nid, fmt.Sprintf("%s was made in place of %s, but %s, and %s", label, made, reason, cleanupLeft(dst))
 		}
 		return out, 409, true
 	}
@@ -808,7 +821,7 @@ func (c *Client) Delete(fullPath string) (M, int) {
 	if status == 200 || status == 204 {
 		return M{"ok": true, "already_gone": false}, 200
 	}
-	if rest.NoClearAnswer(status) {
+	if rest.UnclearFailure(status) {
 		return M{"ok": false, "error": rest.OutcomeUnknown, "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": false, "error": fmt.Sprintf("delete failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)

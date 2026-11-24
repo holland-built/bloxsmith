@@ -227,18 +227,16 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			// (rest.go:419-427), so the werr test fires first.
 			addr, _ := subnet["address"].(string)
 			addr = strings.TrimSpace(addr)
+			plain := status == 200 || status == 201
 			switch {
-			case werr != nil:
-				errDetail = map[string]any{"phase": "allocate"}
-				return fmt.Errorf("the subnet allocation could not be sent: %v", werr)
-			case status < 200 || status > 299:
+			case werr != nil || (plain && addr == "") || (!plain && rest.UnclearFailure(status)):
+				errDetail = map[string]any{"phase": "allocate", "outcome": "unknown"}
+				return fmt.Errorf("the subnet allocation got no clear answer (status %d), so a subnet may or may not "+
+					"have been created. Check the block in the Editor before trying again", status)
+			case !plain:
 				errDetail = map[string]any{"phase": "allocate"}
 				return fmt.Errorf("the subnet allocation was refused%s — nothing was created",
 					upstreamDetail(status, result))
-			case addr == "":
-				errDetail = map[string]any{"phase": "allocate"}
-				return fmt.Errorf("the subnet allocation returned HTTP %d but no subnet address, "+
-					"so nothing usable was created", status)
 			}
 			// Infoblox picked inside the block's own space only. A pick that
 			// clashes with anything in any space, or that cannot be checked, is
@@ -263,8 +261,15 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				errDetail = map[string]any{"phase": "verify", "subnet": addr}
 				if errors.Is(err, errPickKept) {
-					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
-						"block": block, "cidr": cidr, "subnet": addr})
+					detail := map[string]any{"block": block, "cidr": cidr, "subnet": addr}
+					event := "provision-subnet"
+					var maybe pickMaybeKept
+					if errors.As(err, &maybe) {
+						// Its own event, so it is never counted as a subnet created.
+						event = "provision-subnet-unknown"
+						detail["outcome"] = "unknown"
+					}
+					d.auditAppend(event, httpx.Actor(r), detail)
 				}
 				return err
 			}
@@ -287,6 +292,13 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 					errDetail = map[string]any{"phase": "reverse-zone", "subnet": addr}
 					return fmt.Errorf("subnet %s was created, but its reverse DNS zone was not: %s", addr, reason)
 				}
+				zoneUnknown := func(st int) error {
+					d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
+						"block": block, "cidr": cidr, "subnet": addr})
+					errDetail = map[string]any{"phase": "reverse-zone", "subnet": addr, "outcome": "unknown"}
+					return fmt.Errorf("subnet %s was created, but its reverse DNS zone got no clear answer (status %d), "+
+						"so the zone may or may not exist. Check it in the Editor before trying again", addr, st)
+				}
 				emit(map[string]any{"step": "Creating DNS zone…"})
 				zc := cidrN
 				if c, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
@@ -302,9 +314,13 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 				zresult, zstatus, zerr := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
 					map[string]any{"fqdn": fqdn}, nil)
 				emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
+				// A reply with no zone in it says nothing about whether one was made.
+				zreply, zIsMap := zresult.(map[string]any)
+				zval, zHasResult := zreply["result"]
+				plainZone := zstatus == 204 || ((zstatus == 200 || zstatus == 201) && zIsMap && (!zHasResult || zval != nil))
 				switch {
-				case zerr != nil:
-					return zoneFailed(fmt.Sprintf("the request could not be sent: %v", zerr))
+				case zerr != nil || (!plainZone && rest.UnclearFailure(zstatus)):
+					return zoneUnknown(zstatus)
 				case zstatus < 200 || zstatus > 299:
 					return zoneFailed(fmt.Sprintf("it was refused%s", upstreamDetail(zstatus, zresult)))
 				}
@@ -351,6 +367,13 @@ func blockOf(c *rest.Client, blockPath string) (netip.Prefix, string, error) {
 // (its removal failed), so the caller records that it exists.
 var errPickKept = errors.New("the subnet is still there")
 
+// pickMaybeKept is handled like errPickKept, but its message does not say the
+// subnet is still there, because the delete got no clear answer.
+type pickMaybeKept string
+
+func (e pickMaybeKept) Error() string        { return string(e) }
+func (e pickMaybeKept) Is(target error) bool { return target == errPickKept }
+
 // verifySubnetPick checks the subnet Infoblox just made against a fresh read
 // of everything around it. A clash, or a check that cannot run, removes it.
 // warns is what overlaps it only in another IP space (not a clash).
@@ -372,8 +395,13 @@ func verifySubnetPick(c *rest.Client, subnet map[string]any, addr string, cidrN 
 	}
 	path, oerr := edit.ObjectPath("ipam/subnet", id)
 	if oerr == nil {
-		if _, st, _ := c.Write("DELETE", path, nil, nil); st == 200 || st == 204 || st == 404 {
+		_, st, _ := c.Write("DELETE", path, nil, nil)
+		if st == 200 || st == 204 || st == 404 {
 			return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, so it was removed. Preview again", addr, cidrN, reason)
+		}
+		if rest.UnclearFailure(st) {
+			return nil, pickMaybeKept(fmt.Sprintf("Infoblox picked %s/%d, but %s, and it may or may not have been removed. Check it in the Editor",
+				addr, cidrN, reason))
 		}
 	}
 	return nil, fmt.Errorf("Infoblox picked %s/%d, but %s, and it could not be removed: remove it in the Editor (%w)",
@@ -408,6 +436,11 @@ func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN
 		return nil, "", false, nil
 	}
 	if _, st, _ := c.Write("DELETE", path, nil, nil); st != 200 && st != 204 && st != 404 {
+		if rest.UnclearFailure(st) {
+			return nil, "", false, pickMaybeKept(fmt.Sprintf("Infoblox picked %s, which another IP space also uses, "+
+				"and it may or may not have been removed (status %d). The clean %s was not made. Check it in the Editor",
+				made, st, clean))
+		}
 		return nil, "", false, nil
 	}
 	create := map[string]any{"address": clean.Addr().String(), "cidr": clean.Bits(), "space": space}
@@ -420,13 +453,12 @@ func replaceSharedPick(c *rest.Client, subnet map[string]any, addr string, cidrN
 	if res, ok := result.(map[string]any); ok {
 		nsub, _ = res["result"].(map[string]any)
 	}
-	if status == 0 || status == 502 || status == 503 || status == 504 ||
-		(status >= 200 && status <= 299 && provision.PyStr(nsub["id"]) == "") {
+	if rest.NoClearAnswer(status) || (status >= 200 && status <= 299 && (status > 201 || provision.PyStr(nsub["id"]) == "")) {
 		// The create may have been applied: its answer was lost or names no
 		// subnet. It is not looked for or removed blind.
-		return nil, clean.Addr().String(), false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
-			"the clean %s may have been created, but Infoblox's answer was lost%s. Check for it in the Editor before trying again (%w)",
-			made, clean, upstreamDetail(status, result), errPickKept)
+		return nil, clean.Addr().String(), false, pickMaybeKept(fmt.Sprintf("Infoblox picked %s, which another IP space also uses, so it was removed. "+
+			"No clear answer to create the clean subnet %s (status %d). It may have been created, or it may not. "+
+			"Check it in the Editor before trying again", made, clean, status))
 	}
 	if werr != nil || status < 200 || status > 299 {
 		return nil, "", false, fmt.Errorf("Infoblox picked %s, which another IP space also uses, so it was removed; "+
@@ -691,11 +723,12 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		emit(map[string]any{"step": fmt.Sprintf("Decommissioning site: %s", cfg.Site)})
-		result, err := d.prov(r).NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
+		dec := d.prov(r).NewSiteDecommissioner(cfg, emitter(emit))
+		result, err := dec.Decommission()
 		if err != nil {
 			if !cfg.DryRun {
 				d.auditAppend("teardown-site-error", httpx.Actor(r),
-					map[string]any{"template": name, "error": err.Error()})
+					withUnconfirmed(map[string]any{"template": name, "error": err.Error()}, dec.Unconfirmed()))
 			}
 			if !provision.IsError(err) {
 				d.logExc("/api/teardown/site/stream", err)
@@ -706,7 +739,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]any{"done": true, "result": result})
 		if !cfg.DryRun {
 			d.auditAppend("teardown-site", httpx.Actor(r),
-				map[string]any{"template": name, "site": cfg.Site})
+				withUnconfirmed(map[string]any{"template": name, "site": cfg.Site}, result["unconfirmed"]))
 		}
 	})
 }
@@ -736,7 +769,8 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 					run.fail(rel, err)
 					return
 				}
-				if _, err := d.prov(r).NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
+				dec := d.prov(r).NewSiteDecommissioner(cfg, forward)
+				if _, err := dec.Decommission(); err != nil {
 					// Decommission deletes DNS zones, DHCP ranges, subnets and hosts
 					// FAIL-FORWARD — there is no rollback, so this arm is reached with
 					// part of a real site already destroyed, and the loop then moves on
@@ -761,12 +795,13 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 					// before the first DELETE, so nothing was destroyed to report.
 					if !dry {
 						d.auditAppend("teardown-site-error", httpx.Actor(r),
-							map[string]any{"template": rel, "error": err.Error()})
+							withUnconfirmed(map[string]any{"template": rel, "error": err.Error()}, dec.Unconfirmed()))
 					}
+					run.unconfirmed = append(run.unconfirmed, dec.Unconfirmed()...)
 					run.fail(rel, err)
 					return
 				}
-				run.done(rel, "succeeded")
+				run.tornDown(rel, dec.Unconfirmed())
 			})
 
 		for _, cloud := range seedClouds(regions) {
@@ -873,11 +908,13 @@ func (s *seedRun) teardownBlocks(label, name string, bt provision.M, override an
 			blockIPSpace = "default"
 		}
 	}
-	if _, err := s.d.prov(s.r).NewBlockDecommissioner(name, provision.PyStr(blockIPSpace), s.dry, emitter(s.emit)).Decommission(); err != nil {
+	dec := s.d.prov(s.r).NewBlockDecommissioner(name, provision.PyStr(blockIPSpace), s.dry, emitter(s.emit))
+	if _, err := dec.Decommission(); err != nil {
+		s.unconfirmed = append(s.unconfirmed, dec.Unconfirmed()...)
 		s.fail(label, err)
 		return
 	}
-	s.done(label, "succeeded")
+	s.tornDown(label, dec.Unconfirmed())
 }
 
 // seedRun is the state the seed-demo provision and teardown streams share: one
@@ -894,6 +931,8 @@ type seedRun struct {
 	// frame. checked stays nil until something was read.
 	checked map[string]any
 	picks   []any
+	// unconfirmed is every delete Infoblox accepted without saying it finished.
+	unconfirmed []any
 }
 
 // saw adds one block or site result's checked counts and skipped picks to the
@@ -955,6 +994,19 @@ func (s *seedRun) done(tpl, phase string) {
 		"step": fmt.Sprintf("[%s] %s", tpl, phase)})
 }
 
+// tornDown tallies a finished teardown. One with unconfirmed deletes is not
+// called succeeded, and not failed either: its result is not known.
+func (s *seedRun) tornDown(tpl string, unconfirmed []any) {
+	if len(unconfirmed) == 0 {
+		s.done(tpl, "succeeded")
+		return
+	}
+	s.unconfirmed = append(s.unconfirmed, unconfirmed...)
+	summaryAppend(s.summary, "unconfirmed", tpl)
+	s.emit(map[string]any{"template": tpl, "phase": "unconfirmed", "step": fmt.Sprintf(
+		"[%s] result unknown: %d item(s) may or may not have been deleted. Check them in the Editor.", tpl, len(unconfirmed))})
+}
+
 // sites runs step once per site template of regions. A template that will not
 // load is failed here; step gets the rest, with an emitter that prefixes each
 // progress line with the template's path, and reports through fail and done.
@@ -1005,11 +1057,11 @@ func (s *seedRun) finish(event string, regions []string) {
 		// once made this whole entry vanish while the request still returned 200.
 		// It is safe here because audit.Log.Append widens every detail value
 		// first (audit/widen.go); do not add a local conversion back.
-		s.d.auditAppend(event, httpx.Actor(s.r), map[string]any{
+		s.d.auditAppend(event, httpx.Actor(s.r), withUnconfirmed(map[string]any{
 			"regions":   regions,
 			"succeeded": lenOf(s.summary, "succeeded"),
 			"failed":    lenOf(s.summary, "failed"),
-			"skipped":   lenOf(s.summary, "skipped")})
+			"skipped":   lenOf(s.summary, "skipped")}, s.unconfirmed))
 	}
 }
 
@@ -1181,7 +1233,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 	d.json(w, r, 200, map[string]any{"result": result})
 	if !dry {
 		d.auditAppend("teardown-block", httpx.Actor(r),
-			map[string]any{"template": name, "block": blockName})
+			withUnconfirmed(map[string]any{"template": name, "block": blockName}, result["unconfirmed"]))
 	}
 }
 
@@ -1230,7 +1282,7 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.provErr(w, r, "/api/retag/block", err)
 		return
 	}
-	changed := []any{}
+	changed, unconfirmed := []any{}, []any{}
 	for _, blk := range blocks {
 		res, err := d.prov(r).RetagBlock(mapOf(blk), status, dry)
 		if err != nil {
@@ -1250,21 +1302,50 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 			// dry run (provision/block.go:434-440), so `dry` is always false by the
 			// time err is non-nil. The gate that used to sit here read as an active
 			// control and was not one; no test could make it fire either way.
-			d.auditAppend("retag-block-error", httpx.Actor(r), map[string]any{
+			d.auditAppend("retag-block-error", httpx.Actor(r), withUnconfirmed(map[string]any{
 				"template": templateName,
 				"status":   status,
 				"count":    len(changed),
-				"error":    err.Error()})
+				"error":    err.Error()}, unconfirmed))
+			if len(unconfirmed) > 0 {
+				code, msg := 400, fmt.Sprintf("%s. %d earlier block(s) may or may not have been re-tagged. Check them in the Editor.",
+					err, len(unconfirmed))
+				if !provision.IsError(err) {
+					d.logExc("/api/retag/block", err)
+					code, msg = 500, "internal error"
+				}
+				d.json(w, r, code, map[string]any{"status": status, "changed": changed, "unconfirmed": unconfirmed, "error": msg})
+				return
+			}
 			d.provErr(w, r, "/api/retag/block", err)
 			return
 		}
+		if res["unconfirmed"] == true {
+			unconfirmed = append(unconfirmed, res)
+			continue
+		}
 		changed = append(changed, res)
 	}
-	d.json(w, r, 200, map[string]any{"status": status, "changed": changed, "dry_run": dry})
+	if len(unconfirmed) > 0 {
+		d.json(w, r, 502, map[string]any{"status": status, "changed": changed, "unconfirmed": unconfirmed, "dry_run": dry,
+			"error": fmt.Sprintf("%d block(s) may or may not have been re-tagged. Check them in the Editor before trying again.", len(unconfirmed))})
+	} else {
+		d.json(w, r, 200, map[string]any{"status": status, "changed": changed, "dry_run": dry})
+	}
 	if !dry {
 		d.auditAppend("retag-block", httpx.Actor(r),
-			map[string]any{"template": templateName, "status": status, "count": len(changed)})
+			withUnconfirmed(map[string]any{"template": templateName, "status": status, "count": len(changed)}, unconfirmed))
 	}
+}
+
+// withUnconfirmed adds how many writes got an unconfirmed answer to an audit
+// row, when there were any.
+func withUnconfirmed(detail map[string]any, list any) map[string]any {
+	if l, _ := list.([]any); len(l) > 0 {
+		detail["unconfirmed"] = len(l)
+		detail["unconfirmed_items"] = l
+	}
+	return detail
 }
 
 // --- POST /api/drift/check (server.py:6264) ----------------------------------
@@ -1391,14 +1472,28 @@ func lenOf(summary map[string]any, key string) int {
 // UI can branch on outcome instead of inferring success from mere completion.
 func terminalFrame(summary map[string]any) map[string]any {
 	succeeded, failed, skipped := lenOf(summary, "succeeded"), lenOf(summary, "failed"), lenOf(summary, "skipped")
-	return map[string]any{
+	unknown, _ := summary["unconfirmed"].([]any)
+	frame := map[string]any{
 		"done":      true,
 		"summary":   summary,
 		"succeeded": succeeded,
 		"failed":    failed,
 		"skipped":   skipped,
-		"total":     succeeded + failed + skipped,
+		"total":     succeeded + failed + skipped + len(unknown),
 	}
+	if len(unknown) > 0 {
+		names := make([]string, 0, len(unknown))
+		for _, t := range unknown {
+			names = append(names, provision.PyStr(t))
+		}
+		frame["unconfirmed"] = len(unknown)
+		frame["unconfirmed_note"] = fmt.Sprintf("%d template(s) may or may not be fully removed: %s. Check them in the Editor.",
+			len(unknown), strings.Join(names, ", "))
+		if failed > 0 {
+			frame["unconfirmed_note"] = fmt.Sprintf("%s %d other template(s) failed.", frame["unconfirmed_note"], failed)
+		}
+	}
+	return frame
 }
 
 func mapOf(v any) map[string]any {

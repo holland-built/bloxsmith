@@ -370,29 +370,29 @@ func firstNonEmpty(xs ...string) string {
 // Deleting a zone deletes every record in it, so the desk deletes one only
 // when nothing but its own SOA and apex NS records is left. When it cannot list every
 // record, it does not delete.
-func zoneBlocker(cli *edit.Client, id string) string {
+func zoneBlocker(cli *edit.Client, id string) (why string, unread bool) {
 	const cantCheck = "Bloxsmith could not check what is left in this zone, so it was not deleted. Try again, or delete it on the DNS page."
 	p, err := edit.ObjectPath("dns/auth_zone", id)
 	if err != nil {
-		return "not a valid Infoblox ID"
+		return "not a valid Infoblox ID", false
 	}
 	if _, st, _ := cli.Rest.GetEx(p, nil); st == 404 {
-		return ""
+		return "", false
 	} else if st != 200 {
-		return cantCheck
+		return cantCheck, true
 	}
 	esc, err := rest.CSPQ(id)
 	if err != nil {
-		return cantCheck
+		return cantCheck, false
 	}
 	const limit = 200
 	recs, err := cli.Rest.GetStrict("/api/ddi/v1/dns/record", map[string]string{
 		"_filter": `zone=="` + esc + `"`, "_fields": "type,name_in_zone", "_limit": fmt.Sprint(limit)})
 	if err != nil {
-		return cantCheck
+		return cantCheck, false
 	}
 	if len(recs) >= limit {
-		return fmt.Sprintf("This zone holds %d or more records, more than Bloxsmith checks, so it was not deleted.", limit)
+		return fmt.Sprintf("This zone holds %d or more records, more than Bloxsmith checks, so it was not deleted.", limit), false
 	}
 	others := 0
 	for _, x := range recs {
@@ -407,9 +407,9 @@ func zoneBlocker(cli *edit.Client, id string) string {
 		}
 	}
 	if others > 0 {
-		return fmt.Sprintf("This zone now holds %d record(s) this change did not make, so it was not deleted. Remove them first.", others)
+		return fmt.Sprintf("This zone now holds %d record(s) this change did not make, so it was not deleted. Remove them first.", others), false
 	}
-	return ""
+	return "", false
 }
 
 // kitServerCheck is the demo server part of a kit preview: whether a build

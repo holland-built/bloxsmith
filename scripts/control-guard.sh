@@ -452,7 +452,7 @@ OLD = (
     "\t\treturn nil, err\n"
     "\t}\n"
     "\n"
-    "\treturn result, nil\n"
+    "\tif len(d.unconfirmed) > 0 {\n"
 )
 NEW = (
     "\t// --- EXECUTE: deletions run only from the plan above, in the original\n"
@@ -504,7 +504,7 @@ NEW = (
     "\tresult[\"export_path\"] = exportPath\n"
     "\tresult[\"export_written\"] = !d.cfg.DryRun\n"
     "\n"
-    "\treturn result, nil\n"
+    "\tif len(d.unconfirmed) > 0 {\n"
 )
 content = open(path, encoding="utf-8").read()
 n = content.count(OLD)

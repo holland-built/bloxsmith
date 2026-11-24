@@ -20,7 +20,7 @@ func TestWriteFailed_AnyOther2xxIsUnknown(t *testing.T) {
 
 // When a release fails, the message must not say the addresses were released.
 func TestAllocate_StillReservedAddressesAreCounted(t *testing.T) {
-	for _, dns := range []int{400, 500} {
+	for _, dns := range []int{400, 409} {
 		t.Run(fmt.Sprint(dns), func(t *testing.T) {
 			f := newAllocFake(t, allocConfig{allocBody: allocTwoAddresses, dnsStatus: dns, deleteStatuses: []int{204, 500}})
 			res, _ := f.client().SelfserviceAllocate(M{

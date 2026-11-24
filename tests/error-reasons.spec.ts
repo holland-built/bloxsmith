@@ -53,7 +53,7 @@ test('Threat lookup: a refused search names the reason, and Lookup runs it again
   expect(calls).toBe(2);
 });
 
-test('Block on the Ask tab: a timed-out write asks to be re-checked, and only a click sends it again', async ({ page }) => {
+test('Block on the Ask tab: a timed-out write says to check first, and only a click sends it again', async ({ page }) => {
   await page.route('**/api/threat-lookup*', (route) => json(route, { entities: [], availability: 'ok' }));
   let writes = 0;
   await page.route('**/api/block-domain', (route) => {
@@ -75,6 +75,54 @@ test('Block on the Ask tab: a timed-out write asks to be re-checked, and only a 
   await page.waitForTimeout(1000);
   expect(writes).toBe(1);
 
-  await lookup.getByRole('button', { name: 'Re-check' }).click();
+  // The button says what it does: it sends the block again.
+  await expect(lookup.getByRole('button', { name: 'Re-check' })).toHaveCount(0);
+  await expect(lookup.getByText(/refresh and re-check before retrying/)).toBeVisible();
+  await lookup.getByRole('button', { name: 'Send the block again' }).click();
   await expect.poll(() => writes).toBe(2);
+});
+
+const WRITABLE = { known: true, tenant: 't/-', label: 'Test Tenant', writable: true };
+const UNCONFIRMED = {
+  ok: false, outcome: 'unverified',
+  error: 'Infoblox did not answer within 12s. The change may already have applied: refresh and re-check before retrying.',
+};
+
+test('Unblock on the Ask tab: the button after a timeout says it sends the unblock again', async ({ page }) => {
+  await page.route('**/api/threat-lookup*', (route) => json(route, { entities: [], availability: 'ok' }));
+  await page.route('**/api/block-domain', (route) => json(route, { ok: true }));
+  let unblocks = 0;
+  await page.route('**/api/unblock-domain', (route) => { unblocks += 1; return json(route, UNCONFIRMED, 502); });
+
+  await page.goto('/#ai');
+  const lookup = page.locator('[data-panel-id="ai-threat-lookup"]');
+  await lookup.getByPlaceholder('domain, IP, or host…').fill('bad.example.com');
+  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await lookup.getByRole('button', { name: 'Block domain' }).click();
+  await lookup.getByRole('button', { name: 'Unblock' }).click();
+  await expect(lookup.getByText(/refresh and re-check before retrying/)).toBeVisible();
+  await lookup.getByRole('button', { name: 'Send the unblock again' }).click();
+  await expect.poll(() => unblocks).toBe(2);
+});
+
+test('Security: the button after a timeout names the block or unblock it sends again', async ({ page }) => {
+  await page.route('**/api/vault/write-target*', (route) => json(route, WRITABLE));
+  let blocks = 0;
+  let unblocks = 0;
+  await page.route('**/api/block-domain', (route) => {
+    blocks += 1;
+    return blocks === 1 ? json(route, UNCONFIRMED, 502) : json(route, { ok: true, outcome: 'verified' });
+  });
+  await page.route('**/api/unblock-domain', (route) => { unblocks += 1; return json(route, UNCONFIRMED, 502); });
+
+  await page.goto('/#security');
+  await page.locator('button.sec-block').first().click({ force: true });
+  await expect(page.getByText(/refresh and re-check before retrying/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Re-check' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Send the block again' }).first().click();
+  await expect.poll(() => blocks).toBe(2);
+
+  await page.getByRole('button', { name: 'Unblock' }).first().click();
+  await page.getByRole('button', { name: 'Send the unblock again' }).first().click();
+  await expect.poll(() => unblocks).toBe(2);
 });

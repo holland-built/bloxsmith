@@ -135,7 +135,7 @@ func TestEditDelete_GatewayTimeout_IsRecorded(t *testing.T) {
 // The other direction, and the reason this is not "audit every failure": upstream
 // ANSWERED and refused, so nothing was deleted and there is nothing to record.
 func TestEditDelete_UpstreamRefused_RecordsNothing(t *testing.T) {
-	for _, code := range []int{400, 403, 409, 500} {
+	for _, code := range []int{400, 403, 409} {
 		t.Run(fmt.Sprintf("%d", code), func(t *testing.T) {
 			d, logPath := editDeleteDeps(t, statusUpstream(code))
 			rr := httptest.NewRecorder()

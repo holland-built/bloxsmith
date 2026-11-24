@@ -190,7 +190,7 @@ func TestIPAMAddressDelete_UnknownOutcomeWritesErrorEntry(t *testing.T) {
 // so the object is provably still there and not even the *-error row is allowed.
 func TestDNSRecordDelete_FailureWritesNoAuditEntry(t *testing.T) {
 	d, logPath := newDeleteDeps(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
+		w.WriteHeader(403)
 		io.WriteString(w, `{"error":"delete refused"}`)
 	})
 

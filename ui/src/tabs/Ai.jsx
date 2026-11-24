@@ -583,12 +583,12 @@ function BlockDomainButton({ domain, disabled }) {
   if (state === 'tokenRequired') return <div className="mt-2 text-note" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
   if (state === 'error') {
     // Only a click runs it again, never a timer: an unconfirmed change may
-    // already have applied, so that one asks to be re-checked, not retried.
+    // already have applied, so its button says it sends the change again.
     return (
       <div className="mt-2 flex items-center gap-1.5">
         <span className="text-note" style={{ color: COLORS.crit }}>{msg}</span>
         <button onClick={() => run(lastActionRef.current)} className="px-2 py-1 rounded-control text-note border border-border text-muted">
-          {unconfirmed ? 'Re-check' : 'Retry'}
+          {unconfirmed ? `Send the ${lastActionRef.current} again` : 'Retry'}
         </button>
       </div>
     )

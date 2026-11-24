@@ -449,9 +449,9 @@ func TestSubnetStream_Apply_SaysACleanCreateWithNoAnswerMayExist(t *testing.T) {
 		if strings.Contains(body, "Nothing was created") || !strings.Contains(body, "may have been created") {
 			t.Fatalf("status %d: want 172.16.129.0/24 named as possibly made, got %s", tc.status, body)
 		}
-		rows := auditEntries(t, logPath, "provision-subnet")
+		rows := auditEntries(t, logPath, "provision-subnet-unknown")
 		if len(rows) != 1 || !strings.Contains(fmt.Sprint(rows[0]), "172.16.129.0") {
-			t.Fatalf("status %d: provision-subnet rows = %v, want one naming 172.16.129.0", tc.status, rows)
+			t.Fatalf("status %d: provision-subnet-unknown rows = %v, want one naming 172.16.129.0", tc.status, rows)
 		}
 	}
 }

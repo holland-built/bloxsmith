@@ -131,14 +131,14 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		"name": devName, "ip_space": space, "tags": withMadeTag(nil),
 	}, nil)
 	switch {
-	case writeUnreadable(resp, fstatus) || outcomeUnknown(fstatus):
-		res := createdUnreadable("DHCP reservation", fstatus, "")
-		if outcomeUnknown(fstatus) {
-			res = createdMaybe("DHCP reservation", fstatus, "")
+	case writeUnreadable(resp, fstatus) || (fstatus != 200 && fstatus != 201 && rest.UnclearFailure(fstatus)):
+		res, code := createdUnreadable("DHCP reservation", fstatus, ""), statusOr(fstatus, 502)
+		if !writeUnreadable(resp, fstatus) {
+			res, code = createdMaybe("DHCP reservation", fstatus, ""), unclearStatus(fstatus)
 		}
 		res["address"], res["mac"] = address, mac
 		return M{CreatedUnreadableKey: true, "addresses": []any{M{"address": address}},
-			"fixed_address": res, "error": res["error"]}, statusOr(fstatus, 502)
+			"fixed_address": res, "error": res["error"]}, code
 	case fstatus != 200 && fstatus != 201:
 		return M{"ok": false, "error": fmt.Sprintf("the reservation was refused (%s); nothing was created. "+
 			"If the address was just taken, preview again", statusPhrase(fstatus)), "detail": resp}, statusOr(fstatus, 502)
@@ -152,26 +152,19 @@ func (c *Client) reserveForDevice(objPath, subnetID, name string, dns, dhcp M, d
 		switch {
 		case (rstatus == 200 || rstatus == 201) && asMap(rresp) != nil:
 			out["record"] = M{"ok": true, "id": recordID(rresp), "status": rstatus}
-		case writeUnreadable(rresp, rstatus) || outcomeUnknown(rstatus):
+		case recordMayExist(rresp, rstatus):
 			// The record may exist: say so, and do not suggest adding it again.
-			rec := createdUnreadable("DNS record", rstatus, "The reservation was made")
-			if outcomeUnknown(rstatus) {
-				rec = createdMaybe("DNS record", rstatus, "The reservation was made")
-			}
+			rec, code := recordMaybe(rresp, rstatus, "The reservation was made")
 			delete(out, "ok")
 			out[CreatedUnreadableKey] = true
 			out["record"] = rec
 			out["error"] = rec["error"]
-			return out, statusOr(rstatus, 502)
+			return out, code
 		default:
 			out["ok"] = false
 			out["record"] = M{"ok": false, "status": rstatus, "detail": rresp}
 			out["error"] = fmt.Sprintf("the reservation was made, but the DNS record was not (%s). "+
 				"The device still gets %s; add the record on its own", statusPhrase(rstatus), address)
-			if rest.NoClearAnswer(rstatus) {
-				out["error"] = fmt.Sprintf("the reservation was made, but the DNS record may or may not exist. "+
-					"The device still gets %s; check for the record in Infoblox", address)
-			}
 			return out, 502
 		}
 	}
