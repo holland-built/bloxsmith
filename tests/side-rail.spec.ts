@@ -6,7 +6,7 @@ import { installBaselineWorld } from './page-fixtures';
 // icon opens one small panel on click. One caret opens the full menu, which
 // pushes the page over and stays open across a refresh.
 
-const WORDS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts', 'Status', 'Inventory', 'Risk', 'Change', 'Ask'];
+const WORDS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Build a chart', 'Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 const GROUPS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 
 const rail = (page: Page) => page.locator('.frame-rail');

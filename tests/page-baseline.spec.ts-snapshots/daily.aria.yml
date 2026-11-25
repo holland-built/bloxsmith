@@ -1,4 +1,4 @@
-- main "Daily tab":
+- main "Daily report tab":
   - heading "Daily report" [level=1]
   - text: /Updated \d+:\d+ [AP]M/
   - button "Arrange panels"

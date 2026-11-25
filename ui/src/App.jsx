@@ -58,7 +58,7 @@ import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
-  { id: 'daily', label: 'Daily', el: Daily },
+  { id: 'daily', label: 'Daily report', el: Daily },
   { id: 'best-practices', label: 'Best practices', el: BestPractices },
   { id: 'value', label: 'Value', el: Value },
   { id: 'network', label: 'Network', el: Network },
@@ -122,11 +122,11 @@ function hashTab() {
 // behaving exactly as before, it is only the way a tab is *reached by mouse*
 // that changed.
 const GROUPS = [
-  { id: 'status', label: 'Status', question: 'How are we doing?', tabIds: ['overview', 'daily', 'best-practices', 'value'] },
-  { id: 'inventory', label: 'Inventory', question: 'What do we have?', tabIds: ['network', 'dns', 'assets', 'infra'] },
-  { id: 'risk', label: 'Risk', question: 'Are we safe?', tabIds: ['security', 'incidents', 'audit', 'changes'] },
-  { id: 'change', label: 'Change', question: 'Change something', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'lists', 'made', 'demo'] },
-  { id: 'ask', label: 'Ask', question: '', tabIds: ['ai', 'chart'] },
+  { id: 'status', label: 'Status', tabIds: ['overview', 'daily', 'best-practices', 'value'] },
+  { id: 'inventory', label: 'Inventory', tabIds: ['network', 'dns', 'assets', 'infra'] },
+  { id: 'risk', label: 'Risk', tabIds: ['security', 'incidents', 'audit', 'changes'] },
+  { id: 'change', label: 'Change', tabIds: ['automate', 'provision', 'selfservice', 'editor', 'drift', 'lists', 'made', 'demo'] },
+  { id: 'ask', label: 'Ask', tabIds: ['ai', 'chart'] },
 ]
 
 // Dev-only completeness check. A tab missing from every group is unreachable
@@ -283,7 +283,7 @@ const GroupSection = ({ group, tab, onPick }) => {
   return (
     <div role="group" aria-label={group.label}>
       <div aria-hidden="true" className="px-2.5 pt-2 pb-1 text-note text-dim">
-        {group.question || group.label}
+        {group.label}
       </div>
       {tabs.map((t) => (
         <a
@@ -640,7 +640,7 @@ export default function App() {
                 </TabErrorBoundary>
               </main>
             </div>
-            <JobBar tab={tab} />
+            <JobBar tab={tab} tabs={TABS} />
           </div>
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>

@@ -42,7 +42,7 @@ const GROUP_LABELS = ['Status', 'Inventory', 'Risk', 'Change', 'Ask'];
 // Which group owns which tab. Duplicated from App.jsx on purpose: a test that
 // imports the thing it checks would pass on any regrouping, including a wrong one.
 const GROUP_TABS: Record<string, string[]> = {
-  Status: ['Overview', 'Daily', 'Best practices', 'Value'],
+  Status: ['Overview', 'Daily report', 'Best practices', 'Value'],
   Inventory: ['Network', 'DNS', 'Assets', 'Infra'],
   Risk: ['Security', 'Incidents', 'Audit', 'Changes'],
   Change: ['Automate', 'Provision', 'Get an address', 'Editor', 'Drift', 'Site lists', 'Made with Bloxsmith', 'Demo server'],
@@ -339,8 +339,8 @@ test('the settings sheet is a real modal dialog: focus, trap, Escape, return', a
 // everyday jobs on top, then the groups, which fold, are remembered, and open
 // by themselves for the page you are on. A job is not listed twice.
 // ---------------------------------------------------------------------------
-const JOBS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Charts'];
-const JOB_TAB_LABELS = new Set(['Overview', 'Get an address', 'Automate', 'Daily', 'Build a chart']);
+const JOBS = ['Overview', 'Get an address', 'Automate', 'Daily report', 'Build a chart'];
+const JOB_TAB_LABELS = new Set(['Overview', 'Get an address', 'Automate', 'Daily report', 'Build a chart']);
 
 test('the page menu reaches every page, and lists each once', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -399,4 +399,29 @@ test('widening the window with focus on the All pages button moves focus to the 
   await page.locator(MENU).focus();
   await page.setViewportSize({ width: 1280, height: 1000 });
   await expect(page.locator('main')).toBeFocused();
+});
+
+// One name for each group and page everywhere (fix 7, 2026-11-24). The phone's
+// All pages menu used to head its groups with questions ("How are we doing?")
+// while the side bar said "Status", and the side bar's jobs said "Daily report"
+// and "Charts" where the menu said "Daily" and "Build a chart".
+test('the phone menu and the side bar use the same names for groups and pages', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#overview');
+  await page.locator(MENU).click();
+  const menu = page.locator('header [role="menu"]');
+  const headings = await menu.locator('[role="group"] > [aria-hidden="true"]').allTextContents();
+  expect(headings.map((h) => h.trim())).toEqual(GROUP_LABELS);
+  const menuPages = new Set((await menu.getByRole('menuitem').allTextContents()).map((t) => t.replace('✓', '').trim()));
+  const dock = await page.locator('nav[aria-label="Jobs"] a').evaluateAll((as) => as.map((a) => a.getAttribute('title')));
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#overview');
+  const rail = page.locator('nav[aria-label="Pages"]');
+  const railJobs = await rail.locator(':scope > a').allTextContents();
+  const railGroups = await rail.locator('[data-nav-group] > button .frame-link-text').evaluateAll((els) =>
+    els.map((e) => e.firstChild?.textContent?.trim()),
+  );
+  expect(railGroups).toEqual(GROUP_LABELS);
+  for (const name of [...railJobs, ...dock]) expect([...menuPages]).toContain(name);
 });
