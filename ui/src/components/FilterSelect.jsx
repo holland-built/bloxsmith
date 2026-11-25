@@ -7,6 +7,10 @@ import { MACHINE_TEXT } from '../lib/machineText.js'
 const inputCls = `${FIELD_CLS} w-full`
 
 const RESULTS_CAP = 50
+// A list this short is read at a glance in the dropdown, so a search box above
+// it only doubles the form's height. Counted on the whole list, not on the
+// matches, so the box never disappears while someone is typing in it.
+const SEARCH_FROM = 9
 
 // A dropdown with a search box above it. A tenant can have hundreds of IP
 // spaces (801 on the live one, 2026-09-25), which made the plain list a long
@@ -19,7 +23,10 @@ export default function FilterSelect({ label, value, onChange, options, placehol
   const [q, setQ] = useState('')
   const inputRef = useRef(null)
   const listRef = useRef(null)
-  const needle = q.trim().toLowerCase()
+  const searchable = options.length >= SEARCH_FROM
+  // A search typed before the list shrank no longer narrows it, since there is
+  // no box left to clear it from.
+  const needle = searchable ? q.trim().toLowerCase() : ''
   const shown = needle ? options.filter((o) => o.label.toLowerCase().includes(needle)) : options
   const chosen = value && !shown.some((o) => o.value === value) ? options.find((o) => o.value === value) : null
   // The matches, shown as you type so nobody has to open the dropdown to see
@@ -47,7 +54,7 @@ export default function FilterSelect({ label, value, onChange, options, placehol
   }
   return (
     <div className="flex flex-col gap-1.5">
-      <input {...MACHINE_TEXT}
+      {searchable && <input {...MACHINE_TEXT}
         ref={inputRef}
         type="search"
         aria-label={`Search ${label}`}
@@ -60,8 +67,8 @@ export default function FilterSelect({ label, value, onChange, options, placehol
           else if (e.key === 'Enter') { e.preventDefault(); if (results.length) pick(results[0].value) }
           else if (e.key === 'Escape' && q) { e.preventDefault(); clear() }
         }}
-        disabled={disabled || options.length === 0}
-      />
+        disabled={disabled}
+      />}
       {results.length > 0 && (
         <ul ref={listRef} aria-label={`Matching ${label.toLowerCase()}`} onKeyDown={onListKey} className="flex flex-col max-h-[240px] overflow-y-auto rounded-control border border-border bg-field">
           {results.map((o, i) => (
@@ -89,7 +96,10 @@ export default function FilterSelect({ label, value, onChange, options, placehol
             : `${shown.length.toLocaleString()} ${shown.length === 1 ? 'match' : 'matches'}.`}
       </span>
       <select aria-label={label} className={inputCls} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-        <option value="">{needle ? `${placeholder} (${shown.length.toLocaleString()} of ${options.length.toLocaleString()} match)` : placeholder}</option>
+        {/* An empty list may have failed to load or may really be empty, and
+            this box cannot tell which, so it claims neither. A disabled one
+            keeps the page's own reason ("Pick a space first"). */}
+        <option value="">{options.length === 0 && !disabled ? 'Nothing to pick yet' : needle ? `${placeholder} (${shown.length.toLocaleString()} of ${options.length.toLocaleString()} match)` : placeholder}</option>
         {chosen && <option value={chosen.value}>{chosen.label}</option>}
         {/* Index in the key: two spaces can share a name, and the site and seed
             pickers use the name as the value. */}

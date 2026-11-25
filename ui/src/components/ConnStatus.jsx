@@ -218,7 +218,7 @@ export default function ConnStatus() {
     color = 'var(--color-ok)'
     stateWord = ''
   } else if (statusOk && feedsDegraded) {
-    stateWord = 'load error'
+    stateWord = "Some data didn't load"
   } else if (statusOk) {
     color = 'var(--color-warn)'
     stateWord = 'empty'

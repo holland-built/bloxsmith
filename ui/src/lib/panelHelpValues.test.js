@@ -310,12 +310,12 @@ const UTIL_BAND_PROOFS = [
 const UTIL_STATUS_PROOFS = [
   { re: /const band = utilBand\(util\)/, expect: 'utilStatus() takes its band from utilBand()' },
   {
-    re: /if \(band === 'crit'\) return \{ label: 'Critical', color: 'var\(--color-crit\)'/,
-    expect: "utilStatus() draws the 'crit' band Critical / COLORS.crit (red)",
+    re: /if \(band === 'crit'\) return \{ label: SEV_WORD\.crit, color: 'var\(--color-crit\)'/,
+    expect: "utilStatus() draws the 'crit' band Needs action / COLORS.crit (red)",
   },
   {
-    re: /if \(band === 'warn'\) return \{ label: 'Warning', color: 'var\(--color-warn\)'/,
-    expect: "utilStatus() draws the 'warn' band Warning / COLORS.warn (amber)",
+    re: /if \(band === 'warn'\) return \{ label: SEV_WORD\.warn, color: 'var\(--color-warn\)'/,
+    expect: "utilStatus() draws the 'warn' band Review / COLORS.warn (amber)",
   },
 ]
 

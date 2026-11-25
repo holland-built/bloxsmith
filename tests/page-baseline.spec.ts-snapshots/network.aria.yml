@@ -48,18 +48,18 @@
         - columnheader "Free":
           - button "Free"
     - rowgroup:
-      - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) other-site \d+% Critical \d+ 5 free/:
+      - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) other-site \d+% Needs action \d+ 5 free/:
         - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/
         - cell "other-site"
         - cell /\d+%/
-        - cell "Critical"
+        - cell "Needs action"
         - cell /\d+/
         - cell "5 free"
-      - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) baseline-site \d+% Warning \d+ \d+ free/:
+      - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) baseline-site \d+% Review \d+ \d+ free/:
         - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/
         - cell "baseline-site"
         - cell /\d+%/
-        - cell "Warning"
+        - cell "Review"
         - cell /\d+/
         - cell /\d+ free/
       - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) baseline-site \d+% Healthy \d+ \d+ free/:
