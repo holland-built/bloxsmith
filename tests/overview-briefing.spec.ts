@@ -82,11 +82,11 @@ test('an unknown change outcome is never called failed', async ({ page }) => {
 
 test('a count that stopped early says "more than" over the whole day, never a shorter window', async ({ page }) => {
   await healthyWorld(page, []);
-  await page.route('**/api/csp-audit-count', count({ total: 50000, people: 600, complete: false, stopped_by: 'ceiling' }));
+  await page.route('**/api/csp-audit-count', count({ total: 50000, people: 600, people_complete: false, complete: false, more: true, stopped_by: 'ceiling' }));
   await page.goto('/#overview');
   await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('More than 50,000 in the last 24 hours, at least 600 of them by users', { timeout: 20_000 });
   // The label stays "Changes" (no shorter window); its tip says the count stopped early.
-  await expect(fact(page, 'Changes').locator('.br-label')).toHaveText(/^Changes(Counting stopped at 50,000 changes.*real number is higher.*)?$/);
+  await expect(fact(page, 'Changes').locator('.br-label')).toHaveText(/^Changes(Counting stopped at 50,000 changes.*more changes exist.*)?$/);
 });
 
 test('a failed change count is not checked, never 0', async ({ page }) => {

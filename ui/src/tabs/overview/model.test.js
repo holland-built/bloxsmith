@@ -156,10 +156,13 @@ test('the Changes line counts the whole day', () => {
   assert.equal(changeWords(changeSummary({ data: { status: 'ok', total: 0, people: 0, complete: true } })), 'No changes logged in 24 hours')
 })
 
-test('a count that stopped early says "more than", never a shorter window', () => {
-  const c = changeSummary({ data: { status: 'ok', total: 50000, people: 600, failed: 2, no_result: 0, complete: false, stopped_by: 'ceiling' } })
+test('a count that stopped early says "more than" only when more were seen', () => {
+  const c = changeSummary({ data: { status: 'ok', total: 50000, people: 600, people_complete: false, complete: false, more: true, stopped_by: 'ceiling' } })
   assert.equal(changeWords(c), 'More than 50,000 in the last 24 hours, at least 600 of them by users')
-  assert.match(c.tip, /real number is higher/)
+  assert.match(c.tip, /more changes exist/)
+  const t = changeSummary({ data: { status: 'ok', total: 31000, people: 600, people_complete: true, complete: false, more: false, stopped_by: 'time' } })
+  assert.equal(changeWords(t), 'At least 31,000 in the last 24 hours, 600 of them by users')
+  assert.match(t.tip, /ran out of time/)
 })
 
 test('a failed or refused count is not checked, never 0', () => {

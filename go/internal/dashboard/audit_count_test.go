@@ -15,8 +15,11 @@ import (
 )
 
 // auditTenant answers the audit log the way the live one did when probed: no
-// total, at most 1000 rows a page, paged with _offset. It holds rows rows; every
-// tenth is by a person, every fiftieth failed, every hundredth has no code.
+// total, at most 1000 rows a page, paged with _offset. It holds rows rows. By
+// the cspAuditMachine rule, "someone@example.com" (every tenth) and "admin"
+// (every tenth) are people and "test.user@example.com" (every twentieth) is
+// not. Every fiftieth failed, every hundredth has no code. A filter carrying
+// the people clauses is answered with the people rows only.
 func auditTenant(t *testing.T, rows int, filters *[]string) (*httptest.Server, *int32) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +28,7 @@ func auditTenant(t *testing.T, rows int, filters *[]string) (*httptest.Server, *
 		if r.Method != http.MethodGet || r.URL.Path != "/api/auditlog/v1/logs" {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		if filters != nil && q.Get("_offset") == "0" {
+		if filters != nil && q.Get("_offset") == "0" && !strings.Contains(q.Get("_filter"), "not user_name~") {
 			*filters = append(*filters, q.Get("_filter"))
 		}
 		limit, _ := strconv.Atoi(q.Get("_limit"))
@@ -34,23 +37,45 @@ func auditTenant(t *testing.T, rows int, filters *[]string) (*httptest.Server, *
 			return
 		}
 		off, _ := strconv.Atoi(q.Get("_offset"))
+		user := func(i int) string {
+			switch {
+			case i%10 == 0:
+				return "someone@example.com"
+			case i%10 == 1:
+				return "admin"
+			case i%20 == 2:
+				return "test.user@example.com"
+			}
+			return "service.dhcp"
+		}
+		ids := make([]int, 0, rows)
+		for i := 0; i < rows; i++ {
+			if strings.Contains(q.Get("_filter"), "not user_name~") {
+				u, machine := user(i), false
+				for _, p := range cspAuditMachine {
+					machine = machine || strings.Contains(u, p)
+				}
+				if machine {
+					continue
+				}
+			}
+			ids = append(ids, i)
+		}
 		var b strings.Builder
 		b.WriteString(`{"page":null,"results":[`)
-		for i := off; i < rows && i < off+limit; i++ {
-			if i > off {
+		for n := off; n < len(ids) && n < off+limit; n++ {
+			i := ids[n]
+			if n > off {
 				b.WriteByte(',')
 			}
-			user, code := "service.dhcp", `,"http_code":200`
-			if i%10 == 0 {
-				user = "someone@example.com"
-			}
+			code := `,"http_code":200`
 			if i%50 == 1 {
 				code = `,"http_code":500`
 			}
 			if i%100 == 3 {
 				code = ""
 			}
-			fmt.Fprintf(&b, `{"user_name":%q%s}`, user, code)
+			fmt.Fprintf(&b, `{"user_name":%q%s}`, user(i), code)
 		}
 		b.WriteString(`]}`)
 		w.Header().Set("Content-Type", "application/json")
@@ -66,7 +91,7 @@ func TestCSPAuditCountReadsTheWholeDay(t *testing.T) {
 	defer srv.Close()
 	now := time.Date(2026, 11, 25, 15, 23, 0, 0, time.UTC)
 	out := (&Service{Rest: rest.New(srv.URL, rest.NewAuth("k", nil))}).CSPAuditCount(context.Background(), now)
-	want := map[string]any{"status": "ok", "total": 3412, "people": 342, "failed": 69, "no_result": 35, "complete": true}
+	want := map[string]any{"status": "ok", "total": 3412, "people": 684, "failed": 69, "no_result": 35, "complete": true}
 	for k, v := range want {
 		if out[k] != v {
 			t.Fatalf("%s = %v, want %v (all: %v)", k, out[k], v, out)
@@ -86,7 +111,8 @@ func TestCSPAuditCountStopsAtTheCeiling(t *testing.T) {
 	if out["status"] != "ok" || out["complete"] != false || out["stopped_by"] != "ceiling" || out["total"] != auditCountCeiling {
 		t.Fatalf("got %v", out)
 	}
-	if n := int(atomic.LoadInt32(calls)); n > auditCountCeiling/auditCountPage+auditCountWorkers {
+	// Two reads (all rows, and people), each stopping at the ceiling plus one proof row.
+	if n := int(atomic.LoadInt32(calls)); n > 2*(auditCountCeiling/auditCountPage+auditCountWorkers+1) {
 		t.Fatalf("read %d pages past a ceiling of %d rows", n, auditCountCeiling)
 	}
 }
@@ -102,6 +128,66 @@ func TestCSPAuditCountFailureIsNotZero(t *testing.T) {
 		}
 		if (out["permission_denied"] == true) != denied {
 			t.Fatalf("%d: permission_denied wrong: %v", code, out)
+		}
+	}
+}
+
+// Exactly the ceiling, with nothing after it, is the whole count; one row more
+// is proven by reading it, and only then is it "more than".
+func TestCSPAuditCountCeilingNeedsProof(t *testing.T) {
+	for rows, more := range map[int]bool{auditCountCeiling: false, auditCountCeiling + 1: true} {
+		srv, _ := auditTenant(t, rows, nil)
+		out := (&Service{Rest: rest.New(srv.URL, rest.NewAuth("k", nil))}).CSPAuditCount(context.Background(), time.Now())
+		srv.Close()
+		if out["status"] != "ok" || out["total"] != auditCountCeiling || out["complete"] != !more || out["more"] != more {
+			t.Fatalf("%d rows: got %v", rows, out)
+		}
+	}
+}
+
+// A refused page wins over another page running out of time: not checked.
+func TestCSPAuditCountRefusalBeatsTimeout(t *testing.T) {
+	old := auditCountBudget
+	auditCountBudget = 300 * time.Millisecond
+	defer func() { auditCountBudget = old }()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("_offset") {
+		case "0":
+			var b strings.Builder
+			b.WriteString(`{"results":[`)
+			for i := 0; i < auditCountPage; i++ {
+				if i > 0 {
+					b.WriteByte(',')
+				}
+				b.WriteString(`{"user_name":"service.x","http_code":200}`)
+			}
+			b.WriteString(`]}`)
+			_, _ = w.Write([]byte(b.String()))
+		case "1000":
+			w.WriteHeader(403)
+		default:
+			select {
+			case <-r.Context().Done():
+			case <-time.After(2 * time.Second):
+			}
+			_, _ = w.Write([]byte(`{"results":[]}`))
+		}
+	}))
+	defer srv.Close()
+	out := (&Service{Rest: rest.New(srv.URL, rest.NewAuth("k", nil))}).CSPAuditCount(context.Background(), time.Now())
+	if out["status"] != "error" || out["permission_denied"] != true {
+		t.Fatalf("got %v", out)
+	}
+}
+
+// A 200 whose results are missing or null is not an empty day.
+func TestCSPAuditCountBadBodyIsNotZero(t *testing.T) {
+	for _, body := range []string{`{}`, `{"results":null}`, `{"results":{}}`, `[]`} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+		out := (&Service{Rest: rest.New(srv.URL, rest.NewAuth("k", nil))}).CSPAuditCount(context.Background(), time.Now())
+		srv.Close()
+		if out["status"] != "error" {
+			t.Fatalf("%s: got %v", body, out)
 		}
 	}
 }

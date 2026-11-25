@@ -194,7 +194,9 @@ export function trendWords(t) {
  * The change log over the whole last 24 hours, from /api/csp-audit-count,
  * which counts every row rather than the newest 500. A read that failed is
  * "unavailable", never 0. When counting stopped at its ceiling or time budget
- * the totals are a floor, and the words say "more than".
+ * the totals are a floor: "more than" only when the server read a row past
+ * its ceiling, otherwise "at least". People are counted by their own read, so
+ * that number has its own "complete".
  */
 export function changeSummary(count) {
   if (count.loading && !count.data) return { state: 'loading' }
@@ -202,14 +204,18 @@ export function changeSummary(count) {
   if (count.error || !d || d.status !== 'ok' || !Number.isFinite(d.total)) return { state: 'unavailable' }
   if (d.complete === true && d.total === 0) return { state: 'empty' }
   const complete = d.complete === true
+  const more = !complete && d.more === true
+  const why = more ? 'at its upper limit, and more changes exist' : d.stopped_by === 'time' ? 'when it ran out of time' : 'before the end of the log'
   return {
     state: 'ok',
     complete,
+    more,
     total: d.total,
     people: d.people ?? 0,
+    peopleComplete: d.people_complete !== false,
     failed: d.failed ?? 0,
     noResult: d.no_result ?? 0,
-    tip: complete ? null : `Counting stopped at ${d.total.toLocaleString()} changes, ${d.stopped_by === 'time' ? 'when it ran out of time' : 'its upper limit'}, so the real number is higher. The count still covers the whole 24 hours.`,
+    tip: complete ? null : `Counting stopped at ${d.total.toLocaleString()} changes, ${why}. The count still covers the whole 24 hours.`,
   }
 }
 
@@ -218,10 +224,11 @@ export function changeWords(c) {
   if (c.state === 'loading') return 'Loading…'
   if (c.state === 'unavailable') return 'Not checked'
   if (c.state === 'empty') return 'No changes logged in 24 hours'
-  if (!c.complete) return `More than ${c.total.toLocaleString()} in the last 24 hours, at least ${c.people.toLocaleString()} of them by users`
+  const people = `${c.peopleComplete ? '' : 'at least '}${c.people.toLocaleString()} of them by users`
+  if (!c.complete) return `${c.more ? 'More than' : 'At least'} ${c.total.toLocaleString()} in the last 24 hours, ${people}`
   const failed = c.failed ? `, ${c.failed.toLocaleString()} failed` : ''
   const noResult = c.noResult ? `, ${c.noResult.toLocaleString()} with no result reported` : ''
-  return `${c.total.toLocaleString()} in the last 24 hours, ${c.people.toLocaleString()} of them by users${failed}${noResult}`
+  return `${c.total.toLocaleString()} in the last 24 hours, ${people}${failed}${noResult}`
 }
 
 /**
