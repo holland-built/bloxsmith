@@ -377,7 +377,7 @@ test('14. form results are announced', async ({ page }) => {
   const sheet = await openSettings(page);
   await sheet.getByRole('button', { name: 'Test active connection' }).click();
   await expect(sheet.getByRole('status').filter({ hasText: 'Connected' })).toBeVisible();
-  await sheet.getByLabel('Active CSP account').selectOption('a2');
+  await sheet.getByLabel('Active Infoblox account').selectOption('a2');
   await expect(sheet.getByRole('alert').filter({ hasText: 'refused' })).toBeVisible();
   await sheet.getByRole('button', { name: 'Integrations', exact: true }).click();
   await sheet.getByLabel('Axur API key').fill('token');
@@ -578,7 +578,7 @@ test('R5. a refused IQ Actions read is a permission problem and keeps its reason
   const queue = page.locator('[data-panel-id="incidents-soc-queue"]');
   await expect(queue.getByText(REFUSED)).toBeVisible();
   await expect(queue.getByText('No permission')).toBeVisible();
-  await expect(queue.getByText('IQ Actions information is unavailable')).toHaveCount(0);
+  await expect(queue.getByText('Suggested actions are unavailable')).toHaveCount(0);
   await expect(queue.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 

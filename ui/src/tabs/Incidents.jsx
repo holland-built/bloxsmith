@@ -10,7 +10,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
-import { categoryWord, plainMessage } from '../lib/plainWords.js'
+import { categoryWord, plainMessage, subjectName } from '../lib/plainWords.js'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 import './Overview.css'
 import './Incidents.css'
@@ -418,21 +418,12 @@ function SeverityKpis({ signals, truncated, loading, error, panelId, severity, o
 
 // ---------- incidents table ----------
 
-// The thing a signal is about, by name. Zone and subnet messages start with it
-// ("aws.private.: High Neg-TTL", "Windows Wireless at 80% utilization").
-function subjectOf(s) {
-  const msg = String(s.message || '')
-  if (s.entity_type === 'zone' && msg.includes(': ')) return msg.split(': ')[0]
-  if (s.entity_type === 'subnet' && / at \d+% utilization$/.test(msg)) return msg.replace(/ at \d+% utilization$/, '') || s.entity_id
-  if (s.entity_type === 'posture') return 'All DNS zones'
-  return s.entity_id || '—'
-}
 
 // The subject as a link to its item page, when the signal names a zone or a
 // subnet by its real id. Anything else stays plain text.
 const SUBJECT_KIND = { zone: ['zone', 'dns/auth_zone/'], subnet: ['network', 'ipam/subnet/'] }
 function subjectLink(s) {
-  const name = subjectOf(s)
+  const name = subjectName(s)
   const [kind, prefix] = SUBJECT_KIND[s.entity_type] || []
   if (!kind || !String(s.entity_id || '').startsWith(prefix)) return name
   return <ItemLink kind={kind} value={name} id={s.entity_id} />
@@ -471,7 +462,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
           className="inc-seen"
           checked={!!acks[ackKey(s)]}
           onChange={() => onToggleAck(s)}
-          aria-label={`Mark ${s.entity_id || ackKey(s)} as seen`}
+          aria-label={`Mark ${subjectName(s) === '—' ? ackKey(s) : subjectName(s)} as seen`}
         />
       ),
     },
@@ -671,13 +662,13 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
     ) : undefined
 
   return (
-    <Card panelId={panelId} span={2} title="IQ Actions" note="IQ for Threat Defense" right={right}>
+    <Card panelId={panelId} span={2} title="Suggested actions" note="From Infoblox threat insights" right={right}>
       {loading ? (
         <Skeleton h={280} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions information is unavailable" reason={reason} onRetry={onRetry} />
+        <FeedUnavailable label="Suggested actions are unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <FeedUnavailable label="IQ Actions information is unavailable" reason={error.message || undefined} onRetry={onRetry} />
+        <FeedUnavailable label="Suggested actions are unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
@@ -794,11 +785,11 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
-        <FeedUnavailable label="IQ Actions information is unavailable" reason={reason} onRetry={onRetry} />
+        <FeedUnavailable label="Suggested actions are unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <FeedUnavailable label="IQ Actions information is unavailable" reason={error.message || undefined} onRetry={onRetry} />
+        <FeedUnavailable label="Suggested actions are unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
-        <Empty>no IQ actions to trend</Empty>
+        <Empty>No suggested actions to show over time</Empty>
       ) : (
         <>
           <Suspense fallback={<Skeleton h={150} />}>

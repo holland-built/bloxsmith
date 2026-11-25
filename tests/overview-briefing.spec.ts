@@ -37,7 +37,7 @@ test('a critical incident outside the five services still sets the headline', as
   await healthyWorld(page, [incident('capacity', 'crit', nowS - 3 * DAY)]);
   await page.goto('/#overview');
   await expect(page.locator('[data-problem="capacity"]')).toBeVisible({ timeout: 20_000 });
-  await expect(verdict(page)).toHaveText('Action required');
+  await expect(verdict(page)).toHaveText('Needs action');
 });
 
 test('a warning incident outside the five services asks for review', async ({ page }) => {
@@ -133,7 +133,7 @@ test('a partial source with a warning stays unconfirmed, and a critical problem 
   await page.unroute('**/api/hub/health*');
   await page.route('**/api/hub/health*', (r) => json(r, [HEALTHY[0], partialRow('DHCP', 'crit', '1 error · 1/2 up'), HEALTHY[2]]));
   await page.reload();
-  await expect(verdict(page)).toHaveText('Action required', { timeout: 20_000 });
+  await expect(verdict(page)).toHaveText('Needs action', { timeout: 20_000 });
 });
 
 test('incidents built from a failed feed do not read as all healthy', async ({ page }) => {

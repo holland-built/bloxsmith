@@ -59,7 +59,7 @@ test('a service failing its health check never says "None open" on its row', asy
     { name: 'Security', status: 'ok', meta: '3/3 up', availability: 'ok' },
   ]));
   await page.goto('/#overview');
-  await expect(tile(page, 'DHCP').locator('.ov-verdict')).toHaveText('Action required', { timeout: 20_000 });
+  await expect(tile(page, 'DHCP').locator('.ov-verdict')).toHaveText('Needs action', { timeout: 20_000 });
   await expect(row(page, 'DHCP')).toContainText('DHCP services: 10 of 18 up');
   await expect(row(page, 'DHCP')).not.toContainText('None open');
   await page.getByRole('button', { name: 'Hide' }).click();
@@ -144,10 +144,10 @@ test('a past day with no issue on record is an outline, never green', async ({ p
   for (let i = 0; i < 9; i++) await expect(days.nth(i)).toHaveClass(/\bnone\b/);
 });
 
-test("a service whose own check says healthy still shows Action required when a critical issue is open on it", async ({ page }) => {
+test("a service whose own check says healthy still shows Needs action when a critical issue is open on it", async ({ page }) => {
   await installBaselineWorld(page);
   await page.route('**/api/hub/health*', (route) => json(route, [{ name: 'Security', status: 'ok', statusLabel: 'healthy', meta: '' }]));
   await page.goto('/#overview');
   await expect(row(page, 'Security')).toContainText('3 critical or high security events', { timeout: 20_000 });
-  await expect(tile(page, 'Security').locator('.ov-verdict')).toHaveText('Action required');
+  await expect(tile(page, 'Security').locator('.ov-verdict')).toHaveText('Needs action');
 });

@@ -12,14 +12,14 @@ test('the page never says OK while a service is unchecked', () => {
 })
 
 test('a known problem outranks a feed that is still loading', () => {
-  const v = pageVerdict([svc('Action required', 'crit'), svc('Checking', 'none'), svc('Review', 'warn')])
-  assert.equal(v.word, 'Action required')
+  const v = pageVerdict([svc('Needs action', 'crit'), svc('Checking', 'none'), svc('Review', 'warn')])
+  assert.equal(v.word, 'Needs action')
   assert.equal(v.line, '1 of 3 services requires action')
 })
 
 test('an incident outside the five services still sets the verdict', () => {
   const ok = [svc('Healthy', 'ok'), svc('Healthy', 'ok')]
-  assert.equal(pageVerdict(ok, [{ sev: 'crit' }]).word, 'Action required')
+  assert.equal(pageVerdict(ok, [{ sev: 'crit' }]).word, 'Needs action')
   assert.equal(pageVerdict(ok, [{ sev: 'crit' }]).line, '1 other incident requires action')
   assert.equal(pageVerdict(ok, [{ sev: 'warn' }, { sev: 'warn' }]).line, '2 other incidents require review')
   assert.equal(pageVerdict(ok, [{ sev: 'note' }]).word, 'All services healthy')
@@ -51,7 +51,7 @@ test('a partial source keeps the verdict unconfirmed unless action is required',
   const look = pageVerdict([svc('Healthy', 'ok'), partial('Review', 'warn')])
   assert.equal(look.word, 'Status unconfirmed')
   assert.equal(look.line, '1 of 2 services could not be fully checked, 1 item requires review')
-  assert.equal(pageVerdict([partial('Action required', 'crit'), partial('Partly checked', 'none')]).word, 'Action required')
+  assert.equal(pageVerdict([partial('Needs action', 'crit'), partial('Partly checked', 'none')]).word, 'Needs action')
 })
 
 test('a capped log with no usable dates has an undetermined period', () => {

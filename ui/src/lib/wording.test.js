@@ -50,9 +50,10 @@ test('date helpers accept API values and show a dash for a bad one', () => {
 })
 
 test('the Value row does not repeat a word', () => {
-  const name = new Map(SOURCES)
-  assert.equal(name.get('address'), 'Get an address: assigned IPs')
-  assert.equal(name.get('dns'), 'Get an address: DNS names')
+  const row = new Map(SOURCES.map(([s, ...rest]) => [s, rest]))
+  assert.deepEqual(row.get('address'), ['Get an address', 'item'])
+  assert.deepEqual(row.get('dns'), ['Get an address', 'DNS name'])
+  for (const [, label] of SOURCES) assert.ok(!label.includes(':'), `${label} has its own colon, so the line would have two`)
 })
 
 test('a write with no clear answer says the outcome is unknown', () => {

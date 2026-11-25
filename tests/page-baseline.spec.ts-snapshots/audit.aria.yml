@@ -31,44 +31,44 @@
         - columnheader "Detail":
           - button "Detail"
     - rowgroup:
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn't delete a DNS record error=request refused · id=dns\/record\/baseline-1/:
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn''t delete a DNS record Error: request refused · Item: dns\/record\/baseline-1/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Couldn't delete a DNS record"
-        - cell "error=request refused · id=dns/record/baseline-1"
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) method=POST · path=\/api\/edit\/dnsrecord · reason=tenant-read-only · tenant=baseline\/-/:
+        - 'cell "Error: request refused · Item: dns/record/baseline-1"'
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) Request: POST \/api\/edit\/dnsrecord · Reason: tenant-read-only · Account: baseline\/-/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Change blocked (read-only)"
-        - cell "method=POST · path=/api/edit/dnsrecord · reason=tenant-read-only · tenant=baseline/-"
-      - row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator Subnet created block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/:
+        - 'cell "Request: POST /api/edit/dnsrecord · Reason: tenant-read-only · Account: baseline/-"'
+      - 'row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator Subnet created Address block: ipam\/address_block\/baseline-1 · Prefix length: \d+ · Subnet: \d+\.\d+\.0\.0/':
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Subnet created"
-        - cell /block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/
-      - row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator Change allowed method=POST · path=\/api\/provision\/subnet/:
+        - 'cell /Address block: ipam\/address_block\/baseline-1 · Prefix length: \d+ · Subnet: \d+\.\d+\.0\.0/'
+      - 'row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator Change allowed Request: POST \/api\/provision\/subnet/':
         - cell /1\/1\/\d+, 7:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Change allowed"
-        - cell "method=POST · path=/api/provision/subnet"
-      - row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator App updated from=v0\.0\.0-baseline/:
+        - 'cell "Request: POST /api/provision/subnet"'
+      - 'row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator App updated From version: v0\.0\.0-baseline/':
         - cell /1\/1\/\d+, 6:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "App updated"
-        - cell "from=v0.0.0-baseline"
+        - 'cell "From version: v0.0.0-baseline"'
   - heading "Activity Summary" [level=2]
   - text: 5 recorded events
   - 'button "About: Activity Summary"': "About: ⓘ"
   - 'button "Options: Activity Summary"'
   - text: Couldn't delete a DNS record 1 Subnet created 1 App updated 1 Change allowed 1 Change blocked (read-only) 1
-  - heading "CSP Portal Audit" [level=2]
+  - heading "Infoblox Portal Audit" [level=2]
   - text: external — Infoblox portal activity
   - textbox "Search user or resource":
     - /placeholder: Search user or resource…
   - button "Search"
   - text: 5 entries shown, total unknown
-  - 'button "About: CSP Portal Audit"': "About: ⓘ"
-  - 'button "Options: CSP Portal Audit"'
+  - 'button "About: Infoblox Portal Audit"': "About: ⓘ"
+  - 'button "Options: Infoblox Portal Audit"'
   - table:
     - rowgroup:
       - row "Time Who Action Resource Result":

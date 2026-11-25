@@ -2707,7 +2707,9 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
         <div ref={headRef} className="relative flex flex-wrap items-center gap-2 mb-2 min-w-0">
           <h2 id={titleId} ref={titleRef} className="text-copy font-semibold min-w-0 break-words">{title}</h2>
           {note && <span ref={noteRef} className="text-note text-dim min-w-0 break-words">{note}</span>}
-          <span className="flex-1" />
+          {/* Not on a phone: `right` has its own line there, and a spacer that wraps
+              onto that line beside it takes width from the search box. */}
+          <span className="flex-1 max-md:hidden" />
           {/* The drag handle goes in the buttons span below, and headNeed
               measures both that span and `right`: a header element outside
               those two would be invisible to the width floor, and the header

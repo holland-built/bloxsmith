@@ -704,7 +704,7 @@ function CspAuditTable({ panelId }) {
     <Card
       panelId={panelId}
       span={6}
-      title="CSP Portal Audit"
+      title="Infoblox Portal Audit"
       note="external — Infoblox portal activity"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">

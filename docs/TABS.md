@@ -604,7 +604,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Security | Axur Supplier Risk | Axur's supplier risk service | No | it comes from Axur, not Infoblox |
 | Security | CTEM Exposure | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Threat Feed Activity | Infoblox's security hit records | As a copy | the blocked and allowed totals above the bars are worked out in the app |
-| Security | IQ for Threat Defense | Infoblox IQ for Threat Defense insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
+| Security | Threat insights | Infoblox IQ for Threat Defense insights | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Insights | Infoblox's asset insight records | No | it counts a different set of asset records from the ones Build a chart reads |
 | Security | Exposures | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
 | Security | Asset Risk | Infoblox's attack surface service | No | it comes from the ordinary Infoblox API, not the activity records Build a chart reads |
@@ -624,11 +624,11 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Incidents | Categories | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Severity Counts | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Triage | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
-| Incidents | IQ Actions | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
+| Incidents | Suggested actions | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
 | Incidents | Action Volume | Infoblox IQ actions | No | the actions are counted by day in the app, not read from activity records |
 | Audit | Activity Summary | this app's own audit log | No | it is this app's own record, not Infoblox's |
 | Audit | Audit Log | this app's own audit log | No | it is a list, not a chart |
-| Audit | CSP Portal Audit | the Infoblox audit log | No | it is a list, not a chart |
+| Audit | Infoblox Portal Audit | the Infoblox audit log | No | it is a list, not a chart |
 | Changes | Worth a look | the Infoblox audit log | No | how notable each change is, is worked out in the app |
 | Changes | Changed objects | the Infoblox audit log | No | it is a list, not a chart |
 | Provision | Subnet: Request | the Infoblox API | No | it is a form, not a chart |

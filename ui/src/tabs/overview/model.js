@@ -3,6 +3,7 @@
 // fetches. Nothing is estimated, and a feed that did not answer stays
 // "not checked" rather than becoming a 0 or a green mark.
 
+import { SEV_WORD } from '../../lib/severity.js'
 import { feedState, hasNoResult, isSuccess, windowLabel, withinWindow } from '../../lib/changes.js'
 
 const DAY_S = 86400
@@ -41,7 +42,7 @@ export function upCount(meta) {
  * feeds are still loading. "All services healthy" needs every service to have
  * been checked in full and no open incident outside them (the board's Other
  * row). A source that was partial or failed keeps the page at "Status
- * unconfirmed" unless a real problem already makes it "Action required".
+ * unconfirmed" unless a real problem already makes it "Needs action".
  */
 export function pageVerdict(services, otherIssues = []) {
   const count = (test) => services.filter(test).length
@@ -59,7 +60,7 @@ export function pageVerdict(services, otherIssues = []) {
     if (!svc) return `${incidents(other)} ${other === 1 ? 'requires' : 'require'} ${need}`
     return `${svc} of ${total} ${plural(svc)} ${need}${other ? `, plus ${incidents(other)}` : ''}`
   }
-  if (act || otherAct) return { ...base, tone: 'crit', word: 'Action required', line: line(act, otherAct, 'action') }
+  if (act || otherAct) return { ...base, tone: 'crit', word: SEV_WORD.crit, line: line(act, otherAct, 'action') }
   if (unchecked) {
     const review = look + otherLook
     const also = review ? `, ${review} ${review === 1 ? 'item requires' : 'items require'} review` : ''

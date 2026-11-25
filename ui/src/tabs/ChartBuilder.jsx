@@ -442,7 +442,7 @@ function HowPanel({ opts, picks, result, cube, any }) {
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-note text-muted">
-            Sent to <code>{result.data.endpoint}</code> on your Infoblox account. No AI was used.
+            Sent to Infoblox's reporting service on your account. No AI was used.
           </p>
           {rows.length > 0 && (
             <button

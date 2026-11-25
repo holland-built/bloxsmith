@@ -60,7 +60,7 @@ export const CONTROL_HELP = {
   },
   settings: {
     label: 'The sliders button',
-    what: 'Connections, write access, the CSP account, the Axur key, theme and spacing, updates, the dashboard token, and locking the vault.',
+    what: 'Connections, write access, the Infoblox account, the Axur key, theme and spacing, updates, the dashboard token, and locking the vault.',
   },
   theme: {
     label: 'Sun · Monitor · Moon',

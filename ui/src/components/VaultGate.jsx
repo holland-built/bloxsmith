@@ -184,7 +184,7 @@ function FirstTenant({ onDone }) {
       <h1 className="text-copy font-semibold mb-2">Add your first connection</h1>
       <p className="text-note leading-relaxed text-muted mb-4">
         Paste an Infoblox API key. The key is encrypted in your vault, and the connection is named automatically from
-        its CSP account.
+        its Infoblox account.
       </p>
       <label className="block text-note text-dim mb-1" htmlFor="vat-key">Infoblox API key</label>
       <input
@@ -205,7 +205,7 @@ function FirstTenant({ onDone }) {
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && go()}
-        placeholder="leave blank to use the CSP account name"
+        placeholder="leave blank to use the Infoblox account name"
       />
       {test && (
         <div

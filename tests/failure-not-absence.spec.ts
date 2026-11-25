@@ -99,7 +99,7 @@ test.describe('Incidents → IQ Actions panel (IQ Actions feed)', () => {
     await page.route('**/api/actions*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#incidents');
     const card = page.locator('[data-panel-id="incidents-soc-queue"]');
-    await expect(card.getByText(/iq actions information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/suggested actions are unavailable/i)).toBeVisible();
     await expect(card.getByText(/no pending actions/i)).toHaveCount(0);
   });
 
@@ -108,7 +108,7 @@ test.describe('Incidents → IQ Actions panel (IQ Actions feed)', () => {
     await page.goto('/#incidents');
     const card = page.locator('[data-panel-id="incidents-soc-queue"]');
     await expect(card.getByText(/no pending actions/i)).toBeVisible();
-    await expect(card.getByText(/iq actions information is unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/suggested actions are unavailable/i)).toHaveCount(0);
   });
 });
 

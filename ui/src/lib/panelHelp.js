@@ -211,7 +211,7 @@ export const PANEL_HELP = {
   // ---- Infra ----
   'infra-service-health': {
     what: 'Whether the DNS, DHCP and Security services you have deployed are running, and how many of each are up.',
-    look: 'Green is healthy, amber degraded, red critical. A grey badge means that service was not listed because the inventory hit its row cap, so it is unknown rather than absent.',
+    look: 'Green is healthy, amber degraded, red critical. A grey badge means that service was not listed because Infoblox sent only part of the list, so it is unknown rather than absent.',
   },
   'infra-host-status': {
     what: 'Your Infoblox machines grouped by state. "Unknown" is its own group: nothing reported a state for those, which is not the same as offline.',
@@ -219,7 +219,7 @@ export const PANEL_HELP = {
   },
   'infra-onprem-hosts': {
     what: 'The Infoblox boxes installed on your own sites, and how many Infoblox applications each one is running.',
-    look: 'Scroll for the rest. OPH ID is the identifier Infoblox uses for that box; Apps is how many services are loaded onto it.',
+    look: 'Scroll for the rest. Host ID is the ID Infoblox gives that box; Apps is how many services are loaded onto it.',
   },
   'infra-jobs': {
     what: 'Recent background tasks Infoblox ran for this tenant — when each was created, what kind it was, and how it ended.',

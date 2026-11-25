@@ -2,18 +2,25 @@
 // and the objects they made, counted from the runs record (/api/desk/runs,
 // go/internal/runs). Pure, so the counting is tested without a browser.
 
+import { countOf } from './plainWords.js'
+
 // Minutes one job would take by hand in the Infoblox Portal. An estimate,
 // said as one on the page.
 export const MINUTES_PER_JOB = 10
 
-// The pages that make things, in the order the panel lists them. A recorded
-// delete ("delete") is not work made, so it is left out.
+// The pages that make things, in the order the panel lists them, with the
+// word for what each one makes. A recorded delete ("delete") is not work made,
+// so it is left out. Get an address makes two kinds of thing; its two rows
+// share the page name and say which by the noun ("Get an address: 1 job,
+// 2 items created"), not by a second label after a second colon. "Items", not
+// "addresses": one address run also records its DNS record or reservation
+// (allocatedObjects in go/internal/server/desk.go).
 export const SOURCES = [
-  ['', 'Automate'],
-  ['address', 'Get an address: assigned IPs'],
-  ['dns', 'Get an address: DNS names'],
-  ['lists', 'Site lists'],
-  ['editor', 'Editor'],
+  ['', 'Automate', 'object'],
+  ['address', 'Get an address', 'item'],
+  ['dns', 'Get an address', 'DNS name'],
+  ['lists', 'Site lists', 'object'],
+  ['editor', 'Editor', 'object'],
 ]
 
 // Only "built" counts. Remove (go/internal/server/desk.go) also runs on a
@@ -61,11 +68,16 @@ export function countWork(data, range) {
   return {
     jobs,
     objects,
-    bySource: SOURCES.map(([s, label]) => [label, per.get(s).jobs, per.get(s).objects]).filter(([, j]) => j > 0),
+    bySource: SOURCES.map(([s, label, one, many]) => [label, per.get(s).jobs, per.get(s).objects, one, many]).filter(([, j]) => j > 0),
     older,
     other,
     hours: hoursSaved(jobs),
   }
+}
+
+// One bySource row as the panel says it: "Get an address: 1 job, 2 items created".
+export function workLine([label, jobs, objects, one, many]) {
+  return `${label}: ${countOf(jobs, 'job')}, ${countOf(objects, one, many)} created`
 }
 
 // Jobs x MINUTES_PER_JOB, in hours to one decimal place.

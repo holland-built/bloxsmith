@@ -1,7 +1,7 @@
 // Run with: npm test  (node --test, no test framework dependency)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { countWork, hoursSaved, MINUTES_PER_JOB } from './valueWork.js'
+import { countWork, hoursSaved, MINUTES_PER_JOB, workLine } from './valueWork.js'
 
 const RANGE = ['2026-10-21', '2026-11-19']
 const run = (extra = {}) => ({ source: 'address', status: 'built', tenant: 't1', created: '2026-11-10T12:00:00Z', objects: [{}], ...extra })
@@ -37,7 +37,7 @@ test('counts jobs and objects made, by page', () => {
   }, RANGE)
   assert.equal(w.jobs, 4)
   assert.equal(w.objects, 6)
-  assert.deepEqual(w.bySource, [['Automate', 1, 3], ['Site lists', 2, 3], ['Editor', 1, 0]])
+  assert.deepEqual(w.bySource, [['Automate', 1, 3, 'object', undefined], ['Site lists', 2, 3, 'object', undefined], ['Editor', 1, 0, 'object', undefined]])
 })
 
 test('a runs list that failed to load is null (not checked), never 0', () => {
@@ -57,7 +57,7 @@ test('runs with no tenant or another tenant earn no credit, and are counted apar
   const w = countWork({ tenant: 't1', runs: [run({ tenant: '', objects: [{}, {}] }), run({ tenant: undefined }), run({ tenant: 't2' }), run()] }, RANGE)
   assert.equal(w.jobs, 1)
   assert.equal(w.objects, 1)
-  assert.deepEqual(w.bySource, [['Get an address: assigned IPs', 1, 1]])
+  assert.deepEqual(w.bySource, [['Get an address', 1, 1, 'item', undefined]])
   assert.equal(w.hours, 0.2)
   assert.equal(w.older, 2)
   assert.equal(w.other, 1)
@@ -69,4 +69,13 @@ test('time saved is jobs x 10 minutes, in hours', () => {
   assert.equal(hoursSaved(6), 1)
   assert.equal(hoursSaved(4), 0.7)
   assert.equal(countWork({ tenant: 't1', runs: [run(), run(), run()] }, RANGE).hours, 0.5)
+})
+
+test('a job line names the page once and says what was made', () => {
+  const w = countWork({ tenant: 't1', runs: [run({ source: 'address', objects: [{}, {}] }), run({ source: 'dns', objects: [{}] })] }, RANGE)
+  assert.deepEqual(w.bySource.map(workLine), [
+    // An address with a DNS name records two things: the address and its record.
+    'Get an address: 1 job, 2 items created',
+    'Get an address: 1 job, 1 DNS name created',
+  ])
 })

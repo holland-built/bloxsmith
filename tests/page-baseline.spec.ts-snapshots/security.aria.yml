@@ -63,10 +63,10 @@
   - 'button "Options: Threat Feed Activity"'
   - text: /\d+ Blocked 0 Allowed/
   - application "Threat Feed Activity chart": /Dec \d+ Dec \d+/
-  - heading "IQ for Threat Defense" [level=2]
+  - heading "Threat insights" [level=2]
   - text: "1"
-  - 'button "About: IQ for Threat Defense"': "About: ⓘ"
-  - 'button "Options: IQ for Threat Defense"'
+  - 'button "About: Threat insights"': "About: ⓘ"
+  - 'button "Options: Threat insights"'
   - table:
     - rowgroup:
       - row "Threat Severity Status Events Last Seen":
