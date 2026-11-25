@@ -845,3 +845,31 @@ main tr:has(input[type="checkbox"]:checked) > td:first-child { box-shadow: inset
 @media (max-width: 520px) {
   .kpi-num { font-size: 24px }
 }
+
+/* SCROLL CUE (GUI audit A1, C3, B5, 2026-11-25). A box that swipes sideways
+   fades out at its right edge while more of it is off to the right, and the fade
+   goes once it is scrolled to the end, so columns and buttons past the edge do
+   not look missing. Nothing is hidden: every column is still there to swipe to.
+   Add `scroll-cue` to any box that scrolls sideways (DataTable uses
+   `max-md:scroll-cue`, because only a phone swipes its tables).
+   The scroll position drives the fade (a scroll-driven animation, Baseline
+   since 2026-10: Chrome 115, Safari 26, Firefox 159), so there is no script.
+   In an older browser the fade never shows and the box still scrolls as before.
+   The mask keeps the box's focus outline whole (no-clip). */
+@property --scroll-cue-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-cue-end {
+  from { --scroll-cue-end: 2.5rem; }
+}
+@utility scroll-cue {
+  scroll-padding-inline-end: 2.5rem;
+  mask:
+    linear-gradient(black, black) no-clip subtract,
+    linear-gradient(to right, transparent, black) 100% 0 / var(--scroll-cue-end) 100% no-repeat no-clip;
+  animation: scroll-cue-end linear both;
+  animation-timeline: scroll(self inline);
+  animation-range: calc(100% - 2.5rem) 100%;
+}

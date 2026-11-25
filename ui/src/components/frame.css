@@ -110,6 +110,13 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
 }
 .frame-rail:not([data-full]) :is(.frame-nav > .frame-link, .frame-group) > svg { width: 18px; height: 18px; }
 .frame-rail:not([data-full]) :is(.frame-nav > .frame-link, .frame-group) > .frame-link-text { flex: none; width: 100%; overflow-wrap: break-word; }
+/* Bold text is wider. Each word keeps room for its own bold copy (hidden, in
+   the same grid cell), so the current item turning bold never wraps onto a new
+   line and pushes every item below it down (GUI audit E4, 2026-11-25). */
+.frame-rail:not([data-full]) .frame-link-text[data-label] { display: grid; }
+.frame-rail:not([data-full]) .frame-link-text[data-label] > :first-child,
+.frame-rail:not([data-full]) .frame-link-text[data-label]::after { grid-area: 1 / 1; align-self: center; }
+.frame-rail:not([data-full]) .frame-link-text[data-label]::after { content: attr(data-label); font-weight: 600; visibility: hidden; }
 .frame-group[aria-expanded='true'] { background: var(--frame-hover); color: var(--color-txt); }
 .frame-rail[data-full] .frame-group[aria-expanded='true'] { background: transparent; }
 

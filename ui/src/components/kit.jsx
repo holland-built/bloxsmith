@@ -41,6 +41,7 @@ const TILE = `kpi-tile no-underline cursor-pointer`
 // Assets, the one page with two tiles, drew them in a four- and then a
 // six-column row and left the rest of it empty.
 const TILE_COLS = {
+  1: 'grid-cols-1',
   2: 'grid-cols-2',
   3: 'grid-cols-3',
   4: 'grid-cols-2 md:grid-cols-4',

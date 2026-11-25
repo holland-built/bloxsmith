@@ -154,7 +154,7 @@ export function JobRail({ tab, groups, tabs, logo }) {
           {jobsOf(tabs).map((j) => (
             <a key={j.id} href={`#${j.id}`} aria-current={j.id === tab ? 'page' : undefined} className={`frame-link ${j.id === tab ? '' : 'text-muted'}`}>
               <NavIcon name={j.id} />
-              <span className="frame-link-text">{j.label}</span>
+              <span className="frame-link-text" data-label={j.label}><span>{j.label}</span></span>
             </a>
           ))}
           <div className="frame-nav-gap" />
@@ -181,7 +181,7 @@ export function JobRail({ tab, groups, tabs, logo }) {
                   <NavIcon name={g.id} />
                   {/* "Ask pages", not "Ask": the AI page's send button is already
                       called Ask, and two controls with one name cannot be told apart. */}
-                  <span className="frame-link-text">{g.label}<span className="sr-only"> pages</span></span>
+                  <span className="frame-link-text" data-label={g.label}><span>{g.label}</span><span className="sr-only"> pages</span></span>
                   {full && <span className="frame-fold" data-open={isOpen ? '' : undefined}><NavIcon name="caret" size={12} /></span>}
                 </button>
                 {isOpen && (
@@ -210,8 +210,11 @@ export function JobRail({ tab, groups, tabs, logo }) {
 }
 
 // The phone's bottom bar: an icon for each job, and the current page in words.
-// The other labels stay available to screen readers and voice control.
+// The other labels stay available to screen readers and voice control. On a
+// page that is not one of the jobs, the bar adds that page's name at the end,
+// so it always shows where you are (GUI audit A12, D13, E3, 2026-11-25).
 export function JobBar({ tab, tabs }) {
+  const here = !JOB_IDS.has(tab) && tabs.find((t) => t.id === tab)
   return (
     <nav aria-label="Jobs" data-job-bar="" className="frame-dock">
       {jobsOf(tabs).map((j) => (
@@ -220,6 +223,11 @@ export function JobBar({ tab, tabs }) {
           <span>{j.label}</span>
         </a>
       ))}
+      {here && (
+        <a href={`#${here.id}`} aria-current="page" className="frame-dock-item">
+          <span>{here.label}</span>
+        </a>
+      )}
     </nav>
   )
 }
