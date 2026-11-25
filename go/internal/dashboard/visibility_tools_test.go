@@ -158,7 +158,7 @@ func TestSubnetBands_Boundaries(t *testing.T) {
 		}
 	}
 	// The server-side filters say the same thing.
-	f := &visTenant{Subnets: []fakeSubnet{{24, 19, "", false}, {24, 20, "", false}, {24, 79, "", false}, {24, 80, "", false}}}
+	f := &visTenant{Subnets: []fakeSubnet{{24, 19, "", ""}, {24, 20, "", ""}, {24, 79, "", ""}, {24, 80, "", ""}}}
 	s := f.service(t)
 	under := s.restCountCtx(context.Background(), subnetPath, subnetFilter(subnetUnderFilter))
 	over := s.restCountCtx(context.Background(), subnetPath, subnetFilter(subnetOverFilter))
@@ -169,9 +169,9 @@ func TestSubnetBands_Boundaries(t *testing.T) {
 
 func cloudSubnets() []fakeSubnet {
 	return []fakeSubnet{
-		{24, 5, "AWS", false}, {24, 85, "AWS", false}, {24, 50, "AWS", false},
-		{24, 10, "Azure", false}, {30, 100, "", false}, {24, 3, "", false},
-		{24, 90, "GCP", true}, // tagged GCP, no discoverer name
+		{24, 5, "AWS", ""}, {24, 85, "AWS", ""}, {24, 50, "AWS", ""},
+		{24, 10, "Azure", ""}, {30, 100, "", ""}, {24, 3, "", ""},
+		{24, 90, "GCP", "tag"}, // tagged GCP, no discoverer name
 	}
 }
 
@@ -185,8 +185,12 @@ func TestSubnetClouds_Summary(t *testing.T) {
 	if aws.Cloud != "AWS" || aws.Subnets.N() != 3 || aws.Underutilized.N() != 1 || aws.Overutilized.N() != 1 {
 		t.Fatalf("AWS: %+v", aws)
 	}
-	if sum.Unconfirmed.N() != 1 || sum.NotCloud.N() != 2 {
-		t.Fatalf("unconfirmed %+v not cloud %+v, want 1 and 2", sum.Unconfirmed, sum.NotCloud)
+	// The GCP subnet known only by its tag is GCP, as cloudOfSubnet reads it.
+	if gcp := sum.Clouds[2]; gcp.Subnets.N() != 1 || gcp.Overutilized.N() != 1 {
+		t.Fatalf("GCP: %+v", gcp)
+	}
+	if !sum.Unconfirmed.OK() || sum.Unconfirmed.N() != 0 || sum.NotCloud.N() != 2 {
+		t.Fatalf("unknown %+v not cloud %+v, want 0 and 2", sum.Unconfirmed, sum.NotCloud)
 	}
 }
 
@@ -225,5 +229,33 @@ func TestRiskyDNSTool_Refused(t *testing.T) {
 	c := out["counts"].(map[string]any)["Dangling"].(map[string]any)
 	if c["count"] != nil || c["status"] != MetricForbidden {
 		t.Fatalf("want forbidden with no count, got %v", c)
+	}
+}
+
+// A connection's name is typed by an admin, so it proves nothing: an AWS
+// connection called servicenow-sync does not connect ServiceNow.
+func TestCmdbGap_ConnectorNameIsNotProof(t *testing.T) {
+	combos := combosOf(t, []fakeAsset{{Type: "Server", Providers: []string{"AWS"}}})
+	conn := map[string]any{"availability": "ok", "truncated": false,
+		"connectors": []map[string]any{{"name": "servicenow-sync", "type": "Amazon Web Services"}}}
+	g := assembleCmdbGap(combos, metricOK(len(combos)), conn)
+	if g.Connected != "no" || g.Missing.Count != nil {
+		t.Fatalf("want not connected and no count, got %s %+v", g.Connected, g.Missing)
+	}
+}
+
+// One AWS subnet known only by its tag and one known only by its discoverer
+// are both AWS (cloudOfSubnet reads either), so neither is "not cloud".
+func TestSubnetClouds_TagAndDiscovererOverlap(t *testing.T) {
+	f := &visTenant{Subnets: []fakeSubnet{
+		{24, 5, "AWS", "tag"}, {24, 90, "AWS", "disc"}, {24, 50, "", ""},
+	}}
+	sum := f.service(t).readSubnetClouds(context.Background())
+	aws := sum.Clouds[0]
+	if aws.Subnets.N() != 2 || aws.Underutilized.N() != 1 || aws.Overutilized.N() != 1 {
+		t.Fatalf("AWS: %+v", aws)
+	}
+	if !sum.Unconfirmed.OK() || sum.Unconfirmed.N() != 0 || sum.NotCloud.N() != 1 {
+		t.Fatalf("unknown %+v not cloud %+v, want 0 and 1", sum.Unconfirmed, sum.NotCloud)
 	}
 }

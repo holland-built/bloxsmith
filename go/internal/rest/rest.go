@@ -35,8 +35,17 @@ const (
 	retryAfterCap = 3 * time.Second
 )
 
-// retrySleep is time.Sleep; tests swap it to record the pause.
-var retrySleep = time.Sleep
+// retrySleep pauses for d, or until ctx ends, whichever comes first; tests
+// swap it to record the pause. A caller with no deadline (context.Background)
+// pauses exactly as long as before.
+var retrySleep = func(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-ctx.Done():
+	}
+}
 
 // doGet sends one GET, and a second after a pause when the first failed for a
 // reason that often clears by itself. The caller reads and closes the
@@ -52,7 +61,7 @@ func (c *Client) doGet(ctx context.Context, path string, params map[string]strin
 	if resp != nil {
 		resp.Body.Close()
 	}
-	retrySleep(wait)
+	retrySleep(ctx, wait)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

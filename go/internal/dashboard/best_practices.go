@@ -391,23 +391,30 @@ func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 		c.Title = f.unsure
 		return unknown(c, r.SampleOK, what)
 	}
+	// The count is the cube's own count of records; one record that points
+	// two places is two sample rows, so the rows are never the count.
+	if !r.Count.OK() {
+		c.Title = f.unsure
+		c.Status, c.Items = "unknown", []map[string]any{}
+		c.Reason = "Couldn't read how many DNS records Infoblox flagged " + f.flag + ". " + r.Count.Reason
+		return c
+	}
 	items := make([]map[string]any, 0, len(r.Sample))
 	for _, row := range r.Sample {
 		items = append(items, dnsRecordItem(row))
 	}
-	// The cube's own count of records; one record that points two places is
-	// two sample rows. Without it, the rows are the best count there is.
-	n := len(items)
-	if r.Count.OK() {
-		n = r.Count.N()
-	}
+	n := r.Count.N()
 	if n == 0 && len(items) == 0 {
 		c.Title = f.none
 		c.Status, c.Items = "passed", items
 		return c
 	}
+	// The count says none but records came back: the two reads disagree.
 	if n == 0 {
-		n = len(items)
+		c.Title = f.unsure
+		c.Status, c.Items = "unknown", []map[string]any{}
+		c.Reason = "Infoblox's count and its list of flagged records disagree."
+		return c
 	}
 	c.Title = f.found(n)
 	c.Status, c.Items = "problem", items

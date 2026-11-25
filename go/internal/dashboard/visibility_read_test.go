@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func staleRecords(n int) []fakeRecord {
@@ -101,5 +102,33 @@ func TestParseFlagList(t *testing.T) {
 	got := parseFlagList("['Abandoned','Stale','Untrusted']")
 	if strings.Join(got, "|") != "Abandoned|Stale|Untrusted" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// A connector read already running for another caller can't hold this one
+// past its deadline: the join gives up and the list reads as unavailable.
+func TestConnectorHealth_JoinHonoursDeadline(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-release
+		writeResults(w, nil)
+	})
+	defer close(release)
+	go s.FetchConnectorHealth(context.Background())
+	<-started
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	got := s.FetchConnectorHealth(ctx)
+	if d := time.Since(begin); d > time.Second {
+		t.Fatalf("waited %v past a 50ms deadline", d)
+	}
+	if got["availability"] != "error" {
+		t.Fatalf("want an unavailable list, got %v", got)
 	}
 }

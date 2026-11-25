@@ -531,3 +531,33 @@ func TestBestPractices_DNSCountFromAggregateNotRows(t *testing.T) {
 		t.Fatalf("want a title counting 1 record, got %v", c)
 	}
 }
+
+// When the cube's own count fails, the check can't tell: the number of sample
+// rows is never used as the count (one record pointing two places is two rows).
+func TestBestPractices_DNSCountFailureIsUnknown(t *testing.T) {
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		var q struct{ Dimensions []string }
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("query")), &q)
+		if len(q.Dimensions) == 0 {
+			w.WriteHeader(500)
+			return
+		}
+		data := []map[string]any{}
+		if strings.Contains(r.URL.Query().Get("query"), "'Dangling'") {
+			data = []map[string]any{
+				dnsRec("www", "example.test.", "A", "10.0.0.1", "", "['Dangling']"),
+				dnsRec("www", "example.test.", "A", "10.0.0.2", "", "['Dangling']"),
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": data}})
+		_, _ = w.Write(b)
+	})
+	c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling")
+	if c["status"] != "unknown" || c["reason"] == "" || strings.HasPrefix(c["title"].(string), "2 ") {
+		t.Fatalf("want unknown with a reason and no sample-sized count, got %v", c)
+	}
+}

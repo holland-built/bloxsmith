@@ -315,7 +315,8 @@ func assembleCmdbGap(combos []coverageCombo, combosM Metric, conn map[string]any
 	inConnectors := false
 	if list, ok := conn["connectors"].([]map[string]any); ok {
 		for _, c := range list {
-			if isServiceNow(getStr(c["type"])) || isServiceNow(getStr(c["name"])) {
+			// The provider type only: the name is whatever an admin typed.
+			if isServiceNow(getStr(c["type"])) {
 				inConnectors = true
 			}
 		}
@@ -453,68 +454,139 @@ type subnetCloudRow struct {
 }
 
 type subnetCloudSummary struct {
-	Rule           string           `json:"rule"`
-	Total          Metric           `json:"all_subnets"`
-	Underutilized  Metric           `json:"all_underutilized"`
-	Overutilized   Metric           `json:"all_overutilized"`
-	Clouds         []subnetCloudRow `json:"by_cloud"`
-	Unconfirmed    Metric           `json:"cloud_unconfirmed"`
-	NotCloud       Metric           `json:"not_cloud"`
-	UnconfirmedWhy string           `json:"cloud_unconfirmed_meaning"`
+	Rule          string           `json:"rule"`
+	Total         Metric           `json:"all_subnets"`
+	Underutilized Metric           `json:"all_underutilized"`
+	Overutilized  Metric           `json:"all_overutilized"`
+	Clouds        []subnetCloudRow `json:"by_cloud"`
+	Unconfirmed   Metric           `json:"cloud_unknown"`
+	NotCloud      Metric           `json:"not_cloud"`
+	UnknownWhy    string           `json:"cloud_unknown_meaning"`
 }
 
-// readSubnetClouds counts subnets per cloud and band with server-side totals,
-// so the summary never stops at one 5,000-row read. The cloud is read from
-// discovery_metadata.discoverer, which can be filtered on together with
-// utilization; the cloud tag is counted too, and a subnet tagged as a cloud
-// whose discoverer doesn't say so lands in cloud_unconfirmed. On the live demo
-// tenant on 2026-11-25 the two agreed (AWS 587, Azure 221, GCP 168).
+// subnetCloudPage and subnetCloudRowCap bound the cloud-row reads: a tenant
+// with more cloud subnets than the cap gets an incomplete summary, never a
+// short one.
+const (
+	subnetCloudPage   = 1000
+	subnetCloudRowCap = 20000
+)
+
+// subnetRowsAll pages through every subnet matching params, a page at a time.
+func (s *Service) subnetRowsAll(ctx context.Context, params map[string]string) ([]map[string]any, Metric) {
+	var out []map[string]any
+	for off := 0; ; off += subnetCloudPage {
+		p := map[string]string{"_fields": "id,cidr,utilization,tags,discovery_metadata",
+			"_limit": fmt.Sprint(subnetCloudPage), "_offset": fmt.Sprint(off), "_is_total_size_needed": "true"}
+		for k, v := range params {
+			p[k] = v
+		}
+		if ctx.Err() != nil {
+			return nil, metricFail(MetricUnknown, reasonTimeUp)
+		}
+		rows, body, err := s.Rest.GetPageStrictCtx(ctx, subnetPath, p)
+		if err != nil {
+			return nil, readFailure(ctx, 0, err)
+		}
+		total := pageTotalSize(body, -1)
+		if total < 0 {
+			return nil, metricFail(MetricUnknown, "Infoblox didn't send a total for the subnet list.")
+		}
+		if total > subnetCloudRowCap {
+			return nil, metricFail(MetricIncomplete, fmt.Sprintf("There are more than %d cloud subnets, more than this summary reads.", subnetCloudRowCap))
+		}
+		for _, r := range rows {
+			out = append(out, asMap(r))
+		}
+		if len(rows) == 0 || off+subnetCloudPage >= total {
+			return out, metricOK(len(out))
+		}
+	}
+}
+
+// readSubnetClouds counts subnets per cloud and band. The overall totals are
+// server-side counts. The cloud rows are every subnet that carries a cloud tag
+// or a cloud discoverer name, fetched and joined by id, then each classified
+// with cloudOfSubnet, the rule the subnet lists use (tag first, then the
+// discoverer). Subtracting tag and discoverer totals could not see subnets
+// that have one but not the other. On the live demo tenant on 2026-11-25 the
+// tag and discoverer counts agreed (AWS 587, Azure 221, GCP 168).
 func (s *Service) readSubnetClouds(ctx context.Context) subnetCloudSummary {
 	out := subnetCloudSummary{
-		Rule:           fmt.Sprintf("Underutilized is under %d%% used, overutilized is %d%% or more. Every subnet is counted, IPv4 /29 to /32 and IPv6 included.", subnetUnderPct, subnetOverPct),
-		UnconfirmedWhy: "Subnets with a cloud tag whose discovery record doesn't name that cloud, so their bands aren't in any cloud row.",
+		Rule:       fmt.Sprintf("Underutilized is under %d%% used, overutilized is %d%% or more. Every subnet is counted, IPv4 /29 to /32 and IPv6 included.", subnetUnderPct, subnetOverPct),
+		UnknownWhy: "Subnets with a cloud tag or discoverer name that couldn't be matched to AWS, Azure or GCP.",
 	}
-	rows := make([]subnetCloudRow, len(subnetClouds))
-	tagged := make([]Metric, len(subnetClouds))
+	var discs []string
+	for _, c := range subnetClouds {
+		discs = append(discs, "discovery_metadata.discoverer=='"+c.Discoverer+"'")
+	}
+	sets := []map[string]string{{"_filter": strings.Join(discs, " or ")}}
+	for _, c := range subnetClouds {
+		sets = append(sets, map[string]string{"_tfilter": `"external_provider/` + strings.ToLower(c.Name) + `"~''`})
+	}
+	rows := make([][]map[string]any, len(sets))
+	ms := make([]Metric, len(sets))
 	tasks := []func(){
 		func() { out.Total = s.restCountCtx(ctx, subnetPath, nil) },
 		func() { out.Underutilized = s.restCountCtx(ctx, subnetPath, subnetFilter(subnetUnderFilter)) },
 		func() { out.Overutilized = s.restCountCtx(ctx, subnetPath, subnetFilter(subnetOverFilter)) },
 	}
-	for i, c := range subnetClouds {
-		rows[i].Cloud = c.Name
-		disc := "discovery_metadata.discoverer=='" + c.Discoverer + "'"
-		tasks = append(tasks,
-			func() { rows[i].Subnets = s.restCountCtx(ctx, subnetPath, subnetFilter(disc)) },
-			func() { rows[i].Underutilized = s.restCountCtx(ctx, subnetPath, subnetFilter(disc, subnetUnderFilter)) },
-			func() { rows[i].Overutilized = s.restCountCtx(ctx, subnetPath, subnetFilter(disc, subnetOverFilter)) },
-			func() {
-				tagged[i] = s.restCountCtx(ctx, subnetPath,
-					map[string]string{"_tfilter": `"external_provider/` + strings.ToLower(c.Name) + `"~''`})
-			},
-		)
+	for i, p := range sets {
+		tasks = append(tasks, func() { rows[i], ms[i] = s.subnetRowsAll(ctx, p) })
 	}
 	runBounded(tasks...)
-	out.Clouds = rows
-	unconfirmed, inClouds := 0, 0
-	var bad *Metric
-	for i := range rows {
-		for _, m := range []Metric{rows[i].Subnets, tagged[i]} {
-			if !m.OK() && bad == nil {
-				bad = &m
-			}
+
+	bad := out.Total
+	for _, m := range ms {
+		if !m.OK() && bad.OK() {
+			bad = m
 		}
-		inClouds += rows[i].Subnets.N()
-		unconfirmed += max(0, tagged[i].N()-rows[i].Subnets.N())
 	}
-	if !out.Total.OK() && bad == nil {
-		bad = &out.Total
-	}
-	if bad != nil {
-		out.Unconfirmed, out.NotCloud = *bad, *bad
+	if !bad.OK() {
+		out.Clouds = make([]subnetCloudRow, len(subnetClouds))
+		for i, c := range subnetClouds {
+			out.Clouds[i] = subnetCloudRow{Cloud: c.Name, Subnets: bad, Underutilized: bad, Overutilized: bad}
+		}
+		out.Unconfirmed, out.NotCloud = bad, bad
 		return out
 	}
-	out.Unconfirmed = metricOK(unconfirmed)
-	out.NotCloud = metricOK(max(0, out.Total.N()-inClouds-unconfirmed))
+	seen := map[string]bool{}
+	count := map[string]*[3]int{}
+	for _, c := range subnetClouds {
+		count[c.Name] = &[3]int{}
+	}
+	unknown, inCloud := 0, 0
+	for _, set := range rows {
+		for _, r := range set {
+			id := getStr(r["id"])
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			inCloud++
+			cloud, _ := cloudOfSubnet(r)
+			n, ok := count[cloud]
+			if !ok {
+				unknown++
+				continue
+			}
+			n[0]++
+			if u, ok := asMap(r["utilization"])["utilization"].(float64); ok {
+				if inUnderBand(int(u)) {
+					n[1]++
+				}
+				if inOverBand(int(u)) {
+					n[2]++
+				}
+			}
+		}
+	}
+	for _, c := range subnetClouds {
+		n := count[c.Name]
+		out.Clouds = append(out.Clouds, subnetCloudRow{Cloud: c.Name,
+			Subnets: metricOK(n[0]), Underutilized: metricOK(n[1]), Overutilized: metricOK(n[2])})
+	}
+	out.Unconfirmed = metricOK(unknown)
+	out.NotCloud = metricOK(max(0, out.Total.N()-inCloud))
 	return out
 }

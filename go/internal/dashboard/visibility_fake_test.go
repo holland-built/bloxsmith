@@ -34,8 +34,9 @@ type fakeSubnet struct {
 	CIDR  int
 	Util  int
 	Cloud string // "AWS", "Azure", "GCP" or ""
-	// TagOnly: the subnet carries the cloud tag but no discoverer name.
-	TagOnly bool
+	// Only: "tag" when the subnet carries the cloud tag but no discoverer
+	// name, "disc" for the reverse, "" for both.
+	Only string
 }
 
 type visTenant struct {
@@ -214,13 +215,32 @@ var fakeDiscoverer = map[string]string{"AWS": "Amazon Web Services", "Azure": "M
 func (f *visTenant) subnets(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("_filter")
 	tfilter := r.URL.Query().Get("_tfilter")
-	n := 0
-	for _, sn := range f.Subnets {
-		if fakeSubnetMatches(t, sn, filter, tfilter) {
-			n++
+	var rows []map[string]any
+	for i, sn := range f.Subnets {
+		if !fakeSubnetMatches(t, sn, filter, tfilter) {
+			continue
 		}
+		row := map[string]any{"id": "subnet/" + strconv.Itoa(i), "cidr": sn.CIDR,
+			"utilization": map[string]any{"utilization": sn.Util}, "tags": map[string]any{}}
+		if sn.Cloud != "" && sn.Only != "disc" {
+			row["tags"] = map[string]any{"external_provider/" + strings.ToLower(sn.Cloud): "x"}
+		}
+		if sn.Cloud != "" && sn.Only != "tag" {
+			row["discovery_metadata"] = map[string]any{"discoverer": fakeDiscoverer[sn.Cloud]}
+		}
+		rows = append(rows, row)
 	}
-	writeResultsWithPage(w, nil, map[string]any{"total_size": strconv.Itoa(n)})
+	n := len(rows)
+	off, _ := strconv.Atoi(r.URL.Query().Get("_offset"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("_limit"))
+	rows = rows[min(off, n):]
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	if !strings.Contains(r.URL.Query().Get("_fields"), "tags") {
+		rows = nil
+	}
+	writeResultsWithPage(w, rows, map[string]any{"total_size": strconv.Itoa(n)})
 }
 
 func fakeSubnetMatches(t *testing.T, sn fakeSubnet, filter, tfilter string) bool {
@@ -228,7 +248,7 @@ func fakeSubnetMatches(t *testing.T, sn fakeSubnet, filter, tfilter string) bool
 		ok := false
 		for c := range fakeDiscoverer {
 			if tfilter == fmt.Sprintf(`"external_provider/%s"~''`, strings.ToLower(c)) {
-				ok = sn.Cloud == c
+				ok = sn.Cloud == c && sn.Only != "disc"
 			}
 		}
 		if !ok {
@@ -237,6 +257,14 @@ func fakeSubnetMatches(t *testing.T, sn fakeSubnet, filter, tfilter string) bool
 	}
 	if filter == "" {
 		return true
+	}
+	if strings.Contains(filter, " or ") && !strings.HasPrefix(filter, "(") && !strings.Contains(filter, " and ") {
+		for _, alt := range strings.Split(filter, " or ") {
+			if fakeSubnetMatches(t, sn, alt, "") {
+				return true
+			}
+		}
+		return false
 	}
 	for _, clause := range strings.Split(filter, " and ") {
 		// get_subnets' "(cidr<=28 or cidr>=33)" small-link rule: not modelled.
@@ -258,7 +286,7 @@ func fakeSubnetMatches(t *testing.T, sn fakeSubnet, filter, tfilter string) bool
 		case "discovery_metadata.discoverer":
 			want := strings.Trim(val, "'")
 			disc := fakeDiscoverer[sn.Cloud]
-			if sn.TagOnly {
+			if sn.Only == "tag" {
 				disc = ""
 			}
 			if op != "==" || disc != want {
