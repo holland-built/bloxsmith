@@ -786,14 +786,20 @@ a.text-link,
    A button group that picks one thing is a row of pills, and the picked one is
    a soft blue tint with a faint ring. Overview's tiles (.ov-kpi) keep their
    own pick. Text stays --color-txt, so 4.5:1 holds on the tint. */
+/* 22px, not 999px: a one-line button (up to 44px tall) is still a full pill,
+   and anything taller (a two-line choice, a row that wraps) gets rounded
+   corners instead of being drawn as an oval. */
 main button[aria-pressed]:not(.ov-kpi, .as-row),
 main .pick {
-  border-radius: 999px;
+  border-radius: 22px;
 }
-main :has(> button[aria-pressed]:not(.ov-kpi, .as-row)):not(ul, li, [role="group"]) {
-  border-radius: 999px;
+main :has(> button[aria-pressed]:not(.ov-kpi, .as-row)):not(ul, li, nav, [role="group"]) {
+  border-radius: 22px;
 }
 main ul:has(> li > button[aria-pressed]) button { border-radius: var(--radius-control) }
+/* A side list of choices (Automate's jobs) is a list, not pills: its rows are
+   split by straight lines. */
+main nav > button[aria-pressed]:not(.ov-kpi, .as-row) { border-radius: 0 }
 main button[aria-pressed="true"]:not(.ov-kpi),
 main .pick-on {
   background: var(--color-pick-bg) !important;
