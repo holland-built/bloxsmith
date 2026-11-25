@@ -191,3 +191,35 @@ func TestCSPAuditCountBadBodyIsNotZero(t *testing.T) {
 		}
 	}
 }
+
+// The total read and the people read share one limit: never more than
+// auditCountWorkers requests at the audit log at once, ceiling probe included.
+func TestCSPAuditCountSharesOneRequestLimit(t *testing.T) {
+	var inFlight, most int32
+	page := `{"results":[` + strings.TrimSuffix(strings.Repeat(`{"user_name":"a@b.c","http_code":200},`, auditCountPage), ",") + `]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&inFlight, 1)
+		defer atomic.AddInt32(&inFlight, -1)
+		for {
+			m := atomic.LoadInt32(&most)
+			if n <= m || atomic.CompareAndSwapInt32(&most, m, n) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		off, _ := strconv.Atoi(r.URL.Query().Get("_offset"))
+		if off >= auditCountCeiling {
+			_, _ = w.Write([]byte(`{"results":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(page))
+	}))
+	defer srv.Close()
+	out := (&Service{Rest: rest.New(srv.URL, rest.NewAuth("k", nil))}).CSPAuditCount(context.Background(), time.Now())
+	if out["status"] != "ok" || out["total"] != auditCountCeiling {
+		t.Fatalf("got %v", out)
+	}
+	if m := atomic.LoadInt32(&most); m > auditCountWorkers {
+		t.Fatalf("%d requests at once, limit %d", m, auditCountWorkers)
+	}
+}

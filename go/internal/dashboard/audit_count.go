@@ -25,7 +25,7 @@ const (
 	auditCountPage          = 1000             // the most rows one request may ask for
 	auditCountCeiling       = 50000            // stop here
 	auditCountBudgetDefault = 20 * time.Second // stop here too
-	auditCountWorkers       = 4                // pages read at the same time
+	auditCountWorkers       = 4                // requests at the audit log at once, both reads together
 )
 
 // auditCountBudget is a variable only so a test can shorten it.
@@ -74,12 +74,15 @@ func (s *Service) CSPAuditCount(ctx context.Context, now time.Time) map[string]a
 	people := strings.Join(append([]string{window}, auditKindClauses("people")...), " and ")
 	bctx, cancel := context.WithTimeout(ctx, auditCountBudget)
 	defer cancel()
+	// One limit for both reads, so the audit log never sees more than
+	// auditCountWorkers requests from this count at once.
+	slots := make(chan struct{}, auditCountWorkers)
 
 	var all, ppl auditTally
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); all = s.countAudit(ctx, bctx, window, "subject_type,http_code", true) }()
-	go func() { defer wg.Done(); ppl = s.countAudit(ctx, bctx, people, "user_name", false) }()
+	go func() { defer wg.Done(); all = s.countAudit(ctx, bctx, slots, window, "subject_type,http_code", true) }()
+	go func() { defer wg.Done(); ppl = s.countAudit(ctx, bctx, slots, people, "user_name", false) }()
 	wg.Wait()
 
 	for _, t := range []auditTally{all, ppl} {
@@ -101,9 +104,19 @@ func (s *Service) CSPAuditCount(ctx context.Context, now time.Time) map[string]a
 	return out
 }
 
-// countAudit pages one filter. ctx is the request, bctx the time budget.
-func (s *Service) countAudit(ctx, bctx context.Context, filter, fields string, outcomes bool) auditTally {
+// countAudit pages one filter. ctx is the request, bctx the time budget, and
+// every request first takes one of the shared slots.
+func (s *Service) countAudit(ctx, bctx context.Context, slots chan struct{}, filter, fields string, outcomes bool) auditTally {
 	get := func(off, limit int) auditPage {
+		select {
+		case slots <- struct{}{}:
+			defer func() { <-slots }()
+		case <-bctx.Done():
+			if ctx.Err() == nil {
+				return auditPage{timeout: true}
+			}
+			return auditPage{bad: true}
+		}
 		body, st, err := s.Rest.GetExCtx(bctx, "/api/auditlog/v1/logs", map[string]string{
 			"_filter": filter, "_limit": strconv.Itoa(limit), "_offset": strconv.Itoa(off),
 			"_order_by": "created_at desc", "_fields": fields,
