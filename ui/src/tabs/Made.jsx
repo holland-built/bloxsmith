@@ -90,7 +90,7 @@ export default function Made() {
     <div className="w-full px-6 py-5 flex flex-col gap-4">
       <div>
         <PageTitle className="mb-1">Made with Bloxsmith</PageTitle>
-        <TabIntro>Everything Bloxsmith made and deleted, newest first. Items made with Bloxsmith carry the tag made_by=bloxsmith in Infoblox where it allows tags.</TabIntro>
+        <TabIntro>Everything Bloxsmith made and deleted, newest first. Bloxsmith marks the items it makes in Infoblox, where Infoblox allows it.</TabIntro>
       </div>
       <ReadOnlyNote ro={ro} what="Delete still shows what it would remove and whether Bloxsmith made it. The final Delete is off." />
       <Card panelId="made-all" title="What Bloxsmith made and deleted" span={6} note="from Automate, Get an address, Site lists and the Editor">

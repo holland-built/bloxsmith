@@ -24,7 +24,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['assets', 'Assets'],
   ['incidents', 'Incidents'],
   ['audit', 'Audit'],
-  ['changes', 'What changed'],
+  ['changes', 'Changes'],
   ['automate', 'Automate'],
   ['provision', 'Provision'],
   ['selfservice', 'Get an address'],

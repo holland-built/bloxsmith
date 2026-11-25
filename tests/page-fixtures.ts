@@ -782,7 +782,7 @@ const DEMO_STATUS = {
   unlocked: true,
   steps: [
     { ID: 'ip', Says: 'Take the next free IP in the demo network' },
-    { ID: 'vm', Says: 'Build a NIOS-X VM on Proxmox' },
+    { ID: 'vm', Says: 'Build the demo server on Proxmox' },
   ],
   runs: [],
 };

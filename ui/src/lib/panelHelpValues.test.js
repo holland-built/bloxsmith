@@ -790,7 +790,7 @@ const CLAIMS = [
     panel: 'security-response-summary',
     says: /The first figure counts unticked critical events, red when there are any/,
     file: SECURITY,
-    proofs: [{ re: /label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 \? COLORS\.crit : undefined/, expect: 'the unacked-critical tile is COLORS.crit (red) only when above zero' }],
+    proofs: [{ re: /label: 'Critical, not yet reviewed', value: unackedCrit, color: unackedCrit > 0 \? COLORS\.crit : undefined/, expect: 'the unacked-critical tile is COLORS.crit (red) only when above zero' }],
   },
   {
     panel: 'security-lookalike-domains',

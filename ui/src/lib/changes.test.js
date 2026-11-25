@@ -344,6 +344,12 @@ test('the banner never promises "everything that changed"', () => {
   assert.doesNotMatch(notice.text, /\ball\b/i)
 })
 
+test('the banner says it in plain words (GUI audit C13)', () => {
+  const notice = capNotice({ truncated: true, count: 500, rows: [] })
+  assert.doesNotMatch(notice.text, /\brows?\b|capped|events?\b/i)
+  assert.match(notice.text, /changes/)
+})
+
 test('an untruncated response raises no banner at all', () => {
   assert.equal(capNotice({ truncated: false, rows: [] }).capped, false)
   assert.equal(capNotice({ rows: [] }).capped, false)

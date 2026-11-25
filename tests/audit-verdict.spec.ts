@@ -39,7 +39,7 @@ test.describe('CSP Portal Audit — loads on mount', () => {
       fulfillJson(route, { rows: [CSP_ROW], count: 1, truncated: false, status: 'ok' }),
     );
     await page.goto('/#audit');
-    const card = page.getByText('Infoblox Portal Audit', { exact: true }).locator('..').locator('..');
+    const card = page.getByText('Infoblox Portal audit', { exact: true }).locator('..').locator('..');
     // No fill(), no click() — the row must already be there.
     await expect(card.getByText('alice@example.com')).toBeVisible();
     await expect(card.getByText('zone/corp.example.com')).toBeVisible();
@@ -50,7 +50,7 @@ test.describe('CSP Portal Audit — loads on mount', () => {
       fulfillJson(route, { rows: [], count: 0, truncated: false, status: 'error' }),
     );
     await page.goto('/#audit');
-    const card = page.getByText('Infoblox Portal Audit', { exact: true }).locator('..').locator('..');
+    const card = page.getByText('Infoblox Portal audit', { exact: true }).locator('..').locator('..');
     await expect(card.getByText(/Portal audit information is unavailable/i)).toBeVisible();
   });
 
@@ -59,7 +59,7 @@ test.describe('CSP Portal Audit — loads on mount', () => {
       fulfillJson(route, { rows: [], count: 0, truncated: false, status: 'ok' }),
     );
     await page.goto('/#audit');
-    const card = page.getByText('Infoblox Portal Audit', { exact: true }).locator('..').locator('..');
+    const card = page.getByText('Infoblox Portal audit', { exact: true }).locator('..').locator('..');
     await expect(card.getByText(/nothing here yet/i)).toBeVisible();
     await expect(card.getByText(/Portal audit information is unavailable/i)).toHaveCount(0);
   });

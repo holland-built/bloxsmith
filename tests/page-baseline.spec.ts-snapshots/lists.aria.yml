@@ -13,8 +13,8 @@
       - text: Paste them in How many, from the top
       - spinbutton "How many, from the top": /\d+/
       - button "Get both lists"
-    - text: Sites never to add, one per line (kept for this tenant)
-    - textbox "Sites never to add, one per line (kept for this tenant)":
+    - text: Sites never to add, one per line (kept for this account)
+    - textbox "Sites never to add, one per line (kept for this account)":
       - /placeholder: e.g. example.com
     - button "Save never-add list" [disabled]
     - group "The list they go into":

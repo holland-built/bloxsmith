@@ -50,35 +50,35 @@ test.describe('Security tab — hub/security availability branching', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, HUB_SECURITY_DEAD));
     await page.goto('/#security');
 
-    const heroCard = page.locator('text=Threat Events by hour').locator('..').locator('..');
+    const heroCard = page.locator('text=Threat events by hour').locator('..').locator('..');
     await expect(heroCard.getByText(/threat information is unavailable/i)).toBeVisible();
     await expect(heroCard.getByText('Threat event information is unavailable')).toBeVisible();
 
-    const summaryCard = page.locator('text=Response Summary').locator('..').locator('..');
+    const summaryCard = page.locator('text=Response summary').locator('..').locator('..');
     await expect(summaryCard.getByText(/threat information is unavailable/i)).toBeVisible();
 
-    const inboxCard = page.locator('text=Triage Inbox').locator('..').locator('..');
+    const inboxCard = page.locator('text=Triage inbox').locator('..').locator('..');
     await expect(inboxCard.getByText(/threat information is unavailable/i)).toBeVisible();
 
     // One dead feed must never blank the rest of the Security tab — an
     // unrelated card still renders.
-    await expect(page.getByText('Lookalike Domains')).toBeVisible();
+    await expect(page.getByText('Lookalike domains')).toBeVisible();
   });
 
   test('genuinely empty dns_event feed renders the normal empty state, not unavailable', async ({ page }) => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, HUB_SECURITY_EMPTY_OK));
     await page.goto('/#security');
 
-    const heroCard = page.locator('text=Threat Events by hour').locator('..').locator('..');
+    const heroCard = page.locator('text=Threat events by hour').locator('..').locator('..');
     await expect(heroCard.getByText(/threat information is unavailable/i)).toHaveCount(0);
 
-    const summaryCard = page.locator('text=Response Summary').locator('..').locator('..');
+    const summaryCard = page.locator('text=Response summary').locator('..').locator('..');
     await expect(summaryCard.getByText(/threat information is unavailable/i)).toHaveCount(0);
     // Response Summary still renders its zeroed KPI grid rather than a
     // feed-unavailable card.
-    await expect(summaryCard.getByText('Unacked Critical')).toBeVisible();
+    await expect(summaryCard.getByText('Critical, not yet reviewed', { exact: false })).toBeVisible();
 
-    const inboxCard = page.locator('text=Triage Inbox').locator('..').locator('..');
+    const inboxCard = page.locator('text=Triage inbox').locator('..').locator('..');
     await expect(inboxCard.getByText(/threat information is unavailable/i)).toHaveCount(0);
   });
 });

@@ -19,6 +19,9 @@
 .chg-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 @media (max-width: 760px) {
   .chg-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  /* One place for "Needs action" on every tile: its own line under the label,
+     whatever the label's length (GUI audit C15). */
+  .chg-tile .ov-kpi-top { flex-direction: column; align-items: flex-start; gap: 2px }
   .chg-tile:nth-child(2) { border-right: 0 }
   .chg-tile:nth-child(-n + 2) { border-bottom: 1px solid var(--ov-line) }
 }
@@ -26,6 +29,13 @@
 /* The row limit: a grey note under the tiles, never a warning colour. */
 .chg-cap { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ov-ink2) }
 .chg-cap-i { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--ov-line2); font-size: 11px; font-style: italic; color: var(--ov-muted) }
+
+.chg-do { color: var(--ov-ink) }
+
+/* The key to the coloured dots that start each row of the feed. */
+.chg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 8px 8px; font-size: 12.5px; color: var(--ov-muted) }
+.chg-legend > span { display: inline-flex; align-items: center; gap: 6px }
+.chg-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50% }
 
 .chg-span { padding: 0 8px 8px; font-size: 13px; color: var(--ov-muted) }
 .chg-span b { color: var(--ov-ink); font-weight: 600 }
@@ -37,6 +47,5 @@
 /* A narrow phone: the label, its state and the short line wrap, never cut. */
 @media (max-width: 420px) {
   .chg-tile { padding-inline: 10px }
-  .chg-tile .ov-kpi-top { flex-wrap: wrap; gap: 2px 6px }
   .chg-line { overflow: visible; white-space: normal; text-overflow: clip }
 }

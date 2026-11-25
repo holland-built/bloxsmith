@@ -23,6 +23,7 @@ import {
   withinWindow,
 } from '../lib/changes.js'
 import Tip from '../components/Tip.jsx'
+import { actionWord, resourceWord } from '../lib/auditWords.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import './Overview.css'
 import './Changes.css'
@@ -106,7 +107,7 @@ export default function Changes() {
     <div className="w-full px-6 py-5">
       <div className="ov-look chg">
         <div className="ov-head">
-          <PageTitle>What changed</PageTitle>
+          <PageTitle>Changes</PageTitle>
           <span className="chg-pills">
             {/* The window the page can honestly claim: "Last 24 hours" only
                 when the feed was not cut off at its row limit. */}
@@ -153,6 +154,7 @@ export default function Changes() {
             ) : (
               <>
                 <SpanBar summary={summary} />
+                <DotLegend />
                 <Feed groups={groups} />
               </>
             )}
@@ -189,11 +191,17 @@ const TILE_LABEL = {
 // numbers stay ink however large, so a busy night never shouts.
 const ALARM = new Set(['deletions', 'failures'])
 
+// What "Needs action" asks for, on the two tiles that can say it (GUI audit C14).
+const TILE_DO = {
+  deletions: (n) => (n === 1 ? 'Check it was meant' : 'Check they were meant'),
+  failures: (n) => (n === 1 ? 'See why it failed' : 'See why they failed'),
+}
+
 function tileLine(cell, listed) {
   if (cell.state === 'unknown') return cell.key === 'newActors' && !/cap/.test(cell.reason) ? 'too little history' : 'older changes not checked'
   if (cell.key === 'outOfHours') return `${OOH_START_HOUR}:00–0${OOH_END_HOUR}:00 local`
   if (cell.key === 'newActors') return cell.state === 'populated' ? cell.actors.map(shortActor).join(', ') : 'none in the recent half'
-  if (cell.atLeast) return 'older changes not checked'
+  if (cell.atLeast) return `at least ${cell.count}; older changes not checked`
   return `of ${listed} ${listed === 1 ? 'change' : 'changes'}`
 }
 
@@ -205,7 +213,7 @@ function BandCell({ cell, listed }) {
   const tip = (
     <>
       {unknown && <>{NOT_ENOUGH_HISTORY[0].toUpperCase() + NOT_ENOUGH_HISTORY.slice(1)}: {cell.reason}. </>}
-      {cell.atLeast && <>At least this many: the {ROW_CAP}-row limit was reached, so older rows were not read. </>}
+      {cell.atLeast && <>At least this many: only the newest {ROW_CAP} changes were checked, so older ones weren&apos;t. </>}
       {cell.caption}
       {cell.key === 'newActors' && populated && <span className="ov-tip-sub">{cell.actors.join(', ')}</span>}
     </>
@@ -232,6 +240,7 @@ function BandCell({ cell, listed }) {
         )}
       </span>
       <span className="ov-muted ov-small chg-line">{tileLine(cell, listed)}</span>
+      {alarm && <span className="ov-small chg-line chg-do" data-changes-do="">{TILE_DO[cell.key](cell.count)}</span>}
     </Tip>
   )
 }
@@ -262,6 +271,27 @@ function SpanBar({ summary }) {
         <b>{summary.listed}</b> {summary.listed === 1 ? 'change' : 'changes'} · <b>{summary.groups}</b> {summary.groups === 1 ? 'object' : 'objects'} ·{' '}
         {summary.earliestClock}–{summary.latestClock}
       </Tip>
+    </div>
+  )
+}
+
+// What the coloured dot at the start of each row means (GUI audit C20). Grey
+// covers both of the dot's quieter hidden labels in FeedRow, Routine and No result.
+function DotLegend() {
+  const { COLORS } = useChartTheme()
+  const keys = [
+    [COLORS.crit, 'Deleted or failed'],
+    [COLORS.warn, 'Out of hours'],
+    [COLORS.other, 'Everything else'],
+  ]
+  return (
+    <div data-changes-legend="" className="chg-legend">
+      {keys.map(([colour, word]) => (
+        <span key={word}>
+          <span aria-hidden="true" className="chg-dot" style={{ background: colour }} />
+          {word}
+        </span>
+      ))}
     </div>
   )
 }
@@ -312,7 +342,7 @@ function Feed({ groups }) {
           key={group.resource}
           data-changes-group={group.resource}
           role="rowgroup"
-          aria-label={`${group.resource} — ${groupCounts(group)}`}
+          aria-label={`${resourceWord(group.resource)} — ${groupCounts(group)}`}
         >
           <GroupHeader group={group} />
           {group.rows.map((row, i) => (
@@ -345,7 +375,7 @@ function GroupHeader({ group }) {
         className="col-span-2 text-note font-semibold truncate"
         title={group.resource}
       >
-        <span role="heading" aria-level={3}>{group.resource}</span>
+        <span role="heading" aria-level={3}>{resourceWord(group.resource) || group.resource}</span>
       </span>
       <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-note chg-dim truncate">
         {groupCounts(group)}
@@ -365,7 +395,7 @@ function FeedRow({ row }) {
   // by ear or in greyscale. The word behind the colour rides with it. It is not
   // simply the Flags column repeated: a routine row has an EMPTY Flags cell and
   // a grey rail, and "Routine" is the only place that state is ever stated.
-  const railWord = del || failed ? 'Critical' : ooh ? 'Out of hours' : noResult ? 'No result' : 'Routine'
+  const railWord = del || failed ? 'Deleted or failed' : ooh ? 'Out of hours' : noResult ? 'No result' : 'Routine'
   // Both halves of this timestamp read in the browser's zone. The header above
   // says "Local time" and means it for the date as well as the clock.
   const date = formatDate(row.ts)
@@ -384,7 +414,7 @@ function FeedRow({ row }) {
         <span className="chg-dim mr-1.5">{date}</span>
         {formatClock(row.ts)}
       </span>
-      <span role="cell" aria-colindex={COL.action} className="truncate" style={del ? { color: COLORS.crit } : undefined} title={row.action}>{row.action || '—'}</span>
+      <span role="cell" aria-colindex={COL.action} className="truncate" style={del ? { color: COLORS.crit } : undefined} title={row.action}>{actionWord(row.action) || '—'}</span>
       {/* Success is the normal case, so it stays grey; only a failure is coloured. */}
       <span role="cell" aria-colindex={COL.result} className={`truncate${failed ? '' : ' chg-dim'}`} style={failed ? { color: COLORS.crit } : undefined} title={row.result}>
         {row.result || 'not reported'}

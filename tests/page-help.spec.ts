@@ -57,7 +57,7 @@ test('nothing is sent to the AI until the notice is understood, then it shrinks 
   await page.route('**/api/query', (r) => { asked.push(r.request().postDataJSON().question); return r.fulfill({ json: { answer: 'ok' } }); });
   await page.goto('/#ai?q=' + encodeURIComponent('Which hosts are offline?'));
   const box = page.getByRole('textbox', { name: 'Ask about your network' });
-  await expect(page.getByRole('note')).toContainText('to api.groq.com. Nothing is sent until you ask.');
+  await expect(page.getByRole('note')).toContainText('to Groq (api.groq.com). Nothing is sent until you ask.');
   await expect(box).toHaveValue('Which hosts are offline?');
   await box.press('Enter');
   await page.waitForTimeout(300);
@@ -65,7 +65,7 @@ test('nothing is sent to the AI until the notice is understood, then it shrinks 
   await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeDisabled();
 
   await page.getByRole('button', { name: 'Allow AI questions' }).click();
-  await expect(page.getByText('Questions send tenant data to api.groq.com.')).toBeVisible();
+  await expect(page.getByText('Questions send details from this account to Groq.')).toBeVisible();
   await box.press('Enter');
   await expect.poll(() => asked).toEqual(['Which hosts are offline?']);
 
@@ -83,7 +83,7 @@ test('a different AI provider asks again', async ({ page }) => {
     return r.fulfill({ json: { ...base, active: 'baseline-tenant', unlocked: true, ready: true, exists: true, llmSendsTo: 'llm.example.net' } });
   });
   await page.goto('/#ai');
-  await expect(page.getByRole('note')).toContainText('to llm.example.net.');
+  await expect(page.getByRole('note')).toContainText('to the AI service at llm.example.net.');
   await expect(page.getByRole('button', { name: 'Allow AI questions' })).toBeVisible();
 });
 

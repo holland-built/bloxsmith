@@ -90,9 +90,9 @@ test.describe('a service the tenant does not own', () => {
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('3 panels hidden');
     await expect(row).toContainText('no threat-defense service detected');
-    await expect(page.getByText('Threat Events by hour')).toHaveCount(0);
-    await expect(page.getByText('Response Summary')).toHaveCount(0);
-    await expect(page.getByText('Triage Inbox')).toHaveCount(0);
+    await expect(page.getByText('Threat events by hour')).toHaveCount(0);
+    await expect(page.getByText('Response summary')).toHaveCount(0);
+    await expect(page.getByText('Triage inbox')).toHaveCount(0);
 
     // Unmapped Security panels are not part of the group and must not move.
     //
@@ -108,13 +108,13 @@ test.describe('a service the tenant does not own', () => {
     // that the panel had already resolved to its error state by the time this
     // ran, instead of still showing a skeleton. The ambiguity was always there;
     // the timing is only what made it show up.
-    await expect(page.getByText('Lookalike Domains')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'CTEM Exposure' })).toBeVisible();
+    await expect(page.getByText('Lookalike domains')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Exposure by severity' })).toBeVisible();
 
     await showAnyway(page).click();
-    await expect(page.getByText('Threat Events by hour')).toBeVisible();
-    await expect(page.getByText('Response Summary')).toBeVisible();
-    await expect(page.getByText('Triage Inbox')).toBeVisible();
+    await expect(page.getByText('Threat events by hour')).toBeVisible();
+    await expect(page.getByText('Response summary')).toBeVisible();
+    await expect(page.getByText('Triage inbox')).toBeVisible();
   });
 
   test('DHCP Leases hides on Network without disturbing the IPAM panels', async ({ page }) => {
@@ -150,7 +150,7 @@ test.describe('fail open — every non-authoritative answer hides nothing', () =
     await expect(hiddenRow(page)).toHaveCount(0);
 
     await page.goto('/#security');
-    await expect(page.getByText('Threat Events by hour')).toBeVisible();
+    await expect(page.getByText('Threat events by hour')).toBeVisible();
     await expect(hiddenRow(page)).toHaveCount(0);
 
     await page.goto('/#network');
