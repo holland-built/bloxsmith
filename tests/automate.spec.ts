@@ -217,12 +217,12 @@ test('make a new network: pick a block and say how many devices need an address'
   await expect(job.getByRole('button', { name: 'Preview' })).toBeDisabled();
   // 180 devices needs a /24.
   await devices.fill('180');
-  await expect(job.locator('[data-size-words]')).toHaveText('/24: 256 addresses, 254 usable by devices');
+  await expect(job.locator('[data-size-words]')).toHaveText('256 addresses, 254 usable by devices');
   // 1 device still gets the smallest network offered, a /29.
   await devices.fill('1');
-  await expect(job.locator('[data-size-words]')).toHaveText('/29: 8 addresses, 6 usable by devices');
+  await expect(job.locator('[data-size-words]')).toHaveText('8 addresses, 6 usable by devices');
   await devices.fill('50');
-  await expect(job.locator('[data-size-words]')).toHaveText('/26: 64 addresses, 62 usable by devices');
+  await expect(job.locator('[data-size-words]')).toHaveText('64 addresses, 62 usable by devices');
   await job.getByRole('button', { name: 'Preview' }).click();
   await expect(job.locator('[data-desk-preview]')).toContainText('This will make 10.9.4.0/26 (64 addresses) in 10.9.0.0/16 (65,536 addresses), lab-block.');
   expect(posted[0]).toEqual({ job: 'network', dry: true, input: { space: 'ipam/ip_space/a', block_id: 'ipam/address_block/b1', cidr: 26, name: '' } });
@@ -253,7 +253,7 @@ test('make a new network for AWS: preview lists the held addresses, fewer device
 
   // None: 1 device still gets a /29 and nothing is held.
   await devices.fill('1');
-  await expect(job.locator('[data-size-words]')).toHaveText('/29: 8 addresses, 6 usable by devices');
+  await expect(job.locator('[data-size-words]')).toHaveText('8 addresses, 6 usable by devices');
   await job.getByRole('button', { name: 'Preview' }).click();
   await expect(job.locator('[data-desk-preview]')).toContainText('This will make 10.9.4.32/29 (8 addresses)');
   await expect(job.locator('[data-held]')).toHaveCount(0);
@@ -262,22 +262,22 @@ test('make a new network for AWS: preview lists the held addresses, fewer device
   // AWS: the /29 becomes a /28, the smallest AWS allows, and 1 device cannot get a /29.
   // The size line counts the 3 addresses AWS keeps.
   await forWhat.getByRole('radio', { name: 'AWS' }).check();
-  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 11 usable by devices after 3 held back');
+  await expect(job.locator('[data-size-words]')).toHaveText('16 addresses, 11 usable by devices after 3 held back');
   // 12 devices plus AWS's 3 do not fit a /28 (14), so the size goes up to /27.
   await devices.fill('12');
-  await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
+  await expect(job.locator('[data-size-words]')).toHaveText('32 addresses, 27 usable by devices after 3 held back');
   await devices.fill('1');
-  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 11 usable by devices after 3 held back');
+  await expect(job.locator('[data-size-words]')).toHaveText('16 addresses, 11 usable by devices after 3 held back');
   // An empty box is no size, cloud or not.
   await devices.fill('');
   await expect(job.getByRole('button', { name: 'Preview' })).toBeDisabled();
   // A count typed before picking the cloud is kept, and the size grows to fit it.
   await forWhat.getByRole('radio', { name: 'None' }).check();
   await devices.fill('12');
-  await expect(job.locator('[data-size-words]')).toHaveText('/28: 16 addresses, 14 usable by devices');
+  await expect(job.locator('[data-size-words]')).toHaveText('16 addresses, 14 usable by devices');
   await forWhat.getByRole('radio', { name: 'AWS' }).check();
   await expect(devices).toHaveValue('12');
-  await expect(job.locator('[data-size-words]')).toHaveText('/27: 32 addresses, 27 usable by devices after 3 held back');
+  await expect(job.locator('[data-size-words]')).toHaveText('32 addresses, 27 usable by devices after 3 held back');
   await devices.fill('1');
   await expect(job.getByText('AWS does not allow a network smaller than /28')).toBeVisible();
   await job.getByRole('button', { name: 'Preview' }).click();

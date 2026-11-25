@@ -1,6 +1,6 @@
 // The job desk: pick a job, answer a few plain questions, check what will be
 // made, Build. Every Build is recorded with the exact Infoblox IDs it made
-// (go/internal/runs), so "Your recent changes" can remove exactly that.
+// (go/internal/runs), so "Made here" can remove exactly that.
 //
 // The older pages (Provision, Self-Service, Demo server) stay as they are.
 // Changes made there are not recorded here and cannot be removed from here.
@@ -161,16 +161,23 @@ function SpacePicker({ value, onChange, want }) {
   return (
     <Field label="IP space">
       {suggested.length > 0 && (
-        <div data-space-suggestions="" className="flex flex-wrap gap-2">
-          {suggested.map((s) => (
-            <button key={s.id} type="button" onClick={() => { picked.current = true; onChange(s.id, s.name) }}
-              aria-pressed={s.id === value}
-              className="text-left px-3 py-1.5 rounded-control border"
-              style={s.id === value ? { borderColor: COLORS.accent, background: 'var(--color-line-2)' } : undefined}>
-              <span className="block text-copy text-txt">{s.name || s.id}</span>
-              <span className="block text-note text-muted">{s.reason || 'IP space'}</span>
-            </button>
-          ))}
+        // A suggestion, not a choice already made: it says so, and pressing
+        // one picks it in the list below (owner's reviewer, 2026-11-25).
+        <div className="flex flex-col gap-1">
+          <span id="space-suggested">Suggested:</span>
+          <div data-space-suggestions="" role="group" aria-labelledby="space-suggested" className="flex flex-wrap gap-2">
+            {suggested.map((s) => (
+              <button key={s.id} type="button" onClick={() => { picked.current = true; onChange(s.id, s.name) }}
+                aria-pressed={s.id === value}
+                aria-describedby="space-suggest-does"
+                className="text-left px-3 py-1.5 rounded-control border"
+                style={s.id === value ? { borderColor: COLORS.accent, background: 'var(--color-line-2)' } : undefined}>
+                <span className="block text-copy text-txt">{s.name || s.id}</span>
+                <span className="block text-note text-muted">{s.reason || 'IP space'}</span>
+              </button>
+            ))}
+          </div>
+          <span id="space-suggest-does" className="text-note text-dim">Press to use this IP space. It is picked in the list below.</span>
         </div>
       )}
       <FilterSelect
@@ -241,7 +248,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
         onPreview={() => flow.runPreview(input())}
         onApply={() => flow.runBuild(input(), (j) => {
           const got = j.run?.objects?.find((o) => o.kind === 'address')?.label
-          return got ? `Done. ${got} is reserved. Remove it any time from Your recent changes.` : 'Done.'
+          return got ? `Done. ${got} is reserved. Remove it any time from Made here.` : 'Done.'
         })}
         applyLabel="Build it"
         error={flow.error}
@@ -380,7 +387,7 @@ function DnsJob({ onBuilt, ro, start = {} }) {
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
-        onApply={() => flow.runBuild(input(), () => `Done. ${full} now points to ${value.trim()}. Remove it any time from Your recent changes.`)}
+        onApply={() => flow.runBuild(input(), () => `Done. ${full} now points to ${value.trim()}. Remove it any time from Made here.`)}
         applyLabel="Build it"
         error={flow.error}
         message={flow.message}
@@ -461,7 +468,7 @@ function BranchJob({ onBuilt, ro, start = {} }) {
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
-        onApply={() => flow.runBuild(input(), () => `Done. Branch office ${site} is set up. Remove it any time from Your recent changes.`)}
+        onApply={() => flow.runBuild(input(), () => `Done. Branch office ${site} is set up. Remove it any time from Made here.`)}
         applyLabel="Build it"
         error={flow.error}
         message={flow.message}
@@ -522,8 +529,8 @@ function DemoJob({ onBuilt, ro, start = {} }) {
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
         onApply={() => flow.runBuild(input(), () => server
-          ? `The site and sample names for ${customer} are ready. The demo server is building now; its progress shows in Your recent changes.`
-          : `Done. The demo for ${customer} is ready. Remove it any time from Your recent changes.`)}
+          ? `The site and sample names for ${customer} are ready. The demo server is building now; its progress shows in Made here.`
+          : `Done. The demo for ${customer} is ready. Remove it any time from Made here.`)}
         applyLabel="Build it"
         error={flow.error}
         message={flow.message}
@@ -635,7 +642,7 @@ function NetworkJob({ onBuilt, ro, start = {} }) {
         onApply={() => flow.runBuild(input(), (j) => {
           const got = j.run?.objects?.find((o) => o.kind === 'subnet')?.label
           const kept = (j.run?.objects ?? []).filter((o) => o.kind === 'address').length
-          const done = got ? `Done. ${got} is made${kept ? `, with ${kept} address${kept === 1 ? '' : 'es'} held back for ${cloudDef.name}` : ''}. Remove it any time from Your recent changes.` : 'Done.'
+          const done = got ? `Done. ${got} is made${kept ? `, with ${kept} address${kept === 1 ? '' : 'es'} held back for ${cloudDef.name}` : ''}. Remove it any time from Made here.` : 'Done.'
           return j.run?.note ? `${done} ${j.run.note}` : done
         })}
         applyLabel="Build it"
@@ -710,7 +717,7 @@ function when(iso) {
   return formatWhen(t)
 }
 
-// One row of Your recent changes, with its own Remove: first a list of what
+// One row of Made here, with its own Remove: first a list of what
 // is still there, then a second click to delete it.
 // A demo server's own state, read from its run on the Demo server side.
 const DEMO_WORDS = {
@@ -845,7 +852,7 @@ function RecentChanges({ api, ro }) {
     return () => clearInterval(t)
   }, [building, refetch])
   return (
-    <Card panelId="automate-recent" title="Your recent changes" span={6}
+    <Card panelId="automate-recent" title="Made here" span={6}
       note="only changes made on this page; each one can be removed">
       {list.length === 0
         ? (!api.loading && !api.error && <Empty>Nothing built here yet.</Empty>)
@@ -867,6 +874,13 @@ function RecentChanges({ api, ro }) {
   )
 }
 
+// The two buttons at the top. Greyed while their box is empty (not the bright
+// accent, which looked pressable), and one width, so both boxes end together.
+const TOP_BTN = 'text-copy font-medium px-4 py-1.5 rounded-control min-w-[7.5rem] disabled:cursor-not-allowed'
+const topBtnStyle = (off) => (off
+  ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
+  : { background: COLORS.accent, color: COLORS.onAccent })
+
 // Find: anything typed opens the existing search page, which looks it up in
 // IPAM, DNS and the logs at once. Read-only.
 function FindBox() {
@@ -876,8 +890,7 @@ function FindBox() {
       onSubmit={(e) => { e.preventDefault(); if (q.trim()) window.location.hash = `dossier?q=${encodeURIComponent(q.trim())}` }}>
       <input {...MACHINE_TEXT} aria-label="Find an address, network or name" className={`${FIELD_CLS} flex-1`}
         value={q} onChange={(e) => setQ(e.target.value)} placeholder="IP, network or name" />
-      <button type="submit" disabled={!q.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
-        style={{ background: COLORS.accent, color: COLORS.onAccent }}>Find item</button>
+      <button type="submit" disabled={!q.trim()} className={TOP_BTN} style={topBtnStyle(!q.trim())}>Find item</button>
     </form>
   )
 }
@@ -907,10 +920,9 @@ function PlanBox({ onOpen }) {
       <form aria-label="Describe it in one sentence" className="flex gap-2" onSubmit={ask}>
         <input aria-label="Or describe it in one sentence" className={`${FIELD_CLS} flex-1`} value={text}
           onChange={(e) => setText(e.target.value)} placeholder="Or describe the job" />
-        <button type="submit" disabled={busy || !text.trim()} className="text-copy font-medium px-4 py-1.5 rounded-control"
-          style={{ background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Planning…' : 'Plan it'}</button>
+        <button type="submit" disabled={busy || !text.trim()} className={TOP_BTN} style={topBtnStyle(busy || !text.trim())}>{busy ? 'Planning…' : 'Plan it'}</button>
       </form>
-      {error && <p className="text-note" style={{ color: COLORS.crit }}>{error}</p>}
+      {error && <p role="alert" className="text-note" style={{ color: COLORS.crit }}>{error}</p>}
       {plan && (
         <div data-plan="" className="rounded-control border border-border bg-field px-3 py-2 flex flex-col gap-2 text-copy">
           {plan.jobs.length === 0

@@ -72,8 +72,9 @@ test('Editor: a subnet create preview says what it checked and what it skipped',
   await page.route('**/api/edit/subnet', (route) =>
     json(route, { ok: true, dry_run: true, would_create: { address: '10.16.9.0', cidr: 24 }, checked: CHECKED, skipped: [SKIP] }));
   await page.goto('/#editor?type=subnet');
-  await page.getByRole('textbox', { name: 'Address block ID *' }).fill('ipam/address_block/9');
-  await page.getByRole('spinbutton', { name: 'How many devices need an address? *' }).fill('200');
+  await page.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/baseline-1');
+  await page.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/baseline-1');
+  await page.getByRole('spinbutton', { name: 'How many devices need an address?' }).fill('200');
   await page.getByRole('button', { name: 'Preview' }).first().click();
   await expectChecked(page.locator('[data-editor-result]'));
 });

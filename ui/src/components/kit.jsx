@@ -198,8 +198,9 @@ export function ColumnHeading({ id, children }) {
 // A count too small for the smallest size offered gets that smallest size; a
 // count too big for the largest says so instead of picking a size.
 // held: addresses a cloud keeps in every network, counted on top of the devices.
-export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, held = 0, label = 'How many devices need an address?', required = false, disabled, title, error = '' }) {
+export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, held = 0, label = 'How many devices need an address?', required = false, disabled, title, error = '', ...rest }) {
   const errId = useId()
+  const inputId = useId()
   const [typed, setTyped] = useState(null)
   // The size this box last handed the form. When the form empties the size
   // itself (a reset), what was typed goes too, so the box never shows a count
@@ -246,21 +247,21 @@ export function DevicesInput({ prefix, onPrefix, minPrefix = 1, maxPrefix = 30, 
   } else if (current) {
     note = held ? sizeLine(current).replace(/[\d,]+ usable by devices$/, `${(usableCount(current) - held).toLocaleString('en-US')} usable by devices after ${held} held back`) : sizeLine(current)
   }
+  // A form row like the others (data-field): in a two-column form the label
+  // sits on the left and the box, its note and its error on the right.
   return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col gap-1 text-note text-muted">
-        <span>{label}{required ? ' *' : ''}</span>
-        <input {...MACHINE_TEXT} type="number" min="1" step="1" inputMode="numeric" className={`${FIELD_CLS} w-full disabled:opacity-60`}
-          value={shown} disabled={disabled} title={title} data-devices-input=""
-          aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
-          onChange={(e) => {
-            const v = e.target.value
-            setTyped(v)
-            const p = fit(v)
-            sent.current = p == null ? '' : String(p)
-            onPrefix(sent.current)
-          }} />
-      </label>
+    <div data-field="" className="flex flex-col gap-1 text-note text-muted" {...rest}>
+      <label htmlFor={inputId}>{label}{required ? ' *' : ''}</label>
+      <input {...MACHINE_TEXT} id={inputId} type="number" min="1" step="1" inputMode="numeric" className={`${FIELD_CLS} w-full disabled:opacity-60`}
+        value={shown} disabled={disabled} title={title} data-devices-input=""
+        aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
+        onChange={(e) => {
+          const v = e.target.value
+          setTyped(v)
+          const p = fit(v)
+          sent.current = p == null ? '' : String(p)
+          onPrefix(sent.current)
+        }} />
       {note && <p data-size-words="" aria-live="polite" className={`text-note ${tooMany || tooBig ? 'text-warn' : 'text-muted'}`}>{note}</p>}
       {error && <FieldError id={errId}>{error}</FieldError>}
     </div>

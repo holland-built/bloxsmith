@@ -237,7 +237,7 @@ function stubDelete(page: Page, body: Json) {
 test.describe('Editor delete — already_gone must not read as "deleted"', () => {
   async function armAndDelete(page: Page) {
     await page.goto('/#editor?type=dns_zone&id=zone-1');
-    const btn = page.getByRole('button', { name: 'Delete DNS Zone' });
+    const btn = page.getByRole('button', { name: 'Delete DNS zone' });
     await btn.click();
     await page.getByRole('button', { name: 'Permanently delete' }).click();
   }
@@ -246,7 +246,7 @@ test.describe('Editor delete — already_gone must not read as "deleted"', () =>
     await stubDelete(page, { ok: true, already_gone: false });
     await armAndDelete(page);
 
-    await expect(page.getByText('DNS Zone deleted.', { exact: true })).toBeVisible();
+    await expect(page.getByText('DNS zone deleted.', { exact: true })).toBeVisible();
     await expect(page.getByText(/already gone/i)).toHaveCount(0);
   });
 
@@ -254,8 +254,8 @@ test.describe('Editor delete — already_gone must not read as "deleted"', () =>
     await stubDelete(page, { ok: true, already_gone: true });
     await armAndDelete(page);
 
-    await expect(page.getByText(/DNS Zone was already gone — nothing was deleted\./)).toBeVisible();
-    await expect(page.getByText('DNS Zone deleted.', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/DNS zone was already gone — nothing was deleted\./)).toBeVisible();
+    await expect(page.getByText('DNS zone deleted.', { exact: true })).toHaveCount(0);
   });
 });
 

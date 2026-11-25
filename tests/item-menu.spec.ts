@@ -237,7 +237,7 @@ test('network: Edit and Add a DHCP range open the Editor, filled in from the ite
   await expect(item.locator('[data-item-details]')).toContainText('baseline-net-c');
   await item.getByRole('link', { name: 'Add a DHCP range' }).click();
   await expect(page).toHaveURL(/#editor\?type=dhcp_range&space=ipam%2Fip_space%2Fbaseline-1&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10\.30\.0\.0%2F24$/);
-  await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(page.getByRole('combobox', { name: 'IP space' })).toHaveValue('ipam/ip_space/baseline-1');
 });
 
 test('address: Reserve it opens a new host in the Editor with the address filled in', async ({ page }) => {
@@ -331,16 +331,16 @@ test('network: Add a DHCP range from a table finds the IP space from the network
   await page.goto('/#network');
   await pick(page, networkLink(page), 'Add a DHCP range');
   await expect(page).toHaveURL(/#editor\?type=dhcp_range&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10\.30\.0\.0%2F24$/);
-  await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(page.getByRole('combobox', { name: 'IP space' })).toHaveValue('ipam/ip_space/baseline-1');
   await expect(page.locator('[data-editor-form]')).toContainText('For network 10.30.0.0/24');
 });
 
 test('network: Add a DHCP range says so when the IP space cannot be found', async ({ page }) => {
   await page.route('**/api/item/network?**', (r) => r.fulfill(json({ availability: 'error', reason: 'Infoblox did not answer.' })));
   await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fbaseline-3&network=10.30.0.0%2F24');
-  await expect(page.getByRole('textbox', { name: 'IP Space' })).toHaveValue('');
+  await expect(page.getByRole('combobox', { name: 'IP space' })).toHaveValue('');
   await expect(page.locator('[data-editor-form]')).toContainText('For network 10.30.0.0/24');
-  await expect(page.locator('[data-editor-form]')).toContainText("The IP space of 10.30.0.0/24 could not be filled in. Type its ID, which starts ipam/ip_space/.");
+  await expect(page.locator('[data-editor-form]')).toContainText("The IP space of 10.30.0.0/24 could not be filled in. Pick it from the list.");
 });
 
 test('Get an address: following a second link with another space picks that link\'s subnet', async ({ page }) => {
@@ -390,19 +390,19 @@ async function rangeLookups(page: Page) {
 test('Editor: a new subnet in the hash replaces the IP space the last lookup filled in', async ({ page }) => {
   await rangeLookups(page);
   await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fa');
-  const box = page.getByRole('textbox', { name: 'IP Space' });
+  const box = page.getByRole('combobox', { name: 'IP space' });
   await expect(box).toHaveValue('ipam/ip_space/a');
   await setHash(page, '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fb');
   await expect(box).toHaveValue('ipam/ip_space/b');
 });
 
-test('Editor: an IP space typed by hand stays when the subnet in the hash changes', async ({ page }) => {
+test('Editor: an IP space picked by hand stays when the subnet in the hash changes', async ({ page }) => {
   await rangeLookups(page);
   await page.goto('/#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fa');
-  const box = page.getByRole('textbox', { name: 'IP Space' });
+  const box = page.getByRole('combobox', { name: 'IP space' });
   await expect(box).toHaveValue('ipam/ip_space/a');
-  await box.fill('ipam/ip_space/typed');
+  await box.selectOption('ipam/ip_space/baseline-1');
   await setHash(page, '#editor?type=dhcp_range&subnet=ipam%2Fsubnet%2Fb');
   await page.waitForTimeout(500);
-  await expect(box).toHaveValue('ipam/ip_space/typed');
+  await expect(box).toHaveValue('ipam/ip_space/baseline-1');
 });

@@ -3015,8 +3015,12 @@ export function PreviewApply({
       onClick={onPreview}
       disabled={busy || disabled}
       aria-describedby={why ? needsId : undefined}
-      className={PA_BTN}
-      style={{ background: COLORS.accent, color: COLORS.onAccent }}
+      // Greyed, not faded: white on a faded blue was hard to read in the light
+      // theme. The field fill with dim words reads in both themes.
+      className="px-3.5 py-1.5 rounded-control text-copy font-medium disabled:cursor-not-allowed"
+      style={busy || disabled
+        ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
+        : { background: COLORS.accent, color: COLORS.onAccent }}
     >
       {busy ? busyLabel : previewLabel}
     </button>

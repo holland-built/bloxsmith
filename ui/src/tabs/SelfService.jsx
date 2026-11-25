@@ -16,7 +16,7 @@ import { useSpaceOptions } from '../lib/spaceOptions.js'
 import { withSize } from '../lib/sizes.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { ColumnHeading, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
-import { COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, FormHint, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { COLORS, deletedMsg, Empty, FetchError, FieldError, FIELD_CLS, FormHint, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import FilterSelect from '../components/FilterSelect.jsx'
 import { readLast, saveLast, stillThere } from '../lib/lastAllocate.js'
@@ -224,6 +224,7 @@ function AllocatePanel() {
   const dnsIncomplete = dnsOn && single && !dnsName
   const device = deviceOn && single
   const macOk = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(mac.trim())
+  const macBad = mac.trim() !== '' && !macOk
   // Reserve takes the exact address the preview showed, so what is reserved is
   // what was previewed; the server refuses if it was taken meanwhile.
   const previewed = flow.stale ? '' : flow.previewReply?.fixed_address?.address || ''
@@ -345,18 +346,21 @@ function AllocatePanel() {
         </label>
         {device && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+            <div className="flex flex-col gap-1">
             <Field label="Device MAC address">
               <input {...MACHINE_TEXT}
                 className={inputCls}
                 value={mac}
                 onChange={(e) => { setMac(e.target.value); flow.markStale() }}
                 placeholder="e.g. aa:bb:cc:dd:ee:ff"
-                aria-invalid={mac.trim() !== '' && !macOk}
+                aria-invalid={macBad}
+                aria-describedby={macBad ? 'ss-mac-error' : undefined}
               />
             </Field>
-            <p className="text-note text-muted self-end">
-              {mac.trim() && !macOk ? 'Six pairs of letters or digits, like aa:bb:cc:dd:ee:ff.' : 'Preview checks this device has no reservation yet.'}
-            </p>
+            {/* A bad MAC says why under the box, in red, linked to it (DESIGN.md Fields). */}
+            {macBad && <FieldError id="ss-mac-error">Six pairs of letters or digits, like aa:bb:cc:dd:ee:ff.</FieldError>}
+            </div>
+            {!macBad && <p className="text-note text-muted self-end">Preview checks this device has no reservation yet.</p>}
           </div>
         )}
       </div>
@@ -381,7 +385,7 @@ function AllocatePanel() {
             />
             <CheckedAgainst res={flow.previewReply} />
           </>
-        ) : !flow.message && <FormHint missing={spacesApi.error && spaces.length === 0 && 'IP spaces'}>Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.</FormHint>}
+        ) : !flow.message && <FormHint missing={spacesApi.error && spaces.length === 0 && 'IP spaces'}>Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate, which appears after Preview.</FormHint>}
       </PreviewApply>
     </section>
     } />

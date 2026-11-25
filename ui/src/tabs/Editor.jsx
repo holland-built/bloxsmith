@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ColumnHeading, DevicesInput, FormColumns, PageTitle, ReadOnlyNote } from '../components/kit.jsx'
 import { PrefixInput } from '../components/PrefixInput.jsx'
-import { COLORS, deletedMsg, Empty, FieldError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { COLORS, deletedMsg, Empty, FetchError, FieldError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import FilterSelect from '../components/FilterSelect.jsx'
+import { SHARE_PICKER, useApi } from '../lib/api.js'
+import { withSize } from '../lib/sizes.js'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useReadOnly } from '../lib/writeTarget.js'
 import { tokenFetch } from '../lib/authFetch.js'
@@ -17,39 +20,48 @@ import { writeFailureText } from '../lib/writeFailure.js'
 const inputCls = `${FIELD_CLS} w-full`
 const MISSING = 'Fill in this field.'
 
+// Things Infoblox knows by an internal ID (a DNS view, an address block, an
+// IP space) are picked from a list by name, never typed (owner: "a name, not
+// an internal id"). kind 'view' | 'block' | 'space' send the ID; 'space_name'
+// sends the space's name, which is what the block-tags form looks up.
+const TAGS_HINT = 'name=value, separated by commas'
 const FIELD_SPECS = {
   dns_zone: {
-    label: 'DNS Zone', endpoint: '/api/edit/dns_zone', fields: [
+    label: 'DNS zone', endpoint: '/api/edit/dns_zone', fields: [
       { key: 'fqdn', label: 'Zone name', kind: 'text', placeholder: 'e.g. zone.example.com.', required: true },
-      { key: 'view', label: 'DNS view ID', kind: 'text', placeholder: 'view id', required: true },
+      { key: 'view', label: 'DNS view', kind: 'view', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
-      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text', placeholder: 'e.g. env=prod,team=noc' },
+      { key: 'tags', label: 'Tags', kind: 'text', placeholder: 'e.g. env=prod, team=noc', hint: TAGS_HINT },
     ],
   },
   subnet: {
     label: 'Subnet', endpoint: '/api/edit/subnet', fields: [
-      { key: 'block_id', label: 'Address block ID', kind: 'text', placeholder: 'block id', required: true },
+      // The IP space only narrows the block list (listOnly: never sent). Two
+      // blocks can share an address in different spaces, and the block list
+      // does not say which space each is in, so blocks are picked within one.
+      { key: 'block_space', label: 'IP space', kind: 'space', required: true, listOnly: true },
+      { key: 'block_id', label: 'Address block', kind: 'block', required: true },
       { key: 'cidr', label: 'How many devices need an address?', kind: 'devices', required: true },
       { key: 'name', label: 'Name', kind: 'text' },
       { key: 'comment', label: 'Comment', kind: 'text' },
-      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
+      { key: 'tags', label: 'Tags', kind: 'text', hint: TAGS_HINT },
     ],
   },
   address_block: {
-    label: 'Address Block', endpoint: '/api/edit/address_block', fields: [
+    label: 'Address block', endpoint: '/api/edit/address_block', fields: [
       { key: 'address', label: 'Address', kind: 'text', placeholder: 'e.g. 10.20.0.0', required: true },
       { key: 'cidr', label: 'How many devices need an address?', kind: 'devices', required: true },
-      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space', required: true },
+      { key: 'space', label: 'IP space', kind: 'space', required: true },
       { key: 'comment', label: 'Comment', kind: 'text' },
-      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
+      { key: 'tags', label: 'Tags', kind: 'text', hint: TAGS_HINT },
     ],
   },
   dhcp_range: {
-    label: 'DHCP Range', endpoint: '/api/edit/dhcp_range', fields: [
+    label: 'DHCP range', endpoint: '/api/edit/dhcp_range', fields: [
       { key: 'start', label: 'Start address', kind: 'text', placeholder: 'e.g. 10.20.0.100', required: true },
       { key: 'end', label: 'End address', kind: 'text', placeholder: 'e.g. 10.20.0.200', required: true },
-      { key: 'space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space', required: true },
-      { key: 'tags', label: 'Tags (key=value, key2=value2)', kind: 'text' },
+      { key: 'space', label: 'IP space', kind: 'space', required: true },
+      { key: 'tags', label: 'Tags', kind: 'text', hint: TAGS_HINT },
     ],
   },
   host: {
@@ -60,31 +72,67 @@ const FIELD_SPECS = {
     ],
   },
   tags: {
-    label: 'Tags (block re-tag)', endpoint: '/api/retag/block', fields: [
+    label: 'Tags on address blocks', endpoint: '/api/retag/block', fields: [
       { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
       { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
       { key: 'address', label: 'Block address', kind: 'text', placeholder: 'e.g. 10.20.0.0' },
       { key: 'cidr', label: 'Block size: the number after the slash', kind: 'prefix' },
       { key: 'status', label: 'Status', kind: 'text', placeholder: 'e.g. available' },
-      { key: 'ip_space', label: 'IP Space', kind: 'text', placeholder: 'e.g. my-ip-space' },
+      { key: 'ip_space', label: 'IP space', kind: 'space_name' },
     ],
   },
 }
 
 const EDITOR_TYPES = [
-  { key: 'dns_zone', label: 'DNS Zone' },
+  { key: 'dns_zone', label: 'DNS zone' },
   { key: 'subnet', label: 'Subnet' },
-  { key: 'address_block', label: 'Address Block' },
-  { key: 'dhcp_range', label: 'DHCP Range' },
+  { key: 'address_block', label: 'Address block' },
+  { key: 'dhcp_range', label: 'DHCP range' },
   { key: 'host', label: 'Host' },
   { key: 'tags', label: 'Tags' },
 ]
+
+// "DNS zone" stays "DNS zone", "Address block" reads "address block": lower
+// case except acronyms, for use inside a sentence.
+const nounOf = (label) => label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
+
+const PICK_WORDS = { view: 'DNS views', block: 'address blocks', space: 'IP spaces', space_name: 'IP spaces' }
+
+// A list picker for one ID field. A value the list does not hold (the list
+// failed, or an item from a search) stays shown as itself, never dropped.
+function PickField({ f, value, onChange, api, options, error, disabled, title, optional, placeholder }) {
+  const lid = `ed-l-${f.key}`
+  const eid = `ed-missing-${f.key}`
+  const opts = value && !options.some((o) => o.value === value) ? [...options, { value, label: value }] : options
+  // An empty required pick is marked on the list itself, as a typed box is:
+  // aria-invalid (which also draws the red outline) and a link to the reason.
+  // FilterSelect takes no such props, so they are set on its list here.
+  const ref = useRef(null)
+  useEffect(() => {
+    const sel = ref.current?.querySelector('select')
+    if (!sel) return
+    if (error) { sel.setAttribute('aria-invalid', 'true'); sel.setAttribute('aria-describedby', eid) }
+    else { sel.removeAttribute('aria-invalid'); sel.removeAttribute('aria-describedby') }
+  }, [error, eid])
+  return (
+    <div ref={ref} data-field="" data-field-key={f.key} role="group" aria-labelledby={lid} title={title}
+      className="text-note text-muted flex flex-col gap-1">
+      <span id={lid}>{f.label}{optional ? ' (optional)' : ''}</span>
+      <div className="flex flex-col gap-1">
+        <FilterSelect label={f.label} value={value} onChange={onChange} options={opts} disabled={disabled}
+          placeholder={placeholder || (api.loading ? 'Loading…' : `Pick ${f.kind === 'view' ? 'a DNS view' : f.kind === 'block' ? 'an address block' : 'an IP space'}`)} />
+        {error && <FieldError id={eid}>{error}</FieldError>}
+        <FetchError error={api.error} stale={options.length > 0} what={PICK_WORDS[f.kind]} />
+      </div>
+    </div>
+  )
+}
 
 const EDIT_UPDATE_TYPES = ['dns_zone', 'subnet', 'dhcp_range', 'host']
 
 // Fields Infoblox won't change on an existing item through this form (the
 // server's update ignores them), so they are read-only while updating.
-const UPDATE_FIXED = { dns_zone: ['fqdn', 'view'], subnet: ['block_id', 'cidr'], dhcp_range: ['space'] }
+const UPDATE_FIXED = { dns_zone: ['fqdn', 'view'], subnet: ['block_space', 'block_id', 'cidr'], dhcp_range: ['space'] }
 
 // What each type's search actually matches; Infoblox refuses a partial match
 // on subnet and range addresses, so those take a full IP.
@@ -169,8 +217,7 @@ function FindExisting({ type, label, picked, busy, onPick, onClear, initialQ = '
     autoPick.current = ''
     if (it) onPick(it)
   }, [state, initialQ, onPick])
-  // "DNS Zone" reads "DNS zone": lower case except acronyms.
-  const noun = label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
+  const noun = nounOf(label)
   const seen = {}
   ;(fresh ? state.items : []).forEach((it) => { seen[it.label] = (seen[it.label] || 0) + 1 })
 
@@ -246,7 +293,9 @@ export default function Editor() {
   const formRef = useRef(null)
   const [missingTick, setMissingTick] = useState(0)
   useEffect(() => {
-    if (missingKey) formRef.current?.querySelector(`[data-field-key="${missingKey}"] input`)?.focus()
+    // A picker's list, not its search box, is the field; a typed box is its input.
+    const row = missingKey && formRef.current?.querySelector(`[data-field-key="${missingKey}"]`)
+    if (row) (row.querySelector('select:not(:disabled)') ?? row.querySelector('input:not(:disabled)'))?.focus()
   }, [missingKey, missingTick])
 
   // Re-seed the form whenever the type changes so deep-link params prefill it.
@@ -285,7 +334,29 @@ export default function Editor() {
     !rangeLookup.pending && !rangeLookup.space && !fields.space
 
   const spec = FIELD_SPECS[type]
+  // Each list is read only while a form that needs it is open.
+  const needs = (kind) => !!spec?.fields.some((f) => f.kind === kind)
+  const viewsApi = useApi(needs('view') ? '/api/dns/zones' : null, SHARE_PICKER)
+  // A new subnet's blocks come from the IP space picked above them. An existing
+  // subnet's block cannot change, so all blocks are read only to name it.
   const isUpdate = !!editId.trim() && EDIT_UPDATE_TYPES.includes(type)
+  const blockSpace = fields.block_space || ''
+  const blocksApi = useApi(!needs('block') ? null
+    : blockSpace ? `/api/ipam/blocks?space=${encodeURIComponent(blockSpace)}`
+    : isUpdate ? '/api/ipam/blocks' : null)
+  const spacesApi = useApi(needs('space') || needs('space_name') ? '/api/ipam/spaces' : null, SHARE_PICKER)
+  const pickOptions = {
+    view: (viewsApi.data?.views ?? []).map((v) => ({ value: v.id, label: v.name || v.id })),
+    block: (blocksApi.data?.blocks ?? []).map((b) => ({
+      value: b.id,
+      label: b.address ? `${withSize(`${b.address}${b.cidr ? `/${b.cidr}` : ''}`)}${b.name ? ` — ${b.name}` : ''}` : b.name || b.id,
+    })),
+    space: (spacesApi.data?.spaces ?? []).map((sp) => ({ value: sp.id, label: sp.name || sp.id })),
+    space_name: (spacesApi.data?.spaces ?? []).filter((sp) => sp.name).map((sp) => ({ value: sp.name, label: sp.name })),
+  }
+  const pickApi = { view: viewsApi, block: blocksApi, space: spacesApi, space_name: spacesApi }
+  // Forms with a required field mark the others "(optional)", as Get an address does.
+  const anyRequired = !!spec?.fields.some((f) => f.required)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
   const isV6 = String(fields.address || '').includes(':')
 
@@ -313,6 +384,7 @@ export default function Editor() {
         // A field emptied on purpose is sent empty, which clears it.
         if (raw == null || raw === '') { body[f.key] = f.key === 'tags' ? {} : ''; return }
       } else if (raw == null || raw === '') return
+      if (f.listOnly) return
       if (f.key === 'tags') body.tags = parseTags(raw)
       else if (f.key === 'addresses') body.addresses = hostAddresses(raw, fields.spaces)
       else if (f.kind === 'devices' || f.kind === 'prefix') body[f.key] = Number(raw)
@@ -470,7 +542,7 @@ export default function Editor() {
           right (owner, 2026-11-11). Below lg they stack, form first. */}
       {spec ? <FormColumns form={
         <section aria-labelledby="editor-form-h" data-editor-form="" ref={formRef}>
-        <ColumnHeading id="editor-form-h">{`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}</ColumnHeading>
+        <ColumnHeading id="editor-form-h">{type === 'tags' ? 'Change the tags on address blocks' : isUpdate ? `Change this ${nounOf(spec.label)}` : `New ${nounOf(spec.label)}`}</ColumnHeading>
         <div data-form-cols="" className="flex flex-col gap-3">
           {EDIT_DELETE_TYPES.includes(type) && (
             <FindExisting
@@ -499,28 +571,46 @@ export default function Editor() {
               }}
             />
           )}
-          <label data-field="" className="text-note text-muted flex flex-col gap-1">
-            <span>ID of an existing one (leave blank to make a new one)</span>
-            <input {...MACHINE_TEXT} className={inputCls} value={editId} placeholder="existing object id — enables update/delete" onChange={(e) => { disarmDelete(); setEditId(e.target.value); setLoaded(null); markStale() }} />
-          </label>
 
           {type === 'dhcp_range' && rangeNet && <p className="text-note text-muted">For network {rangeNet}.</p>}
-          {spec.fields.map((f) => (f.kind === 'devices' || f.kind === 'prefix' ? (
-            <div key={`${type}-${f.key}`} data-field="" data-field-key={f.key}>
-              {/* A device count is only for making a new IPv4 network. A size
-                  that names an existing one, or an IPv6 size, is typed exactly. */}
-              {f.kind === 'devices' && !isUpdate && !isV6
-                ? <DevicesInput label={f.label} required={f.required} prefix={fields[f.key] ?? ''}
-                    onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''} />
-                : <PrefixInput label={f.kind === 'prefix' ? f.label : 'Size: the number after the slash'} required={f.required}
-                    prefix={fields[f.key] ?? ''} family={isV6 ? 6 : 4}
-                    onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''}
-                    disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
-                    title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />}
+          {rangeSpaceMissed && (
+            <p role="status" className="text-note" style={{ color: COLORS.warn }}>
+              The IP space of {rangeNet || 'this network'} could not be filled in. Pick it from the list.
+            </p>
+          )}
+          {spec.fields.map((f) => (f.kind in PICK_WORDS ? (
+            <PickField key={`${type}-${f.key}`} f={f} value={fields[f.key] || ''}
+              onChange={(v) => {
+                setField(f.key, v)
+                // A block from the old space is not in the new one.
+                if (f.key === 'block_space') setFields((prev) => ({ ...prev, block_id: '' }))
+              }}
+              api={pickApi[f.kind]} options={pickOptions[f.kind]} optional={anyRequired && !f.required}
+              error={missingKey === f.key ? MISSING : ''}
+              // While a new space's blocks load, or after that load fails, the
+              // list may still hold the old space's blocks, so it cannot be picked from.
+              placeholder={f.kind === 'block' && !isUpdate && !blockSpace ? 'Pick an IP space first' : undefined}
+              disabled={(isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)) ||
+                (f.kind === 'block' && !isUpdate && (!blockSpace || blocksApi.loading || !!blocksApi.error))}
+              title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />
+          ) : f.kind === 'devices' && !isUpdate && !isV6 ? (
+            // A device count is only for making a new IPv4 network. It is a
+            // form row of its own (data-field), so it lines up with the others.
+            <DevicesInput key={`${type}-${f.key}`} data-field-key={f.key} label={f.label} prefix={fields[f.key] ?? ''}
+              onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''} />
+          ) : f.kind === 'devices' || f.kind === 'prefix' ? (
+            // A size that names an existing one, or an IPv6 size, is typed
+            // exactly. Its label sits above the box, in line with the boxes.
+            <div key={`${type}-${f.key}`} data-field-key={f.key}>
+              <PrefixInput label={`${f.kind === 'prefix' ? f.label : 'Size: the number after the slash'}${anyRequired && !f.required ? ' (optional)' : ''}`}
+                prefix={fields[f.key] ?? ''} family={isV6 ? 6 : 4}
+                onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''}
+                disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
+                title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />
             </div>
           ) : (
             <label key={f.key} data-field="" data-field-key={f.key} className="text-note text-muted flex flex-col gap-1">
-              <span>{f.label}{f.required ? ' *' : ''}</span>
+              <span>{f.label}{anyRequired && !f.required ? ' (optional)' : ''}</span>
               <input {...(f.key === 'comment' ? null : MACHINE_TEXT)}
                 className={`${inputCls} disabled:opacity-60`}
                 disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
@@ -532,12 +622,9 @@ export default function Editor() {
                 aria-invalid={missingKey === f.key || undefined}
                 aria-describedby={missingKey === f.key ? `ed-missing-${f.key}` : undefined}
               />
+              {/* Inside the label, so it is read with the field's name. */}
+              {f.hint && <span className="text-note text-dim">{f.hint}</span>}
               {missingKey === f.key && <FieldError id={`ed-missing-${f.key}`}>{MISSING}</FieldError>}
-              {f.key === 'space' && rangeSpaceMissed && (
-                <span role="status" style={{ color: COLORS.warn }}>
-                  The IP space of {rangeNet || 'this network'} could not be filled in. Type its ID, which starts ipam/ip_space/.
-                </span>
-              )}
             </label>
           )))}
 

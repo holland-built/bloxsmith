@@ -1,32 +1,38 @@
 - main "Editor tab":
   - heading "Editor" [level=1]
   - paragraph: Make, change or delete one DNS or DHCP item at a time.
-  - button "DNS Zone"
+  - button "DNS zone"
   - button "Subnet"
-  - button "Address Block"
-  - button "DHCP Range"
+  - button "Address block"
+  - button "DHCP range"
   - button "Host"
   - button "Tags"
-  - region "DNS Zone — Create":
-    - heading "DNS Zone — Create" [level=2]
+  - region "New DNS zone":
+    - heading "New DNS zone" [level=2]
     - text: Change or delete an existing DNS zone
     - searchbox "Change or delete an existing DNS zone"
-    - text: ID of an existing one (leave blank to make a new one)
-    - textbox "ID of an existing one (leave blank to make a new one)":
-      - /placeholder: existing object id — enables update/delete
-    - text: Zone name *
-    - textbox "Zone name *":
-      - /placeholder: zone.example.com.
-    - text: DNS view ID *
-    - textbox "DNS view ID *":
-      - /placeholder: view id
-    - text: Comment
-    - textbox "Comment":
+    - text: Zone name
+    - textbox "Zone name":
+      - /placeholder: e.g. zone.example.com.
+    - group "DNS view":
+      - text: ""
+      - searchbox "Search DNS view"
+      - status
+      - combobox "DNS view":
+        - option "Pick a DNS view" [selected]
+        - option "default"
+    - text: Comment (optional)
+    - textbox "Comment (optional)":
       - /placeholder: ""
-    - text: Tags (key=value, key2=value2)
-    - textbox "Tags (key=value, key2=value2)":
-      - /placeholder: env=prod,team=noc
+    - text: Tags (optional)
+    - textbox "Tags (optional) name=value, separated by commas":
+      - /placeholder: e.g. env=prod, team=noc
+    - text: name=value, separated by commas
     - button "Preview"
   - region "Preview":
     - heading "Preview" [level=2]
     - paragraph: Press Preview to see what would be sent. Nothing changes in Infoblox until you press Create.
+  - region "Made here":
+    - heading "Made here" [level=2]
+    - paragraph: Made in the Editor, newest first. Each delete asks first.
+    - text: Nothing made here yet.

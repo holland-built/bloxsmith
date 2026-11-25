@@ -91,7 +91,11 @@ export default function Drift() {
               label="Template"
               value={template}
               onChange={setTemplate}
-              options={templates.map((t) => ({ value: t.name, label: `${t.name} — ${t.region || ''}/${t.environment || ''}` }))}
+              options={templates.map((t) => {
+                // Only the parts a template has: no "name — /" for one with neither.
+                const where = [t.region, t.environment].filter(Boolean).join('/')
+                return { value: t.name, label: where ? `${t.name} — ${where}` : t.name }
+              })}
               placeholder="Select a template"
             />
           )}
@@ -115,18 +119,24 @@ export default function Drift() {
         <button
           disabled={checking || !template}
           onClick={check}
-          className="px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
-          style={{ background: COLORS.accent, color: COLORS.onAccent }}
+          aria-describedby={!template ? 'drift-needs' : undefined}
+          className="px-3 py-2 rounded-control text-copy font-medium disabled:cursor-not-allowed self-start"
+          // Greyed, not faded: white on a faded blue was hard to read in the
+          // light theme. The field fill with dim words reads in both.
+          style={checking || !template
+            ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
+            : { background: COLORS.accent, color: COLORS.onAccent }}
         >
           {checking ? 'Checking…' : 'Check drift'}
         </button>
+        {!template && <p id="drift-needs" className="text-note text-muted">To check, pick a template.</p>}
       </div>
     </section>
   )
 
   const findings = result && (
     result.found === false ? (
-        <Empty>site not found for this template</Empty>
+        <Empty>No site in Infoblox matches this template.</Empty>
       ) : (
         <>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -139,7 +149,9 @@ export default function Drift() {
                   : { background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
               }
             >
-              {result.drifted ? `✕ ${result.drifts?.length || 0} items` : '✓ in-sync'}
+              {result.drifted
+                ? `✕ ${result.drifts?.length || 0} ${result.drifts?.length === 1 ? 'difference' : 'differences'}`
+                : '✓ Matches the template'}
             </span>
             {result.subnet_count != null && (
               <span className="text-note text-muted">{result.subnet_count} subnets</span>
@@ -153,7 +165,7 @@ export default function Drift() {
             </div>
           )}
           {sortedCats.length === 0 ? (
-            <Empty>no drift items</Empty>
+            <Empty>No differences.</Empty>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {sortedCats.map(([cat, items]) => {
@@ -161,7 +173,7 @@ export default function Drift() {
                 const shown = open ? items : items.slice(0, 6)
                 return (
                   <div key={cat}>
-                    <div className="text-note font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
+                    <div className="text-note font-medium text-dim mb-1.5">{cat.charAt(0).toUpperCase() + cat.slice(1)}</div>
                     <div className="flex flex-col gap-1.5">
                       {shown.map((d, i) => {
                         const st = PILL[driftItemKind(d)]
@@ -183,7 +195,7 @@ export default function Drift() {
                         onClick={() => toggleCat(cat)}
                         className="text-note text-dim mt-1.5 underline underline-offset-2"
                       >
-                        {open ? 'show less' : `+${items.length - 6} more`}
+                        {open ? 'Show less' : `+${items.length - 6} more`}
                       </button>
                     )}
                   </div>
@@ -205,7 +217,7 @@ export default function Drift() {
       ) : result ? (
         <div role="status">{findings}</div>
       ) : (
-        <FormHint missing={templatesApi.error && templates.length === 0 && 'site templates'}>Pick a template and press Check drift. What Infoblox has that the template lacks, what it lacks, and what it holds differently are listed here.</FormHint>
+        <FormHint missing={templatesApi.error && templates.length === 0 && 'site templates'}>Pick a template and press Check drift. The differences are listed here.</FormHint>
       )}
     </section>
   )
@@ -213,7 +225,7 @@ export default function Drift() {
   return (
     <div className="w-full px-6 py-5">
       <PageTitle className="mb-1">Drift</PageTitle>
-      <TabIntro>Lists the gaps between a site template and what is in Infoblox, without changing anything.</TabIntro>
+      <TabIntro>Shows what is missing from Infoblox, what is extra, and what differs from the template. It changes nothing.</TabIntro>
       <FormColumns form={form} result={resultCol} />
     </div>
   )

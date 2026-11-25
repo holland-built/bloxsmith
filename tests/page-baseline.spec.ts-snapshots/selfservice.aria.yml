@@ -28,10 +28,17 @@
     - spinbutton "Count": "1"
     - text: Name (optional)
     - textbox "Name (optional)":
-      - /placeholder: host-01
+      - /placeholder: e.g. host-01
     - checkbox "Also give it a DNS name"
     - text: Also give it a DNS name
+    - checkbox "Lock it to one device (DHCP reservation)"
+    - text: Lock it to one device (DHCP reservation)
     - button "Preview" [disabled]
+    - text: To preview, pick an IP space.
   - region "Preview":
     - heading "Preview" [level=2]
-    - paragraph: Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate.
+    - paragraph: Pick a space and press Preview to see which address you would get. Nothing is taken until you press Allocate, which appears after Preview.
+  - region "Made here":
+    - heading "Made here" [level=2]
+    - paragraph: Addresses, reservations and DNS names made on this page, newest first. Each delete asks first.
+    - text: Nothing made here yet.

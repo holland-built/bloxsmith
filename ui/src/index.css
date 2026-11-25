@@ -788,8 +788,9 @@ a.text-link,
    own pick. Text stays --color-txt, so 4.5:1 holds on the tint. */
 /* 22px, not 999px: a one-line button (up to 44px tall) is still a full pill,
    and anything taller (a two-line choice, a row that wraps) gets rounded
-   corners instead of being drawn as an oval. */
-main button[aria-pressed]:not(.ov-kpi, .as-row),
+   corners instead of being drawn as an oval. Automate's IP space suggestions
+   are two lines tall, so they keep the 10px control corners. */
+main button[aria-pressed]:not(.ov-kpi, .as-row, [data-space-suggestions] > button),
 main .pick {
   border-radius: 22px;
 }

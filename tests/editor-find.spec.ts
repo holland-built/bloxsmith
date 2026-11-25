@@ -39,8 +39,8 @@ test('an address block is picked for Delete only, without filling a Create', asy
   await page.goto('/#editor?type=address_block');
   await page.getByPlaceholder('Find by address or comment').fill('10.20');
   await page.getByRole('button', { name: '10.20.0.0/16' }).click();
-  await expect(page.getByRole('button', { name: 'Delete Address Block' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Address *' })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Delete Address block' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Address', exact: true })).toHaveValue('');
 });
 
 test('while updating a zone, its name and view are read-only', async ({ page }) => {
@@ -49,7 +49,7 @@ test('while updating a zone, its name and view are read-only', async ({ page }) 
   await page.goto('/#editor?type=dns_zone');
   await page.getByPlaceholder('Find by zone name or comment').fill('lab');
   await page.getByRole('button', { name: 'lab.example.' }).click();
-  await expect(page.getByRole('textbox', { name: 'Zone name *' })).toBeDisabled();
+  await expect(page.getByRole('textbox', { name: 'Zone name' })).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'Comment' })).toBeEnabled();
 });
 
@@ -124,7 +124,7 @@ test('a second Update sends only what changed after the first', async ({ page })
   await page.getByRole('button', { name: 'Preview' }).click();
   await page.getByRole('button', { name: 'Update', exact: true }).click();
   await expect(page.getByText('Host updated.')).toBeVisible();
-  await page.getByRole('textbox', { name: 'Name *' }).fill('web8');
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('web8');
   await page.getByRole('button', { name: 'Preview' }).click();
   await expect.poll(() => bodies.length).toBe(3);
   expect(bodies[2]).toEqual({ name: 'web8', dry: true });
@@ -152,7 +152,7 @@ test('two results with the same label show their IDs', async ({ page }) => {
     { id: 'ipam/subnet/b2', label: '10.0.0.0/24 — lab', fields: {} },
   ] } }));
   await page.goto('/#editor?type=subnet');
-  await page.getByRole('searchbox').fill('lab');
+  await page.getByPlaceholder('Find by name, comment or full network address').fill('lab');
   await expect(page.getByRole('button', { name: '10.0.0.0/24 — lab ipam/subnet/a1' })).toBeVisible();
   await expect(page.getByRole('button', { name: '10.0.0.0/24 — lab ipam/subnet/b2' })).toBeVisible();
 });
@@ -165,9 +165,9 @@ test('a deep link picks an address block for Delete only', async ({ page }) => {
   await page.goto('/#editor?type=address_block&id=ipam%2Faddress_block%2F3&q=10.20.0.0');
   await expect(page.getByPlaceholder('Find by address or comment')).toHaveValue('10.20.0.0');
   await expect(page.getByRole('button', { name: '10.20.0.0/16' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Delete Address Block' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Address *' })).toHaveValue('');
-  await expect(page.getByRole('heading', { name: 'Address Block — Create' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete Address block' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Address', exact: true })).toHaveValue('');
+  await expect(page.getByRole('heading', { name: 'New address block' })).toBeVisible();
 });
 
 test('a deep link whose id does not come back fills the search and picks nothing', async ({ page }) => {
@@ -176,9 +176,10 @@ test('a deep link whose id does not come back fills the search and picks nothing
   await page.goto('/#editor?type=subnet&id=ipam%2Fsubnet%2Fgone&q=10.1.0.0');
   await expect(page.getByPlaceholder('Find by name, comment or full network address')).toHaveValue('10.1.0.0');
   await expect(page.getByRole('button', { name: '10.1.0.0/16' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('heading', { name: 'Subnet — Create' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New subnet' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Delete Subnet' })).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'ID of an existing one (leave blank to make a new one)' })).toHaveValue('');
+  // Nothing picked: no way back to "new" is offered, because it is new.
+  await expect(page.getByRole('button', { name: 'Make a new one instead' })).toHaveCount(0);
 });
 
 // q alone can match more than the 25 find returns (98 blocks at 10.0.0.0 on
@@ -195,8 +196,9 @@ test('a deep link picks its item even when q alone matches more than 25', async 
   await page.goto('/#editor?type=address_block&id=ipam%2Faddress_block%2Ffar&q=10.0.0.0');
   await expect(page.getByPlaceholder('Find by address or comment')).toHaveValue('10.0.0.0');
   await expect(page.getByRole('button', { name: '10.0.0.0/8 — far' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('textbox', { name: 'ID of an existing one (leave blank to make a new one)' })).toHaveValue('ipam/address_block/far');
-  await expect(page.getByRole('button', { name: 'Delete Address Block' })).toBeVisible();
+  // Picked: the form offers the way back to making a new one.
+  await expect(page.getByRole('button', { name: 'Make a new one instead' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete Address block' })).toBeVisible();
   expect(asked).toEqual([{ q: '10.0.0.0', id: 'ipam/address_block/far' }]);
 });
 
@@ -210,6 +212,6 @@ test('a deep link whose id finds nothing falls back to the plain search', async 
   });
   await page.goto('/#editor?type=subnet&id=ipam%2Fsubnet%2Fgone&q=10.1.0.0');
   await expect(page.getByRole('button', { name: '10.1.0.0/16' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('heading', { name: 'Subnet — Create' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New subnet' })).toBeVisible();
   expect(asked).toEqual(['ipam/subnet/gone', null]);
 });

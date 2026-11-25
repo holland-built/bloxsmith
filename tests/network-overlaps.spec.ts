@@ -130,13 +130,13 @@ test('following a subnet link opens the Editor with that subnet picked', async (
   await panel(page).getByRole('button', { name: /spaces$/ }).nth(0).click();
   await panel(page).getByRole('link', { name: /^10\.3\.0\.0\/16 \(65,536 addresses\), open this subnet/ }).click();
 
-  await expect(page.getByRole('heading', { name: 'Subnet — Update' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Change this subnet' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByPlaceholder('Find by name, comment or full network address')).toHaveValue('10.3.0.0');
   await expect(page.getByRole('button', { name: '10.3.0.0/16 — branch-lan' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: '10.3.0.0/16 — elsewhere' })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('branch-lan');
-  await expect(page.getByRole('textbox', { name: 'Comment' })).toHaveValue('floor 2');
-  await expect(page.getByRole('textbox', { name: 'Address block ID *' })).toHaveValue('ipam/address_block/9');
+  await expect(page.getByRole('textbox', { name: 'Name (optional)' })).toHaveValue('branch-lan');
+  await expect(page.getByRole('textbox', { name: 'Comment (optional)' })).toHaveValue('floor 2');
+  await expect(page.getByRole('combobox', { name: 'Address block' })).toHaveValue('ipam/address_block/9');
   await expect(page.getByRole('button', { name: 'Delete Subnet' })).toBeVisible();
   expect(finds).toEqual(['10.3.0.0']);
 });

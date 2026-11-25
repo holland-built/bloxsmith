@@ -16,7 +16,7 @@ test('Editor: an empty required field is marked, explained under it, and focused
   await expect(preview).toBeVisible({ timeout: 20_000 });
   await preview.click();
 
-  const zone = page.getByRole('textbox', { name: 'Zone name *' });
+  const zone = page.getByRole('textbox', { name: 'Zone name' });
   await expect(zone).toBeFocused();
   await expect(zone).toHaveAttribute('aria-invalid', 'true');
   await expect(zone).toHaveAccessibleDescription('Fill in this field.');
@@ -27,17 +27,19 @@ test('Editor: an empty required field is marked, explained under it, and focused
   await zone.fill('lab.example.com.');
   await expect(zone).not.toHaveAttribute('aria-invalid', 'true');
   await preview.click();
-  const view = page.getByRole('textbox', { name: 'DNS view ID *' });
+  const view = page.getByRole('combobox', { name: 'DNS view' });
   await expect(view).toBeFocused();
   await expect(view).toHaveAttribute('aria-invalid', 'true');
+  await expect(view).toHaveAccessibleDescription('Fill in this field.');
 });
 
 test('Editor: an empty device count is marked and focused too', async ({ page }) => {
   await page.goto('/#editor');
   await page.getByRole('button', { name: 'Subnet', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Address block ID *' }).fill('ipam/address_block/1');
+  await page.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/baseline-1');
+  await page.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/baseline-1');
   await page.getByRole('button', { name: 'Preview' }).first().click();
-  const devices = page.getByRole('spinbutton', { name: 'How many devices need an address? *' });
+  const devices = page.getByRole('spinbutton', { name: 'How many devices need an address?' });
   await expect(devices).toBeFocused();
   await expect(devices).toHaveAttribute('aria-invalid', 'true');
 });
@@ -115,7 +117,7 @@ test('Editor: picking an existing item clears a missing-field mark', async ({ pa
   const preview = page.getByRole('button', { name: 'Preview' }).first();
   await expect(preview).toBeVisible({ timeout: 20_000 });
   await preview.click();
-  const zone = page.getByRole('textbox', { name: 'Zone name *' });
+  const zone = page.getByRole('textbox', { name: 'Zone name' });
   await expect(zone).toHaveAttribute('aria-invalid', 'true');
 
   await page.getByRole('searchbox').first().fill('lab');
