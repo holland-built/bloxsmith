@@ -213,10 +213,15 @@ test.describe('ok state', () => {
 });
 
 test.describe('fail state', () => {
+  // Two widths. At 1440 on a Mac the subnet table fits 4 of the 6 columns
+  // with about 7px to spare; on Linux text is a little wider and it takes a
+  // row of its own, which is what CI saw (#524). At 1408 it takes its own row
+  // everywhere. A failed read has no table to measure, so before the fix it
+  // fell back to 4 columns and moved every panel after it.
   test('Codex B: Network and DNS panels keep their width and place when the reads fail', async ({ page }) => {
-    test.setTimeout(90_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    for (const tab of ['network', 'dns']) {
+    test.setTimeout(150_000);
+    for (const width of [1440, 1408]) for (const tab of ['network', 'dns']) {
+      await page.setViewportSize({ width, height: 900 });
       const boxes = async () => {
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(800);
@@ -233,7 +238,7 @@ test.describe('fail state', () => {
       await page.goto(`/#${tab}`);
       await expect(page.locator('main h1').first()).toBeVisible({ timeout: 20_000 });
       const bad = await boxes();
-      expect(bad, `${tab}: x and width of each panel, fail vs ok`).toEqual(ok);
+      expect(bad, `${tab} at ${width}: x and width of each panel, fail vs ok`).toEqual(ok);
     }
   });
 });

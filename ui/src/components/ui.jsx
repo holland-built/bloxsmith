@@ -337,6 +337,28 @@ function panelItems(grid) {
     .filter((entry) => entry.id)
 }
 
+// THE LAST WIDTH A TABLE MEASURED, KEPT FOR WHEN IT CANNOT MEASURE. A table
+// sizes its own panel from its columns, but a read that failed or is still
+// loading has no table, and the panel fell back to its declared span. Where the
+// table needs more than that span, every panel after it moved when a read
+// failed (GUI audit w5b; CI on Linux, where text is a little wider, #524). The
+// need is pixels, not tracks, so it converts at whatever width the grid is now.
+// Per browser; with nothing saved the declared span still applies.
+const NEED_KEY = 'panel-needs'
+let savedNeeds = null
+function readNeeds() {
+  if (savedNeeds) return savedNeeds
+  try { savedNeeds = JSON.parse(localStorage.getItem(NEED_KEY) || '{}') || {} } catch { savedNeeds = {} }
+  return savedNeeds
+}
+function rememberNeed(id, need) {
+  const needs = readNeeds()
+  if (needs[id] === need) return
+  needs[id] = need
+  try { localStorage.setItem(NEED_KEY, JSON.stringify(needs)) } catch { /* no storage: this load only */ }
+}
+const panelIdOf = (el) => el.getAttribute('data-panel-id') || el.querySelector('[data-panel-id]')?.getAttribute('data-panel-id') || null
+
 function applyLayout(grid, items, overrides) {
   const geo = readGeometry(grid)
   if (!geo) return
@@ -381,7 +403,11 @@ function applyLayout(grid, items, overrides) {
   const els = Array.from(grid.children)
   const plan = els.map((el) => {
     const entry = items.get(el)
-    const measuredSpan = entry && entry.need != null ? spanFor(entry.need) : null
+    const id = panelIdOf(el)
+    let need = entry?.need ?? null
+    if (need != null && id) rememberNeed(id, need)
+    else if (need == null && id) need = readNeeds()[id] ?? null
+    const measuredSpan = need != null ? spanFor(need) : null
     // trackCount is read live above, so a saved span 6 clamps to 2 on the base
     // grid and back to 6 at xl — the ResizeObserver below re-runs this across
     // every breakpoint change. The STORED span is never touched by the clamp.
@@ -390,7 +416,7 @@ function applyLayout(grid, items, overrides) {
       source,
       span: span ?? declaredSpan(el.className, trackCount),
       fixed: source === 'user',
-      need: source === 'measured' ? entry.need : null,
+      need: source === 'measured' ? need : null,
     }
   })
   const filled = fillRows(plan, trackCount, widthOf)
