@@ -62,5 +62,5 @@ test('Hosts Needing Attention says how many it lists, a number the Hosts tile do
   const panel = page.locator('[data-panel-id="daily-hosts-attention"]');
   await expect(panel.getByText('6 listed', { exact: true })).toBeVisible();
   await expect(panel.locator('tbody tr')).toHaveCount(6);
-  await expect(panel.getByRole('link', { name: 'Open Infra' })).toHaveAttribute('href', '#infra?status=not-online');
+  await expect(panel.getByRole('link', { name: 'Open hosts' })).toHaveAttribute('href', '#infra?status=not-online');
 });

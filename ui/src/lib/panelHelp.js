@@ -61,7 +61,7 @@ export const PANEL_HELP = {
   },
   'daily-security-today': {
     what: 'Threat events seen in the last hour, counted by how serious each one was, and how many were stopped rather than only written down.',
-    look: 'When the hour holds more events than were fetched, the count by the title says so, and its tip says the figures were counted from that sample. A dash means the data could not be read.',
+    look: 'When the hour holds more events than were fetched, the count by the title says so, and its tip says the figures were counted from that sample.',
   },
   'daily-top-capacity-risks': {
     what: 'A big network with only 40 addresses spare is a worse problem than a tiny one sitting at 99% full, so this ranks by addresses left, not by fullness.',

@@ -33,7 +33,12 @@
 .ov-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 14px 18px 8px }
 .ov-card-head h2 { font-size: 15px; font-weight: 600; margin: 0 }
 .ov-head-right { display: inline-flex; gap: 12px; align-items: baseline; min-width: 0; text-align: right }
-.ov-link { color: var(--ov-accent); text-decoration: underline; font-size: 13px }
+/* A button that looks like one, not like a link (screen audit A13). The soft
+   accent tint is the one the briefing's item buttons use. */
+.ov-btn { border: 0; min-height: 28px; padding: 0 12px; border-radius: var(--radius-control, 10px); font: inherit; font-size: 13px; font-weight: 600; color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 12%, transparent); cursor: pointer }
+.ov-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px }
+@media (hover: hover) { .ov-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) } }
+@media (pointer: coarse) { .ov-btn { min-height: 44px } }
 
 .ov-num { font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1 }
 .ov-num small { font-size: 13px; letter-spacing: 0; color: var(--ov-muted); font-weight: 400 }
@@ -58,7 +63,6 @@
 .ov-ticks i.on.ok { background: color-mix(in srgb, var(--ov-ok) 70%, transparent) }
 .ov-ticks i.on.warn { background: var(--ov-warn) } .ov-ticks i.on.crit { background: var(--ov-crit) }
 .ov-ticks i.on.none { background: var(--ov-muted) }
-.ov-ticks-none { background: repeating-linear-gradient(90deg, var(--ov-line) 0 2px, transparent 2px 4px) }
 /* Services up: running is grey and half height, stopped is full height in the
    state colour, so the problem is the only colour and also the only tall mark. */
 .ov-ticks-good { align-items: flex-end }
@@ -69,6 +73,7 @@
 
 /* the board: one row per service */
 .ov-board-box { padding-bottom: 4px }
+.ov-board .ov-board-head th { padding-top: 0; padding-bottom: 6px; border-top: 0; font-size: 11px; color: var(--ov-muted) }
 .ov-board { width: 100%; border-collapse: collapse }
 .ov-board th, .ov-board td { text-align: left; padding: 12px 18px; border-top: 1px solid var(--ov-line); font-weight: 400; vertical-align: middle }
 .ov-board tbody th { font-weight: 600; white-space: nowrap; width: 90px }

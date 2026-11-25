@@ -40,7 +40,7 @@ const LICENSES = {
 // and heading. Named, so a column that stops rendering fails here instead of
 // quietly dropping out of the check.
 const EXPECTED: Record<string, Array<[string, string]>> = {
-  overview: [['license-inventory', 'Time Left'], ['license-inventory', 'Qty']],
+  overview: [['license-inventory', 'Time left'], ['license-inventory', 'Qty']],
   network: [['network-exhaustion', 'Used'], ['network-exhaustion', 'Free']],
   dns: [['dns-failed-lookups', 'Failed'], ['dns-zones', 'Records'], ['dns-dtc-lbdn', 'Precedence'], ['dns-dtc-lbdn', 'TTL']],
 };

@@ -55,7 +55,7 @@
   - text: Issues by kind
   - list "Zone issues by kind":
     - listitem:
-      - 'button /low ttl: \d+ zones?\. Show them\./'
+      - 'button /cache time too short: \d+ zones?\. Show them\./'
   - term: Forward
   - definition: /\d+/
   - term: Reverse
@@ -99,12 +99,12 @@
         - columnheader "Issues":
           - button "Issues"
     - rowgroup:
-      - row /other\.example\. baseline-view 3 \d+ low ttl/:
+      - row /other\.example\. baseline-view 3 \d+ cache time too short/:
         - cell "other.example."
         - cell "baseline-view"
         - cell "3"
         - cell /\d+/
-        - cell "low ttl"
+        - cell "cache time too short"
       - row /baseline\.example\. baseline-view \d+ \d+ —/:
         - cell "baseline.example."
         - cell "baseline-view"

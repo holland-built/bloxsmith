@@ -21,7 +21,7 @@ test('a row that counts something bad names it as an issue, with its severity an
   await expect(row(page, 'Security')).toContainText('Critical', { timeout: 20_000 });
   await expect(row(page, 'Security')).toContainText('3 critical or high security events');
   await expect(measure(page, 'Security')).toContainText('3 critical or high events');
-  await expect(measure(page, 'IPAM')).toContainText('1 of 3 subnets ≥90%');
+  await expect(measure(page, 'IPAM')).toContainText('1 of 3 subnets 90% full or more');
   await expect(measure(page, 'IPAM')).toContainText('0 more at 70–89% · all subnets');
 });
 
@@ -34,8 +34,8 @@ test('a healthy network is a real 0 and "None open", not a missing number', asyn
   await page.route('**/api/data', (route) => fulfillJson(route, healthy));
   await page.goto('/#overview');
   await expect(measure(page, 'Hosts')).toContainText('0 of 3 not online', { timeout: 20_000 });
-  await expect(row(page, 'Hosts')).toContainText('None open');
-  await expect(measure(page, 'IPAM')).toContainText('0 of 3 subnets ≥90%');
+  await expect(row(page, 'Hosts')).toContainText('No open issues');
+  await expect(measure(page, 'IPAM')).toContainText('0 of 3 subnets 90% full or more');
   await expect(measure(page, 'IPAM')).toContainText('1 more at 70–89%');
 });
 
@@ -49,7 +49,7 @@ test('a zero counted over part of the hosts says so, and a missing whole-network
   await expect(measure(page, 'Hosts')).toContainText('0 of 3 not online', { timeout: 20_000 });
   await expect(measure(page, 'Hosts')).toContainText('3 loaded of 40');
   await expect(row(page, 'Hosts')).toContainText('none among the 3 loaded');
-  await expect(row(page, 'Hosts')).not.toContainText('None open');
+  await expect(row(page, 'Hosts')).not.toContainText('No open issues');
   await expect(measure(page, 'IPAM')).toContainText('unavailable');
 });
 

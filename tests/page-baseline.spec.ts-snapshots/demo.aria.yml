@@ -1,0 +1,39 @@
+- main "Demo server tab":
+  - navigation "On this page":
+    - paragraph: On this page
+    - list:
+      - listitem:
+        - button "Settings"
+      - listitem:
+        - button "Build"
+      - listitem:
+        - button "The Infoblox code"
+      - listitem:
+        - button "Runs"
+  - heading "Demo server" [level=1]
+  - paragraph: Builds a NIOS-X server on Proxmox, gives it DNS, and proves it answers.
+  - button "Arrange panels"
+  - heading "Settings" [level=2]
+  - text: saved in the vault; the join token is never shown again
+  - 'button "About: Settings"': "About: ⓘ"
+  - 'button "Options: Settings"'
+  - paragraph: /Saved and ready\. Builds go to baseline-pve on \d+\.\d+\.9\.0\/\d+, with the stored join token\./
+  - button "Change settings"
+  - heading "Build" [level=2]
+  - text: preview first; nothing is created until you press Build
+  - 'button "About: Build"': "About: ⓘ"
+  - 'button "Options: Build"'
+  - button "Preview"
+  - list:
+    - listitem: Take the next free IP in the demo network Waiting
+    - listitem: Build a NIOS-X VM on Proxmox Waiting
+  - heading "The Infoblox code" [level=2]
+  - text: what OpenTofu runs for each step
+  - 'button "About: The Infoblox code"': "About: ⓘ"
+  - 'button "Options: The Infoblox code"'
+  - text: Press Preview to see the code each step runs.
+  - heading "Runs" [level=2]
+  - text: each run is tagged with its ID in Infoblox and on the VM
+  - 'button "About: Runs"': "About: ⓘ"
+  - 'button "Options: Runs"'
+  - text: No demo runs yet.

@@ -603,16 +603,11 @@ const CLAIMS = [
     file: DAILY,
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(sec\.data, 'events'\)/, expect: 'the panel computes a scope note from the payload' },
-      { re: /\{sec\.loading \|\| secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
+      { re: /: sampleCountLabel\(sec\.data, 'events'\)\n/, expect: 'the title count is the sample-aware label, not rows.length' },
+      { re: /<span>\{countLabel\}<\/span>/, expect: 'and it is what the title shows' },
       { re: /const scopeTip = \[scopeNote, /, expect: 'the scope note is the start of the tip' },
-      { re: /<Tip tip=\{sec\.loading \|\| secDead \? null : scopeTip\}/, expect: 'and that tip is on the count by the title' },
+      { re: /<Tip tip=\{scopeTip\} prefix="dy" className="dy-tip-end text-note text-muted">\s*<span>\{countLabel\}/, expect: 'and that tip is on the count by the title' },
     ],
-  },
-  {
-    panel: 'daily-security-today',
-    says: /A dash means the data could not be read/,
-    file: DAILY,
-    proofs: [{ re: /\{sec\.loading \|\| secDead \? '— events'/, expect: 'a dead feed renders a dash rather than a count' }],
   },
   {
     panel: 'daily-security-today',

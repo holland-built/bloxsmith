@@ -359,7 +359,7 @@ test('P9c: a keyboard-only run moves a card a position, changes its span, and bo
   // "Move [object Object]" that a template-literal label produces for a panel
   // whose title is an element rather than a string.
   await expect(
-    page.getByRole('button', { name: 'Move DNS Query Rate — 24h', exact: true }),
+    page.getByRole('button', { name: 'Move DNS query rate — 24 hours', exact: true }),
   ).toHaveCount(1);
 
   // Enter opens move mode on the focused handle.

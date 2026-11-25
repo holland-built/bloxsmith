@@ -46,7 +46,7 @@ test('a panel header carries an ⓘ button named after its own panel', async ({ 
 
   // Named by reference to the panel's own <h2>, so a screen reader hears which
   // panel it is about — never seven identical "more info" buttons down a tab.
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
   // The visible label is the glyph, and the name is still the words. Both
@@ -71,7 +71,7 @@ test('clicking ⓘ reveals the help text and flips aria-expanded', async ({ page
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const controls = await btn.getAttribute('aria-controls');
   expect(controls, 'the About button must point at the region it opens').toBeTruthy();
 
@@ -92,7 +92,7 @@ test('hovering About reveals the help, and moving the pointer away closes it', a
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeHidden();
   // Let the panels finish loading first: a panel above that grows when its data
@@ -117,7 +117,7 @@ test('keyboard focus alone reveals the help — no click, no pointer', async ({ 
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeHidden();
 
@@ -139,7 +139,7 @@ test('a clicked-open panel stays open after the pointer and the focus both leave
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
 
   await btn.click();
@@ -196,7 +196,7 @@ test('a closed panel keeps its help copy out of the document altogether', async 
 
   // The same read finds it once it is open, so the assertion above is a real
   // measurement and not a phrase that never appears anywhere.
-  const btn = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   await btn.click();
   await expect(page.locator(`#${await btn.getAttribute('aria-controls')}`)).toBeVisible();
   expect((await read()).inDocument).toBe(true);
@@ -212,7 +212,7 @@ test('the disclosure is operable with the keyboard alone', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
+  const btn = page.getByRole('button', { name: 'About: DNS query rate — 24 hours', exact: true });
   // press() focuses the element and sends a real key event — no click is
   // synthesised by Playwright, so this fails if the affordance is
   // pointer-only.
@@ -235,7 +235,7 @@ test("an open panel's help is about that panel and nothing else", async ({ page 
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
-  const btn = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
+  const btn = page.getByRole('button', { name: 'About: DNS query rate — 24 hours', exact: true });
   await btn.click();
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
   await expect(region).toBeVisible();
@@ -421,7 +421,7 @@ test('an open About ends with how the panel is built and whether Build a chart c
   await expect(volumeBody.locator('[data-panel-built]')).toHaveText("Built from Infoblox's DNS activity records. Build a chart can redraw this.");
 
   await page.goto('/#overview');
-  const licences = page.getByRole('button', { name: 'About: License Inventory', exact: true });
+  const licences = page.getByRole('button', { name: 'About: License inventory', exact: true });
   await licences.click();
   const licencesBody = page.locator(`#${await licences.getAttribute('aria-controls')}`);
   await expect(licencesBody.locator('[data-panel-built]')).toHaveText("Built from the licence list and account alerts. Build a chart can't redraw it: it is a list, not a chart.");

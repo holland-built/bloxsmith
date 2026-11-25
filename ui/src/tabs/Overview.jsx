@@ -143,7 +143,7 @@ function useBoard(dns) {
     return { ...r, seen: typeof t === 'number' ? t : null, fresh: typeof t === 'number' && now - t < DAY_S }
   })
   const full = issues.find((r) => r.key === 'subnet-utilization')
-  if (full && typeof totals.subnetsCrit === 'number') full.sub = totals.subnetsCrit ? `${n0(totals.subnetsCrit)} are 90% full or more` : 'none at 90% yet'
+  if (full && typeof totals.subnetsCrit === 'number') full.sub = totals.subnetsCrit ? `${n0(totals.subnetsCrit)} ${totals.subnetsCrit === 1 ? 'is' : 'are'} 90% full or more` : 'none at 90% yet'
 
   const svcRows = health.loading || health.error || !Array.isArray(health.data) ? [] : health.data
   const svc = Object.fromEntries(svcRows.map((s) => [s.name, s]))
@@ -174,7 +174,7 @@ function useBoard(dns) {
     { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), partial: notFull(svcState('DHCP')), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
       measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active ${noun(activeLeases, 'lease')}`), scope: sliceOk('leases') ? `of ${n0(leases.length)} ${noun(leases.length, 'lease')} loaded` : '' },
     { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, partial: totals.degraded === true, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
-      measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} ${noun(totals.subnets, 'subnet')} ≥90%`),
+      measure: m(crit !== null, data.loading, `${n0(crit)} of ${n0(totals.subnets)} ${noun(totals.subnets, 'subnet')} 90% full or more`),
       scope: crit !== null && typeof totals.subnetsWarn === 'number' ? `${n0(totals.subnetsWarn - crit)} more at 70–89% · all subnets` : '' },
     { name: 'Hosts', href: '#infra?status=offline', state: null, partial: hostsShort, n: offline, of: sliceOk('hosts') ? hosts.length : null,
       measure: m(offline !== null, data.loading, `${n0(offline)} of ${n0(hosts.length)} not online`),
@@ -268,7 +268,7 @@ function tiles(board, dns) {
   const t = [
     { name: 'DNS', value: fmt(by.DNS?.n, 1), unit: 'queries/s', right: outOf(by.DNS), was: trend.was ?? null, hours: trend.hours },
     { name: 'DHCP', value: fmt(by.DHCP?.n), unit: `active ${noun(by.DHCP?.n, 'lease')}`, right: outOf(by.DHCP) },
-    { name: 'IPAM', value: fmt(by.IPAM?.n), unit: `${noun(by.IPAM?.n, 'subnet')} ≥90%`, right: typeof by.IPAM?.of === 'number' ? `of ${fmt(by.IPAM.of)}` : null, fill: by.IPAM?.n / by.IPAM?.of },
+    { name: 'IPAM', value: fmt(by.IPAM?.n), unit: `${noun(by.IPAM?.n, 'subnet')} 90% full or more`, right: typeof by.IPAM?.of === 'number' ? `of ${fmt(by.IPAM.of)}` : null, fill: by.IPAM?.n / by.IPAM?.of },
     { name: 'Hosts', value: fmt(by.Hosts?.n), unit: 'not online', right: typeof by.Hosts?.of === 'number' ? `of ${fmt(by.Hosts.of)}` : null, fill: by.Hosts?.n / by.Hosts?.of },
     { name: 'Security', value: fmt(by.Security?.n), unit: 'critical or high', right: outOf(by.Security) },
   ]
@@ -295,7 +295,9 @@ function Change({ was, now, hours }) {
 // many run. A bad-when-full bar (subnets full) stays pale until there is
 // something to see.
 function TickBar({ fill, good, sev, label }) {
-  if (fill == null || !Number.isFinite(fill)) return <div className="ov-ticks ov-ticks-none" aria-hidden="true" />
+  // No fill (DNS has no share of anything) draws nothing: an empty striped
+  // strip meant nothing and read as a broken bar (screen audit A6).
+  if (fill == null || !Number.isFinite(fill)) return null
   const n = 48
   const on = Math.max(fill > 0 ? 1 : 0, Math.round(fill * n))
   if (good) {
@@ -338,9 +340,11 @@ function Tiles({ board, dns, health }) {
         <div className="ov-card-head"><h2>{cur.name}</h2><span className="ov-muted">{cur.right}</span></div>
         {/* No DNS chart here: "DNS Query Rate — 24h" under Charts is the one
             chart (owner, 2026-11-10: the page said everything twice). */}
-        <div className="ov-pad">
-          <TickBar fill={cur.fill} good={cur.good} sev={cur.v.sev} label={`${cur.name}: ${cur.value} ${cur.unit} ${cur.right ?? ''}`} />
-        </div>
+        {cur.fill != null && Number.isFinite(cur.fill) && (
+          <div className="ov-pad">
+            <TickBar fill={cur.fill} good={cur.good} sev={cur.v.sev} label={`${cur.name}: ${cur.value} ${cur.unit} ${cur.right ?? ''}`} />
+          </div>
+        )}
         {cur.name === 'DNS' && <DnsHealthLine health={health} />}
         {/* The chosen tile's explanation, written out: picking a tile by tap
             or keyboard shows it, not only a mouse hover over the tile. */}
@@ -409,7 +413,7 @@ function Issue({ r }) {
 function IssueList({ b, checked, none }) {
   const open = openProblems(b)
   if (open.length) return <ul className="ov-issues">{open.map((r) => <Issue key={r.key} r={r} />)}</ul>
-  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'None open' : 'not checked: information unavailable'}</span>
+  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'No open issues' : 'not checked: information unavailable'}</span>
 }
 
 // The board can be folded to one line of counts, so the charts below come up
@@ -461,13 +465,15 @@ function ServiceBoard({ board, dns }) {
         <h2 id="ov-board">Services</h2>
         <span className="ov-head-right">
           {hidden && <span className="ov-muted" data-board-summary="">{boardSummary(board.board, board.issuesChecked)}</span>}
-          <button type="button" onClick={toggle} aria-expanded={!hidden} aria-controls="ov-board-table" className="ov-link">{hidden ? 'Show' : 'Hide'}</button>
+          <button type="button" onClick={toggle} aria-expanded={!hidden} aria-controls="ov-board-table" className="ov-btn">{hidden ? 'Show' : 'Hide'}</button>
         </span>
       </div>
       <div id="ov-board-table" hidden={hidden} role="region" aria-label="Service board" tabIndex={0} className="ov-board-box">
         <table role="table" className="ov-board" data-board="">
-          <thead role="rowgroup" className="sr-only">
-            <tr role="row"><th role="columnheader" scope="col">Service</th><th role="columnheader" scope="col">Open issues</th><th role="columnheader" scope="col">Last 10 days</th></tr>
+          {/* Only "Last 10 days" shows: without it the squares did not say
+              they were days (screen audit A13). */}
+          <thead role="rowgroup" className="ov-board-head">
+            <tr role="row"><th role="columnheader" scope="col"><span className="sr-only">Service</span></th><th role="columnheader" scope="col"><span className="sr-only">Open issues</span></th><th role="columnheader" scope="col">Last 10 days</th></tr>
           </thead>
           <tbody role="rowgroup">
             {board.board.map((b) => {
@@ -536,7 +542,7 @@ function LicenseInventory({ licenses, panelId }) {
     { key: 'expiry', label: 'Expiry', priority: 'low' },
     {
       key: 'remaining',
-      label: 'Time Left',
+      label: 'Time left',
       align: 'right',
       sortable: true,
       // Unknown expiry sorts as +Infinity, never -Infinity: ascending order means
@@ -598,7 +604,7 @@ function LicenseInventory({ licenses, panelId }) {
       // "QUANTITY" clipped to "QUAN…" — while two grid columns sat empty to the
       // right. Full width removes both the clip and the dead space.
       span={6}
-      title="License Inventory"
+      title="License inventory"
       right={unavailable ? null : <span className="text-note text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
     >
       {licenses.loading ? (
@@ -666,8 +672,8 @@ function DnsHero({ dns, health, panelId }) {
       // and a React node is not a name — "Arrange this page" listed this panel
       // as "dns-hero". The words are the heading's own, verbatim, so the row in
       // the popup and the heading on screen are the same phrase to look for.
-      panelName="DNS Query Rate — 24h"
-      title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
+      panelName="DNS query rate — 24 hours"
+      title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS query rate — 24 hours</span>}
       right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />queries per second</span>}
     >
       {dns.loading ? (
@@ -693,7 +699,7 @@ function DnsHero({ dns, health, panelId }) {
           <WhenNear h={230}>
             <Suspense fallback={<Skeleton h={230} />}>
               <GradientArea
-                label="DNS Query Rate — 24h"
+                label="DNS query rate — 24 hours"
                 data={chartData}
                 color={COLORS.series}
                 gradientId="dnsFill"

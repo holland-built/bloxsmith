@@ -1,0 +1,58 @@
+- main "Site lists tab":
+  - heading "Site lists" [level=1]
+  - paragraph: Put a list of websites into a security policy, to block, allow, log or redirect them.
+  - region "Make the list":
+    - heading "Make the list" [level=2]
+    - group "Where the sites come from":
+      - text: Where the sites come from
+      - 'radio "Top sites: the most popular, and your network''s busiest" [checked]'
+      - text: "Top sites: the most popular, and your network's busiest"
+      - radio "A CSV file"
+      - text: A CSV file
+      - radio "Paste them in"
+      - text: Paste them in How many, from the top
+      - spinbutton "How many, from the top": /\d+/
+      - button "Get both lists"
+    - text: Sites never to add, one per line (kept for this tenant)
+    - textbox "Sites never to add, one per line (kept for this tenant)":
+      - /placeholder: e.g. example.com
+    - button "Save never-add list" [disabled]
+    - group "The list they go into":
+      - text: The list they go into
+      - radio "Make a new list" [checked]
+      - text: Make a new list
+      - radio "Add to a list I have"
+      - text: Add to a list I have New list name
+      - textbox "New list name":
+        - /placeholder: e.g. top-sites
+    - group "Policy":
+      - text: Policy
+      - status
+      - combobox "Policy":
+        - option "Select policy…" [selected]
+        - option "Baseline office"
+    - text: What the policy does with these sites
+    - combobox "What the policy does with these sites":
+      - option "Block" [selected]
+      - option "Allow"
+      - option "Log only"
+      - option "Redirect"
+      - option "Block without logging"
+      - option "Redirect without logging"
+    - text: People cannot reach these sites. Each attempt is logged. Where the rule goes (rules are checked from the top)
+    - combobox "Where the rule goes (rules are checked from the top)" [disabled]:
+      - option "First, before every other rule" [selected]
+    - button "Preview" [disabled]
+    - text: To preview, press Get both lists, name the new list and pick a policy.
+  - region "Preview":
+    - heading "Preview" [level=2]
+    - paragraph: Pick the sites, the list and the policy, then press Preview. Nothing changes in Infoblox until you press Add to policy.
+  - region "Daily proposals":
+    - heading "Daily proposals" [level=2]
+    - paragraph: Once a day, while Bloxsmith is running, it proposes the top sites a list is missing, and drops the ones it added that have left the top. Nothing changes until you approve.
+    - button "Propose changes every day" [disabled]
+    - text: To turn this on, press Get both lists, pick a list under Add to a list I have (make a new list first), pick a policy.
+  - region "Lists and rules made here":
+    - heading "Lists and rules made here" [level=2]
+    - paragraph: Newest first. Delete a rule before its list. Each delete asks first.
+    - text: Nothing made here yet.

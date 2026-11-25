@@ -54,7 +54,7 @@ const badge = (page: import('@playwright/test').Page, panel: string, addr: strin
 test('Status: the IPAM tile counts by the same bands', async ({ page }) => {
   await page.goto('/#overview');
   const ipam = page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: /^IPAM / });
-  await expect(ipam).toContainText('1 of 4 subnets ≥90%', { timeout: 20_000 });
+  await expect(ipam).toContainText('1 of 4 subnets 90% full or more', { timeout: 20_000 });
   await expect(ipam).toContainText('2 more at 70–89%');
 });
 

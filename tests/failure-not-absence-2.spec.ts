@@ -158,7 +158,7 @@ test.describe('Overview → License Inventory panel', () => {
   test('status:"error" shows unavailable wording, not a "0 licenses" header count', async ({ page }) => {
     await page.route('**/api/csp/license-alerts*', (route) => fulfillJson(route, { licenses: [], status: 'error' }));
     await page.goto('/#overview');
-    const card = page.locator('text=License Inventory').locator('..').locator('..');
+    const card = page.locator('text=License inventory').locator('..').locator('..');
     await expect(card.getByText(/license information is unavailable/i)).toBeVisible();
     await expect(card.getByText('0 licenses', { exact: true })).toHaveCount(0);
   });
@@ -166,7 +166,7 @@ test.describe('Overview → License Inventory panel', () => {
   test('a genuinely empty tenant still renders "No licenses found" and a real 0 count', async ({ page }) => {
     await page.route('**/api/csp/license-alerts*', (route) => fulfillJson(route, { licenses: [], status: 'ok' }));
     await page.goto('/#overview');
-    const card = page.locator('text=License Inventory').locator('..').locator('..');
+    const card = page.locator('text=License inventory').locator('..').locator('..');
     await expect(card.getByText('No licenses found', { exact: true })).toBeVisible();
     await expect(card.getByText('0 licenses', { exact: true })).toBeVisible();
     await expect(card.getByText(/license information is unavailable/i)).toHaveCount(0);

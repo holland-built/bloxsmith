@@ -19,7 +19,7 @@ test('Daily: a subnet that reports a total of 0 is not ranked as the top capacit
     },
   }));
   await page.goto('/#daily');
-  const panel = page.locator('h2', { hasText: 'Top Capacity Risks' }).first().locator('xpath=ancestor::div[contains(@class,"bg-card")]');
+  const panel = page.locator('h2', { hasText: 'Top capacity risks' }).first().locator('xpath=ancestor::div[contains(@class,"bg-card")]');
   await expect(panel.getByText('10.9.9.0')).toBeVisible({ timeout: 20_000 });
   const cells = await panel.locator('[role="row"], tr').allInnerTexts();
   const body = cells.filter((t) => /10\.9\.9\.0|fd10:1900::/.test(t));

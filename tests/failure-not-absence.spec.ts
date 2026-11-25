@@ -51,7 +51,7 @@ test.describe('Daily → Security Today panel (threat-event feed)', () => {
   test('dead feed shows unavailable wording, not zeroed chips', async ({ page }) => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, DEAD));
     await page.goto('/#daily');
-    const card = page.locator('text=Security Today').locator('..').locator('..');
+    const card = page.locator('text=Security today').locator('..').locator('..');
     await expect(card.getByText(/threat information is unavailable/i)).toBeVisible();
     await expect(card.getByText('critical', { exact: true })).toHaveCount(0);
   });
@@ -59,7 +59,7 @@ test.describe('Daily → Security Today panel (threat-event feed)', () => {
   test('genuinely empty feed still renders the zeroed chip grid', async ({ page }) => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#daily');
-    const card = page.locator('text=Security Today').locator('..').locator('..');
+    const card = page.locator('text=Security today').locator('..').locator('..');
     await expect(card.getByText(/threat information is unavailable/i)).toHaveCount(0);
     await expect(card.getByText('critical', { exact: true })).toBeVisible();
   });

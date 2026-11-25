@@ -139,3 +139,50 @@ test('the account name is the active label, never an id', () => {
   assert.equal(accountName(vault(null, [])), null)
   assert.equal(accountName({ error: new Error('x') }), null)
 })
+
+// A9 (gui audit, 2026-11-25): "Infoblox did not respond…" sat under nine
+// figures. It is said once per panel; each figure keeps only "Not checked".
+test('a failed read is said once per panel, not under every figure', async () => {
+  const { missedNote, NOT_RESPONDING } = await import('./valueModel.js')
+  const m = model()
+  assert.equal(m.cache_hit.text, 'Not checked')
+  assert.equal(m.cache_hit.note, null)
+  assert.equal(missedNote([m.queries, m.cache_hit, m.roaming]), NOT_RESPONDING)
+  assert.equal(missedNote([m.queries, m.roaming]), null)
+  assert.equal(missedNote([m.daily]), null)
+  assert.equal(missedNote([model({ daily: { error: new Error('x') } }).daily]), NOT_RESPONDING)
+})
+
+test('Print report has nothing to print only when every figure failed', async () => {
+  const { nothingToPrint } = await import('./valueModel.js')
+  const dead = { error: new Error('x') }
+  assert.equal(nothingToPrint(model({ security: dead, platform: dead, daily: dead, runs: dead })), true)
+  // Job history read, but with the security read failed there is no report
+  // period, so the job figure itself says 'Not available': still nothing to print.
+  assert.equal(nothingToPrint(model({ security: dead, platform: dead, daily: dead, runs: { data: { tenant: 't', runs: [] } } })), true)
+  // One real figure (the security read worked) is something to print.
+  assert.equal(nothingToPrint(model({ platform: dead, daily: dead, runs: dead })), false)
+  // A failed refresh that still holds the last read keeps its figures.
+  assert.equal(nothingToPrint(model({ runs: dead, daily: dead })), false)
+  // Review of A9: Infoblox failing comes back as HTTP 200 with an error status
+  // inside (go/internal/dashboard/value_security.go). That is just as failed.
+  const failed = (keys) => ({ data: { status: 'error', metrics: Object.fromEntries(keys.map((k) => [k, { status: 'error', value: null }])) } })
+  assert.equal(nothingToPrint(model({
+    security: failed(['blocked', 'zero_day', 'sus_to_mal']),
+    platform: failed(['queries', 'cache_hit', 'uptime', 'dhcp_assigned', 'roaming']),
+    daily: { data: { status: 'error' } },
+    runs: dead,
+  })), true)
+  // Second review: the server always marks uptime and DHCP 'unavailable' with
+  // the current settings. 'Not available' beside failures is still nothing to print.
+  const mixed = { data: { status: 'error', metrics: {
+    queries: { status: 'error', value: null }, cache_hit: { status: 'error', value: null }, roaming: { status: 'error', value: null },
+    uptime: { status: 'unavailable', value: null }, dhcp_assigned: { status: 'unavailable', value: null },
+  } } }
+  assert.equal(nothingToPrint(model({
+    security: failed(['blocked', 'zero_day', 'sus_to_mal']),
+    platform: mixed,
+    daily: { data: { status: 'error' } },
+    runs: dead,
+  })), true)
+})

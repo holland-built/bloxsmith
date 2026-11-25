@@ -93,7 +93,7 @@ test('Tab reaches a row, the whole row shows it, and Enter opens it', async ({ p
   await page.goto('/#daily');
   const p = panel(page, 'daily-hosts-attention');
   await expect(p.locator('[data-row-open]').first()).toBeAttached({ timeout: 20_000 });
-  await tabToRowButton(page, p.getByRole('button', { name: 'Options: Hosts Needing Attention' }));
+  await tabToRowButton(page, p.getByRole('button', { name: 'Options: Hosts needing attention' }));
 
   const seen = await page.evaluate(() => {
     const row = document.activeElement!.closest('tr')!;
@@ -117,7 +117,7 @@ test('Space opens a row too', async ({ page }) => {
   await page.goto('/#daily');
   const p = panel(page, 'daily-top-capacity-risks');
   await expect(p.locator('[data-row-open]').first()).toBeAttached({ timeout: 20_000 });
-  await tabToRowButton(page, p.getByRole('button', { name: 'Options: Top Capacity Risks' }));
+  await tabToRowButton(page, p.getByRole('button', { name: 'Options: Top capacity risks' }));
   await page.keyboard.press('Space');
   await expect(page).toHaveURL(/#network\?subnet=/);
 });

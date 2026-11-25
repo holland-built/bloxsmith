@@ -126,7 +126,7 @@ const HOSTS = [
 ];
 const ZONES = [
   { id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', view: 'baseline-view', records: 12, ttl: 3600, neg_ttl: 900, dnssec_status: 'SIGNED', anomaly: false, issues: [] },
-  { id: 'dns/auth_zone/baseline-2', fqdn: 'other.example.', view: 'baseline-view', records: 3, ttl: 300, neg_ttl: 900, dnssec_status: 'UNSIGNED', anomaly: true, issues: ['low ttl'] },
+  { id: 'dns/auth_zone/baseline-2', fqdn: 'other.example.', view: 'baseline-view', records: 3, ttl: 300, neg_ttl: 900, dnssec_status: 'UNSIGNED', anomaly: true, issues: ['TTL Too Low'] },
 ];
 const DNS_VIEWS = [{ id: 'dns/view/baseline-1', name: 'baseline-view', comment: 'the only view' }];
 const SEC_POLICIES = [
@@ -712,6 +712,78 @@ const CHART_RESULT = {
   ],
 };
 
+// --- the four pages that had no fixtures until 2026-11-25 ---------------------
+// Best practices, Value, Site lists and Demo server asked for data nothing
+// answered, so their "working" screenshots showed errors (screen audit A, step
+// 0). Shapes read from the Go handlers: dashboard/best_practices.go (check),
+// dashboard/value_security.go, value_platform.go, value_daily.go,
+// server/lists.go, server/sitesync.go and the demo status the Demo server spec
+// already fakes. Every name is invented.
+const BEST_PRACTICES = {
+  checks: [
+    {
+      id: 'hosts-down', severity: 'high', status: 'problem', title: '1 on-prem host is offline or in error',
+      why: "A host that's down serves nothing.", link: '#infra',
+      items: [{ name: 'baseline-host-c', detail: 'offline' }],
+    },
+    {
+      id: 'gm-resilience', severity: 'high', status: 'unknown', title: 'Grid Masters with no HA and no candidate', why: 'A lone Grid Master is a single point of failure.', items: [],
+      reason: "1 grid couldn't be checked: not all of its members are visible in the Portal.",
+    },
+    { id: 'dhcp-aap', severity: 'medium', status: 'passed', title: 'No DHCP HA group uses Advanced Active/Passive', why: 'That mode is retired.', items: [] },
+  ],
+};
+const VALUE_WINDOW = ['2025-12-02', '2025-12-31'];
+const VALUE_SECURITY = {
+  status: 'ok',
+  window: 'last 30 days',
+  metrics: {
+    blocked: { status: 'ok', value: 48210, covered: true, days_from: VALUE_WINDOW[0], days_to: VALUE_WINDOW[1], previous: 41000, previous_status: 'ok', window_range: VALUE_WINDOW },
+    zero_day: { status: 'ok', value: 12 },
+    sus_to_mal: { status: 'ok', value: 7, ahead_minutes: 640 },
+  },
+};
+const VALUE_PLATFORM = {
+  status: 'ok',
+  window: 'last 30 days',
+  metrics: {
+    queries: { status: 'ok', unit: 'queries', value: 1250000 },
+    cache_hit: { status: 'ok', unit: 'percent', value: 62.5 },
+    uptime: { status: 'ok', unit: 'percent', value: 99.9, hosts: [{ host_name: 'baseline-host-a', value: 99.9 }, { host_name: 'baseline-host-b', value: 99.8 }] },
+    dhcp_assigned: { status: 'ok', unit: 'addresses', value: 3400 },
+    roaming: { status: 'ok', unit: 'devices', value: 25 },
+  },
+};
+const VALUE_DAILY = {
+  status: 'ok',
+  window: 'last 30 days',
+  days: Array.from({ length: 30 }, (_, i) => ({ day: `2025-12-${String(i + 2).padStart(2, '0')}`, value: 1200 + ((i * 37) % 500) })),
+};
+const LIST_TARGETS = {
+  ok: true,
+  lists: [{ id: 5, name: 'baseline-allow', item_count: 3, policies: ['Baseline office'] }],
+  policies: [{ id: 7, name: 'Baseline office', rules: [
+    { type: 'named_feed', data: 'Base', action: 'action_block' },
+    { type: 'custom_list', data: 'baseline-allow', action: 'action_allow' },
+  ] }],
+  redirects: ['baseline-page'],
+};
+const DEMO_STATUS = {
+  settings: {
+    pve: 'root@10.10.9.2', pveName: 'baseline-pve', pveIp: '10.10.9.2', pool: 'baseline-pool', bridge: 'vmbr9',
+    subnet: '10.10.9.0/24', gateway: '10.10.9.1', image: '/tmp/baseline.qcow2', owner: 'baseline-owner',
+    ram: 4096, cores: 2, disk: '64G', hasJoinToken: true,
+  },
+  problems: [],
+  terraform: 'tofu',
+  unlocked: true,
+  steps: [
+    { ID: 'ip', Says: 'Take the next free IP in the demo network' },
+    { ID: 'vm', Says: 'Build a NIOS-X VM on Proxmox' },
+  ],
+  runs: [],
+};
+
 const PER_PAGE: Record<string, Handler[]> = {
   changes: [{ method: 'GET', path: '/api/csp-audit', body: CSP_AUDIT, required: true }],
   drift: [
@@ -751,6 +823,22 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/lists/proposals', body: { ok: true, proposals: [] }, required: true },
   ],
   daily: [{ method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true }],
+  'best-practices': [{ method: 'GET', path: '/api/best-practices', body: BEST_PRACTICES, required: true }],
+  value: [
+    { method: 'GET', path: '/api/csp/value-security', body: VALUE_SECURITY, required: true },
+    { method: 'GET', path: '/api/csp/value-platform', body: VALUE_PLATFORM, required: true },
+    { method: 'GET', path: '/api/csp/value-daily', body: VALUE_DAILY, required: true },
+    { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
+  ],
+  lists: [
+    { method: 'GET', path: '/api/lists/targets', body: LIST_TARGETS, required: true },
+    { method: 'GET', path: '/api/lists/never-add', body: { ok: true, sites: [] }, required: true },
+    { method: 'GET', path: '/api/lists/watches', body: { ok: true, watches: {} }, required: true },
+    { method: 'GET', path: '/api/lists/proposals', body: { ok: true, proposals: [] }, required: true },
+    // The "Made here" list under the form, as on Get an address.
+    { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
+  ],
+  demo: [{ method: 'GET', path: '/api/demo/status', body: DEMO_STATUS, required: true }],
   network: [
     { method: 'GET', path: '/api/csp/dhcp-leases', body: DHCP_LEASES, required: true },
     { method: 'GET', path: '/api/csp/dhcp-requests', body: DHCP_REQUESTS, required: true },
@@ -867,6 +955,8 @@ const SHELL_EXEMPT: Record<string, string[]> = {
   editor: ['GET /api/views'],
   drift: ['GET /api/views'],
   chart: ['GET /api/views'],
+  // Site lists is a form page too: no panel grid to arrange.
+  lists: ['GET /api/views'],
 };
 
 export const HAS_FIXTURES = Object.keys(PER_PAGE);

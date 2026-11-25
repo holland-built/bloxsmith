@@ -20,9 +20,13 @@ const LABELS = {
   dhcp_assigned: 'DHCP addresses assigned',
 }
 
+// Said once at the top of a panel (missedNote), not under every figure that
+// failed: nine copies of it read as nine problems (screen audit A9).
+export const NOT_RESPONDING = 'Infoblox did not respond. This page retries every 5 minutes.'
+
 const MISSING = {
   loading: ['Loading…', null],
-  error: ['Not checked', 'Infoblox did not respond. This page retries every 5 minutes.'],
+  error: ['Not checked', null],
   empty: ['No readings', 'Infoblox has no readings for this period.'],
   unavailable: ['Not available', 'This data is not available for this account.'],
 }
@@ -36,6 +40,25 @@ function stat(key, x) {
     ? x.text.replace(/^Not available:\s*/, '')
     : why
   return { ...base, text, note: reason }
+}
+
+/** The panel's one failure sentence, when any of its figures failed to read. */
+export function missedNote(stats) {
+  return stats.some((s) => s?.state === 'error') ? NOT_RESPONDING : null
+}
+
+/**
+ * True when every figure in the report failed, so a printed report would be
+ * nothing but "Not checked". Read from the model, not the replies: Infoblox
+ * failing comes back as HTTP 200 with an error status inside
+ * (go/internal/dashboard/value_security.go), which the model already calls
+ * failed.
+ */
+export function nothingToPrint(m) {
+  const figures = [m.blocked, m.zero_day, m.sus_to_mal, m.queries, m.cache_hit, m.roaming, m.uptime, m.dhcp_assigned, m.work, m.daily]
+  // A figure the server marks 'unavailable' is not a result either, so only a
+  // real read ('ok', or 'none' for a counted zero) leaves something to print.
+  return !figures.some((s) => s?.state === 'ok' || s?.state === 'none')
 }
 
 const PLATFORM_KEYS = { queries: 1, cache_hit: 1, roaming: 1, uptime: 1, dhcp_assigned: 1 }
