@@ -202,7 +202,7 @@ function SeverityHero({ panelId, hub, events }) {
                 bars holding 50. */}
             {otherSev > 0 && (
               <div className="flex items-center gap-1.5 text-note text-muted">
-                <span>Other</span>
+                <span>Info or no severity</span>
                 <b>{otherSev}</b>
               </div>
             )}
