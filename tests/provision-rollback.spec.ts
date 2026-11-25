@@ -64,9 +64,9 @@ async function stubSeedStream(page: import('@playwright/test').Page, applyBody: 
 
 async function seedApply(page: import('@playwright/test').Page) {
   await page.goto('/#provision');
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Seed demo data', exact: true }).click();
+  await page.getByRole('button', { name: 'Make demo data', exact: true }).click();
   await expect(page.getByText('upstream 500 creating dhcp range').first()).toBeVisible();
 }
 
@@ -196,7 +196,7 @@ test('a demo teardown with an unconfirmed delete does not say complete', async (
         + sseFrame({ done: true, succeeded: 2, failed: 0, skipped: 0, unconfirmed: 1, total: 3, unconfirmed_note: note }),
   }));
   await page.goto('/#provision');
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   await page.getByPlaceholder('DELETE').fill('DELETE');
   await page.getByRole('button', { name: 'Preview', exact: true }).last().click();
   await expect(page.getByText(/Review the plan, then Tear down demo/)).toBeVisible();
@@ -218,8 +218,8 @@ test('a real run whose connection drops says the outcome is unknown', async ({ p
     ? route.fulfill({ status: 200, contentType: 'text/event-stream', body: PREVIEW_OK })
     : route.abort()));
   await page.goto('/#provision');
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Seed demo data', exact: true }).click();
+  await page.getByRole('button', { name: 'Make demo data', exact: true }).click();
   await expect(page.getByText('Bloxsmith did not get an answer, so this may or may not have happened. Refresh and check before trying again.').first()).toBeVisible();
 });

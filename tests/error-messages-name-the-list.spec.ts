@@ -22,7 +22,7 @@ test('Get an address: each failed list says which list it is and why', async ({ 
   await expect(card.getByText(/Pick a space and press Preview/)).toHaveCount(0);
 });
 
-test('Drift: failed templates replace "Pick a template and press Check drift"', async ({ page }) => {
+test('Drift: failed templates replace "Pick a template and press Compare"', async ({ page }) => {
   await page.route('**/api/templates*', (r) => r.fulfill(json({ error: 'templates folder missing' }, 500)));
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [] })));
   await page.goto('/#drift');
@@ -30,14 +30,14 @@ test('Drift: failed templates replace "Pick a template and press Check drift"', 
   await expect(page.locator('[data-drift-form]').getByText('Could not load site templates. templates folder missing.')).toBeVisible();
   const result = page.locator('[data-drift-result]');
   await expect(result.getByText('Site templates did not load, so there is nothing to pick yet.')).toBeVisible();
-  await expect(result.getByText(/Pick a template and press Check drift/)).toHaveCount(0);
+  await expect(result.getByText(/Pick a template and press Compare/)).toHaveCount(0);
 });
 
 test('Drift: with templates loaded, the instruction is still shown', async ({ page }) => {
   await page.route('**/api/templates*', (r) => r.fulfill(json([{ name: 'dal', region: 'us', environment: 'prod' }])));
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [] })));
   await page.goto('/#drift');
-  await expect(page.locator('[data-drift-result]').getByText(/Pick a template and press Check drift/)).toBeVisible();
+  await expect(page.locator('[data-drift-result]').getByText(/Pick a template and press Compare/)).toBeVisible();
 });
 
 test('Best practices: no checks back says "No checks ran" and the tiles are unavailable, never 0 of 0', async ({ page }) => {

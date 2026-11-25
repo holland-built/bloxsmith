@@ -49,7 +49,7 @@ test('get an IP address: preview, build, then remove it', async ({ page }) => {
 
   await page.goto('/#automate');
   await expect(page.getByRole('heading', { name: 'What do you want to do?' })).toBeVisible();
-  await expect(page.getByText('Nothing built here yet.')).toBeVisible();
+  await expect(page.getByText('Nothing made here yet.')).toBeVisible();
 
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');

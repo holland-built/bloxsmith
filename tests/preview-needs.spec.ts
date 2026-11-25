@@ -20,15 +20,15 @@ test('Get an address says why Preview is off, and the reason goes as each one is
   await expect(preview).toBeDisabled();
   await expect(preview).toHaveAccessibleDescription('To preview, pick an IP space.');
 
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
-  await panel.getByRole('combobox', { name: 'Block' }).selectOption('ipam/address_block/b1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/b1');
   await panel.getByRole('checkbox', { name: 'Also give it a DNS name' }).check();
-  await panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' }).check();
+  await panel.getByRole('checkbox', { name: 'Lock it to one device' }).check();
   await expect(panel.getByText(
     "To preview, pick another block (this one has no subnets), type a Name (it becomes the DNS name), pick a DNS zone and type the device's MAC address.",
   )).toBeVisible();
 
-  await panel.getByRole('combobox', { name: 'Block' }).selectOption('');
+  await panel.getByRole('combobox', { name: 'Address block' }).selectOption('');
   await panel.getByPlaceholder('host-01').fill('printer-3');
   await panel.getByRole('combobox', { name: 'Zone' }).selectOption('dns/auth_zone/z1');
   await panel.getByRole('textbox', { name: 'Device MAC address' }).fill('aa:bb:cc:dd:ee:01');

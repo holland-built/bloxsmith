@@ -80,7 +80,7 @@ const TABS = [
   { id: 'provision', label: 'Provision', el: Provision },
   { id: 'selfservice', label: 'Get an address', el: SelfService },
   { id: 'editor', label: 'Editor', el: Editor },
-  { id: 'drift', label: 'Drift', el: Drift },
+  { id: 'drift', label: 'Compare to template', el: Drift },
   { id: 'lists', label: 'Site lists', el: SiteLists },
   { id: 'made', label: 'Made with Bloxsmith', el: Made },
   { id: 'demo', label: 'Demo server', el: DemoServer },

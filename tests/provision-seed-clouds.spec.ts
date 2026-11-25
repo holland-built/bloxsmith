@@ -19,7 +19,7 @@ test.describe('Provision → Seed demo cloud choices', () => {
     });
 
     await page.goto('/#provision');
-    await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+    await page.getByRole('button', { name: 'Demo data', exact: true }).click();
 
     const aws = page.getByRole('checkbox', { name: /^AWS\b/ });
     const azure = page.getByRole('checkbox', { name: /^Azure\b/ });

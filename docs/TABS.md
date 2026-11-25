@@ -5,7 +5,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 Tabs fall into two groups:
 
 - **Read-only**: Overview, Daily, Value, Network, DNS, Security, Infra, Assets, Incidents, Audit, Changes. They refresh on a timer and only show data. They never write to Infoblox. Assets is the exception to the timer: it reads again only when you ask, for the reason given in its own section. The refresh times on this page are the normal ones. The list at the top of the screen can slow them to 1, 5 or 15 minutes or turn them off, and the round arrow beside it reloads the page now. Connection status and job progress keep updating whatever the list says.
-- **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Drift and AI sit in between. Drift only reads. AI reads, and has one action that writes: blocking a domain.
+- **Can make changes**: Provision, Get an address, Editor and Demo server. These create, change or delete real objects in your tenant. Compare to template and AI sit in between. Compare to template only reads. AI reads, and has one action that writes: blocking a domain.
 
 Almost every panel follows one rule: information that failed to load never looks like information that loaded and came back empty. When a request fails, times out, or returns something the panel can't trust, the panel says so. You see "feed unavailable", a warning, or a line naming the error, never the blank state of a healthy, empty tenant. So a panel with no rows means there are no rows.
 
@@ -58,14 +58,14 @@ If the tenant you are using is read-only, the buttons that would write are greye
 | [Provision](#provision) | **yes** | Build subnets, sites and demo networks |
 | [Get an address](#get-an-address) | **yes** | Take an address, add a DNS record, edit or remove either |
 | [Editor](#editor) | **yes** | Create, update or delete one object directly |
-| [Drift](#drift) | no | Your template compared with what is really there |
+| [Compare to template](#compare-to-template) | no | Your template compared with what is really there |
 | [Demo server](#demo-server) | **yes** | Build a NIOS-X server on Proxmox for a demo, then remove it |
 | [AI](#ai) | one action | Ask questions, look up threats |
 | [Build a chart](#build-a-chart) | no | Make a DNS or security chart by picking from menus |
 
 ## Rearranging panels
 
-You can rearrange every tab, and each tab remembers its own layout. Moving a panel on Network changes nothing on DNS. Provision keeps three layouts, one each for Subnet, Full site and Seed demo, because those are three different pages behind one tab.
+You can rearrange every tab, and each tab remembers its own layout. Moving a panel on Network changes nothing on DNS. Provision keeps three layouts, one each for Subnet, Full site and Demo data, because those are three different pages behind one tab.
 
 - **Move**: open the ⋯ menu in a panel's header and drag **Move**. Press Escape while dragging to cancel. Without a mouse, Tab to ⋯ and press Enter, Tab to **Move** and press Enter, move with ← and →, then press Enter to keep the new place or Escape to put it back.
 - **Resize**: drag a panel's right edge. Press Escape while dragging to keep the old width. When moving with the keyboard, ↑ and ↓ resize.
@@ -73,9 +73,9 @@ You can rearrange every tab, and each tab remembers its own layout. Moving a pan
 - **Arrange panels**: a button above the panels opens a window called "Arrange this page". It lists what is on the page, in the order you see it, and lists separately anything you took off. Drag a row up or down, or use its **Move up** and **Move down** buttons. **Take off the page** and **Put back on the page** hide a panel and bring it back. A panel you put back goes to the *end* of the page, not where it was before, and the window says so. The window also explains all of this in words, for anyone who hasn't used a ⠿ grip before.
 - **Saving**: there is no Save button. Every move, resize and hide is saved as soon as you let go, the page tells you it saved, and the layout is still there on your next visit and after a server restart.
 
-Four tabs are forms, not panels: **Get an address**, **Editor**, **Drift** and **Build a chart**. They have no ⠿, ✕, ⓘ or **Arrange panels**. What you fill in is on the left, and what it produces (a preview, a result or a chart) is on the right, beside the button that made it. On a narrow screen the two stack, form first.
+Four tabs are forms, not panels: **Get an address**, **Editor**, **Compare to template** and **Build a chart**. They have no ⠿, ✕, ⓘ or **Arrange panels**. What you fill in is on the left, and what it produces (a preview, a result or a chart) is on the right, beside the button that made it. On a narrow screen the two stack, form first.
 
-On wide screens, Provision and Demo server also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Seed demo.
+On wide screens, Provision and Demo server also have an **On this page** list on the left. It names every panel on the page, and clicking a name jumps to that panel. The panel you are looking at is marked. The list keeps up as the page changes, for example when you switch Provision between Subnet, Full site and Demo data.
 
 You can't add or delete panels. Each tab has a fixed set that comes with the app, and **Take off the page** only hides one. If a panel is missing and you didn't hide it, the service behind it wasn't found on this tenant. The tab says so, in a row that offers to show the panel anyway.
 
@@ -348,15 +348,15 @@ Build a whole site from a template in your template library in one run: address 
 
 If the template list is empty, no templates are installed. Run `scripts/fetch_templates.py`, or use the release download or container image, which include them.
 
-### Seed demo
+### Demo data
 
 Builds a full demo network in the regions you tick (AMER, EMEA, APAC) from the template library, all at once. Each region lists the sites it will build. Made for demos and lab tenants. You can also tick AWS, Azure and Google Cloud, which start unticked: each builds that cloud's demo sites in its own address block, and keeps hosts and DHCP ranges off the addresses the cloud keeps for itself.
 
-Progress for each template adds up as `done/total`, and each failure is listed. The last message says what happened, not just that the run ended. A clean run says "Seed complete". A mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed". A run where nothing worked says "Seed failed — 0 of *N* template(s) succeeded".
+Progress for each template adds up as `done/total`, and each failure is listed. The last message says what happened, not just that the run ended. A clean run says "Demo data made." A mixed one says "Demo data partly made — *X* of *N* succeeded, *Y* failed". A run where nothing worked says "Demo data failed — 0 of *N* template(s) succeeded".
 
 **Tear down demo** deletes the demo sites for the ticked regions in the chosen space: each site's DNS zone, DHCP ranges, reverse zones, networks and hosts. Nothing else is touched. The live run needs admin and `DELETE` typed in to confirm.
 
-> Do not point Seed demo at a production tenant. It writes many objects quickly, and teardown is the only way back.
+> Do not point Demo data at a production tenant. It writes many objects quickly, and teardown is the only way back.
 
 ## Get an address
 
@@ -369,7 +369,7 @@ Take the next free address, or several, from a subnet.
 1. Pick **IP space** (yours first), then **block** (optional), then **subnet**. Every list has a search box above it; type part of a name or address to narrow it. Leave the subnet on **Any network with room** to use the one with the most free addresses.
 2. Set how many addresses you want, and a name if you want one.
 3. To give a single address a DNS name too, tick **Also give it a DNS name** and pick the zone. Only forward zones are listed. The Name you typed becomes the DNS name, for example `printer-3.example.com`. Tick **Also create the reverse (PTR) record** if you want that as well. Infoblox makes it only when a reverse zone covers the address, so Preview checks first and shows an amber note when none does, or when it could not check. If the DNS record cannot be made, the address is handed back.
-4. To keep a single address for one device, tick **Lock it to one device (DHCP reservation)** and type the device's MAC address, such as `aa:bb:cc:dd:ee:ff`. DHCP then gives that address to that device only. Preview refuses a device that already has a reservation. **Reserve** takes the exact address the preview showed; if someone took it meanwhile, nothing is made and you preview again. With a DNS name as well, the reservation is made first, and it stays even if the DNS record fails.
+4. To keep a single address for one device, tick **Lock it to one device** and type the device's MAC address, such as `aa:bb:cc:dd:ee:ff`. DHCP then gives that address to that device only. Preview refuses a device that already has a reservation. **Reserve** takes the exact address the preview showed; if someone took it meanwhile, nothing is made and you preview again. With a DNS name as well, the reservation is made first, and it stays even if the DNS record fails.
 5. **Preview** shows which addresses it would take, in a sentence. **Allocate** (or **Reserve**) takes them and names the address you got.
 
 ### Create a DNS record
@@ -414,22 +414,22 @@ It handles six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, 
 
 Other tabs can open Editor with the form filled in, using a link such as `#editor?type=subnet&id=abc123`.
 
-> Subnets and address blocks made here belong to no site template, so Drift will list them as extra.
+> Subnets and address blocks made here belong to no site template, so Compare to template will list them as extra.
 
-## Drift
+## Compare to template
 
 **Read-only.** Compares a site template with what is really in Infoblox.
 
 1. Pick a **template**. You can choose a different **IP space** from the one the template uses.
-2. Press **Check drift**.
+2. Press **Compare**.
 
-The result is either `✓ in-sync` or a count of differences, grouped by kind, worst first. Each difference is marked:
+The result is either `✓ Matches the template` or a count of differences, grouped by kind, worst first. Each difference is marked:
 
 - **missing**: the template has it and Infoblox doesn't.
 - **changed**: it exists, but a value is different from the template.
 - **extra**: it is in Infoblox but not in the template.
 
-Drift never fixes anything. To close a gap, provision the site again (missing), or edit or delete the object (changed, extra).
+Compare to template never fixes anything. To close a gap, provision the site again (missing), or edit or delete the object (changed, extra).
 
 ## Site lists
 
@@ -641,14 +641,14 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Full site: Tear down this site | the Infoblox API | No | it is a form, not a chart |
 | Provision | Full site: Teardown log | the Infoblox API | No | it is a live log, not a chart |
 | Provision | Full site: Teardown result | the Infoblox API | No | it reports what a change did, not a chart |
-| Provision | Seed demo: Request | the Infoblox API | No | it is a form, not a chart |
-| Provision | Seed demo: Progress | the Infoblox API | No | it is a live log, not a chart |
-| Provision | Seed demo: Log | the Infoblox API | No | it is a live log, not a chart |
-| Provision | Seed demo: Summary | the Infoblox API | No | it reports what a change did, not a chart |
-| Provision | Seed demo: Tear down demo | the Infoblox API | No | it is a form, not a chart |
-| Provision | Seed demo: Teardown progress | the Infoblox API | No | it is a live log, not a chart |
-| Provision | Seed demo: Teardown log | the Infoblox API | No | it is a live log, not a chart |
-| Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Demo data: Request | the Infoblox API | No | it is a form, not a chart |
+| Provision | Demo data: Progress | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Demo data: Log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Demo data: Summary | the Infoblox API | No | it reports what a change did, not a chart |
+| Provision | Demo data: Tear down demo | the Infoblox API | No | it is a form, not a chart |
+| Provision | Demo data: Teardown progress | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Demo data: Teardown log | the Infoblox API | No | it is a live log, not a chart |
+| Provision | Demo data: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
 | Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
 | Automate | Made here | the app's own run records | No | it is a list, not a chart |
 | Made with Bloxsmith | What Bloxsmith made and deleted | the app's own run records | No | it is a list, not a chart |

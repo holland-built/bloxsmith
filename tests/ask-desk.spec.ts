@@ -71,7 +71,7 @@ test('a wide lookup result can be scrolled to its last column, not clipped', asy
   );
   await page.goto('/#ai');
   await page.getByPlaceholder('domain, IP, or host…').fill('tbcloud-alibaba.com');
-  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up', exact: true }).click();
   // The table's own wrapper, found without relying on anything this change added.
   const region = page.locator('[data-panel-id="ai-threat-lookup"] table').first().locator('..');
   await expect(region).toBeVisible();

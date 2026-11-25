@@ -30,7 +30,7 @@ test('while the new space\'s blocks load, the Block picker offers none of the ol
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
   // The dropdown itself: the IP Space field also has a search box now.
-  const space = panel.getByRole('combobox', { name: 'IP Space' });
+  const space = panel.getByRole('combobox', { name: 'IP space' });
   const block = panel.getByLabel('Block');
   await space.selectOption({ label: 'Amsterdam Lab' });
   await expect(block.locator('option', { hasText: '10.1.0.0/16' })).toHaveCount(1);

@@ -15,7 +15,7 @@ async function openAddress(page: import('@playwright/test').Page) {
   );
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   return panel;
 }
 
@@ -29,12 +29,12 @@ test('Get an address can reserve the address for one device', async ({ page }) =
       : r.fulfill(json({ ok: true, addresses: [{ id: 'dhcp/fixed_address/f1', address: '10.0.42.7' }], fixed_address: { ok: true, id: 'dhcp/fixed_address/f1', address: '10.0.42.7', mac: 'aa:bb:cc:dd:ee:01' } }));
   });
   const panel = await openAddress(page);
-  const lock = panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' });
+  const lock = panel.getByRole('checkbox', { name: 'Lock it to one device' });
 
   // One device gets one address.
-  await panel.getByRole('spinbutton', { name: 'Count' }).fill('2');
+  await panel.getByRole('spinbutton', { name: 'How many addresses' }).fill('2');
   await expect(lock).toBeDisabled();
-  await panel.getByRole('spinbutton', { name: 'Count' }).fill('1');
+  await panel.getByRole('spinbutton', { name: 'How many addresses' }).fill('1');
 
   await lock.check();
   await panel.getByPlaceholder('host-01').fill('printer-3');
@@ -59,7 +59,7 @@ test('a device that already has a reservation is refused in the preview', async 
     r.fulfill(json({ ok: false, error: 'aa:bb:cc:dd:ee:01 already has a reservation: 10.0.42.40 (old-printer). Use that one, or remove it first' }, 409)),
   );
   const panel = await openAddress(page);
-  await panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' }).check();
+  await panel.getByRole('checkbox', { name: 'Lock it to one device' }).check();
   await panel.getByRole('textbox', { name: 'Device MAC address' }).fill('aa:bb:cc:dd:ee:01');
   await panel.getByRole('button', { name: 'Preview' }).click();
   await expect(panel.getByText(/already has a reservation: 10\.0\.42\.40/)).toBeVisible();

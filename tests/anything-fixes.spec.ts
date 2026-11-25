@@ -63,7 +63,7 @@ test('Allocate says which address it reserved', async ({ page }) => {
   });
   await page.goto('/#selfservice');
   const card = await openTask(page, 'address');
-  await card.getByRole('combobox', { name: 'IP Space' }).selectOption({ label: 'Lab' });
+  await card.getByRole('combobox', { name: 'IP space' }).selectOption({ label: 'Lab' });
   await card.getByRole('combobox', { name: 'Subnet' }).selectOption('sub1');
   await card.getByRole('button', { name: 'Preview' }).click();
   await card.getByRole('button', { name: 'Allocate', exact: true }).click();

@@ -121,8 +121,8 @@ for (const width of [390, 1440]) {
 test('a box that cannot be used looks it', async ({ page }) => {
   await page.goto('/#selfservice');
   const card = await openTask(page, 'address');
-  const block = card.getByRole('combobox', { name: 'Block', exact: true });
-  const space = card.getByRole('combobox', { name: 'IP Space', exact: true });
+  const block = card.getByRole('combobox', { name: 'Address block', exact: true });
+  const space = card.getByRole('combobox', { name: 'IP space', exact: true });
   await expect(block).toBeDisabled();
   await expect(space).toBeEnabled();
   const look = (el: Element) => ({ color: getComputedStyle(el).color, cursor: getComputedStyle(el).cursor, border: getComputedStyle(el).borderTopColor });
@@ -137,13 +137,13 @@ test('a short list has no search box, and an empty one says there is nothing to 
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [{ id: 'ipam/ip_space/1', name: 'one' }] })));
   await page.goto('/#selfservice');
   const card = await openTask(page, 'address');
-  await expect(card.getByRole('combobox', { name: 'IP Space', exact: true })).toBeVisible();
-  await expect(card.getByRole('searchbox', { name: 'Search IP Space' })).toHaveCount(0);
+  await expect(card.getByRole('combobox', { name: 'IP space', exact: true })).toBeVisible();
+  await expect(card.getByRole('searchbox', { name: 'Search IP space' })).toHaveCount(0);
 
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [] })));
   await page.reload();
   const again = await openTask(page, 'address');
-  const space = again.getByRole('combobox', { name: 'IP Space', exact: true });
+  const space = again.getByRole('combobox', { name: 'IP space', exact: true });
   await expect(space.locator('option').first()).toHaveText('Nothing to pick yet');
   await expect(again).not.toContainText('0 options');
 });
@@ -153,5 +153,5 @@ test('a long list keeps its search box', async ({ page }) => {
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces })));
   await page.goto('/#selfservice');
   const card = await openTask(page, 'address');
-  await expect(card.getByRole('searchbox', { name: 'Search IP Space' })).toBeVisible();
+  await expect(card.getByRole('searchbox', { name: 'Search IP space' })).toBeVisible();
 });

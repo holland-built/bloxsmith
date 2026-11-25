@@ -192,7 +192,7 @@ async function allocate(page: Page, reply: Reply) {
     ? r.fulfill({ json: { ok: true, dry_run: true, addresses: [{ address: '10.0.42.7' }] } }) : reply(r)));
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('button', { name: 'Preview' }).click();
   await expect(panel.getByText('10.0.42.7').first()).toBeVisible();
   await panel.getByRole('button', { name: /^(Allocate|Reserve|Get)/ }).last().click();

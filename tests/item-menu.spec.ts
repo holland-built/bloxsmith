@@ -221,9 +221,9 @@ test('network: Reserve an address opens Get an address on that network, locked t
   await pick(page, networkLink(page), 'Reserve an address');
   await expect(page).toHaveURL(/#selfservice\?subnet=ipam%2Fsubnet%2Fbaseline-3&network=10\.30\.0\.0%2F24&reserve=1$/);
   const panel = page.locator('[data-task="address"]');
-  await expect(panel.getByRole('combobox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/baseline-1');
+  await expect(panel.getByRole('combobox', { name: 'IP space' })).toHaveValue('ipam/ip_space/baseline-1');
   await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/baseline-3');
-  await expect(panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' })).toBeChecked();
+  await expect(panel.getByRole('checkbox', { name: 'Lock it to one device' })).toBeChecked();
 });
 
 test('network: Edit and Add a DHCP range open the Editor, filled in from the item page', async ({ page }) => {
@@ -307,9 +307,9 @@ test('Get an address: a plain visit after a prefilled link clears the prefill, k
   const link = '#selfservice?space=ipam%2Fip_space%2Fbaseline-1&subnet=ipam%2Fsubnet%2Fbaseline-3&reserve=1';
   await page.goto('/' + link);
   const panel = page.locator('[data-task="address"]');
-  const space = panel.getByRole('combobox', { name: 'IP Space' });
+  const space = panel.getByRole('combobox', { name: 'IP space' });
   const subnet = panel.getByRole('combobox', { name: 'Subnet' });
-  const lock = panel.getByRole('checkbox', { name: 'Lock it to one device (DHCP reservation)' });
+  const lock = panel.getByRole('checkbox', { name: 'Lock it to one device' });
   await expect(space).toHaveValue('ipam/ip_space/baseline-1');
   await expect(subnet).toHaveValue('ipam/subnet/baseline-3');
   await expect(lock).toBeChecked();
@@ -361,7 +361,7 @@ test('Get an address: following a second link with another space picks that link
   await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/baseline-3');
 
   await setHash(page, '#selfservice?space=ipam%2Fip_space%2Fa&subnet=ipam%2Fsubnet%2Ftwo-1');
-  await expect(panel.getByRole('combobox', { name: 'IP Space' })).toHaveValue('ipam/ip_space/a');
+  await expect(panel.getByRole('combobox', { name: 'IP space' })).toHaveValue('ipam/ip_space/a');
   await expect(panel.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/two-1');
 });
 
@@ -369,8 +369,8 @@ test('Get an address: a Block picked by hand stays when a plain visit takes the 
   await page.route('**/api/ipam/spaces*', (r) => r.fulfill(json({ spaces: [{ id: 'ipam/ip_space/a', name: 'Corp' }] })));
   await page.goto('/#selfservice?space=ipam%2Fip_space%2Fa');
   const panel = page.locator('[data-task="address"]');
-  const space = panel.getByRole('combobox', { name: 'IP Space' });
-  const block = panel.getByRole('combobox', { name: 'Block' });
+  const space = panel.getByRole('combobox', { name: 'IP space' });
+  const block = panel.getByRole('combobox', { name: 'Address block' });
   await expect(space).toHaveValue('ipam/ip_space/a');
   await block.selectOption('ipam/address_block/a1');
   await setHash(page, '#selfservice');

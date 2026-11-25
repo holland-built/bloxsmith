@@ -45,10 +45,10 @@ test('Threat lookup: a refused search names the reason, and Lookup runs it again
   await page.goto('/#ai');
   const lookup = page.locator('[data-panel-id="ai-threat-lookup"]');
   await lookup.getByPlaceholder('domain, IP, or host…').fill('example.com');
-  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await lookup.getByRole('button', { name: 'Look up', exact: true }).click();
   await expect(lookup.getByText(REFUSED)).toBeVisible();
   await expect(lookup.getByRole('button', { name: 'Try again' })).toHaveCount(0);
-  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await lookup.getByRole('button', { name: 'Look up', exact: true }).click();
   await expect(lookup.getByText('No matches')).toBeVisible();
   expect(calls).toBe(2);
 });
@@ -67,7 +67,7 @@ test('Block on the Ask tab: a timed-out write says to check first, and only a cl
   await page.goto('/#ai');
   const lookup = page.locator('[data-panel-id="ai-threat-lookup"]');
   await lookup.getByPlaceholder('domain, IP, or host…').fill('bad.example.com');
-  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await lookup.getByRole('button', { name: 'Look up', exact: true }).click();
   await lookup.getByRole('button', { name: 'Block domain' }).click();
   await expect(lookup.getByText(/did not answer within 12s/)).toBeVisible();
 
@@ -97,7 +97,7 @@ test('Unblock on the Ask tab: the button after a timeout says it sends the unblo
   await page.goto('/#ai');
   const lookup = page.locator('[data-panel-id="ai-threat-lookup"]');
   await lookup.getByPlaceholder('domain, IP, or host…').fill('bad.example.com');
-  await lookup.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await lookup.getByRole('button', { name: 'Look up', exact: true }).click();
   await lookup.getByRole('button', { name: 'Block domain' }).click();
   await lookup.getByRole('button', { name: 'Unblock' }).click();
   await expect(lookup.getByText(/refresh and re-check before retrying/)).toBeVisible();

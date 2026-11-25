@@ -12,6 +12,7 @@ import { tokenFetch } from '../lib/authFetch.js'
 // lives in lib/ so npm test can reach it — inside this file it was a
 // cross-language prose contract nothing checked. See driftStatus.test.js.
 import { driftItemKind } from '../lib/driftStatus.js'
+import { countOf } from '../lib/plainWords.js'
 
 // Colours stay here, with the component that paints them. Keeping them next to
 // the classifier is what put the classifier inside a .jsx file and out of reach
@@ -48,7 +49,7 @@ export default function Drift() {
       .then(async (r) => {
         let body = null
         try { body = await r.json() } catch { body = null }
-        if (!r.ok || body?.error) { setErr(body?.error || failureText(r.status, 'check for drift')); setChecking(false); return }
+        if (!r.ok || body?.error) { setErr(body?.error || failureText(r.status, 'compare to the template')); setChecking(false); return }
         setResult(body)
         setChecking(false)
       })
@@ -80,7 +81,7 @@ export default function Drift() {
   // result appears beside the button that asked for it. Below lg they stack.
   const form = (
     <section aria-labelledby="drift-form-h" data-drift-form="">
-      <ColumnHeading id="drift-form-h">Check drift</ColumnHeading>
+      <ColumnHeading id="drift-form-h">Compare</ColumnHeading>
       <div className="flex flex-col gap-3">
         <div role="group" aria-label="Template" className="text-note text-muted flex flex-col gap-1">
           Template
@@ -96,40 +97,42 @@ export default function Drift() {
                 const where = [t.region, t.environment].filter(Boolean).join('/')
                 return { value: t.name, label: where ? `${t.name} — ${where}` : t.name }
               })}
-              placeholder="Select a template"
+              placeholder="Pick a template"
             />
           )}
+          {/* Each load error sits under the box it is about (audit R2-D1). */}
+          <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
+          {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
         </div>
-        <div role="group" aria-label="IP space (override)" className="text-note text-muted flex flex-col gap-1">
-          IP space (override)
+        <div role="group" aria-label="IP space (optional)" className="text-note text-muted flex flex-col gap-1">
+          IP space (optional)
           <FilterSelect
-            label="IP space (override)"
+            label="IP space (optional)"
             value={ipSpace}
             onChange={setIpSpace}
             options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
-            placeholder="— template default —"
+            placeholder="The template's own IP space"
           />
-        </div>
-        <div>
-          <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
           <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
-          {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
-          {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+          {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
         </div>
-        <button
-          disabled={checking || !template}
-          onClick={check}
-          aria-describedby={!template ? 'drift-needs' : undefined}
-          className="px-3 py-2 rounded-control text-copy font-medium disabled:cursor-not-allowed self-start"
-          // Greyed, not faded: white on a faded blue was hard to read in the
-          // light theme. The field fill with dim words reads in both.
-          style={checking || !template
-            ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
-            : { background: COLORS.accent, color: COLORS.onAccent }}
-        >
-          {checking ? 'Checking…' : 'Check drift'}
-        </button>
-        {!template && <p id="drift-needs" className="text-note text-muted">To check, pick a template.</p>}
+        {/* The same size as Preview on the other forms, with its hint beside it. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <button
+            disabled={checking || !template}
+            onClick={check}
+            aria-describedby={!template ? 'drift-needs' : undefined}
+            className="px-3.5 py-1.5 rounded-control text-copy font-medium disabled:cursor-not-allowed"
+            // Greyed, not faded: white on a faded blue was hard to read in the
+            // light theme. The field fill with dim words reads in both.
+            style={checking || !template
+              ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
+              : { background: COLORS.accent, color: COLORS.onAccent }}
+          >
+            {checking ? 'Comparing…' : 'Compare'}
+          </button>
+          {!template && <span id="drift-needs" className="text-note text-muted">To compare, pick a template.</span>}
+        </div>
       </div>
     </section>
   )
@@ -154,7 +157,7 @@ export default function Drift() {
                 : '✓ Matches the template'}
             </span>
             {result.subnet_count != null && (
-              <span className="text-note text-muted">{result.subnet_count} subnets</span>
+              <span className="text-note text-muted">{countOf(result.subnet_count, 'subnet')}</span>
             )}
           </div>
           {result.summary && (
@@ -213,18 +216,18 @@ export default function Drift() {
       {err ? (
         <div role="alert" className="text-copy" style={{ color: COLORS.crit }}>{err}</div>
       ) : checking ? (
-        <p role="status" className="text-copy text-muted">Checking…</p>
+        <p role="status" className="text-copy text-muted">Comparing…</p>
       ) : result ? (
         <div role="status">{findings}</div>
       ) : (
-        <FormHint missing={templatesApi.error && templates.length === 0 && 'site templates'}>Pick a template and press Check drift. The differences are listed here.</FormHint>
+        <FormHint missing={templatesApi.error && templates.length === 0 && 'site templates'}>Pick a template and press Compare. The differences are listed here.</FormHint>
       )}
     </section>
   )
 
   return (
     <div className="w-full px-6 py-5">
-      <PageTitle className="mb-1">Drift</PageTitle>
+      <PageTitle className="mb-1">Compare to template</PageTitle>
       <TabIntro>Shows what is missing from Infoblox, what is extra, and what differs from the template. It changes nothing.</TabIntro>
       <FormColumns form={form} result={resultCol} />
     </div>

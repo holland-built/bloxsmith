@@ -156,7 +156,7 @@ test.describe('AI → Threat lookup panel (entity_search)', () => {
     await page.goto('/#ai');
     const card = page.locator('text=Threat lookup').locator('..').locator('..');
     await card.getByPlaceholder('domain, IP, or host…').fill('evil.example.com');
-    await card.getByRole('button', { name: 'Lookup', exact: true }).click();
+    await card.getByRole('button', { name: 'Look up', exact: true }).click();
     await expect(card.getByText(/threat lookup unavailable/i)).toBeVisible();
     await expect(card.getByText(/no matches/i)).toHaveCount(0);
   });
@@ -167,7 +167,7 @@ test.describe('AI → Threat lookup panel (entity_search)', () => {
     await page.goto('/#ai');
     const card = page.locator('text=Threat lookup').locator('..').locator('..');
     await card.getByPlaceholder('domain, IP, or host…').fill('benign.example.com');
-    await card.getByRole('button', { name: 'Lookup', exact: true }).click();
+    await card.getByRole('button', { name: 'Look up', exact: true }).click();
     await expect(card.getByText(/no matches/i)).toBeVisible();
     await expect(card.getByText(/threat lookup unavailable/i)).toHaveCount(0);
   });

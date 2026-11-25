@@ -11,10 +11,10 @@
     - /placeholder: Ask a question…
   - button "Ask" [disabled]
   - paragraph: Enter to send, Shift+Enter for a new line.
-  - button "Which subnets are nearly full?"
-  - button "Which domains are on threat feeds?"
+  - button "Which address ranges are nearly full?"
+  - button "Which sites are on known-bad lists?"
   - button "Any lookalike domains of my brand?"
-  - button "Are any of my DNS zones misconfigured?"
+  - button "Are any of my DNS zones set up wrong?"
   - button "Which hosts are offline?"
   - button /What changed in the last \d+ hours\?/
   - heading "Threat lookup" [level=2]
@@ -22,5 +22,5 @@
   - 'button "Options: Threat lookup"'
   - textbox "Look up a domain, IP, or host":
     - /placeholder: domain, IP, or host…
-  - button "Lookup" [disabled]
+  - button "Look up" [disabled]
   - text: Look up a domain, IP, or host

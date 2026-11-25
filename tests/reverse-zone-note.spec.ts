@@ -21,7 +21,7 @@ test('Get an address: the preview warns when no reverse zone covers the address'
   );
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('checkbox', { name: 'Also give it a DNS name' }).check();
   await panel.getByPlaceholder('host-01').fill('printer-3');
   await panel.getByRole('combobox', { name: 'Zone' }).selectOption('dns/auth_zone/z1');

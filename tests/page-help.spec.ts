@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
 });
 
-for (const [hash, heading] of [['#editor', 'Editor'], ['#ai', 'AI'], ['#drift', 'Drift'], ['#overview', 'Overview']] as const) {
+for (const [hash, heading] of [['#editor', 'Editor'], ['#ai', 'AI'], ['#drift', 'Compare to template'], ['#overview', 'Overview']] as const) {
   test(`${heading}: one sentence under the title, and Help opens this page's help`, async ({ page }) => {
     await page.goto('/' + hash);
     await expect(page.getByRole('button', { name: 'Docs' })).toHaveCount(0);

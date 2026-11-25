@@ -23,8 +23,8 @@ test('180 devices asks for a /24 and the block list shows sizes', async ({ page 
   });
 
   await page.goto('/#provision');
-  await page.getByRole('combobox', { name: 'Space', exact: true }).selectOption('ipam/ip_space/a');
-  await expect(page.getByRole('combobox', { name: 'Block', exact: true }).locator('option', { hasText: '10.9.0.0/16 (65,536 addresses)' })).toBeAttached();
+  await page.getByRole('combobox', { name: 'IP space', exact: true }).selectOption('ipam/ip_space/a');
+  await expect(page.getByRole('combobox', { name: 'Address block', exact: true }).locator('option', { hasText: '10.9.0.0/16 (65,536 addresses)' })).toBeAttached();
 
   const devices = page.getByRole('spinbutton', { name: 'How many devices need an address?' });
   await expect(devices).toHaveValue('254'); // the starting /24, as devices
@@ -96,10 +96,16 @@ test('Editor: an IPv6 address block takes a prefix, not a device count', async (
   expect(posted[0]).toMatchObject({ address: '2001:db8::', cidr: 56, space: 'ipam/ip_space/baseline-1' });
 });
 
-test('Editor: Tags finds an existing block by its exact size, not a device count', async ({ page }) => {
+test('Editor: Tags finds an existing block by its exact address and size, not a device count', async ({ page }) => {
   await installBaselineWorld(page);
+  const posted: Record<string, unknown>[] = [];
+  await page.route('**/api/retag/block', (r) => { posted.push(r.request().postDataJSON()); return r.fulfill({ json: { ok: true, dry_run: true } }); });
   await page.goto('/#editor?type=tags');
   await expect(page.getByRole('spinbutton', { name: /How many devices/ })).toHaveCount(0);
-  await page.getByRole('spinbutton', { name: 'Block size: the number after the slash' }).fill('31');
-  await expect(page.getByText('/31 is 2 addresses')).toBeVisible();
+  // The block is picked from the chosen IP space's list (audit R2-D3), so its size is the block's own.
+  await page.getByRole('combobox', { name: 'IP space' }).selectOption({ label: 'Baseline Space' });
+  await page.getByRole('combobox', { name: 'Address block' }).selectOption({ label: '10.10.0.0/16 (65,536 addresses) — baseline-block' });
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => posted.length).toBeGreaterThan(0);
+  expect(posted[0]).toMatchObject({ address: '10.10.0.0', cidr: 16 });
 });

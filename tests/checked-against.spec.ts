@@ -43,7 +43,7 @@ test('Provision seed preview lists the first 3 skips and says how many more', as
   await page.route('**/api/provision/seed-demo/stream*', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream',
     body: sse({ done: true, succeeded: 1, failed: 0, skipped: 0, total: 1, checked: CHECKED, skipped_picks: picks }) }));
   await page.goto('/#provision');
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
   const box = page.locator('[data-checked-against]');
   await expect(box).toContainText(LINE);
@@ -90,7 +90,7 @@ test('Get an address: the preview says what it checked, and a fresh read gives n
     skipped: [{ candidate: '10.0.42.5', reason: 'a reservation in acme-systems already uses 10.0.42.5' }] }));
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('button', { name: 'Preview' }).click();
   const box = panel.locator('[data-checked-against]');
   await expect(box).toContainText('Checked against: 14 DHCP ranges, 212 reservations and hosts.');
@@ -136,7 +136,7 @@ test('Get an address preview warns when another IP space also uses the address',
     ] }));
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('button', { name: 'Preview' }).click();
   await expect(panel.locator('[data-shared-warning]')).toHaveText('Also used in another IP space. 10.0.42.7 sits inside ' +
     `10.0.42.1 to 10.0.42.99 and 10.0.42.7 in IP spaces lab and dev. ${LAB_TAIL} pick a different address.`);

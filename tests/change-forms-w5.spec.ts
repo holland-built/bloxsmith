@@ -66,7 +66,7 @@ test('D1: the Editor asks for a DNS view, address block and IP space by name, ne
   await page.getByRole('button', { name: 'Address block', exact: true }).click();
   await expect(form.getByRole('textbox', { name: /IP space/i })).toHaveCount(0);
   await expect(form.getByRole('combobox', { name: 'IP space' }).locator('option', { hasText: 'Baseline Space' })).toHaveCount(1);
-  await expect(form.getByText('name=value, separated by commas')).toBeVisible();
+  await expect(form.getByText('Each tag is a name and a value, like env=prod. Separate tags with commas.')).toBeVisible();
 });
 
 test('D1: the block-tags form sends the IP space by name, as the server looks it up', async ({ page }) => {
@@ -128,7 +128,7 @@ test('D9: the device count lines up with the other rows on a wide screen', async
 test('D9: each load error sits under its own field', async ({ page }) => {
   await failReads(page);
   await page.goto('/#provision');
-  const space = page.getByRole('group', { name: 'Space', exact: true });
+  const space = page.getByRole('group', { name: 'IP space', exact: true });
   await expect(space.getByText(/Could not load IP spaces/)).toBeVisible({ timeout: 20_000 });
 });
 
@@ -212,16 +212,16 @@ test('E11: Made\'s find fields line up with the panel title', async ({ page }) =
 
 // ---------- Drift ----------
 
-test('D12: Drift says why Check drift is greyed', async ({ page }) => {
+test('D12: Compare to template says why Compare is greyed', async ({ page }) => {
   await page.goto('/#drift');
-  await expect(page.getByRole('button', { name: 'Check drift' })).toBeDisabled();
-  await expect(page.getByText('To check, pick a template.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeDisabled();
+  await expect(page.getByText('To compare, pick a template.')).toBeVisible();
 });
 
-test('D16: the greyed Check drift is readable in the light theme', async ({ page }) => {
+test('D16: the greyed Compare is readable in the light theme', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('theme', 'light'));
   await page.goto('/#drift');
-  await looksDisabled(page.getByRole('button', { name: 'Check drift' }));
+  await looksDisabled(page.getByRole('button', { name: 'Compare', exact: true }));
 });
 
 test('codex D13: the Drift intro is a plain sentence', async ({ page }) => {
@@ -241,13 +241,13 @@ test('D14: Drift results use plain sentence-case words', async ({ page }) => {
   const tpl = page.getByRole('combobox', { name: 'Template' });
   await expect(tpl.locator('option', { hasText: 'bare' })).toHaveText('bare');
   await tpl.selectOption('baseline-site');
-  await page.getByRole('button', { name: 'Check drift' }).click();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(page.getByText('7 differences')).toBeVisible();
   await expect(page.getByText('Subnets', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '+1 more' }).click();
   await expect(page.getByRole('button', { name: 'Show less' })).toBeVisible();
   reply = { found: true, site: 'baseline-site', drifted: false, drifts: [] };
-  await page.getByRole('button', { name: 'Check drift' }).click();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(page.getByText('Matches the template')).toBeVisible();
   await expect(page.getByText(/in-sync|no drift items/)).toHaveCount(0);
 });

@@ -25,13 +25,13 @@ test('a filter box is marked as machine text', async ({ page }) => {
 
 test('a form box for a name is machine text, and the comment box beside it is not', async ({ page }) => {
   await page.goto('/#provision');
-  const name = page.getByPlaceholder('subnet name');
+  const name = page.getByPlaceholder('e.g. branch-office');
   await expect(name).toBeVisible({ timeout: 20_000 });
   await expect(name).toHaveAttribute('spellcheck', 'false');
   await expect(name).toHaveAttribute('autocomplete', 'off');
 
   // The comment is prose: a browser's spell-check is the point there.
-  const comment = page.getByPlaceholder('optional');
+  const comment = page.getByRole('textbox', { name: 'Comment (optional)' });
   await expect(comment).toBeVisible();
   expect(await comment.getAttribute('spellcheck')).toBeNull();
   expect(await comment.getAttribute('autocomplete')).toBeNull();

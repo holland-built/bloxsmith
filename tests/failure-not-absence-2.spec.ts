@@ -36,7 +36,7 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
     await page.goto('/#ai');
     const card = page.locator('text=Threat lookup').locator('..').locator('..');
     await card.getByPlaceholder('domain, IP, or host…').fill('evil.example.com');
-    await card.getByRole('button', { name: 'Lookup', exact: true }).click();
+    await card.getByRole('button', { name: 'Look up', exact: true }).click();
     await expect(card.getByText('Dossier unavailable', { exact: true })).toBeVisible();
     await expect(card.getByText('CLEAN', { exact: true })).toHaveCount(0);
     await expect(card.getByText('MALICIOUS', { exact: true })).toHaveCount(0);
@@ -48,7 +48,7 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
     await page.goto('/#ai');
     const card = page.locator('text=Threat lookup').locator('..').locator('..');
     await card.getByPlaceholder('domain, IP, or host…').fill('benign.example.com');
-    await card.getByRole('button', { name: 'Lookup', exact: true }).click();
+    await card.getByRole('button', { name: 'Look up', exact: true }).click();
     await expect(card.getByText('CLEAN', { exact: true })).toBeVisible();
     await expect(card.getByText('Dossier unavailable', { exact: true })).toHaveCount(0);
   });

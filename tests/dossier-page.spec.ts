@@ -469,7 +469,7 @@ test('the AI tab lookup still renders inline and links to the full page', async 
   // dossier-empty-sources): an accessible name matches as a SUBSTRING by
   // default, and this panel's About button is named "About: Threat lookup", which
   // contains "Lookup". Exact is the stricter assertion, not a looser one.
-  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up', exact: true }).click();
 
   // Page-scoped: the AI tab has exactly one of each of these, and walking up
   // from the input lands on whichever ancestor `.first()`/`.last()` happens to

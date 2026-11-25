@@ -23,8 +23,10 @@ const MISSING = 'Fill in this field.'
 // Things Infoblox knows by an internal ID (a DNS view, an address block, an
 // IP space) are picked from a list by name, never typed (owner: "a name, not
 // an internal id"). kind 'view' | 'block' | 'space' send the ID; 'space_name'
-// sends the space's name, which is what the block-tags form looks up.
-const TAGS_HINT = 'name=value, separated by commas'
+// sends the space's name, which is what the block-tags form looks up. The
+// block-tags form also picks a template and a site by name, and a block by its
+// address ('block_addr', sent as address and cidr).
+const TAGS_HINT = 'Each tag is a name and a value, like env=prod. Separate tags with commas.'
 const FIELD_SPECS = {
   dns_zone: {
     label: 'DNS zone', endpoint: '/api/edit/dns_zone', fields: [
@@ -73,12 +75,12 @@ const FIELD_SPECS = {
   },
   tags: {
     label: 'Tags on address blocks', endpoint: '/api/retag/block', fields: [
-      { key: 'template', label: 'Site template', kind: 'text', placeholder: 'template name' },
-      { key: 'site', label: 'Site', kind: 'text', placeholder: 'site name' },
-      { key: 'address', label: 'Block address', kind: 'text', placeholder: 'e.g. 10.20.0.0' },
-      { key: 'cidr', label: 'Block size: the number after the slash', kind: 'prefix' },
-      { key: 'status', label: 'Status', kind: 'text', placeholder: 'e.g. available' },
+      // The IP space comes first: the sites and blocks listed are that space's.
       { key: 'ip_space', label: 'IP space', kind: 'space_name' },
+      { key: 'template', label: 'Site template', kind: 'template' },
+      { key: 'site', label: 'Site', kind: 'site' },
+      { key: 'address', label: 'Address block', kind: 'block_addr' },
+      { key: 'status', label: 'Status', kind: 'text', placeholder: 'e.g. available' },
     ],
   },
 }
@@ -96,7 +98,8 @@ const EDITOR_TYPES = [
 // case except acronyms, for use inside a sentence.
 const nounOf = (label) => label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
 
-const PICK_WORDS = { view: 'DNS views', block: 'address blocks', space: 'IP spaces', space_name: 'IP spaces' }
+const PICK_WORDS = { view: 'DNS views', block: 'address blocks', space: 'IP spaces', space_name: 'IP spaces', template: 'site templates', site: 'sites', block_addr: 'address blocks' }
+const PICK_ONE = { view: 'a DNS view', block: 'an address block', space: 'an IP space', space_name: 'an IP space', template: 'a site template', site: 'a site', block_addr: 'an address block' }
 
 // A list picker for one ID field. A value the list does not hold (the list
 // failed, or an item from a search) stays shown as itself, never dropped.
@@ -120,7 +123,7 @@ function PickField({ f, value, onChange, api, options, error, disabled, title, o
       <span id={lid}>{f.label}{optional ? ' (optional)' : ''}</span>
       <div className="flex flex-col gap-1">
         <FilterSelect label={f.label} value={value} onChange={onChange} options={opts} disabled={disabled}
-          placeholder={placeholder || (api.loading ? 'Loading…' : `Pick ${f.kind === 'view' ? 'a DNS view' : f.kind === 'block' ? 'an address block' : 'an IP space'}`)} />
+          placeholder={placeholder || (api.loading ? 'Loading…' : `Pick ${PICK_ONE[f.kind]}`)} />
         {error && <FieldError id={eid}>{error}</FieldError>}
         <FetchError error={api.error} stale={options.length > 0} what={PICK_WORDS[f.kind]} />
       </div>
@@ -345,6 +348,18 @@ export default function Editor() {
     : blockSpace ? `/api/ipam/blocks?space=${encodeURIComponent(blockSpace)}`
     : isUpdate ? '/api/ipam/blocks' : null)
   const spacesApi = useApi(needs('space') || needs('space_name') ? '/api/ipam/spaces' : null, SHARE_PICKER)
+  // The block-tags form: templates as Provision and Compare to template read
+  // them, and the picked IP space's blocks, for their addresses and the sites
+  // tagged on them. Only that space's: two spaces can hold the same address,
+  // and the server looks the block up by address within the space it is sent.
+  const templatesApi = useApi(needs('template') ? '/api/templates' : null, SHARE_PICKER)
+  const tagSpaceId = (spacesApi.data?.spaces ?? []).find((sp) => sp.name && sp.name === fields.ip_space)?.id || ''
+  const allBlocksApi = useApi((needs('site') || needs('block_addr')) && tagSpaceId
+    ? `/api/ipam/blocks?space=${encodeURIComponent(tagSpaceId)}` : null)
+  const allBlocks = tagSpaceId ? allBlocksApi.data?.blocks ?? [] : []
+  // While the space's blocks load, or after that load fails, the list may
+  // still hold another space's, so it cannot be picked from.
+  const tagListOff = !tagSpaceId || allBlocksApi.loading || !!allBlocksApi.error
   const pickOptions = {
     view: (viewsApi.data?.views ?? []).map((v) => ({ value: v.id, label: v.name || v.id })),
     block: (blocksApi.data?.blocks ?? []).map((b) => ({
@@ -353,8 +368,16 @@ export default function Editor() {
     })),
     space: (spacesApi.data?.spaces ?? []).map((sp) => ({ value: sp.id, label: sp.name || sp.id })),
     space_name: (spacesApi.data?.spaces ?? []).filter((sp) => sp.name).map((sp) => ({ value: sp.name, label: sp.name })),
+    template: (Array.isArray(templatesApi.data) ? templatesApi.data : [])
+      .filter((t) => t.name && (!t.type || t.type === 'site')).map((t) => ({ value: t.name, label: t.name })),
+    site: [...new Set(allBlocks.map((b) => b.tags?.Site).filter((v) => v && v !== 'unassigned'))].sort()
+      .map((v) => ({ value: v, label: v })),
+    block_addr: allBlocks.filter((b) => b.address && b.cidr).map((b) => ({
+      value: `${b.address}/${b.cidr}`,
+      label: `${withSize(`${b.address}/${b.cidr}`)}${b.name ? ` — ${b.name}` : ''}`,
+    })),
   }
-  const pickApi = { view: viewsApi, block: blocksApi, space: spacesApi, space_name: spacesApi }
+  const pickApi = { view: viewsApi, block: blocksApi, space: spacesApi, space_name: spacesApi, template: templatesApi, site: allBlocksApi, block_addr: allBlocksApi }
   // Forms with a required field mark the others "(optional)", as Get an address does.
   const anyRequired = !!spec?.fields.some((f) => f.required)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
@@ -387,7 +410,12 @@ export default function Editor() {
       if (f.listOnly) return
       if (f.key === 'tags') body.tags = parseTags(raw)
       else if (f.key === 'addresses') body.addresses = hostAddresses(raw, fields.spaces)
-      else if (f.kind === 'devices' || f.kind === 'prefix') body[f.key] = Number(raw)
+      else if (f.kind === 'block_addr') {
+        const cut = String(raw).lastIndexOf('/')
+        body.address = String(raw).slice(0, cut)
+        body.cidr = Number(String(raw).slice(cut + 1))
+      }
+      else if (f.kind === 'devices') body[f.key] = Number(raw)
       else body[f.key] = raw
     })
     return body
@@ -584,25 +612,28 @@ export default function Editor() {
                 setField(f.key, v)
                 // A block from the old space is not in the new one.
                 if (f.key === 'block_space') setFields((prev) => ({ ...prev, block_id: '' }))
+                if (type === 'tags' && f.key === 'ip_space') setFields((prev) => ({ ...prev, site: '', address: '' }))
               }}
               api={pickApi[f.kind]} options={pickOptions[f.kind]} optional={anyRequired && !f.required}
               error={missingKey === f.key ? MISSING : ''}
               // While a new space's blocks load, or after that load fails, the
               // list may still hold the old space's blocks, so it cannot be picked from.
-              placeholder={f.kind === 'block' && !isUpdate && !blockSpace ? 'Pick an IP space first' : undefined}
+              placeholder={(f.kind === 'block' && !isUpdate && !blockSpace) || ((f.kind === 'site' || f.kind === 'block_addr') && !tagSpaceId)
+                ? 'Pick an IP space first' : undefined}
               disabled={(isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)) ||
-                (f.kind === 'block' && !isUpdate && (!blockSpace || blocksApi.loading || !!blocksApi.error))}
+                (f.kind === 'block' && !isUpdate && (!blockSpace || blocksApi.loading || !!blocksApi.error)) ||
+                ((f.kind === 'site' || f.kind === 'block_addr') && tagListOff)}
               title={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key) ? "Can't be changed on an existing one" : undefined} />
           ) : f.kind === 'devices' && !isUpdate && !isV6 ? (
             // A device count is only for making a new IPv4 network. It is a
             // form row of its own (data-field), so it lines up with the others.
             <DevicesInput key={`${type}-${f.key}`} data-field-key={f.key} label={f.label} prefix={fields[f.key] ?? ''}
               onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''} />
-          ) : f.kind === 'devices' || f.kind === 'prefix' ? (
+          ) : f.kind === 'devices' ? (
             // A size that names an existing one, or an IPv6 size, is typed
             // exactly. Its label sits above the box, in line with the boxes.
             <div key={`${type}-${f.key}`} data-field-key={f.key}>
-              <PrefixInput label={`${f.kind === 'prefix' ? f.label : 'Size: the number after the slash'}${anyRequired && !f.required ? ' (optional)' : ''}`}
+              <PrefixInput label={`Size: the number after the slash${anyRequired && !f.required ? ' (optional)' : ''}`}
                 prefix={fields[f.key] ?? ''} family={isV6 ? 6 : 4}
                 onPrefix={(p) => setField(f.key, p)} error={missingKey === f.key ? MISSING : ''}
                 disabled={isUpdate && (UPDATE_FIXED[type] || []).includes(f.key)}
