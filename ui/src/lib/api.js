@@ -250,10 +250,12 @@ export function serverReason(body) {
 /**
  * A failed request in words: what could not be done and what to do next, for
  * when the server sent no message of its own. `what` starts with a verb.
+ * `retryShown`: the panel draws its own Try again button beside the text, so
+ * the text does not say it a second time (GUI audit R3-C7).
  */
-export function failureText(status, what) {
+export function failureText(status, what, { retryShown = false } = {}) {
   if (isNoPermission({ status })) return NO_PERMISSION
-  return `Could not ${what}. Try again in a moment.`
+  return retryShown ? `Could not ${what}.` : `Could not ${what}. Try again in a moment.`
 }
 
 /**

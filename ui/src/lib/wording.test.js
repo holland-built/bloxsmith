@@ -157,3 +157,8 @@ test('a refusal after part of a list went in keeps the server message', () => {
   assert.equal(writeFailureText(502, { outcome: 'partial', refused: true, error }, 'add the domains'), error)
   assert.equal(writeFailureText(502, { outcome: 'partial', error }, 'add the domains'), WRITE_UNKNOWN)
 })
+
+test('a failure shown beside a Try again button does not also say "try again in a moment" (GUI audit R3-C7)', () => {
+  assert.equal(failureText(503, 'search the portal audit log', { retryShown: true }), 'Could not search the portal audit log.')
+  assert.equal(failureText(403, 'search the portal audit log', { retryShown: true }), NO_PERMISSION)
+})

@@ -23,6 +23,7 @@ import './Network.css'
 import { formatWhen } from '../lib/dates.js'
 import { HeadlineStrip, PageTitle } from '../components/kit.jsx'
 import UpdatedPill from './UpdatedPill.jsx'
+import { COULD_NOT_READ, failReason } from '../lib/plainWords.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -249,7 +250,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus, loading }) {
         loading && subnets.length === 0 ? (
           <Skeleton h={220} />
         ) : subnetsStatus === 'error' ? (
-          <FeedUnavailable label="Subnet information is unavailable" />
+          <FeedUnavailable label="Utilization Distribution unavailable" reason={COULD_NOT_READ} />
         ) : subnets.length > 0 ? (
           <Empty>no loaded subnet reports utilisation</Empty>
         ) : (
@@ -309,7 +310,7 @@ function IpamSpaces({ panelId, ipam }) {
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
-        <FeedUnavailable label="IP space information is unavailable" />
+        <FeedUnavailable label="IP spaces unavailable" reason={failReason(ipam)} />
       ) : rows.length === 0 ? (
         <Empty>{ipam.data?.rows?.length > 0 ? 'No IP spaces report how full they are' : 'No IP spaces found'}</Empty>
       ) : (
@@ -578,7 +579,7 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       {dhcp.loading ? (
         <Skeleton h={200} />
       ) : dhcp.error || status === 'error' ? (
-        <FeedUnavailable label="DHCP lease information is unavailable" />
+        <FeedUnavailable label="DHCP Leases unavailable" reason={failReason(dhcp)} />
       ) : rows.length === 0 ? (
         <Empty>No DHCP leases found</Empty>
       ) : tableRows.length === 0 ? (
@@ -611,9 +612,10 @@ function DhcpRequests({ panelId, requests }) {
       ) : (
         <>
           {someFailed && (
-            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-crit pt-1">
-              {allFailed ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}
-              <button type="button" onClick={requests.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-copy pt-1">
+              {/* FetchError's look, at body size (GUI audit R3-B2). */}
+              <span className="font-semibold text-crit">{allFailed ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}</span>
+              <button type="button" onClick={requests.refetch} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
                 Try again
               </button>
             </p>
@@ -919,14 +921,14 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
         </div>
       )}
       {unused && !unusedApi.data ? (
-        unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" onRetry={unusedApi.refetch} /> : <Skeleton />
+        unusedApi.error ? <FeedUnavailable label="Unused networks unavailable" reason={failReason(unusedApi)} onRetry={unusedApi.refetch} /> : <Skeleton />
       ) : !unused && loading && subnets.length === 0 ? (
         <Skeleton />
       ) : base.length === 0 ? (
-        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnet information is unavailable" />
+        subnetsStatus === 'error' && !unused ? <FeedUnavailable label="Subnets unavailable" reason={COULD_NOT_READ} />
           : <Empty>{unused ? 'No unused networks found' : subnets.length > 0 ? 'No networks of /28 or larger' : 'No subnets found'}</Empty>
       ) : tableRows.length === 0 ? (
-        landing && listFailed ? <FeedUnavailable label="Subnet information is unavailable" />
+        landing && listFailed ? <FeedUnavailable label="Subnets unavailable" reason={COULD_NOT_READ} />
           : <Empty>{landing && !listComplete ? 'none in the subnets loaded' : 'no subnets match'}</Empty>
       ) : (
         <div className="mt-2.5">

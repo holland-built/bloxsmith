@@ -27,7 +27,7 @@ test('R2-B1 R2-B5 B4: DNS with every read down blames no one panel and shows bar
   await expect(strip(page)).not.toContainText('Unavailable');
   // Zone problems: the message sits under the title, not at the panel's foot.
   const zp = panel(page, 'dns-zone-kpis');
-  const msg = zp.getByText('DNS zone information is unavailable');
+  const msg = zp.getByText('Zone problems unavailable');
   await expect(msg).toBeVisible();
   const [cardTop, msgTop] = await Promise.all([zp.evaluate((e) => e.getBoundingClientRect().top), msg.evaluate((e) => e.getBoundingClientRect().top)]);
   expect(msgTop - cardTop).toBeLessThan(120);
@@ -59,7 +59,7 @@ test('B10 B15: Network says IP spaces, not IPAM, and a failed count is not "coun
   expect(await page.locator('main').innerText()).not.toMatch(/\bIPAM\b/);
   await fail(page, '**/api/data', '**/api/csp/ipam-util*');
   await page.reload();
-  await expect(page.getByText('IP space information is unavailable')).toBeVisible();
+  await expect(page.getByText('IP spaces unavailable')).toBeVisible();
   expect(await page.locator('main').innerText()).not.toContain('count unavailable');
 });
 
@@ -98,7 +98,7 @@ test('R2-B2 R2-B8: Assets names its types plainly when they fail', async ({ page
   await expect(strip(page)).not.toContainText('Asset types');
   await fail(page, '**/api/csp/asset-filters*');
   await page.reload();
-  await expect(page.getByText('Asset types unavailable')).toBeVisible();
+  await expect(page.getByText('Asset Inventory unavailable')).toBeVisible();
   expect(await page.locator('main').innerText()).not.toContain('Asset filter information');
 });
 

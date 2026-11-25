@@ -98,14 +98,14 @@ test('a cold Assets read that outlives the old budget still renders', async ({ p
   // that way first and did exactly that.
   //
   // What actually differs is what the operator SEES on the way: without the
-  // override the panel puts up "Asset inventory unavailable" — a statement that
+  // override the panel puts up "Asset list unavailable" — a statement that
   // the feed is broken — for a read that was merely slow, and then quietly
   // replaces it with data. That false claim is the bug, so that is the
   // assertion. The sampler watches for the failure copy for the whole load
   // rather than checking once at the end, because it is transient by nature.
   const failureSeen: string[] = [];
   const sample = async () => {
-    for (const phrase of ['Asset inventory unavailable', 'Asset filter information is unavailable']) {
+    for (const phrase of ['Asset list unavailable', 'Asset Inventory unavailable']) {
       try {
         if (await page.getByText(phrase).count()) failureSeen.push(phrase);
       } catch { /* page mid-navigation */ }

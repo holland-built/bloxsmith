@@ -144,7 +144,7 @@ test('A9: a failed Value read is said once per panel, and Print report has nothi
   await page.goto('/#value');
   const grid = page.locator('[data-card-grid]');
   await expect(grid.locator('[data-stat="queries"]')).toContainText('Not checked', SLOW);
-  await expect(grid.getByText(/Infoblox did not respond/)).toHaveCount(2);
+  await expect(grid.getByText(/Could not load (security results|platform performance)\./)).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Print report' })).toBeDisabled();
 });
 
@@ -156,13 +156,13 @@ test('A9: each Value failure sentence has Try again, and it reads again', async 
   for (const p of ['**/api/csp/value-security', '**/api/csp/value-platform', '**/api/csp/value-daily']) await page.route(p, (r) => (dead ? down(r) : r.fallback()));
   await page.goto('/#value');
   const grid = page.locator('[data-card-grid]');
-  await expect(grid.getByText(/Infoblox did not respond/)).toHaveCount(2, SLOW);
+  await expect(grid.getByText(/Could not load (security results|platform performance)\./)).toHaveCount(2, SLOW);
   await expect(grid.getByText('Daily figures could not be read')).toHaveCount(0);
   const retry = page.locator('[data-panel-id="value-security"]').getByRole('button', { name: 'Try again' });
   await expect(page.locator('[data-panel-id="value-platform"]').getByRole('button', { name: 'Try again' })).toBeVisible();
   dead = false;
   await retry.click();
-  await expect(page.locator('[data-panel-id="value-security"]').getByText(/Infoblox did not respond/)).toHaveCount(0, SLOW);
+  await expect(page.locator('[data-panel-id="value-security"]').getByText(/Could not load security results\./)).toHaveCount(0, SLOW);
   await expect(grid.locator('[data-stat="blocked"]')).not.toContainText('Not checked');
 });
 
@@ -193,7 +193,7 @@ test('step 12: Passed shows no tick until the checks have answered', async ({ pa
   await page.route('**/api/best-practices', down);
   await page.goto('/#best-practices');
   const passed = page.locator('[data-tile="passed"]');
-  await expect(passed).toContainText('unavailable', SLOW);
+  await expect(passed).toContainText('Not checked', SLOW);
   await expect(passed.locator('.bp-ring')).not.toHaveClass(/\bok\b/);
   await expect(passed.locator('.bp-ring')).not.toHaveText('✓');
 });

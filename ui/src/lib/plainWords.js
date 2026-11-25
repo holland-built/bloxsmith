@@ -26,6 +26,16 @@ export function bucketWord(name) {
   return name === 'Offline' ? 'Not online' : name
 }
 
+// Infoblox's own host states as the words every page shows (GUI audit B8,
+// R3-A4): the Host Status legend, the headline numbers, Infra's table and
+// Daily's list. Only these exact words are renamed: a loose match would turn
+// "Setup failed" ("up") or "Inactive" into "Active". Anything else is null,
+// and the caller shows it as sent.
+const HOST_STATUS_WORD = { ok: 'Active', active: 'Active', degraded: 'Review', offline: bucketWord('Offline') }
+export function hostStatusWord(v) {
+  return HOST_STATUS_WORD[String(v || '').toLowerCase()] ?? null
+}
+
 /** A category id in words: the known ones by name, any other one de-dashed. */
 export function categoryWord(id) {
   const s = String(id ?? '')
@@ -142,4 +152,29 @@ export function subjectName(s) {
   if (lease) return lease[1]
   if (s.entity_type === 'posture') return 'All DNS zones'
   return s.entity_id || '—'
+}
+
+/**
+ * A DNS cache time (TTL), given in seconds, in words: 300 -> "5 minutes",
+ * 3600 -> "1 hour". The largest unit that divides it exactly, so nothing is
+ * rounded away (90 stays "90 seconds"). Not a number -> a dash (GUI audit R3-B4).
+ */
+export function cacheTime(sec) {
+  const s = sec === '' || sec == null ? NaN : Number(sec)
+  if (!Number.isFinite(s)) return '—'
+  for (const [size, one] of [[86400, 'day'], [3600, 'hour'], [60, 'minute']]) {
+    if (s >= size && s % size === 0) return countOf(s / size, one)
+  }
+  return countOf(s, 'second')
+}
+
+/**
+ * Why a panel failed, for FeedUnavailable's `reason`: the feed's own error
+ * (passed whole, so a "no permission" answer is still recognised), else the
+ * server's reason, else a plain sentence. Every failed panel on a page then
+ * says why, not only the ones whose caller remembered to (GUI audit R3-B2).
+ */
+export const COULD_NOT_READ = 'Bloxsmith could not read it.'
+export function failReason(feed) {
+  return feed?.error || feed?.data?.reason || COULD_NOT_READ
 }

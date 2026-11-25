@@ -17,15 +17,16 @@ export function actionWord(action) {
 }
 
 /**
- * "success" -> "Worked", "failed: denied" -> "Refused", any other failure ->
- * "Failed" (GUI audit R2-C4). The record's own text stays in the cell's title.
+ * "success" -> "Worked", any failure -> "Failed" (GUI audit R2-C4). A refusal
+ * ("failed: denied") is a failure too, and Changes says "Failed" on its tile,
+ * chip and group line, so one word is used everywhere (R3-C5). The record's own
+ * text, with its reason, stays in the cell's title.
  */
 export function resultWord(result) {
   const low = String(result ?? '').trim().toLowerCase()
   if (!low) return ''
   if (low === 'success' || low === 'succeeded' || low === 'ok') return 'Worked'
-  if (/denied|refused|forbidden|unauthori[sz]ed/.test(low)) return 'Refused'
-  if (/fail|error/.test(low)) return 'Failed'
+  if (/fail|error|denied|refused|forbidden|unauthori[sz]ed/.test(low)) return 'Failed'
   return low[0].toUpperCase() + low.slice(1)
 }
 
@@ -52,6 +53,11 @@ const RESOURCE = {
   block: 'Address block',
   host: 'Host',
   site: 'Site',
+}
+
+/** The plain word for a name the map knows ("dns_record" -> "DNS record"), else null. */
+export function knownResource(name) {
+  return RESOURCE[String(name ?? '').toLowerCase()] ?? null
 }
 
 /**

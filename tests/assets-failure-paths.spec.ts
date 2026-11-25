@@ -168,8 +168,8 @@ test.describe('Assets → inventory list (availability:"error")', () => {
     await page.goto('/#assets');
 
     const list = panel(page, 'assets-list');
-    await expect(list.locator('[data-feed-unavailable="Asset inventory unavailable"]')).toBeVisible();
-    await expect(list.getByText('Asset inventory unavailable')).toBeVisible();
+    await expect(list.locator('[data-feed-unavailable="Asset list unavailable"]')).toBeVisible();
+    await expect(list.getByText('Asset list unavailable')).toBeVisible();
 
     // THE ASSERTION WITH TEETH. `rows: []` arrives on the error body too, so
     // once L290's guard stops firing the same fixture falls through to L375-376
@@ -202,7 +202,7 @@ test.describe('Assets → filter bar (availability:"error")', () => {
     await page.goto('/#assets');
 
     const bar = panel(page, 'assets-filter-bar');
-    await expect(bar.locator('[data-feed-unavailable="Asset types unavailable"]')).toBeVisible();
+    await expect(bar.locator('[data-feed-unavailable="Asset Inventory unavailable"]')).toBeVisible();
 
     // THE ASSERTION WITH TEETH, and it is the line directly below, not the one
     // after it. FILTERS_ERROR carries `types: []` exactly as the server does, so

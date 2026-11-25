@@ -125,21 +125,21 @@
         - columnheader "Issues":
           - button "Issues"
     - rowgroup:
-      - row /other\.example\. baseline-view 3 \d+ cache time too short/:
+      - row "other.example. baseline-view 3 5 minutes cache time too short":
         - cell "other.example.":
           - link "other.example.":
             - /url: "#dossier?kind=zone&q=other.example.&view=baseline-view&id=dns%2Fauth_zone%2Fbaseline-2"
         - cell "baseline-view"
         - cell "3"
-        - cell /\d+/
+        - cell "5 minutes"
         - cell "cache time too short"
-      - row /baseline\.example\. baseline-view \d+ \d+ —/:
+      - row /baseline\.example\. baseline-view \d+ 1 hour —/:
         - cell "baseline.example.":
           - link "baseline.example.":
             - /url: "#dossier?kind=zone&q=baseline.example.&view=baseline-view&id=dns%2Fauth_zone%2Fbaseline-1"
         - cell "baseline-view"
         - cell /\d+/
-        - cell /\d+/
+        - cell "1 hour"
         - cell "—"
   - heading "Zone signing" [level=2]
   - text: 1 unsigned
@@ -170,18 +170,18 @@
   - 'button "Options: Blocklist zones"'
   - table:
     - rowgroup:
-      - row "Zone Severity Override Type Status":
+      - row "Zone Severity Action Source Status":
         - columnheader "Zone"
         - columnheader "Severity"
-        - columnheader "Override"
-        - columnheader "Type"
+        - columnheader "Action"
+        - columnheader "Source"
         - columnheader "Status"
     - rowgroup:
-      - row "rpz.baseline.example. High None local Enabled":
+      - row "rpz.baseline.example. High As each entry says Your own list Enabled":
         - cell "rpz.baseline.example."
         - cell "High"
-        - cell "None"
-        - cell "local"
+        - cell "As each entry says"
+        - cell "Your own list"
         - cell "Enabled"
   - heading "Load-balanced names" [level=2]
   - text: 1 name
@@ -189,18 +189,18 @@
   - 'button "Options: Load-balanced names"'
   - table:
     - rowgroup:
-      - row "Name Policy Precedence Cache time Status":
+      - row "Name Policy Priority Cache time Status":
         - columnheader "Name"
         - columnheader "Policy"
-        - columnheader "Precedence"
+        - columnheader "Priority"
         - columnheader "Cache time"
         - columnheader "Status"
     - rowgroup:
-      - row /baseline-lbdn baseline-policy \d+ \d+ Enabled/:
+      - row /baseline-lbdn baseline-policy \d+ 5 minutes Enabled/:
         - cell "baseline-lbdn":
           - link "baseline-lbdn":
             - /url: "#dossier?kind=address&q=baseline-lbdn"
         - cell "baseline-policy"
         - cell /\d+/
-        - cell /\d+/
+        - cell "5 minutes"
         - cell "Enabled"

@@ -83,7 +83,7 @@ const HINTS: [string, string, number[]][] = [
   ['#automate', 'Find an address, network or name', [320, 390]],
   ['#automate', 'Or describe it in one sentence', [320, 390]],
   ['#network', 'Search address, hostname, MAC', [320, 390]],
-  ['#assets', 'Search assets by name, IP or MAC address', [390]],
+  ['#assets', 'Search assets by name, IP address or hardware (MAC) address', [390]],
 ];
 for (const [hash, label, widths] of HINTS) {
   for (const width of widths) {

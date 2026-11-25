@@ -96,18 +96,18 @@ test.describe('Overview → service board (/api/data empty)', () => {
 // ---------- 2. Network ← /api/data ----------
 
 test.describe('Network → Utilization Distribution + exhaustion table (/api/data down)', () => {
-  test('a dead /api/data shows "Subnet information is unavailable" and no loaded count, not "0 loaded"', async ({ page }) => {
+  test('a dead /api/data shows "Utilization Distribution unavailable" and no loaded count, not "0 loaded"', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#network');
 
     const bands = card(page, 'Utilization Distribution');
-    await expect(bands.getByText('Subnet information is unavailable')).toBeVisible();
+    await expect(bands.getByText('Utilization Distribution unavailable')).toBeVisible();
     // No count at all beside the error (GUI audit round 2, B15).
     await expect(bands.getByText(/loaded/)).toHaveCount(0);
     await expect(bands.getByText(/\b0 loaded\b/)).toHaveCount(0);
 
     const exhaustion = card(page, 'Which Subnets Run Out First?');
-    await expect(exhaustion.getByText('Subnet information is unavailable')).toBeVisible();
+    await expect(exhaustion.getByText('Subnets unavailable')).toBeVisible();
     await expect(exhaustion.locator('tbody tr')).toHaveCount(0);
   });
 
@@ -119,7 +119,7 @@ test.describe('Network → Utilization Distribution + exhaustion table (/api/dat
 
     const bands = card(page, 'Utilization Distribution');
     await expect(bands.getByText('0 loaded of 0 total', { exact: true })).toBeVisible();
-    await expect(bands.getByText('Subnet information is unavailable')).toHaveCount(0);
+    await expect(bands.getByText('Utilization Distribution unavailable')).toHaveCount(0);
     await expect(bands.getByText('— loaded (count unavailable)', { exact: true })).toHaveCount(0);
   });
 });
@@ -127,14 +127,14 @@ test.describe('Network → Utilization Distribution + exhaustion table (/api/dat
 // ---------- 3. Infra ← /api/data ----------
 
 test.describe('Infra → Host Status + Host Inventory (/api/data down)', () => {
-  test('a dead /api/data shows "Host information is unavailable" and "— hosts", not "0 hosts"', async ({ page }) => {
+  test('a dead /api/data shows "Host Status unavailable", "Host Inventory unavailable" and "— hosts", not "0 hosts"', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#infra');
 
-    await expect(card(page, 'Host Status').getByText('Host information is unavailable')).toBeVisible();
+    await expect(card(page, 'Host Status').getByText('Host Status unavailable')).toBeVisible();
 
     const inventory = card(page, 'Host Inventory');
-    await expect(inventory.getByText('Host information is unavailable')).toBeVisible();
+    await expect(inventory.getByText('Host Inventory unavailable')).toBeVisible();
     await expect(inventory.getByText('— hosts', { exact: true })).toBeVisible();
     await expect(inventory.getByText('0 hosts', { exact: true })).toHaveCount(0);
     await expect(inventory.locator('tbody tr')).toHaveCount(0);
@@ -149,7 +149,7 @@ test.describe('Infra → Host Status + Host Inventory (/api/data down)', () => {
     const inventory = card(page, 'Host Inventory');
     await expect(inventory.getByText('0 hosts', { exact: true })).toBeVisible();
     await expect(inventory.getByText('— hosts', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Host information is unavailable')).toHaveCount(0);
+    await expect(page.getByText(/Host (Status|Inventory) unavailable/)).toHaveCount(0);
   });
 });
 
@@ -442,11 +442,11 @@ test.describe('DNS → zone table (zone with ttl:null)', () => {
     const unknown = table.locator('tbody tr', { hasText: 'no-authority.example.com' });
     await expect(unknown.locator('td').nth(3)).toHaveText('—');
     await expect(unknown.getByText('not checked', { exact: true })).toBeVisible();
-    // 3600 was the invented default this fix removed.
-    await expect(unknown.getByText('3600', { exact: true })).toHaveCount(0);
+    // 3600 (shown as "1 hour" since GUI audit R3-B4) was the invented default this fix removed.
+    await expect(unknown.getByText('1 hour', { exact: true })).toHaveCount(0);
 
     const checked = table.locator('tbody tr', { hasText: 'checked.example.com' });
-    await expect(checked.getByText('3600', { exact: true })).toBeVisible();
+    await expect(checked.getByText('1 hour', { exact: true })).toBeVisible();
     await expect(checked.getByText('not checked', { exact: true })).toHaveCount(0);
 
     // The verdict must name the population it actually covers: 3 zones, only

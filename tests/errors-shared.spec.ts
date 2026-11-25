@@ -35,7 +35,7 @@ test('a browser that cannot reach Bloxsmith says so in plain words, in the muted
   await installBaselineWorld(page);
   await page.route('**/api/csp/assets?*', (r) => r.abort('failed'));
   await page.goto('/#assets');
-  const box = page.locator('[data-feed-unavailable="Asset inventory unavailable"]');
+  const box = page.locator('[data-feed-unavailable="Asset list unavailable"]');
   const reason = box.locator('[data-failure-reason]');
   await expect(reason).toHaveText(NO_SERVER, { timeout: 20_000 });
   await expect(box).not.toContainText('Failed to fetch');

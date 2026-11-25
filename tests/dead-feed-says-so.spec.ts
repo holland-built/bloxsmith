@@ -24,7 +24,7 @@ test('DNS: a dead query-volume feed says so, and does not say "no data"', async 
   await page.goto('/#dns');
   const block = unavailable(page, 'dns-query-volume-7d');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('DNS query volume information is unavailable');
+  await expect(block).toContainText('Query Volume unavailable');
   await expect(page.locator('[data-panel-id="dns-query-volume-7d"]').getByText(/^(No .* (found|yet|in this period)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
 });
 

@@ -80,7 +80,7 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     );
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
-    await expect(card.getByText(/subnet information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/Utilization Distribution unavailable/i)).toBeVisible();
     await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 
@@ -91,7 +91,7 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
     await expect(card.getByText(/^No subnets found$/i)).toBeVisible();
-    await expect(card.getByText(/subnet information is unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/Utilization Distribution unavailable/i)).toHaveCount(0);
   });
 
   test('subnets feed ok renders the utilization chart', async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe('Network → Utilization Distribution panel (subnets feed)', () =>
     await page.goto('/#network');
     const card = page.locator('text=Utilization Distribution').locator('..').locator('..');
     await expect(card.getByText(/2 loaded/i)).toBeVisible();
-    await expect(card.getByText(/subnet information is unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/Utilization Distribution unavailable/i)).toHaveCount(0);
     await expect(card.getByText(/^(No .* (found|yet)|Nothing to show|No rows to show)$/i)).toHaveCount(0);
   });
 });

@@ -68,13 +68,13 @@ test('C7 C12: Incidents failure starts in plain words and the pill matches other
   expect(text).not.toContain("Couldn't load");
 });
 
-test('R2-C4 C11: Audit Portal rows say Worked or Refused, newest first, in plain words', async ({ page }) => {
+test('R2-C4 C11: Audit Portal rows say Worked or Failed, newest first, in plain words', async ({ page }) => {
   await page.goto('/#audit');
   const portal = panel(page, 'audit-csp-portal');
   await expect(portal.getByRole('cell', { name: 'Deleted', exact: true })).toBeVisible();
   const text = await portal.innerText();
   for (const word of ['success', 'failed: denied', '(service)', 'external', 'total unknown']) expect(text, word).not.toContain(word);
-  await expect(portal.getByRole('cell', { name: 'Refused', exact: true })).toBeVisible();
+  await expect(portal.getByRole('cell', { name: 'Failed', exact: true })).toBeVisible();
   await expect(portal).toContainText('From the Infoblox Portal');
   // Newest first, like the Audit log above it.
   const times = await portal.getByRole('row').evaluateAll((rows) =>
@@ -140,11 +140,11 @@ test('Changes list on a phone: each row is a stacked block with every column on 
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/#changes');
   const feed = page.getByRole('table', { name: /Changed objects/ });
-  const row = feed.getByRole('row').filter({ hasText: 'Refused' }).first();
+  const row = feed.getByRole('row').filter({ hasText: 'actor-gamma' }).first();
   await expect(row).toBeVisible();
   // Result and Flags are on screen, inside the list's own box, not off to the right.
   const box = (await feed.boundingBox())!;
-  for (const cell of [row.getByRole('cell', { name: /Refused/ }), row.locator('[data-flag="failed"]')]) {
+  for (const cell of [row.getByRole('cell', { name: /^Failed/ }).first(), row.locator('[data-flag="failed"]')]) {
     const b = (await cell.boundingBox())!;
     expect(b.x).toBeGreaterThanOrEqual(box.x);
     expect(b.x + b.width).toBeLessThanOrEqual(Math.min(box.x + box.width, 390) + 1);
@@ -161,7 +161,7 @@ test('Changes list on a desktop keeps its one-line rows with no visible labels',
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/#changes');
   const feed = page.getByRole('table', { name: /Changed objects/ });
-  const row = feed.getByRole('row').filter({ hasText: 'Refused' }).first();
+  const row = feed.getByRole('row').filter({ hasText: 'actor-gamma' }).first();
   await expect(row).toBeVisible();
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(31);
   const labels = await row.locator('[role="cell"]').evaluateAll((cells) => cells.map((c) => getComputedStyle(c, '::before').content));

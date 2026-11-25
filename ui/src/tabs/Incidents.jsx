@@ -582,7 +582,9 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       rows
         .map((r, i) => ({ r, i }))
         .sort((a, b) => Number(actionState(a.r).resolved) - Number(actionState(b.r).resolved) || sevRank(mcpSeverity(a.r), COLORS) - sevRank(mcpSeverity(b.r), COLORS) || a.i - b.i)
-        .map(({ r }) => r),
+        // The name as its own field, so a phone's stacked row finds it as the
+        // row's heading and draws it first (GUI audit R3-C3).
+        .map(({ r }) => ({ ...r, actionName: r.title || r.name || r.message || r.display_id || r.id || '—' })),
     [rows, COLORS],
   )
   // Only a confirmed 'active' counts as open; a missing or odd status is
@@ -599,18 +601,22 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
       render: (_v, r) => <SeverityPill severity={mcpSeverity(r)} />,
     },
     {
-      key: 'action',
+      key: 'actionName',
       label: 'Action',
       keep: true,
       grow: true,
-      render: (_v, r) => (
-        <button
-          type="button"
-          className="line-clamp-2 text-left underline decoration-dotted underline-offset-2 hover:text-link"
-          onClick={() => onOpenAction(r.id)}
-        >
-          {r.title || r.name || r.message || r.display_id || r.id || '—'}
-        </button>
+      // The span keeps the name out of the phone rule that moves a cell
+      // holding only a button to the bottom of its block (index.css .dt-stack).
+      render: (v, r) => (
+        <span className="block">
+          <button
+            type="button"
+            className="line-clamp-2 text-left underline decoration-dotted underline-offset-2 hover:text-link"
+            onClick={() => onOpenAction(r.id)}
+          >
+            {v}
+          </button>
+        </span>
       ),
     },
     {

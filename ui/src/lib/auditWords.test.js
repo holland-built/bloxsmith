@@ -92,11 +92,13 @@ test('a refusal with no method recorded says edit, and the subnet stream names a
 })
 
 // GUI audit round 2, R2-C4: results and account kinds in plain words.
-test('resultWord says Worked, Refused or Failed', async () => {
+// Round 3, R3-C5: a refusal is a failure, said with the one word Changes and
+// Audit both use. The record's own text stays in the cell's title.
+test('resultWord says Worked or Failed', async () => {
   const { resultWord } = await import('./auditWords.js')
   assert.equal(resultWord('success'), 'Worked')
   assert.equal(resultWord('SUCCESS'), 'Worked')
-  assert.equal(resultWord('failed: denied'), 'Refused')
+  assert.equal(resultWord('failed: denied'), 'Failed')
   assert.equal(resultWord('failed: timeout'), 'Failed')
   assert.equal(resultWord(''), '')
   assert.equal(resultWord('pending'), 'Pending')

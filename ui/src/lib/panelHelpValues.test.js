@@ -622,7 +622,7 @@ const CLAIMS = [
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(hub\.data, 'events'\)/, expect: 'the severity panel computes a scope note' },
       { re: /right=\{unavailable \? null : <span className="[^"]*">\{headCount\}<\/span>\}/, expect: 'its heading shows headCount' },
-      { re: /const headCount = !hub\.data\?\.truncated && legend > countedOf\(hub\.data\)\n\s+\? `\$\{legend\.toLocaleString\(\)\} events`\n\s+: sampleCountLabel\(hub\.data, 'events'\)/, expect: 'and headCount is the sample-aware label, or the legend total when that is larger' },
+      { re: /const headCount = !hub\.data\?\.truncated && covered > countedOf\(hub\.data\)\n\s+\? `\$\{covered\.toLocaleString\(\)\} events`\n\s+: sampleCountLabel\(hub\.data, 'events'\)/, expect: 'and headCount is the sample-aware label, or the legend or whole-window total when that is larger' },
     ],
   },
   {
@@ -705,7 +705,7 @@ const CLAIMS = [
   },
   {
     panel: 'dns-hero',
-    says: /Below it, average answer time and lookups answered without an error, over 24 hours\./,
+    says: /Below it, over 24 hours: average answer time, and the share of lookups answered without an error, not found, and failed\./,
     file: GO_CSP,
     proofs: [
       {

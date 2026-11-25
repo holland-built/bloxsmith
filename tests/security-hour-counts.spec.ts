@@ -59,7 +59,7 @@ test('Security: a complete hour counts the hour and says what the list shows', a
   await expect(summary).toContainText('Total events', { timeout: 20_000 });
   await expect(summary).toContainText('354');
   // Acknowledgements are per listed row, so this figure names its scope.
-  await expect(summary).toContainText('newest 50');
+  await expect(summary).toContainText('of the 50 listed');
   await expect(card(page, 'Triage inbox')).toContainText('Showing the newest 50 of 354 events.');
   await expect(card(page, 'Threat events by hour')).toContainText('354 events');
   await expect(card(page, 'Threat events by hour')).toContainText('Showing the newest 50 of 354 events.');

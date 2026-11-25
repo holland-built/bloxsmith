@@ -1,3 +1,5 @@
+import { knownResource, resourceWord } from './auditWords.js'
+
 /**
  * Turning `/api/audit/log` entries into rows the Audit tab can render.
  *
@@ -126,6 +128,49 @@ export function detailText(detail) {
     .join(' · ')
 }
 
+// An internal id written as a path, "dns/record/baseline-1" or
+// "ipam/address_block/abc". Only its kind is told on screen.
+const ID_PATH = /^[a-z_]+\/[a-z_]+\/\S+$/i
+// "dns/record/baseline-1" -> "DNS record baseline-1": the kind in words, then
+// the item's own name, so two records never read the same on screen.
+const kindOfId = (v) => {
+  const [a, b, ...name] = String(v).split('/')
+  return `${knownResource(`${a}_${b}`) ?? resourceWord(b)} ${name.join('/')}`
+}
+const bareVersion = (v) => String(v).replace(/^v(?=\d)/, '')
+
+/**
+ * The detail in words for the Detail column (GUI audit C8, round 3). It said
+ * "Address block: ipam/address_block/1 · Prefix length: 24 · Subnet: 10.10.0.0"
+ * and "From version: v0.0.0". detailText above stays the record, shown in the
+ * cell's title and searched by the filter box, so nothing is lost:
+ *   - a subnet and its prefix length are one address, "10.10.0.0/24"
+ *   - an internal id says what kind of thing it is, then its own name
+ *     ("DNS record baseline-1"); an address block's id beside the subnet it
+ *     holds says nothing more
+ *   - versions lose the "v" tag and say what changed
+ */
+export function plainDetail(detail) {
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return ''
+  const d = Object.fromEntries(Object.entries(detail).filter(([k]) => !DETAIL_NOISE.has(k)))
+  const head = []
+  if (d.subnet != null && d.cidr != null) head.push(`Subnet: ${d.subnet}/${d.cidr}`)
+  else if (d.cidr != null) head.push(`Subnet size: /${d.cidr}`)
+  if (d.subnet != null || d.cidr != null) {
+    if (d.subnet != null && d.cidr == null) head.push(`Subnet: ${d.subnet}`)
+    delete d.subnet
+    delete d.cidr
+    if (ID_PATH.test(String(d.block ?? ''))) delete d.block
+  }
+  if (d.from != null && d.to != null) head.push(`Version ${bareVersion(d.from)} to ${bareVersion(d.to)}`)
+  else if (d.from != null) head.push(`Was version ${bareVersion(d.from)}`)
+  else if (d.to != null) head.push(`Now version ${bareVersion(d.to)}`)
+  delete d.from
+  delete d.to
+  for (const k of Object.keys(d)) if (ID_PATH.test(String(d[k] ?? ''))) d[k] = kindOfId(d[k])
+  return [...head, detailText(d)].filter(Boolean).join(' · ')
+}
+
 /**
  * One render-ready row per chain entry.
  *
@@ -140,7 +185,8 @@ export function detailText(detail) {
 export function chainRows(entries) {
   if (!Array.isArray(entries)) return []
   return entries.map((e, i) => {
-    const detail = detailText(e?.detail)
+    const record = detailText(e?.detail)
+    const detail = plainDetail(e?.detail)
     const actor = String(e?.actor ?? '')
     const event = String(e?.event ?? '')
     return {
@@ -152,7 +198,9 @@ export function chainRows(entries) {
       actor,
       event,
       detail,
-      _search: `${actor} ${event} ${detail}`.toLowerCase(),
+      // The record as written, for the cell's title, when the words differ.
+      ...(record !== detail ? { _record: record } : {}),
+      _search: `${actor} ${event} ${detail}${record !== detail ? ` ${record}` : ''}`.toLowerCase(),
     }
   })
 }

@@ -99,10 +99,11 @@ function Strip({ checks }) {
 }
 
 // The three headline numbers. With no answer from the server they say
-// Checking… or unavailable, never 0.
+// Checking… or Not checked, never 0. "Not checked" is the one phrase the
+// Status pages use for a figure that did not load (GUI audit R3-A3).
 function Tiles({ checks, loading }) {
   const t = checks ? tally(checks) : null
-  const none = loading ? 'Checking…' : 'unavailable'
+  const none = loading ? 'Checking…' : 'Not checked'
   const fixTone = t?.problems ? SEVERITY[t.bySev[0][0]].tone : ''
   const of = t ? <small>of {t.total}</small> : null
   return (
@@ -121,7 +122,7 @@ function Tiles({ checks, loading }) {
           <span className="ov-muted ov-small">{t ? (t.unknown ? 'not enough information to check' : 'none') : none}</span>
         </li>
         <li className="bp-tile" data-tile="passed">
-          {/* No tick until the checks have answered: a tick over "unavailable"
+          {/* No tick until the checks have answered: a tick over "Not checked"
               read as a pass (step 12 of the screen audit). */}
           <span className="bp-tile-top"><span className={`bp-ring sm ${t ? 'ok' : 'none'}`} aria-hidden="true">{t ? '✓' : '–'}</span>
             <Tip tip="The whole list was read and nothing was wrong.">Passed</Tip>

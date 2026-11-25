@@ -7,7 +7,7 @@ import { sliceState } from '../lib/data.js'
 import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
-import { issueWord } from '../lib/plainWords.js'
+import { hostStatusWord, issueWord } from '../lib/plainWords.js'
 import Tip from '../components/Tip.jsx'
 import { statusBucket } from '../lib/statusBucket.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
@@ -389,7 +389,8 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
         </span>
       ),
     },
-    { key: 'status', label: 'Status', align: 'right' },
+    // Overview's and Infra's words, not Infoblox's raw "offline" (GUI audit R3-A4).
+    { key: 'status', label: 'Status', align: 'right', render: (v) => hostStatusWord(v) || v || '—' },
   ]
 
   return (
@@ -440,9 +441,9 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
   const columns = [
     {
       key: 'count',
-      label: '',
+      // Named, so the number is not a lone chip with no heading (GUI audit R3-A2).
+      label: 'Issues found',
       keep: true,
-      width: '2.5rem',
       render: (v) => (
         <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}>
           {v}

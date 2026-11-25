@@ -40,13 +40,13 @@ test('Drift: with templates loaded, the instruction is still shown', async ({ pa
   await expect(page.locator('[data-drift-result]').getByText(/Pick a template and press Compare/)).toBeVisible();
 });
 
-test('Best practices: no checks back says "No checks ran" and the tiles are unavailable, never 0 of 0', async ({ page }) => {
+test('Best practices: no checks back says "No checks ran" and the tiles say Not checked, never 0 of 0', async ({ page }) => {
   await page.route('**/api/best-practices', (r) => r.fulfill(json({ checks: [] })));
   await page.goto('/#best-practices');
 
   await expect(page.getByText('No checks ran, so nothing here is known to pass or fail.')).toBeVisible();
   const tiles = page.getByRole('region', { name: 'Checks at a glance' });
   await expect(tiles).not.toContainText('of 0');
-  await expect(tiles.getByText('unavailable')).toHaveCount(3);
+  await expect(tiles.getByText('Not checked')).toHaveCount(3);
   await expect(tiles.getByText('none', { exact: true })).toHaveCount(0);
 });

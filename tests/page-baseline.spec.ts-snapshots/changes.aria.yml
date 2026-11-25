@@ -26,11 +26,11 @@
         - rowheader "IP address":
           - heading "IP address" [level=3]
         - cell "2 changes · 1 worked · 1 failed"
-      - 'row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Changed Refused actor-gamma automated account Failed/':
+      - 'row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Changed Failed actor-gamma automated account Failed/':
         - cell "Deleted or failed"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Changed"
-        - cell "Refused"
+        - cell "Failed"
         - cell "actor-gamma"
         - cell "automated account"
         - cell "Failed"
