@@ -299,7 +299,8 @@ test.describe('Network', () => {
     await expect(card.locator('[data-feed-unavailable]')).toBeVisible();
     await expect(card.getByText(/Couldn't read every subnet/)).toHaveCount(0);
     // The request's own reason, as the shared unavailable message shows it.
-    await expect(card.getByText(/upstream timeout/)).toBeVisible();
+    // Case-blind: a server's reason is now shown as a sentence (GUI audit R2-C6).
+    await expect(card.getByText(/upstream timeout/i)).toBeVisible();
   });
 
   test('B6 guard: a partial read still says the list could be wrong', async ({ page }) => {

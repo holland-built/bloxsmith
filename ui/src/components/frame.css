@@ -40,7 +40,10 @@
 
 /* ---------- top row ---------- */
 .frame-top { position: sticky; top: 0; z-index: 10; min-height: var(--frame-top); display: flex; align-items: center; gap: 12px; padding: 8px 24px; background: var(--color-bg); }
-.frame-where { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+/* A floor, so the search box beside it cannot squeeze the account line to one
+   letter a line (seen at 768px, where it ran down the whole screen). The phone
+   layout below lays this out differently (display: contents). */
+.frame-where { flex: 1; min-width: 10rem; display: flex; align-items: center; gap: 8px; }
 .frame-phone-logo { display: none; }
 .frame-logo { flex: none; display: inline-grid; place-items: center; cursor: pointer; border-radius: 6px; }
 .frame-search { flex: 0 1 380px; min-width: 0; }
@@ -162,12 +165,9 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
   [data-panel-menu-toggle]:hover, [data-panel-help-toggle]:hover { background: var(--frame-hover); color: var(--color-txt); }
 }
 
-/* "Arrange panels" is a tool, not a switch that is on. */
-[data-layout-arrange] {
-  border-color: transparent; background: transparent;
-  color: var(--color-muted); font-weight: 500; padding-inline: 6px; margin-inline-start: -6px;
-}
-[data-layout-arrange]:hover { background: var(--frame-hover); border-color: transparent; color: var(--color-txt); }
+/* "Arrange panels" keeps the plain button look ui.jsx gives it (GUI audit
+   round 2, R2-A3: cancelled here, it read as a caption). While its dialog is
+   open it takes the tint of what is picked. */
 [data-layout-arrange][aria-expanded='true'] { background: var(--frame-tint); color: var(--color-txt); }
 
 @media (pointer: coarse) {
@@ -204,15 +204,17 @@ button.frame-conn { cursor: pointer; border-radius: 6px; }
     background: var(--color-card); border-top: 1px solid var(--color-card-border);
   }
   .frame-dock-item {
-    position: relative; flex: 1 1 0; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px;
+    position: relative; flex: 1 1 0; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px;
     padding: 4px 2px; border-radius: 8px; color: var(--color-muted);
     font-size: 12px; line-height: 1.15; text-align: center; text-decoration: none;
   }
   .frame-dock-item:not([aria-current='page']) > span {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
+  /* Its share is fixed (basis 0), so a long name wraps onto a second line
+     instead of taking the other icons under 44px wide (GUI audit R2-E3). */
   .frame-dock-item[aria-current='page'] {
-    flex: 2.6 1 auto; background: var(--frame-tint); box-shadow: inset 0 0 0 1px var(--frame-ring);
+    flex: 2.6 1 0; min-width: 0; overflow-wrap: anywhere; background: var(--frame-tint); box-shadow: inset 0 0 0 1px var(--frame-ring);
     color: var(--color-txt); font-weight: 600;
   }
   .frame-dock-item[aria-current='page'] > svg { flex: none; color: var(--color-link); }

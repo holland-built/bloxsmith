@@ -668,17 +668,80 @@ html[data-theme="light"] { color-scheme: light; }
     max-width: 100%;
   }
 
-  table button,
-  table select,
-  table input,
+  /* A phone table stacks its rows (.dt-stack, below) and measures no columns,
+     so the reason for the exemption is gone there: its buttons, boxes and
+     pickers get the 44px floor. Links in a stacked row stay inline text. */
+  table:not(.dt-stack) button,
+  table:not(.dt-stack) select,
+  table:not(.dt-stack) input,
   table textarea,
   table a[href],
-  table [role="button"],
+  table:not(.dt-stack) [role="button"],
   svg button,
   svg a[href],
   svg [role="button"] {
     min-height: 0;
   }
+}
+
+/* ---------- phone tables: one block per row ----------
+   GUI audit round 2, A1, B5, C3. Below 768px DataTable adds `dt-stack` and
+   draws every row as a block: the row's name on top (data-dt-head), one
+   "Label: value" line per column, its checkboxes and buttons along the bottom,
+   and a hairline between rows, not a card each. Nothing is wider than the
+   screen, so nothing swipes. The <tr> keeps the see-through button that opens
+   the row, now laid over the whole block. */
+.dt-stack,
+.dt-stack tbody { display: block; }
+.dt-stack tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  position: relative;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-line);
+}
+.dt-stack tbody tr:last-child { border-bottom: 0; }
+.dt-stack td {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  position: static;
+  text-align: left;
+}
+.dt-stack td > :not(.dt-label) { min-width: 0; }
+.dt-stack td[data-dt-head] { order: -1; font-weight: 500; }
+.dt-label { flex: none; color: var(--color-muted); }
+.dt-label::after { content: ":"; }
+/* Long values (ids, domain names) wrap instead of being cut off. */
+.dt-stack td * {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  -webkit-line-clamp: none;
+  /* No narrower caps (Security's time is held to 180px), but never wider than
+     the block either. */
+  max-width: 100% !important;
+}
+/* A checkbox is drawn as a control with its column's name beside it; a button
+   is drawn on its own. Both sit along the bottom of the block, as wide as they
+   need and no wider than the row: a button holding a long title (Incidents'
+   action) wraps inside the screen instead of running off it. */
+.dt-stack td:has(> input[type="checkbox"], > button:not([data-row-open])) {
+  flex: 0 1 auto;
+  order: 1;
+  align-items: center;
+}
+.dt-stack td:has(> input[type="checkbox"]) { flex-direction: row-reverse; }
+.dt-stack td:has(> input[type="checkbox"]) > .dt-label::after { content: none; }
+.dt-stack td:has(> button:not([data-row-open])) > .dt-label { display: none; }
+@media (pointer: coarse) {
+  .dt-stack :is(button, select, input) { min-height: 44px; }
 }
 
 /* Links carry an underline in both themes, so they stay distinguishable

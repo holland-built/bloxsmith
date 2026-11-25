@@ -175,6 +175,22 @@ function getFeedSnapshot() {
   return feedSnapshot
 }
 
+// How many mounted components read a url. The header reads /api/data on every
+// page, so it uses this to tell whether the page on screen reads it too: a
+// failure nobody on the page shows is not worth a warning there (GUI audit E9).
+// It shares the broken-feed listeners: a listener whose own answer did not
+// change does not re-render.
+function notifyWatchers() {
+  for (const listener of feedListeners) listener()
+}
+export function useWatcherCount(url) {
+  return useSyncExternalStore(
+    subscribeFeeds,
+    () => [...feeds].filter((feed) => feed.url === url).length,
+    () => 0,
+  )
+}
+
 /**
  * Is anything on the page broken, and is anything already trying again?
  * `failed` stays true while a retry is pending, so the pair tells "trying
@@ -202,7 +218,17 @@ export function noPermissionText(error) {
   return REFUSED_CALL.test(text) ? text : NO_PERMISSION
 }
 
-const SERVER_PROBLEM = 'The server had a problem. Try again in a moment.'
+// A failed read that gave no reason, in words that say WHO failed (GUI audit
+// round 2, R2-E2, R2-C3). Bloxsmith answers 502 when Infoblox failed it
+// (go/internal/server/ipam.go writeUpstreamError) and 504 when Infoblox was too
+// slow; any other bare failure is Bloxsmith's own. No "try again" here: the
+// line under a failed panel already says it is trying again, or offers the
+// button once it has stopped.
+function noReason(status) {
+  if (status === 502) return 'Infoblox did not answer properly.'
+  if (status === 504) return 'Infoblox did not answer in time.'
+  return 'Bloxsmith had a problem reading this.'
+}
 
 /**
  * The reason a failed answer gives, or '' when it gives none. A list read that
@@ -216,7 +242,9 @@ export function serverReason(body) {
   // Bloxsmith's own messages wrap Go errors ("could not read the list of
   // changes: open /Users/…/runs.json: …"). Keep the sentence, drop the wrapped
   // part, which can carry a local file path.
-  return typeof body?.error === 'string' ? body.error.split(': ')[0].trim() : ''
+  const own = typeof body?.error === 'string' ? body.error.split(': ')[0].trim() : ''
+  // Go errors start lower case; on screen a reason is a sentence (R2-C6).
+  return own && own[0].toUpperCase() + own.slice(1)
 }
 
 /**
@@ -714,7 +742,7 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
               })
             }
           }
-          throw Object.assign(new Error(isNoPermission(res) ? `${res.status} ${res.statusText}` : serverReason(body) || SERVER_PROBLEM), {
+          throw Object.assign(new Error(isNoPermission(res) ? `${res.status} ${res.statusText}` : serverReason(body) || noReason(res.status)), {
             status: res.status,
           })
         }
@@ -799,10 +827,12 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
   useEffect(() => {
     const entry = entryRef.current
     feeds.add(entry)
+    notifyWatchers()
     return () => {
       feeds.delete(entry)
       holding.delete(entry)
       publishFeeds()
+      notifyWatchers()
     }
   }, [])
 
@@ -835,7 +865,10 @@ export function useApi(url, { poll, coldMs, adoptIfFresherThan, live: liveFeed =
   useEffect(() => {
     const entry = entryRef.current
     entry.retry = retry
-    entry.url = url
+    if (entry.url !== url) {
+      entry.url = url
+      notifyWatchers()
+    }
     entry.coldMs = coldMs
     entry.dropOlder = () => {
       floorRef.current = requestRef.current + 1

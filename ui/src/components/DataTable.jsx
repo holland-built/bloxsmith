@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
-import { Card, Empty, FeedUnavailable, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
+import { Card, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { compareCells } from '../lib/sortCompare.js'
 import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
@@ -78,7 +78,6 @@ function visibleColumns(columns, sorted) {
 // any cost.
 
 const CELL_PAD = 20 // px-2.5 on both sides of a th/td
-const PHONE_GROW_MAX = 240 // widest a wrapping text column gets on a phone
 const SORT_AFFORDANCE_PAD = 17 // room for the ▲/▼ indicator on a sortable header; Inter's triangle paints 15.53px (tests/table-measures-what-it-paints.spec.ts), was 14 under system-ui
 const MEASURE_BUFFER = 3 // absorbs measureText() sub-pixel rounding
 const BADGE_PAD = 20 // the pill span's own px-2.5
@@ -128,6 +127,17 @@ function widthsEqual(a, b) {
 // list of key names would have caught `network` either.
 function rowName(r, cols) {
   if (typeof r.rowLabel === 'string' && r.rowLabel !== '') return r.rowLabel
+  const c = nameCol(r, cols)
+  if (c) return String(r[c.key]).trim()
+  if (r.name != null && r.name !== '') return String(r.name)
+  if (r.id != null && r.id !== '') return String(r.id)
+  return 'row'
+}
+
+// The column rowName() takes a row's name from: the first visible column whose
+// value is a usable scalar. A phone draws that cell as the heading of the
+// row's block, so the heading and the row button's name are the same words.
+function nameCol(r, cols) {
   // THE VISIBLE COLUMNS COME BEFORE r.name AND r.id, and that order is the
   // whole point rather than a detail.
   //
@@ -154,12 +164,24 @@ function rowName(r, cols) {
       const str = String(v).trim()
       // An em dash is this app's "no value", so it identifies nothing.
       if (str === '' || str === '—' || str === '–') continue
-      return str
+      return c
     }
   }
-  if (r.name != null && r.name !== '') return String(r.name)
-  if (r.id != null && r.id !== '') return String(r.id)
-  return 'row'
+  return null
+}
+
+// DESIGN.md's phone query. Below it a table draws each row as a stacked block
+// (`dt-stack`, index.css) instead of columns that swipe sideways (GUI audit
+// round 2, A1, B5, C3).
+const PHONE_QUERY = '(max-width: 767px)'
+function subscribePhone(cb) {
+  const mq = window.matchMedia?.(PHONE_QUERY)
+  if (!mq) return () => {}
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+function usePhone() {
+  return useSyncExternalStore(subscribePhone, () => !!window.matchMedia?.(PHONE_QUERY)?.matches, () => false)
 }
 
 function colKind(c) {
@@ -213,6 +235,7 @@ export function DataTable({
 }) {
   const theme = useThemeColors()
   const fit = usePanelFit()
+  const phone = usePhone()
   const isControlled = typeof onSort === 'function'
   const [internalSort, setInternalSort] = useState(null)
   const activeSort = isControlled ? sort : internalSort
@@ -258,11 +281,8 @@ export function DataTable({
   // button inside a hidden cell cannot be reached at all.
   const openCol = cols.find((c) => c.priority !== 'low') ?? cols[0]
 
-  function handleSort(key) {
-    const next = toggleSort(activeSort, key)
-    if (isControlled) onSort(next)
-    else setInternalSort(next)
-  }
+  const applySort = isControlled ? onSort : setInternalSort
+  const handleSort = (key) => applySort(toggleSort(activeSort, key))
 
   // ---- measurement ----
   // Canvas measureText for anything whose painted shape is known here (headers,
@@ -511,13 +531,8 @@ export function DataTable({
     const tier2 = cols.filter((c) => !c.width && !tier1.includes(c))
 
     const fixedTotal = Object.values(fixed).reduce((a, b) => a + b, 0)
-    // On a phone a long free-text column wraps at a readable width, and the
-    // table keeps every column at full size and swipes sideways instead of
-    // squeezing them until their values are cut off.
-    const phone = window.matchMedia?.('(width < 48rem)')?.matches
-    if (phone) for (const c of growWrapSet) naturals[c.key] = Math.min(naturals[c.key], PHONE_GROW_MAX)
     const totalNatural = cols.reduce((a, c) => (c.width ? a : a + naturals[c.key]), 0)
-    const available = phone ? Math.max(wrapper.clientWidth, fixedTotal + totalNatural) : wrapper.clientWidth
+    const available = wrapper.clientWidth
     const budget = Math.max(0, available - fixedTotal)
 
     // Tell the enclosing Card how much width these columns actually need, so
@@ -744,7 +759,8 @@ export function DataTable({
   const tableLayoutClass = colWidths ? 'table-fixed' : 'table-auto'
 
   function cellStyle(c) {
-    if (!colWidths) return undefined
+    // A phone stacks each row (dt-stack), so no cell carries a column width.
+    if (!colWidths || phone) return undefined
     const w = `${colWidths.widths[c.key]}px`
     // The inline max-width is the visible, testable marker that this column
     // may clip: maxCh/render columns are always marked (an explicit ceiling,
@@ -757,10 +773,42 @@ export function DataTable({
     return colWidths.clipMarked[c.key] ? { width: w, maxWidth: w } : { width: w }
   }
 
+  // ON A PHONE EACH ROW IS A BLOCK (GUI audit round 2, A1, B5, C3). The markup
+  // stays <table>/<tr>/<td> (a row that opens something stays a row), restyled
+  // by `.dt-stack` in index.css: the row's name on top, then one "Label: value"
+  // line per column, controls along the bottom, hairlines between rows. The
+  // header row is read by a screen reader only, and the explicit roles keep the
+  // table a table once CSS has changed how its parts are displayed. Sorting
+  // moves to the Sort by picker above the rows.
+  const roles = phone
+    ? { table: 'table', group: 'rowgroup', row: 'row', th: 'columnheader', td: 'cell' }
+    : {}
+  const sortable = cols.filter((c) => c.sortable)
+  const sortPicker =
+    phone && sortable.length ? (
+      <label className="flex items-center gap-2 text-note text-muted px-2.5 pb-1.5">
+        Sort by
+        <select
+          className={`${FIELD_CLS} min-w-0`}
+          value={activeSort?.key ? `${activeSort.key}|${activeSort.dir}` : ''}
+          onChange={(e) => {
+            const [key, dir] = e.target.value.split('|')
+            applySort({ key, dir })
+          }}
+        >
+          {!activeSort?.key && <option value="">As listed</option>}
+          {sortable.flatMap((c) => [
+            <option key={`${c.key}|asc`} value={`${c.key}|asc`}>{c.label}</option>,
+            <option key={`${c.key}|desc`} value={`${c.key}|desc`}>{`${c.label}, reversed`}</option>,
+          ])}
+        </select>
+      </label>
+    ) : null
+
   const table = (
-    <table className={`w-full ${tableLayoutClass} border-collapse text-copy`}>
-      <thead>
-        <tr>
+    <table role={roles.table} className={`w-full ${tableLayoutClass} border-collapse text-copy${phone ? ' dt-stack' : ''}`}>
+      <thead role={roles.group} className={phone ? 'sr-only' : undefined}>
+        <tr role={roles.row}>
           {cols.map((c) => {
             const alignRight = c.align === 'right'
             const lowPri = c.priority === 'low' ? ' md:@max-[360px]:hidden' : ''
@@ -768,9 +816,10 @@ export function DataTable({
             // never become so — CELL_PAD above hard-codes it for the canvas
             // measurer, so a density that moved it would desync the two.
             const base = `${headBg} text-note font-medium text-dim uppercase tracking-wide py-[var(--sp-cell-y)] px-2.5 border-b border-line-2 overflow-hidden text-ellipsis ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
-            if (c.sortable) {
-              const isActive = activeSort && activeSort.key === c.key
-              const ariaSort = isActive ? (activeSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
+            const ariaSort = !c.sortable ? undefined
+              : activeSort?.key !== c.key ? 'none'
+              : activeSort.dir === 'asc' ? 'ascending' : 'descending'
+            if (c.sortable && !phone) {
               return (
                 <th key={c.key} aria-sort={ariaSort} data-col-kind={colKind(c)} className={base} style={cellStyle(c)}>
                   <button
@@ -779,21 +828,33 @@ export function DataTable({
                     className={`inline-flex items-center gap-1 uppercase tracking-wide select-none cursor-pointer hover:text-muted ${alignRight ? 'flex-row-reverse' : ''}`}
                   >
                     {c.label}
-                    <span aria-hidden="true">{isActive ? (activeSort.dir === 'asc' ? '▲' : '▼') : ''}</span>
+                    <span aria-hidden="true">{ariaSort === 'ascending' ? '▲' : ariaSort === 'descending' ? '▼' : ''}</span>
                   </button>
                 </th>
               )
             }
             return (
-              <th key={c.key} data-col-kind={colKind(c)} className={base} style={cellStyle(c)}>
+              <th
+                key={c.key}
+                role={roles.th}
+                aria-sort={ariaSort}
+                data-col-kind={colKind(c)}
+                className={base}
+                style={cellStyle(c)}
+              >
                 {c.label}
               </th>
             )
           })}
         </tr>
       </thead>
-      <tbody>
-        {visible.map((r, i) => (
+      <tbody role={roles.group}>
+        {visible.map((r, i) => {
+          // The heading is the name the row's button says (rowName), so a
+          // rowLabel wins: the column showing those words, or nameCol's pick.
+          const name = phone ? rowName(r, cols) : null
+          const head = phone ? cols.find((c) => String(r[c.key] ?? '').trim() === name) ?? nameCol(r, cols) : null
+          return (
           // A ROW THAT OPENS SOMETHING STAYS A ROW. It used to carry
           // role="button" and an aria-label itself. A button's children are
           // presentational, so a screen reader announced the label and none of
@@ -802,6 +863,7 @@ export function DataTable({
           // real <button> in the first cell, whose click bubbles up to this one.
           <tr
             key={rowKey ? rowKey(r, i) : `${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}
+            role={roles.row}
             onClick={onRowClick ? () => onRowClick(r) : undefined}
             style={rowStyle ? rowStyle(r) : undefined}
             className={
@@ -870,15 +932,25 @@ export function DataTable({
                   </span>
                 )
               }
+              // On a phone every cell but the row's heading says which column it
+              // is. The words are already in the header for a screen reader.
+              const label =
+                phone && c !== head && c.label ? (
+                  <span className="dt-label" aria-hidden="true">
+                    {c.label}
+                  </span>
+                ) : null
               return (
-                <td key={c.key} className={tdBase} style={cellStyle(c)}>
+                <td key={c.key} role={roles.td} data-dt-head={c === head ? '' : undefined} className={tdBase} style={cellStyle(c)}>
                   {open}
+                  {label}
                   {content}
                 </td>
               )
             })}
           </tr>
-        ))}
+          )
+        })}
       </tbody>
     </table>
   )
@@ -904,9 +976,8 @@ export function DataTable({
 
   // Explicit px widths (table-fixed) that sum to <= the wrapper's clientWidth
   // make overflow arithmetically impossible, so the wrapper never x-scrolls
-  // (the user's #1 complaint). Phones are the exception: there the columns keep
-  // their full width and the table swipes, with a fade at the right edge
-  // (scroll-cue, index.css) while more of it is off to the right. @container hides priority:'low'
+  // (the user's #1 complaint). A phone takes no widths at all: each row is a
+  // stacked block (dt-stack, above), so nothing swipes. @container hides priority:'low'
   // columns only in a narrow panel on a larger screen. Long values clip within their column via
   // ellipsis (or a 2-line clamp for the non-mono grow column).
   return (
@@ -927,7 +998,10 @@ export function DataTable({
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
-      <div ref={wrapperRef} className={`overflow-x-hidden max-md:overflow-x-auto max-md:scroll-cue overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
+      {sortPicker}
+      {/* A phone has no inner scroll box: the stacked rows grow the page,
+          which already scrolls, so there is no scroll inside a scroll. */}
+      <div ref={wrapperRef} className={`overflow-x-hidden overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight: phone ? undefined : maxHeight, minHeight }}>
         {table}
       </div>
       {footer}
@@ -953,7 +1027,7 @@ export function FeedCard({ span, panelId, title, note, feed, columns, limit, vie
       {feed.loading && !feed.data ? (
         <Skeleton h={160} />
       ) : bad ? (
-        <FeedUnavailable reason={feed.error?.message || undefined} />
+        <FeedUnavailable label={`${title} unavailable`} reason={feed.error?.message || undefined} />
       ) : rows.length === 0 ? (
         <Empty />
       ) : (

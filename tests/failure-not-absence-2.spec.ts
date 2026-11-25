@@ -138,7 +138,7 @@ test.describe('Topbar connection pill (ConnStatus _meta / _totals.degraded)', ()
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload({ hosts: 'error', subnets: 'error', leases: 'error' }, true)));
     await page.goto('/#overview');
     const pill = page.locator('span[title*="last data fetch"]');
-    await expect(pill).toContainText("Some data didn't load");
+    await expect(pill).toContainText("Subnets, hosts, and address leases didn't load");
     await expect(pill).not.toContainText('empty');
   });
 
@@ -148,7 +148,7 @@ test.describe('Topbar connection pill (ConnStatus _meta / _totals.degraded)', ()
     await page.goto('/#overview');
     const pill = page.locator('span[title*="last data fetch"]');
     await expect(pill).toContainText('empty');
-    await expect(pill).not.toContainText("Some data didn't load");
+    await expect(pill).not.toContainText("didn't load");
   });
 });
 

@@ -68,9 +68,11 @@ export const COLORS = {
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
 // A box marked aria-invalid gets a red outline, so the mark a screen reader
 // hears and the one a person sees are the same mark. A disabled box has dimmer
-// words and a "not allowed" pointer, but no fade: fading it took its outline
-// below the 3:1 that tests/contrast.spec.ts holds every field to.
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit disabled:text-dim disabled:cursor-not-allowed ${FOCUS_RING}`
+// words, the row-hover fill and a "not allowed" pointer, but no fade: fading it
+// took its outline below the 3:1 that tests/contrast.spec.ts holds every field
+// to. The fill is what tells it apart in light theme, where dim words are close
+// to body text (GUI audit round 2, R2-E12).
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit disabled:text-dim disabled:bg-line disabled:cursor-not-allowed ${FOCUS_RING}`
 
 // The line under a box that says what is wrong with it. The box points at it
 // with aria-describedby={id} and aria-invalid, so the reason is read out when
@@ -1119,18 +1121,14 @@ export function CardGrid({ className = '', layoutKey, children }) {
             // is the exact treatment this file gives DISABLED chrome — an
             // operator scanning the page read straight past it.
             //
-            // What changed, and why this and not something else: the accent
-            // token already in the palette (--color-accent, #0070f3) carries
-            // the border and a 15% wash behind the label, and the label itself
-            // moves to full --color-txt at 12px semibold. Nothing here is a new
-            // colour, a gradient, a shadow, an icon or an animation — the tint
-            // and the border are doing the work, and the words stay words.
-            //
             // It stays SECOND to a page's primary action by one deliberate
-            // step: that button is a SOLID accent fill with white text, this one
-            // is the tonal version of the same accent. Filled beats tinted at a
-            // glance, which is the ranking a page control should have.
-            className="cursor-pointer rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-note font-semibold text-txt hover:bg-accent/25 hover:border-accent"
+            // step: that button is a SOLID accent fill with white text.
+            //
+            // GUI audit round 2 (R2-A3): it is now the plain secondary button
+            // (field fill, button border), because a soft blue wash is what
+            // DESIGN.md keeps for something picked, and frame.css had been
+            // cancelling the wash back to bare text anyway.
+            className="cursor-pointer rounded-control border border-border bg-field px-2.5 py-1 text-note font-semibold text-field-txt hover:border-border-hover"
           >
             Arrange panels
           </button>
@@ -3202,6 +3200,24 @@ const sentence = (text) => `${text}${/[.!?]$/.test(text) ? '' : '.'}`
 // The Try again button, the size of the buttons in a panel's header.
 const RETRY_BTN = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
 
+// ONE FAILURE, ONE LOOK, ONE LINE (GUI audit round 2, R2-A4, R2-C3, R2-E2).
+// FetchError (a list that failed above what it still shows) and FeedUnavailable
+// (a panel with nothing to show) say it the same way, all at body size: what
+// failed in red, why in muted text, then either "Trying again…" while the
+// page's own retries run or the Try again button once they are spent, never
+// both and never "try again" in words while it is already trying.
+function RetryPart({ denied, showButton, retrying, onRetry }) {
+  if (denied) return null
+  if (showButton) {
+    return (
+      <button type="button" onClick={onRetry} className={RETRY_BTN}>
+        Try again
+      </button>
+    )
+  }
+  return retrying ? <span className="text-dim">Trying again…</span> : null
+}
+
 // What failed is red; why is muted, so one failure has one severity colour.
 // While the page's own retries are pending it says so, as FeedUnavailable
 // does, and offers Try again only once they are spent. `what` names the list,
@@ -3212,17 +3228,12 @@ export function FetchError({ error, stale, what = 'current data' }) {
   if (!error) return null
   const denied = isNoPermission(error)
   return (
-    <div role="alert" className="text-note mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div role="alert" className="text-copy mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>
-        <span style={{ color: COLORS.crit }}>{`Could not load ${what}.`}</span>
-        <span className="text-muted">{` ${sentence(plainReason(error))}`}{stale && ' The list below may be out of date.'}</span>
+        <span className="font-semibold" style={{ color: COLORS.crit }}>{`Could not load ${what}.`}</span>
+        <span className="text-muted" data-failure-reason="">{` ${sentence(plainReason(error))}`}{stale && ' The list below may be out of date.'}</span>
       </span>
-      {!denied && failed && !retrying && (
-        <button type="button" onClick={retryFailedFeeds} className={RETRY_BTN}>
-          Try again
-        </button>
-      )}
-      {!denied && retrying && <span className="text-dim">{"Didn't load — trying again…"}</span>}
+      <RetryPart denied={denied} showButton={failed && !retrying} retrying={retrying} onRetry={retryFailedFeeds} />
     </div>
   )
 }
@@ -3276,21 +3287,11 @@ export function FeedUnavailable({ reason, label = 'Information unavailable', onR
     <div
       data-feed-unavailable={label}
       role="status"
-      className="min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
+      className="min-h-[100px] flex flex-wrap items-center justify-center content-center gap-x-2 gap-y-1 text-center text-copy px-4"
     >
-      <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{denied ? 'No permission' : label}</div>
-      {reason ? <div className="text-note text-muted">{plainReason(reason)}</div> : null}
-      {showButton ? (
-        <button
-          type="button"
-          onClick={onRetry || retryFailedFeeds}
-          className={`mt-1 ${RETRY_BTN}`}
-        >
-          Try again
-        </button>
-      ) : retrying && !denied ? (
-        <div className="text-note text-dim">{"Didn't load — trying again…"}</div>
-      ) : null}
+      <span className="font-semibold" style={{ color: COLORS.crit }}>{denied ? 'No permission' : label}</span>
+      {reason ? <span className="text-muted" data-failure-reason="">{plainReason(reason)}</span> : null}
+      <RetryPart denied={denied} showButton={showButton} retrying={retrying} onRetry={onRetry || retryFailedFeeds} />
     </div>
   )
 }

@@ -5,24 +5,20 @@ import { installFixtures } from './page-fixtures';
 // B5), the phone bar showing where you are (A12, D13, E3), the side menu not
 // jumping when the current item is bold (E4), and a one-tile strip (B7).
 
-// A1, C3, B5. On a phone a wide table swipes sideways, but nothing said so, so
-// the columns on the right (and buttons like Block and Resolve) looked missing.
-// The right edge now fades while more of the table is off to the right, and the
-// fade goes once the table is scrolled to its end. Every column stays.
-test('on a phone a wide table fades at the right edge until it is scrolled to the end', async ({ page }) => {
+// A1, C3, B5. On a phone a wide table used to swipe sideways behind a fade at
+// its right edge. Round 2 (r2a) stacks each row as a block instead, so there is
+// nothing off to the right: no swipe and no fade.
+test('on a phone a wide table stacks its rows, so it neither swipes nor fades', async ({ page }) => {
   await installFixtures(page, 'network');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#network');
   const scroller = page.locator('[data-panel-id="network-exhaustion"] table').first().locator('xpath=..');
   await expect(scroller).toBeVisible();
+  await page.waitForTimeout(300);
   const wide = await scroller.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
-  expect(wide, 'the subnet table should be wider than a phone screen').toBe(true);
-
-  const fade = () => scroller.evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--scroll-cue-end')) || 0);
-  await expect.poll(fade, { message: 'the right edge should fade while more is off to the right' }).toBeGreaterThan(8);
-
-  await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
-  await expect.poll(fade, { message: 'the fade should go once the table is scrolled to its end' }).toBe(0);
+  expect(wide, 'the subnet table should fit a phone screen').toBe(false);
+  const fade = await scroller.evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--scroll-cue-end')) || 0);
+  expect(fade).toBe(0);
 });
 
 test('on a wide screen a table that fits has no fade', async ({ page }) => {
@@ -127,34 +123,20 @@ test('the Search result bar item follows a new search', async ({ page }) => {
   await expect(current).toHaveAttribute('href', '#dossier?q=beta.example');
 });
 
-// Codex review of w2. The fade masked the table box itself, and its keyboard
-// focus ring is drawn inside the box, so the ring's right edge faded away.
-// The ring's right edge must be drawn as strongly as its left edge.
-test('a phone table keeps its whole focus ring while it has keyboard focus', async ({ page }) => {
-  await installFixtures(page, 'network');
+// Codex review of w2 pinned the swiping table's focus ring. The phone table no
+// longer swipes (r2a), so what a keyboard reaches is each row's own button, and
+// that button, laid over the row, must cover the whole stacked block.
+test('on a phone the button that opens a row covers the whole stacked row', async ({ page }) => {
+  await installFixtures(page, 'daily');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#network');
-  const scroller = page.locator('[data-panel-id="network-exhaustion"] table').first().locator('xpath=..');
-  await expect(scroller).toHaveAttribute('tabindex', '0');
-  await scroller.scrollIntoViewIfNeeded();
-  // Focus it the way a keyboard does: a key press, then focus lands on it.
-  await page.keyboard.press('Shift');
-  await scroller.evaluate((el) => (el as HTMLElement).focus());
-  await expect.poll(() => scroller.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
-  await page.waitForTimeout(300);
-  const shot = await scroller.screenshot();
-  const edges = await page.evaluate(async (b64) => {
-    const img = new Image();
-    img.src = `data:image/png;base64,${b64}`;
-    await img.decode();
-    const c = document.createElement('canvas');
-    c.width = img.width; c.height = img.height;
-    const ctx = c.getContext('2d')!;
-    ctx.drawImage(img, 0, 0);
-    const y = Math.floor(img.height / 2);
-    const px = (x: number) => [...ctx.getImageData(x, y, 1, 1).data.slice(0, 3)];
-    return { left: px(0), right: px(img.width - 1) };
-  }, shot.toString('base64'));
-  const diff = edges.left.reduce((a, v, i) => a + Math.abs(v - edges.right[i]), 0);
-  expect(diff, `left ${edges.left} right ${edges.right}`).toBeLessThan(30);
+  await page.goto('/#daily');
+  const row = page.locator('[data-panel-id="daily-top-capacity-risks"] tbody tr').first();
+  const open = row.locator('[data-row-open]');
+  await expect(open).toBeAttached();
+  const [r, b] = await Promise.all([row.boundingBox(), open.boundingBox()]);
+  expect(r && b, 'row or button has no box').toBeTruthy();
+  expect(Math.abs(b!.x - r!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(b!.y - r!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(b!.width - r!.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(b!.height - r!.height)).toBeLessThanOrEqual(1);
 });
