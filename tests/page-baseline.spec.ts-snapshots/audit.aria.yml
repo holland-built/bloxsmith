@@ -28,11 +28,11 @@
         - columnheader "Detail":
           - button "Detail"
     - rowgroup:
-      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn''t delete a DNS record Error: request refused · Item: DNS record/':
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn''t delete a DNS record Error: request refused · Item: DNS record baseline-1/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Couldn't delete a DNS record"
-        - 'cell "Error: request refused · Item: DNS record"'
+        - 'cell "Error: request refused · Item: DNS record baseline-1"'
       - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) Tried to create a DNS record; changes are turned off/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"

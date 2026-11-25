@@ -91,7 +91,7 @@ test('C8: Audit Detail says what happened without internal ids or version tags',
   const text = await log.locator('tbody').innerText();
   for (const raw of ['dns/record/', 'ipam/address_block', 'Prefix length', 'v0.0.0', 'From version']) expect(text, raw).not.toContain(raw);
   await expect(log).toContainText('Subnet: 10.10.0.0/24');
-  await expect(log).toContainText('Item: DNS record');
+  await expect(log).toContainText('Item: DNS record baseline-1');
 });
 
 test('R3-B1 R3-C4: the phone Sort by picker names the direction in words', async ({ page }) => {
@@ -105,4 +105,19 @@ test('R3-B1 R3-C4: the phone Sort by picker names the direction in words', async
   expect(labels).toContain('Time, oldest first');
   expect(labels).toContain('Actor, A to Z');
   await expect(picker.locator('option:checked')).toHaveText('Time, newest first');
+});
+
+test('Codex review of r3y: picking "A to Z" on the phone Audit log sorts A to Z', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#audit');
+  const log = panel(page, 'audit-log');
+  const picker = log.getByRole('combobox', { name: 'Sort by' });
+  // From the default Time sort straight to a new column, ascending.
+  await picker.selectOption({ label: 'Event, A to Z' });
+  await expect(picker.locator('option:checked')).toHaveText('Event, A to Z');
+  // dns-record-delete-error is first of the five event names A to Z.
+  await expect(log.locator('tbody tr').first()).toContainText("Couldn't delete a DNS record");
+  await picker.selectOption({ label: 'Event, Z to A' });
+  await expect(picker.locator('option:checked')).toHaveText('Event, Z to A');
+  await expect(log.locator('tbody tr').first()).not.toContainText("Couldn't delete a DNS record");
 });

@@ -131,9 +131,11 @@ export function detailText(detail) {
 // An internal id written as a path, "dns/record/baseline-1" or
 // "ipam/address_block/abc". Only its kind is told on screen.
 const ID_PATH = /^[a-z_]+\/[a-z_]+\/\S+$/i
+// "dns/record/baseline-1" -> "DNS record baseline-1": the kind in words, then
+// the item's own name, so two records never read the same on screen.
 const kindOfId = (v) => {
-  const [a, b] = String(v).split('/')
-  return knownResource(`${a}_${b}`) ?? resourceWord(b)
+  const [a, b, ...name] = String(v).split('/')
+  return `${knownResource(`${a}_${b}`) ?? resourceWord(b)} ${name.join('/')}`
 }
 const bareVersion = (v) => String(v).replace(/^v(?=\d)/, '')
 
@@ -143,8 +145,9 @@ const bareVersion = (v) => String(v).replace(/^v(?=\d)/, '')
  * and "From version: v0.0.0". detailText above stays the record, shown in the
  * cell's title and searched by the filter box, so nothing is lost:
  *   - a subnet and its prefix length are one address, "10.10.0.0/24"
- *   - an internal id says only what kind of thing it is ("DNS record"); an
- *     address block's id beside the subnet it holds says nothing more
+ *   - an internal id says what kind of thing it is, then its own name
+ *     ("DNS record baseline-1"); an address block's id beside the subnet it
+ *     holds says nothing more
  *   - versions lose the "v" tag and say what changed
  */
 export function plainDetail(detail) {

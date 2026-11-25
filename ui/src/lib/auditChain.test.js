@@ -367,7 +367,9 @@ test('olderPages: a reply joins the poll that landed while it was out', () => {
 test('plain detail says a subnet with its size, names an item by its kind, and drops version tags', async () => {
   const { plainDetail } = await import('./auditChain.js')
   assert.equal(plainDetail({ block: 'ipam/address_block/1', cidr: '24', subnet: '10.10.0.0' }), 'Subnet: 10.10.0.0/24')
-  assert.equal(plainDetail({ error: 'request refused', id: 'dns/record/1' }), 'Error: request refused · Item: DNS record')
+  // The item keeps its own name on screen, so two records never read the same.
+  assert.equal(plainDetail({ error: 'request refused', id: 'dns/record/1' }), 'Error: request refused · Item: DNS record 1')
+  assert.equal(plainDetail({ id: 'ipam/address_block/abc-2' }), 'Item: Address block abc-2')
   assert.equal(plainDetail({ from: 'v1.0.0', image_digest: 'x' }), 'Was version 1.0.0')
   assert.equal(plainDetail({ from: 'v1.0.0', to: 'v1.1.0' }), 'Version 1.0.0 to 1.1.0')
   assert.equal(plainDetail({ cidr: 24 }), 'Subnet size: /24')

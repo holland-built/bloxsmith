@@ -28,6 +28,10 @@ test('text says A to Z, and a column with no values still gets words', () => {
   assert.deepEqual(sortWords({ key: 'ip', label: 'IP', comparator: () => 0 }, [{ ip: '10.0.0.1' }]), ['IP, lowest first', 'IP, highest first'])
 })
 
+test('time left until something runs out says soonest and latest first, not oldest (Codex review of r3y)', () => {
+  assert.deepEqual(sortWords({ key: 'remaining', label: 'Time left', sortAccessor: (r) => r.d }, [{ d: 12 }]), ['Time left, soonest first', 'Time left, latest first'])
+})
+
 test('a ranked severity given as an accessor, an end date and digits in text', () => {
   assert.deepEqual(sortWords({ key: 's', label: 'Severity', sortAccessor: () => 1 }, [{}]), ['Severity, most serious first', 'Severity, least serious first'])
   assert.deepEqual(sortWords({ key: 'e', label: 'Ends', comparator: () => 0 }, [{ e: 'x' }]), ['Ends, soonest first', 'Ends, latest first'])

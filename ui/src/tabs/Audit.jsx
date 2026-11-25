@@ -646,9 +646,10 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
           maxHeight={420}
           stickyHeader
           sort={sort}
-          onSort={(next) =>
-            setSort((s) => (s.key === next.key ? { key: next.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
-          }
+          // DataTable supplies the whole sort: a header click flips or starts
+          // ascending, and the phone picker names its own direction. Forcing a
+          // new column to descending made "Actor, A to Z" sort Z to A.
+          onSort={setSort}
         />
       )}
     </Card>

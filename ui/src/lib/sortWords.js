@@ -5,7 +5,7 @@
 // The direction is worked out from the column, because the tables do not say
 // what kind of value they hold:
 //   - a time (its name says so, or its values are dates): oldest / newest first;
-//     an end date: soonest / latest first
+//     an end date or time left: soonest / latest first
 //   - a severity, priority or status the table ranks (comparator or accessor): most / least serious first
 //     (every such comparator in tabs/ puts the most serious first)
 //   - a number (or digits in text), or an address: lowest / highest first
@@ -14,7 +14,8 @@
 // Plain .js so `npm test` (bare node --test) can import it.
 
 const TIME = /\b(time|seen|date|when|age|updated|created|detected)\b/i
-const ENDS = /^ends$/i
+// An end date or the time left until one: the nearest is the soonest, not the oldest.
+const SOONEST = /^(ends|time left|expires|remaining)$/i
 const RANKED = /\b(severity|priority|status)\b/i
 const ADDRESS = /^(ip|address)$/i
 
@@ -34,7 +35,7 @@ const looksLikeDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(
 export function sortWords(col, rows) {
   const v = firstValue(col, rows)
   let pair = ['A to Z', 'Z to A']
-  if (ENDS.test(col.label)) pair = ['soonest first', 'latest first']
+  if (SOONEST.test(col.label)) pair = ['soonest first', 'latest first']
   else if (TIME.test(col.label) || looksLikeDate(v)) pair = ['oldest first', 'newest first']
   else if ((col.comparator || col.sortAccessor) && RANKED.test(col.label)) pair = ['most serious first', 'least serious first']
   else if (looksLikeNumber(v) || looksLikeAddress(v) || (col.comparator && ADDRESS.test(col.label))) pair = ['lowest first', 'highest first']
