@@ -63,8 +63,8 @@ test('withSize adds the address count to a network', () => {
 })
 
 test('sizeLine says total and usable in plain words', () => {
-  assert.equal(sizeLine(24), '/24: 256 addresses, 254 usable by devices')
-  assert.equal(sizeLine(32), '/32: 1 address, 1 usable by devices')
+  assert.equal(sizeLine(24), '256 addresses, 254 usable by devices')
+  assert.equal(sizeLine(32), '1 address, 1 usable by devices')
   assert.equal(sizeLine(''), '')
 })
 

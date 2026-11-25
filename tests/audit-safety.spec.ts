@@ -128,7 +128,7 @@ test('2. releasing an address: separate confirm with no timer', async ({ page })
 test('2. Editor delete: separate confirm with no timer', async ({ page }) => {
   const live = await stubDelete(page);
   await page.goto('/#editor?type=dns_zone&id=zone-1');
-  const del = page.getByRole('button', { name: 'Delete DNS Zone' });
+  const del = page.getByRole('button', { name: 'Delete DNS zone' });
   await del.click();
   const yes = page.getByRole('button', { name: 'Permanently delete' });
   await expect(yes).toBeVisible();
@@ -150,10 +150,16 @@ test('2. a delete check that lands after switching item never arms the delete', 
     await json(route, { ok: true, dry_run: true, label: 'zone-1', made: true, changed: false, gone: false, blocked: '', confirm: 'code-1' });
   });
   await page.goto('/#editor?type=dns_zone&id=zone-1');
-  await page.getByRole('button', { name: 'Delete DNS Zone' }).click();
+  await page.getByRole('button', { name: 'Delete DNS zone' }).click();
   await expect.poll(() => checks).toBe(1);
-  await page.getByRole('button', { name: /Address Block/ }).first().click();
-  await page.getByPlaceholder(/existing object id/).fill('block-y');
+  // Another item is picked while the check is out (Find, now that the typed
+  // ID box is gone).
+  await page.route('**/api/edit/address_block/find*', (r) =>
+    json(r, { items: [{ id: 'block-y', label: '10.9.0.0/16', fields: {} }] }));
+  await page.getByRole('button', { name: 'Address block', exact: true }).click();
+  await page.getByPlaceholder('Find by address or comment').fill('10.9');
+  await page.getByRole('button', { name: '10.9.0.0/16' }).click();
+  await expect(page.getByRole('button', { name: 'Delete Address block' })).toBeVisible();
   release();
   await page.waitForTimeout(300);
   await expect(page.getByRole('button', { name: 'Permanently delete' })).toHaveCount(0);

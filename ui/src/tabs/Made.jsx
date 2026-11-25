@@ -46,7 +46,7 @@ function FindOther({ ro }) {
   return (
     <Card panelId="made-find" title="Delete something else" span={6}
       note="any item of these kinds, made with Bloxsmith or not; each delete asks first">
-      <form role="search" aria-label="Find something to delete" onSubmit={find} className="flex flex-wrap items-end gap-2 px-3 pb-3">
+      <form role="search" aria-label="Find something to delete" onSubmit={find} className="flex flex-wrap items-end gap-2 pb-3">
         <label className="flex flex-col gap-1 text-note text-muted">
           What
           <select className={FIELD_CLS} value={kind} onChange={(e) => { setKind(e.target.value); setFound(null) }}>
@@ -58,12 +58,15 @@ function FindOther({ ro }) {
           <input {...MACHINE_TEXT} className={FIELD_CLS} value={q} placeholder={HINTS[kind]}
             onChange={(e) => setQ(e.target.value)} />
         </label>
-        <button type="submit" disabled={!q.trim() || busy} className="text-copy font-medium px-4 py-1.5 rounded-control"
-          style={{ background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Finding…' : 'Find item'}</button>
+        {/* Greyed while the box is empty, not the bright accent that looked pressable. */}
+        <button type="submit" disabled={!q.trim() || busy} className="text-copy font-medium px-4 py-1.5 rounded-control disabled:cursor-not-allowed"
+          style={!q.trim() || busy
+            ? { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)' }
+            : { background: COLORS.accent, color: COLORS.onAccent }}>{busy ? 'Finding…' : 'Find item'}</button>
       </form>
-      {error && <p role="alert" className="text-note px-3" style={{ color: COLORS.crit }}>{error}</p>}
+      {error && <p role="alert" className="text-note" style={{ color: COLORS.crit }}>{error}</p>}
       {found && (found.length === 0
-        ? <p className="text-note text-muted px-3">Nothing found. Up to 25 matches are shown.</p>
+        ? <p className="text-note text-muted">Nothing found. Up to 25 matches are shown.</p>
         : (
           <ul data-found="">
             {found.map((f) => (

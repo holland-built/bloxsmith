@@ -194,7 +194,7 @@ for (const role of ['viewer', 'operator', 'admin']) {
       fulfillJson(route, { actor: 'baseline', role, tenant: 'baseline-tenant', token_auth: false }),
     );
     await page.goto('/#provision');
-    const badge = page.getByText(role.toUpperCase(), { exact: true });
+    const badge = page.getByText(role.charAt(0).toUpperCase() + role.slice(1), { exact: true });
     await expect(badge).toBeVisible({ timeout: 20_000 });
 
     const neutral = await tokenColour(page, '--pill-neutral-bg');

@@ -113,7 +113,7 @@ test('on a DASHBOARD_TOKEN deployment the admin is read as admin, because whoami
   });
   await page.goto('/#provision');
 
-  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible();
+  await expect(page.getByText('Admin', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Switch to read-write' })).toBeVisible();
 });
 
@@ -124,14 +124,14 @@ test('typing the token in Settings turns the viewer badge into admin without a r
     return json(route, { actor: 'baseline', role: admin ? 'admin' : 'viewer', tenant: 'baseline-tenant', token_auth: admin });
   });
   await page.goto('/#provision');
-  await expect(page.getByText('VIEWER', { exact: true })).toBeVisible();
+  await expect(page.getByText('Viewer', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Security', exact: true }).click();
   await page.getByLabel('Dashboard token').fill('s3cret');
   await page.keyboard.press('Escape');
 
-  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible();
+  await expect(page.getByText('Admin', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Switch to read-write' })).toBeVisible();
 });
 
@@ -145,6 +145,6 @@ test('a failed whoami read is retried instead of leaving an admin as viewer', as
   });
   await page.goto('/#provision');
 
-  await expect(page.getByText('ADMIN', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Admin', { exact: true })).toBeVisible({ timeout: 10_000 });
   expect(calls).toBeGreaterThanOrEqual(2);
 });

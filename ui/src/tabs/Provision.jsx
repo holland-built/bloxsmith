@@ -95,8 +95,10 @@ function WriteAccessBanner({ isAdmin }) {
 // token, so on a token deployment an admin read as "viewer" and lost the admin
 // controls. It reads again when the token changes in Settings (the sheet opens
 // over this tab), and retries a failed read instead of staying "viewer".
+// null until the server answers: an unknown role is shown as nothing, never
+// as "viewer" beside a header that says changes are allowed.
 function useRole() {
-  const [role, setRole] = useState('viewer')
+  const [role, setRole] = useState(null)
   useEffect(() => {
     let alive = true
     let seq = 0
@@ -130,18 +132,21 @@ export default function Provision() {
   return (
     <WriteTarget.Provider value={writeTarget}>
     <PageRail>
-    <div className="max-w-[820px] p-5">
+    <div data-provision-page="" className="p-5">
       <div className="flex items-center justify-between mb-1">
         <PageTitle>Provision</PageTitle>
-        <span
-          className="text-note font-medium px-2 py-0.5 rounded-full"
-          // A role is not a state. This was green for an admin, amber for an
-          // operator and RED for a viewer, so somebody with read access was
-          // shown the colour this app uses for a failure.
-          style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
-        >
-          {role.toUpperCase()}
-        </span>
+        {role && (
+          <span
+            data-role-badge=""
+            className="text-note font-medium px-2 py-0.5 rounded-mark"
+            // A role is not a state. This was green for an admin, amber for an
+            // operator and RED for a viewer, so somebody with read access was
+            // shown the colour this app uses for a failure.
+            style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
+          >
+            {role.charAt(0).toUpperCase() + role.slice(1)}
+          </span>
+        )}
       </div>
 
       <TabIntro>Creates real objects in Infoblox: one subnet, a whole site, or a multi-region demo network.</TabIntro>
@@ -332,8 +337,10 @@ function RollbackReport({ report }) {
 
 // ---------- log rendering ----------
 
-function LogView({ log, doneLabel }) {
-  if (log.length === 0) return <Empty>Output appears here when you preview or apply.</Empty>
+// blockedBy names the list that failed to load, so the log does not invite a
+// run that cannot start.
+function LogView({ log, doneLabel, blockedBy = '' }) {
+  if (log.length === 0) return <Empty>{blockedBy ? `Nothing can run until the ${blockedBy} load.` : 'Output appears here when you preview or apply.'}</Empty>
   return (
     <div role="log" aria-live="polite" tabIndex={0} aria-label="Run output" className="font-mono text-note flex flex-col gap-0.5 max-h-[280px] overflow-auto">
       {log.map((l, i) => (
@@ -429,6 +436,7 @@ function SubnetMode() {
               placeholder={spaceOpts.loading ? 'Loading spaces…' : 'Select a space'}
               options={spaces}
             />
+            <FetchError error={spaceOpts.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
           <Field group label="Block">
             {/* Keyed on the space, so a search typed for one space's blocks is
@@ -446,6 +454,7 @@ function SubnetMode() {
               placeholder={!space ? 'Pick a space first' : blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || (b.address ? withSize(b.address + (b.cidr ? `/${b.cidr}` : '')) : String(b.cidr ?? '')) }))}
             />
+            <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
           </Field>
           <DevicesInput prefix={cidr} onPrefix={(p) => { setCidr(p); flow.markStale() }} />
           <Field label="Name">
@@ -457,8 +466,6 @@ function SubnetMode() {
           <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
 
           <div>
-            <FetchError error={spaceOpts.error} stale={spaces.length > 0} what="IP spaces" />
-            <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
             {!spaceOpts.loading && !spaceOpts.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>no address blocks</Empty>}
           </div>
@@ -486,7 +493,8 @@ function SubnetMode() {
       </Card>
 
       <Card key="provision-subnet-log" title="Live log" panelId="provision-subnet-log" span={6}>
-        <LogView log={flow.log} doneLabel={flow.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
+        <LogView log={flow.log} doneLabel={flow.status === 'previewed' ? 'plan complete — nothing written' : 'done'}
+          blockedBy={spaceOpts.error && spaces.length === 0 ? 'IP spaces' : ''} />
       </Card>
 
       {flow.status === 'applied' && subnet && (
@@ -560,6 +568,7 @@ function SiteMode({ isAdmin }) {
               placeholder="— template default —"
               options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
             />
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
           <Field label="Template">
             <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
@@ -595,7 +604,6 @@ function SiteMode({ isAdmin }) {
           )}
 
           <div>
-            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
             <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
             {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
             {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
@@ -624,7 +632,8 @@ function SiteMode({ isAdmin }) {
       </Card>
 
       <Card key="provision-site-log" title="Live log" panelId="provision-site-log" span={6}>
-        <LogView log={build.log} doneLabel={build.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
+        <LogView log={build.log} doneLabel={build.status === 'previewed' ? 'plan complete — nothing written' : 'done'}
+          blockedBy={templatesApi.error && templates.length === 0 ? 'site templates' : ''} />
       </Card>
 
       {/* Its own card, and NOT gated on 'applied': the Result card below only
@@ -795,10 +804,10 @@ function SeedMode({ isAdmin }) {
               placeholder="— template default —"
               options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
             />
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
 
           <div>
-            <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
             {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
           </div>
 

@@ -26,7 +26,10 @@ for (const width of [1440, 390]) {
           const r = el.getBoundingClientRect();
           if (r.height <= 46 || r.width === 0) continue; // a 44px touch button may be a full pill
           const rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-          if (rad >= r.height / 2 - 1) bad.push(`${el.tagName.toLowerCase()} ${Math.round(r.width)}x${Math.round(r.height)} "${(el.textContent || '').trim().slice(0, 30)}"`);
+          // 40%, not 50%: a 22px corner on a 50px two-line button leaves only
+          // 6px of straight side, which reads as an oval (Automate's IP space
+          // suggestion, 2026-11-25). A full half-height check let it through.
+          if (rad >= r.height * 0.4) bad.push(`${el.tagName.toLowerCase()} ${Math.round(r.width)}x${Math.round(r.height)} "${(el.textContent || '').trim().slice(0, 30)}"`);
         }
         return bad;
       });

@@ -1,6 +1,6 @@
 - main "Drift tab":
   - heading "Drift" [level=1]
-  - paragraph: Lists the gaps between a site template and what is in Infoblox, without changing anything.
+  - paragraph: Shows what is missing from Infoblox, what is extra, and what differs from the template. It changes nothing.
   - region "Check drift":
     - heading "Check drift" [level=2]
     - group "Template":
@@ -16,6 +16,7 @@
         - option "— template default —" [selected]
         - option "Baseline Space"
     - button "Check drift" [disabled]
+    - paragraph: To check, pick a template.
   - region "Result":
     - heading "Result" [level=2]
-    - paragraph: Pick a template and press Check drift. What Infoblox has that the template lacks, what it lacks, and what it holds differently are listed here.
+    - paragraph: Pick a template and press Check drift. The differences are listed here.

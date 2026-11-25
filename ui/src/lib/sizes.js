@@ -47,11 +47,11 @@ export function validPrefix(v, family = 4) {
   return Number.isInteger(p) && p >= 1 && p <= (family === 6 ? 128 : 32) ? String(p) : ''
 }
 
-// sizeLine says what a size gives you: "/24: 256 addresses, 254 usable by devices".
+// sizeLine says what a size gives you: "256 addresses, 254 usable by devices".
 export function sizeLine(prefix) {
   const total = addressCount(prefix)
   if (total == null) return ''
-  return `/${Number(prefix)}: ${count(total)}, ${usableCount(prefix).toLocaleString('en-US')} usable by devices`
+  return `${count(total)}, ${usableCount(prefix).toLocaleString('en-US')} usable by devices`
 }
 
 // withSize adds the address count to a network written as address/prefix:

@@ -220,7 +220,10 @@ const SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Spac
 const DESK_SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space', yours: false, reason: '250 of 256 addresses free' }] };
 // The picker's zone shape, which is NOT /api/data's zone shape — that one carries
 // dnssec_status, records, ttl and issues. Two different reads of the same object.
-const DNS_ZONES_PICKER = { zones: [{ id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', name: 'baseline.example.' }] };
+const DNS_ZONES_PICKER = {
+  views: [{ id: 'dns/view/baseline-1', name: 'default' }],
+  zones: [{ id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', name: 'baseline.example.' }],
+};
 
 // Shape from the live server: a bare array of template objects.
 // TWO types, not one. Provision's Full-site mode is gated on `!siteTemplate`
@@ -809,6 +812,12 @@ const PER_PAGE: Record<string, Handler[]> = {
   editor: [
     // The "Made here" list under the form (MadeList.jsx), 2026-11-13.
     { method: 'GET', path: '/api/desk/runs', body: { tenant: '', runs: [] }, required: true },
+    // The pickers that replaced typed IDs (2026-11-25). The DNS zone form opens
+    // first, so only its view list is read on load.
+    { method: 'GET', path: '/api/dns/zones', body: DNS_ZONES_PICKER, required: true },
+    { method: 'GET', path: '/api/ipam/spaces', body: SPACES },
+    { method: 'GET', path: '/api/desk/spaces', body: DESK_SPACES },
+    { method: 'GET', path: '/api/ipam/blocks', body: { blocks: [{ id: 'ipam/address_block/baseline-1', address: '10.10.0.0', cidr: 16, name: 'baseline-block' }] } },
   ],
   overview: [
     { method: 'GET', path: '/api/csp-audit', body: CSP_AUDIT, required: true },

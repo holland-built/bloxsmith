@@ -722,7 +722,7 @@
   {
     "id": "automate-recent",
     "page": "Automate",
-    "name": "Your recent changes",
+    "name": "Made here",
     "kind": "local",
     "source": "the app's own run records",
     "builder": "no",
