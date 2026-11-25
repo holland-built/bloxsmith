@@ -94,7 +94,7 @@ func (d *Deps) registerCSPRoutes(mux router) {
 		}))
 	})
 
-	mux.HandleFunc("GET /api/best-practices",func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/best-practices", func(w http.ResponseWriter, r *http.Request) {
 		defer d.recover500(w, r, "/api/best-practices")
 		d.json(w, r, 200, d.dash(r).BestPractices(r.Context()))
 	})
