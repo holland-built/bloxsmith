@@ -15,10 +15,10 @@ import { PageTitle } from '../components/kit.jsx'
 const inputCls = 'px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt'
 
 const SUGGESTIONS = [
-  'Which subnets are nearly full?',
-  'Which domains are on threat feeds?',
+  'Which address ranges are nearly full?',
+  'Which sites are on known-bad lists?',
   'Any lookalike domains of my brand?',
-  'Are any of my DNS zones misconfigured?',
+  'Are any of my DNS zones set up wrong?',
   'Which hosts are offline?',
   'What changed in the last 24 hours?',
 ]
@@ -419,7 +419,7 @@ function ChatCard({ panelId }) {
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>
-      <p className="text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line.</p>
+      <p className="hidden md:block text-note text-muted mt-1 text-center">Enter to send, Shift+Enter for a new line.</p>
       <EgressNotice
         egress={egress}
         accepted={accepted(egress)}
@@ -698,7 +698,7 @@ function LookupCard({ panelId }) {
           onClick={lookup}
           disabled={busy || !q.trim()}
         >
-          {busy ? 'Looking up…' : 'Lookup'}
+          {busy ? 'Looking up…' : 'Look up'}
         </button>
       </div>
       {err && <div role="alert" className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}

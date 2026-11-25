@@ -14,15 +14,15 @@ import { FIND_KINDS, KIND_WORDS, when } from '../lib/madeDelete.js'
 import { failureText } from '../lib/api.js'
 
 const HINTS = {
-  dns_record: 'part of the name, like printer',
-  address: 'the full address, like 10.2.1.7',
-  fixed_address: 'its name, or the full address',
-  subnet: 'its name, or the network address like 10.2.1.0',
-  dns_zone: 'part of the zone name',
-  host: 'part of the host name',
-  dhcp_range: 'its name, or the first address',
-  custom_list: 'part of the list name',
-  policy_rule: 'part of the policy or list name',
+  dns_record: 'e.g. printer',
+  address: 'e.g. 10.2.1.7',
+  fixed_address: 'e.g. printer or 10.2.1.7',
+  subnet: 'e.g. office or 10.2.1.0',
+  dns_zone: 'e.g. example.com',
+  host: 'e.g. web01',
+  dhcp_range: 'e.g. guests or 10.2.1.100',
+  custom_list: 'e.g. blocked-sites',
+  policy_rule: 'e.g. Office or blocked-sites',
 }
 
 function FindOther({ ro }) {

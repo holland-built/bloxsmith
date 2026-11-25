@@ -11,31 +11,30 @@
   - paragraph: "Creates real objects in Infoblox: one subnet, a whole site, or a multi-region demo network."
   - button "Subnet" [pressed]
   - button "Full site"
-  - button "Seed demo"
+  - button "Demo data"
   - button "Arrange panels"
   - heading "Request" [level=2]
   - 'button "About: Request"': "About: ⓘ"
   - 'button "Options: Request"'
-  - group "Space":
+  - group "IP space":
     - text: ""
     - status
-    - combobox "Space":
-      - option "Select a space" [selected]
+    - combobox "IP space":
+      - option "Pick an IP space" [selected]
       - option /Baseline Space \(\d+ of \d+ addresses free\)/
-  - group "Block":
+  - group "Address block":
     - text: ""
     - status
-    - combobox "Block" [disabled]:
-      - option "Pick a space first" [selected]
+    - combobox "Address block" [disabled]:
+      - option "Pick an IP space first" [selected]
   - text: How many devices need an address?
   - spinbutton "How many devices need an address?": /\d+/
   - paragraph: "/\\d+ addresses, \\d+ usable by devices/"
   - text: Name
   - textbox "Name":
-    - /placeholder: subnet name
-  - text: Comment
-  - textbox "Comment":
-    - /placeholder: optional
+    - /placeholder: e.g. branch-office
+  - text: Comment (optional)
+  - textbox "Comment (optional)"
   - checkbox "Create matching DNS zone"
   - text: Create matching DNS zone
   - button "Preview" [disabled]

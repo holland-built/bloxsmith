@@ -43,9 +43,9 @@ test('a failed lookup is only as tall as its content, not the height of the chat
   await page.goto('/#ai');
   await fillChat(page);
   await page.getByPlaceholder('domain, IP, or host…').fill('bad.example.com');
-  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up', exact: true }).click();
   await expect(page.locator(`${LOOKUP} [data-feed-unavailable="Threat lookup unavailable"]`)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Lookup', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Look up', exact: true })).toBeEnabled();
 
   // One reading, after the lookup has settled: no retrying assertion here.
   const ask = (await page.locator('[data-panel-id="ai-ask"]').boundingBox())!;

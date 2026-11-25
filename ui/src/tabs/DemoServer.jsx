@@ -13,6 +13,7 @@ import DemoSettingsForm from '../components/DemoSettingsForm.jsx'
 
 const btnCls = 'px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 const primary = { background: COLORS.accent, color: COLORS.onAccent }
+const greyed = { background: 'var(--color-field)', color: 'var(--color-dim)', boxShadow: 'inset 0 0 0 1px var(--color-border)', opacity: 1 }
 const danger = { background: COLORS.crit, color: COLORS.onCrit }
 
 
@@ -112,7 +113,11 @@ export default function DemoServer() {
 
         <CardGrid layoutKey="demo">
           <Card panelId="demo-settings" span={3} title="Settings" note="saved securely on this computer; the sign-up code is never shown again">
-            {status.loading && !st ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
+            {status.loading && !st ? <Empty>Loading…</Empty> : (status.error && !st) ? (
+              // The saved settings could not be read. A blank form here would
+              // look like nothing was saved, and saving it would overwrite them.
+              <FeedUnavailable label="Settings unavailable" reason={status.error.message || undefined} />
+            ) : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
               <div data-settings-folded="" className="flex flex-col gap-2 text-note">
                 <FetchError error={status.error} stale={!!st} what="the demo server status" />
                 <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the saved sign-up code.</p>
@@ -130,13 +135,16 @@ export default function DemoServer() {
           <Card panelId="demo-build" span={3} title="Build" note="preview first; nothing is created until you press Build">
             <div className="flex flex-col gap-3">
               <div className="flex gap-2 flex-wrap">
-                <button className={btnCls} style={primary} disabled={busy || problems.length > 0} onClick={preview}>
+                <button className={btnCls} disabled={busy || !st || problems.length > 0} onClick={preview}
+                  // Greyed, not faded, like Preview on the other forms.
+                  style={busy || !st || problems.length > 0 ? greyed : primary}>
                   {busy && !plan ? 'Checking…' : 'Preview'}
                 </button>
                 {plan?.ready && (
                   <button className={btnCls} style={primary} disabled={busy} onClick={build}>{busy ? 'Building…' : 'Build it'}</button>
                 )}
               </div>
+              {!st && !status.loading && <div className="text-note text-muted">Preview waits until the settings load.</div>}
               {problems.length > 0 && <div className="text-note text-muted">Fill in the settings first.</div>}
               {plan && (
                 <ul className="flex flex-col gap-1.5">

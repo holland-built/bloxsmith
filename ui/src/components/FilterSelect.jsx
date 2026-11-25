@@ -19,6 +19,10 @@ const SEARCH_FROM = 9
 //
 // The chosen option always stays in the list, even when the search no longer
 // matches it, so narrowing the search never silently changes the selection.
+// The label inside a sentence: lower case, except words written in capitals
+// (acronyms such as IP or DNS), so "IP space" stays "IP space".
+const inSentence = (label) => label.split(' ').map((w) => (w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
+
 export default function FilterSelect({ label, value, onChange, options, placeholder, disabled }) {
   const [q, setQ] = useState('')
   const inputRef = useRef(null)
@@ -90,7 +94,7 @@ export default function FilterSelect({ label, value, onChange, options, placehol
           that appears already holding its text is announced unreliably. */}
       <span role="status" className={needle ? 'text-note text-dim' : 'sr-only'}>
         {!needle ? '' : shown.length === 0
-          ? `No ${label.toLowerCase()} matches “${q.trim()}”.`
+          ? `No ${inSentence(label)} matches “${q.trim()}”.`
           : shown.length > RESULTS_CAP
             ? `Showing ${RESULTS_CAP} of ${shown.length.toLocaleString()} matches. Keep typing to narrow it, or use the list below.`
             : `${shown.length.toLocaleString()} ${shown.length === 1 ? 'match' : 'matches'}.`}

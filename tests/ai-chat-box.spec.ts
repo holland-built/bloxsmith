@@ -33,6 +33,6 @@ test('a suggestion is asked with one click', async ({ page }) => {
   const asked: string[] = [];
   await page.route('**/api/query', (r) => { asked.push(r.request().postDataJSON().question); return r.fulfill({ json: { answer: 'ok' } }); });
   await page.goto('/#ai');
-  await page.getByRole('button', { name: 'Which subnets are nearly full?' }).click();
-  await expect.poll(() => asked).toEqual(['Which subnets are nearly full?']);
+  await page.getByRole('button', { name: 'Which address ranges are nearly full?' }).click();
+  await expect.poll(() => asked).toEqual(['Which address ranges are nearly full?']);
 });

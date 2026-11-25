@@ -51,7 +51,7 @@ test('a subnet is found by typing, and the preview is a sentence', async ({ page
   );
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   await panel.getByRole('searchbox', { name: 'Search Subnet' }).fill('site-42');
   await panel.getByRole('button', { name: '10.0.42.0/24 (256 addresses) — site-42', exact: true }).click();
   await panel.getByPlaceholder('host-01').fill('printer-3');

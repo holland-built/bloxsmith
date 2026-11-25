@@ -24,9 +24,9 @@
     - textbox "Comment (optional)":
       - /placeholder: ""
     - text: Tags (optional)
-    - textbox "Tags (optional) name=value, separated by commas":
+    - textbox "Tags (optional) Each tag is a name and a value, like env=prod. Separate tags with commas.":
       - /placeholder: e.g. env=prod, team=noc
-    - text: name=value, separated by commas
+    - text: Each tag is a name and a value, like env=prod. Separate tags with commas.
     - button "Preview"
   - region "Preview":
     - heading "Preview" [level=2]

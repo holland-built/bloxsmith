@@ -151,7 +151,7 @@ test.describe('Ask', () => {
   test('Lookup stays inside its card at 320px', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 700 });
     await open(page, 'ai');
-    const button = page.getByRole('button', { name: 'Lookup', exact: true });
+    const button = page.getByRole('button', { name: 'Look up', exact: true });
     const card = button.locator('xpath=ancestor::*[@data-panel-id or contains(@class,"rounded-surface")][1]');
     const b = (await button.boundingBox())!;
     const c = (await card.boundingBox())!;
@@ -162,7 +162,7 @@ test.describe('Ask', () => {
     await open(page, 'ai');
     await page.route('**/api/threat-lookup*', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"lookup failed"}' }));
     await page.getByRole('textbox', { name: 'Look up a domain, IP, or host' }).fill('bad.example');
-    await page.getByRole('button', { name: 'Lookup', exact: true }).click();
+    await page.getByRole('button', { name: 'Look up', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'lookup failed' })).toBeVisible({ timeout: 15_000 });
   });
 });

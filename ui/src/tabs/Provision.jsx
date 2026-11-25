@@ -157,7 +157,7 @@ export default function Provision() {
         {[
           ['subnet', 'Subnet'],
           ['site', 'Full site'],
-          ['seed', 'Seed demo'],
+          ['seed', 'Demo data'],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -428,17 +428,17 @@ function SubnetMode() {
     <CardGrid layoutKey="provision-subnet">
       <Card key="provision-subnet-request" title="Request" panelId="provision-subnet-request" span={6}>
         <div data-form-cols="" className="flex flex-col gap-3">
-          <Field group label="Space">
+          <Field group label="IP space">
             <FilterSelect
-              label="Space"
+              label="IP space"
               value={space}
               onChange={(v) => { setSpace(v); setBlock(''); flow.markStale() }}
-              placeholder={spaceOpts.loading ? 'Loading spaces…' : 'Select a space'}
+              placeholder={spaceOpts.loading ? 'Loading IP spaces…' : 'Pick an IP space'}
               options={spaces}
             />
             <FetchError error={spaceOpts.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
-          <Field group label="Block">
+          <Field group label="Address block">
             {/* Keyed on the space, so a search typed for one space's blocks is
                 cleared when the space changes. Disabled while the new space's
                 blocks load, and after that load fails: useApi keeps the last
@@ -447,27 +447,27 @@ function SubnetMode() {
                 picked from. */}
             <FilterSelect
               key={space}
-              label="Block"
+              label="Address block"
               value={block}
               onChange={(v) => { setBlock(v); flow.markStale() }}
               disabled={!space || blocksApi.loading || !!blocksApi.error}
-              placeholder={!space ? 'Pick a space first' : blocksApi.loading ? 'Loading blocks…' : 'Select a block'}
+              placeholder={!space ? 'Pick an IP space first' : blocksApi.loading ? 'Loading address blocks…' : 'Pick an address block'}
               options={blocks.map((b) => ({ value: b.id, label: b.name || (b.address ? withSize(b.address + (b.cidr ? `/${b.cidr}` : '')) : String(b.cidr ?? '')) }))}
             />
             <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
           </Field>
           <DevicesInput prefix={cidr} onPrefix={(p) => { setCidr(p); flow.markStale() }} />
           <Field label="Name">
-            <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
+            <input {...MACHINE_TEXT} className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="e.g. branch-office" />
           </Field>
-          <Field label="Comment">
-            <input className={inputCls} value={comment} onChange={(e) => { setComment(e.target.value); flow.markStale() }} placeholder="optional" />
+          <Field label="Comment (optional)">
+            <input className={inputCls} value={comment} onChange={(e) => { setComment(e.target.value); flow.markStale() }} />
           </Field>
           <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
 
           <div>
-            {!spaceOpts.loading && !spaceOpts.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
-            {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>no address blocks</Empty>}
+            {!spaceOpts.loading && !spaceOpts.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
+            {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>No address blocks yet.</Empty>}
           </div>
 
           <PreviewApply
@@ -560,19 +560,19 @@ function SiteMode({ isAdmin }) {
     <CardGrid layoutKey="provision-site">
       <Card key="provision-site-request" title="Request" panelId="provision-site-request" span={6}>
         <div data-form-cols="" className="flex flex-col gap-3">
-          <Field group label="IP space (override)">
+          <Field group label="IP space (optional)">
             <FilterSelect
-              label="IP space"
+              label="IP space (optional)"
               value={siteSpace}
               onChange={(v) => onInput(setSiteSpace)(v)}
-              placeholder="— template default —"
+              placeholder="The template's own IP space"
               options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
             />
             <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
           <Field label="Template">
             <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
-              <option value="">{templatesApi.loading ? 'Loading templates…' : 'Select a template'}</option>
+              <option value="">{templatesApi.loading ? 'Loading templates…' : 'Pick a template'}</option>
               {templates.filter(isSiteTemplate).map((t) => (
                 <option key={t.name} value={t.name} disabled={t.valid === false}>
                   {templateTitle(t)}{t.valid === false ? ' (invalid)' : ''}
@@ -605,7 +605,7 @@ function SiteMode({ isAdmin }) {
 
           <div>
             <FetchError error={templatesApi.error} stale={templates.length > 0} what="site templates" />
-            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
             {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>No site templates are installed. They come with the app's full release download.</Empty>}
           </div>
 
@@ -782,7 +782,7 @@ function SeedMode({ isAdmin }) {
   return (
     // Its own key, for the reason spelled out on the subnet grid above.
     <CardGrid layoutKey="provision-seed">
-      <Card key="provision-seed-request" title="Seed multi-region demo data" panelId="provision-seed-request" span={6}>
+      <Card key="provision-seed-request" title="Multi-region demo data" panelId="provision-seed-request" span={6}>
         <div className="text-note text-dim mb-3">
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
           library. Preview the plan before writing real objects — this creates a lot of them.
@@ -796,19 +796,19 @@ function SeedMode({ isAdmin }) {
               label={seedRegionLabel(r, seedTemplates.data)}
             />
           ))}
-          <Field group label="IP space (override)">
+          <Field group label="IP space (optional)">
             <FilterSelect
-              label="IP space"
+              label="IP space (optional)"
               value={seedSpace}
               onChange={(v) => { setSeedSpace(v); touch() }}
-              placeholder="— template default —"
+              placeholder="The template's own IP space"
               options={spaces.map((sp) => ({ value: sp.name, label: sp.name }))}
             />
             <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
           </Field>
 
           <div>
-            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
           </div>
 
           <PreviewApply
@@ -818,19 +818,19 @@ function SeedMode({ isAdmin }) {
             needs={[!regionList.length && 'pick at least one region']}
             onPreview={() => seed.run(baseQs(true).toString(), true)}
             onApply={() => seed.run(baseQs(false).toString(), false)}
-            applyLabel="Seed demo data"
+            applyLabel="Make demo data"
             busyLabel="Running…"
             error={
               seed.error ||
               (seedEnd === 'failed'
-                ? `Seed failed — 0 of ${seedOutcome.total} template(s) succeeded.`
+                ? `Demo data failed — 0 of ${seedOutcome.total} template(s) succeeded.`
                 : null)
             }
             message={
-              seed.status === 'previewed' ? previewMsg('Seed demo data')
+              seed.status === 'previewed' ? previewMsg('Make demo data')
                 : seedEnd === 'partial'
-                  ? `Seed partial — ${seedOutcome.succeeded} of ${seedOutcome.total} succeeded, ${seedOutcome.failed} failed.`
-                : seedEnd === 'success' ? 'Seed complete.'
+                  ? `Demo data partly made — ${seedOutcome.succeeded} of ${seedOutcome.total} succeeded, ${seedOutcome.failed} failed.`
+                : seedEnd === 'success' ? 'Demo data made.'
                 : null
             }
           >

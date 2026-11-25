@@ -58,11 +58,11 @@ async function stubSeedStream(page: import('@playwright/test').Page, body: strin
 // "complete" regardless of outcome, so only apply's wording is asserted).
 async function seedApply(page: import('@playwright/test').Page) {
   await page.goto('/#provision');
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   // Both the seed and teardown-seed cards use the default "Preview" label —
   // the seed card renders first, so .first() targets it unambiguously.
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Seed demo data', exact: true }).click();
+  await page.getByRole('button', { name: 'Make demo data', exact: true }).click();
 }
 
 test.describe('Provision → Seed demo data outcome banner', () => {
@@ -70,8 +70,8 @@ test.describe('Provision → Seed demo data outcome banner', () => {
     await stubSeedStream(page, ALL_FAILED);
     await seedApply(page);
 
-    await expect(page.getByText('Seed complete.')).toHaveCount(0);
-    await expect(page.getByText(/Seed failed.*0 of 3/i)).toBeVisible();
+    await expect(page.getByText('Demo data made.')).toHaveCount(0);
+    await expect(page.getByText(/Demo data failed.*0 of 3/i)).toBeVisible();
     await expect(page.getByText('0/3 done · 3 failed')).toBeVisible();
   });
 
@@ -79,8 +79,8 @@ test.describe('Provision → Seed demo data outcome banner', () => {
     await stubSeedStream(page, ALL_SUCCEEDED);
     await seedApply(page);
 
-    await expect(page.getByText('Seed complete.')).toBeVisible();
-    await expect(page.getByText(/Seed (failed|partial)/i)).toHaveCount(0);
+    await expect(page.getByText('Demo data made.')).toBeVisible();
+    await expect(page.getByText(/Demo data (failed|partly made)/i)).toHaveCount(0);
     await expect(page.getByText('3/3 done')).toBeVisible();
   });
 
@@ -88,25 +88,25 @@ test.describe('Provision → Seed demo data outcome banner', () => {
     await stubSeedStream(page, PARTIAL);
     await seedApply(page);
 
-    await expect(page.getByText('Seed complete.')).toHaveCount(0);
-    await expect(page.getByText(/Seed partial.*2 of 3 succeeded.*1 failed/i)).toBeVisible();
+    await expect(page.getByText('Demo data made.')).toHaveCount(0);
+    await expect(page.getByText(/Demo data partly made.*2 of 3 succeeded.*1 failed/i)).toBeVisible();
     await expect(page.getByText('2/3 done · 1 failed')).toBeVisible();
   });
 
   test('the three outcomes render non-overlapping banner text', async ({ page }) => {
     await stubSeedStream(page, ALL_FAILED);
     await seedApply(page);
-    const failedBanner = await page.getByText(/Seed failed/i).first().textContent();
+    const failedBanner = await page.getByText(/Demo data failed/i).first().textContent();
 
     await page.unroute('**/api/provision/seed-demo/stream*');
     await stubSeedStream(page, ALL_SUCCEEDED);
     await seedApply(page);
-    const successBanner = await page.getByText('Seed complete.').first().textContent();
+    const successBanner = await page.getByText('Demo data made.').first().textContent();
 
     await page.unroute('**/api/provision/seed-demo/stream*');
     await stubSeedStream(page, PARTIAL);
     await seedApply(page);
-    const partialBanner = await page.getByText(/Seed partial/i).first().textContent();
+    const partialBanner = await page.getByText(/Demo data partly made/i).first().textContent();
 
     expect(failedBanner).not.toEqual(successBanner);
     expect(failedBanner).not.toEqual(partialBanner);

@@ -491,7 +491,7 @@ export default function SiteLists() {
       domains.length === 0 && !split.left.length && (source === 'top' ? 'press Get both lists' : source === 'csv' ? 'choose a CSV file' : 'paste some sites'),
       domains.length > MAX && `use at most ${MAX.toLocaleString()} sites`,
       !listReady && (listMode === 'new' ? 'name the new list' : 'pick a list'),
-      !policyId && 'pick a policy',
+      !policyId && (targets.error && policies.length === 0 ? 'wait for the security policies to load' : 'pick a policy'),
     ],
     onPreview: () => flow.runPreview(body(), 'Add to policy'),
     onApply: () => flow.runApply(body(), doneMsg),

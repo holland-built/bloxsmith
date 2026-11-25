@@ -35,8 +35,8 @@ function sequence(page, pattern: string, answers: Array<{ status?: number; body:
 
 async function lookUp(page, text: string) {
   await page.getByPlaceholder('domain, IP, or host…').fill(text);
-  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Lookup', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Look up', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up', exact: true })).toBeEnabled();
 }
 
 async function hhmm(page) {

@@ -69,13 +69,13 @@ test('Get an address can give the address its DNS name in the same step', async 
   });
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'address');
-  await panel.getByRole('combobox', { name: 'IP Space' }).selectOption('ipam/ip_space/1');
+  await panel.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/1');
   const dnsBox = panel.getByRole('checkbox', { name: 'Also give it a DNS name' });
 
   // One address gets one name: with a count of 2 the option is off.
-  await panel.getByRole('spinbutton', { name: 'Count' }).fill('2');
+  await panel.getByRole('spinbutton', { name: 'How many addresses' }).fill('2');
   await expect(dnsBox).toBeDisabled();
-  await panel.getByRole('spinbutton', { name: 'Count' }).fill('1');
+  await panel.getByRole('spinbutton', { name: 'How many addresses' }).fill('1');
 
   await dnsBox.check();
   await panel.getByPlaceholder('host-01').fill('printer-3');
@@ -138,8 +138,8 @@ test('the page is named for the menu button, and its lists are pickers', async (
   const get = await openTask(page, 'address');
   await expect(get.getByRole('heading', { name: 'Get an address' })).toBeVisible();
   // The baseline lists are short, so each is a plain dropdown with no search box.
-  await expect(get.getByRole('combobox', { name: 'Block', exact: true })).toBeAttached();
+  await expect(get.getByRole('combobox', { name: 'Address block', exact: true })).toBeAttached();
   const manage = await openTask(page, 'addresses');
-  await expect(manage.getByRole('combobox', { name: 'IP Space', exact: true })).toBeAttached();
+  await expect(manage.getByRole('combobox', { name: 'IP space', exact: true })).toBeAttached();
   await expect(manage.getByRole('combobox', { name: 'Subnet', exact: true })).toBeAttached();
 });

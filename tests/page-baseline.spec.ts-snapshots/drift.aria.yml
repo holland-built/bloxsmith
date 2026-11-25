@@ -1,22 +1,22 @@
-- main "Drift tab":
-  - heading "Drift" [level=1]
+- main "Compare to template tab":
+  - heading "Compare to template" [level=1]
   - paragraph: Shows what is missing from Infoblox, what is extra, and what differs from the template. It changes nothing.
-  - region "Check drift":
-    - heading "Check drift" [level=2]
+  - region "Compare":
+    - heading "Compare" [level=2]
     - group "Template":
       - text: ""
       - status
       - combobox "Template":
-        - option "Select a template" [selected]
+        - option "Pick a template" [selected]
         - option "baseline-site — baseline-region/test"
-    - group "IP space (override)":
+    - group "IP space (optional)":
       - text: ""
       - status
-      - combobox "IP space (override)":
-        - option "— template default —" [selected]
+      - combobox "IP space (optional)":
+        - option "The template's own IP space" [selected]
         - option "Baseline Space"
-    - button "Check drift" [disabled]
-    - paragraph: To check, pick a template.
+    - button "Compare" [disabled]
+    - text: To compare, pick a template.
   - region "Result":
     - heading "Result" [level=2]
-    - paragraph: Pick a template and press Check drift. The differences are listed here.
+    - paragraph: Pick a template and press Compare. The differences are listed here.

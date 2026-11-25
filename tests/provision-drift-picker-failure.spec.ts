@@ -65,7 +65,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
     const request = card(page, 'Request');
     await expect(request.getByText(FETCH_ERROR)).toBeVisible();
     await expect(request.getByText('Could not load IP spaces. upstream failed.')).toBeVisible();
-    await expect(request.getByText('no IP spaces', { exact: true })).toHaveCount(0);
+    await expect(request.getByText('No IP spaces yet.', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty /api/ipam/spaces read still shows "no IP spaces"', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
     await page.goto('/#provision');
 
     const request = card(page, 'Request');
-    await expect(request.getByText('no IP spaces', { exact: true })).toBeVisible();
+    await expect(request.getByText('No IP spaces yet.', { exact: true })).toBeVisible();
     await expect(request.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 
@@ -91,7 +91,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
     await request.locator('select').first().selectOption(SPACE.id);
 
     await expect(request.getByText(FETCH_ERROR)).toBeVisible();
-    await expect(request.getByText('no address blocks', { exact: true })).toHaveCount(0);
+    await expect(request.getByText('No address blocks yet.', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty /api/ipam/blocks read still shows "no address blocks"', async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe('Provision / Subnet — failed read vs genuine empty', () => {
     const request = card(page, 'Request');
     await request.locator('select').first().selectOption(SPACE.id);
 
-    await expect(request.getByText('no address blocks', { exact: true })).toBeVisible();
+    await expect(request.getByText('No address blocks yet.', { exact: true })).toBeVisible();
     await expect(request.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 });
@@ -149,11 +149,11 @@ test.describe('Provision / Seed demo — failed read vs genuine empty', () => {
     await stub(page, TEMPLATES, [TEMPLATE]);
 
     await page.goto('/#provision');
-    await page.getByRole('button', { name: 'Seed demo' }).click();
+    await page.getByRole('button', { name: 'Demo data', exact: true }).click();
 
-    const seed = card(page, 'Seed multi-region demo data');
+    const seed = card(page, 'Multi-region demo data');
     await expect(seed.getByText(FETCH_ERROR)).toBeVisible();
-    await expect(seed.getByText('no IP spaces', { exact: true })).toHaveCount(0);
+    await expect(seed.getByText('No IP spaces yet.', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty /api/ipam/spaces read still shows "no IP spaces"', async ({ page }) => {
@@ -161,10 +161,10 @@ test.describe('Provision / Seed demo — failed read vs genuine empty', () => {
     await stub(page, TEMPLATES, [TEMPLATE]);
 
     await page.goto('/#provision');
-    await page.getByRole('button', { name: 'Seed demo' }).click();
+    await page.getByRole('button', { name: 'Demo data', exact: true }).click();
 
-    const seed = card(page, 'Seed multi-region demo data');
-    await expect(seed.getByText('no IP spaces', { exact: true })).toBeVisible();
+    const seed = card(page, 'Multi-region demo data');
+    await expect(seed.getByText('No IP spaces yet.', { exact: true })).toBeVisible();
     await expect(seed.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 });
@@ -204,7 +204,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
 
     const check = page.locator('[data-drift-form]');
     await expect(check.getByText('Could not load IP spaces. upstream failed.')).toBeVisible();
-    await expect(check.getByText('no IP spaces', { exact: true })).toHaveCount(0);
+    await expect(check.getByText('No IP spaces yet.', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty /api/ipam/spaces read still shows "no IP spaces"', async ({ page }) => {
@@ -214,7 +214,7 @@ test.describe('Drift pickers — failed read vs genuine empty', () => {
     await page.goto('/#drift');
 
     const check = page.locator('[data-drift-form]');
-    await expect(check.getByText('no IP spaces', { exact: true })).toBeVisible();
+    await expect(check.getByText('No IP spaces yet.', { exact: true })).toBeVisible();
     await expect(check.getByText(FETCH_ERROR)).toHaveCount(0);
   });
 });

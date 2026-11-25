@@ -264,24 +264,28 @@ function AllocatePanel() {
     <section aria-labelledby="ss-allocate-h">
       <ColumnHeading id="ss-allocate-h">Get an address</ColumnHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <Field label="IP Space" group>
+        <Field label="IP space" group>
           <FilterSelect
-            label="IP Space"
+            label="IP space"
             value={space}
             onChange={(v) => { setSpace(v); setBlock(''); setSubnetId(''); flow.markStale() }}
             options={spaceOpts.options.length ? spaceOpts.options : spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
-            placeholder="Select space…"
+            placeholder="Pick an IP space"
           />
+          {/* Each load error sits under the box it is about (audit R2-D1). */}
+          <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
+          {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
         </Field>
-        <Field label="Block" group>
+        <Field label="Address block" group>
           <FilterSelect
-            label="Block"
+            label="Address block"
             value={block}
             onChange={(v) => { setBlock(v); setSubnetId(''); flow.markStale() }}
             options={blocks.map((b) => ({ value: b.id, label: b.address ? `${withSize(`${b.address}${b.cidr ? `/${b.cidr}` : ''}`)}${b.name ? ` — ${b.name}` : ''}` : b.name || b.id }))}
-            placeholder="Any block"
+            placeholder={space ? 'Any address block' : 'Pick an IP space first'}
             disabled={!space}
           />
+          <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
         </Field>
         <Field label="Subnet" group>
           <FilterSelect
@@ -289,11 +293,12 @@ function AllocatePanel() {
             value={subnetId}
             onChange={(v) => { setSubnetId(v); flow.markStale() }}
             options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
-            placeholder={roomiest ? `Any network with room (now ${subnetLabel(roomiest)})` : 'Select subnet…'}
+            placeholder={roomiest ? `Any network with room (now ${subnetLabel(roomiest)})` : space ? 'Pick a subnet' : 'Pick an IP space first'}
             disabled={!space}
           />
+          <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
         </Field>
-        <Field label="Count">
+        <Field label="How many addresses">
           <input {...MACHINE_TEXT}
             className={inputCls}
             type="number"
@@ -326,7 +331,7 @@ function AllocatePanel() {
                 value={zoneId}
                 onChange={(v) => { setZoneId(v); flow.markStale() }}
                 options={zoneOptions(zones, false)}
-                placeholder="Select zone…"
+                placeholder="Pick a DNS zone"
               />
             </Field>
             <p className="text-note text-muted self-end">
@@ -341,7 +346,7 @@ function AllocatePanel() {
         )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={deviceOn} disabled={!single} onChange={(e) => { setDeviceOn(e.target.checked); flow.markStale() }} />
-          Lock it to one device (DHCP reservation)
+          Lock it to one device
           {!single && <span className="text-note text-muted">(one address at a time)</span>}
         </label>
         {device && (
@@ -366,11 +371,6 @@ function AllocatePanel() {
       </div>
 
       <PreviewApply {...applyProps} part="start" />
-
-      <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
-      <FetchError error={blocksApi.error} stale={blocks.length > 0} what="address blocks" />
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
-      {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
     </section>
     } result={
     <section aria-labelledby="ss-allocate-result-h" data-result-of="allocate">
@@ -449,7 +449,7 @@ function DnsPanel() {
             value={zoneId}
             onChange={(v) => { setZoneId(v); flow.markStale() }}
             options={zoneOptions(zones, type === 'PTR')}
-            placeholder="Select zone…"
+            placeholder="Pick a DNS zone"
           />
         </Field>
         <Field label="Type">
@@ -828,7 +828,7 @@ function ManageRecordsPanel() {
             value={zoneId}
             onChange={(v) => { setZoneId(v); setEditingId(null); closeConfirm(); setDeleteError(null); setPanelMessage(null) }}
             options={zoneOptions(zones, reverse)}
-            placeholder="Select zone…"
+            placeholder="Pick a DNS zone"
           />
         </Field>
       </div>
@@ -1027,14 +1027,16 @@ function ManageAddressesPanel() {
     <section aria-labelledby="ss-addresses-h">
       <ColumnHeading id="ss-addresses-h">Give back an address</ColumnHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <Field label="IP Space" group>
+        <Field label="IP space" group>
           <FilterSelect
-            label="IP Space"
+            label="IP space"
             value={space}
             onChange={(v) => { setSpace(v); setSubnetId(''); closeConfirm(); setReleaseError(null) }}
             options={spaces.map((s) => ({ value: s.id, label: s.name || s.id }))}
-            placeholder="Select space…"
+            placeholder="Pick an IP space"
           />
+          <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
+          {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>No IP spaces yet.</Empty>}
         </Field>
         <Field label="Subnet" group>
           <FilterSelect
@@ -1042,15 +1044,12 @@ function ManageAddressesPanel() {
             value={subnetId}
             onChange={(v) => { setSubnetId(v); closeConfirm(); setReleaseError(null) }}
             options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
-            placeholder="Select subnet…"
+            placeholder={space ? 'Pick a subnet' : 'Pick an IP space first'}
             disabled={!space}
           />
+          <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
         </Field>
       </div>
-
-      <FetchError error={spacesApi.error} stale={spaces.length > 0} what="IP spaces" />
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
-      {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
       {subnetId && (
           <input
             {...MACHINE_TEXT}

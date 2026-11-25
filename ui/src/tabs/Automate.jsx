@@ -853,9 +853,9 @@ function RecentChanges({ api, ro }) {
   }, [building, refetch])
   return (
     <Card panelId="automate-recent" title="Made here" span={6}
-      note="only changes made on this page; each one can be removed">
+      note="Changes made on this page. Each one can be removed.">
       {list.length === 0
-        ? (!api.loading && !api.error && <Empty>Nothing built here yet.</Empty>)
+        ? (!api.loading && !api.error && <Empty>Nothing made here yet.</Empty>)
         : <ul data-recent-changes="">{list.map((r) => <RunRow key={r.id} run={r} ro={ro} demo={demo} onChanged={refetch} />)}</ul>}
       {older.length > 0 && (
         <div data-older-demos="" className="mt-3">
@@ -869,7 +869,7 @@ function RecentChanges({ api, ro }) {
           </ul>
         </div>
       )}
-      <FetchError error={api.error} stale={list.length > 0} what="recent jobs" />
+      <FetchError error={api.error} stale={list.length > 0} what="what was made here" />
     </Card>
   )
 }

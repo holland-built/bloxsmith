@@ -32,38 +32,38 @@ const options = (page: import('@playwright/test').Page, label: string) =>
 
 test('typing narrows the space list, ignoring case, and says how many match', async ({ page }) => {
   await page.goto('/#provision');
-  await expect(options(page, 'Space')).toHaveCount(10); // placeholder + 9
+  await expect(options(page, 'IP space')).toHaveCount(10); // placeholder + 9
 
-  await page.getByRole('searchbox', { name: 'Search Space' }).fill('OFFICE');
-  await expect(options(page, 'Space')).toHaveText(['Select a space (2 of 9 match)', 'Berlin Office', 'Brussels Office']);
+  await page.getByRole('searchbox', { name: 'Search IP space' }).fill('OFFICE');
+  await expect(options(page, 'IP space')).toHaveText(['Pick an IP space (2 of 9 match)', 'Berlin Office', 'Brussels Office']);
 
-  await page.getByRole('combobox', { name: 'Space', exact: true }).selectOption({ label: 'Brussels Office' });
-  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/d');
+  await page.getByRole('combobox', { name: 'IP space', exact: true }).selectOption({ label: 'Brussels Office' });
+  await expect(page.getByRole('combobox', { name: 'IP space', exact: true })).toHaveValue('ipam/ip_space/d');
 });
 
 test('a chosen space stays chosen when the search no longer matches it', async ({ page }) => {
   await page.goto('/#provision');
-  await page.getByRole('combobox', { name: 'Space', exact: true }).selectOption({ label: 'jbriante-IP-Space' });
+  await page.getByRole('combobox', { name: 'IP space', exact: true }).selectOption({ label: 'jbriante-IP-Space' });
 
-  await page.getByRole('searchbox', { name: 'Search Space' }).fill('berlin');
-  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/c');
-  await expect(options(page, 'Space')).toContainText(['jbriante-IP-Space', 'Berlin Office']);
+  await page.getByRole('searchbox', { name: 'Search IP space' }).fill('berlin');
+  await expect(page.getByRole('combobox', { name: 'IP space', exact: true })).toHaveValue('ipam/ip_space/c');
+  await expect(options(page, 'IP space')).toContainText(['jbriante-IP-Space', 'Berlin Office']);
 });
 
 test('a search with no match says so', async ({ page }) => {
   await page.goto('/#provision');
-  await page.getByRole('searchbox', { name: 'Search Space' }).fill('tokyo');
-  await expect(page.getByText('No space matches “tokyo”.')).toBeVisible();
-  await expect(options(page, 'Space')).toHaveText(['Select a space (0 of 9 match)']);
+  await page.getByRole('searchbox', { name: 'Search IP space' }).fill('tokyo');
+  await expect(page.getByText("No IP space matches “tokyo”.", { exact: true })).toBeVisible();
+  await expect(options(page, 'IP space')).toHaveText(['Pick an IP space (0 of 9 match)']);
 });
 
 test('the Full site and Seed demo space lists search the same way', async ({ page }) => {
   await page.goto('/#provision');
-  for (const mode of ['Full site', 'Seed demo']) {
+  for (const mode of ['Full site', 'Demo data']) {
     await page.getByRole('button', { name: mode, exact: true }).click();
-    await page.getByRole('searchbox', { name: 'Search IP space' }).first().fill('amster');
-    await expect(page.getByRole('combobox', { name: 'IP space', exact: true }).first().locator('option')).toHaveText([
-      '— template default — (1 of 9 match)', 'Amsterdam Lab',
+    await page.getByRole('searchbox', { name: 'Search IP space (optional)' }).first().fill('amster');
+    await expect(page.getByRole('combobox', { name: 'IP space (optional)', exact: true }).first().locator('option')).toHaveText([
+      "The template's own IP space (1 of 9 match)", 'Amsterdam Lab',
     ]);
   }
 });
@@ -72,18 +72,18 @@ test('the Full site and Seed demo space lists search the same way', async ({ pag
 // nobody has to open the dropdown to see them. The dropdown stays, holding
 // every match, for anyone who prefers it.
 
-const results = (page: import('@playwright/test').Page, label = 'space') =>
+const results = (page: import('@playwright/test').Page, label = 'ip space') =>
   page.getByRole('list', { name: `Matching ${label}` }).getByRole('button');
 
 test('typing shows the matches as buttons, and a click picks one without opening the dropdown', async ({ page }) => {
   await page.goto('/#provision');
-  const box = page.getByRole('searchbox', { name: 'Search Space' });
+  const box = page.getByRole('searchbox', { name: 'Search IP space' });
   await box.fill('office');
   await expect(results(page)).toHaveText(['Berlin Office', 'Brussels Office']);
   await expect(page.getByRole('status').filter({ hasText: '2 matches.' })).toBeVisible();
 
   await results(page).filter({ hasText: 'Brussels Office' }).click();
-  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/d');
+  await expect(page.getByRole('combobox', { name: 'IP space', exact: true })).toHaveValue('ipam/ip_space/d');
   // The search clears, the list goes, and focus returns to the box.
   await expect(box).toHaveValue('');
   await expect(results(page)).toHaveCount(0);
@@ -92,7 +92,7 @@ test('typing shows the matches as buttons, and a click picks one without opening
 
 test('the keyboard reaches the matches: Down into them, Up back out, Enter picks, Escape clears', async ({ page }) => {
   await page.goto('/#provision');
-  const box = page.getByRole('searchbox', { name: 'Search Space' });
+  const box = page.getByRole('searchbox', { name: 'Search IP space' });
   await box.fill('b');
   await box.press('ArrowDown');
   await expect(results(page).first()).toBeFocused();
@@ -109,23 +109,23 @@ test('the keyboard reaches the matches: Down into them, Up back out, Enter picks
   // Enter in the box picks the first match.
   await box.fill('amster');
   await box.press('Enter');
-  await expect(page.getByRole('combobox', { name: 'Space', exact: true })).toHaveValue('ipam/ip_space/a');
+  await expect(page.getByRole('combobox', { name: 'IP space', exact: true })).toHaveValue('ipam/ip_space/a');
 });
 
 test('more than 50 matches: 50 buttons, a line saying how many more, and the dropdown still holds all of them', async ({ page }) => {
   const many = { spaces: Array.from({ length: 120 }, (_, i) => ({ id: `ipam/ip_space/s${i}`, name: `Site ${i}` })) };
   await page.route('**/api/ipam/spaces*', (route) => json(route, many));
   await page.goto('/#provision');
-  await page.getByRole('searchbox', { name: 'Search Space' }).fill('site');
+  await page.getByRole('searchbox', { name: 'Search IP space' }).fill('site');
   await expect(results(page)).toHaveCount(50);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 50 of 120 matches.' })).toBeVisible();
-  await expect(options(page, 'Space')).toHaveCount(121); // placeholder + all 120
+  await expect(options(page, 'IP space')).toHaveCount(121); // placeholder + all 120
 });
 
 test('on a wide screen the caption sits beside its field; on a phone it sits above', async ({ page }) => {
   const geometry = async () => {
     const cap = await page.locator('[data-panel-id="provision-subnet-request"] [data-field]').first().locator(':scope > span').first().boundingBox();
-    const ctl = await page.getByRole('searchbox', { name: 'Search Space' }).boundingBox();
+    const ctl = await page.getByRole('searchbox', { name: 'Search IP space' }).boundingBox();
     return { cap: cap!, ctl: ctl! };
   };
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -166,19 +166,23 @@ test('a block search belongs to its space: changing the space clears it, and no 
     return json(route, { blocks });
   });
   await page.goto('/#provision');
-  const space = page.getByRole('combobox', { name: 'Space', exact: true });
-  const blockBox = page.getByRole('searchbox', { name: 'Search Block' });
+  const space = page.getByRole('combobox', { name: 'IP space', exact: true });
+  const blockBox = page.getByRole('searchbox', { name: 'Search Address block' });
   await space.selectOption({ label: 'Amsterdam Lab' });
   await blockBox.fill('block');
-  await expect(results(page, 'block')).toHaveText(['Amsterdam Block']);
+  await expect(results(page, 'address block')).toHaveText(['Amsterdam Block']);
+  // A label with no acronym reads in sentence case.
+  await blockBox.fill('zzz');
+  await expect(page.getByText('No address block matches “zzz”.', { exact: true })).toBeVisible();
+  await blockBox.fill('block');
 
   await space.selectOption({ label: 'Berlin Office' });
   await expect(blockBox).toHaveValue('');
-  await expect(results(page, 'block')).toHaveCount(0);
+  await expect(results(page, 'address block')).toHaveCount(0);
 
-  await space.selectOption({ label: 'Select a space' });
-  await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeDisabled();
-  await expect(results(page, 'block')).toHaveCount(0);
+  await space.selectOption({ label: 'Pick an IP space' });
+  await expect(page.getByRole('combobox', { name: 'Address block', exact: true })).toBeDisabled();
+  await expect(results(page, 'address block')).toHaveCount(0);
 });
 
 test('a form panel resized narrower stacks its rows instead of spilling out', async ({ page }) => {
@@ -187,7 +191,7 @@ test('a form panel resized narrower stacks its rows instead of spilling out', as
   const form = page.locator('[data-panel-id="provision-subnet-request"] [data-form-cols]');
   await form.evaluate((el) => { (el as HTMLElement).style.width = '420px'; });
   const cap = await page.locator('[data-panel-id="provision-subnet-request"] [data-field]').first().locator(':scope > span').first().boundingBox();
-  const ctl = await page.getByRole('searchbox', { name: 'Search Space' }).boundingBox();
+  const ctl = await page.getByRole('searchbox', { name: 'Search IP space' }).boundingBox();
   const box = await form.boundingBox();
   expect(ctl!.y).toBeGreaterThan(cap!.y + cap!.height - 1);
   expect(ctl!.x + ctl!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
@@ -201,15 +205,15 @@ test('when the new space\'s blocks fail to load, the old space\'s blocks cannot 
       : route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"upstream"}' });
   });
   await page.goto('/#provision');
-  const space = page.getByRole('combobox', { name: 'Space', exact: true });
+  const space = page.getByRole('combobox', { name: 'IP space', exact: true });
   await space.selectOption({ label: 'Amsterdam Lab' });
-  await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeEnabled();
+  await expect(page.getByRole('combobox', { name: 'Address block', exact: true })).toBeEnabled();
 
   await space.selectOption({ label: 'Berlin Office' });
   await expect(page.getByText('Could not load address blocks. upstream.')).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Block', exact: true })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: 'Address block', exact: true })).toBeDisabled();
   // Nothing loaded for this space, so the list is too short for a search box.
-  await expect(page.getByRole('searchbox', { name: 'Search Block' })).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: 'Search Address block' })).toHaveCount(0);
 });
 
 test('a late answer for the previous space never fills the new space\'s block picker', async ({ page }) => {
@@ -223,8 +227,8 @@ test('a late answer for the previous space never fills the new space\'s block pi
     return json(route, { blocks: [{ id: isA ? 'ipam/address_block/a1' : 'ipam/address_block/b1', name: isA ? 'Amsterdam Block' : 'Berlin Block' }] });
   });
   await page.goto('/#provision');
-  const space = page.getByRole('combobox', { name: 'Space', exact: true });
-  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  const space = page.getByRole('combobox', { name: 'IP space', exact: true });
+  const block = page.getByRole('combobox', { name: 'Address block', exact: true });
   await space.selectOption({ label: 'Amsterdam Lab' });
   await space.selectOption({ label: 'Berlin Office' });
 
@@ -254,8 +258,8 @@ test('switching A, B, then back to A: the first A request answering late does no
     return json(route, { blocks: [{ id: first ? 'ipam/address_block/old' : 'ipam/address_block/a1', name: first ? 'Old Amsterdam Block' : 'Amsterdam Block' }] });
   });
   await page.goto('/#provision');
-  const space = page.getByRole('combobox', { name: 'Space', exact: true });
-  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  const space = page.getByRole('combobox', { name: 'IP space', exact: true });
+  const block = page.getByRole('combobox', { name: 'Address block', exact: true });
   await space.selectOption({ label: 'Amsterdam Lab' });
   await space.selectOption({ label: 'Berlin Office' });
   await space.selectOption({ label: 'Amsterdam Lab' });
@@ -271,11 +275,11 @@ test('before a space is picked, the Block list asks for one instead of claiming 
   // With no space chosen nothing is being fetched, yet the list read
   // "Loading blocks…" for as long as you looked at it.
   await page.goto('/#provision');
-  const block = page.getByRole('combobox', { name: 'Block', exact: true });
+  const block = page.getByRole('combobox', { name: 'Address block', exact: true });
   await expect(block).toBeDisabled();
-  await expect(block.locator('option').first()).toHaveText('Pick a space first');
-  await expect(page.getByText('Loading blocks…')).toHaveCount(0);
+  await expect(block.locator('option').first()).toHaveText('Pick an IP space first');
+  await expect(page.getByText('Loading address blocks…')).toHaveCount(0);
 
-  await page.getByRole('combobox', { name: 'Space', exact: true }).selectOption({ label: 'Amsterdam Lab' });
-  await expect(block.locator('option').first()).not.toHaveText('Pick a space first');
+  await page.getByRole('combobox', { name: 'IP space', exact: true }).selectOption({ label: 'Amsterdam Lab' });
+  await expect(block.locator('option').first()).not.toHaveText('Pick an IP space first');
 });

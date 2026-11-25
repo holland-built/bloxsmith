@@ -21,11 +21,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
 
     const allocateCard = await openTask(page, 'address');
     await expect(allocateCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
-    await expect(allocateCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
+    await expect(allocateCard.getByText('No IP spaces yet.', { exact: true })).toHaveCount(0);
 
     const manageAddressesCard = await openTask(page, 'addresses');
     await expect(manageAddressesCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toBeVisible();
-    await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toHaveCount(0);
+    await expect(manageAddressesCard.getByText('No IP spaces yet.', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty /api/ipam/spaces read still shows "no IP spaces"', async ({ page }) => {
@@ -35,11 +35,11 @@ test.describe('SelfService pickers — failed read vs genuine empty (IP spaces)'
     await page.goto('/#selfservice');
 
     const allocateCard = await openTask(page, 'address');
-    await expect(allocateCard.getByText('no IP spaces', { exact: true })).toBeVisible();
+    await expect(allocateCard.getByText('No IP spaces yet.', { exact: true })).toBeVisible();
     await expect(allocateCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
 
     const manageAddressesCard = await openTask(page, 'addresses');
-    await expect(manageAddressesCard.getByText('no IP spaces', { exact: true })).toBeVisible();
+    await expect(manageAddressesCard.getByText('No IP spaces yet.', { exact: true })).toBeVisible();
     await expect(manageAddressesCard.getByText(/could not load (IP spaces|DNS zones)\./i)).toHaveCount(0);
   });
 });

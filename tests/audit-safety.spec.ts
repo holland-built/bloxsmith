@@ -273,7 +273,7 @@ test('7. a failed list never says there is nothing', async ({ page }) => {
   await page.route('**/api/desk/runs', (r) => json(r, { error: 'down' }, 500));
   await page.goto('/#automate');
   await expect(page.locator('[data-panel-id="automate-recent"]').getByRole('alert')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('Nothing built here yet.')).toHaveCount(0);
+  await expect(page.getByText('Nothing made here yet.')).toHaveCount(0);
   await page.goto('/#made');
   await expect(page.getByRole('alert').first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('Nothing made with Bloxsmith yet.')).toHaveCount(0);

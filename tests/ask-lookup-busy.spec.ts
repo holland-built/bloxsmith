@@ -29,7 +29,7 @@ test('Enter does not start a second lookup while one is running', async ({ page 
   await page.waitForTimeout(500);
   const whileBusy = lookups;
   release();
-  await expect(page.getByRole('button', { name: 'Lookup', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Look up', exact: true })).toBeEnabled();
   expect(whileBusy).toBe(1);
 
   // Once it has finished, Enter works again.

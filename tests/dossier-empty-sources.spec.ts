@@ -65,7 +65,7 @@ async function lookup(page: import('@playwright/test').Page, dossierBody: unknow
   await page.goto('/#ai');
   const card = page.locator('text=Threat lookup').locator('..').locator('..');
   await card.getByPlaceholder('domain, IP, or host…').fill(query);
-  await card.getByRole('button', { name: 'Lookup', exact: true }).click();
+  await card.getByRole('button', { name: 'Look up', exact: true }).click();
   return card;
 }
 

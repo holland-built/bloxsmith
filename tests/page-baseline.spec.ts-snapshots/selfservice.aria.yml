@@ -8,31 +8,31 @@
     - button "Give back an address"
   - region "Get an address":
     - heading "Get an address" [level=2]
-    - group "IP Space":
+    - group "IP space":
       - text: ""
       - status
-      - combobox "IP Space":
-        - option "Select space…" [selected]
+      - combobox "IP space":
+        - option "Pick an IP space" [selected]
         - option /Baseline Space \(\d+ of \d+ addresses free\)/
-    - group "Block":
+    - group "Address block":
       - text: ""
       - status
-      - combobox "Block" [disabled]:
-        - option "Any block" [selected]
+      - combobox "Address block" [disabled]:
+        - option "Pick an IP space first" [selected]
     - group "Subnet":
       - text: ""
       - status
       - combobox "Subnet" [disabled]:
-        - option "Select subnet…" [selected]
-    - text: Count
-    - spinbutton "Count": "1"
+        - option "Pick an IP space first" [selected]
+    - text: How many addresses
+    - spinbutton "How many addresses": "1"
     - text: Name (optional)
     - textbox "Name (optional)":
       - /placeholder: e.g. host-01
     - checkbox "Also give it a DNS name"
     - text: Also give it a DNS name
-    - checkbox "Lock it to one device (DHCP reservation)"
-    - text: Lock it to one device (DHCP reservation)
+    - checkbox "Lock it to one device"
+    - text: Lock it to one device
     - button "Preview" [disabled]
     - text: To preview, pick an IP space.
   - region "Preview":

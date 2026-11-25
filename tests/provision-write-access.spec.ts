@@ -28,13 +28,13 @@ test('on a read-only tenant Preview runs, and Apply says why instead of opening 
   await page.goto('/#provision');
   await expect(page.getByText('Baseline Tenant is read-only.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Seed demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Demo data', exact: true }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Seed demo data', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Make demo data', exact: true })).toBeVisible();
   expect(seen).toHaveLength(1);
   expect(seen[0]).toContain('dry=1');
 
-  await page.getByRole('button', { name: 'Seed demo data', exact: true }).click();
+  await page.getByRole('button', { name: 'Make demo data', exact: true }).click();
   await expect(page.getByText(/Baseline Tenant is read-only, so nothing was sent/)).toBeVisible();
   await expect(page.getByText('Stream connection error')).toHaveCount(0);
   expect(seen).toHaveLength(1); // no apply stream was opened
