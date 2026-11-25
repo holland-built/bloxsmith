@@ -33,20 +33,20 @@
           - button "Status"
         - columnheader "Type"
     - rowgroup:
-      - row /baseline-host-a \d+\.\d+\.0\.2 ok onprem/:
+      - row /baseline-host-a \d+\.\d+\.0\.2 Active onprem/:
         - cell "baseline-host-a"
         - cell /\d+\.\d+\.0\.2/
-        - cell "ok"
+        - cell "Active"
         - cell "onprem"
-      - row /baseline-host-b \d+\.\d+\.0\.2 degraded onprem/:
+      - row /baseline-host-b \d+\.\d+\.0\.2 Degraded onprem/:
         - cell "baseline-host-b"
         - cell /\d+\.\d+\.0\.2/
-        - cell "degraded"
+        - cell "Degraded"
         - cell "onprem"
-      - row /baseline-host-c \d+\.\d+\.0\.2 offline onprem/:
+      - row /baseline-host-c \d+\.\d+\.0\.2 Not online onprem/:
         - cell "baseline-host-c"
         - cell /\d+\.\d+\.0\.2/
-        - cell "offline"
+        - cell "Not online"
         - cell "onprem"
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"

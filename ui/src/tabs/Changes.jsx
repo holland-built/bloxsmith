@@ -127,7 +127,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={96} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : 'nothing can be said about the last 24 hours'} />
+              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : "the list of changes couldn't be read, so these counts aren't known"} />
             ) : (
               <NotabilityBand band={band} listed={summary.listed} />
             )}
@@ -147,7 +147,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={250} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : 'the portal audit read did not complete'} />
+              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : "the list of changes couldn't be read"} />
             ) : state === 'empty' ? (
               <Empty>nothing changed in the last 24 hours</Empty>
             ) : (
@@ -190,10 +190,10 @@ const TILE_LABEL = {
 const ALARM = new Set(['deletions', 'failures'])
 
 function tileLine(cell, listed) {
-  if (cell.state === 'unknown') return cell.key === 'newActors' && !/cap/.test(cell.reason) ? 'too little history' : 'older rows not read'
+  if (cell.state === 'unknown') return cell.key === 'newActors' && !/cap/.test(cell.reason) ? 'too little history' : 'older changes not checked'
   if (cell.key === 'outOfHours') return `${OOH_START_HOUR}:00–0${OOH_END_HOUR}:00 local`
   if (cell.key === 'newActors') return cell.state === 'populated' ? cell.actors.map(shortActor).join(', ') : 'none in the recent half'
-  if (cell.atLeast) return 'older rows not read'
+  if (cell.atLeast) return 'older changes not checked'
   return `of ${listed} ${listed === 1 ? 'change' : 'changes'}`
 }
 
@@ -242,7 +242,7 @@ function CapNote({ text }) {
   return (
     <Tip tip={text} className="chg-cap" data-changes-cap="">
       <span aria-hidden="true" className="chg-cap-i">i</span>
-      Only the {ROW_CAP} most recent
+      Based on the newest {ROW_CAP} changes; older ones weren&apos;t checked
       {/* The live region announces this note, so the whole sentence rides
           along for a screen reader, not only the short label. */}
       <span className="sr-only">. {text}</span>
@@ -286,7 +286,9 @@ function Feed({ groups }) {
       // relative: each row's sr-only label is position:absolute, and without a
       // positioned box here they escape it and stretch the page ~28px a row.
       tabIndex={0}
-      className={`relative max-h-[520px] overflow-auto outline-none ${FOCUS_RING}`}
+      // max-md:scroll-cue: on a phone the right edge fades while more columns
+      // are off to the right (GUI audit C3), the same cue DataTable uses.
+      className={`relative max-h-[520px] overflow-auto max-md:scroll-cue outline-none ${FOCUS_RING}`}
       role="table"
       aria-label="Changed objects, grouped by resource"
       aria-colcount={FEED_COLUMNS.length}

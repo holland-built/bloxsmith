@@ -14,7 +14,7 @@ import { countOf, issueWord } from '../lib/plainWords.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import { healthMetric } from '../lib/dnsHealth.js'
-import { FAILURE_WINDOWS, failuresUrl, failuresView, readWindow, saveWindow } from '../lib/dnsFailures.js'
+import { FAILURE_WINDOWS, failuresUrl, failuresView, NOT_CHECKED, readWindow, saveWindow } from '../lib/dnsFailures.js'
 import Tip from '../components/Tip.jsx'
 import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
@@ -368,6 +368,7 @@ function FailedLookups({ panelId }) {
   // Totals over hours or days, so once a minute is plenty.
   const feed = useApi(failuresUrl(win), { poll: 60000 })
   const v = failuresView(feed, win)
+  const someFailed = v.state === 'error' || [v.total, ...(v.codes ?? [])].some((n) => n?.text === NOT_CHECKED) || v.namesText === NOT_CHECKED
   // The server reads the top 10 only; the heading below says so.
   const names = v.names
   const pick = (w) => {
@@ -393,6 +394,16 @@ function FailedLookups({ panelId }) {
         <Skeleton h={180} />
       ) : (
         <>
+          {/* Any read failed: say so once, with a way to ask again. Each number
+              below still says "not checked" on its own (GUI audit B2). */}
+          {someFailed && (
+            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-crit pt-1">
+              {v.state === 'error' ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}
+              <button type="button" onClick={feed.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+                Try again
+              </button>
+            </p>
+          )}
           <dl className="dns-stats">
             <div data-failed-total="" data-state={v.total.value == null ? 'unknown' : 'ok'}>
               <dt>Failed lookups</dt>
@@ -481,7 +492,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // unarrived slice reads as 'error') for a read that simply has not finished.
   if (loading) {
     return (
-      <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} title="Zone problems" className="flex flex-col justify-between">
         <Skeleton h={200} />
       </Card>
     )
@@ -490,7 +501,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
-      <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} title="Zone problems" className="flex flex-col justify-between">
         <FeedUnavailable label="DNS zone information is unavailable" />
       </Card>
     )
@@ -514,10 +525,10 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
 
   return (
     // All three branches of this component are the SAME panel and carry the
-    // same `panelName`: they are the loading, the dead-feed and the data views
-    // of one tile, so the popup must call it one thing whichever is on screen.
-    // It draws no heading, which is why its About button is named by its id.
-    <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col">
+    // same title: they are the loading, the dead-feed and the data views of
+    // one tile, so the popup must call it one thing whichever is on screen.
+    // It had no heading until GUI audit B11, so a failed read left it blank.
+    <Card panelId={panelId} span={2} title="Zone problems" className="flex flex-col">
       <div className="text-note text-muted pt-1 pb-2">Issues by kind</div>
       {kinds.length ? (
         <ul className="dns-kinds" aria-label="Zone issues by kind">
@@ -803,7 +814,8 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
               Compare views
             </button>
           )}
-          <span className="text-note text-muted whitespace-nowrap">{countOf(sorted.length, 'zone')}</span>
+          {/* A list that failed or has not arrived has no count: a dash, not 0 (B2). */}
+          <span className="text-note text-muted whitespace-nowrap">{countOf(listLoading || listFailed ? null : sorted.length, 'zone')}</span>
           <input {...MACHINE_TEXT}
             aria-label="Filter zones"
             placeholder="Filter…"

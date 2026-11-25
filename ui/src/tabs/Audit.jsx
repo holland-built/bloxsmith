@@ -263,7 +263,9 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
       // in words. The cap is `auditLogReturnCap`, go/internal/server/state.go:86
       // (2000); measured live 2026-08-21 the log holds 838 entries, so today
       // this chip and the log are the same number and no note renders.
-      right={<span className="text-note text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
+      // No count beside a read that failed: "0 recorded events" next to "Audit
+      // log unavailable" says nothing happened when nothing was read (C9).
+      right={chain.error || (total === 0 && readShortfall(chain.data)) ? null : <span className="text-note text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
     >
       <ShortRead chain={chain} />
       <TruncationNote chain={chain} loaded={entries.length} />

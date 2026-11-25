@@ -5,8 +5,8 @@
   - heading "Worth a look" [level=2]
   - 'button "About: Worth a look"': "About: ⓘ"
   - 'button "Options: Worth a look"'
-  - text: /Deletions Needs action 1\+ older rows not read Failed Needs action 1\+ older rows not read Out of hours 2\+ \d+:\d+–\d+:\d+ local New accounts Unknown Not answered older rows not read/
-  - status: /Only the \d+ most recent/
+  - text: /Deletions Needs action 1\+ older changes not checked Failed Needs action 1\+ older changes not checked Out of hours 2\+ \d+:\d+–\d+:\d+ local New accounts Unknown Not answered older changes not checked/
+  - status: /Based on the newest \d+ changes; older ones weren't checked/
   - heading "Changed objects" [level=2]
   - 'button "About: Changed objects"': "About: ⓘ"
   - 'button "Options: Changed objects"'

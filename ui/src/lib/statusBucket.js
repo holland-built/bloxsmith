@@ -11,11 +11,24 @@
 // 2026-11-24 it fell through to "other": Infra drew such a host in purple as
 // "Other" and Daily listed it as needing attention, while Overview, which
 // counts only the offline ones, already treated it as online.
+//
+// Whole words only, never a word inside a word (2026-11-25). The old loose
+// match counted "Setup failed" (it holds "up") and "Inactive" (it holds
+// "active") as Active, so a broken host was drawn as a healthy one. The words
+// are the ones go/internal/dashboard/norm.go sends, plus the spellings other
+// feeds use; "inactive" is offline there too. A status that names a failure
+// in a longer phrase ("Setup failed") is still offline. Any other word is
+// "other": never Active on a guess.
+const BUCKET = {
+  unknown: 'unknown',
+  ok: 'active', online: 'active', active: 'active', up: 'active',
+  degraded: 'degraded', warning: 'degraded', warn: 'degraded',
+  offline: 'offline', inactive: 'offline', down: 'offline', error: 'offline', failed: 'offline', fail: 'offline',
+}
+
 export function statusBucket(s) {
-  s = s || ''
-  if (/^unknown$/i.test(s)) return 'unknown'
-  if (/^ok$/i.test(s) || /online|up|active/i.test(s)) return 'active'
-  if (/degraded|warn/i.test(s)) return 'degraded'
-  if (/off|down|error|fail/i.test(s)) return 'offline'
+  const word = String(s ?? '').trim().toLowerCase()
+  if (Object.hasOwn(BUCKET, word)) return BUCKET[word]
+  if (/\b(failed|failure|error|down|offline)\b/.test(word)) return 'offline'
   return 'other'
 }

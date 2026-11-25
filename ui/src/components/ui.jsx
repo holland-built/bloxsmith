@@ -2718,9 +2718,12 @@ export function Card({ title, panelName, note, right, span = 2, panelId, helpKey
               those two would be invisible to the width floor, and the header
               would overflow the card by exactly that element's width. */}
           {/* On a phone `right` takes its own line, so a wide control cannot
-              carry the help and menu buttons away from the title. */}
+              carry the help and menu buttons away from the title. Its basis
+              adds back the --hb it borrows with the negative end margin:
+              basis-full alone left room for it beside a short title such as
+              "Triage", under the ⓘ and ⋯ buttons (GUI audit C5). */}
           {right && (
-            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-full max-md:grow max-md:max-w-none max-md:-me-(--hb) max-md:mt-(--hbt,0px) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+            <span ref={rightRef} className="shrink-0 max-w-full max-md:order-last max-md:basis-[calc(100%+var(--hb,0px))] max-md:grow max-md:max-w-none max-md:-me-(--hb) max-md:mt-(--hbt,0px) flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
             </span>
           )}

@@ -8,11 +8,12 @@
     - button /Credentials \d+ suppliers \d+ exposed/
   - button "Arrange panels"
   - heading "Triage Inbox" [level=2]
-  - button "all"
-  - button "critical"
-  - button "high"
-  - button "medium"
-  - button "low"
+  - group "Show by severity":
+    - button "all" [pressed]
+    - button "critical"
+    - button "high"
+    - button "medium"
+    - button "low"
   - text: "2"
   - 'button "About: Triage Inbox"': "About: ⓘ"
   - 'button "Options: Triage Inbox"'
@@ -53,7 +54,7 @@
   - 'button "Options: Response Summary"'
   - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
   - heading "Threat Events by hour" [level=2]
-  - text: 2 events
+  - text: 10 events
   - 'button "About: Threat Events by hour"': "About: ⓘ"
   - 'button "Options: Threat Events by hour"'
   - text: critical 1 high 2 medium 3 low 4

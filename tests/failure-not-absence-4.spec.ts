@@ -281,17 +281,19 @@ test.describe('Incidents → severity tiles + categories (/api/incidents down)',
     _meta: { subnets: 'ok', zones: 'ok', leases: 'ok' }, signals_degraded: false,
   };
 
-  test('a dead /api/incidents shows em-dashes, never "Critical 0 High 0 Medium 0 Low 0"', async ({ page }) => {
+  // The failure box alone says the counts are unknown. Tiles of em-dashes used
+  // to sit under it and were pushed half out of the panel (GUI audit C2), so
+  // no tile is drawn at all, and certainly no zero.
+  test('a dead /api/incidents shows the failure, never "Critical 0 High 0 Medium 0 Low 0"', async ({ page }) => {
     await page.route('**/api/incidents*', dead);
     await page.goto('/#incidents');
 
     const sev = page.getByText('Severity counts unavailable').locator(CARD);
     await expect(sev).toBeVisible();
     for (const label of ['Critical', 'High', 'Medium', 'Low']) {
-      const cell = sev.getByText(label, { exact: true }).locator('..');
-      await expect(cell.getByText('—', { exact: true })).toBeVisible();
-      await expect(cell.getByText('0', { exact: true })).toHaveCount(0);
+      await expect(sev.getByText(label, { exact: true })).toHaveCount(0);
     }
+    await expect(sev.getByText('0', { exact: true })).toHaveCount(0);
 
     const cats = card(page, 'Categories');
     await expect(cats.getByText('Categories unavailable')).toBeVisible();

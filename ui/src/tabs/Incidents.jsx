@@ -345,9 +345,9 @@ function SeverityKpis({ signals, truncated, loading, error, panelId, severity, o
   })
 
   // A failed fetch leaves `signals` at [], so every count is 0. Printing those
-  // zeros asserts "no critical incidents" on the strength of a dead backend —
-  // the counts are unknown, not zero, so they render as em-dashes under an
-  // explicit failure banner.
+  // zeros asserts "no critical incidents" on the strength of a dead backend.
+  // The failure box says the counts are unknown; tiles of dashes under it were
+  // pushed half out of the panel (GUI audit C2), so none are drawn.
   if (error) {
     return (
       <Card panelId={panelId} span={6} panelName="Severity Counts" note="counts unknown — fetch failed">
@@ -355,18 +355,6 @@ function SeverityKpis({ signals, truncated, loading, error, panelId, severity, o
           label="Severity counts unavailable"
           reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
         />
-        <div className="ov-look inc-look">
-          <div className="inc-kpis">
-            {SEV_TILES.map((c) => (
-              <div key={c.key} className="ov-kpi" style={{ cursor: 'default' }}>
-                <span className="ov-kpi-in">
-                  <span className="ov-kpi-top">{c.label}</span>
-                  <span className="ov-num inc-num none">—</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </Card>
     )
   }
@@ -500,7 +488,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       title="Triage"
       note={filteredBy ? `only ${filteredBy}` : undefined}
       right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <input {...MACHINE_TEXT}
             aria-label="Filter incidents"
             placeholder="Filter…"
@@ -520,11 +508,13 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
               <button aria-label="Keep seen marks" onClick={() => setConfirmClear(false)} className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt">Keep seen marks</button>
             </span>
           ) : (
-            <button onClick={() => setConfirmClear(true)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
+            <button onClick={() => setConfirmClear(true)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy whitespace-nowrap">
               Clear seen marks
             </button>
           )}
-          <span className="text-note text-muted">{signalsTotal.toLocaleString()}</span>
+          {/* No count for a read that failed or has not arrived: it would be a 0
+              beside the error, not a number of signals. */}
+          {!loading && !error && <span data-triage-count="" className="text-note text-muted">{signalsTotal.toLocaleString()}</span>}
         </div>
       }
     >
@@ -785,9 +775,9 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
-        <FeedUnavailable label="Suggested actions are unavailable" reason={reason} onRetry={onRetry} />
+        <FeedUnavailable label="Action volume is unavailable" reason={reason} onRetry={onRetry} />
       ) : error ? (
-        <FeedUnavailable label="Suggested actions are unavailable" reason={error.message || undefined} onRetry={onRetry} />
+        <FeedUnavailable label="Action volume is unavailable" reason={error.message || undefined} onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <Empty>No suggested actions to show over time</Empty>
       ) : (

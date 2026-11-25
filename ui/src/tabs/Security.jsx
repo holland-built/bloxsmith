@@ -162,9 +162,15 @@ function SeverityHero({ panelId, hub, events }) {
   const legend = SEV_ORDER.reduce((n, s) => n + (Number(counts[s]) || 0), 0)
   const otherSev = countedOf(hub.data) - legend
   const barsNote = shownNote(hub.data, 'events', legend + Math.max(otherSev, 0))
+  // The legend can cover more events than the rows listed (an older payload
+  // counts severities over the whole window). The heading then gives the
+  // legend's total, so heading, legend and the note under the bars agree.
+  const headCount = !hub.data?.truncated && legend > countedOf(hub.data)
+    ? `${legend.toLocaleString()} events`
+    : sampleCountLabel(hub.data, 'events')
 
   return (
-    <Card panelId={panelId} span={4} title="Threat Events by hour" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
+    <Card panelId={panelId} span={4} title="Threat Events by hour" right={unavailable ? null : <span className="text-note text-muted">{headCount}</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -494,12 +500,15 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       title="Triage Inbox"
       className="sec-triage"
       right={
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <div role="group" aria-label="Show by severity" className="flex flex-wrap items-center gap-1.5">
           {['all', ...SEV_ORDER].map((s) => (
             <button
               key={s}
+              type="button"
+              aria-pressed={!landing && sevFilter === s}
               onClick={() => { if (landing) setHashParams('security', {}); setSevFilter(s) }}
-              className={`px-2 py-1 rounded-control text-note capitalize border pick${!landing && sevFilter === s ? ' pick-on' : ''}`}
+              className={`min-h-[24px] px-2 py-1 rounded-control text-note capitalize border pick${!landing && sevFilter === s ? ' pick-on' : ''}`}
               style={{
                 borderColor: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
                 color: !landing && sevFilter === s ? (SEV_COLOR[s] || COLORS.link) : 'var(--color-muted)',
@@ -508,6 +517,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
               {s}
             </button>
           ))}
+          </div>
           {!unavailable && <span className="text-note text-muted ml-1">{rows.length.toLocaleString()}</span>}
         </div>
       }
@@ -992,9 +1002,14 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
   const iCount = iPayload.data?.count ?? iRows.length
 
   const loading = hostnames.loading || ips.loading
-  const hDead = hAvail === 'error'
-  const iDead = iAvail === 'error'
+  // A request that failed outright has no payload at all, so it is dead too:
+  // its empty rows are not "no hostnames found".
+  const hDead = !!hostnames.error || hAvail === 'error'
+  const iDead = !!ips.error || iAvail === 'error'
   const bothDead = hDead && iDead
+  // A request that failed outright has no payload reason; its own error does.
+  const hReason = hPayload.reason || hostnames.error?.message
+  const iReason = iPayload.reason || ips.error?.message
 
   const SAMPLE = 25
   const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, grow: true, render: itemCell('address', undefined, { mono: true }) }]
@@ -1021,7 +1036,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
       }
     >
       {loading ? <Skeleton h={260} /> : bothDead ? (
-        <FeedUnavailable reason={hPayload.reason || iPayload.reason} label="Exposed surface information is unavailable" />
+        <FeedUnavailable reason={hReason || iReason} label="Exposed surface information is unavailable" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -1029,7 +1044,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
               {hDead ? 'Hostnames' : `Showing ${Math.min(SAMPLE, hRows.length).toLocaleString()} of ${countLabel(hCount, hAvail)}`}
             </div>
             {hDead ? (
-              <FeedUnavailable reason={hPayload.reason} label="Hostname information is unavailable" />
+              <FeedUnavailable reason={hReason} label="Hostname information is unavailable" />
             ) : hRows.length === 0 ? (
               <Empty>No hostnames found</Empty>
             ) : (
@@ -1041,7 +1056,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
               {iDead ? 'IPs' : `Showing ${Math.min(SAMPLE, iRows.length).toLocaleString()} of ${countLabel(iCount, iAvail)}`}
             </div>
             {iDead ? (
-              <FeedUnavailable reason={iPayload.reason} label="IP information is unavailable" />
+              <FeedUnavailable reason={iReason} label="IP information is unavailable" />
             ) : iRows.length === 0 ? (
               <Empty>No IP addresses found</Empty>
             ) : (
