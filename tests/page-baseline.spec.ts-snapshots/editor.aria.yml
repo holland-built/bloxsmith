@@ -15,8 +15,7 @@
     - textbox "Zone name":
       - /placeholder: e.g. zone.example.com.
     - group "DNS view":
-      - text: ""
-      - searchbox "Search DNS view"
+      - text: DNS view
       - status
       - combobox "DNS view":
         - option "Pick a DNS view" [selected]
