@@ -553,7 +553,9 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
   }, [filtered, sort])
 
   const columns = [
-    { key: 'ts', label: 'Time', sortable: true, render: chainTs },
+    // A header click on Time starts newest first: ascending would show the
+    // oldest 50 entries of the log (Codex review of r3y).
+    { key: 'ts', label: 'Time', sortable: true, firstDir: 'desc', render: chainTs },
     {
       key: 'actor',
       label: 'Actor',
@@ -647,8 +649,9 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
           stickyHeader
           sort={sort}
           // DataTable supplies the whole sort: a header click flips or starts
-          // ascending, and the phone picker names its own direction. Forcing a
-          // new column to descending made "Actor, A to Z" sort Z to A.
+          // at the column's firstDir (Time: newest first, the rest A to Z), and
+          // the phone picker names its own direction. Forcing every new column
+          // to descending made "Actor, A to Z" sort Z to A.
           onSort={setSort}
         />
       )}

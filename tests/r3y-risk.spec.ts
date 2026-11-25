@@ -121,3 +121,16 @@ test('Codex review of r3y: picking "A to Z" on the phone Audit log sorts A to Z'
   await expect(picker.locator('option:checked')).toHaveText('Event, Z to A');
   await expect(log.locator('tbody tr').first()).not.toContainText("Couldn't delete a DNS record");
 });
+
+test('Codex review of r3y round 2: clicking Time after another column starts newest first', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#audit');
+  const log = panel(page, 'audit-log');
+  const time = log.getByRole('columnheader', { name: 'Time' });
+  await log.locator('thead').getByRole('button', { name: 'Actor' }).click();
+  await expect(log.getByRole('columnheader', { name: 'Actor' })).toHaveAttribute('aria-sort', 'ascending');
+  await log.locator('thead').getByRole('button', { name: /^Time/ }).click();
+  await expect(time).toHaveAttribute('aria-sort', 'descending');
+  // The newest entry (the failed DNS record delete, 1 hour ago) leads.
+  await expect(log.locator('tbody tr').first()).toContainText("Couldn't delete a DNS record");
+});

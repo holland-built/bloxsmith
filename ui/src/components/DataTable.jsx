@@ -17,9 +17,11 @@ export function statusBadgeColor(v) {
   return tone ? utilStatus(TONE_UTIL[tone]) : null
 }
 
-// Toggle a {key,dir} sort object for `key`: same key flips dir, new key => asc.
-export function toggleSort(cur, key) {
-  return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
+// Toggle a {key,dir} sort object for `key`: same key flips dir, new key =>
+// `first` (a column's `firstDir`, so a time column can start newest first),
+// else asc. The phone picker sends its own direction and never comes here.
+export function toggleSort(cur, key, first = 'asc') {
+  return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: first }
 }
 
 // ---------- internals ----------
@@ -283,7 +285,7 @@ export function DataTable({
   const openCol = cols.find((c) => c.priority !== 'low') ?? cols[0]
 
   const applySort = isControlled ? onSort : setInternalSort
-  const handleSort = (key) => applySort(toggleSort(activeSort, key))
+  const handleSort = (key) => applySort(toggleSort(activeSort, key, columns.find((c) => c.key === key)?.firstDir))
 
   // ---- measurement ----
   // Canvas measureText for anything whose painted shape is known here (headers,
