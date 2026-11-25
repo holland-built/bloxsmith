@@ -33,7 +33,7 @@ export default function OneBox() {
         {target && (
           <span
             id={`${id}-hint`}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-note text-accent pointer-events-none"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-note text-link pointer-events-none"
           >
             Enter: {target.says}
           </span>

@@ -56,6 +56,25 @@ test('the headline numbers come first: to fix, couldn\'t tell and passed, each o
   await expect(glance.locator('.bp-cell').nth(1)).toHaveClass(/unknown/);
 });
 
+// A low-severity problem is still a problem. The strip drew it pale grey,
+// which read as neutral beside the red one (fix 6, 2026-11-24). Every problem
+// cell now takes the problem colour; the tile's "1 high · 1 low" carries the
+// severity.
+test('every problem in the strip is drawn in the problem colour, whatever its severity', async ({ page }) => {
+  const mixed = [
+    { id: 'hosts-down', severity: 'high', status: 'problem', title: '2 hosts are offline', why: 'x', items: [] },
+    { id: 'zones', severity: 'low', status: 'problem', title: '3 zones have no secondary', why: 'x', items: [] },
+    { id: 'aap', severity: 'medium', status: 'passed', title: 'No DHCP HA group uses AAP', why: 'x', items: [] },
+  ];
+  await page.route('**/api/best-practices', (r) => r.fulfill(json({ checks: mixed })));
+  await page.goto('/#best-practices');
+  const cells = page.getByRole('region', { name: 'Checks at a glance' }).locator('.bp-cell');
+  await expect(cells).toHaveCount(3);
+  const bg = (i: number) => cells.nth(i).evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await bg(1)).toBe(await bg(0));
+  expect(await bg(2)).not.toBe(await bg(0));
+});
+
 test('Help opens the section for this page', async ({ page }) => {
   await page.route('**/api/best-practices', (r) => r.fulfill(json({ checks })));
   await page.goto('/#best-practices');

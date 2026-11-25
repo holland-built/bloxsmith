@@ -181,7 +181,7 @@ function OpenInInfoblox({ opts, picks, rows, cube }) {
   const bars = chartData(opts, picks, rows, cube)
     .map((d) => ({ name: d.name, href: raws.has(d.name) ? portalLink(opts, picks, raws.get(d.name)) : null }))
     .filter((b) => b.href)
-  const link = 'text-accent underline'
+  const link = 'text-link underline'
   return (
     <div className="mt-3 text-note text-muted">
       <a href={all} target="_blank" rel="noopener noreferrer" className={`${link} text-copy`}>Open these assets in Infoblox</a>

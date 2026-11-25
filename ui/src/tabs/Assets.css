@@ -27,15 +27,18 @@
 .as-count { color: var(--as-ink); font-weight: 500 }
 .as-share { width: 46px; text-align: right; color: var(--as-muted); font-size: 12.5px }
 .as-bar { position: absolute; left: 10px; right: 10px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--as-line) }
-.as-bar i { display: block; height: 100%; border-radius: 2px; background: color-mix(in srgb, var(--as-accent) 70%, transparent) }
-.as-row:hover .as-bar i { background: var(--as-accent) }
+/* A share is an amount, not something to click, so its bar is grey, not the
+   button blue (fix 6, 2026-11-24). That also leaves the amber gap bar below
+   as the only coloured one. */
+.as-bar i { display: block; height: 100%; border-radius: 2px; background: color-mix(in srgb, var(--as-muted) 70%, transparent) }
+.as-row:hover .as-bar i { background: var(--as-ink2) }
 
 /* The gap the page is about: assets discovery could not name. Its bar is
    amber and its name bold, so it does not rely on colour alone. */
 .as-row.gap .as-name { color: var(--as-ink); font-weight: 600 }
 .as-row.gap .as-bar i, .as-row.gap:hover .as-bar i { background: var(--as-warn) }
 
-.as-more { all: unset; box-sizing: border-box; cursor: pointer; margin-top: 4px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--as-accent) }
+.as-more { all: unset; box-sizing: border-box; cursor: pointer; margin-top: 4px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--color-link) }
 .as-more:hover { text-decoration: underline }
 .as-more:focus-visible { outline: 2px solid var(--as-accent) }
 

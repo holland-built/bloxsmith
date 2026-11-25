@@ -37,7 +37,7 @@ function stream(url, onFrame) {
 }
 
 function Mark({ state }) {
-  const map = { ok: ['Done', COLORS.ok], fail: ['Failed', COLORS.crit], start: ['Running', COLORS.accent] }
+  const map = { ok: ['Done', COLORS.ok], fail: ['Failed', COLORS.crit], start: ['Running', COLORS.link] }
   const [txt, col] = map[state] || ['Waiting', 'var(--color-muted, gray)']
   return <span className="text-note font-medium" style={{ color: col }}>{txt}</span>
 }
@@ -116,7 +116,7 @@ export default function DemoServer() {
               <div data-settings-folded="" className="flex flex-col gap-2 text-note">
                 <FetchError error={status.error} stale={!!st} what="the demo server status" />
                 <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the stored join token.</p>
-                <button type="button" className="self-start text-note font-medium underline underline-offset-2" style={{ color: COLORS.accent }}
+                <button type="button" className="self-start text-note font-medium underline underline-offset-2" style={{ color: COLORS.link }}
                   onClick={() => setEditing(true)}>Change settings</button>
               </div>
             ) : (

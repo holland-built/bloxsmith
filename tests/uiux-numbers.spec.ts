@@ -43,6 +43,26 @@ test('Network: IPAM Spaces bars are sized by addresses used, like the numbers be
   expect(await width('big-space')).toBeGreaterThan(await width('small-space'));
 });
 
+// The bar colour says how full a space is, but its length says addresses
+// used, so a nearly full small space drew a short red bar with nothing saying
+// why (fix 6, 2026-11-24). The percent full is now written beside it.
+test('Network: each IPAM space says how full it is in words, not only in bar colour', async ({ page }) => {
+  await page.route('**/api/csp/ipam-util', (route) => route.fulfill({
+    json: {
+      status: 'ok', count: 2, rows: [
+        { id: 'big', label: 'big-space', total: 100000, used: 2000, pct: 2 },
+        { id: 'small', label: 'small-space', total: 256, used: 233, pct: 91 },
+      ],
+    },
+  }));
+  await page.goto('/#network');
+  const panel = page.locator('[data-panel-id="network-ipam-spaces"]');
+  await expect(panel.getByText('big-space')).toBeVisible({ timeout: 20_000 });
+  const row = (label: string) => panel.locator('div.flex.items-center', { hasText: label });
+  await expect(row('small-space')).toContainText('91% full');
+  await expect(row('big-space')).toContainText('2% full');
+});
+
 test('Assets: a Cube.js time with no zone is read as UTC, so Last seen is never in the future', async ({ page }) => {
   // Cube.js sends "2026-10-30T17:58:25.000" meaning UTC. new Date() reads a
   // zoneless string as local time, which put Last seen hours ahead on 2026-10-30.

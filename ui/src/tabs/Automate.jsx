@@ -297,7 +297,7 @@ function CopyBox({ text, kind, tool, label, file, what }) {
       <summary className="cursor-pointer text-txt">Run this from {tool} instead</summary>
       <div className="flex flex-col gap-2 mt-2">
         <button type="button" onClick={copy} className="self-start text-note font-medium underline underline-offset-2"
-          style={{ color: COLORS.accent }}>
+          style={{ color: COLORS.link }}>
           {label}
         </button>
         {copied && <p role="status" className="text-muted">{copied}</p>}
@@ -923,7 +923,7 @@ function PlanBox({ onOpen }) {
                 {j.says && <p className="text-note text-muted">{j.says}</p>}
               </div>
               <button type="button" onClick={() => onOpen(j)} className="text-note font-medium underline underline-offset-2"
-                style={{ color: COLORS.accent }}>Open this job</button>
+                style={{ color: COLORS.link }}>Open this job</button>
             </div>
           ))}
           {plan.unclear && <p className="text-note" style={{ color: COLORS.warn }}>Not planned: {plan.unclear}</p>}

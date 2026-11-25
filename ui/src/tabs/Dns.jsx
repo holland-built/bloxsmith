@@ -817,7 +817,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
       {issuesOnly && (
         <div role="status" data-landing-filter className="mt-2 flex flex-wrap items-center gap-x-3 text-copy">
           <span>{landingLine}</span>
-          <button type="button" className="text-accent underline whitespace-nowrap px-1 py-1.5" onClick={() => { location.hash = 'dns' }}>Show all</button>
+          <button type="button" className="text-link underline whitespace-nowrap px-1 py-1.5" onClick={() => { location.hash = 'dns' }}>Show all</button>
         </div>
       )}
       {listLoading ? (
