@@ -323,8 +323,8 @@ const HUB_HEALTH = [
   {
     name: 'Security',
     status: 'unknown',
-    statusLabel: 'not listed',
-    meta: 'list cut off',
+    statusLabel: 'unknown',
+    meta: 'only part of the list arrived',
     availability: 'partial',
     reason: 'service inventory truncated at the 500-row limit — a service type absent here may exist but not be listed',
   },

@@ -817,9 +817,11 @@ const CLAIMS = [
   },
   {
     panel: 'dns-zones',
-    says: /Rows with a problem are tinted red/,
+    says: /Rows with a problem are tinted amber/,
     file: DNS,
-    proofs: [{ re: /rowStyle=\{\(r\) => \(r\._hasIssues \? \{ background: 'rgba\(238,68,68,0\.06\)' \}/, expect: 'rows with issues get a red wash' }],
+    // The wash is the zone-issue severity's own colour, and lib/severity.js
+    // grades that warn (amber), which tests/one-severity.spec.ts holds.
+    proofs: [{ re: /rowStyle=\{\(r\) => \(r\._hasIssues \? \{ background: `color-mix\(in srgb, \$\{COLORS\[PROBLEM_SEV\.zoneIssues\]\} 6%, transparent\)` \}/, expect: 'rows with issues get a wash in the zone-issue colour' }],
   },
   {
     panel: 'audit-csp-portal',

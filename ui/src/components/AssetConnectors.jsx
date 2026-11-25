@@ -22,6 +22,24 @@ const QUIET = new Set(['ok', 'off'])
 // A message longer than this, or on more than one line, is cut short.
 const SHORT = 90
 
+// A partly working connection: Infoblox's own text often opens with what
+// worked ("Asset Discovery and sync completed successfully…"), which reads
+// as fine beside "Partly working". A plain line says what is wrong first, and
+// the server's text waits under Details (GUI audit B14).
+function PartialMessage({ text }) {
+  return (
+    <>
+      <p className="text-note text-muted">Some items didn't sync.</p>
+      {text && (
+        <details className="text-note text-muted">
+          <summary className="cursor-pointer">Details</summary>
+          <p className="whitespace-pre-line break-words mt-1">{text}</p>
+        </details>
+      )}
+    </>
+  )
+}
+
 function Message({ text }) {
   if (!text) return null
   const first = text.split('\n')[0]
@@ -46,7 +64,7 @@ export default function AssetConnectors({ panelId }) {
   const summary = ORDER.filter(([k]) => d?.counts?.[k]).map(([k, w]) => `${d.counts[k]} ${w}`).join(' · ')
 
   return (
-    <Card span={6} panelId={panelId} title="Discovery connections" note="read-only">
+    <Card span={6} panelId={panelId} title="Discovery connections" note="view only">
       {res.loading && !d ? (
         <Skeleton h={110} />
       ) : unavailable ? (
@@ -75,7 +93,7 @@ export default function AssetConnectors({ panelId }) {
                       {seen ? `last sync ${seenAgo(c.last_sync)}` : 'never synced'}
                     </span>
                   </div>
-                  <Message text={c.message} />
+                  {c.state === 'partial' ? <PartialMessage text={c.message} /> : <Message text={c.message} />}
                 </li>
               )
             })}

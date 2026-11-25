@@ -137,7 +137,7 @@ export const PANEL_HELP = {
   },
   'dns-zones': {
     what: 'Every DNS zone that loaded, which view it sits in, how many records it holds, and how long answers are cached. Zones with a problem come first.',
-    look: 'Rows with a problem are tinted red. A dash under TTL means the zone publishes none, and "not checked" means the checks never ran — not that the zone is clean.',
+    look: 'Rows with a problem are tinted amber. A dash under Cache time means the zone publishes none, and "not checked" means the checks never ran — not that the zone is clean.',
   },
   'dns-dnssec-health': {
     what: 'How many zones with public names, such as .com, are signed against tampering, and the share signed. Internal zones (reverse, .local) are counted apart.',

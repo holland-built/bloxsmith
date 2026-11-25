@@ -703,6 +703,9 @@ a.text-link,
   border-color: transparent;
   border-left-color: var(--color-border);
   border-radius: 0;
+  /* No panel shadow either: on an open area it drew a ghost bottom and right
+     edge (GUI audit E13). */
+  box-shadow: none;
   align-self: start;
 }
 @media (min-width: 1280px) {
@@ -826,11 +829,13 @@ main tr:has(input[type="checkbox"]:checked) > td:first-child { box-shadow: inset
   box-shadow: var(--shadow-surface);
   overflow: hidden;
 }
-.kpi-strip > li { background: var(--color-card); padding: 8px }
+/* A tile fills its cell, edge to edge between the lines: an inset, rounded
+   tinted box inside each cell read as a card inside a card (GUI audit B9). */
+.kpi-strip > li { background: var(--color-card); padding: 0 }
 .kpi-tile {
   box-sizing: border-box; width: 100%; height: 100%;
   display: flex; flex-direction: column; gap: 6px; text-align: left;
-  padding: 10px 12px; border-radius: 12px; color: var(--color-muted);
+  padding: 18px 20px; border-radius: 0; color: var(--color-muted);
 }
 .kpi-tile:hover { background: color-mix(in srgb, var(--color-line) 70%, transparent) }
 .kpi-label { font-size: 13.5px }

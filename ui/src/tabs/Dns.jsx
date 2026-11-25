@@ -20,7 +20,7 @@ import { jumpToPanel } from '../lib/jumpToPanel.js'
 import './Overview.css'
 import './Dns.css'
 import { formatTime } from '../lib/dates.js'
-import { PageTitle } from '../components/kit.jsx'
+import { HeadlineStrip, PageTitle } from '../components/kit.jsx'
 import UpdatedPill from './UpdatedPill.jsx'
 
 // THE DNS PAGE IN THE OVERVIEW'S LOOK (2026-11-10).
@@ -126,7 +126,7 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
       tip: zonesOk ? `Zones whose cache times need fixing.${unchecked > 0 ? ` ${unchecked.toLocaleString()} publish no cache time and were not checked.` : ''}${withIssues > 0 ? ' Opens the list of them.' : ''}` : null,
     },
     {
-      key: 'signing', label: 'Signing', panelId: 'dns-dnssec-health',
+      key: 'signing', label: 'Zone signing', panelId: 'dns-dnssec-health',
       value: sgOk ? sg.unsigned.toLocaleString() : null, loading: dnssec.loading, unit: 'not signed',
       word: sgWord[0], sev: sgWord[1],
       sub: sgOk ? `of ${sg.publicRows.length.toLocaleString()} public` : '',
@@ -141,36 +141,29 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
   ]
 }
 
-function Tiles(props) {
-  const T = headlines(props)
-  return (
-    <ul className="ov-card ov-kpis dns-kpis" aria-label="Headline numbers">
-      {T.map((t) => {
-        const tipId = `dns-tip-${t.key}`
-        const body = (
-          <span className="ov-kpi-in">
-            <span className="ov-kpi-top"><span>{t.label}</span>{t.word ? <span className={`ov-verdict ${t.sev}`}>{t.word}</span> : null}</span>
-            <span className={`ov-num dns-num ${t.value != null && t.value !== '0' ? t.sev ?? '' : ''}`}>
-              {t.value == null ? (t.loading ? <small>Loading…</small> : '—') : t.value}
-              {t.unit && t.value != null ? <small> {t.unit}</small> : null}
-            </span>
-            <span className="ov-muted ov-small">{t.sub || ' '}</span>
-          </span>
-        )
-        const common = { className: 'ov-kpi', title: t.tip || undefined, 'aria-describedby': t.tip ? tipId : undefined, 'data-tile': t.key }
-        return (
-          <li key={t.key}>
-            {t.href ? (
-              <a href={t.href} {...common} onClick={() => setTimeout(() => jumpToPanel(t.panelId), 0)}>{body}</a>
-            ) : (
-              <button type="button" {...common} onClick={() => jumpToPanel(t.panelId)}>{body}</button>
-            )}
-            {t.tip && <span id={tipId} className="sr-only">{t.tip}</span>}
-          </li>
-        )
-      })}
-    </ul>
-  )
+// The shared strip, as on Infra and Assets (GUI audit B9). Each tile's
+// verdict word ("Review", "Unavailable") leads its note line, so the word that
+// used to sit at the tile's top right still shows beside the colour.
+function stripItems(props) {
+  return headlines(props).map((t) => ({
+    tile: t.key,
+    label: t.label,
+    panelId: t.panelId,
+    href: t.href || undefined,
+    jumpTo: t.href ? t.panelId : undefined,
+    value: t.value,
+    loading: t.loading,
+    unit: t.value != null && t.unit ? t.unit : undefined,
+    tone: t.value != null && t.value !== '0' && (t.sev === 'warn' || t.sev === 'crit') ? t.sev : undefined,
+    tip: t.tip || undefined,
+    note: t.word || t.sub ? (
+      <>
+        {t.word ? <span className={`ov-verdict ${t.sev}`}>{t.word}</span> : null}
+        {t.word && t.sub ? ' · ' : null}
+        {t.sub}
+      </>
+    ) : undefined,
+  }))
 }
 
 export default function Dns() {
@@ -204,7 +197,7 @@ export default function Dns() {
         {/* When the zones payload arrived, not the time of this render. */}
         <UpdatedPill api={data} tip="Every number here is fetched again every 30 seconds." unavailable="Zone information is unavailable" />
       </div>
-      <Tiles qps={qps} services={services} zones={zones} zonesStatus={zonesStatus} zonesFailed={!!data.error} zonesLoading={data.loading} dnssec={dnssec} />
+      <HeadlineStrip label="Headline numbers" items={stripItems({ qps, services, zones, zonesStatus, zonesFailed: !!data.error, zonesLoading: data.loading, dnssec })} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A
@@ -536,7 +529,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
             <li key={k}>
               <button type="button" className="dns-kind" onClick={() => open(k)} aria-label={`${issueWord(k)}: ${countOf(n, 'zone')}. Show them.`}>
                 <span className="dns-kind-name">{issueWord(k)}</span>
-                <span className="dns-kind-n">{n.toLocaleString()}</span>
+                <span className="dns-kind-n" style={{ '--c': COLORS[PROBLEM_SEV.zoneIssues] }}>{n.toLocaleString()}</span>
                 <i className="dns-kind-bar" aria-hidden="true" style={{ '--w': `${(n / top) * 100}%`, '--c': COLORS[PROBLEM_SEV.zoneIssues] }} />
               </button>
             </li>
@@ -564,11 +557,11 @@ function DnsServices({ panelId, services }) {
   const columns = [
     { key: 'name', label: 'Name' },
     { key: 'comment', label: 'Comment', grow: true },
-    { key: 'pool_id', label: 'Pool ID', mono: true },
+    { key: 'pool_id', label: 'Server group', mono: true },
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-note text-muted">{rows.length ? countOf(rows.length, 'service') : ''}</span>}>
+    <Card panelId={panelId} span={2} title="DNS Services" right={<span className="text-note text-muted">{rows.length ? countOf(rows.length, 'service') : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
@@ -736,7 +729,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
     ) : ttlChecked(z) ? '—' : (
       // Distinct from the clean '—': this zone published no TTL, so the checks
       // never ran on it. Silence here would read as "checked, nothing wrong".
-      <span className="text-note italic text-dim" title="no TTL published — TTL checks did not run for this zone">not checked</span>
+      <span className="text-note italic text-dim" title="This zone publishes no cache time (TTL), so its cache times were not checked">not checked</span>
     )
     const ttl = ttlValue(z.ttl)
     return {
@@ -771,7 +764,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
     // an empty cell to it. A view where no zone publishes a TTL must still show
     // the TTL column full of dashes — silently dropping it reads as "TTL isn't
     // tracked" instead of "we don't know it".
-    { key: 'ttl', label: 'TTL', mono: true, sortable: true, keep: true },
+    { key: 'ttl', label: 'Cache time', mono: true, sortable: true, keep: true },
     // The cell is built above as markup, so it is passed through `render`:
     // DataTable lays render columns out to measure them, and without it the
     // column was sized short and cut "cache time too short" off (2026-11-25).
@@ -783,7 +776,11 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
   return (
     <Card
       panelId={panelId}
-      span={6}
+      // A table sizes its own panel, so a declared span shows only while it
+      // cannot, as when the read failed. Services 2, zones 4 and signing 2 are
+      // the widths those panels take with data, so a failed read no longer
+      // re-packs the page (GUI audit, Codex B). They were 3, 6 and 3.
+      span={4}
       // The heading becomes a React node the moment the issues-only filter is
       // on, so without this the popup's row for this panel flipped between
       // "DNS Zones" and the raw "dns-zones" depending on how the tab was
@@ -842,7 +839,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
         // nor "the feed is dead".
         <Skeleton h={250} />
       ) : notSigned && signingFailed ? (
-        <FeedUnavailable label="DNSSEC information is unavailable" />
+        <FeedUnavailable label="Zone signing information is unavailable" />
       ) : issuesOnly && listFailed ? (
         <FeedUnavailable label="DNS zone information is unavailable" />
       ) : !notSigned && zones.length === 0 ? (
@@ -859,7 +856,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
           rowCap={150}
           stickyHeader
           rowKey={(r, i) => (r.fqdn || '') + i}
-          rowStyle={(r) => (r._hasIssues ? { background: 'rgba(238,68,68,0.06)' } : undefined)}
+          rowStyle={(r) => (r._hasIssues ? { background: `color-mix(in srgb, ${COLORS[PROBLEM_SEV.zoneIssues]} 6%, transparent)` } : undefined)}
         />
       )}
     </Card>
@@ -903,14 +900,15 @@ function DnssecHealth({ panelId, dnssec }) {
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, grow: true, render: itemCell('zone', (r) => ({ id: r.id }), { mono: true }) },
     { key: 'view', label: 'View', mono: true, maxCh: 22 }, // measured: opaque resource path overflows the card; cap it
-    { key: 'dnssec_signing_policy', label: 'Signing Policy' },
+    { key: 'dnssec_signing_policy', label: 'Signing rule' },
   ]
 
   return (
     <Card
       panelId={panelId}
-      span={3}
-      title="DNSSEC Health"
+      span={2}
+      title="Zone signing"
+      note="DNSSEC"
       right={
         <span className="text-note text-muted">{dnssecPanelLabel(unsigned.length, DNSSEC_CAP)}</span>
       }
@@ -918,9 +916,9 @@ function DnssecHealth({ panelId, dnssec }) {
       {dnssec.loading ? (
         <Skeleton h={280} />
       ) : failed ? (
-        <FeedUnavailable label="DNSSEC information is unavailable" />
+        <FeedUnavailable label="Zone signing information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no DNSSEC data</Empty>
+        <Empty>No zone signing information</Empty>
       ) : (
         <>
           {/* Not signed leads, in amber when there are any: it is the one
@@ -961,6 +959,19 @@ function DnssecHealth({ panelId, dnssec }) {
 
 // ---------- rpz policy zones ----------
 
+// Infoblox sends these in capitals ("HIGH", "NONE"). Shown as words, in
+// sentence case; an override Infoblox names in DNS terms says what it does
+// (GUI audit B10).
+const sentence = (v) => (v ? String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase() : '—')
+const RPZ_OVERRIDE = {
+  NONE: 'None',
+  NXDOMAIN: 'Answers "name not found"',
+  NODATA: 'Answers "no records"',
+  PASSTHRU: 'Lets it through',
+  DROP: 'Drops the lookup',
+  TCP_ONLY: 'Asks again over TCP',
+}
+
 function RpzPanel({ panelId, rpz }) {
   const rows = rpz.data?.rows ?? []
   const total = rpz.data?.count ?? rows.length
@@ -969,8 +980,8 @@ function RpzPanel({ panelId, rpz }) {
 
   const tableRows = rows.map((r, i) => ({
     fqdn: r.fqdn,
-    severity: r.severity || '—',
-    policy_override: r.policy_override || '—',
+    severity: sentence(r.severity),
+    policy_override: RPZ_OVERRIDE[String(r.policy_override ?? '').toUpperCase()] ?? sentence(r.policy_override),
     type: r.type || '—',
     disabled: r.disabled ? 'Disabled' : 'Enabled',
     _k: `${r.fqdn ?? ''}|${i}`,
@@ -979,19 +990,19 @@ function RpzPanel({ panelId, rpz }) {
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, grow: true },
     { key: 'severity', label: 'Severity' },
-    { key: 'policy_override', label: 'Policy Override' },
+    { key: 'policy_override', label: 'Override' },
     { key: 'type', label: 'Type' },
     { key: 'disabled', label: 'Status' },
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'zone') : ''}</span>}>
+    <Card panelId={panelId} span={3} title="Blocklist zones" note="RPZ" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'zone') : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
-        <FeedUnavailable label="RPZ information is unavailable" />
+        <FeedUnavailable label="Blocklist zone information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no RPZ zones</Empty>
+        <Empty>No blocklist zones</Empty>
       ) : (
         <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
       )}
@@ -1020,18 +1031,18 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
     { key: 'name', label: 'Name', mono: true, grow: true, render: itemCell('address', undefined, { mono: true }) },
     { key: 'dtc_policy', label: 'Policy' },
     { key: 'precedence', label: 'Precedence', align: 'right', mono: true },
-    { key: 'ttl', label: 'TTL', mono: true, align: 'right' },
+    { key: 'ttl', label: 'Cache time', mono: true, align: 'right' },
     { key: 'disabled', label: 'Status' },
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'name') : ''}</span>}>
+    <Card panelId={panelId} span={3} title="Load-balanced names" note="DTC" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'name') : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (
-        <FeedUnavailable label="DTC LBDN information is unavailable" />
+        <FeedUnavailable label="Load-balanced name information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>no LBDN records</Empty>
+        <Empty>No load-balanced names</Empty>
       ) : (
         <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
       )}

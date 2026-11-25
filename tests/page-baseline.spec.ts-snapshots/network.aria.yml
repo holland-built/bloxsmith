@@ -1,30 +1,51 @@
 - main "Network tab":
   - heading "Network" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
+  - paragraph: How full your subnets and IP spaces are, and every DHCP lease.
   - list "Headline numbers":
     - listitem:
       - button "Subnets 3"
+      - text: Every subnet, all sizes.
     - listitem:
       - button /≥\d+% 1/
+      - text: /Subnets \d+% full or more, tiny networks of 8 addresses or fewer included\./
     - listitem:
       - button /\d+–\d+% 1/
+      - text: /Subnets \d+% to \d+% full, tiny networks of 8 addresses or fewer included\./
     - listitem:
       - button "Leases 2"
+      - text: Leases on record from DHCP, in every state.
   - button "Arrange panels"
   - heading "Utilization Distribution" [level=2]
   - text: 3 loaded of 3 total
   - 'button "About: Utilization Distribution"': "About: ⓘ"
   - 'button "Options: Utilization Distribution"'
   - application "Utilization Distribution chart": /<\d+% \d+–\d+% ≥\d+% 0 1 2 3 4/
-  - heading "IPAM Spaces — Top Used" [level=2]
-  - text: addresses used
-  - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"
-  - 'button "Options: IPAM Spaces — Top Used"'
-  - link "Baseline Space"
-  - text: /\d+/
-  - link "Other Space"
-  - text: /\d+/
+  - heading "IP spaces — most used" [level=2]
+  - text: IPAM addresses used
+  - 'button "About: IP spaces — most used"': "About: ⓘ"
+  - 'button "Options: IP spaces — most used"'
+  - link "Baseline Space":
+    - /url: "#dossier?kind=space&q=Baseline+Space&id=ipam%2Fip_space%2Fbaseline-1"
+  - text: /\d+ \d+% full/
+  - link "Other Space":
+    - /url: "#dossier?kind=space&q=Other+Space&id=ipam%2Fip_space%2Fbaseline-2"
+  - text: /\d+ \d+% full/
+  - heading "Overlapping ranges" [level=2]
+  - text: IP spaces using each range
+  - 'button "About: Overlapping ranges"': "About: ⓘ"
+  - 'button "Options: Overlapping ranges"'
+  - list:
+    - listitem:
+      - button /\d+\.\d+\.0\.0\/8 3 spaces/
+    - listitem:
+      - button /\d+\.\d+\.0\.0\/\d+ 2 spaces/
   - heading "Which Subnets Run Out First?" [level=2]
-  - text: excl. tiny networks (8 addresses or fewer)
+  - text: tiny networks (8 addresses or fewer) left out
+  - checkbox "Show unused networks"
+  - text: Show unused networks
+  - checkbox "Tiny networks"
+  - text: Tiny networks
   - textbox "Filter networks":
     - /placeholder: Filter…
   - combobox "Filter by site":
@@ -49,22 +70,34 @@
           - button "Free"
     - rowgroup:
       - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) other-site \d+% Needs action \d+ 5 free/:
-        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/
-        - cell "other-site"
+        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+          - link /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+            - /url: "#dossier?kind=network&q=10.30.0.0%2F24&id=ipam%2Fsubnet%2Fbaseline-3"
+        - cell "other-site":
+          - link "other-site":
+            - /url: "#dossier?kind=site&q=other-site"
         - cell /\d+%/
         - cell "Needs action"
         - cell /\d+/
         - cell "5 free"
       - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) baseline-site \d+% Review \d+ \d+ free/:
-        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/
-        - cell "baseline-site"
+        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+          - link /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+            - /url: "#dossier?kind=network&q=10.20.0.0%2F24&id=ipam%2Fsubnet%2Fbaseline-2"
+        - cell "baseline-site":
+          - link "baseline-site":
+            - /url: "#dossier?kind=site&q=baseline-site"
         - cell /\d+%/
         - cell "Review"
         - cell /\d+/
         - cell /\d+ free/
       - row /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\) baseline-site \d+% Healthy \d+ \d+ free/:
-        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/
-        - cell "baseline-site"
+        - cell /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+          - link /\d+\.\d+\.0\.0\/\d+ \(\d+ addresses\)/:
+            - /url: "#dossier?kind=network&q=10.10.0.0%2F24&id=ipam%2Fsubnet%2Fbaseline-1"
+        - cell "baseline-site":
+          - link "baseline-site":
+            - /url: "#dossier?kind=site&q=baseline-site"
         - cell /\d+%/
         - cell "Healthy"
         - cell /\d+/
@@ -72,7 +105,7 @@
   - heading "DHCP Leases" [level=2]
   - text: 2 of 2
   - textbox "Search address, hostname, MAC":
-    - /placeholder: Search address, hostname, MAC…
+    - /placeholder: Address, name or hardware
   - combobox "Filter by state":
     - option "All states" [selected]
     - option "active"
@@ -94,20 +127,31 @@
           - button "State"
     - rowgroup:
       - row /\d+\.\d+\.0\.5 baseline-host-a Jan 1, \d+, 6:\d+ PM \d+:\d+:5e:\d+:\d+:\d+ active/:
-        - cell /\d+\.\d+\.0\.5/
-        - cell "baseline-host-a"
+        - cell /\d+\.\d+\.0\.5/:
+          - link /\d+\.\d+\.0\.5/:
+            - /url: "#dossier?kind=address&q=10.10.0.5"
+        - cell "baseline-host-a":
+          - link "baseline-host-a":
+            - /url: "#dossier?kind=address&q=baseline-host-a"
         - cell /Jan 1, \d+, 6:\d+ PM/
         - cell /\d+:\d+:5e:\d+:\d+:\d+/
         - cell "active"
       - row /\d+\.\d+\.0\.9 baseline-host-b Jan 1, \d+, \d+:\d+ AM \d+:\d+:5e:\d+:\d+:\d+ expired/:
-        - cell /\d+\.\d+\.0\.9/
-        - cell "baseline-host-b"
+        - cell /\d+\.\d+\.0\.9/:
+          - link /\d+\.\d+\.0\.9/:
+            - /url: "#dossier?kind=address&q=10.20.0.9"
+        - cell "baseline-host-b":
+          - link "baseline-host-b":
+            - /url: "#dossier?kind=address&q=baseline-host-b"
         - cell /Jan 1, \d+, \d+:\d+ AM/
         - cell /\d+:\d+:5e:\d+:\d+:\d+/
         - cell "expired"
   - heading "DHCP Requests" [level=2]
   - 'button "About: DHCP Requests"': "About: ⓘ"
   - 'button "Options: DHCP Requests"'
+  - status:
+    - text: Couldn't read some of these numbers from Infoblox.
+    - button "Try again"
   - text: Today
   - term: Requests for an address
   - definition: /\d+,\d+/
@@ -118,4 +162,4 @@
   - definition: /\d+,\d+/
   - term: Requests that got no address
   - definition: not checked
-  - paragraph: If your DHCP servers run in HA pairs, both answer each request, so these counts can be up to twice the devices asking.
+  - paragraph: If your DHCP servers work in pairs, one backing up the other, both answer each request, so these counts can be up to twice the devices asking.

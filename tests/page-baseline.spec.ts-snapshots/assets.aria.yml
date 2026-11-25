@@ -1,11 +1,27 @@
 - main "Assets tab":
   - heading "Assets" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
   - paragraph: "Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more."
+  - list "Headline numbers":
+    - listitem:
+      - button "Assets 2"
+    - listitem:
+      - button "Unclassified 0 0.0% of all"
+    - listitem:
+      - button "Asset types 2"
   - button "Arrange panels"
+  - heading "Coverage gaps" [level=2]
+  - text: devices a tool has not reported
+  - 'button "About: Coverage gaps"': "About: ⓘ"
+  - 'button "Options: Coverage gaps"'
+  - list "Coverage gaps":
+    - listitem:
+      - link "Seen on the network, not by the Infoblox agent 1 Infoblox Endpoint · seen by DHCP logs or your Infoblox servers":
+        - /url: "#assets?gap=Infoblox%20Endpoint"
   - heading "Asset Inventory" [level=2]
-  - text: Infoblox Portal discovery
+  - text: found by Infoblox
   - textbox "Search assets by name, IP or MAC address":
-    - /placeholder: Search by name, IP or MAC…
+    - /placeholder: Name, IP or MAC
   - button "Search"
   - button "Refresh"
   - 'button "About: Asset Inventory"': "About: ⓘ"
@@ -15,10 +31,11 @@
       - button "Router 1 50%"
     - listitem:
       - button "Server 1 50%"
-  - heading "Assets" [level=2]
+  - heading "Asset list" [level=2]
   - text: 1–1 of 1
-  - 'button "About: Assets"': "About: ⓘ"
-  - 'button "Options: Assets"'
+  - 'button "About: Asset list"': "About: ⓘ"
+  - 'button "Options: Asset list"'
+  - paragraph: Infoblox listed 1 asset but counted 2. The two numbers come from separate reads and can differ for a while.
   - table:
     - rowgroup:
       - row "Name Type Provider Vendor Last seen":
@@ -33,14 +50,28 @@
         - columnheader "Last seen":
           - button "Last seen"
     - rowgroup:
-      - row /View details for baseline-asset-a/:
-        - cell /View details for baseline-asset-a/:
+      - row /View details for baseline-asset-a baseline-asset-a Server baseline-provider baseline-vendor \d+[hmsp]+ ago/:
+        - cell "View details for baseline-asset-a baseline-asset-a":
           - button "View details for baseline-asset-a"
-          - text: "baseline-asset-a"
+          - text: ""
         - cell "Server"
         - cell "baseline-provider"
         - cell "baseline-vendor"
-        - cell "5h ago"
+        - cell /\d+[hmsp]+ ago/
   - text: Page 1 of 1
   - button "Previous" [disabled]
   - button "Next" [disabled]
+  - heading "Discovery connections" [level=2]
+  - text: view only
+  - 'button "About: Discovery connections"': "About: ⓘ"
+  - 'button "Options: Discovery connections"'
+  - paragraph: 1 failing · 1 partly working · 1 working
+  - list:
+    - listitem:
+      - text: /baseline-aws Amazon Web Services Failing last sync [\d,.]+[bkmBKM]+ ago/
+      - paragraph: Access denied to resource. Please check your permissions.
+    - listitem:
+      - text: /baseline-azure Microsoft Azure Partly working last sync \d+[hmsp]+ ago/
+      - paragraph: Some items didn't sync.
+      - group: Details
+  - button "Show 1 working or turned off"

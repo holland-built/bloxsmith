@@ -163,8 +163,8 @@ export default function Infra() {
         <FeedCard
           span={3}
           panelId="infra-dfp-services"
-          title="DFP Services"
-          note={statusNote(dfp, 'Infoblox Portal')}
+          title="DNS forwarding proxies"
+          note={statusNote(dfp, 'DFP, from Infoblox Portal')}
           feed={dfp}
           count
           columns={[
@@ -281,8 +281,10 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetr
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
-    // Healthy is pale so the red and amber slices are what the eye lands on.
-    Active: `color-mix(in srgb, ${COLORS.ok} 35%, transparent)`,
+    // Healthy is paler so the red and amber slices are what the eye lands on,
+    // but at 70%, not 35%: 35% measured 2.1:1 on the panel, under the 3:1 a
+    // chart mark needs (GUI audit B13).
+    Active: `color-mix(in srgb, ${COLORS.ok} 70%, transparent)`,
     Degraded: COLORS.warn,
     Offline: COLORS.crit,
     Unknown: COLORS.other,
@@ -478,8 +480,13 @@ const HOST_COLUMNS = [
   // badge stays set so the column keeps its badge width measurement; render
   // takes precedence over it for the actual cell.
   { key: 'status', label: 'Status', badge: true, sortable: true, render: (v) => renderStatus(v), comparator: (a, b) => sevRank(a.status) - sevRank(b.status) },
-  { key: 'type', label: 'Type', priority: 'low' },
+  { key: 'type', label: 'Type', priority: 'low', render: (v) => hostType(v) },
 ]
+
+// Infoblox's own word for a host's kind, in everyday words where it has one
+// (GUI audit B10: "onprem").
+const HOST_TYPE_WORD = { onprem: 'On site' }
+const hostType = (t) => HOST_TYPE_WORD[t] ?? t
 
 function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId }) {
   const theme = useThemeColors()
@@ -573,7 +580,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
           >
             <option value="">All types</option>
             {types.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{hostType(t)}</option>
             ))}
           </select>
         </div>

@@ -21,7 +21,7 @@ import { DHCP_REQUEST_ROWS, DHCP_REQUEST_WINDOWS, dhcpTotal, HA_NOTE } from '../
 import './Overview.css'
 import './Network.css'
 import { formatWhen } from '../lib/dates.js'
-import { PageTitle } from '../components/kit.jsx'
+import { HeadlineStrip, PageTitle } from '../components/kit.jsx'
 import UpdatedPill from './UpdatedPill.jsx'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
@@ -111,16 +111,15 @@ export default function Network() {
 
   return (
     <div className="w-full px-6 py-5">
-      <div className="ov-look net-top">
-        <div>
-          <div className="ov-head net-h1">
-            <PageTitle>Network</PageTitle>
-            <UpdatedPill api={data} tip="When the subnet inventory last arrived. It refreshes every 30 seconds." />
-          </div>
-          <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
+      <div className="ov-look">
+        <div className="ov-head net-h1">
+          <PageTitle>Network</PageTitle>
+          <UpdatedPill api={data} tip="When the subnet inventory last arrived. It refreshes every 30 seconds." />
         </div>
-        <Tiles label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
       </div>
+      <TabIntro>How full your subnets and IP spaces are, and every DHCP lease.</TabIntro>
+      {/* The shared strip, as on Infra and Assets (GUI audit B9). */}
+      <HeadlineStrip label="Headline numbers" items={headlines(subnets, totals, subnetsStatus, dhcp)} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId,
           because CardGrid reads the saved order off `props.panelId` of its own
           children while it reads the live order off the DOM. A wrapper whose id
@@ -195,38 +194,6 @@ function headlines(subnets, totals, subnetsStatus, dhcp) {
   ]
 }
 
-// The numbers across the top in Overview's look: one card split by hairlines.
-// A tile is quiet unless its number is a problem; then the number and a dot
-// take the problem's colour, and the tile itself stays unfilled, so a full
-// band draws the eye without the strip turning into blocks of colour. Same
-// list-of-buttons shape as the shared strip, so each button is still named
-// by its label and number alone; the explanation is its description.
-function Tiles({ items, label }) {
-  const id = useId()
-  return (
-    <ul aria-label={label} className="ov-card net-kpis">
-      {items.map((it, i) => {
-        const tone = it.value != null && (it.tone === 'crit' || it.tone === 'warn') ? it.tone : null
-        return (
-          <li key={it.label} className="net-kpi-cell">
-            <button type="button" className="ov-kpi net-kpi" data-tone={tone || undefined} title={it.tip}
-              aria-describedby={it.tip ? `${id}-${i}` : undefined} onClick={() => jumpToPanel(it.panelId)}>
-              <span className="ov-kpi-in">
-                <span className="ov-kpi-top">
-                  <span>{it.label}</span>
-                  {tone && <span aria-hidden="true" className={`ov-dot ${tone}`} />}
-                </span>
-                <span className={`ov-num net-num${tone ? ` ${tone}` : it.tone === 'ok' ? ' quiet' : ''}`}>{it.value ?? DASH}</span>
-              </span>
-            </button>
-            {it.tip && <span id={`${id}-${i}`} className="sr-only">{it.tip}</span>}
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
 // A subnet's size as the count Infoblox reports, which is what Used plus Free
 // add up to. It used to be worked out from the prefix ("(256 addresses)"),
 // which disagreed with Used and Free when Infoblox counted 254 (2026-11-24).
@@ -240,7 +207,10 @@ function subnetSize(network, total) {
 // ---------- utilization distribution ----------
 
 // Healthy in the same pale green everywhere on this page: chart, bars, table.
-const paleOk = (ok = 'var(--color-ok)') => `color-mix(in srgb, ${ok} 35%, transparent)`
+// 70%, not 35%: at 35% the bar measured 2.1:1 on a dark panel and 1.8:1 on a
+// light one, under the 3:1 a chart mark needs (GUI audit B13). 70% is 4.6:1
+// and 3.6:1, still quieter than the amber and red bands beside it.
+const paleOk = (ok = 'var(--color-ok)') => `color-mix(in srgb, ${ok} 70%, transparent)`
 const barColor = (status) => (status.label === 'Healthy' ? paleOk() : status.color)
 
 function UtilBands({ panelId, subnets, totals, subnetsStatus, loading }) {
@@ -335,7 +305,7 @@ function IpamSpaces({ panelId, ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card panelId={panelId} span={2} title="IPAM Spaces — Top Used" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
+    <Card panelId={panelId} span={2} title="IP spaces — most used" note="IPAM" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
@@ -563,9 +533,8 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
 
   return (
     // No wrapper div. The span must live on the GRID ITEM, and with the wrapper
-    // gone the Card is that item — span={6} puts SPAN_CLASS[6]
-    // ("col-span-2 md:col-span-4 xl:col-span-6") on the Card's own element, the
-    // exact class the wrapper used to carry, so the rendered width is unchanged.
+    // gone the Card is that item, so the span class sits on the Card's own
+    // element.
     // The wrapper had to go for two reasons: a plain div carrying the span class
     // is one of the two shapes CardGrid's layoutKey guard rejects, because the
     // panelId it can see on the DOM is not on the child it sorts; and once this
@@ -575,7 +544,10 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
     <Card
       innerRef={innerRef}
       panelId={panelId}
-      span={6}
+      // 4, not 6 (GUI audit, Codex B): a table sizes its own panel, so the
+      // declared span shows only while it cannot, as when the read failed.
+      // At 6 a failed read moved this panel onto a row of its own.
+      span={4}
       title="DHCP Leases"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
@@ -584,7 +556,7 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
           <span className="text-note text-muted max-md:order-last">{dhcp.loading || dhcp.error || status === 'error' ? '—' : `${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()}`}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search address, hostname, MAC"
-            placeholder="Address, name or MAC"
+            placeholder="Address, name or hardware"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className={`${FIELD_CLS} w-[220px] max-w-full`}
@@ -870,7 +842,10 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
     <Card
       innerRef={innerRef}
       panelId={panelId}
-      span={6}
+      // 4, not 6 (GUI audit, Codex B): a table sizes its own panel, so the
+      // declared span shows only while it cannot, as when the read failed.
+      // At 6 a failed read moved this panel onto a row of its own.
+      span={4}
       // The heading is a fragment — it carries a clear-filter chip when the tab
       // has been drilled into — and a fragment is not a name, so "Arrange this
       // page" listed this panel as "network-exhaustion". The words are the
@@ -893,7 +868,7 @@ function ExhaustionTable({ panelId, subnets, totals, hp, subnetsStatus, loading,
         </>
       }
       note={unused ? unusedNote(unusedPage, unusedTotal)
-        : links ? 'incl. tiny networks (8 addresses or fewer)' : 'excl. tiny networks (8 addresses or fewer)'}
+        : links ? 'tiny networks (8 addresses or fewer) included' : 'tiny networks (8 addresses or fewer) left out'}
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
           <label className="flex items-center gap-1.5 text-note text-muted whitespace-nowrap"

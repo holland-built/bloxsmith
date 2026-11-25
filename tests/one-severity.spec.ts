@@ -23,7 +23,7 @@ test('a subnet 90% full or more is red on Daily, as on Network', async ({ page }
   await expect(daily).toHaveText('Needs action');
   await expect(daily).toHaveClass(/\bcrit\b/);
   await page.goto('/#network');
-  await expect(page.locator('.net-kpi[data-tone="crit"]')).toHaveCount(1);
+  await expect(page.locator('.kpi-tile[data-tone="crit"]')).toHaveCount(1);
 });
 
 test('Changes says the red word for its red tiles', async ({ page }) => {

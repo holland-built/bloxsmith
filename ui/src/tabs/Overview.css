@@ -6,7 +6,7 @@
   --ov-card: #141417; --ov-soft: #1c1c20;
   --ov-ink: #f3f3f5; --ov-ink2: #c4c4ca; --ov-muted: #8c8c95;
   --ov-line: rgb(255 255 255 / .08); --ov-line2: rgb(255 255 255 / .16);
-  --ov-accent: #7b96ff; --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
+  --ov-accent: var(--color-accent); --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
   --ov-tip: #2a3548; --ov-shadow: 0 1px 2px rgb(0 0 0 / .35);
   display: flex; flex-direction: column; gap: 16px;
   color: var(--ov-ink); font-variant-numeric: tabular-nums;
@@ -15,7 +15,7 @@
   --ov-card: #ffffff; --ov-soft: #f1f1ef;
   --ov-ink: #17171a; --ov-ink2: #48484d; --ov-muted: #66666d;
   --ov-line: rgb(0 0 0 / .075); --ov-line2: rgb(0 0 0 / .14);
-  --ov-accent: #3e63dd; --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
+  --ov-accent: var(--color-accent); --ov-ok: var(--color-ok); --ov-warn: var(--color-warn); --ov-crit: var(--color-crit);
   --ov-tip: #1f2530; --ov-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 1px 1px rgb(0 0 0 / .02);
 }
 .ov-look a { color: inherit; text-decoration: none }
@@ -35,7 +35,7 @@
 .ov-head-right { display: inline-flex; gap: 12px; align-items: baseline; min-width: 0; text-align: right }
 /* A button that looks like one, not like a link (screen audit A13). The soft
    accent tint is the one the briefing's item buttons use. */
-.ov-btn { border: 0; min-height: 28px; padding: 0 12px; border-radius: var(--radius-control, 10px); font: inherit; font-size: 13px; font-weight: 600; color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 12%, transparent); cursor: pointer }
+.ov-btn { border: 0; min-height: 28px; padding: 0 12px; border-radius: var(--radius-control, 10px); font: inherit; font-size: 13px; font-weight: 600; color: var(--color-link); background: color-mix(in srgb, var(--ov-accent) 12%, transparent); cursor: pointer }
 .ov-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px }
 @media (hover: hover) { .ov-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) } }
 @media (pointer: coarse) { .ov-btn { min-height: 44px } }
@@ -46,7 +46,7 @@
 .ov-verdict { font-size: 12.5px; font-weight: 600 }
 .ov-verdict.ok, .ov-verdict.none { color: var(--ov-ink2) } .ov-verdict.warn { color: var(--ov-warn) } .ov-verdict.crit { color: var(--ov-crit) }
 .ov-delta { font-size: 12.5px; color: var(--ov-ink2) }
-.ov-act { color: var(--ov-accent) !important; font-size: 13px; white-space: nowrap }
+.ov-act { color: var(--color-link) !important; font-size: 13px; white-space: nowrap }
 
 /* tiles: one card with hairlines; the selected tile gets the soft fill */
 .ov-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); overflow: hidden }

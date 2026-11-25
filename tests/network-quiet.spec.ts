@@ -18,11 +18,20 @@ test('the full band is coloured, healthy is not', async ({ page }) => {
   const strip = page.getByRole('list', { name: 'Headline numbers' });
   const full = strip.getByRole('button', { name: /^≥90% 1$/ });
   await expect(full).toBeVisible({ timeout: 20_000 });
-  // The tile is not filled; its number carries the colour instead.
-  expect(await full.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
-  const num = full.locator('.net-num');
+  // The shared headline strip (GUI audit B9): a problem tile takes a faint 6%
+  // wash of its colour and its number carries the colour itself.
+  const wash = await page.evaluate(() => {
+    const el = document.createElement('span');
+    el.style.backgroundColor = 'color-mix(in srgb, var(--color-crit) 6%, transparent)';
+    document.body.appendChild(el);
+    const c = getComputedStyle(el).backgroundColor;
+    el.remove();
+    return c;
+  });
+  expect(await full.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(wash);
+  const num = full.locator('.kpi-num');
   const numColor = await num.evaluate((el) => getComputedStyle(el).color);
-  const subnetsColor = await strip.getByRole('button', { name: /^Subnets/ }).locator('.net-num').evaluate((el) => getComputedStyle(el).color);
+  const subnetsColor = await strip.getByRole('button', { name: /^Subnets/ }).locator('.kpi-num').evaluate((el) => getComputedStyle(el).color);
   expect(numColor).not.toBe(subnetsColor);
   // The explanation is the tile's description, not part of its name.
   await expect(full).toHaveAccessibleDescription(/90% full or more/);

@@ -13,6 +13,7 @@ import UpdatedPill from './UpdatedPill.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import './Assets.css'
 import { formatWhen } from '../lib/dates.js'
+import { countOf } from '../lib/plainWords.js'
 // Overview.css: the pill the Updated label wears (ov-pill, ov-live).
 import './Overview.css'
 
@@ -163,6 +164,7 @@ export default function Assets() {
         <AssetList
           panelId="assets-list"
           list={list}
+          allTotal={!filters.loading && !filters.error && filters.data?.availability !== 'error' && typeof filters.data?.total === 'number' ? filters.data.total : null}
           searched={q}
           type={type}
           gap={gap}
@@ -246,7 +248,10 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
   const total = typeTotal(d)
   const ranked = rankTypes(types, total, { top: TOP_TYPES, active: type })
   const rows = showAll ? ranked.all : ranked.shown
-  const biggest = Math.max(0, ...ranked.all.map((t) => (typeof t.count === 'number' ? t.count : 0)))
+  // Bars measure each type against every asset, so a type that is half of
+  // them draws half a bar (GUI audit B12). They used to measure against the
+  // biggest type, so two types of 50% each drew two full bars. With no total
+  // the share is unknown, and so is the bar.
   const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
 
   return (
@@ -254,7 +259,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       span={2}
       panelId={panelId}
       title="Asset Inventory"
-      note="Infoblox Portal discovery"
+      note="found by Infoblox"
       right={
         <div className="flex items-center gap-2 min-w-0">
           {/* Shrinks on a phone: at a fixed 220px the box ran off the left
@@ -323,10 +328,15 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
                         className={`as-row${t.label === UNCLASSIFIED ? ' gap' : ''}`}
                       >
                         <span className="as-name">{t.label}</span>{' '}
+                        {/* A funnel, so the row reads as a filter to press and
+                            not as a line of text (GUI audit B12). */}
+                        <svg className="as-cue shrink-0 text-dim" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                          <path d="M1 2h10L7 6.5V10L5 11V6.5z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                        </svg>{' '}
                         {typeof t.count === 'number' && <span className="as-count">{t.count.toLocaleString()}</span>}{' '}
                         <span className="as-share">{share}</span>
                         <span className="as-bar" aria-hidden="true">
-                          <i style={{ width: biggest > 0 && typeof t.count === 'number' ? `${(t.count / biggest) * 100}%` : 0 }} />
+                          <i style={{ width: total > 0 && typeof t.count === 'number' ? `${Math.min(100, (t.count / total) * 100)}%` : 0 }} />
                         </span>
                       </button>
                     </li>
@@ -348,7 +358,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 
 // ---------- the list ----------
 
-function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
+function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
   // A new sort order keeps the current rows up until it lands. Swapping the
   // table for a skeleton would destroy the heading that holds keyboard focus.
   // Only for a sort: rows from another search must never show under this one.
@@ -420,6 +430,17 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
     onSort((cur) => (cur.key === next.key ? { key: cur.key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
   }
 
+  // The headline count and this list are two separate reads. With nothing
+  // searched or filtered they should agree; when they do not, the list says
+  // so, whether it has rows ("2 assets" above "1 of 1") or came back empty
+  // (never "no assets discovered" under a headline that counted some).
+  // With no total from the list read, only an empty first page is a count:
+  // an empty later page means the pages ran out, not that the list is empty.
+  const listed = total ?? (page === 0 && rows.length === 0 && !hasMore ? 0 : null)
+  const unfiltered = !searched && !type && !gap
+  const mismatch = unfiltered && allTotal != null && listed != null && listed !== allTotal
+  const SEPARATE = 'The two numbers come from separate reads and can differ for a while.'
+
   const from = page * PAGE_SIZE + 1
   const to = page * PAGE_SIZE + rows.length
 
@@ -432,7 +453,8 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
       // rather than shrinking to its columns.
       fit={false}
       panelId={panelId}
-      title="Assets"
+      // Not "Assets" again, the page's own name (GUI audit B12).
+      title="Asset list"
       right={
         rows.length > 0 && (
           <span className="text-note text-muted">
@@ -448,6 +470,16 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
         // The whole reason this branch is separate from the one below: a feed
         // that could not be read must never render as a tenant with no assets.
         <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
+      ) : rows.length === 0 && page > 0 ? (
+        // The pager stays, so Previous is still there to press.
+        <>
+          <Empty>Nothing more to show.</Empty>
+          <Pager page={page} onPage={onPage} hasMore={false} total={total} loading={list.loading} />
+        </>
+      ) : rows.length === 0 && mismatch && allTotal > 0 ? (
+        <p className="text-note text-muted py-2">
+          Infoblox's list came back empty but its count says {countOf(allTotal, 'asset')}. {SEPARATE}
+        </p>
       ) : rows.length === 0 ? (
         <Empty>
           {gap && !byAddress
@@ -458,6 +490,11 @@ function AssetList({ list, searched, type, gap, sort, onSort, page, onPage, sele
         </Empty>
       ) : (
         <>
+          {mismatch && (
+            <p className="text-note text-muted mb-2">
+              Infoblox listed {countOf(listed, 'asset')} but counted {allTotal.toLocaleString()}. {SEPARATE}
+            </p>
+          )}
           {gap && !byAddress && (
             <p className="text-note text-muted mb-2">
               Showing devices seen on the network but not in {gap}.{' '}
