@@ -378,10 +378,23 @@ export default function Editor() {
     })),
   }
   const pickApi = { view: viewsApi, block: blocksApi, space: spacesApi, space_name: spacesApi, template: templatesApi, site: allBlocksApi, block_addr: allBlocksApi }
+  // Preview stays grey, with a hint naming each empty required box, until a
+  // new one can be sent (as on Get an address). A list that failed to load
+  // says to load it, since there is nothing to pick.
+  const needWord = (f) => {
+    if (f.kind in PICK_ONE) {
+      return pickApi[f.kind]?.error && !pickOptions[f.kind].length ? `load the ${PICK_WORDS[f.kind]}` : `pick ${PICK_ONE[f.kind]}`
+    }
+    // IPv6 shows the "Size: the number after the slash" box instead of a device count.
+    if (f.kind === 'devices') return isV6 ? 'fill in the size (the number after the slash)' : 'enter how many devices need an address'
+    return `fill in the ${nounOf(f.label.replace(/\s*\(.*\)$/, ''))}`
+  }
   // Forms with a required field mark the others "(optional)", as Get an address does.
   const anyRequired = !!spec?.fields.some((f) => f.required)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
   const isV6 = String(fields.address || '').includes(':')
+  const previewNeeds = !spec || isUpdate ? [] : [...new Set(spec.fields
+    .filter((f) => f.required && !String(fields[f.key] || '').trim()).map(needWord))]
 
   // Any input edit invalidates a preview taken before it — Apply must never
   // submit a body the user has not seen.
@@ -663,6 +676,8 @@ export default function Editor() {
             part="start"
             status={status}
             stale={stale}
+            disabled={previewNeeds.length > 0}
+            needs={previewNeeds}
             onPreview={() => send(true)}
             onApply={() => send(false)}
             applyLabel={isUpdate ? 'Update' : 'Create'}
@@ -697,6 +712,8 @@ export default function Editor() {
             part="outcome"
             status={status}
             stale={stale}
+            disabled={previewNeeds.length > 0}
+            needs={previewNeeds}
             onPreview={() => send(true)}
             onApply={() => send(false)}
             applyLabel={isUpdate ? 'Update' : 'Create'}

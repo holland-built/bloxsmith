@@ -213,7 +213,7 @@ test('network: Get a free address finds the space from the network and picks tha
   await expect(job).toContainText('Get an IP address');
   // The table row knew the network's id, not its space: the item lookup says Baseline Space.
   await expect(job.getByRole('combobox', { name: 'IP space' })).toHaveValue('ipam/ip_space/baseline-1');
-  await expect(job.getByRole('combobox', { name: 'Network' })).toHaveValue('ipam/subnet/baseline-3');
+  await expect(job.getByRole('combobox', { name: 'Subnet' })).toHaveValue('ipam/subnet/baseline-3');
 });
 
 test('network: Reserve an address opens Get an address on that network, locked to a device', async ({ page }) => {

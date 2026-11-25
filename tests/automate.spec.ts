@@ -53,7 +53,7 @@ test('get an IP address: preview, build, then remove it', async ({ page }) => {
 
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
   await job.getByRole('button', { name: 'Preview' }).click();
 
@@ -85,7 +85,7 @@ test('changing an answer after Preview takes the Build button away', async ({ pa
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('button', { name: 'Preview' }).click();
   await expect(job.getByRole('button', { name: 'Build it' })).toBeVisible();
   await job.getByRole('textbox', { name: /What is it for/ }).fill('changed');
@@ -103,7 +103,7 @@ test('a slow Preview that answers after an answer changed is ignored', async ({ 
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('button', { name: 'Preview' }).click();
   await job.getByRole('textbox', { name: /What is it for/ }).fill('changed while waiting');
   release();
@@ -408,7 +408,7 @@ test('after Preview, the IP job offers the same change as an Ansible playbook', 
   const job = page.locator('[data-panel-id="automate-job"]');
   await expect(job.locator('[data-ansible]')).toHaveCount(0);
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('button', { name: 'Preview' }).click();
   await job.getByText('Run this from Ansible instead').click();
   await job.getByRole('button', { name: 'Copy as Ansible playbook' }).click();

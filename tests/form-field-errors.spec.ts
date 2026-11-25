@@ -10,38 +10,33 @@ test.beforeEach(async ({ page }) => {
   await installBaselineWorld(page);
 });
 
-test('Editor: an empty required field is marked, explained under it, and focused', async ({ page }) => {
+// Editor (round 3, R3-D4): like Get an address, Preview stays grey until the
+// required boxes are filled, and the hint beside it names each empty one.
+test('Editor: Preview is grey until the required boxes are filled, and the hint names them', async ({ page }) => {
   await page.goto('/#editor');
   const preview = page.getByRole('button', { name: 'Preview' }).first();
   await expect(preview).toBeVisible({ timeout: 20_000 });
-  await preview.click();
+  await expect(preview).toBeDisabled();
+  await expect(preview).toHaveAccessibleDescription('To preview, fill in the zone name and pick a DNS view.');
 
-  const zone = page.getByRole('textbox', { name: 'Zone name' });
-  await expect(zone).toBeFocused();
-  await expect(zone).toHaveAttribute('aria-invalid', 'true');
-  await expect(zone).toHaveAccessibleDescription('Fill in this field.');
-  // The message sits in the form, not in the Preview column.
-  await expect(page.locator('[data-editor-result]').getByText(/required/i)).toHaveCount(0);
-
-  // Typing in the box clears its mark; the next empty one is pointed at.
-  await zone.fill('lab.example.com.');
-  await expect(zone).not.toHaveAttribute('aria-invalid', 'true');
-  await preview.click();
+  // Each box filled drops out of the hint; Preview comes on once none are left.
+  await page.getByRole('textbox', { name: 'Zone name' }).fill('lab.example.com.');
+  await expect(preview).toHaveAccessibleDescription('To preview, pick a DNS view.');
   const view = page.getByRole('combobox', { name: 'DNS view' });
-  await expect(view).toBeFocused();
-  await expect(view).toHaveAttribute('aria-invalid', 'true');
-  await expect(view).toHaveAccessibleDescription('Fill in this field.');
+  await view.selectOption({ index: 1 });
+  await expect(preview).toBeEnabled();
 });
 
-test('Editor: an empty device count is marked and focused too', async ({ page }) => {
+test('Editor: an empty device count keeps Preview grey and is named in the hint', async ({ page }) => {
   await page.goto('/#editor');
   await page.getByRole('button', { name: 'Subnet', exact: true }).click();
   await page.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/baseline-1');
   await page.getByRole('combobox', { name: 'Address block' }).selectOption('ipam/address_block/baseline-1');
-  await page.getByRole('button', { name: 'Preview' }).first().click();
-  const devices = page.getByRole('spinbutton', { name: 'How many devices need an address?' });
-  await expect(devices).toBeFocused();
-  await expect(devices).toHaveAttribute('aria-invalid', 'true');
+  const preview = page.getByRole('button', { name: 'Preview' }).first();
+  await expect(preview).toBeDisabled();
+  await expect(preview).toHaveAccessibleDescription('To preview, enter how many devices need an address.');
+  await page.getByRole('spinbutton', { name: 'How many devices need an address?' }).fill('200');
+  await expect(preview).toBeEnabled();
 });
 
 test('Unlock: an empty passphrase says so under the box', async ({ page }) => {
@@ -109,21 +104,23 @@ for (const [hash, label, widths] of HINTS) {
   }
 }
 
-test('Editor: picking an existing item clears a missing-field mark', async ({ page }) => {
+// Round 3 (R3-D4): an empty new form greys Preview instead of marking a box,
+// so picking an existing item is what clears the hint and turns Preview on.
+test('Editor: picking an existing item clears the empty-box hint and turns Preview on', async ({ page }) => {
   await page.route('**/api/edit/dns_zone/find**', (r) => r.fulfill({ json: {
     items: [{ id: 'dns/auth_zone/abc', label: 'lab.example.com.', fields: { fqdn: 'lab.example.com.', view: 'dns/view/1' } }],
   } }));
   await page.goto('/#editor');
   const preview = page.getByRole('button', { name: 'Preview' }).first();
   await expect(preview).toBeVisible({ timeout: 20_000 });
-  await preview.click();
-  const zone = page.getByRole('textbox', { name: 'Zone name' });
-  await expect(zone).toHaveAttribute('aria-invalid', 'true');
+  await expect(preview).toBeDisabled();
+  await expect(page.getByText(/^To preview, fill in the zone name/)).toBeVisible();
 
   await page.getByRole('searchbox').first().fill('lab');
   await page.getByRole('button', { name: 'lab.example.com.' }).click();
+  await expect(preview).toBeEnabled();
+  await expect(page.getByText(/^To preview,/)).toHaveCount(0);
   await expect(page.locator('[aria-invalid="true"]')).toHaveCount(0);
-  await expect(page.getByText('Fill in this field.')).toHaveCount(0);
 });
 
 test('Unlock: retyping after a wrong passphrase clears the red mark', async ({ page }) => {
