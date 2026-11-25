@@ -24,7 +24,7 @@ for (const width of [1440, 390]) {
         const bad: string[] = [];
         for (const el of Array.from(document.querySelectorAll('main *')) as HTMLElement[]) {
           const r = el.getBoundingClientRect();
-          if (r.height <= 52 || r.width === 0) continue;
+          if (r.height <= 46 || r.width === 0) continue; // a 44px touch button may be a full pill
           const rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
           if (rad >= r.height / 2 - 1) bad.push(`${el.tagName.toLowerCase()} ${Math.round(r.width)}x${Math.round(r.height)} "${(el.textContent || '').trim().slice(0, 30)}"`);
         }
