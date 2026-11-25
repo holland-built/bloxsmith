@@ -217,6 +217,14 @@ export function JobRail({ tab, groups, tabs, logo }) {
 // named too.
 export function JobBar({ tab, tabs, pages = tabs }) {
   const here = !JOB_IDS.has(tab) && pages.find((t) => t.id === tab)
+  // App keeps only the page id, so a new search on the same page (#dossier?q=…)
+  // does not redraw this bar. Follow the address itself.
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   return (
     <nav aria-label="Jobs" data-job-bar="" className="frame-dock">
       {jobsOf(tabs).map((j) => (
@@ -228,7 +236,7 @@ export function JobBar({ tab, tabs, pages = tabs }) {
       {here && (
         // The page you are on, at its full address, so tapping it keeps a
         // search's words (#dossier?q=…) instead of opening an empty search.
-        <a href={window.location.hash || `#${here.id}`} onClick={(e) => e.preventDefault()} aria-current="page" className="frame-dock-item">
+        <a href={hash || `#${here.id}`} onClick={(e) => e.preventDefault()} aria-current="page" className="frame-dock-item">
           <span>{here.label}</span>
         </a>
       )}
