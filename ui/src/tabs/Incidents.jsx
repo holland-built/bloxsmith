@@ -169,7 +169,7 @@ export default function Incidents() {
       <div className="ov-look inc-head">
         <div className="ov-head">
           <PageTitle>Incidents</PageTitle>
-          <UpdatedPill api={incApi} tip="Incidents to triage, by category and severity. The list refreshes every 20 seconds." unavailable="Couldn't load" />
+          <UpdatedPill api={incApi} tip="Incidents to triage, by category and severity. The list refreshes every 20 seconds."  />
         </div>
       </div>
       <CardGrid layoutKey="incidents">
@@ -277,7 +277,7 @@ function CategoryChips({ categories: fromServer, signals = [], truncated = false
         // a dead backend rendered "no active categories", i.e. all-clear.
         <FeedUnavailable
           label="Categories unavailable"
-          reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
+          reason={error.message || 'The incidents could not be loaded.'}
         />
       ) : categories.length === 0 && degraded ? (
         <FeedUnavailable
@@ -350,10 +350,10 @@ function SeverityKpis({ signals, truncated, loading, error, panelId, severity, o
   // pushed half out of the panel (GUI audit C2), so none are drawn.
   if (error) {
     return (
-      <Card panelId={panelId} span={6} panelName="Severity Counts" note="counts unknown — fetch failed">
+      <Card panelId={panelId} span={6} panelName="Severity Counts" note="counts not known">
         <FeedUnavailable
           label="Severity counts unavailable"
-          reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
+          reason={error.message || 'The incidents could not be loaded.'}
         />
       </Card>
     )
@@ -593,7 +593,7 @@ function SocQueue({ rows, loading, error, unavailable, reason, onRetry, statusSt
   const columns = [
     {
       key: 'sev',
-      label: 'Sev',
+      label: 'Severity',
       sortable: true,
       comparator: (a, b) => sevRank(mcpSeverity(a), COLORS) - sevRank(mcpSeverity(b), COLORS),
       render: (_v, r) => <SeverityPill severity={mcpSeverity(r)} />,
@@ -771,7 +771,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
   }, [rows])
 
   return (
-    <Card panelId={panelId} span={2} title="Action Volume" note="by day">
+    <Card panelId={panelId} span={2} title="Action volume" note="by day">
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (
@@ -784,7 +784,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, reason, onRetry, 
         <>
           <Suspense fallback={<Skeleton h={150} />}>
             <CategoryBars
-              label="Action Volume"
+              label="Action volume"
               data={byDay}
               unit="actions"
               height={150}

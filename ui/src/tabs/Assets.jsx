@@ -226,7 +226,9 @@ function headlines(filters, type) {
       // jumps to the list like the others).
       href: unc > 0 && type !== UNCLASSIFIED ? `#assets?type=${encodeURIComponent(UNCLASSIFIED)}` : undefined,
     },
-    { panelId: 'assets-filter-bar', label: 'Asset types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null },
+    // "Types", not "Asset types": on a phone the longer label wrapped and
+    // dropped its number below the others (GUI audit R2-B8).
+    { panelId: 'assets-filter-bar', label: 'Types', value: ok && Array.isArray(d?.types) ? d.types.length.toLocaleString() : null },
   ]
 }
 
@@ -294,7 +296,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       {filters.loading && !d ? (
         <Skeleton h={72} />
       ) : unavailable ? (
-        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset filter information is unavailable" onRetry={() => filters.refetch()} />
+        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset types unavailable" onRetry={() => filters.refetch()} />
       ) : (
         <div className="as-look">
           {/* total === null is a real state: the type query worked and the

@@ -31,14 +31,16 @@ test('the headline answers "am I under attack" from the feeds the page loads', a
   await expect(page.locator('[data-panel-id="security-lookalike-domains"]')).toBeFocused();
 });
 
-test('Block is the last column and shows by itself only on critical or high rows', async ({ page }) => {
+test('Block is the last column, absent on a row already blocked, and shows by itself only on critical or high rows', async ({ page }) => {
   await page.goto('/#security');
   const inbox = page.locator('[data-panel-id="security-triage-inbox"]');
   await expect(inbox.locator('thead th').last()).toHaveText('Block');
-  const high = inbox.locator('tbody tr', { hasText: 'bad.baseline.example' }).getByRole('button', { name: 'Block' });
+  // The high row's lookup was already blocked by policy (GUI audit R2-C1).
+  const high = inbox.locator('tbody tr', { hasText: 'bad.baseline.example' });
   const medium = inbox.locator('tbody tr', { hasText: 'watch.baseline.example' }).getByRole('button', { name: 'Block' });
   await page.mouse.move(0, 0);
-  await expect(high).toHaveCSS('opacity', '1');
+  await expect(high.getByRole('button', { name: 'Block' })).toHaveCount(0);
+  await expect(high.locator('td').last()).toHaveText('Blocked');
   await expect(medium).toHaveCSS('opacity', '0');
   // Still there for the row under the pointer, and for the keyboard.
   await inbox.locator('tbody tr', { hasText: 'watch.baseline.example' }).hover();

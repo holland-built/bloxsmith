@@ -464,3 +464,35 @@ func TestBestPractices_DNSRecordsFailureNotCached(t *testing.T) {
 		t.Fatalf("after recovery: want problem, got %v", c)
 	}
 }
+
+// GUI audit round 2, R2-A1: every title the owner reads is in plain words. The
+// Infoblox terms stay in each check's "why" text.
+func TestBestPractices_TitlesInPlainWords(t *testing.T) {
+	jargon := []string{"on-prem", "Grid Master", " HA", "NIOS", "deprecated"}
+	host := func(name, st string) any { return map[string]any{"display_name": name, "composite_status": st} }
+	var titles []string
+	for _, c := range []bpCheck{
+		hostsDownCheck(nil, false, true),
+		hostsDownCheck([]any{host("a", "offline")}, true, true),
+		hostsDownCheck([]any{host("a", "offline"), host("b", "error")}, true, true),
+		hostsDownCheck([]any{host("a", "online")}, true, false),
+		hostsDownCheck([]any{host("a", "online")}, true, true),
+		gmResilienceCheck(nil, false, true),
+		gmResilienceCheck(nil, true, true),
+		dhcpAAPCheck(nil, false, true),
+		dhcpAAPCheck([]any{map[string]any{"name": "x", "mode": "advanced-active-passive"}}, true, true),
+		dhcpAAPCheck(nil, true, true),
+	} {
+		titles = append(titles, c.Title)
+	}
+	for _, title := range titles {
+		if title == "" || title[0] < 'A' && (title[0] < '0' || title[0] > '9') || title[0] >= 'a' && title[0] <= 'z' {
+			t.Errorf("title %q must start with a capital or a number", title)
+		}
+		for _, j := range jargon {
+			if strings.Contains(title, j) {
+				t.Errorf("title %q uses %q", title, j)
+			}
+		}
+	}
+}

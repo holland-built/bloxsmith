@@ -337,8 +337,8 @@ test('IPAM spaces with no capacity figure are not called missing', async ({ page
   await page.route('**/api/csp/ipam-util*', (r) => r.fulfill({ json: { status: 'ok', rows: [{ id: 'a', label: 'A', used: 0, total: 0 }] } }));
   await page.goto('/#network');
   const card = page.locator('[data-panel-id="network-ipam-spaces"]');
-  await expect(card).toContainText('No IPAM spaces report capacity');
-  await expect(card).not.toContainText('No IPAM spaces found');
+  await expect(card).toContainText('No IP spaces report how full they are');
+  await expect(card).not.toContainText('No IP spaces found');
 });
 
 test('first load shows neither an empty network list nor an empty connection', async ({ page }) => {

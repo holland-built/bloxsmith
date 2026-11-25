@@ -56,7 +56,7 @@ test('Security: a complete hour counts the hour and says what the list shows', a
   await useHub(page, WHOLE_HOUR);
   await page.goto('/#security');
   const summary = card(page, 'Response summary');
-  await expect(summary).toContainText('Total Events', { timeout: 20_000 });
+  await expect(summary).toContainText('Total events', { timeout: 20_000 });
   await expect(summary).toContainText('354');
   // Acknowledgements are per listed row, so this figure names its scope.
   await expect(summary).toContainText('newest 50');
@@ -70,7 +70,7 @@ test('Security: a capped read keeps its caveat with the real number', async ({ p
   await useHub(page, CAPPED);
   await page.goto('/#security');
   const summary = card(page, 'Response summary');
-  await expect(summary).toContainText('Events Counted', { timeout: 20_000 });
+  await expect(summary).toContainText('Events counted', { timeout: 20_000 });
   await expect(summary).toContainText('Covers only the newest 5,000 events in this window.');
   await expect(card(page, 'Triage inbox')).toContainText('Showing the newest 50 of the 5,000 events counted.');
 });

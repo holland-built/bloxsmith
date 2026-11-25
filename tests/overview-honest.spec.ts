@@ -46,7 +46,7 @@ test('subnets 90% full with no incident yet are on the list and the IPAM row, ma
 test('the panel of recent changes is named for what it covers', async ({ page }) => {
   await installBaselineWorld(page);
   await page.goto('/#overview');
-  await expect(page.getByRole('heading', { name: 'Recent changes', level: 2 })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Last few hours', level: 2 })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'Since yesterday' })).toHaveCount(0);
 });
 

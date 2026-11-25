@@ -90,3 +90,22 @@ test('a refusal with no method recorded says edit, and the subnet stream names a
   assert.equal(s.startsWith('Create a subnet'), true, s)
   assert.equal(/stream/i.test(s), false, s)
 })
+
+// GUI audit round 2, R2-C4: results and account kinds in plain words.
+test('resultWord says Worked, Refused or Failed', async () => {
+  const { resultWord } = await import('./auditWords.js')
+  assert.equal(resultWord('success'), 'Worked')
+  assert.equal(resultWord('SUCCESS'), 'Worked')
+  assert.equal(resultWord('failed: denied'), 'Refused')
+  assert.equal(resultWord('failed: timeout'), 'Failed')
+  assert.equal(resultWord(''), '')
+  assert.equal(resultWord('pending'), 'Pending')
+})
+
+test('whoKindWord names the kind of account', async () => {
+  const { whoKindWord } = await import('./auditWords.js')
+  assert.equal(whoKindWord('service'), 'automated account')
+  assert.equal(whoKindWord('person'), 'person')
+  assert.equal(whoKindWord('device'), 'device')
+  assert.equal(whoKindWord(''), '')
+})

@@ -39,7 +39,7 @@ test('problems come first and open to show what is affected; the rest say passed
   await expect(affected).toBeHidden();
   await rows.nth(0).locator('summary').click();
   await expect(affected.getByRole('listitem')).toHaveText(['nios-x-dal-3offline', 'nios-x-lon-2error']);
-  await expect(rows.nth(0).getByRole('link', { name: 'Open Infra' })).toHaveAttribute('href', '#infra');
+  await expect(rows.nth(0).getByRole('link', { name: 'View servers' })).toHaveAttribute('href', '#infra');
 });
 
 test('the headline numbers come first: to fix, couldn\'t tell and passed, each out of the checks run', async ({ page }) => {

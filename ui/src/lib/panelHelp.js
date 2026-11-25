@@ -157,7 +157,7 @@ export const PANEL_HELP = {
   },
   'security-response-summary': {
     what: 'What happened to the flagged lookups: how many were stopped, how many were only written down, and how many there were.',
-    look: 'The first figure counts unticked critical events, red when there are any. It falls as you tick rows. The last tile says Total Events only when the true count is known; otherwise it says Events Shown.',
+    look: 'The first figure counts unticked critical events, red when there are any. It falls as you tick rows. The last tile says Total events only when the true count is known; otherwise it says Events shown.',
   },
   'security-triage-inbox': {
     what: 'One row per flagged lookup, worst first: the name that was asked for, what the system did about it, and when.',
@@ -169,11 +169,11 @@ export const PANEL_HELP = {
   },
   'security-lookalike-domains': {
     what: 'Domains somebody else registered that are spelled to look like yours, and which of your real domains each one imitates.',
-    look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the source could not be reached, so nothing was checked; 0 means checked and none found.',
+    look: 'A red "yes" means it was judged suspicious. When the source could not be reached no count is shown, because nothing was checked; 0 means checked and none found.',
   },
   'security-axur-incidents': {
     what: 'Security problems Axur found in the suppliers you depend on — exposed logins, dark-web mentions, weak certificates. Axur is a separate service.',
-    look: 'Ordered by exposed credentials, the one figure comparable between suppliers. "Types affected" counts categories, not incidents. A dash instead of a total means nothing was counted.',
+    look: 'Ordered by exposed credentials, the one figure comparable between suppliers. "Types affected" counts categories, not incidents. When nothing was counted no total is shown.',
   },
   'security-ctem-exposure': {
     what: 'Weaknesses found on your internet-facing assets, grouped by how serious they are and how urgent the source rates fixing them.',

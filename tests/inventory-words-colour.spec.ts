@@ -55,16 +55,20 @@ for (const theme of ['dark', 'light']) {
       await installBaselineWorld(page);
     });
 
-    test('A7: Overview\'s main button is the button blue, and its text-only actions are link blue', async ({ page }) => {
+    test('A7: Overview\'s main button is the button blue, its text-only actions are link blue, and its secondary buttons are plain', async ({ page }) => {
       await page.goto('/#overview');
       const primary = page.locator('.br a.br-primary');
       await expect(primary).toBeVisible({ timeout: 20_000 });
       expect(await primary.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await computed(page, 'backgroundColor', 'var(--color-accent)'));
       expect(await primary.evaluate((el) => getComputedStyle(el).color)).toBe(await computed(page, 'color', 'var(--color-on-accent)'));
       const link = await computed(page, 'color', 'var(--color-link)');
-      const textActions = page.locator('.br a.br-btn, .ov-act, .ov-btn');
+      const textActions = page.locator('.ov-act');
       expect(await textActions.count()).toBeGreaterThan(0);
       for (const el of await textActions.all()) expect(await el.evaluate((e) => getComputedStyle(e).color)).toBe(link);
+      // "View hosts" and Hide are secondary buttons, field-coloured, not the
+      // picked tint (GUI audit R2-A8).
+      const field = await computed(page, 'color', 'var(--color-field-txt)');
+      for (const el of await page.locator('.br a.br-btn, .ov-btn').all()) expect(await el.evaluate((e) => getComputedStyle(e).color)).toBe(field);
     });
 
     test('B4: a zone problem graded Review is amber on DNS, count and row alike', async ({ page }) => {

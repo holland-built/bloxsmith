@@ -260,7 +260,7 @@ The IQ for Threat Defense action queue. Refreshes every 20 seconds.
 - **Categories**: click a category to show only its incidents in the list.
 - **Triage**: the incident list. Click a row for the detail. Tick **Seen** on the ones you've dealt with. This browser remembers your ticks for 14 days, so a reload doesn't undo them.
 - **IQ Actions**: actions from Infoblox IQ for Threat Defense, with the detail of each one. Each says whether it is open or resolved, open ones first. **Resolve** closes an open one; **Reopen** on a resolved one shows when you point at its row.
-- **Action Volume**: actions per day.
+- **Action volume**: actions per day.
 
 ## Audit
 
@@ -625,7 +625,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Incidents | Severity Counts | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Triage | the app's incident checks over the Infoblox API | No | the incidents are worked out in the app |
 | Incidents | Suggested actions | Infoblox IQ actions | No | it is a list of actions to work through, not a chart |
-| Incidents | Action Volume | Infoblox IQ actions | No | the actions are counted by day in the app, not read from activity records |
+| Incidents | Action volume | Infoblox IQ actions | No | the actions are counted by day in the app, not read from activity records |
 | Audit | Activity Summary | this app's own audit log | No | it is this app's own record, not Infoblox's |
 | Audit | Audit Log | this app's own audit log | No | it is a list, not a chart |
 | Audit | Infoblox Portal Audit | the Infoblox audit log | No | it is a list, not a chart |

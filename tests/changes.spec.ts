@@ -119,8 +119,8 @@ test.describe('#changes — what changed in the last 24 hours', () => {
 
     const groups = page.locator('[data-changes-group]');
     await expect(groups).toHaveCount(4); // addressservice, subnetservice, dnsrecord, auth_zone
-    await expect(page.locator('[data-changes-group="addressservice"]')).toContainText('3 rows');
-    await expect(page.locator('[data-changes-group="dnsrecord"]')).toContainText('1 row');
+    await expect(page.locator('[data-changes-group="addressservice"]')).toContainText('3 changes');
+    await expect(page.locator('[data-changes-group="dnsrecord"]')).toContainText('1 change');
   });
 
   test('(c) the cap banner is in the DOM exactly when truncated is true', async ({ page }) => {
@@ -248,7 +248,7 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     );
     await page.goto('/#changes');
 
-    await expect(page.getByText(/portal audit information is unavailable/i).first()).toBeVisible();
+    await expect(page.getByText(/the list of changes is unavailable/i).first()).toBeVisible();
     await expect(page.getByText(/nothing changed in the last 24 hours/i)).toHaveCount(0);
     // No band either: four "None" cells would answer four questions nobody
     // could actually ask.
@@ -264,7 +264,7 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await page.goto('/#changes');
 
     await expect(page.getByText(/nothing changed in the last 24 hours/i)).toBeVisible();
-    await expect(page.getByText(/portal audit information is unavailable/i)).toHaveCount(0);
+    await expect(page.getByText(/the list of changes is unavailable/i)).toHaveCount(0);
   });
 
   test('the request asks the server for the last 24 h', async ({ page }) => {
@@ -299,7 +299,7 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await expect(pill).toBeVisible();
     // innerText: the pill's tip is in the DOM but not on screen.
     const shown = await pill.evaluate((el) => (el.firstChild?.textContent ?? '').trim());
-    expect(shown).toMatch(/^Last \d+ (min|h)( \d+ min)? only$/);
+    expect(shown).toMatch(/^Last \d+ (minutes?|hours?)( \d+ minutes?)? only$/);
     expect(shown).not.toMatch(/24 hours/);
     await expect(page.locator('h1')).not.toContainText(/24/);
   });
@@ -380,9 +380,9 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await expect(deleted).toHaveCount(1);
     const cells = deleted.getByRole('cell');
     await expect(cells.nth(2)).toHaveText('Deleted');
-    await expect(cells.nth(3)).toHaveText('success');
+    await expect(cells.nth(3)).toHaveText('Worked');
     await expect(cells.nth(4)).toHaveText('actor-old');
-    await expect(cells.nth(5)).toHaveText('service');
+    await expect(cells.nth(5)).toHaveText('automated account');
 
     // aria-colindex is what makes that alignment a promise rather than a
     // coincidence of source order, and it is 1-based.

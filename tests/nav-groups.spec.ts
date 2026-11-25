@@ -20,7 +20,7 @@ const TAB_HEADINGS: [string, string][] = [
   ['network', 'Network'],
   ['dns', 'DNS'],
   ['security', 'Security'],
-  ['infra', 'Infrastructure'],
+  ['infra', 'Infra'],
   ['assets', 'Assets'],
   ['incidents', 'Incidents'],
   ['audit', 'Audit'],

@@ -238,7 +238,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus, loading }) {
   // "0 loaded" over a dead feed reads as an empty estate; the count is
   // unknown, so it prints as an em-dash.
   const scopeLabel = subnetsStatus === 'error'
-    ? `${DASH} loaded (count unavailable)`
+    ? ''
     : estateTotal !== null
       ? `${subnets.length.toLocaleString()} loaded of ${estateTotal.toLocaleString()} total${unmeasuredLabel}`
       : `${subnets.length.toLocaleString()} loaded (total unavailable)${unmeasuredLabel}`
@@ -305,13 +305,13 @@ function IpamSpaces({ panelId, ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card panelId={panelId} span={2} title="IP spaces — most used" note="IPAM" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
+    <Card panelId={panelId} span={2} title="IP spaces — most used" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
-        <FeedUnavailable label="IPAM information is unavailable" />
+        <FeedUnavailable label="IP space information is unavailable" />
       ) : rows.length === 0 ? (
-        <Empty>{ipam.data?.rows?.length > 0 ? 'No IPAM spaces report capacity' : 'No IPAM spaces found'}</Empty>
+        <Empty>{ipam.data?.rows?.length > 0 ? 'No IP spaces report how full they are' : 'No IP spaces found'}</Empty>
       ) : (
         <div className="flex flex-col gap-2 mt-1">
           {rows.map((r, i) => {
@@ -598,8 +598,9 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
 // as totals for today and the last 30 days (lib/dhcpRequests.js). Each number
 // stands alone: one that could not be read says "not checked".
 function DhcpRequests({ panelId, requests }) {
-  // Any number that failed is said once, with a way to ask again; each
-  // number still says "not checked" on its own (GUI audit B2).
+  // Any number that failed is said once, with a way to ask again. When only
+  // some failed each of those says "not checked"; when all did, no numbers
+  // are shown under the error (GUI audit B2).
   const states = DHCP_REQUEST_WINDOWS.flatMap((w) => DHCP_REQUEST_ROWS.map((r) => dhcpTotal(requests, r.key, w.key).state))
   const allFailed = states.every((st) => st === 'error')
   const someFailed = states.some((st) => st === 'error')
@@ -617,7 +618,7 @@ function DhcpRequests({ panelId, requests }) {
               </button>
             </p>
           )}
-          {DHCP_REQUEST_WINDOWS.map((w) => (
+          {!allFailed && DHCP_REQUEST_WINDOWS.map((w) => (
             <div key={w.key} data-dhcp-window={w.key}>
               <div className="text-note text-muted pt-1">{w.label}</div>
               <dl className="flex flex-wrap gap-x-6 gap-y-2 mt-1 mb-3 tabular-nums">

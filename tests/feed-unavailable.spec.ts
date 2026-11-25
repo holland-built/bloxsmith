@@ -40,8 +40,8 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     );
     await page.goto('/#overview');
     const row = hostsRow(page);
-    await expect(row).toContainText('not checked: information unavailable', { timeout: 20_000 });
-    await expect(hostsTile(page)).toContainText('unavailable');
+    await expect(row).toContainText('Not checked', { timeout: 20_000 });
+    await expect(hostsTile(page)).toContainText('Not checked');
     await expect(row).not.toContainText('No open issues');
     await expect(row).not.toContainText('0 of 0');
     await expect(hostsTile(page)).not.toContainText('0 of 0');

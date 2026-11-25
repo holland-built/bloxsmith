@@ -137,7 +137,7 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
   // is the number's tip. `of` is what the number is out of.
   const cells = [
     {
-      key: 'subnets', name: 'Subnets', unit: `≥${UTIL_CRIT}% full`, value: critSubnets.length, sev: PROBLEM_SEV.subnetsFull, hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
+      key: 'subnets', name: 'Subnets', unit: `${UTIL_CRIT}% full or more`, value: critSubnets.length, sev: PROBLEM_SEV.subnetsFull, hash: `network?minUtil=${UTIL_CRIT}&links=1`, status: meta.subnets,
       of: typeof totals?.subnets === 'number' ? totals.subnets : null,
       detail: `${critReal.length.toLocaleString()} without tiny networks (8 addresses or fewer).`,
     },
@@ -218,7 +218,8 @@ function SecurityToday({ sec, panelId }) {
   // second way.
   const chips = [
     { label: 'critical', value: Number(counts.critical) || 0, color: COLORS.crit },
-    { label: 'high', value: Number(counts.high) || 0, color: COLORS.warn },
+    // The high colour Security uses for the same events (GUI audit R2-A9).
+    { label: 'high', value: Number(counts.high) || 0, color: COLORS.sevHigh },
     { label: 'medium', value: Number(counts.medium) || 0 },
     { label: 'low', value: Number(counts.low) || 0 },
     // Blocked is good news, so it stays plain: only what needs a look is

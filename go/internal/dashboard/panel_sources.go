@@ -145,7 +145,7 @@ var panelSources = []PanelSource{
 	restPanel("incidents-severity", "Incidents", "Severity Counts", "the app's incident checks over the Infoblox API", whyIncident),
 	restPanel("incidents-triage", "Incidents", "Triage", "the app's incident checks over the Infoblox API", whyIncident),
 	restPanel("incidents-soc-queue", "Incidents", "Suggested actions", "Infoblox IQ actions", "it is a list of actions to work through, not a chart"),
-	restPanel("incidents-action-volume", "Incidents", "Action Volume", "Infoblox IQ actions", "the actions are counted by day in the app, not read from activity records"),
+	restPanel("incidents-action-volume", "Incidents", "Action volume", "Infoblox IQ actions", "the actions are counted by day in the app, not read from activity records"),
 
 	// ---- Audit ----
 	{ID: "audit-activity-summary", Page: "Audit", Name: "Activity Summary", Kind: "local", Source: "this app's own audit log",

@@ -59,6 +59,43 @@ function noStatus(feed) {
 function statusColumn(feed) {
   return noStatus(feed) ? [] : [{ key: 'status', label: 'Status', badge: true }]
 }
+
+// Jobs and DNS forwarding proxies: the table draws (and measures) the status
+// pill itself, so the plain word goes into the rows. Infoblox's "ok" was a
+// grey chip beside a green "completed" (GUI audit R2-B3); "Online" is a word
+// the shared colour rule paints green. Every other word just gets a capital,
+// which keeps its colour (lib/statusWord.js ignores case).
+const FEED_WORD = { ok: 'Online' }
+function feedWord(v) {
+  const low = String(v ?? '').trim().toLowerCase()
+  return low ? FEED_WORD[low] ?? low[0].toUpperCase() + low.slice(1) : v
+}
+function useFeedWords(feed) {
+  const data = feed.data
+  // Keyed on the data alone, so the rows stay the same objects between polls
+  // that bring nothing new.
+  const plain = useMemo(
+    () => (Array.isArray(data?.rows) ? { ...data, rows: data.rows.map((r) => ({ ...r, status: feedWord(r.status) })) } : data),
+    [data],
+  )
+  return { ...feed, data: plain }
+}
+
+// One word and one colour for each state on this page (GUI audit R2-B3, B8):
+// Infoblox's "ok" was a grey chip beside a green "completed" and a green
+// "healthy". The healthy words all paint green; "degraded" is the app's
+// Review (lib/severity.js SEV_WORD). Any other word keeps its own colour rule
+// (lib/statusWord.js) and gets a capital.
+const HEALTHY = new Set(['ok', 'healthy', 'active', 'online', 'completed', 'complete', 'success'])
+const WORD = { ok: 'Healthy', degraded: 'Review', critical: 'Needs action' }
+function plainStatus(v) {
+  const low = String(v ?? '').trim().toLowerCase()
+  if (!low) return ''
+  return WORD[low] ?? low[0].toUpperCase() + low.slice(1)
+}
+function statusPill(v) {
+  return statusBadgeColor(HEALTHY.has(String(v ?? '').trim().toLowerCase()) ? 'active' : v)
+}
 function statusNote(feed, fallback) {
   return noStatus(feed) ? 'no status reported' : fallback
 }
@@ -70,8 +107,8 @@ export default function Infra() {
   const savedCharts = useSavedChartPanels('infra')
   const data = useApi('/api/data', { poll: 30000 })
   const onprem = useApi('/api/csp/onprem-hosts', { poll: 30000 })
-  const jobs = useApi('/api/csp/jobs', { poll: 15000, live: true })
-  const dfp = useApi('/api/csp/dfp', { poll: 30000 })
+  const jobs = useFeedWords(useApi('/api/csp/jobs', { poll: 15000, live: true }))
+  const dfp = useFeedWords(useApi('/api/csp/dfp', { poll: 30000 }))
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
   const discovery = useApi('/api/csp/discovery-status', { poll: 60000 })
   // The DNS/DHCP/Security service rollup. Registered since the Go rewrite and
@@ -102,7 +139,7 @@ export default function Infra() {
       <div className="ov-look mb-1">
         <div className="ov-head">
           <span className="flex items-center gap-2">
-            <PageTitle>Infrastructure</PageTitle>
+            <PageTitle>Infra</PageTitle>
             {/* Only when maintenance is ON. With it off this used to be a green
                 "Operational" pill, and all it knew was that maintenance was off:
                 it said so beside four offline hosts out of ten. Whether the estate
@@ -164,7 +201,7 @@ export default function Infra() {
           span={3}
           panelId="infra-dfp-services"
           title="DNS forwarding proxies"
-          note={statusNote(dfp, 'DFP, from Infoblox Portal')}
+          note={statusNote(dfp, 'from the Infoblox Portal')}
           feed={dfp}
           count
           columns={[
@@ -259,7 +296,7 @@ function headlines(hosts, totalHosts, hostsStatus) {
   return [
     { panelId: 'infra-host-inventory', label: 'Hosts', value: ok && typeof totalHosts === 'number' ? totalHosts.toLocaleString() : null },
     { panelId: 'infra-host-status', label: `Not online${loaded}`, value: v('offline'), tone: alarmTone(n('offline'), 'crit') },
-    { panelId: 'infra-host-status', label: `Degraded${loaded}`, value: v('degraded'), tone: alarmTone(n('degraded'), 'warn') },
+    { panelId: 'infra-host-status', label: `Review${loaded}`, value: v('degraded'), tone: alarmTone(n('degraded'), 'warn') },
     { panelId: 'infra-host-status', label: `Unknown${loaded}`, value: v('unknown') },
   ]
 }
@@ -278,14 +315,14 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetr
   // slice rather than part of Other: a host whose status the upstream never
   // reported is not a category of health, and burying 52-of-532 in "Other"
   // hides exactly the population an operator needs to go look at.
-  const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
+  const buckets = { Active: 0, Review: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
     // Healthy is paler so the red and amber slices are what the eye lands on,
     // but at 70%, not 35%: 35% measured 2.1:1 on the panel, under the 3:1 a
     // chart mark needs (GUI audit B13).
     Active: `color-mix(in srgb, ${COLORS.ok} 70%, transparent)`,
-    Degraded: COLORS.warn,
+    Review: COLORS.warn,
     Offline: COLORS.crit,
     Unknown: COLORS.other,
     Other: COLORS.purple,
@@ -375,11 +412,18 @@ function HostLoad({ hostMetrics, dnsHealth }) {
       key: k, label, mono: true, priority: 'low', render: (_, r) => hostMetricText(dnsHealth, k, [r.host, r.host_name]),
     })),
   ]
-  const wide = DNS_HOST_METRICS.filter(([k]) => accountWide.includes(k))
+  // Only readings that arrived are listed; the ones that failed are named
+  // once, in words, with a way to ask again, rather than printed as
+  // "not checked" (GUI audit B2).
+  const wide = DNS_HOST_METRICS.filter(([k]) => accountWide.includes(k) && healthMetric(dnsHealth, k).state !== 'error')
+  const lost = DNS_HOST_METRICS.filter(([k]) => accountWide.includes(k) && healthMetric(dnsHealth, k).state === 'error')
   return (
     <div className="mt-3 pt-3 border-t border-line" data-host-load="">
-      <div className="text-note text-muted mb-1">CPU and memory, latest reading</div>
-      {failed && <div className="text-note text-muted">CPU and memory: {NOT_CHECKED}</div>}
+      {/* A failed read is said once, in words; "not checked" read as though
+          nobody looked (GUI audit B2). */}
+      {failed
+        ? <div className="text-note text-muted">CPU and memory couldn&apos;t be read from Infoblox.</div>
+        : <div className="text-note text-muted mb-1">CPU and memory, latest reading</div>}
       {rows.length > 0 ? (
         <DataTable rows={rows} columns={columns} maxHeight={220} rowKey={(r) => r.host} />
       ) : (
@@ -395,6 +439,14 @@ function HostLoad({ hostMetrics, dnsHealth }) {
           ))}
           . Infoblox does not report {wide.length > 1 ? 'these' : 'this'} per host here.
         </div>
+      )}
+      {lost.length > 0 && (
+        <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-muted mt-2" data-host-dns-failed="">
+          DNS {lost.map(([, , words]) => words).join(' and ')} couldn&apos;t be read from Infoblox.
+          <button type="button" onClick={dnsHealth.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+            Try again
+          </button>
+        </p>
       )}
     </div>
   )
@@ -415,13 +467,12 @@ function discoveryTile(feed) {
     href: '#assets',
     value: ok ? data.total.toLocaleString() : null,
     loading: pending,
-    note: dead ? 'unavailable' : undefined,
   }
 }
 
 // ---------- host inventory table ----------
 
-const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
+const BUCKET_LABEL = { active: 'Active', degraded: 'Review', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
 
 // Severity rank for status sort: offline first, then degraded, then unknown,
 // then active, then other. Unknown sorts ABOVE healthy because "we could not
@@ -432,7 +483,7 @@ function sevRank(s) {
   return SEV_ORDER[statusBucket(s)] ?? 4
 }
 
-const STATUS_WORD = { ok: 'Active', active: 'Active', degraded: 'Degraded', offline: bucketWord('Offline') }
+const STATUS_WORD = { ok: 'Active', active: 'Active', degraded: 'Review', offline: bucketWord('Offline') }
 
 // Status badge. Same pill as DataTable's own `badge` renderer for every status
 // it knows; an unknown one is deliberately not one of those colours — neutral
@@ -450,7 +501,7 @@ function renderStatus(v) {
       </span>
     )
   }
-  const st = statusBadgeColor(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
+  const st = statusPill(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
   // The same words as the Host Status legend and the headline numbers, not
   // Infoblox's raw "ok" or "offline" (GUI audit B8). Only those exact words
   // are renamed: going through statusBucket's loose match would turn
@@ -725,7 +776,7 @@ function ServiceHealth({ panelId, feed }) {
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-note text-muted truncate" title={b.reason || undefined}>{b.meta}</span>
                 <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium whitespace-nowrap" style={pill(b.status)}>
-                  {b.statusLabel}
+                  {plainStatus(b.statusLabel)}
                 </span>
               </div>
             </div>

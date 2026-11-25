@@ -240,16 +240,19 @@ function KpiStack({ panelId, hub, events, acks }) {
   // The `?? events.length` fallback is gone with it. That is the shape that let
   // the bug survive a rename: a consumer that substitutes the rows in hand for a
   // missing total is printing the sample under the total's label again.
-  const totalCell = totalEventsTile(d, 'Total Events', 'Events Shown')
+  const totalCell = totalEventsTile(d, 'Total events', 'Events shown')
   const scopeNote = sampleScopeNote(d, 'events')
 
   const cells = [
     // Red only when there is something to act on; blocked and logged are
     // counts, not problems, so they stay plain.
     { label: 'Critical, not yet reviewed', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: shownOnlyLabel(d) },
-    { label: 'Blocked', value: d.blocked ?? 0 },
-    { label: 'Logged', value: d.logged ?? 0 },
-    { label: totalCell.label, value: totalCell.value },
+    // The span is said on each figure: Threat feed activity's own Blocked
+    // covers 7 days, and side by side the two read as a contradiction
+    // (GUI audit R2-C2). /api/hub/security reads the last hour (server/data.go).
+    { label: 'Blocked, last hour', value: d.blocked ?? 0 },
+    { label: 'Logged, last hour', value: d.logged ?? 0 },
+    { label: sentenceCase(totalCell.label), value: totalCell.value },
   ]
 
   return (
@@ -278,7 +281,20 @@ function KpiStack({ panelId, hub, events, acks }) {
 
 // ---------- block action ----------
 
-function BlockCell({ domain, readOnly, urgent }) {
+// Infoblox sends severities and policy actions in capitals ("HIGH", "BLOCK").
+// On screen they read as words, like the chips elsewhere (GUI audit R2-C4).
+function sentenceCase(v) {
+  const t = String(v ?? '')
+  return t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : ''
+}
+const ACTION_WORD = { block: 'Blocked', log: 'Logged', allow: 'Allowed', redirect: 'Redirected' }
+const isBlockedAction = (v) => String(v ?? '').toLowerCase() === 'block'
+function policyActionWord(v) {
+  if (!v) return '—'
+  return ACTION_WORD[String(v).toLowerCase()] ?? sentenceCase(v)
+}
+
+function BlockCell({ domain, readOnly, urgent, blocked }) {
   const { COLORS } = useChartTheme()
   // idle | busy | verified | rejected | unverified | tokenRequired.
   // "verified" is the ONLY state that may show a green tick — it means a
@@ -327,6 +343,8 @@ function BlockCell({ domain, readOnly, urgent }) {
   }
 
   if (!domain) return <span className="text-dim text-note">—</span>
+  // Already blocked by policy: there is nothing to press (GUI audit R2-C1).
+  if (blocked && state === 'idle') return <span className="text-note text-muted">Blocked</span>
   if (state === 'busy') return <span className="text-note text-muted">…</span>
   if (state === 'verified') {
     return (
@@ -426,7 +444,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
   const columns = [
     {
       key: 'ack',
-      label: 'Ack',
+      label: 'Seen',
       keep: true,
       render: (_v, r) => (
         // A placeholder-free control in a 50-row list: without a label a screen
@@ -457,8 +475,8 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
-            {r.severity || '—'}
+          <span className="font-medium text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
+            {sentenceCase(r.severity) || '—'}
           </span>
         )
       },
@@ -468,7 +486,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
     // two, so they give way first there (DataTable hides priority:'low' below
     // 360px). The domain is what the row is about; these can wait for a wider
     // screen.
-    { key: 'policy_action', label: 'Action', sortable: true, priority: 'low' },
+    { key: 'policy_action', label: 'Action', sortable: true, priority: 'low', render: (v) => policyActionWord(v) },
     {
       key: 'event_time',
       label: 'Time',
@@ -489,7 +507,10 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       key: 'block',
       label: 'Block',
       keep: true,
-      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} urgent={sevRank(r.severity) <= 1} />,
+      // Block is offered where the policy only logged or allowed the lookup,
+      // never on a row the policy already blocked (GUI audit R2-C1). It stands
+      // out on critical and high rows; on the rest it shows on hover or focus.
+      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} blocked={isBlockedAction(r.policy_action)} urgent={sevRank(r.severity) <= 1} />,
     },
   ]
 
@@ -580,7 +601,7 @@ function LookalikeTable({ panelId, lookalikes }) {
   const counted = !lookalikes.error && !d.unavailable
 
   return (
-    <Card panelId={panelId} span={3} title="Lookalike domains" right={<span className="text-note text-muted">{counted ? rows.length : '—'} detected</span>}>
+    <Card panelId={panelId} span={3} title="Lookalike domains" right={counted ? <span className="text-note text-muted">{rows.length} detected</span> : null}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
@@ -662,11 +683,12 @@ function AxurPanel({ panelId, axur }) {
       panelId={panelId}
       span={3}
       title="Axur supplier risk"
-      right={
+      // No count at all when nothing was read: a dash there read as one (GUI audit R2-C9).
+      right={counted ? (
         <span className="text-note text-muted">
-          {counted ? `${(d.total_credentials ?? 0).toLocaleString()} credentials · ${rows.length} suppliers` : '—'}
+          {`${(d.total_credentials ?? 0).toLocaleString()} credentials · ${rows.length} suppliers`}
         </span>
-      }
+      ) : null}
     >
       {axur.loading ? <Skeleton h={220} /> : axur.error ? (
         <FeedUnavailable reason={axur.error.message || undefined} label="Axur information is unavailable" />
@@ -719,8 +741,8 @@ function CtemPanel({ panelId, ctem }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
-            {r.severity || '—'}
+          <span className="font-medium text-note" style={{ color: SEV_COLOR[sev] || 'var(--color-muted)' }}>
+            {sentenceCase(r.severity) || '—'}
           </span>
         )
       },
@@ -792,8 +814,8 @@ function ThreatFeed({ panelId, threats }) {
       ) : rows.length === 0 ? <Empty>No threat feed activity found</Empty> : (
         <>
           <div className="flex gap-5 mb-2">
-            <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />Blocked</div></div>
-            <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.other }} />Allowed</div></div>
+            <div><span className="text-figure font-semibold">{totals.block.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.series }} />Blocked, last 7 days</div></div>
+            <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="flex items-center gap-1.5 text-note text-muted"><i data-swatch aria-hidden="true" className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.other }} />Allowed, last 7 days</div></div>
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
@@ -852,12 +874,12 @@ function InsightsPanel({ panelId, insights }) {
   // totalVerifiedAssets now is: null on the wire, never a fabricated 0.
   const columns = [
     { key: 'name', label: 'Threat', grow: true, sortable: true },
-    { key: 'severity', label: 'Severity', sortable: true, sortAccessor: (r) => sevRank(r.severity) },
+    { key: 'severity', label: 'Severity', sortable: true, sortAccessor: (r) => sevRank(r.severity), render: (v) => sentenceCase(v) || '—' },
     { key: 'currentStatus', label: 'Status', sortable: true },
     { key: 'totalEvents', label: 'Events', align: 'right', mono: true, sortable: true },
     { key: 'totalVerifiedAssets', label: 'Assets', align: 'right', mono: true, sortable: true, hideWhenConstant: true },
     { key: 'feedSource', label: 'Threat feed', sortable: true, hideWhenConstant: true },
-    { key: 'lastSeen', label: 'Last Seen', sortable: true, sortAccessor: (r) => r.lastSeenAt },
+    { key: 'lastSeen', label: 'Last seen', sortable: true, sortAccessor: (r) => r.lastSeenAt },
   ]
 
   return (
@@ -887,7 +909,7 @@ function AssetInsights({ panelId, assetInsights }) {
       ) : (
         <div className="flex flex-col gap-2">
           <div>
-            <div className="text-note text-muted">Total Findings</div>
+            <div className="text-note text-muted">Total findings</div>
             <div className="text-figure font-semibold tracking-tight my-1">{d.total.toLocaleString()}</div>
           </div>
           {d.breakdown_available === false ? (
@@ -917,8 +939,8 @@ function ExposuresPanel({ panelId, exposures }) {
   const columns = [
     { key: 'title', label: 'Title', grow: true, sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'first_seen_at', label: 'First Seen', sortable: true, render: (v) => fmtDate(v) },
-    { key: 'last_seen_at', label: 'Last Seen', sortable: true, render: (v) => fmtDate(v) },
+    { key: 'first_seen_at', label: 'First seen', sortable: true, render: (v) => fmtDate(v) },
+    { key: 'last_seen_at', label: 'Last seen', sortable: true, render: (v) => fmtDate(v) },
   ]
 
   const rightNode =

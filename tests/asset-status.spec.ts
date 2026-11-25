@@ -28,12 +28,12 @@ test.describe('Infra → Discovered assets tile (discovery-status feed)', () => 
   const tile = (page: import('@playwright/test').Page) =>
     page.getByRole('list', { name: 'Headline numbers' }).getByRole('link', { name: /Discovered assets/ });
 
-  test('discovery feed error shows a dash and says unavailable, never a zero', async ({ page }) => {
+  test('discovery feed error shows a dash, never a zero', async ({ page }) => {
     await page.route('**/api/csp/discovery-status*', (route) =>
       fulfillJson(route, scalarCountPayload({ status: 'error' })),
     );
     await page.goto('/#infra');
-    await expect(tile(page)).toContainText('unavailable');
+    // The dash alone: the page pill and panels say why (GUI audit R2-B5).
     await expect(tile(page)).toContainText('—');
     await expect(tile(page)).not.toContainText('0');
   });
