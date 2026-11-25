@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -146,6 +147,23 @@ func (d *Deps) registerCSPRoutes(mux router) {
 	mux.HandleFunc("GET /api/csp/asset-connectors", func(w http.ResponseWriter, r *http.Request) {
 		defer d.recover500(w, r, "/api/csp/asset-connectors")
 		d.json(w, r, 200, d.dash(r).FetchConnectorHealth(r.Context()))
+	})
+
+	// The Visibility Assessment's data.json, as a file to save and upload to
+	// the Glean agent (dashboard/visibility_counts.go). Read-only. The Ask AI
+	// tool visibility_counts links here.
+	mux.HandleFunc("GET /api/visibility-counts", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/visibility-counts")
+		f := d.dash(r).VisibilityCounts(r.Context())
+		body, err := json.MarshalIndent(f, "", "  ")
+		if err != nil {
+			d.json(w, r, 500, map[string]any{"error": "couldn't build the file"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", `attachment; filename="visibility-`+f.ReportDate+`.json"`)
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(append(body, '\n'))
 	})
 
 	mux.HandleFunc("GET /api/csp/asset-detail", func(w http.ResponseWriter, r *http.Request) {

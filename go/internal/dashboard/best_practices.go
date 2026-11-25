@@ -82,7 +82,7 @@ func (s *Service) bestPractices(ctx context.Context) map[string]any {
 		dhcpAAPCheck(ha, haErr == nil, haWhole),
 		as,
 	}
-	for _, c := range s.dnsRecordChecks() {
+	for _, c := range s.dnsRecordChecks(ctx) {
 		failed = failed || c.Status == "unknown"
 		checks = append(checks, c)
 	}
@@ -368,51 +368,48 @@ func (s *Service) cubeRowsStrict(query map[string]any) (rows []map[string]any, o
 }
 
 // dnsRecordChecks reads the four flags at once, one read per flag, so a long
-// Stale list that runs past the row limit can't hide a Dangling record.
-func (s *Service) dnsRecordChecks() []bpCheck {
+// Stale list that runs past the row limit can't hide a Dangling record. Each
+// flag goes through readDNSFlag (visibility_read.go), the reader the
+// Visibility Assessment shares, which counts records with its own aggregate
+// query rather than by counting sample rows.
+func (s *Service) dnsRecordChecks(ctx context.Context) []bpCheck {
 	out := make([]bpCheck, len(dnsRecFlags))
 	tasks := make([]func(), len(dnsRecFlags))
 	for i, f := range dnsRecFlags {
 		tasks[i] = func() {
-			d := func(n string) string { return dnsRecCube + "." + n }
-			rows, ok := s.cubeRowsStrict(map[string]any{
-				"measures": []string{d("uniqueRecordCount")},
-				"dimensions": []string{
-					d("record_asset_name"), d("record_asset_record_type"),
-					d("record_asset_absolute_zone_name"), d("record_asset_zone_id"),
-					d("record_asset_dns_rdata"), d("record_asset_last_queried_str"),
-				},
-				"filters": []map[string]any{{
-					"member": d("indicator_ids_str"), "operator": "contains",
-					"values": []string{"'" + f.flag + "'"},
-				}},
-				"order": map[string]any{d("record_asset_absolute_zone_name"): "asc", d("record_asset_name"): "asc"},
-				"limit": dnsRecLimit,
-			})
-			out[i] = dnsRecordCheck(f, rows, ok)
+			out[i] = dnsRecordCheck(f, s.readDNSFlag(ctx, f.flag, dnsRecLimit))
 		}
 	}
 	mustFanOut(tasks...)
 	return out
 }
 
-func dnsRecordCheck(f dnsRecFlag, rows []map[string]any, readOK bool) bpCheck {
+func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 	c := bpCheck{ID: f.id, Severity: f.severity, Why: f.why}
 	what := "list of DNS records Infoblox flagged " + f.flag
-	if !readOK || len(rows) >= dnsRecLimit {
+	if !r.SampleOK || len(r.Sample) >= dnsRecLimit {
 		c.Title = f.unsure
-		return unknown(c, readOK, what)
+		return unknown(c, r.SampleOK, what)
 	}
-	items := make([]map[string]any, 0, len(rows))
-	for _, r := range rows {
-		items = append(items, dnsRecordItem(r))
+	items := make([]map[string]any, 0, len(r.Sample))
+	for _, row := range r.Sample {
+		items = append(items, dnsRecordItem(row))
 	}
-	if len(items) == 0 {
+	// The cube's own count of records; one record that points two places is
+	// two sample rows. Without it, the rows are the best count there is.
+	n := len(items)
+	if r.Count.OK() {
+		n = r.Count.N()
+	}
+	if n == 0 && len(items) == 0 {
 		c.Title = f.none
 		c.Status, c.Items = "passed", items
 		return c
 	}
-	c.Title = f.found(len(items))
+	if n == 0 {
+		n = len(items)
+	}
+	c.Title = f.found(n)
 	c.Status, c.Items = "problem", items
 	return c
 }

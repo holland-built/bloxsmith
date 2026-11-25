@@ -113,7 +113,7 @@ func (s *Service) FetchConnectorHealth(ctx context.Context) map[string]any {
 		return assembleConnectors(nil, nil)
 	}
 	v, _ := s.Cache.DoFresh(cache.Key("assets", "connectors", nil, false), func() (any, error) {
-		rows, _, err := s.Rest.GetPageStrict(connectorPath, map[string]string{"_limit": strconv.Itoa(connectorLimit)})
+		rows, _, err := s.Rest.GetPageStrictCtx(ctx, connectorPath, map[string]string{"_limit": strconv.Itoa(connectorLimit)})
 		res := assembleConnectors(rows, err)
 		if res["availability"] == "error" {
 			return res, errConnectorsDegraded

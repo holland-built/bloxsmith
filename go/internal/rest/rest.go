@@ -41,21 +41,26 @@ var retrySleep = time.Sleep
 // doGet sends one GET, and a second after a pause when the first failed for a
 // reason that often clears by itself. The caller reads and closes the
 // response it gets back.
-func (c *Client) doGet(path string, params map[string]string) (*http.Response, error) {
-	resp, err := c.getOnce(path, params)
+func (c *Client) doGet(ctx context.Context, path string, params map[string]string) (*http.Response, error) {
+	resp, err := c.getOnce(ctx, path, params)
 	wait, again := retryWait(resp, err)
-	if !again {
+	// A caller whose deadline has passed gets no second try: the answer would
+	// arrive after it stopped waiting.
+	if !again || ctx.Err() != nil {
 		return resp, err
 	}
 	if resp != nil {
 		resp.Body.Close()
 	}
 	retrySleep(wait)
-	return c.getOnce(path, params)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return c.getOnce(ctx, path, params)
 }
 
-func (c *Client) getOnce(path string, params map[string]string) (*http.Response, error) {
-	req, err := http.NewRequest("GET", c.url(path, params), nil)
+func (c *Client) getOnce(ctx context.Context, path string, params map[string]string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.url(path, params), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -440,14 +445,23 @@ func (c *Client) url(path string, params map[string]string) string {
 // checked for and passed through as (nil, status, nil) before the JSON
 // parse is even attempted.
 func (c *Client) GetEx(path string, params map[string]string) (any, int, error) {
-	body, status, _, err := c.GetETag(path, params)
+	return c.GetExCtx(context.Background(), path, params)
+}
+
+// GetExCtx is GetEx that stops when ctx ends, retry included.
+func (c *Client) GetExCtx(ctx context.Context, path string, params map[string]string) (any, int, error) {
+	body, status, _, err := c.getETag(ctx, path, params)
 	return body, status, err
 }
 
 // GetETag is GetEx plus the response's ETag header, so a later WriteIfMatch
 // can refuse to save over a change someone else made in between.
 func (c *Client) GetETag(path string, params map[string]string) (any, int, string, error) {
-	resp, err := c.doGet(path, params)
+	return c.getETag(context.Background(), path, params)
+}
+
+func (c *Client) getETag(ctx context.Context, path string, params map[string]string) (any, int, string, error) {
+	resp, err := c.doGet(ctx, path, params)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -542,7 +556,7 @@ func UnclearFailure(status int) bool {
 // keep a bounded copy of it for UpstreamError.Snippet. It delegates to
 // getStrict, discarding the envelope that GetPageStrict needs.
 func (c *Client) GetStrict(path string, params map[string]string) ([]any, error) {
-	rows, _, err := c.getStrict(path, params)
+	rows, _, err := c.getStrict(context.Background(), path, params)
 	return rows, err
 }
 
@@ -551,15 +565,20 @@ func (c *Client) GetStrict(path string, params map[string]string) ([]any, error)
 // It shares getStrict's single request/read/decode routine with GetStrict —
 // there is exactly one copy of that logic.
 func (c *Client) GetPageStrict(path string, params map[string]string) (rows []any, body map[string]any, err error) {
-	return c.getStrict(path, params)
+	return c.getStrict(context.Background(), path, params)
+}
+
+// GetPageStrictCtx is GetPageStrict that stops when ctx ends, retry included.
+func (c *Client) GetPageStrictCtx(ctx context.Context, path string, params map[string]string) (rows []any, body map[string]any, err error) {
+	return c.getStrict(ctx, path, params)
 }
 
 // getStrict is the one request/read/decode routine behind both GetStrict and
 // GetPageStrict. body is the decoded top-level object when the response is a
 // JSON object, else nil (a bare top-level array still populates rows via
 // Unwrap, but has no envelope to expose). On error, rows and body are nil.
-func (c *Client) getStrict(path string, params map[string]string) ([]any, map[string]any, error) {
-	resp, err := c.doGet(path, params)
+func (c *Client) getStrict(ctx context.Context, path string, params map[string]string) ([]any, map[string]any, error) {
+	resp, err := c.doGet(ctx, path, params)
 	if err != nil {
 		return nil, nil, &UpstreamError{Path: path, Category: "network"}
 	}

@@ -496,3 +496,38 @@ func TestBestPractices_TitlesInPlainWords(t *testing.T) {
 		}
 	}
 }
+
+// The title's count is the cube's own count of records, not the number of
+// sample rows: one record that points two places comes back as two rows.
+func TestBestPractices_DNSCountFromAggregateNotRows(t *testing.T) {
+	p := "NetworkInsightsDnsRecordsRolledByIndicatorIdV1."
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		var q struct{ Dimensions []string }
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("query")), &q)
+		dangling := strings.Contains(r.URL.Query().Get("query"), "'Dangling'")
+		var data []map[string]any
+		switch {
+		case !dangling && len(q.Dimensions) == 0:
+			data = []map[string]any{{p + "uniqueRecordCount": "0"}}
+		case !dangling:
+			data = []map[string]any{}
+		case len(q.Dimensions) == 0:
+			data = []map[string]any{{p + "uniqueRecordCount": "1"}}
+		default:
+			data = []map[string]any{
+				dnsRec("www", "example.test.", "A", "10.0.0.1", "", "['Dangling']"),
+				dnsRec("www", "example.test.", "A", "10.0.0.2", "", "['Dangling']"),
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": data}})
+		_, _ = w.Write(b)
+	})
+	c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling")
+	if c["status"] != "problem" || !strings.HasPrefix(c["title"].(string), "1 DNS record ") {
+		t.Fatalf("want a title counting 1 record, got %v", c)
+	}
+}

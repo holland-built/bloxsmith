@@ -45,6 +45,14 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return s.apiGet(args)
 	case "iq_insights":
 		return s.iqInsights(args)
+	case "risky_dns_records":
+		return s.riskyDNSTool(ctx)
+	case "asset_problems":
+		return s.assetProblemsTool(ctx, aiStr(args["split"]))
+	case "cmdb_gap":
+		return s.cmdbGapTool(ctx)
+	case "visibility_counts":
+		return s.visibilityCountsTool(ctx)
 	}
 
 	// search_entity is the only tool still on the MCP path (entity_search
@@ -79,6 +87,11 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 
 	switch name {
 	case "get_subnets":
+		// by_cloud answers with server-side counts per cloud and band
+		// (visibility_tools.go), not a list, so it has no 5,000-row cap.
+		if on, _ := args["by_cloud"].(bool); on {
+			return jstr(map[string]any{"by_cloud": s.readSubnetClouds(ctx)})
+		}
 		// _is_total_size_needed asks the subnet endpoint for the authoritative
 		// tenant-wide row count in page.total_size — subnets is the one REST
 		// list here where the fetched (capped-by-_limit) row count is NOT the
@@ -105,25 +118,44 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		// at-risk read already sends (dashboard.go), so Infoblox counts the
 		// whole tenant and the total below is the number at or above it.
 		minUtil, hasMin := aiInt(args["min_utilization"])
+		maxUtil, hasMax := aiInt(args["max_utilization"])
 		//
 		// The cidr clause leaves out /29 to /32, as the dashboard's lists do:
 		// they are point-to-point links, full by design, and on the live tenant
 		// they were 862 of the 1,118 subnets at 80% or more (probed
 		// 2026-10-27). cidr>=33 keeps IPv6, which only IPv6 can be; a regex on
 		// the address for ':' was refused by CSP.
-		if hasMin && minUtil >= 0 && minUtil <= 100 {
-			params["_filter"] = "utilization.utilization>=" + strconv.Itoa(minUtil) + " and (cidr<=28 or cidr>=33)"
-		} else {
-			hasMin = false
+		// max_utilization is the same filter from the other end ("which are
+		// underused?"), with the same /29 to /32 rule.
+		hasMin = hasMin && minUtil >= 0 && minUtil <= 100
+		hasMax = hasMax && maxUtil >= 0 && maxUtil <= 100
+		var band []string
+		if hasMin {
+			band = append(band, "utilization.utilization>="+strconv.Itoa(minUtil))
+		}
+		if hasMax {
+			band = append(band, "utilization.utilization<="+strconv.Itoa(maxUtil))
+		}
+		if len(band) > 0 {
+			params["_filter"] = strings.Join(band, " and ") + " and (cidr<=28 or cidr>=33)"
 		}
 		body, status, err := s.Rest.GetEx("/api/ddi/v1/ipam/subnet", params)
 		if err != nil || status == 0 || status >= 400 {
 			return aiLookupFailed("subnets", aiExDetail(status, err))
 		}
 		data := normSubnets(rest.Unwrap(body))
+		bandWords := ""
+		switch {
+		case hasMin && hasMax:
+			bandWords = fmt.Sprintf("%d%% to %d%% used", minUtil, maxUtil)
+		case hasMin:
+			bandWords = fmt.Sprintf("%d%% used or more", minUtil)
+		case hasMax:
+			bandWords = fmt.Sprintf("%d%% used or less", maxUtil)
+		}
 		if len(data) == 0 {
-			if hasMin {
-				return fmt.Sprintf("No subnet is %d%% used or more (IPv4 /29 to /32 links are left out).", minUtil)
+			if bandWords != "" {
+				return fmt.Sprintf("No subnet is %s (IPv4 /29 to /32 links are left out).", bandWords)
 			}
 			return "No subnet data."
 		}
@@ -131,8 +163,8 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		// a subnet that reports no utilization goes last.
 		sort.SliceStable(data, func(i, j int) bool { return utilOf(data[i]) > utilOf(data[j]) })
 		noun := "subnets"
-		if hasMin {
-			noun = fmt.Sprintf("subnets at %d%% used or more (IPv4 /29 to /32 links left out)", minUtil)
+		if bandWords != "" {
+			noun = fmt.Sprintf("subnets at %s (IPv4 /29 to /32 links left out)", bandWords)
 		}
 		return jstr(cappedPayloadWithTotal(data, aiSampleCap, pageTotalSize(body, len(data)), noun))
 
