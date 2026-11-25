@@ -4,7 +4,7 @@
   - region "Make the list":
     - heading "Make the list" [level=2]
     - group "Where the sites come from":
-      - text: ""
+      - text: Where the sites come from
       - 'radio "Top sites: the most popular, and your network''s busiest" [checked]'
       - text: "Top sites: the most popular, and your network's busiest"
       - radio "A CSV file"
@@ -18,7 +18,7 @@
       - /placeholder: e.g. example.com
     - button "Save never-add list" [disabled]
     - group "The list they go into":
-      - text: ""
+      - text: The list they go into
       - radio "Make a new list" [checked]
       - text: Make a new list
       - radio "Add to a list I have"
@@ -26,8 +26,7 @@
       - textbox "New list name":
         - /placeholder: e.g. top-sites
     - group "Policy":
-      - text: ""
-      - searchbox "Search Policy"
+      - text: Policy
       - status
       - combobox "Policy":
         - option "Select policy…" [selected]
