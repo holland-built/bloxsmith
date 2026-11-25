@@ -36,7 +36,7 @@ test('a browser that cannot reach Bloxsmith says so in plain words, in the muted
   await page.route('**/api/csp/assets?*', (r) => r.abort('failed'));
   await page.goto('/#assets');
   const box = page.locator('[data-feed-unavailable="Asset inventory unavailable"]');
-  const reason = box.locator(':scope > div').nth(1);
+  const reason = box.locator('[data-failure-reason]');
   await expect(reason).toHaveText(NO_SERVER, { timeout: 20_000 });
   await expect(box).not.toContainText('Failed to fetch');
   // One problem, one severity colour: the label is red, the reason is muted.
@@ -69,10 +69,10 @@ test('a failed list says it is trying again, then offers Try again once the retr
   await page.goto('/#selfservice');
   const card = await openTask(page, 'address');
   const alert = card.getByRole('alert').filter({ hasText: 'Could not load IP spaces.' });
-  await expect(alert).toContainText("Didn't load — trying again…");
+  await expect(alert).toContainText('Trying again…');
   const again = alert.getByRole('button', { name: 'Try again' });
   await expect(again).toBeVisible({ timeout: 30_000 });
-  await expect(alert).not.toContainText('trying again');
+  await expect(alert).not.toContainText('Trying again');
   // The same size as a panel header button, and the line wraps without an indent.
   const s = await again.evaluate((el) => {
     const b = getComputedStyle(el);

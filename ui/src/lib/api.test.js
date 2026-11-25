@@ -1707,7 +1707,7 @@ test('a failed load with only an error field shows that error', async (t) => {
   harness(t, [jsonStatus(404, { error: 'list not found' })])
   const b = mountHook(() => useApi('/api/lists/items?id=x'))
   await settle()
-  assert.equal(b.current.error.message, 'list not found')
+  assert.equal(b.current.error.message, 'List not found')
   b.unmount()
 })
 
@@ -1715,14 +1715,47 @@ test('a failed load with no readable reason falls back to the plain sentence', a
   harness(t, [() => Promise.resolve(new Response('<html>oops</html>', { status: 404 }))])
   const c = mountHook(() => useApi('/api/x'))
   await settle()
-  assert.equal(c.current.error.message, 'The server had a problem. Try again in a moment.')
+  assert.equal(c.current.error.message, 'Bloxsmith had a problem reading this.')
   c.unmount()
+})
+
+// GUI audit round 2, R2-E2 and R2-C3. "The server had a problem. Try again in a
+// moment." did not say which program failed, and told the reader to retry while
+// the page was already retrying. A failure with no reason now names who failed
+// and says nothing about trying again: the line under it does that.
+test('a failed load with no reason says Infoblox failed when Bloxsmith said its upstream did', async (t) => {
+  harness(t, [() => Promise.resolve(new Response('', { status: 502 }))])
+  const c = mountHook(() => useApi('/api/x'))
+  await settle()
+  assert.equal(c.current.error.message, 'Infoblox did not answer properly.')
+  c.unmount()
+})
+
+test('a failed load with no reason says Infoblox was too slow on a gateway timeout', async (t) => {
+  harness(t, [() => Promise.resolve(new Response('', { status: 504 }))])
+  const c = mountHook(() => useApi('/api/x'))
+  await settle()
+  assert.equal(c.current.error.message, 'Infoblox did not answer in time.')
+  c.unmount()
+})
+
+test('a failed load with no reason says Bloxsmith failed on any other status', async (t) => {
+  harness(t, [() => Promise.resolve(new Response('', { status: 503 }))])
+  const c = mountHook(() => useApi('/api/x'))
+  await settle()
+  assert.equal(c.current.error.message, 'Bloxsmith had a problem reading this.')
+  assert.doesNotMatch(c.current.error.message, /try again/i)
+  c.unmount()
+})
+
+test('a server reason starts with a capital letter', () => {
+  assert.equal(serverReason({ error: 'the list of changes could not be read' }), 'The list of changes could not be read')
 })
 
 test('a server message keeps its sentence but never a wrapped local path', () => {
   assert.equal(
     serverReason({ error: 'could not read the list of changes: open /Users/someone/state/runs.json: permission denied' }),
-    'could not read the list of changes',
+    'Could not read the list of changes',
   )
   assert.equal(serverReason({ upstream: 'Access denied' }), 'Infoblox said: Access denied')
 })

@@ -2,8 +2,9 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { dataPayload, installBaselineWorld, installFixtures } from './page-fixtures';
 
-// What a phone must still be able to do: reach every table column by swiping,
-// keep the page itself from moving sideways, and read rows, panel headers,
+// What a phone must still be able to do: see every table column (a shared
+// table stacks each row as a block below 768px, GUI audit round 2 A1/B5/C3, and
+// any other table swipes), keep the page itself from moving sideways, and read rows, panel headers,
 // chart numbers and small row actions without anything landing on top of
 // something else. Each check here failed on the code before this change.
 
@@ -17,7 +18,7 @@ const json = (body: unknown) => ({ status: 200, contentType: 'application/json',
 
 for (const width of PHONES) {
   for (const tab of TABLE_PAGES) {
-    test(`${tab} at ${width}px: every column can be reached and the page stays put`, async ({ page }) => {
+    test(`${tab} at ${width}px: every column is on screen and the page stays put`, async ({ page }) => {
       await installBaselineWorld(page);
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/#${tab}`);
@@ -28,6 +29,17 @@ for (const width of PHONES) {
         tables.flatMap((t) => {
           const box = t.parentElement as HTMLElement;
           const out: string[] = [];
+          // A stacked table: its header row is for screen readers only, and
+          // every cell of every row has to sit inside the box, on screen.
+          if (t.classList.contains('dt-stack')) {
+            const right = box.getBoundingClientRect().left + box.clientWidth;
+            for (const td of t.querySelectorAll('tbody td')) {
+              const r = td.getBoundingClientRect();
+              if (r.width > 0 && r.right > right + 1) out.push(`cell past the edge: ${(td.textContent || '').trim().slice(0, 30)}`);
+            }
+            if (box.scrollWidth > box.clientWidth + 1) out.push('a stacked table still swipes');
+            return out;
+          }
           for (const th of t.querySelectorAll('thead th')) {
             if (getComputedStyle(th).display === 'none') out.push(`hidden column ${th.textContent}`);
           }

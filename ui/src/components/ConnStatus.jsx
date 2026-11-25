@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { noteTenant, refreshFeeds, useApi } from '../lib/api.js'
+import { noteTenant, refreshFeeds, useApi, useWatcherCount } from '../lib/api.js'
 import { tokenFetch } from '../lib/authFetch.js'
 import { REFRESH_CHOICES, setRefresh, useRefreshChoice } from '../lib/refresh.js'
 
@@ -161,6 +161,10 @@ export default function ConnStatus() {
   useEffect(() => { noteTenant(activeId) }, [activeId])
 
   const FEED_KEYS = ['subnets', 'hosts', 'leases']
+  // The header reads /api/data on every page. Its failure is worth a warning
+  // only where the page on screen reads it too (GUI audit E9: the warning
+  // showed on AI, which has no failed panel).
+  const pageReadsData = useWatcherCount('/api/data') > 1
   const meta = rows?._meta || {}
   const totals = rows?._totals || {}
 
@@ -177,6 +181,11 @@ export default function ConnStatus() {
     !!dataError ||
     !!totals.degraded ||
     FEED_KEYS.some((k) => meta[k] === 'error')
+
+  // The lists that failed: each one marked so, or all three when the whole
+  // read failed, or when it is degraded with nothing loaded to tell them apart.
+  const marked = FEED_KEYS.filter((k) => meta[k] === 'error')
+  const failedFeeds = dataError || (feedsDegraded && !hasData && !marked.length) ? FEED_KEYS : marked
 
   useEffect(() => {
     if (hasData) lastFetchRef.current = Date.now()
@@ -214,11 +223,18 @@ export default function ConnStatus() {
     color = 'var(--color-muted)'
     stateWord = 'checking'
     stateTone = 'text-muted'
+  } else if (statusOk && failedFeeds.length && pageReadsData) {
+    // Name what did not load (GUI audit E9), checked BEFORE "has data": with
+    // subnets loaded and hosts failed, the header must still say hosts failed.
+    const list = new Intl.ListFormat('en').format(failedFeeds.map((k) => (k === 'leases' ? 'address leases' : k)))
+    stateWord = `${list[0].toUpperCase()}${list.slice(1)} didn't load`
   } else if (statusOk && hasData) {
     color = 'var(--color-ok)'
     stateWord = ''
   } else if (statusOk && feedsDegraded) {
-    stateWord = "Some data didn't load"
+    // Nothing on this page comes from the lists that failed.
+    color = 'var(--color-muted)'
+    stateWord = ''
   } else if (statusOk) {
     color = 'var(--color-warn)'
     stateWord = 'empty'
@@ -291,7 +307,9 @@ export default function ConnStatus() {
       const switched = typeof writeTarget.tenant === 'string' && !writeTarget.tenant.endsWith('/-')
       const elsewhere = switched ? ' in another account' : ''
       writeWords = (writeTarget.writable ? 'Changes allowed' : 'Read-only') + elsewhere
-      writeTone = writeTarget.writable ? 'text-warn' : 'text-muted'
+      // A permission is not a status (DESIGN.md), so neither verdict takes
+      // the warning colour; only "Can't tell", above, is a problem.
+      writeTone = 'text-muted'
     }
   }
 

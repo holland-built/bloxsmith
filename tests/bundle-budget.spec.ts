@@ -72,8 +72,15 @@ import { test, expect } from './fixtures';
 // entry chunk 150,295 -> 150,905 B (the Card header code in ui.jsx that keeps
 // a panel's About and menu buttons on the title line, which every tab shares).
 // vendor-react did not move and no charts chunk is on the route.
-const BUDGET_BYTES = 404 * 1024; // 413,696 B
+const BUDGET_BYTES = 405 * 1024; // 414,720 B
 
+//
+// RAISED 404 -> 405 KB on 2026-11-25 (GUI audit round 2, job r2a), approved by
+// the coordinator, with the chunk that grew identified: the entry chunk
+// index-*.js +610 B, for failure lines that say whether Bloxsmith or Infoblox
+// failed, the header naming which lists did not load, and one shared look for
+// a failed panel. Base had 194 B of headroom. No charts chunk is on the route,
+// and the shared table code is its own chunk, not loaded by #provision.
 test('#provision downloads less JavaScript than the committed budget', async ({ page }) => {
   const bytes = new Map<string, number>();
   const pending: Promise<unknown>[] = [];

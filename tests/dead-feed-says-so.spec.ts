@@ -64,7 +64,8 @@ test('Infra: a dead on-prem host feed draws the block, not a grey line', async (
   await page.goto('/#infra');
   const block = unavailable(page, 'infra-onprem-hosts');
   await expect(block).toBeVisible({ timeout: 20_000 });
-  await expect(block).toContainText('Information unavailable');
+  // The panel's own name, not a generic word (GUI audit round 2, B3).
+  await expect(block).toContainText('Host Apps unavailable');
 });
 
 test('Audit: Try again re-runs the portal search, which is not one of the page-wide feeds', async ({ page }) => {
