@@ -90,3 +90,19 @@ test('#assets on a touch phone: the search row never sits under the buttons', as
   expect(overlap).toBe(false);
   await ctx.close();
 });
+
+// A caption long enough to wrap must not take width from the row under it.
+test('#assets at 390: a wrapped caption leaves the search row its full width', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#assets');
+  const box = page.getByLabel('Search assets by name, IP or MAC address', { exact: true });
+  await expect(box).toBeVisible({ timeout: 20_000 });
+  await page.waitForLoadState('networkidle');
+  const { row, head } = await box.evaluate((el) => {
+    const h = el.closest('[data-panel-id]')!.querySelector('h2')!.parentElement!;
+    const cs = getComputedStyle(h);
+    return { row: el.parentElement!.parentElement!.getBoundingClientRect().width, head: h.getBoundingClientRect().width - parseFloat(cs.paddingLeft) };
+  });
+  expect(Math.round(row)).toBeGreaterThanOrEqual(Math.round(head) - 1);
+});
