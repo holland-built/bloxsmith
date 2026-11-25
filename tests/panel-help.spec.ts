@@ -71,6 +71,10 @@ test('clicking ⓘ reveals the help text and flips aria-expanded', async ({ page
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
+  // Let the panels above finish loading first: one that grows when its data
+  // arrives can move this button between mousedown and mouseup, so no click
+  // reaches it and only the hover/focus preview opens the box.
+  await page.waitForLoadState('networkidle');
   const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const controls = await btn.getAttribute('aria-controls');
   expect(controls, 'the About button must point at the region it opens').toBeTruthy();
@@ -142,6 +146,10 @@ test('a clicked-open panel stays open after the pointer and the focus both leave
   const btn = page.getByRole('button', { name: 'About: License inventory', exact: true });
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
 
+  // Let the panels above finish loading first: one that grows when its data
+  // arrives can move this button between mousedown and mouseup, so no click
+  // reaches it and only the hover/focus preview opens the box.
+  await page.waitForLoadState('networkidle');
   await btn.click();
   await expect(region).toBeVisible();
 
