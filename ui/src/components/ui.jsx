@@ -12,6 +12,7 @@ import {
   shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
 } from '../lib/layout.js'
 import { utilBand } from '../lib/utilBands.js'
+import { SEV_WORD } from '../lib/severity.js'
 import { dialogKeyDown } from '../lib/focusTrap.js'
 
 // Where each panel's numbers come from (dashboard/panel_sources.go), by id.
@@ -66,8 +67,10 @@ export const COLORS = {
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
 // A box marked aria-invalid gets a red outline, so the mark a screen reader
-// hears and the one a person sees are the same mark.
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit ${FOCUS_RING}`
+// hears and the one a person sees are the same mark. A disabled box has dimmer
+// words and a "not allowed" pointer, but no fade: fading it took its outline
+// below the 3:1 that tests/contrast.spec.ts holds every field to.
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-field-border bg-field text-field-txt text-copy outline-none focus-visible:border-accent aria-[invalid=true]:border-crit disabled:text-dim disabled:cursor-not-allowed ${FOCUS_RING}`
 
 // The line under a box that says what is wrong with it. The box points at it
 // with aria-describedby={id} and aria-invalid, so the reason is read out when
@@ -3139,31 +3142,54 @@ export function deletedMsg(j, label) {
   return `${label} delete accepted — the server did not report whether it still existed.`
 }
 
-// `what` names the list, as a person would say it ("IP spaces"), so a page
-// with several failed lists says which one each line is about.
-export function fetchErrorText(error, what = 'current data') {
-  const reason = (isNoPermission(error) ? noPermissionText(error) : String(error?.message || error)).trim()
-  // A server reason often has no full stop, and the next sentence follows it.
-  return `Could not load ${what}. ${reason}${/[.!?]$/.test(reason) ? '' : '.'}`
+// Why a load failed, in words the owner can act on. The browser's own words
+// for the two failures it reports itself are not that:
+// - "Failed to fetch" (Chrome), "Load failed" (Safari) and "NetworkError when
+//   attempting to fetch resource." (Firefox) are a TypeError, which means
+//   this page could not reach Bloxsmith's own server at all.
+// - An abort is api.js giving up after its time budget (abortAfter), which
+//   means Infoblox did not answer in time.
+// Callers pass the error itself or only its message, sometimes after a
+// lead-in ("could not load incidents: Failed to fetch"), so the browser's
+// words are matched at the end. Any other reason is the server's own sentence
+// (api.js serverReason) and is kept as sent.
+const NO_SERVER = /(?:^|:\s*)(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)$/
+const GAVE_UP = /(?:^|:\s*)(?:signal is aborted without reason|(?:The|This) operation was aborted\.?|Fetch is aborted|The user aborted a request\.?|signal timed out)$/
+function plainReason(error) {
+  if (isNoPermission(error)) return noPermissionText(error)
+  const text = String(error?.message ?? error ?? '').trim()
+  if (error?.name === 'TypeError' || NO_SERVER.test(text)) return 'Bloxsmith itself did not answer. Check that it is still running.'
+  if (error?.name === 'AbortError' || error?.name === 'TimeoutError' || GAVE_UP.test(text)) return 'Infoblox did not answer in time.'
+  return text
 }
 
-export function FetchError({ error, stale, what }) {
+// A server reason often has no full stop, and the next sentence follows it.
+const sentence = (text) => `${text}${/[.!?]$/.test(text) ? '' : '.'}`
+
+// The Try again button, the size of the buttons in a panel's header.
+const RETRY_BTN = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
+
+// What failed is red; why is muted, so one failure has one severity colour.
+// While the page's own retries are pending it says so, as FeedUnavailable
+// does, and offers Try again only once they are spent. `what` names the list,
+// as a person would say it ("IP spaces"), so a page with several failed lists
+// says which one each line is about.
+export function FetchError({ error, stale, what = 'current data' }) {
   const { failed, retrying } = useFeedRecovery()
   if (!error) return null
   const denied = isNoPermission(error)
   return (
-    <div role="alert" className="text-note mb-2" style={{ color: COLORS.crit }}>
-      {fetchErrorText(error, what)}
-      {stale && ' The list below may be out of date.'}
+    <div role="alert" className="text-note mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>
+        <span style={{ color: COLORS.crit }}>{`Could not load ${what}.`}</span>
+        <span className="text-muted">{` ${sentence(plainReason(error))}`}{stale && ' The list below may be out of date.'}</span>
+      </span>
       {!denied && failed && !retrying && (
-        <button
-          type="button"
-          onClick={retryFailedFeeds}
-          className="ml-2 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note"
-        >
+        <button type="button" onClick={retryFailedFeeds} className={RETRY_BTN}>
           Try again
         </button>
       )}
+      {!denied && retrying && <span className="text-dim">{"Didn't load — trying again…"}</span>}
     </div>
   )
 }
@@ -3179,8 +3205,12 @@ export function FormHint({ missing, children }) {
   )
 }
 
+// No h-full here or on FeedUnavailable: a Card is a plain block, so a full
+// height box under its title row came out taller than the room left, by the
+// title's height, and spilled past the panel's bottom edge (19-105px measured
+// on Network, Assets and Incidents, 2026-11-25).
 export function Empty({ children = 'Nothing to show' }) {
-  return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-copy">{children}</div>
+  return <div className="min-h-[100px] flex items-center justify-center text-muted text-copy">{children}</div>
 }
 
 // A dead upstream feed must never read as "you have none" — this is visually
@@ -3203,25 +3233,25 @@ export function FeedUnavailable({ reason, label = 'Information unavailable', onR
   // down without scraping the rendered text. tests/contrast.spec.ts uses it to
   // tell "the page never loaded" apart from "the page loaded and its feeds did
   // not answer" — two states that look identical to an element count.
-  // Attribute only: no text and no class changes, because the
-  // failure-not-absence-*.spec.ts suite asserts this component's exact copy.
-  // The recovery line and button below are APPENDED for the same reason: the
-  // two divs above, their classes and the attribute stay byte-identical, and
-  // neither addition may contain "unavailable" or "no data", which other specs
-  // assert absent when a feed is genuinely empty rather than broken.
+  // The failure-not-absence-*.spec.ts suite asserts this component's exact
+  // copy, so the label is shown as given. The reason goes through plainReason,
+  // which rewrites only the browser's own words for a lost server or a
+  // timeout. The recovery line and button below may never contain
+  // "unavailable" or "no data", which other specs assert absent when a feed is
+  // genuinely empty rather than broken.
   return (
     <div
       data-feed-unavailable={label}
       role="status"
-      className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
+      className="min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
     >
       <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>{denied ? 'No permission' : label}</div>
-      {reason ? <div className="text-note" style={{ color: COLORS.warn }}>{denied ? noPermissionText(reason) : reason}</div> : null}
+      {reason ? <div className="text-note text-muted">{plainReason(reason)}</div> : null}
       {showButton ? (
         <button
           type="button"
           onClick={onRetry || retryFailedFeeds}
-          className="mt-1 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note"
+          className={`mt-1 ${RETRY_BTN}`}
         >
           Try again
         </button>
@@ -3246,8 +3276,8 @@ export function Skeleton({ h = 140 }) {
 // reads it from. This only turns the band into a word and its colours.
 export function utilStatus(util) {
   const band = utilBand(util)
-  if (band === 'crit') return { label: 'Critical', color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
-  if (band === 'warn') return { label: 'Warning', color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
+  if (band === 'crit') return { label: SEV_WORD.crit, color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
+  if (band === 'warn') return { label: SEV_WORD.warn, color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
   return { label: 'Healthy', color: 'var(--color-ok)', bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)' }
 }
 

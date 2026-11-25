@@ -113,12 +113,13 @@ test('the DNS form lists forward zones, and only reverse zones for PTR', async (
   // The forward zone no longer fits, so it is dropped rather than kept out of sight.
   await expect(zone).toHaveValue('');
   await expect.poll(() => optionValues(zone)).toEqual(['dns/auth_zone/r1', 'dns/auth_zone/r2']);
-  await panel.getByRole('searchbox', { name: 'Search Zone' }).fill('ip6');
-  await panel.getByRole('button', { name: '8.b.d.0.1.0.0.2.ip6.arpa.' }).click();
+  // Two zones is too short a list for a search box, so it is picked from the list.
+  await expect(panel.getByRole('searchbox', { name: 'Search Zone' })).toHaveCount(0);
+  await zone.selectOption({ label: '8.b.d.0.1.0.0.2.ip6.arpa.' });
   await expect(zone).toHaveValue('dns/auth_zone/r2');
 });
 
-test('Manage Records switches between forward and reverse zones, and searches them', async ({ page }) => {
+test('Manage Records switches between forward and reverse zones', async ({ page }) => {
   await page.route('**/api/dns/zones*', (r) => r.fulfill(json(MIXED)));
   await page.goto('/#selfservice');
   const panel = await openTask(page, 'records');
@@ -126,17 +127,19 @@ test('Manage Records switches between forward and reverse zones, and searches th
   await expect.poll(() => optionValues(zone)).toEqual(['dns/auth_zone/f1', 'dns/auth_zone/f2']);
   await panel.getByRole('radio', { name: 'Reverse zones' }).check();
   await expect.poll(() => optionValues(zone)).toEqual(['dns/auth_zone/r1', 'dns/auth_zone/r2']);
-  await expect(panel.getByRole('searchbox', { name: 'Search Zone' })).toBeVisible();
+  // A list of eight or fewer has no search box (FilterSelect SEARCH_FROM).
+  await expect(panel.getByRole('searchbox', { name: 'Search Zone' })).toHaveCount(0);
 });
 
-test('the page is named for the menu button, and its lists can be searched', async ({ page }) => {
+test('the page is named for the menu button, and its lists are pickers', async ({ page }) => {
   await page.route('**/api/dns/zones*', (r) => r.fulfill(json(MIXED)));
   await page.goto('/#selfservice');
   await expect(page.getByRole('heading', { level: 1, name: 'Get an address' })).toBeVisible();
   const get = await openTask(page, 'address');
   await expect(get.getByRole('heading', { name: 'Get an address' })).toBeVisible();
-  await expect(get.getByRole('searchbox', { name: 'Search Block' })).toBeAttached();
+  // The baseline lists are short, so each is a plain dropdown with no search box.
+  await expect(get.getByRole('combobox', { name: 'Block', exact: true })).toBeAttached();
   const manage = await openTask(page, 'addresses');
-  await expect(manage.getByRole('searchbox', { name: 'Search IP Space' })).toBeAttached();
-  await expect(manage.getByRole('searchbox', { name: 'Search Subnet' })).toBeAttached();
+  await expect(manage.getByRole('combobox', { name: 'IP Space', exact: true })).toBeAttached();
+  await expect(manage.getByRole('combobox', { name: 'Subnet', exact: true })).toBeAttached();
 });

@@ -169,7 +169,7 @@ test('a failing feed keeps the tenant name, and says feed error and the write st
   await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true })));
   await page.goto('/#overview');
   await expect(pill(page)).toContainText(TENANT);
-  await expect(pill(page)).toContainText('load error');
+  await expect(pill(page)).toContainText("Some data didn't load");
   await expect(pill(page)).toContainText('Changes allowed');
   await expect(pill(page)).not.toContainText('empty');
 });
@@ -181,7 +181,7 @@ test('an empty estate keeps the tenant name, and says no data beside it', async 
   await expect(pill(page)).toContainText(TENANT);
   await expect(pill(page)).toContainText('empty');
   await expect(pill(page)).toContainText('Read-only');
-  await expect(pill(page)).not.toContainText('load error');
+  await expect(pill(page)).not.toContainText("Some data didn't load");
 });
 
 test('a healthy tenant shows its name and no state word', async ({ page }) => {
@@ -350,7 +350,7 @@ for (const [w, h] of [
     );
     await page.goto('/#overview');
     await expect(chip(page)).toHaveText('Changes allowed in another account');
-    await expect(page.locator('header [data-state]')).toHaveText('load error');
+    await expect(page.locator('header [data-state]')).toHaveText("Some data didn't load");
     // All three facts are there AND readable: the name is in the chip, and neither
     // the state word nor the write words are clipped by their own box.
     await expect(pill(page)).toContainText('Infoblox Professional Services EMEA Sandbox');
@@ -371,7 +371,7 @@ test('a single-key server with no tenant list still names what a write would hit
   await page.route('**/api/vault/write-target*', (route) => json(route, writeTarget({ writable: true, label: 'Lab Estate' })));
   await page.goto('/#overview');
   await expect(pill(page)).toContainText('Lab Estate');
-  await expect(pill(page)).toContainText('load error');
+  await expect(pill(page)).toContainText("Some data didn't load");
   await expect(pill(page)).toContainText('Changes allowed');
 });
 

@@ -1,1 +1,0 @@
-var e={subnetsFull:`crit`,hostsDown:`crit`,zoneIssues:`warn`,changeAlarm:`crit`},t={crit:`Needs action`,warn:`Review`};export{t as n,e as t};

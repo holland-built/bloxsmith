@@ -65,8 +65,8 @@ test('Network: the tiles, the chart labels and the table agree with Status', asy
   // 88 and 72. 88 was "Over 85" here, and red.
   await expect(tiles.getByRole('button', { name: /^70–89% 2$/ })).toBeVisible();
 
-  await expect(badge(page, 'network-exhaustion', '10.0.91.0')).toHaveText('Critical');
-  await expect(badge(page, 'network-exhaustion', '10.0.88.0')).toHaveText('Warning');
+  await expect(badge(page, 'network-exhaustion', '10.0.91.0')).toHaveText('Needs action');
+  await expect(badge(page, 'network-exhaustion', '10.0.88.0')).toHaveText('Review');
 });
 
 test('Daily: the subnet count is the red band, and opens Network at it', async ({ page }) => {
