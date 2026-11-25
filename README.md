@@ -10,30 +10,42 @@
 ![Tests](https://img.shields.io/badge/tests-go%20test%20%7C%20Playwright-2EA44F)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Bloxsmith is a dashboard for your Infoblox Portal (CSP) data that runs on your own computer.
-Setup takes about five minutes with Docker Desktop. You end up with a page at
-<http://localhost:8080> that keeps your API key encrypted and shows your subnets, DNS and
-security data.
+Bloxsmith shows your Infoblox Portal (CSP) account on one page: what needs attention, how full your subnets are, how DNS is answering, and what security blocked. It runs on your own computer, and setup takes about five minutes with Docker Desktop. You end up with a page at <http://localhost:8080> that keeps your API key encrypted on your machine.
 
-![Bloxsmith dashboard](docs/dashboard.png)
+![Bloxsmith Overview page: four items needing attention, recent DNS traffic and changes, and a status card for each service](docs/dashboard.png)
 
 <details>
-<summary><b>Light theme</b></summary>
+<summary><b>More screens: Security, Network, DNS, Changes, AI, phone, light theme</b></summary>
 
-![Bloxsmith dashboard in the light theme](docs/dashboard-light.png)
+**Security.** Blocked and suspicious lookups, threat events by hour, and exposed credentials.
+
+![Security page with critical events, a triage list of blocked lookups and a chart of threat events by hour](docs/screenshots/security.png)
+
+**Network.** How full each subnet and IP space is, and which ones run out first.
+
+![Network page with a bar chart of subnet fullness, the fullest IP spaces, and a table of subnets sorted by how full they are](docs/screenshots/network.png)
+
+**DNS.** Lookups per second, failed lookups, and zones with problems.
+
+![DNS page with the query rate over 24 hours, answer times, failed lookups and zone problems](docs/screenshots/dns.png)
+
+**Changes.** Who changed what in the last few hours, with deletions, failures and out-of-hours work picked out.
+
+![Changes page listing recent changes grouped by IP address, subnet, DNS record and zone, with failed and deleted ones marked](docs/screenshots/changes.png)
+
+**AI** (under **Ask** in the menu). Ask about your network in plain words. This needs an AI key (see **Optional: the AI query box** below).
+
+![AI page with a question box, suggested questions and a threat lookup box](docs/screenshots/ask-ai.png)
+
+**On a phone.** The same pages work on a phone, with the menu along the bottom.
+
+<img src="docs/screenshots/phone-overview.png" alt="Overview page on a phone, showing the items needing attention" width="300">
+
+**Light theme.**
+
+![Bloxsmith Overview page in the light theme](docs/dashboard-light.png)
 
 </details>
-
-| Area | What you see |
-|---|---|
-| Subnets and DHCP | Leases, how full each subnet is, which ones are running out |
-| DNS | Records, zones, query rates |
-| Security | Policies, threat indicators, audit logs |
-| Assets | Every device Infoblox has found, searchable by name and type |
-| Build a chart | Your own DNS, security or DHCP chart, picked from menus, that you can add to the Overview, Network, DNS, Security or Infra page |
-| AI query box (optional) | Ask questions about your data in plain English |
-
-[What each tab does](docs/TABS.md) lists every tab and says which ones change things in Infoblox. [Infoblox AI connection](docs/TABS.md#infoblox-ai-connection-mcp) lists the Infoblox AI actions Bloxsmith uses, what for, and the user group they need.
 
 ## What people use it for
 
@@ -41,14 +53,17 @@ Every page is in the menu down the left side: the everyday ones on top, the rest
 
 | You want to | Open | Then |
 |---|---|---|
-| Check the network first thing in the morning | **Overview**, then **Daily** | Look for subnets running out of addresses, DNS errors and new security hits |
-| Find a device | **Assets** | Type part of its name, or pick a type |
-| Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
+| Check the network first thing in the morning | **Overview**, then **Daily report** | Look for subnets running out of addresses, DNS errors and new security hits |
+| Find a device | **Assets** | Type part of its name, address or MAC, or pick a type |
+| Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Made here** removes exactly what was built |
 | Give someone an address or a DNS record | **Get an address** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
-| See who changed what today | **Changes** | Changes from the last 24 hours, grouped by what was touched. **Audit** goes further back |
+| See who changed what today | **Changes** | Recent changes, grouped by what was touched. **Audit** goes further back |
 | Keep a block or allow list filled with the most popular sites | **Site lists** | Pick the top sites, press **Preview**, then **Add to policy**. **Daily proposals** suggests changes each day and changes nothing until you approve |
 | See what Bloxsmith made, and delete it | **Made with Bloxsmith** | Press **Delete** on an item. It asks once, and says whether Bloxsmith made it |
+| Make your own chart | **Build a chart** | Pick DNS, security or DHCP data from the menus, then add the chart to the Overview, Network, DNS, Security or Infra page |
 | Show a customer what automation looks like | **Demo server** | Builds a NIOS-X server on Proxmox, then removes it. See [Demo server](#demo-server) below |
+
+[What each tab does](docs/TABS.md) lists every page and says which ones change things in Infoblox. [Infoblox AI connection](docs/TABS.md#infoblox-ai-connection-mcp) lists the Infoblox AI actions Bloxsmith uses, what for, and the user group they need.
 
 ## Quick start
 
@@ -118,35 +133,23 @@ The dashboard then opens with a short **Finish setting up** checklist: AI answer
 <details>
 <summary><b>Updating</b></summary>
 
-Nothing updates on its own. Bloxsmith shows a small banner when a newer version is out, and you
-decide when to take it. Open the Bloxsmith folder from step 2:
+Nothing updates on its own unless you turn on overnight updates. Bloxsmith shows a small banner when a newer version is out, and you
+decide when to take it. Your passphrase, keys and saved views are kept, and the dashboard is
+unavailable for about a minute.
 
-| Your computer | What to do |
+| How you installed | What to do |
 |---|---|
-| macOS | Double-click `update.command` |
-| Windows | Double-click `update.bat` |
-| Linux | Run `./update.sh` |
+| Quick start on macOS | Double-click `update.command` in the Bloxsmith folder |
+| Quick start on Windows | Double-click `update.bat` in the Bloxsmith folder |
+| Quick start on Linux | Run `./update.sh` in the Bloxsmith folder |
+| Homebrew or an installer script | Click **Update** in the dashboard's header, or run `bloxsmith update` |
 
-Your passphrase, keys and saved views are kept. The dashboard is unavailable for about a minute.
-
-</details>
-
-<details>
-<summary><b>Update by typing it yourself, or for the other install methods</b></summary>
-
-From the Bloxsmith folder, this does the same as the update files:
+To type the Docker update yourself, run this from the Bloxsmith folder. It does the same as the
+update files:
 
 ```bash
 # download the newest Bloxsmith and restart it
 docker compose pull && docker compose up -d
-```
-
-If you installed with Homebrew or an installer script, click the **Update** button in the dashboard's header, or
-run:
-
-```bash
-# download, check and swap in the newest version; restart Bloxsmith afterwards
-bloxsmith update
 ```
 
 All update modes, including pinning a version: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#updating).
@@ -490,7 +493,7 @@ your API key.
 <details>
 <summary><b>Build, run and test</b></summary>
 
-You need Go 1.26.9 or newer and Node.js 24.
+You need Go 1.26.11 or newer and Node.js 24.
 
 ```bash
 # get the code
