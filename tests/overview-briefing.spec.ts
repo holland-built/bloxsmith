@@ -10,7 +10,6 @@ import { FIXED_NOW, installBaselineWorld } from './page-fixtures';
 const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 const nowS = FIXED_NOW.getTime() / 1000;
 const DAY = 86400;
-const agoIso = (minutes: number) => new Date(FIXED_NOW.getTime() - minutes * 60000).toISOString();
 const verdict = (page: Page) => page.locator('[data-verdict]');
 const fact = (page: Page, label: string) => page.locator('.br-fact', { hasText: label });
 const incident = (key: string, severity: string, seen: number | undefined) => ({ key, category: key, severity, count: 2, message: `${key} incident`, first_detected_at: seen });
@@ -71,44 +70,37 @@ test('a source that failed stops "None" being claimed', async ({ page }) => {
   await expect(fact(page, 'New issues')).not.toContainText('None in the last 24 hours');
 });
 
+// The Changes line counts the whole 24 hours on the server (/api/csp-audit-count).
+const count = (body: Record<string, unknown>) => (r: Route) => json(r, { status: 'ok', failed: 0, no_result: 0, complete: true, ceiling: 50000, ...body });
+
 test('an unknown change outcome is never called failed', async ({ page }) => {
   await healthyWorld(page, []);
-  const row = (id: number, result: unknown) => ({ id: `r${id}`, ts: agoIso(10 + id), user: 'admin@example.com', who_kind: 'person', action: 'update', resource: 'dns/zone', result });
-  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: false, count: 6, rows: [row(1, 'success'), row(2, 'failure'), row(3, 'failure'), row(4, 'failure'), row(5, ''), row(6, undefined)] }));
+  await page.route('**/api/csp-audit-count', count({ total: 6, people: 6, failed: 3, no_result: 2 }));
   await page.goto('/#overview');
-  await expect(fact(page, 'Changes')).toContainText('6 changes, 6 by users, 3 failed, 2 with no result reported', { timeout: 20_000 });
+  await expect(fact(page, 'Changes')).toContainText('6 in the last 24 hours, 6 of them by users, 3 failed, 2 with no result reported', { timeout: 20_000 });
 });
 
-test('a capped change log states the period it covers, never a full day', async ({ page }) => {
+test('a count that stopped early says "more than" over the whole day, never a shorter window', async ({ page }) => {
   await healthyWorld(page, []);
-  const rows = [5, 45].map((m, i) => ({ id: `r${i}`, ts: agoIso(m), user: 'admin@example.com', who_kind: 'person', action: 'update', resource: 'dns/zone', result: 'success' }));
-  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: true, count: 500, rows }));
+  await page.route('**/api/csp-audit-count', count({ total: 50000, people: 600, complete: false, stopped_by: 'ceiling' }));
   await page.goto('/#overview');
-  await expect(fact(page, 'Changes').locator('.br-label')).toContainText('Changes, last 45 minutes only', { timeout: 20_000 });
-  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('2 changes, 2 by users');
-  await expect(fact(page, 'Changes').locator('.br-label')).not.toContainText('Changes, last 24 hours');
+  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('More than 50,000 in the last 24 hours, at least 600 of them by users', { timeout: 20_000 });
+  // The label stays "Changes" (no shorter window); its tip says the count stopped early.
+  await expect(fact(page, 'Changes').locator('.br-label')).toHaveText(/^Changes(Counting stopped at 50,000 changes.*real number is higher.*)?$/);
 });
 
-test('a capped change log with no usable dates does not say nothing changed', async ({ page }) => {
+test('a failed change count is not checked, never 0', async ({ page }) => {
   await healthyWorld(page, []);
-  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: true, count: 500, rows: [{ id: 'r1', ts: 'not a date', result: 'success' }] }));
+  await page.route('**/api/csp-audit-count', (r) => json(r, { status: 'error', permission_denied: true }));
   await page.goto('/#overview');
-  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('Period covered could not be determined', { timeout: 20_000 });
+  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('Not checked', { timeout: 20_000 });
 });
 
 // ---------- the server's own "no answer" values (normAudit, FetchHubHealth) ----------
 
-const auditRow = (id: number, result: string) => ({ id: `a${id}`, ts: agoIso(10 + id), user: 'admin@example.com', who_kind: 'person', who_role: '', action: 'UPDATE', resource: 'dns/zone', result });
 const partialRow = (name: string, status = 'ok', meta = '2/2 online') => ({ name, status, statusLabel: status === 'ok' ? 'healthy' : 'critical', meta, availability: 'partial', reason: 'service inventory truncated at the 500-row limit' });
 const errorRows = () => ['DNS', 'DHCP', 'Security'].map((name) => ({ name, status: 'error', statusLabel: 'unavailable', meta: 'information unavailable', availability: 'error', reason: 'Service inventory information is unavailable' }));
 const oldIncident = () => incident('dns-ttl-anomaly', 'warn', nowS - 3 * DAY);
-
-test('the server\'s literal "unknown" result is no result reported, never failed', async ({ page }) => {
-  await healthyWorld(page, []);
-  await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: false, count: 5, rows: [auditRow(1, 'success'), auditRow(2, 'failure'), auditRow(3, 'failure'), auditRow(4, 'unknown'), auditRow(5, 'unknown')] }));
-  await page.goto('/#overview');
-  await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('5 changes, 5 by users, 2 failed, 2 with no result reported', { timeout: 20_000 });
-});
 
 test('health rows with availability "error" stop "None" being claimed', async ({ page }) => {
   await healthyWorld(page, [oldIncident()]);

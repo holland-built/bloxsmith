@@ -1,6 +1,6 @@
 /* The morning briefing at the top of Overview. It borrows the colour tokens of
    .ov-look in Overview.css, so ok, warn and crit stay the app's own. */
-.ov-look.br { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 48px; align-items: start; min-width: 0; margin-bottom: 32px }
+.ov-look.br { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; margin-bottom: 24px }
 .br *, .br *::before { box-sizing: border-box }
 .br h1, .br h2, .br p, .br ol, .br ul { margin: 0; padding: 0 }
 .br ol, .br ul { list-style: none }
@@ -18,24 +18,27 @@
 @media (pointer: coarse) { .br-down-retry { min-height: 44px } }
 .br-down-wait { font-size: 12.5px; color: var(--color-dim) }
 
-.br a.br-btn, .br a.br-primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
+.br a.br-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
 /* The standard secondary button, not the picked tint (GUI audit R2-A8, A15). */
 .br a.br-btn { min-height: 32px; padding: 0 12px; border-radius: var(--radius-control); border: 1px solid var(--color-border); font-size: 13px; color: var(--color-field-txt); background: var(--color-field) }
-.br a.br-primary { min-height: 44px; max-width: 100%; padding: 0 20px; border-radius: 10px; font-size: 15px; color: var(--color-on-accent); background: var(--ov-accent) }
-.br a.br-btn:active, .br a.br-primary:active { scale: .96 }
+.br a.br-btn:active { scale: .96 }
 @media (hover: hover) {
   .br a.br-btn:hover { border-color: var(--color-border-hover) }
-  .br a.br-primary:hover { background: color-mix(in srgb, var(--ov-accent) 86%, var(--ov-ink)) }
 }
 
-.br-rail { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0 }
+/* One slim row: the page name and date on the left, Updated on the right.
+   The verdict is the heading of the attention list (picked 2026-11-25). */
+.br-rail { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 4px; min-width: 0 }
 .br-date { font-size: 14px; color: var(--ov-muted) }
-.br .br-verdict { margin-block-start: 14px }
-.br-verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.05 }
-.br-verdict .br-mark { width: 28px; height: 28px }
-.br-verdict.crit { color: var(--ov-crit) } .br-verdict.warn { color: var(--ov-warn) } .br-verdict.ok { color: var(--ov-ok) }
-.br .br-line { font-size: 16px; color: var(--ov-ink2); margin-block-end: 10px }
-.br-updated { margin-block-start: 8px }
+.br-updated { margin-inline-start: auto; font-size: 13px }
+.br .br-updated .ov-tip { left: auto; right: 0 }
+/* Plain text with its dot, as in the picked mockup, not the outlined pill. */
+.br-updated .ov-pill { border: 0; background: none; padding: 0; font-size: 13px; color: var(--ov-muted) }
+.br-read h2.br-verdict { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 2px; font-weight: 700; text-wrap: balance }
+.br-verdict.crit > [data-verdict] { color: var(--ov-crit) } .br-verdict.warn > [data-verdict] { color: var(--ov-warn) } .br-verdict.ok > [data-verdict] { color: var(--ov-ok) }
+.br-read h2.br-verdict > [data-verdict] { margin: 0; font-size: inherit; font-weight: inherit }
+.br-verdict .br-mark { width: 20px; height: 20px }
+.br-read h2.br-verdict .br-line { margin: 0; font-size: 15px; font-weight: 500; color: var(--ov-ink2) }
 .br-read { display: flex; flex-direction: column; gap: 34px; max-width: 860px; min-width: 0 }
 .br-read h2 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; padding-block-end: 10px; border-bottom: 2px solid var(--ov-line2) }
 .br-read h2 span { font-size: 15px; font-weight: 400; color: var(--ov-muted); margin-inline-start: 6px }
@@ -46,15 +49,10 @@
 .br-title { font-size: 15px; line-height: 1.35; min-width: 0; overflow-wrap: anywhere }
 .br-list .crit .br-title { font-weight: 600 }
 @media (pointer: coarse) { .br a.br-btn { min-height: 44px } }
-@media (max-width: 960px) {
-  .ov-look.br { grid-template-columns: minmax(0, 1fr); gap: 28px }
-  .br-rail { position: static }
-}
 @media (max-width: 560px) {
   .br-fact { grid-template-columns: minmax(0, 1fr) }
   .br-list li { grid-template-columns: 16px minmax(0, 1fr) }
   .br-list .br-btn { grid-column: 2; justify-self: start }
-  .br-verdict { font-size: 34px }
 }
 
 /* The tiles and Services board below the briefing, kept readable on a phone:
@@ -84,24 +82,17 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .br-rail, .br-read > section { animation: br-fade 200ms linear both }
-  .br a.br-btn:active, .br a.br-primary:active { scale: 1 }
+  .br a.br-btn:active { scale: 1 }
 }
 @keyframes br-in { from { opacity: 0; filter: blur(4px); transform: translateY(12px) } }
 @keyframes br-fade { from { opacity: 0 } }
 
-/* Wide screens: the headline becomes one band across the top, so the space
-   under it goes to the lists instead of a tall narrow column. */
+/* Wide screens: the lists sit side by side as cards under the slim row. */
 @media (min-width: 961px) {
-  .br .br-updated .ov-tip { left: auto; right: 0 }
-  .br-rail { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "date verdict primary" "title line updated"; gap: 2px 40px; align-items: center }
-  .br-date { grid-area: date } .br-rail h1 { grid-area: title }
-  .br .br-verdict { grid-area: verdict; margin: 0; font-size: 28px } .br-verdict .br-mark { width: 22px; height: 22px }
-  .br .br-line { grid-area: line; margin: 0; font-size: 15px }
-  .br a.br-primary { grid-area: primary; justify-self: end } .br-updated { grid-area: updated; justify-self: end; margin: 0 }
   .br-read { max-width: none } .br-fact { grid-template-columns: 150px minmax(0, 1fr); padding-block: 8px; font-size: 14px }
   .br-read h2 { font-size: 16px; padding-block-end: 8px }
+  .br-read h2.br-verdict { font-size: 19px }
   .br-list li { padding-block: 7px }
-  .ov-look.br { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 24px }
   .br-read { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-rows: auto 1fr; gap: 16px }
   .br-read > section { background: var(--ov-card); border: 1px solid var(--ov-line); border-radius: 16px; box-shadow: var(--ov-shadow); padding: 14px 18px }
   .br-read > section:has(#br-look) { grid-area: 1 / 1 / span 2 / 2 } .br-read > section:has(#br-since) { grid-area: 1 / 2 } .br-read > section:has(#br-fine) { grid-area: 2 / 2 }

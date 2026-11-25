@@ -4,7 +4,6 @@
 // "not checked" rather than becoming a 0 or a green mark.
 
 import { SEV_WORD } from '../../lib/severity.js'
-import { feedState, hasNoResult, isSuccess, windowLabel, withinWindow } from '../../lib/changes.js'
 
 const DAY_S = 86400
 const SEV_RANK = { crit: 0, warn: 1, note: 2 }
@@ -178,30 +177,65 @@ export function dnsTrend(dns) {
   return { state: 'ok', now, was, hours, pct }
 }
 
-// "Last 6 h 30 min only" said out loud: "Last 6 hours 30 minutes only".
-const wholeWords = (text) => String(text)
-  .replace(/\b(\d+) h\b/g, (_, n) => `${n} ${n === '1' ? 'hour' : 'hours'}`)
-  .replace(/\b(\d+) min\b/g, (_, n) => `${n} ${n === '1' ? 'minute' : 'minutes'}`)
+const rate = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1))
+const hoursAgo = (h) => `${h} ${h === 1 ? 'hour' : 'hours'} ago`
 
-/** The change log over the last day, saying how far back it really reaches. */
-export function changeSummary(audit, nowMs) {
-  const rows = withinWindow(audit.data?.rows, nowMs)
-  const state = feedState({ payload: audit.data, error: audit.error, loading: audit.loading, rowsInWindow: rows })
-  // Capped, yet no row has a usable date: the period covered is unknown, and
-  // "nothing changed" would be false.
-  if (state === 'empty' && audit.data?.truncated === true) return { state: 'undetermined' }
-  if (state !== 'ok') return { state }
-  const win = windowLabel({ truncated: audit.data?.truncated === true, rows, nowMs })
+/** "13.1 queries/s, up 50% since 23 hours ago (was 8.7)", from dnsTrend. */
+export function trendWords(t) {
+  if (t.state === 'loading') return 'Loading…'
+  if (t.state !== 'ok') return t.state === 'error' ? 'Not checked' : 'No traffic reported'
+  if (t.pct == null) return `${rate(t.now)} queries/s, no earlier value for comparison`
+  const dir = t.pct === 0 ? 'unchanged' : `${t.pct > 0 ? 'up' : 'down'} ${Math.abs(t.pct)}%`
+  // A no-break space keeps "(was 8.7)" on one line.
+  return `${rate(t.now)} queries/s, ${dir} since ${hoursAgo(t.hours)} (was\u00a0${rate(t.was)})`
+}
+
+/**
+ * The change log over the whole last 24 hours, from /api/csp-audit-count,
+ * which counts every row rather than the newest 500. A read that failed is
+ * "unavailable", never 0. When counting stopped at its ceiling or time budget
+ * the totals are a floor, and the words say "more than".
+ */
+export function changeSummary(count) {
+  if (count.loading && !count.data) return { state: 'loading' }
+  const d = count.data
+  if (count.error || !d || d.status !== 'ok' || !Number.isFinite(d.total)) return { state: 'unavailable' }
+  if (d.complete === true && d.total === 0) return { state: 'empty' }
+  const complete = d.complete === true
   return {
-    state,
-    total: rows.length,
-    people: rows.filter((r) => r.who_kind === 'person').length,
-    failed: rows.filter((r) => !isSuccess(r) && !hasNoResult(r)).length,
-    noResult: rows.filter(hasNoResult).length,
-    capped: win.capped,
-    window: wholeWords(win.text),
-    tip: win.tip,
+    state: 'ok',
+    complete,
+    total: d.total,
+    people: d.people ?? 0,
+    failed: d.failed ?? 0,
+    noResult: d.no_result ?? 0,
+    tip: complete ? null : `Counting stopped at ${d.total.toLocaleString()} changes, ${d.stopped_by === 'time' ? 'when it ran out of time' : 'its upper limit'}, so the real number is higher. The count still covers the whole 24 hours.`,
   }
+}
+
+/** "3,412 in the last 24 hours, 41 of them by users", from changeSummary. */
+export function changeWords(c) {
+  if (c.state === 'loading') return 'Loading…'
+  if (c.state === 'unavailable') return 'Not checked'
+  if (c.state === 'empty') return 'No changes logged in 24 hours'
+  if (!c.complete) return `More than ${c.total.toLocaleString()} in the last 24 hours, at least ${c.people.toLocaleString()} of them by users`
+  const failed = c.failed ? `, ${c.failed.toLocaleString()} failed` : ''
+  const noResult = c.noResult ? `, ${c.noResult.toLocaleString()} with no result reported` : ''
+  return `${c.total.toLocaleString()} in the last 24 hours, ${c.people.toLocaleString()} of them by users${failed}${noResult}`
+}
+
+/**
+ * The attention list's heading, which carries the page's verdict: "Needs
+ * action" and "8 items across 4 of 5 services". A state with nothing listed
+ * keeps the verdict's own line.
+ */
+export function listHeading(verdict, problems, services) {
+  const base = { tone: verdict.tone, word: verdict.word, detail: verdict.line }
+  if (!problems.length || (verdict.tone !== 'crit' && verdict.tone !== 'warn')) return base
+  const names = new Set(services.map((s) => s.name))
+  const hit = new Set(problems.map((r) => r.service).filter((n) => names.has(n))).size
+  const items = `${problems.length} ${problems.length === 1 ? 'item' : 'items'}`
+  return { ...base, detail: hit ? `${items} across ${hit} of ${services.length} services` : items }
 }
 
 /** Licenses that run out within 90 days. An unreadable date is not "fine". */

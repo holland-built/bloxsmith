@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { installBaselineWorld } from './page-fixtures';
 
-// Overview's "Items requiring attention": one click must reach the failing
+// Overview's attention list (its heading is the verdict): one click must reach the failing
 // items, filtered and in view, with a way back to the whole list.
 const down = (svc: string, n: number) =>
   Array.from({ length: n }, (_, i) => ({ name: `${svc}_h${i}`, state: i ? 'stopped' : 'error', host: `${svc}-host-${i}`, ip: `10.9.0.${i + 1}` }));
@@ -93,7 +93,7 @@ test('each attention row on Overview goes to its own address in one click', asyn
   ];
   for (const [name, address] of rows) {
     await page.goto('/#overview');
-    await page.getByRole('region', { name: /Items requiring attention/ }).getByRole('link', { name }).click();
+    await page.getByRole('region', { name: /items across/ }).getByRole('link', { name }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(address);
   }
 });

@@ -55,12 +55,10 @@ for (const theme of ['dark', 'light']) {
       await installBaselineWorld(page);
     });
 
-    test('A7: Overview\'s main button is the button blue, its text-only actions are link blue, and its secondary buttons are plain', async ({ page }) => {
+    // The big "Start with" button left Overview on 2026-11-25 (owner's pick).
+    test('A7: Overview\'s text-only actions are link blue, and its secondary buttons are plain', async ({ page }) => {
       await page.goto('/#overview');
-      const primary = page.locator('.br a.br-primary');
-      await expect(primary).toBeVisible({ timeout: 20_000 });
-      expect(await primary.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await computed(page, 'backgroundColor', 'var(--color-accent)'));
-      expect(await primary.evaluate((el) => getComputedStyle(el).color)).toBe(await computed(page, 'color', 'var(--color-on-accent)'));
+      await expect(page.locator('.br a.br-btn').first()).toBeVisible({ timeout: 20_000 });
       const link = await computed(page, 'color', 'var(--color-link)');
       const textActions = page.locator('.ov-act');
       expect(await textActions.count()).toBeGreaterThan(0);

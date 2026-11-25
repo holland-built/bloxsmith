@@ -78,7 +78,7 @@ test('reading and Tab order follow the screen: attention list first', async ({ p
   await page.setViewportSize({ width: 2000, height: 900 });
   await busyWorld(page);
   const order = await page.locator('.br-read h2').allTextContents();
-  expect(order[0]).toContain('Items requiring attention');
+  expect(order[0]).toContain('items across');
   expect(order[1]).toContain('Last few hours');
   expect(order[2]).toContain('Current status');
 });
@@ -93,7 +93,7 @@ test('the page does not scroll sideways at the width where the wide layout start
 test('nothing is lost and the page does not scroll sideways on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await busyWorld(page);
-  for (const name of ['Last few hours', 'Items requiring attention', 'Current status', 'Service details']) {
+  for (const name of ['Last few hours', /items across/, 'Current status', 'Service details']) {
     await expect(page.getByRole('heading', { name })).toBeVisible();
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

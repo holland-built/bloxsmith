@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canTellNew, changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, openProblems, pageVerdict, rankProblems, upCount, vsWords } from './model.js'
+import { canTellNew, changeSummary, changeWords, dnsTrend, emptyListWords, licenseSummary, listHeading, newIssuesWords, openProblems, pageVerdict, rankProblems, trendWords, upCount, vsWords } from './model.js'
 
 const svc = (word, sev) => ({ v: { word, sev } })
 const NOW = 1_800_000_000
@@ -37,14 +37,6 @@ test('"None" new is only said over complete, fully dated records', () => {
   assert.equal(words([old], true, true), 'Checking…')
 })
 
-test('a blank change result is unknown, never failed', () => {
-  const nowMs = NOW * 1000
-  const ts = new Date(nowMs - 60000).toISOString()
-  const rows = ['success', 'failure', 'failure', 'unknown', '', undefined].map((result) => ({ ts, result }))
-  const s = changeSummary({ data: { status: 'ok', truncated: false, rows } }, nowMs)
-  assert.deepEqual([s.total, s.failed, s.noResult], [6, 2, 3])
-})
-
 test('a partial source keeps the verdict unconfirmed unless action is required', () => {
   const partial = (word, sev) => ({ v: { word, sev }, b: { partial: true } })
   assert.equal(pageVerdict([svc('Healthy', 'ok'), partial('Partly checked', 'none')]).word, 'Status unconfirmed')
@@ -52,11 +44,6 @@ test('a partial source keeps the verdict unconfirmed unless action is required',
   assert.equal(look.word, 'Status unconfirmed')
   assert.equal(look.line, '1 of 2 services could not be fully checked, 1 item requires review')
   assert.equal(pageVerdict([partial('Needs action', 'crit'), partial('Partly checked', 'none')]).word, 'Needs action')
-})
-
-test('a capped log with no usable dates has an undetermined period', () => {
-  const s = changeSummary({ data: { status: 'ok', truncated: true, rows: [{ ts: 'not a date', result: 'success' }] } }, NOW * 1000)
-  assert.equal(s.state, 'undetermined')
 })
 
 test('"new" is only claimed once the record is over a day old', () => {
@@ -97,7 +84,7 @@ test('a failing service links to its own down list', () => {
 test('a failed feed is an error, never a zero', () => {
   assert.equal(dnsTrend({ data: { status: 'error', rows: [] } }).state, 'error')
   assert.equal(licenseSummary({ data: { status: 'error', licenses: [] } }, NOW * 1000).state, 'error')
-  assert.equal(changeSummary({ data: { status: 'error', rows: [], count: 0 } }, NOW * 1000).state, 'unavailable')
+  assert.equal(changeSummary({ data: { status: 'error' } }).state, 'unavailable')
 })
 
 test('DNS trend reports the real gap between its first and last hour', () => {
@@ -159,9 +146,39 @@ test('a subnet incident is opened with View subnets, on the subnet list', () => 
   assert.equal(r.href, '#network?minUtil=70&links=1')
 })
 
-// A13: "last 6 h" is a unit nobody says out loud.
-test('the change window is said in whole words', () => {
-  const rows = [{ ts: new Date((NOW - 6 * 3600 - 30 * 60) * 1000).toISOString(), result: 'success', who_kind: 'person' }]
-  const c = changeSummary({ data: { rows, truncated: true } }, NOW * 1000)
-  assert.equal(c.window, 'Last 6 hours 30 minutes only')
+
+// Picked 2026-11-25: the whole 24 hours, counted on the server.
+test('the Changes line counts the whole day', () => {
+  const c = changeSummary({ data: { status: 'ok', total: 3412, people: 41, failed: 0, no_result: 0, complete: true } })
+  assert.equal(changeWords(c), '3,412 in the last 24 hours, 41 of them by users')
+  const f = changeSummary({ data: { status: 'ok', total: 6, people: 6, failed: 3, no_result: 2, complete: true } })
+  assert.equal(changeWords(f), '6 in the last 24 hours, 6 of them by users, 3 failed, 2 with no result reported')
+  assert.equal(changeWords(changeSummary({ data: { status: 'ok', total: 0, people: 0, complete: true } })), 'No changes logged in 24 hours')
+})
+
+test('a count that stopped early says "more than", never a shorter window', () => {
+  const c = changeSummary({ data: { status: 'ok', total: 50000, people: 600, failed: 2, no_result: 0, complete: false, stopped_by: 'ceiling' } })
+  assert.equal(changeWords(c), 'More than 50,000 in the last 24 hours, at least 600 of them by users')
+  assert.match(c.tip, /real number is higher/)
+})
+
+test('a failed or refused count is not checked, never 0', () => {
+  assert.equal(changeWords(changeSummary({ data: { status: 'error', permission_denied: true } })), 'Not checked')
+  assert.equal(changeWords(changeSummary({ error: 'boom' })), 'Not checked')
+  assert.equal(changeWords(changeSummary({ loading: true })), 'Loading…')
+})
+
+test('the DNS line puts the old number in brackets', () => {
+  assert.equal(trendWords({ state: 'ok', now: 13.1, was: 8.7, hours: 23, pct: 51 }), '13.1 queries/s, up 51% since 23 hours ago (was\u00a08.7)')
+  assert.equal(trendWords({ state: 'ok', now: 6, was: 8, hours: 1, pct: -25 }), '6.0 queries/s, down 25% since 1 hour ago (was\u00a08.0)')
+  assert.equal(trendWords({ state: 'ok', now: 8, was: 8, hours: 2, pct: 0 }), '8.0 queries/s, unchanged since 2 hours ago (was\u00a08.0)')
+})
+
+test('the list heading carries the verdict and the counts', () => {
+  const services = ['DNS', 'DHCP', 'IPAM', 'Hosts', 'Security'].map((name) => ({ name }))
+  const problems = [{ service: 'DHCP' }, { service: 'DHCP' }, { service: 'Security' }, { service: 'Other' }]
+  const h = listHeading({ tone: 'crit', word: 'Needs action', line: 'x' }, problems, services)
+  assert.deepEqual([h.word, h.detail], ['Needs action', '4 items across 2 of 5 services'])
+  const ok = listHeading({ tone: 'ok', word: 'All services healthy', line: 'All 5 services checked' }, [], services)
+  assert.deepEqual([ok.word, ok.detail], ['All services healthy', 'All 5 services checked'])
 })
