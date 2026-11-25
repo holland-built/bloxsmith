@@ -415,6 +415,7 @@ func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 		}
 		c.Title = f.none
 		c.Status, c.Items = "passed", items
+		c.partial = !r.SampleOK // the count proves none; don't cache the failed read
 		return c
 	}
 	c.Title = f.found(n)

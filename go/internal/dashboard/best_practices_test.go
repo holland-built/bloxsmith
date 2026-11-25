@@ -595,3 +595,15 @@ func TestBestPractices_DNSCountKeptWhenListFails(t *testing.T) {
 		t.Fatalf("a count of 0 passes even without the list, got %v", c)
 	}
 }
+
+// A count of 0 passes even when the list failed, but that result is marked
+// partial, so Best practices doesn't cache it and the next load asks again.
+func TestBestPractices_ZeroWithFailedListNotCached(t *testing.T) {
+	c := dnsRecordCheck(dnsRecFlags[0], dnsFlagRead{Count: metricOK(0), SampleOK: false})
+	if c.Status != "passed" || !c.partial {
+		t.Fatalf("want passed and partial, got %+v", c)
+	}
+	if c := dnsRecordCheck(dnsRecFlags[0], dnsFlagRead{Count: metricOK(0), SampleOK: true, Sample: []map[string]any{}}); c.partial {
+		t.Fatalf("a whole read is not partial: %+v", c)
+	}
+}
