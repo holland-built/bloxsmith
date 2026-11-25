@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { retryFailedFeeds, useApi, useFeedRecovery } from '../../lib/api.js'
-import { sinceIso } from '../../lib/changes.js'
 import Tip from '../../components/Tip.jsx'
-import { changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
+import { changeSummary, changeWords, dnsTrend, emptyListWords, licenseSummary, listHeading, newIssuesWords, pageVerdict, rankProblems, trendWords } from './model.js'
 import './Briefing.css'
 import { PageTitle } from '../../components/kit.jsx'
 
@@ -11,7 +10,6 @@ import { PageTitle } from '../../components/kit.jsx'
 // Services board and arrangeable charts stay below it in Overview.jsx.
 
 const SEV_WORD = { crit: 'Critical', warn: 'Warning', note: 'Note', ok: 'Healthy', none: 'Not checked' }
-const rate = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1))
 
 // A shape as well as a colour, so a state still reads without colour vision.
 function Mark({ sev }) {
@@ -38,25 +36,6 @@ const tipFor = (r) => [SEV_WORD[r.sev], r.sub, r.partial ? 'The service list is 
 
 function Fact({ label, children, tip }) {
   return <li className="br-fact"><Tip tip={tip || null} className="br-label">{label}</Tip><span>{children}</span></li>
-}
-
-function trendWords(t) {
-  if (t.state === 'loading') return 'Loading…'
-  if (t.state !== 'ok') return t.state === 'error' ? 'Not checked' : 'No traffic reported'
-  if (t.pct == null) return `${rate(t.now)} queries/s, no earlier value for comparison`
-  const dir = t.pct === 0 ? 'unchanged' : `${t.pct > 0 ? 'up' : 'down'} ${Math.abs(t.pct)}%`
-  return `${rate(t.now)} queries/s, ${dir} from ${rate(t.was)} ${t.hours} hours ago`
-}
-
-function changeWords(c) {
-  if (c.state === 'loading') return 'Loading…'
-  if (c.state === 'unavailable') return 'Not checked'
-  if (c.state === 'undetermined') return 'Period covered could not be determined'
-  if (c.state === 'empty') return 'No changes logged in 24 hours'
-  const people = `${c.people.toLocaleString()} by users`
-  const failed = c.failed ? `, ${c.failed.toLocaleString()} failed` : ''
-  const noResult = c.noResult ? `, ${c.noResult.toLocaleString()} with no result reported` : ''
-  return `${c.total.toLocaleString()} changes, ${people}${failed}${noResult}`
 }
 
 function licenseWords(l) {
@@ -86,14 +65,15 @@ function InventoryDown() {
 }
 
 export default function Briefing({ board, services, dns, licenses, updated }) {
-  const [since] = useState(() => sinceIso(Date.now()))
-  const audit = useApi(`/api/csp-audit?since=${encodeURIComponent(since)}`, { poll: 60000 })
+  // The whole last 24 hours counted on the server, not the newest 500 rows.
+  const audit = useApi('/api/csp-audit-count', { poll: 60000 })
   const clock = useClock()
   const nowMs = Date.now()
   const verdict = pageVerdict(services, board.board.find((b) => b.name === 'Other')?.issues)
   const problems = rankProblems(board, nowMs / 1000)
   const trend = useMemo(() => dnsTrend(dns), [dns])
-  const changes = changeSummary(audit, nowMs)
+  const changes = changeSummary(audit)
+  const heading = listHeading(verdict, problems, services)
   const license = licenseSummary(licenses, nowMs)
   const checking = verdict.checking > 0
   const fine = services.filter((s) => s.v.sev === 'ok')
@@ -104,16 +84,15 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
       {board.feedDown && <InventoryDown />}
       <div className="ov-look br">
         <header className="br-rail">
-          <p className="br-date">{clock.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           <PageTitle>Overview</PageTitle>
-          <p className={`br-verdict ${verdict.tone}`}><Mark sev={verdict.tone} /><span data-verdict="">{verdict.word}</span></p>
-          <p className="br-line">{verdict.line}</p>
-          {problems[0] && <a className="br-primary" href={problems[0].href}>Start with: {problems[0].action}</a>}
+          <p className="br-date">{clock.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           <div className="br-updated">{updated}</div>
         </header>
         <div className="br-read">
           <section aria-labelledby="br-look">
-            <h2 id="br-look">Items requiring attention <span>{problems.length || ''}</span></h2>
+            <h2 id="br-look" className={`br-verdict ${heading.tone}`}>
+              <Mark sev={heading.tone} /><span data-verdict="">{heading.word}</span> <span className="br-line">{heading.detail}</span>
+            </h2>
             {problems.length ? (
               <ol className="br-list">
                 {problems.map((r) => (
@@ -130,7 +109,7 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
             <h2 id="br-since">Last few hours</h2>
             <ul className="br-facts">
               <Fact label="DNS traffic">{trendWords(trend)}</Fact>
-              <Fact label={changes.state === 'ok' ? `Changes, ${changes.window.toLowerCase()}` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
+              <Fact label="Changes" tip={changes.tip}>{changeWords(changes)}</Fact>
               <Fact label="New issues" tip="Issues are dated from when this system first detected them, so 24 hours of history are required to identify new issues.">
                 {newIssuesWords({ problems, allRead: board.allRead, reading: board.reading, nowS: nowMs / 1000 })}
               </Fact>

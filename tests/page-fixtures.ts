@@ -214,6 +214,10 @@ const SHELL: Handler[] = [
 // A fixture that only exercises the healthy path cannot catch the sick one.
 const CSP_AUDIT = { status: 'ok', truncated: true, count: CSP_AUDIT_ROWS.length, rows: CSP_AUDIT_ROWS };
 
+// The Overview's Changes line: the whole 24 hours counted on the server
+// (dashboard/audit_count.go), not the newest 500 rows.
+const CSP_AUDIT_COUNT = { status: 'ok', total: 3412, people: 41, failed: 0, no_result: 0, complete: true, ceiling: 50000 };
+
 const SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space' }] };
 // The ranked list the Automate page and the older pages' space pickers read.
 // Not "yours", so no page picks a space by itself in the baseline.
@@ -820,7 +824,7 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/ipam/blocks', body: { blocks: [{ id: 'ipam/address_block/baseline-1', address: '10.10.0.0', cidr: 16, name: 'baseline-block' }] } },
   ],
   overview: [
-    { method: 'GET', path: '/api/csp-audit', body: CSP_AUDIT, required: true },
+    { method: 'GET', path: '/api/csp-audit-count', body: CSP_AUDIT_COUNT, required: true },
     { method: 'GET', path: '/api/csp/dns-qps', body: DNS_QPS, required: true },
     { method: 'GET', path: '/api/csp/dns-health', body: DNS_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/license-alerts', body: LICENSE_ALERTS, required: true },

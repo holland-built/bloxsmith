@@ -1096,6 +1096,26 @@ func isoAllowed(v string) string {
 	return v
 }
 
+// auditKindClauses is the people/machines filter, shared by CSPAudit (the
+// Changes tab) and CSPAuditCount (the Overview), so the two count people alike.
+func auditKindClauses(kind string) []string {
+	switch kind {
+	case "people":
+		out := make([]string, 0, len(cspAuditMachine))
+		for _, pref := range cspAuditMachine {
+			out = append(out, "not user_name~"+rest.Lit(pref))
+		}
+		return out
+	case "machines":
+		ors := make([]string, len(cspAuditMachine))
+		for i, p := range cspAuditMachine {
+			ors[i] = "user_name~" + rest.Lit(p)
+		}
+		return []string{"(" + strings.Join(ors, " or ") + ")"}
+	}
+	return nil
+}
+
 // CSPAudit is the on-demand audit-log search (server.py:5143). q/kind/since/
 // until go into a _filter EXPRESSION; every user value is neutralised by
 // rest.Lit (strip \ and ") since it lands inside a double-quoted literal.
@@ -1105,18 +1125,7 @@ func (s *Service) CSPAudit(q, kind, since, until string) map[string]any {
 	if q != "" {
 		clauses = append(clauses, "(user_name~"+rest.Lit(q)+" or resource_type~"+rest.Lit(q)+")")
 	}
-	switch kind {
-	case "people":
-		for _, pref := range cspAuditMachine {
-			clauses = append(clauses, "not user_name~"+rest.Lit(pref))
-		}
-	case "machines":
-		ors := make([]string, len(cspAuditMachine))
-		for i, p := range cspAuditMachine {
-			ors[i] = "user_name~" + rest.Lit(p)
-		}
-		clauses = append(clauses, "("+strings.Join(ors, " or ")+")")
-	}
+	clauses = append(clauses, auditKindClauses(kind)...)
 	if v := isoAllowed(since); v != "" {
 		clauses = append(clauses, "created_at>="+rest.Lit(v))
 	}

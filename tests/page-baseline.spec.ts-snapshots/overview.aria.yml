@@ -1,13 +1,9 @@
 - main "Overview tab":
-  - paragraph: Thursday, January 1
   - heading "Overview" [level=1]
-  - paragraph: Needs action
-  - paragraph: 2 of 5 services require action
-  - 'link "Start with: View hosts"':
-    - /url: "#infra?status=offline"
+  - paragraph: Thursday, January 1
   - text: /Updated \d+:\d+ PM/
-  - region "Items requiring attention 4":
-    - heading "Items requiring attention 4" [level=2]
+  - region "Needs action 4 items across 4 of 5 services":
+    - heading "Needs action 4 items across 4 of 5 services" [level=2]
     - list:
       - listitem:
         - text: 1 of 3 hosts is not online
@@ -32,8 +28,8 @@
   - region "Last few hours":
     - heading "Last few hours" [level=2]
     - list:
-      - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
-      - listitem: Changes, last 6 hours only 5 changes, 0 by users, 1 failed
+      - listitem: /DNS traffic \d+ queries\/s, up \d+% since 2 hours ago \(was \d+\)/
+      - listitem: Changes 3,412 in the last 24 hours, 41 of them by users
       - listitem: /New issues Not yet available\. Requires \d+ hours of history\./
   - region "Current status":
     - heading "Current status" [level=2]

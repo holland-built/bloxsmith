@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"bloxsmith/internal/dashboard"
 )
@@ -80,6 +81,17 @@ func (d *Deps) registerCSPRoutes(mux router) {
 		q := r.URL.Query()
 		d.json(w, r, 200, d.dash(r).CSPAudit(
 			q.Get("q"), q.Get("kind"), q.Get("since"), q.Get("until")))
+	})
+
+	// The Overview's Changes line: the whole last 24 hours counted, not the
+	// newest 500 rows (dashboard/audit_count.go). Only the Overview reads it;
+	// /api/csp-audit above stays as the Changes tab knows it.
+	mux.HandleFunc("GET /api/csp-audit-count", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp-audit-count")
+		svc := d.dash(r)
+		d.json(w, r, 200, svc.CachedRead("/api/csp-audit-count", func() map[string]any {
+			return svc.CSPAuditCount(r.Context(), time.Now())
+		}))
 	})
 
 	mux.HandleFunc("GET /api/best-practices", func(w http.ResponseWriter, r *http.Request) {
