@@ -46,7 +46,7 @@
     - button "DHCP Review 1 active lease 1 of 2 up 1 active lease · of 2 leases loaded · 1 stopped · 1/2 up"
     - button /IPAM Review 1 subnet \d+% full or more of 3 1 of 3 subnets \d+% full or more · 0 more at \d+–\d+% · all subnets/
     - button "Hosts Needs action 1 not online of 3 1 of 3 not online · all hosts"
-    - button "Security Needs action 3 critical or high 3 critical or high events · whole window · list cut off"
+    - button "Security Needs action 3 critical or high 3 critical or high events · whole window · only part of the list arrived"
   - region "DNS detail":
     - heading "DNS" [level=2]
     - text: /Average answer time \d+ ms Answered without an error \d+% last \d+ hours \d+ queries\/s · hourly average, last hour · 2\/2 online/

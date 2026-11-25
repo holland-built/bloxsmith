@@ -1,5 +1,7 @@
 - main "Infra tab":
   - heading "Infrastructure" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
+  - paragraph: "Host and service health: hosts, jobs and DNS forwarding proxies."
   - list "Headline numbers":
     - listitem:
       - button "Hosts 3"
@@ -19,7 +21,7 @@
     - /placeholder: Search name, IP…
   - combobox "Filter by type":
     - option "All types" [selected]
-    - option "onprem"
+    - option "On site"
   - 'button "About: Host Inventory"': "About: ⓘ"
   - 'button "Options: Host Inventory"'
   - table:
@@ -33,31 +35,53 @@
           - button "Status"
         - columnheader "Type"
     - rowgroup:
-      - row /baseline-host-a \d+\.\d+\.0\.2 Active onprem/:
+      - row /baseline-host-a \d+\.\d+\.0\.2 Active On site/:
         - cell "baseline-host-a"
-        - cell /\d+\.\d+\.0\.2/
+        - cell /\d+\.\d+\.0\.2/:
+          - link /\d+\.\d+\.0\.2/:
+            - /url: "#dossier?kind=address&q=10.10.0.2"
         - cell "Active"
-        - cell "onprem"
-      - row /baseline-host-b \d+\.\d+\.0\.2 Degraded onprem/:
+        - cell "On site"
+      - row /baseline-host-b \d+\.\d+\.0\.2 Degraded On site/:
         - cell "baseline-host-b"
-        - cell /\d+\.\d+\.0\.2/
+        - cell /\d+\.\d+\.0\.2/:
+          - link /\d+\.\d+\.0\.2/:
+            - /url: "#dossier?kind=address&q=10.20.0.2"
         - cell "Degraded"
-        - cell "onprem"
-      - row /baseline-host-c \d+\.\d+\.0\.2 Not online onprem/:
+        - cell "On site"
+      - row /baseline-host-c \d+\.\d+\.0\.2 Not online On site/:
         - cell "baseline-host-c"
-        - cell /\d+\.\d+\.0\.2/
+        - cell /\d+\.\d+\.0\.2/:
+          - link /\d+\.\d+\.0\.2/:
+            - /url: "#dossier?kind=address&q=10.30.0.2"
         - cell "Not online"
-        - cell "onprem"
+        - cell "On site"
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
   - application "Host Status chart"
-  - text: /3 hosts Active \d+% Degraded \d+% Not online \d+%/
+  - text: /3 hosts Active \d+% Degraded \d+% Not online \d+% CPU and memory, latest reading/
+  - table:
+    - rowgroup:
+      - row "Host CPU Memory":
+        - columnheader "Host"
+        - columnheader "CPU"
+        - columnheader "Memory"
+    - rowgroup:
+      - row /baseline-ns1 \d+% \d+%/:
+        - cell "baseline-ns1"
+        - cell /\d+%/
+        - cell /\d+%/
+      - row "baseline-ns2 5% not checked":
+        - cell "baseline-ns2"
+        - cell "5%"
+        - cell "not checked"
+  - text: "/DNS for all hosts together, last \\d+ hours: answer time \\d+ ms, timeouts \\d+ a second\\. Infoblox does not report these per host here\\./"
   - heading "Service Health" [level=2]
   - text: deployed services
   - 'button "About: Service Health"': "About: ⓘ"
   - 'button "Options: Service Health"'
-  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security list cut off not listed
+  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security only part of the list arrived unknown
   - heading "Host Apps" [level=2]
   - text: Infoblox Portal 1
   - 'button "About: Host Apps"': "About: ⓘ"
@@ -90,10 +114,10 @@
         - cell "discovery"
         - cell "completed"
         - cell "baseline-operator"
-  - heading "DFP Services" [level=2]
-  - text: Infoblox Portal 1
-  - 'button "About: DFP Services"': "About: ⓘ"
-  - 'button "Options: DFP Services"'
+  - heading "DNS forwarding proxies" [level=2]
+  - text: DFP, from Infoblox Portal 1
+  - 'button "About: DNS forwarding proxies"': "About: ⓘ"
+  - 'button "Options: DNS forwarding proxies"'
   - table:
     - rowgroup:
       - row "Name Status":

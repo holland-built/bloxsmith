@@ -50,12 +50,19 @@ const TILE_COLS = {
 }
 const TILE_COLS_DEFAULT = 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6'
 
+// An item may also carry `tip`, an explanation that is the tile's hover text
+// and its description (not part of its name), and `tile`, a data-tile key for
+// tests and links, and `jumpTo`, a panel a link tile jumps to once the link
+// has changed the page (DNS's zones tile filters the list, then shows it).
 export function HeadlineStrip({ items, label }) {
+  const id = useId()
   return (
     <ul aria-label={label} className={`kpi-strip grid mb-[var(--sp-grid-gap)] ${TILE_COLS[items.length] || TILE_COLS_DEFAULT}`}>
       {items.map((it, i) => {
         const tone = it.value != null && TONE[it.tone] && it.tone !== 'neutral' ? it.tone : null
         const cls = `${TILE} ${FOCUS_RING}`
+        const tipId = it.tip ? `${id}-${i}` : undefined
+        const common = { 'data-tone': tone || undefined, 'data-tile': it.tile, title: it.tip || undefined, 'aria-describedby': tipId, className: cls }
         const body = (
           <>
             <span className="kpi-label">{it.label}</span>
@@ -71,10 +78,11 @@ export function HeadlineStrip({ items, label }) {
           // it takes the whole row until the strip goes to five columns.
           <li key={it.label} className={`min-w-0${items.length === 5 && i === 4 ? ' col-span-2 md:col-span-1' : ''}`}>
             {it.href ? (
-              <a href={it.href} data-tone={tone || undefined} className={cls}>{body}</a>
+              <a href={it.href} {...common} onClick={it.jumpTo ? () => setTimeout(() => jumpToPanel(it.jumpTo), 0) : undefined}>{body}</a>
             ) : (
-              <button type="button" data-tone={tone || undefined} onClick={() => jumpToPanel(it.panelId)} className={cls}>{body}</button>
+              <button type="button" {...common} onClick={() => jumpToPanel(it.panelId)}>{body}</button>
             )}
+            {tipId && <span id={tipId} className="sr-only">{it.tip}</span>}
           </li>
         )
       })}

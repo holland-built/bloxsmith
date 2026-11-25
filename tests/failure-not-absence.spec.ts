@@ -210,16 +210,16 @@ test.describe('DNS → DNSSEC Health panel (CSPDnssec status field)', () => {
   test('status:"error" renders unavailable wording, not "no DNSSEC data"', async ({ page }) => {
     await page.route('**/api/csp/dnssec*', (route) => fulfillJson(route, { rows: [], count: 0, status: 'error' }));
     await page.goto('/#dns');
-    const card = page.locator('text=DNSSEC Health').locator('..').locator('..');
-    await expect(card.getByText(/dnssec information is unavailable/i)).toBeVisible();
-    await expect(card.getByText(/no dnssec data/i)).toHaveCount(0);
+    const card = page.locator('text=Zone signing').locator('..').locator('..');
+    await expect(card.getByText(/zone signing information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/no zone signing information/i)).toHaveCount(0);
   });
 
   test('a genuinely empty response renders "no DNSSEC data"', async ({ page }) => {
     await page.route('**/api/csp/dnssec*', (route) => fulfillJson(route, { rows: [], count: 0, status: 'ok' }));
     await page.goto('/#dns');
-    const card = page.locator('text=DNSSEC Health').locator('..').locator('..');
-    await expect(card.getByText(/no dnssec data/i)).toBeVisible();
-    await expect(card.getByText(/dnssec information is unavailable/i)).toHaveCount(0);
+    const card = page.locator('text=Zone signing').locator('..').locator('..');
+    await expect(card.getByText(/no zone signing information/i)).toBeVisible();
+    await expect(card.getByText(/zone signing information is unavailable/i)).toHaveCount(0);
   });
 });

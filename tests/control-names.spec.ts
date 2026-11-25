@@ -46,6 +46,66 @@ const SETTLE_MS = 1400;
 // a few hundred ms. Checked when it went in: every count and per-tab total the
 // three tests below collect was the same under both waits.
 const QUIET_MS = 300;
+// HOW A COLOUR IS READ, installed on the page as window.__contrast so the AA
+// test and its own check below use the same reader.
+//
+// A background is what is actually painted behind the text: every layer from
+// the text up to the first solid one, laid over each other. The first version
+// took the nearest background that was not fully transparent, read the first
+// three numbers out of it and treated them as solid 0-255 values. A tinted
+// button's background computes to `color(srgb 0.22 0.44 0.86 / 0.12)`, so it
+// read as rgb(0, 0, 1), near black: Overview's "View hosts" measured 3.45:1
+// when what is painted is 5.2:1 (GUI audit w5b, 2026-11-25). Wrong the other
+// way, a see-through tint read as solid would also hide a real failure.
+function installContrastReader() {
+  const read = (s: string): number[] | null => {
+    const m = s.match(/^color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.e-]+%?))?\)$/);
+    if (m) {
+      const a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : Number(m[4]);
+      return [Number(m[1]) * 255, Number(m[2]) * 255, Number(m[3]) * 255, a];
+    }
+    const n = s.match(/^rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?\)$/);
+    if (n) {
+      const a = n[4] == null ? 1 : n[4].endsWith('%') ? parseFloat(n[4]) / 100 : Number(n[4]);
+      return [Number(n[1]), Number(n[2]), Number(n[3]), a];
+    }
+    if (s === 'transparent') return [0, 0, 0, 0];
+    throw new Error(`contrast reader cannot read the colour "${s}"`);
+  };
+  const over = (top: number[], under: number[]) => top.slice(0, 3).map((v, i) => v * top[3] + under[i] * (1 - top[3]));
+  const bgOf = (el: Element): number[] => {
+    const layers: number[][] = [];
+    for (let e: Element | null = el; e; e = e.parentElement) {
+      const c = read(getComputedStyle(e).backgroundColor)!;
+      if (c[3] === 0) continue;
+      layers.push(c);
+      if (c[3] >= 1) break;
+    }
+    // Nothing solid anywhere up the tree: the canvas under it is white.
+    let base = [255, 255, 255];
+    for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+    return base;
+  };
+  const lum = (c: number[]) => {
+    const [r, g, b] = c.map((v) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (fg: number[], bg: number[]) => {
+    const a = lum(fg), b = lum(bg);
+    const [hi, lo] = a > b ? [a, b] : [b, a];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  // Text colour, laid over its own background when it is see-through.
+  const fgOf = (el: Element) => {
+    const c = read(getComputedStyle(el).color)!;
+    return c[3] >= 1 ? c.slice(0, 3) : over(c, bgOf(el));
+  };
+  (window as unknown as { __contrast: unknown }).__contrast = { read, bgOf, fgOf, ratio };
+}
+
 async function settle(page: import('@playwright/test').Page) {
   // Counted in 50ms timer ticks, not read off a clock: installBaselineWorld
   // freezes the page's clock, but its timers keep running.
@@ -275,29 +335,11 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
         ).toBeVisible();
       }
 
+      await page.evaluate(installContrastReader);
       const res = await page.evaluate(() => {
-        const lum = (c: number[]) => {
-          const [r, g, b] = c.map((v) => {
-            v /= 255;
-            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-          });
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        };
-        const parse = (s: string) => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
-        const bgOf = (el: Element): number[] => {
-          let e: Element | null = el;
-          while (e && e !== document.documentElement) {
-            const c = getComputedStyle(e).backgroundColor;
-            if (c && !/,\s*0\)$/.test(c) && c !== 'transparent') return parse(c);
-            e = e.parentElement;
-          }
-          return parse(getComputedStyle(document.body).backgroundColor);
-        };
-        const ratio = (fg: number[], bg: number[]) => {
-          const a = lum(fg), b = lum(bg);
-          const [hi, lo] = a > b ? [a, b] : [b, a];
-          return (hi + 0.05) / (lo + 0.05);
-        };
+        type Reader = { read: (s: string) => number[]; bgOf: (e: Element) => number[]; fgOf: (e: Element) => number[]; ratio: (a: number[], b: number[]) => number };
+        const { read, bgOf, fgOf, ratio } = (window as unknown as { __contrast: Reader }).__contrast;
+        const parse = (s: string) => read(s).slice(0, 3).map(Math.round);
         const probe = document.createElement('span');
         probe.style.color = 'var(--color-link)';
         document.body.appendChild(probe);
@@ -316,7 +358,7 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
           count: painted.length,
           bad: painted.map((e) => {
             const cs = getComputedStyle(e);
-            const fg = parse(cs.color), bg = bgOf(e);
+            const fg = fgOf(e), bg = bgOf(e);
             const size = parseFloat(cs.fontSize), weight = parseInt(cs.fontWeight) || 400;
             const need = size >= 24 || (size >= 18.66 && weight >= 700) ? 3.0 : 4.5;
             const r = ratio(fg, bg);
@@ -342,4 +384,36 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
   ).toEqual(['dark', 'light']);
 
   expect(failures, `Accent text below its AA threshold:\n  ${failures.join('\n  ')}`).toEqual([]);
+});
+
+// The reader above, checked against what it must get right. A tinted button
+// whose painted contrast is under 4.5:1 must still fail, so laying the tint
+// over the panel cannot hide a real failure; and Overview's "View hosts",
+// which the old reader put at 3.45:1, reads as painted (about 5.2:1).
+test('the contrast reader measures a tinted button as painted, and still catches one below AA', async ({ page }) => {
+  await installBaselineWorld(page);
+  await page.goto('/#overview');
+  await page.evaluate(() => localStorage.setItem('theme', 'light'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.evaluate(installContrastReader);
+  const viewHosts = page.locator('.br a.br-btn', { hasText: 'View hosts' });
+  await expect(viewHosts).toBeVisible({ timeout: 20_000 });
+
+  const read = await page.evaluate(() => {
+    type Reader = { bgOf: (e: Element) => number[]; fgOf: (e: Element) => number[]; ratio: (a: number[], b: number[]) => number };
+    const { bgOf, fgOf, ratio } = (window as unknown as { __contrast: Reader }).__contrast;
+    const real = document.querySelector('.br a.br-btn')!;
+    // A link-coloured label on a heavy accent tint: painted, about 2.1:1.
+    const bad = document.createElement('span');
+    bad.textContent = 'Too faint';
+    bad.style.cssText = 'color: var(--color-link); background: color-mix(in srgb, var(--color-accent) 70%, transparent); font-size: 13px';
+    real.parentElement!.appendChild(bad);
+    const out = { viewHosts: ratio(fgOf(real), bgOf(real)), faint: ratio(fgOf(bad), bgOf(bad)) };
+    bad.remove();
+    return out;
+  });
+  expect(read.viewHosts, '"View hosts" as painted').toBeGreaterThan(5.0);
+  expect(read.viewHosts).toBeLessThan(5.4);
+  expect(read.faint, 'a tinted label under AA must still fail').toBeLessThan(4.5);
 });

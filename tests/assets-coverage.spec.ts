@@ -14,9 +14,9 @@ test('a gap tile shows its count and filters the list to those devices', async (
   page.on('request', (r) => { if (r.url().includes('/api/csp/assets?')) asked.push(r.url()); });
   await page.goto('/#assets');
 
-  const tile = panel(page).getByRole('link', { name: /^Seen on the network, not in Infoblox Endpoint/ });
+  const tile = panel(page).getByRole('link', { name: /^Seen on the network, not by the Infoblox agent/ });
   await expect(tile).toContainText('1');
-  await expect(tile).toContainText('seen by DHCP Logs or NIOS Grid');
+  await expect(tile).toContainText('Infoblox Endpoint · seen by DHCP logs or your Infoblox servers');
   await tile.click();
 
   await expect(page).toHaveURL(/#assets\?gap=Infoblox(\+|%20)Endpoint$/);
@@ -38,7 +38,8 @@ test('a count the server could not trust says "couldn\'t count"', async ({ page 
   } }));
   await page.goto('/#assets');
 
-  const tile = panel(page).getByRole('link', { name: /^Seen on the network, not in CrowdStrike Falcon/ });
+  const tile = panel(page).getByRole('link', { name: /^Seen on the network, not by a security agent/ });
+  await expect(tile).toContainText('CrowdStrike Falcon');
   await expect(tile).toContainText("couldn't count");
   await expect(tile).toContainText('security agent');
   await expect(tile).not.toContainText('0');

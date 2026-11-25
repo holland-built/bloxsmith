@@ -20,7 +20,7 @@ export const DHCP_REQUEST_WINDOWS = [
   { key: 'last_30_days', label: 'Last 30 days' },
 ]
 
-export const HA_NOTE = 'If your DHCP servers run in HA pairs, both answer each request, so these counts can be up to twice the devices asking.'
+export const HA_NOTE = 'If your DHCP servers work in pairs, one backing up the other, both answer each request, so these counts can be up to twice the devices asking.'
 
 /** One total: { state, value, text }. state is 'loading', 'ok', 'empty' or 'error'. */
 export function dhcpTotal(feed, metric, window) {

@@ -436,7 +436,7 @@ test.describe('DNS → zone table (zone with ttl:null)', () => {
     // Column order is Zone / View / Records / TTL / Issues — asserted by index
     // because "the TTL cell says —" and "some cell in this row says —" are
     // different claims, and only the first one is the fix.
-    await expect(table.getByRole('columnheader', { name: 'TTL' })).toBeVisible();
+    await expect(table.getByRole('columnheader', { name: 'Cache time' })).toBeVisible();
     const unknown = table.locator('tbody tr', { hasText: 'no-authority.example.com' });
     await expect(unknown.locator('td').nth(3)).toHaveText('—');
     await expect(unknown.getByText('not checked', { exact: true })).toBeVisible();

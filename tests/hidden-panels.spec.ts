@@ -124,7 +124,7 @@ test.describe('a service the tenant does not own', () => {
     await expect(hiddenRow(page)).toContainText('no DHCP service detected');
     await expect(page.getByText('DHCP Leases')).toHaveCount(0);
     await expect(page.getByText('Utilization Distribution')).toBeVisible();
-    await expect(page.getByText('IPAM Spaces — Top Used')).toBeVisible();
+    await expect(page.getByText('IP spaces — most used')).toBeVisible();
   });
 
   test('"show anyway" is sticky for the session — navigating away and back keeps them shown', async ({ page }) => {

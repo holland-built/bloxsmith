@@ -4,20 +4,43 @@
   - list "Headline numbers":
     - listitem:
       - button /DNS queries \d+ a second/
+      - text: /Average for the hour from \d+:\d+ AM, so far\. No reading from this time yesterday to compare with\./
     - listitem:
-      - link /Zones Review \d+ with issues of \d+/:
+      - link "Zones 1 with issues Review · of 2":
         - /url: "#dns?issues=1"
+      - text: Zones whose cache times need fixing. Opens the list of them.
     - listitem:
-      - button /Signing Review \d+ not signed of \d+ public/
+      - button "Zone signing 1 not signed Review · of 2 public"
+      - text: Zones with public names, such as .com, that are not signed against tampering. Internal zones (reverse, .local, .lab) need no signing and are not counted.
     - listitem:
-      - button /DNS services \d+/
+      - button "DNS services 1"
+      - text: DNS services on this tenant. Infoblox gives no up or down state, so this is a count, not a health check.
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]
   - text: queries per second
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
   - text: /\d+/
-  - application "DNS Query Rate — 24h chart": /\d+:\d+ AM \d+:\d+ AM/
+  - application /DNS Query Rate — \d+[hmsp]+ chart/: /\d+:\d+ AM \d+:\d+ AM/
+  - heading /DNS Answers — \d+[hmsp]+/ [level=2]
+  - 'button /About: DNS Answers — \d+[hmsp]+/': "About: ⓘ"
+  - 'button /Options: DNS Answers — \d+[hmsp]+/'
+  - text: Average time to answer
+  - term: All answers
+  - definition: /\d+ ms/
+  - term: From your own zones
+  - definition: no readings
+  - term: Asked elsewhere
+  - definition: /\d+ ms/
+  - text: How lookups ended
+  - term: Answered from cache
+  - definition: /\d+%/
+  - term: Failed (SERVFAIL)
+  - definition: 1.6%
+  - term: Name not found (NXDOMAIN)
+  - definition: /\d+%/
+  - term: Timeouts
+  - definition: /\d+ a second/
   - heading "Failed Lookups" [level=2]
   - combobox "Time window":
     - option "Today" [selected]
@@ -56,21 +79,23 @@
   - text: Issues by kind
   - list "Zone issues by kind":
     - listitem:
-      - 'button /cache time too short: \d+ zones?\. Show them\./'
+      - 'button "cache time too short: 1 zone. Show them."'
   - term: Forward
-  - definition: /\d+/
+  - definition: "2"
   - term: Reverse
-  - definition: /\d+/
+  - definition: "0"
+  - term: Unusual settings
+  - definition: "1"
   - heading "DNS Services" [level=2]
   - text: 1 service
   - 'button "About: DNS Services"': "About: ⓘ"
   - 'button "Options: DNS Services"'
   - table:
     - rowgroup:
-      - row "Name Comment Pool ID":
+      - row "Name Comment Server group":
         - columnheader "Name"
         - columnheader "Comment"
-        - columnheader "Pool ID"
+        - columnheader "Server group"
     - rowgroup:
       - row "baseline-dns-service baseline pool/baseline-1":
         - cell "baseline-dns-service"
@@ -79,7 +104,7 @@
   - heading "Query Volume — 7d" [level=2]
   - 'button "About: Query Volume — 7d"': "About: ⓘ"
   - 'button "Options: Query Volume — 7d"'
-  - application "Query Volume — 7d chart"
+  - application "Query Volume — 7d chart": /Dec \d+ Dec \d+ Dec \d+ Dec \d+ Dec \d+ Jan 1/
   - heading "DNS Zones" [level=2]
   - text: 2 zones
   - textbox "Filter zones":
@@ -88,34 +113,38 @@
   - 'button "Options: DNS Zones"'
   - table:
     - rowgroup:
-      - row "Zone View Records TTL Issues":
+      - row "Zone View Records Cache time Issues":
         - columnheader "Zone":
           - button "Zone"
         - columnheader "View":
           - button "View"
         - columnheader "Records":
           - button "Records"
-        - columnheader "TTL":
-          - button "TTL"
+        - columnheader "Cache time":
+          - button "Cache time"
         - columnheader "Issues":
           - button "Issues"
     - rowgroup:
       - row /other\.example\. baseline-view 3 \d+ cache time too short/:
-        - cell "other.example."
+        - cell "other.example.":
+          - link "other.example.":
+            - /url: "#dossier?kind=zone&q=other.example.&view=baseline-view&id=dns%2Fauth_zone%2Fbaseline-2"
         - cell "baseline-view"
         - cell "3"
         - cell /\d+/
         - cell "cache time too short"
       - row /baseline\.example\. baseline-view \d+ \d+ —/:
-        - cell "baseline.example."
+        - cell "baseline.example.":
+          - link "baseline.example.":
+            - /url: "#dossier?kind=zone&q=baseline.example.&view=baseline-view&id=dns%2Fauth_zone%2Fbaseline-1"
         - cell "baseline-view"
         - cell /\d+/
         - cell /\d+/
         - cell "—"
-  - heading "DNSSEC Health" [level=2]
-  - text: 1 unsigned
-  - 'button "About: DNSSEC Health"': "About: ⓘ"
-  - 'button "Options: DNSSEC Health"'
+  - heading "Zone signing" [level=2]
+  - text: DNSSEC 1 unsigned
+  - 'button "About: Zone signing"': "About: ⓘ"
+  - 'button "Options: Zone signing"'
   - term: Not signed
   - definition: "1"
   - term: Signed
@@ -131,42 +160,46 @@
         - columnheader "View"
     - rowgroup:
       - row "other.example. baseline-view":
-        - cell "other.example."
+        - cell "other.example.":
+          - link "other.example.":
+            - /url: "#dossier?kind=zone&q=other.example.&id=dns%2Fauth_zone%2Fbaseline-2"
         - cell "baseline-view"
-  - heading "RPZ Policy Zones" [level=2]
-  - text: 1 zone
-  - 'button "About: RPZ Policy Zones"': "About: ⓘ"
-  - 'button "Options: RPZ Policy Zones"'
+  - heading "Blocklist zones" [level=2]
+  - text: RPZ 1 zone
+  - 'button "About: Blocklist zones"': "About: ⓘ"
+  - 'button "Options: Blocklist zones"'
   - table:
     - rowgroup:
-      - row "Zone Severity Policy Override Type Status":
+      - row "Zone Severity Override Type Status":
         - columnheader "Zone"
         - columnheader "Severity"
-        - columnheader "Policy Override"
+        - columnheader "Override"
         - columnheader "Type"
         - columnheader "Status"
     - rowgroup:
-      - row "rpz.baseline.example. HIGH NONE local Enabled":
+      - row "rpz.baseline.example. High None local Enabled":
         - cell "rpz.baseline.example."
-        - cell "HIGH"
-        - cell "NONE"
+        - cell "High"
+        - cell "None"
         - cell "local"
         - cell "Enabled"
-  - heading "DTC Load-Balanced Names" [level=2]
-  - text: 1 name
-  - 'button "About: DTC Load-Balanced Names"': "About: ⓘ"
-  - 'button "Options: DTC Load-Balanced Names"'
+  - heading "Load-balanced names" [level=2]
+  - text: DTC 1 name
+  - 'button "About: Load-balanced names"': "About: ⓘ"
+  - 'button "Options: Load-balanced names"'
   - table:
     - rowgroup:
-      - row "Name Policy Precedence TTL Status":
+      - row "Name Policy Precedence Cache time Status":
         - columnheader "Name"
         - columnheader "Policy"
         - columnheader "Precedence"
-        - columnheader "TTL"
+        - columnheader "Cache time"
         - columnheader "Status"
     - rowgroup:
       - row /baseline-lbdn baseline-policy \d+ \d+ Enabled/:
-        - cell "baseline-lbdn"
+        - cell "baseline-lbdn":
+          - link "baseline-lbdn":
+            - /url: "#dossier?kind=address&q=baseline-lbdn"
         - cell "baseline-policy"
         - cell /\d+/
         - cell /\d+/
