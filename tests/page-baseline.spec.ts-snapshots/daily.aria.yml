@@ -7,7 +7,7 @@
   - 'button "Options: Open issues"'
   - link "Subnets":
     - /url: "#network?minUtil=90&links=1"
-  - text: /Needs action 1 ≥\d+% full of \d+/
+  - text: /Needs action 1 \d+% full or more of \d+/
   - link "Hosts":
     - /url: "#infra?status=offline"
   - text: Needs action 1 not online of 3

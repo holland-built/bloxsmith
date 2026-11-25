@@ -104,7 +104,7 @@ test('Audit: a portal row with no result is not painted as a success', async ({ 
 
   const table = page.locator('[data-panel-id="audit-csp-portal"]');
   const resultCell = (resource: string) => table.locator('tr', { hasText: resource }).locator('td').last().locator('span').first();
-  await expect(resultCell('res-with-result')).toHaveText('success', { timeout: 20_000 });
+  await expect(resultCell('res-with-result')).toHaveText('Worked', { timeout: 20_000 });
   await expect(resultCell('res-without-result')).toHaveText('—');
 
   const ok = await tokenColour(page, '--color-ok', 'color');

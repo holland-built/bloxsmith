@@ -30,7 +30,7 @@
 .chg-cap { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ov-ink2) }
 .chg-cap-i { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--ov-line2); font-size: 11px; font-style: italic; color: var(--ov-muted) }
 
-.chg-do { color: var(--ov-ink) }
+.chg-do { color: var(--ov-muted) }
 
 /* The key to the coloured dots that start each row of the feed. */
 .chg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 8px 8px; font-size: 12.5px; color: var(--ov-muted) }
@@ -48,4 +48,22 @@
 @media (max-width: 420px) {
   .chg-tile { padding-inline: 10px }
   .chg-line { overflow: visible; white-space: normal; text-overflow: clip }
+}
+
+/* The changed-objects list on a phone: each row a stacked block of
+   "Label: value" lines under its object's heading, so Result and Flags are
+   never off to the right. Hairline dividers between rows, not cards; the
+   column headings stay for screen readers only. The same break as the
+   shared tables (768px). */
+@media (max-width: 767.98px) {
+  .chg-colhead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap }
+  .chg-group { display: flex; flex-wrap: wrap; gap: 2px 10px; padding-block: 8px }
+  .chg-group > [role] { white-space: normal; overflow: visible }
+  .chg-row { display: block; height: auto; padding-block: 10px; font-size: 13px }
+  .chg-row > [role="cell"] { display: block; min-width: 0; overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.5 }
+  .chg-row > [role="cell"]:first-child { display: inline-block; vertical-align: middle; margin-inline-end: 8px }
+  .chg-row > [role="cell"]:nth-child(2) { display: inline }
+  .chg-row > [role="cell"]:last-child { display: flex; flex-wrap: wrap; gap: 4px; align-items: center }
+  .chg-row > [role="cell"]:last-child:not(:has(.ov-chip)) { display: none }
+  .chg-row > [data-k]::before { content: attr(data-k) ": " / ""; margin-inline-end: 4px; color: var(--ov-muted) }
 }

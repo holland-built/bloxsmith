@@ -19,11 +19,12 @@
 .br-down-wait { font-size: 12.5px; color: var(--color-dim) }
 
 .br a.br-btn, .br a.br-primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
-.br a.br-btn { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: var(--color-link); background: color-mix(in srgb, var(--ov-accent) 12%, transparent) }
+/* The standard secondary button, not the picked tint (GUI audit R2-A8, A15). */
+.br a.br-btn { min-height: 32px; padding: 0 12px; border-radius: var(--radius-control); border: 1px solid var(--color-border); font-size: 13px; color: var(--color-field-txt); background: var(--color-field) }
 .br a.br-primary { min-height: 44px; max-width: 100%; padding: 0 20px; border-radius: 10px; font-size: 15px; color: var(--color-on-accent); background: var(--ov-accent) }
 .br a.br-btn:active, .br a.br-primary:active { scale: .96 }
 @media (hover: hover) {
-  .br a.br-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) }
+  .br a.br-btn:hover { border-color: var(--color-border-hover) }
   .br a.br-primary:hover { background: color-mix(in srgb, var(--ov-accent) 86%, var(--ov-ink)) }
 }
 

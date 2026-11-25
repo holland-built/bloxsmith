@@ -23,7 +23,7 @@ import {
   withinWindow,
 } from '../lib/changes.js'
 import Tip from '../components/Tip.jsx'
-import { actionWord, resourceWord } from '../lib/auditWords.js'
+import { actionWord, resourceWord, resultWord, whoKindWord } from '../lib/auditWords.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import './Overview.css'
 import './Changes.css'
@@ -114,12 +114,12 @@ export default function Changes() {
             {/* No claim at all until a read has established what it covers. */}
             {state === 'loading' || state === 'unavailable' ? null : (
               <Tip tip={win.tip} className="ov-pill" data-changes-window="">
-                {win.text}
+                {plainSpan(win.text)}
               </Tip>
             )}
             <span className="ov-pill" data-updated="">
               <span aria-hidden="true" className={`ov-live${state === 'unavailable' ? ' down' : state === 'loading' ? ' wait' : ''}`} />
-              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? (fetchedAt ? `Couldn't refresh · ${formatTime(fetchedAt)}` : 'Not updated') : `Updated ${fetchedAt ? formatTime(fetchedAt) : ''}`}
+              {state === 'loading' ? 'Checking…' : state === 'unavailable' ? (fetchedAt ? `Couldn't refresh · ${formatTime(fetchedAt)}` : 'Information is unavailable') : `Updated ${fetchedAt ? formatTime(fetchedAt) : ''}`}
             </span>
           </span>
         </div>
@@ -128,7 +128,7 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={96} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : "the list of changes couldn't be read, so these counts aren't known"} />
+              <FeedUnavailable label="The list of changes is unavailable" reason={refused ? NO_PERMISSION : "These counts aren't known until it can be read."} />
             ) : (
               <NotabilityBand band={band} listed={summary.listed} />
             )}
@@ -148,9 +148,9 @@ export default function Changes() {
             {state === 'loading' ? (
               <Skeleton h={250} />
             ) : state === 'unavailable' ? (
-              <FeedUnavailable label="Portal audit information is unavailable" reason={refused ? NO_PERMISSION : "the list of changes couldn't be read"} />
+              <FeedUnavailable label="The list of changes is unavailable" reason={refused ? NO_PERMISSION : undefined} />
             ) : state === 'empty' ? (
-              <Empty>nothing changed in the last 24 hours</Empty>
+              <Empty>Nothing changed in the last 24 hours</Empty>
             ) : (
               <>
                 <SpanBar summary={summary} />
@@ -163,6 +163,14 @@ export default function Changes() {
       </div>
     </div>
   )
+}
+
+// "Last 6 h only" -> "Last 6 hours only": the shared span words are short for
+// tight spaces, and the pill has room for the whole word (GUI audit R2-C4).
+function plainSpan(text) {
+  return String(text)
+    .replace(/(\d+) h\b/g, (_, n) => `${n} ${n === '1' ? 'hour' : 'hours'}`)
+    .replace(/(\d+) min\b/g, (_, n) => `${n} ${n === '1' ? 'minute' : 'minutes'}`)
 }
 
 // ---------- the four tiles ----------
@@ -240,6 +248,8 @@ function BandCell({ cell, listed }) {
         )}
       </span>
       <span className="ov-muted ov-small chg-line">{tileLine(cell, listed)}</span>
+      {/* Advice in grey, not a link: the rows it means are in Changed objects
+          below (GUI audit R2-C5). */}
       {alarm && <span className="ov-small chg-line chg-do" data-changes-do="">{TILE_DO[cell.key](cell.count)}</span>}
     </Tip>
   )
@@ -357,9 +367,9 @@ function Feed({ groups }) {
 // Counts describe the rows listed under this header. The band above counts
 // the same rows, all groups together.
 function groupCounts(group) {
-  const parts = [`${group.total} ${group.total === 1 ? 'row' : 'rows'}`]
-  if (group.successes) parts.push(`${group.successes} success`)
-  if (group.failures) parts.push(`${group.failures} not successful`)
+  const parts = [`${group.total} ${group.total === 1 ? 'change' : 'changes'}`]
+  if (group.successes) parts.push(`${group.successes} worked`)
+  if (group.failures) parts.push(`${group.failures} failed`)
   if (group.deletions) parts.push(`${group.deletions} deleted`)
   return parts.join(' · ')
 }
@@ -384,6 +394,12 @@ function GroupHeader({ group }) {
   )
 }
 
+// On a phone each row stacks into lines of "Label: value" (Changes.css), so
+// every column stays on screen. The label is drawn there by CSS from data-k,
+// with empty alternative text: screen readers already hear each cell against
+// its column header, and the cell's own text is unchanged.
+const COL_LABEL = Object.fromEntries(FEED_COLUMNS.map((c) => [c.key, c.label]))
+
 function FeedRow({ row }) {
   const { COLORS } = useChartTheme()
   const del = isDeletion(row)
@@ -401,7 +417,7 @@ function FeedRow({ row }) {
   const date = formatDate(row.ts)
 
   return (
-    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-2 h-[30px] text-note`}>
+    <div role="row" className={`grid ${FEED_COLS} gap-x-3 items-center border-b border-line px-2 h-[30px] text-note chg-row`}>
       <span
         role="cell"
         aria-colindex={COL.severity}
@@ -414,16 +430,16 @@ function FeedRow({ row }) {
         <span className="chg-dim mr-1.5">{date}</span>
         {formatClock(row.ts)}
       </span>
-      <span role="cell" aria-colindex={COL.action} className="truncate" style={del ? { color: COLORS.crit } : undefined} title={row.action}>{actionWord(row.action) || '—'}</span>
+      <span role="cell" aria-colindex={COL.action} data-k={COL_LABEL.action} className="truncate" style={del ? { color: COLORS.crit } : undefined} title={row.action}>{actionWord(row.action) || '—'}</span>
       {/* Success is the normal case, so it stays grey; only a failure is coloured. */}
-      <span role="cell" aria-colindex={COL.result} className={`truncate${failed ? '' : ' chg-dim'}`} style={failed ? { color: COLORS.crit } : undefined} title={row.result}>
-        {row.result || 'not reported'}
+      <span role="cell" aria-colindex={COL.result} data-k={COL_LABEL.result} className={`truncate${failed ? '' : ' chg-dim'}`} style={failed ? { color: COLORS.crit } : undefined} title={row.result}>
+        {resultWord(row.result) || 'Not reported'}
       </span>
-      <span role="cell" aria-colindex={COL.user} className="truncate" title={`${row.user || '—'}${row.who_role ? ` · ${row.who_role}` : ''}`}>
+      <span role="cell" aria-colindex={COL.user} data-k={COL_LABEL.user} className="truncate" title={`${row.user || '—'}${row.who_role ? ` · ${row.who_role}` : ''}`}>
         {shortActor(row.user) || '—'}
       </span>
-      <span role="cell" aria-colindex={COL.kind} className="truncate chg-dim">{row.who_kind || '—'}</span>
-      <span role="cell" aria-colindex={COL.flags} className="flex items-center gap-1">
+      <span role="cell" aria-colindex={COL.kind} data-k={COL_LABEL.kind} className="truncate chg-dim">{whoKindWord(row.who_kind) || '—'}</span>
+      <span role="cell" aria-colindex={COL.flags} data-k={COL_LABEL.flags} className="flex items-center gap-1">
         {del && <span data-flag="deleted" className="ov-chip crit">Deleted</span>}
         {failed && <span data-flag="failed" className="ov-chip crit">Failed</span>}
         {noResult && <span data-flag="no-result" className="ov-chip none">No result</span>}

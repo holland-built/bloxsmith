@@ -1,6 +1,6 @@
 - main "Changes tab":
   - heading "Changes" [level=1]
-  - text: /Last \d+ h only Updated .+/
+  - text: /Last \d+ hours only Updated .+/
   - button "Arrange panels"
   - heading "Worth a look" [level=2]
   - 'button "About: Worth a look"': "About: ⓘ"
@@ -20,67 +20,67 @@
       - columnheader "Who"
       - columnheader "Type"
       - columnheader "Flags"
-    - rowgroup "IP address — 2 rows · 1 success · 1 not successful":
-      - row "IP address 2 rows · 1 success · 1 not successful":
+    - rowgroup "IP address — 2 changes · 1 worked · 1 failed":
+      - row "IP address 2 changes · 1 worked · 1 failed":
         - cell
         - rowheader "IP address":
           - heading "IP address" [level=3]
-        - cell "2 rows · 1 success · 1 not successful"
-      - 'row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Changed failed: denied actor-gamma service Failed/':
+        - cell "2 changes · 1 worked · 1 failed"
+      - 'row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Changed Refused actor-gamma automated account Failed/':
         - cell "Deleted or failed"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Changed"
-        - 'cell "failed: denied"'
+        - cell "Refused"
         - cell "actor-gamma"
-        - cell "service"
+        - cell "automated account"
         - cell "Failed"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed success actor-beta service Out of hours/:
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed Worked actor-beta automated account Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Changed"
-        - cell "success"
+        - cell "Worked"
         - cell "actor-beta"
-        - cell "service"
+        - cell "automated account"
         - cell "Out of hours"
-    - rowgroup "Subnet — 1 row · 1 success":
-      - row "Subnet 1 row · 1 success":
+    - rowgroup "Subnet — 1 change · 1 worked":
+      - row "Subnet 1 change · 1 worked":
         - cell
         - rowheader "Subnet":
           - heading "Subnet" [level=3]
-        - cell "1 row · 1 success"
-      - row /Routine \d+-\d+-\d+:\d+:\d+ Changed success actor-beta service/:
+        - cell "1 change · 1 worked"
+      - row /Routine \d+-\d+-\d+:\d+:\d+ Changed Worked actor-beta automated account/:
         - cell "Routine"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Changed"
-        - cell "success"
+        - cell "Worked"
         - cell "actor-beta"
-        - cell "service"
+        - cell "automated account"
         - cell
-    - rowgroup "DNS record — 1 row · 1 success · 1 deleted":
-      - row "DNS record 1 row · 1 success · 1 deleted":
+    - rowgroup "DNS record — 1 change · 1 worked · 1 deleted":
+      - row "DNS record 1 change · 1 worked · 1 deleted":
         - cell
         - rowheader "DNS record":
           - heading "DNS record" [level=3]
-        - cell "1 row · 1 success · 1 deleted"
-      - row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Deleted success actor-alpha service Deleted/:
+        - cell "1 change · 1 worked · 1 deleted"
+      - row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Deleted Worked actor-alpha automated account Deleted/:
         - cell "Deleted or failed"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Deleted"
-        - cell "success"
+        - cell "Worked"
         - cell "actor-alpha"
-        - cell "service"
+        - cell "automated account"
         - cell "Deleted"
-    - rowgroup "DNS zone — 1 row · 1 success":
-      - row "DNS zone 1 row · 1 success":
+    - rowgroup "DNS zone — 1 change · 1 worked":
+      - row "DNS zone 1 change · 1 worked":
         - cell
         - rowheader "DNS zone":
           - heading "DNS zone" [level=3]
-        - cell "1 row · 1 success"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed success actor-alpha service Out of hours/:
+        - cell "1 change · 1 worked"
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed Worked actor-alpha automated account Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
         - cell "Changed"
-        - cell "success"
+        - cell "Worked"
         - cell "actor-alpha"
-        - cell "service"
+        - cell "automated account"
         - cell "Out of hours"

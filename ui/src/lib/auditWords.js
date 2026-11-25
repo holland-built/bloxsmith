@@ -16,6 +16,28 @@ export function actionWord(action) {
   return ACTION[low] ?? low[0].toUpperCase() + low.slice(1)
 }
 
+/**
+ * "success" -> "Worked", "failed: denied" -> "Refused", any other failure ->
+ * "Failed" (GUI audit R2-C4). The record's own text stays in the cell's title.
+ */
+export function resultWord(result) {
+  const low = String(result ?? '').trim().toLowerCase()
+  if (!low) return ''
+  if (low === 'success' || low === 'succeeded' || low === 'ok') return 'Worked'
+  if (/denied|refused|forbidden|unauthori[sz]ed/.test(low)) return 'Refused'
+  if (/fail|error/.test(low)) return 'Failed'
+  return low[0].toUpperCase() + low.slice(1)
+}
+
+// The server's account classes (auditClass in go/internal/dashboard/norm.go).
+const WHO_KIND = { service: 'automated account' }
+
+/** "service" -> "automated account"; person, device and the rest stay as they are. */
+export function whoKindWord(kind) {
+  const low = String(kind ?? '').trim().toLowerCase()
+  return WHO_KIND[low] ?? low
+}
+
 // Portal API names and the app's own route names, one map for both.
 const RESOURCE = {
   dnsrecord: 'DNS record',

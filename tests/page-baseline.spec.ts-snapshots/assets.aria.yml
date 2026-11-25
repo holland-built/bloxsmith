@@ -8,7 +8,7 @@
     - listitem:
       - button "Unclassified 0 0.0% of all"
     - listitem:
-      - button "Asset types 2"
+      - button "Types 2"
   - button "Arrange panels"
   - heading "Coverage gaps" [level=2]
   - text: devices a tool has not reported

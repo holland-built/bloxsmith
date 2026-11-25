@@ -60,7 +60,7 @@ function Problem({ c }) {
           {c.items.length > SHOW ? <p className="ov-muted ov-small">And {(c.items.length - SHOW).toLocaleString()} more.</p> : null}
         </div>
       </details>
-      {c.link ? <a className="ov-act bp-act" href={c.link}>Open Infra</a> : null}
+      {c.link ? <a className="ov-act bp-act" href={c.link}>View servers</a> : null}
     </li>
   )
 }
@@ -118,7 +118,7 @@ function Tiles({ checks, loading }) {
             <Tip tip="A list couldn't be read, came back cut short, or can't prove the answer either way. These are never counted as passed.">Couldn't tell</Tip>
           </span>
           <span className={`ov-num bp-num ${t?.unknown ? '' : 'calm'}`}>{t ? t.unknown : '—'} {of}</span>
-          <span className="ov-muted ov-small">{t ? (t.unknown ? 'not a pass' : 'none') : none}</span>
+          <span className="ov-muted ov-small">{t ? (t.unknown ? 'not enough information to check' : 'none') : none}</span>
         </li>
         <li className="bp-tile" data-tile="passed">
           {/* No tick until the checks have answered: a tick over "unavailable"
@@ -127,7 +127,7 @@ function Tiles({ checks, loading }) {
             <Tip tip="The whole list was read and nothing was wrong.">Passed</Tip>
           </span>
           <span className="ov-num bp-num calm">{t ? t.passed : '—'} {of}</span>
-          <span className="ov-muted ov-small">{t ? (t.passed ? 'whole list read' : 'none') : none}</span>
+          <span className="ov-muted ov-small">{t ? (t.passed ? 'nothing to fix' : 'none') : none}</span>
         </li>
       </ul>
       {checks?.length ? <Strip checks={checks} /> : null}

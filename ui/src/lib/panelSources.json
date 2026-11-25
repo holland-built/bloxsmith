@@ -497,7 +497,7 @@
   {
     "id": "incidents-action-volume",
     "page": "Incidents",
-    "name": "Action Volume",
+    "name": "Action volume",
     "kind": "rest",
     "source": "Infoblox IQ actions",
     "builder": "no",

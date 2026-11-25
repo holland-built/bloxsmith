@@ -22,7 +22,7 @@
   - 'button "Options: Utilization Distribution"'
   - application "Utilization Distribution chart": /<\d+% \d+–\d+% ≥\d+% 0 1 2 3 4/
   - heading "IP spaces — most used" [level=2]
-  - text: IPAM addresses used
+  - text: addresses used
   - 'button "About: IP spaces — most used"': "About: ⓘ"
   - 'button "Options: IP spaces — most used"'
   - link "Baseline Space":

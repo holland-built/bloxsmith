@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
@@ -99,12 +99,12 @@ function headlines({ qps, services, zones, zonesStatus, zonesFailed, zonesLoadin
   const checked = zonesOk ? zones.filter(ttlChecked).length : 0
   const unchecked = zonesOk ? zones.length - checked : 0
   const withIssues = zonesOk ? zones.filter(hasIssues).length : null
-  const zoneWord = zonesLoading ? ['Checking', 'none'] : !zonesOk ? ['Unavailable', 'none']
+  const zoneWord = zonesLoading ? ['Checking', 'none'] : !zonesOk ? ['', 'none']
     : withIssues > 0 ? [SEV_WORD[PROBLEM_SEV.zoneIssues], PROBLEM_SEV.zoneIssues] : unchecked > 0 ? ['Partly checked', 'none'] : zones.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const sg = signing(dnssec)
   const sgOk = !dnssec.loading && !sg.failed
-  const sgWord = dnssec.loading ? ['Checking', 'none'] : !sgOk ? ['Unavailable', 'none']
+  const sgWord = dnssec.loading ? ['Checking', 'none'] : !sgOk ? ['', 'none']
     : sg.unsigned > 0 ? [SEV_WORD.warn, 'warn'] : sg.publicRows.length ? ['Healthy', 'ok'] : ['', 'none']
 
   const svc = services.data?.rows
@@ -195,8 +195,9 @@ export default function Dns() {
       <div className="ov-head">
         <PageTitle>DNS</PageTitle>
         {/* When the zones payload arrived, not the time of this render. */}
-        <UpdatedPill api={data} tip="Every number here is fetched again every 30 seconds." unavailable="Zone information is unavailable" />
+        <UpdatedPill api={data} tip="Every number here is fetched again every 30 seconds." />
       </div>
+      <TabIntro>How your DNS is answering: lookups, failures, zones and their settings.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={stripItems({ qps, services, zones, zonesStatus, zonesFailed: !!data.error, zonesLoading: data.loading, dnssec })} />
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
@@ -316,8 +317,8 @@ const ANSWER_TIMES = [
 ]
 const ANSWER_SHARES = [
   ['cache_hit', 'Answered from cache', 'The share of lookups answered from a recent answer the server kept (its cache), without asking anyone again.'],
-  ['servfail', 'Failed (SERVFAIL)', 'The share of lookups the server could not answer at all.'],
-  ['nxdomain', 'Name not found (NXDOMAIN)', 'The share of lookups for a name that does not exist. Often typing errors or old settings.'],
+  ['servfail', 'Failed', 'The share of lookups the server could not answer at all (SERVFAIL).'],
+  ['nxdomain', 'Name not found', 'The share of lookups for a name that does not exist (NXDOMAIN). Often typing errors or old settings.'],
   ['timeouts', 'Timeouts', 'How many times a second your servers gave up waiting for another DNS server to reply.'],
 ]
 
@@ -356,6 +357,15 @@ function DnsAnswers({ panelId, health }) {
 // response code, and the names that failed most (lib/dnsFailures.js). The
 // server picks which records to read by how far back the window goes, and the
 // line under the table says which. A read that failed says "not checked".
+// "Refused (REFUSED)" -> "Refused" on screen, with the DNS code kept in the
+// tip for anyone who needs it (GUI audit B10).
+const CODE_RE = / \(([A-Z]+)\)$/
+const codeLabel = (label) => String(label).replace(CODE_RE, '')
+function codeTip(c) {
+  const code = String(c.label).match(CODE_RE)?.[1]
+  return code ? `${c.tip} DNS calls this ${code}.` : c.tip
+}
+
 function FailedLookups({ panelId }) {
   const [win, setWin] = useState(readWindow)
   // Totals over hours or days, so once a minute is plenty.
@@ -387,8 +397,9 @@ function FailedLookups({ panelId }) {
         <Skeleton h={180} />
       ) : (
         <>
-          {/* Any read failed: say so once, with a way to ask again. Each number
-              below still says "not checked" on its own (GUI audit B2). */}
+          {/* Any read failed: say so once, with a way to ask again. When only
+              some failed, each of those says "not checked" on its own; when
+              the whole read failed there are no numbers to show (GUI audit B2). */}
           {someFailed && (
             <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-crit pt-1">
               {v.state === 'error' ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}
@@ -397,6 +408,7 @@ function FailedLookups({ panelId }) {
               </button>
             </p>
           )}
+          {v.state !== 'error' && <>
           <dl className="dns-stats">
             <div data-failed-total="" data-state={v.total.value == null ? 'unknown' : 'ok'}>
               <dt>Failed lookups</dt>
@@ -406,7 +418,7 @@ function FailedLookups({ panelId }) {
           <dl className="dns-stats">
             {v.codes.map((c) => (
               <div key={c.key} data-failed-code={c.key}>
-                <dt><Tip tip={c.tip}>{c.label}</Tip></dt>
+                <dt><Tip tip={codeTip(c)}>{codeLabel(c.label)}</Tip></dt>
                 <dd className={c.value == null ? 'text-muted' : undefined} style={c.value == null ? { fontSize: 15, fontWeight: 400 } : undefined}>{c.text}</dd>
               </div>
             ))}
@@ -421,6 +433,7 @@ function FailedLookups({ panelId }) {
           )}
           {v.note && <div className="text-copy text-muted mt-2" data-failed-note="">{v.note}</div>}
           {v.source && <div className="text-note text-muted mt-2" data-failed-source="">{v.source}</div>}
+          </>}
         </>
       )}
     </Card>
@@ -494,7 +507,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
-      <Card panelId={panelId} span={2} title="Zone problems" className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} title="Zone problems">
         <FeedUnavailable label="DNS zone information is unavailable" />
       </Card>
     )
@@ -908,7 +921,6 @@ function DnssecHealth({ panelId, dnssec }) {
       panelId={panelId}
       span={2}
       title="Zone signing"
-      note="DNSSEC"
       right={
         <span className="text-note text-muted">{dnssecPanelLabel(unsigned.length, DNSSEC_CAP)}</span>
       }
@@ -996,7 +1008,7 @@ function RpzPanel({ panelId, rpz }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="Blocklist zones" note="RPZ" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'zone') : ''}</span>}>
+    <Card panelId={panelId} span={3} title="Blocklist zones" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'zone') : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
@@ -1036,7 +1048,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="Load-balanced names" note="DTC" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'name') : ''}</span>}>
+    <Card panelId={panelId} span={3} title="Load-balanced names" right={<span className="text-note text-muted">{rows.length ? countOf(total, 'name') : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (

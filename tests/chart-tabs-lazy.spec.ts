@@ -57,7 +57,7 @@ const CHART_TABS: [string, string][] = [
   ['dns', 'DNS'],
   ['incidents', 'Incidents'],
   ['audit', 'Audit'],
-  ['infra', 'Infrastructure'],
+  ['infra', 'Infra'],
 ];
 
 for (const [tab, heading] of CHART_TABS) {

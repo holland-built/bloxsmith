@@ -61,9 +61,9 @@
   - 'button "Options: Suggested actions"'
   - table:
     - rowgroup:
-      - row "Sev Action Status":
-        - columnheader "Sev":
-          - button "Sev"
+      - row "Severity Action Status":
+        - columnheader "Severity":
+          - button "Severity"
         - columnheader "Action"
         - columnheader "Status"
     - rowgroup:
@@ -81,9 +81,9 @@
         - cell "Resolved Reopen":
           - text: Resolved
           - button "Reopen"
-  - heading "Action Volume" [level=2]
+  - heading "Action volume" [level=2]
   - text: by day
-  - 'button "About: Action Volume"': "About: ⓘ"
-  - 'button "Options: Action Volume"'
-  - application "Action Volume chart": /Dec \d+ Jan 1/
+  - 'button "About: Action volume"': "About: ⓘ"
+  - 'button "Options: Action volume"'
+  - application "Action volume chart": /Dec \d+ Jan 1/
   - text: High 1 Medium 0 Low 1

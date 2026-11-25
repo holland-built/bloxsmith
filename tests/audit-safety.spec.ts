@@ -567,14 +567,14 @@ test('R4. Changes shows no permission when the audit read was refused', async ({
   await page.goto('/#changes');
   await expect(page.locator('[data-panel-id="changes-notability"]').getByText(NO_PERM)).toBeVisible();
   await expect(page.locator('[data-panel-id="changes-changed-objects"]').getByText(NO_PERM)).toBeVisible();
-  await expect(page.getByText('Portal audit information is unavailable')).toHaveCount(0);
+  await expect(page.getByText('The list of changes is unavailable')).toHaveCount(0);
   await expect(page.getByRole('main').getByRole('button', { name: 'Try again' })).toHaveCount(0);
 });
 
 test('R4. Changes still says unavailable for any other audit failure', async ({ page }) => {
   await page.route('**/api/csp-audit*', (r) => json(r, { rows: [], count: 0, truncated: false, status: 'error' }));
   await page.goto('/#changes');
-  await expect(page.getByText('Portal audit information is unavailable').first()).toBeVisible();
+  await expect(page.getByText('The list of changes is unavailable').first()).toBeVisible();
   await expect(page.getByText(NO_PERM)).toHaveCount(0);
 });
 
@@ -725,7 +725,7 @@ test('L4. an old denial does not hide a newer failure on Changes', async ({ page
   fail = true;
   await page.clock.fastForward(10 * 60 * 1000);
   await page.clock.runFor(1000);
-  await expect(page.getByText('Portal audit information is unavailable').first()).toBeVisible();
+  await expect(page.getByText('The list of changes is unavailable').first()).toBeVisible();
   await expect(page.getByText(NO_PERM)).toHaveCount(0);
 });
 

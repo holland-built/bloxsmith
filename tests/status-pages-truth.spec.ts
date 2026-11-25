@@ -74,7 +74,7 @@ test('A13: Hide is a button, the words are whole, and the squares say they are d
   await expect(hide).toHaveCSS('text-decoration-line', 'none', SLOW);
   await expect(page.locator('[data-board-row="DNS"]')).toContainText('No open issues');
   await expect(page.locator('[data-board]')).not.toContainText('None open');
-  await expect(fact(page, 'Changes')).toContainText(/Changes \(last \d+ hours?/);
+  await expect(fact(page, 'Changes')).toContainText(/Changes, last \d+ hours?/);
   const head = page.locator('[data-board]').getByRole('columnheader', { name: 'Last 10 days' });
   expect((await head.boundingBox())!.width).toBeGreaterThan(40);
 });

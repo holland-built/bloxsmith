@@ -50,7 +50,7 @@ test('a zero counted over part of the hosts says so, and a missing whole-network
   await expect(measure(page, 'Hosts')).toContainText('3 loaded of 40');
   await expect(row(page, 'Hosts')).toContainText('none among the 3 loaded');
   await expect(row(page, 'Hosts')).not.toContainText('No open issues');
-  await expect(measure(page, 'IPAM')).toContainText('unavailable');
+  await expect(measure(page, 'IPAM')).toContainText('Not checked');
 });
 
 test('each service row shows its state from the health feed, and a partial service list says so', async ({ page }) => {

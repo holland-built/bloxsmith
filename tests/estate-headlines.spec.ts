@@ -67,7 +67,7 @@ test('Network, Infra: a dead /api/data is a dash in the strip, never 0', async (
   await page.route('**/api/data*', dead);
   for (const [tab, labels] of [
     ['network', [/^Subnets/, /^≥90%/, /^70–89%/]],
-    ['infra', [/^Hosts/, /^Not online/, /^Degraded/, /^Unknown/]],
+    ['infra', [/^Hosts/, /^Not online/, /^Review/, /^Unknown/]],
   ] as const) {
     await page.goto(`/#${tab}`);
     for (const label of labels) {
@@ -82,7 +82,8 @@ test('DNS: a dead /api/data is a dash in the zones headline, never 0', async ({ 
   await page.goto('/#dns');
   const zones = dnsTile(page, 'zones');
   await expect(zones).toContainText('—');
-  await expect(zones).toContainText('Unavailable');
+  // The dash alone; the page pill and panels say why (GUI audit R2-B5).
+  await expect(zones).not.toContainText('Unavailable');
   await expect(zones).not.toContainText(/\b0\b/);
 });
 

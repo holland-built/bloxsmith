@@ -51,7 +51,7 @@ test('changing the window asks for that window and shows its numbers', async ({ 
   await expect(panel(page).locator('[data-failed-total] dd')).toHaveText('78,000');
 });
 
-test('a failed reply says "not checked", never 0', async ({ page }) => {
+test('a failed reply says it could not be read, never 0', async ({ page }) => {
   await page.route('**/api/csp/dns-failures*', (route) => {
     const w = new URL(route.request().url()).searchParams.get('window') ?? '';
     return fulfillJson(route, {
@@ -62,16 +62,15 @@ test('a failed reply says "not checked", never 0', async ({ page }) => {
   });
   await page.goto('/#dns');
   const p = panel(page);
-  await expect(p.locator('[data-failed-total] dd')).toHaveText('not checked');
-  for (const code of ['nxdomain', 'servfail', 'refused', 'other']) {
-    await expect(p.locator(`[data-failed-code="${code}"] dd`)).toHaveText('not checked');
-  }
-  await expect(p.locator('[data-failed-names]')).toHaveText('not checked');
+  // Every part failed: one line says so and no numbers are drawn (GUI audit round 2, B2).
+  await expect(p.locator('[data-panel-failed]')).toContainText("Couldn't read these numbers from Infoblox.");
+  await expect(p.locator('[data-failed-total], [data-failed-code], [data-failed-names]')).toHaveCount(0);
   await expect(p.locator('dd', { hasText: /^0$/ })).toHaveCount(0);
 });
 
-test('a dead request says "not checked" too', async ({ page }) => {
+test('a dead request says it could not be read too', async ({ page }) => {
   await page.route('**/api/csp/dns-failures*', (route) => route.fulfill({ status: 500, body: 'boom' }));
   await page.goto('/#dns');
-  await expect(panel(page).locator('[data-failed-total] dd')).toHaveText('not checked');
+  await expect(panel(page).locator('[data-panel-failed]')).toContainText("Couldn't read these numbers from Infoblox.");
+  await expect(panel(page).locator('[data-failed-total]')).toHaveCount(0);
 });

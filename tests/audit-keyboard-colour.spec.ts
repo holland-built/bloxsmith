@@ -237,7 +237,7 @@ test('Security: the events panel is by hour, with plain totals and no colour key
 test('Security: Threat Feed Activity has a colour key beside each total', async ({ page }) => {
   await open(page, 'security');
   const card = page.locator('[data-panel-id="security-threat-feed-activity"]');
-  await expect(card.getByText('Blocked', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByText('Blocked, last 7 days', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(card.locator('[data-swatch]')).toHaveCount(2);
 });
 

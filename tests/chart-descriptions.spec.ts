@@ -47,7 +47,7 @@ const PAGES: [string, string[]][] = [
   ['network', ['Utilization Distribution chart']],
   ['security', ['Threat events by hour chart', 'Threat feed activity chart']],
   ['infra', ['Host Status chart']],
-  ['incidents', ['Action Volume chart']],
+  ['incidents', ['Action volume chart']],
 ];
 
 for (const [tab, names] of PAGES) {
@@ -82,7 +82,7 @@ test('a donut says each slice: the hosts by state', async ({ page }) => {
   // "ok" counts as online (lib/statusBucket.js); it used to be drawn as Other.
   await page.goto('/#infra');
   await expect(page.locator(CHART)).toHaveCount(1, { timeout: 20_000 });
-  expect(await descriptionOf(page, 'Host Status chart')).toBe('Hosts: Active 1, Degraded 1, Not online 1.');
+  expect(await descriptionOf(page, 'Host Status chart')).toBe('Hosts: Active 1, Review 1, Not online 1.');
 });
 
 test('a long run gives its ends, its lowest and its highest: a week of queries', async ({ page }) => {

@@ -19,8 +19,8 @@
   - 'button "Options: Triage inbox"'
   - table:
     - rowgroup:
-      - row "Ack Severity Query Action Time Block":
-        - columnheader "Ack"
+      - row "Seen Severity Query Action Time Block":
+        - columnheader "Seen"
         - columnheader "Severity":
           - button "Severity"
         - columnheader "Query":
@@ -31,28 +31,27 @@
           - button "Time"
         - columnheader "Block"
     - rowgroup:
-      - row /Mark bad\.baseline\.example as seen HIGH bad\.baseline\.example BLOCK Jan 1, \d+, \d+:\d+ AM Block/:
+      - row /Mark bad\.baseline\.example as seen High bad\.baseline\.example Blocked Jan 1, \d+, \d+:\d+ AM Blocked/:
         - cell "Mark bad.baseline.example as seen":
           - checkbox "Mark bad.baseline.example as seen"
-        - cell "HIGH"
+        - cell "High"
         - cell "bad.baseline.example"
-        - cell "BLOCK"
+        - cell "Blocked"
         - cell /Jan 1, \d+, \d+:\d+ AM/
-        - cell "Block":
-          - button "Block"
-      - row /Mark watch\.baseline\.example as seen MEDIUM watch\.baseline\.example LOG Jan 1, \d+, 8:\d+ AM Block/:
+        - cell "Blocked"
+      - row /Mark watch\.baseline\.example as seen Medium watch\.baseline\.example Logged Jan 1, \d+, 8:\d+ AM Block/:
         - cell "Mark watch.baseline.example as seen":
           - checkbox "Mark watch.baseline.example as seen"
-        - cell "MEDIUM"
+        - cell "Medium"
         - cell "watch.baseline.example"
-        - cell "LOG"
+        - cell "Logged"
         - cell /Jan 1, \d+, 8:\d+ AM/
         - cell "Block":
           - button "Block"
   - heading "Response summary" [level=2]
   - 'button "About: Response summary"': "About: ⓘ"
   - 'button "Options: Response summary"'
-  - text: /Critical, not yet reviewed 0 Blocked \d+ Logged 8 Total Events \d+/
+  - text: /Critical, not yet reviewed 0 Blocked, last hour \d+ Logged, last hour 8 Total events \d+/
   - heading "Threat events by hour" [level=2]
   - text: 10 events
   - 'button "About: Threat events by hour"': "About: ⓘ"
@@ -62,7 +61,7 @@
   - heading "Threat feed activity" [level=2]
   - 'button "About: Threat feed activity"': "About: ⓘ"
   - 'button "Options: Threat feed activity"'
-  - text: /\d+ Blocked 0 Allowed/
+  - text: /\d+ Blocked, last 7 days 0 Allowed, last 7 days/
   - application "Threat feed activity chart": /Dec \d+ Dec \d+/
   - heading "Threat insights" [level=2]
   - text: "1"
@@ -70,7 +69,7 @@
   - 'button "Options: Threat insights"'
   - table:
     - rowgroup:
-      - row "Threat Severity Status Events Last Seen":
+      - row "Threat Severity Status Events Last seen":
         - columnheader "Threat":
           - button "Threat"
         - columnheader "Severity":
@@ -79,12 +78,12 @@
           - button "Status"
         - columnheader "Events":
           - button "Events"
-        - columnheader "Last Seen":
-          - button "Last Seen"
+        - columnheader "Last seen":
+          - button "Last seen"
     - rowgroup:
-      - row /Baseline Insight HIGH Active 9 Jan 1, \d+/:
+      - row /Baseline Insight High Active 9 Jan 1, \d+/:
         - cell "Baseline Insight"
-        - cell "HIGH"
+        - cell "High"
         - cell "Active"
         - cell "9"
         - cell /Jan 1, \d+/
@@ -143,7 +142,7 @@
   - heading "Asset insights" [level=2]
   - 'button "About: Asset insights"': "About: ⓘ"
   - 'button "Options: Asset insights"'
-  - text: /Total Findings \d+ baseline/
+  - text: /Total findings \d+ baseline/
   - heading "Exposed surface" [level=2]
   - text: 0 hostnames · 0 IPs
   - 'button "About: Exposed surface"': "About: ⓘ"

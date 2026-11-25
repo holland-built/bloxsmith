@@ -42,7 +42,7 @@ function Fact({ label, children, tip }) {
 
 function trendWords(t) {
   if (t.state === 'loading') return 'Loading…'
-  if (t.state !== 'ok') return t.state === 'error' ? 'Unavailable' : 'No traffic reported'
+  if (t.state !== 'ok') return t.state === 'error' ? 'Not checked' : 'No traffic reported'
   if (t.pct == null) return `${rate(t.now)} queries/s, no earlier value for comparison`
   const dir = t.pct === 0 ? 'unchanged' : `${t.pct > 0 ? 'up' : 'down'} ${Math.abs(t.pct)}%`
   return `${rate(t.now)} queries/s, ${dir} from ${rate(t.was)} ${t.hours} hours ago`
@@ -50,7 +50,7 @@ function trendWords(t) {
 
 function changeWords(c) {
   if (c.state === 'loading') return 'Loading…'
-  if (c.state === 'unavailable') return 'Change log unavailable'
+  if (c.state === 'unavailable') return 'Not checked'
   if (c.state === 'undetermined') return 'Period covered could not be determined'
   if (c.state === 'empty') return 'No changes logged in 24 hours'
   const people = `${c.people.toLocaleString()} by users`
@@ -127,10 +127,10 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
             ) : <p className="br-empty" data-empty-list="">{emptyListWords(services, verdict)}</p>}
           </section>
           <section aria-labelledby="br-since">
-            <h2 id="br-since">Recent changes</h2>
+            <h2 id="br-since">Last few hours</h2>
             <ul className="br-facts">
               <Fact label="DNS traffic">{trendWords(trend)}</Fact>
-              <Fact label={changes.state === 'ok' ? `Changes (${changes.window.toLowerCase()})` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
+              <Fact label={changes.state === 'ok' ? `Changes, ${changes.window.toLowerCase()}` : 'Changes'} tip={changes.tip}>{changeWords(changes)}</Fact>
               <Fact label="New issues" tip="Issues are dated from when this system first detected them, so 24 hours of history are required to identify new issues.">
                 {newIssuesWords({ problems, allRead: board.allRead, reading: board.reading, nowS: nowMs / 1000 })}
               </Fact>

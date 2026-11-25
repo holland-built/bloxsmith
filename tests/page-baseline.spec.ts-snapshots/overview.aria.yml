@@ -25,15 +25,15 @@
           - /url: "#infra?service=DHCP&status=down"
           - text: ""
       - listitem:
-        - text: 2 subnets close to full
-        - 'link "View subnets: 2 subnets close to full"':
+        - text: 2 subnets close to full; 1 is 90% full or more
+        - 'link "View subnets: 2 subnets close to full; 1 is 90% full or more"':
           - /url: "#network?minUtil=70&links=1"
           - text: ""
-  - region "Recent changes":
-    - heading "Recent changes" [level=2]
+  - region "Last few hours":
+    - heading "Last few hours" [level=2]
     - list:
       - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
-      - listitem: Changes (last 6 hours only) 5 changes, 0 by users, 1 failed
+      - listitem: Changes, last 6 hours only 5 changes, 0 by users, 1 failed
       - listitem: /New issues Not yet available\. Requires \d+ hours of history\./
   - region "Current status":
     - heading "Current status" [level=2]
@@ -84,15 +84,15 @@
                     - /url: "#ai?q=Which%20DHCP%20services%20are%20not%20running%3F"
                     - text: Ask AI
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/
-          - 'row /IPAM 2 subnets close to full Open: 2 subnets close to full Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
+          - 'row /IPAM 2 subnets close to full; 1 is \d+% full or more Open: 2 subnets close to full; 1 is \d+% full or more Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
             - rowheader "IPAM":
               - link "IPAM":
                 - /url: "#network?minUtil=90&links=1"
-            - 'cell "2 subnets close to full Open: 2 subnets close to full"':
+            - 'cell "2 subnets close to full; 1 is 90% full or more Open: 2 subnets close to full; 1 is 90% full or more"':
               - list:
                 - listitem:
-                  - text: 2 subnets close to full
-                  - 'link "Open: 2 subnets close to full"':
+                  - text: 2 subnets close to full; 1 is 90% full or more
+                  - 'link "Open: 2 subnets close to full; 1 is 90% full or more"':
                     - /url: "#incidents"
                     - text: ""
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/

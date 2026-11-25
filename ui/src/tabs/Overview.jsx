@@ -142,8 +142,15 @@ function useBoard(dns) {
     const t = firstSeen[r.key]
     return { ...r, seen: typeof t === 'number' ? t : null, fresh: typeof t === 'number' && now - t < DAY_S }
   })
-  const full = issues.find((r) => r.key === 'subnet-utilization')
-  if (full && typeof totals.subnetsCrit === 'number') full.sub = totals.subnetsCrit ? `${n0(totals.subnetsCrit)} ${totals.subnetsCrit === 1 ? 'is' : 'are'} 90% full or more` : 'none at 90% yet'
+  // A subnet incident counts from its own cut-off (70% for the app's own
+  // signal), while the IPAM tile counts 90% or more. Both numbers go on the
+  // line itself, so the two never read as a contradiction (GUI audit A4).
+  if (typeof totals.subnetsCrit === 'number') {
+    for (const full of issues.filter((r) => r.key === 'subnet-utilization' || r.entity === 'subnet')) {
+      const at90 = totals.subnetsCrit ? `${n0(totals.subnetsCrit)} ${totals.subnetsCrit === 1 ? 'is' : 'are'} 90% full or more` : 'none at 90% yet'
+      full.title = `${full.title}; ${at90}`
+    }
+  }
 
   const svcRows = health.loading || health.error || !Array.isArray(health.data) ? [] : health.data
   const svc = Object.fromEntries(svcRows.map((s) => [s.name, s]))
@@ -160,7 +167,7 @@ function useBoard(dns) {
 
   // Each measure carries the scope it was counted over, and a feed that failed
   // says so instead of showing a number or a dash that reads as zero.
-  const m = (ok, loading, text) => (loading ? 'Loading…' : ok ? text : 'unavailable')
+  const m = (ok, loading, text) => (loading ? 'Loading…' : ok ? text : 'Not checked')
   // A source that answered with only part of the picture. Its rows are real,
   // but anything it did not reach could be down, so it can never support
   // "healthy". Only the server's own "ok" counts as a full read.
@@ -170,7 +177,7 @@ function useBoard(dns) {
   const issuesFor = (name) => issues.filter((r) => rowOf(r) === name)
   const board = [
     { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps,
-      measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: 'hourly average, last hour' },
+      measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: dnsOk ? 'hourly average, last hour' : '' },
     { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), partial: notFull(svcState('DHCP')), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
       measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active ${noun(activeLeases, 'lease')}`), scope: sliceOk('leases') ? `of ${n0(leases.length)} ${noun(leases.length, 'lease')} loaded` : '' },
     { name: 'IPAM', href: '#network?minUtil=90&links=1', state: null, partial: totals.degraded === true, n: crit, of: typeof totals.subnets === 'number' ? totals.subnets : null,
@@ -191,7 +198,7 @@ function useBoard(dns) {
   const fetchedAt = useMemo(() => (data.data ? new Date() : null), [data.data])
   const coverage = [
     data.loading && !data.data && 'Checking inventory…',
-    feedDown && 'Inventory information is unavailable',
+    feedDown && 'The inventory could not be read',
     fetchedAt && `Inventory fetched ${formatTime(fetchedAt)}`,
     typeof totals.subnets === 'number' && `subnets: ${n0(subnets.length)} of ${n0(totals.subnets)} loaded`,
     typeof totals.hosts === 'number' && `hosts: ${n0(hosts.length)} of ${n0(totals.hosts)} loaded`,
@@ -413,7 +420,7 @@ function Issue({ r }) {
 function IssueList({ b, checked, none }) {
   const open = openProblems(b)
   if (open.length) return <ul className="ov-issues">{open.map((r) => <Issue key={r.key} r={r} />)}</ul>
-  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'No open issues' : 'not checked: information unavailable'}</span>
+  return <span className="ov-muted">{checked === 'loading' ? 'Checking…' : checked ? none || 'No open issues' : 'Not checked'}</span>
 }
 
 // The board can be folded to one line of counts, so the charts below come up
@@ -497,7 +504,7 @@ function ServiceBoard({ board, dns }) {
 // "Updated 11:02 PM" from when the inventory arrived, not when the page drew.
 // Its tip is the coverage line: what was loaded, and what could not be.
 function Updated({ board }) {
-  const label = board.feedDown ? 'Inventory information is unavailable' : board.fetchedAt ? `Updated ${formatTime(board.fetchedAt)}` : 'Checking…'
+  const label = board.feedDown ? 'Information is unavailable' : board.fetchedAt ? `Updated ${formatTime(board.fetchedAt)}` : 'Checking…'
   return (
     <Tip tip={board.coverage || null} className="ov-pill" data-coverage="" data-updated="">
       <span className={`ov-live ${board.feedDown ? 'down' : board.fetchedAt ? '' : 'wait'}`} aria-hidden="true" />{label}

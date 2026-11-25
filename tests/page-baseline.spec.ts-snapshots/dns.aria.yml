@@ -35,9 +35,9 @@
   - text: How lookups ended
   - term: Answered from cache
   - definition: /\d+%/
-  - term: Failed (SERVFAIL)
+  - term: Failed
   - definition: 1.6%
-  - term: Name not found (NXDOMAIN)
+  - term: Name not found
   - definition: /\d+%/
   - term: Timeouts
   - definition: /\d+ a second/
@@ -51,11 +51,11 @@
   - 'button "Options: Failed Lookups"'
   - term: Failed lookups
   - definition: /\d+,\d+/
-  - term: Name not found (NXDOMAIN)
+  - term: Name not found
   - definition: /\d+,\d+/
-  - term: Server failed (SERVFAIL)
+  - term: Server failed
   - definition: /\d+/
-  - term: Refused (REFUSED)
+  - term: Refused
   - definition: /\d+/
   - term: Other
   - definition: "5"
@@ -142,7 +142,7 @@
         - cell /\d+/
         - cell "—"
   - heading "Zone signing" [level=2]
-  - text: DNSSEC 1 unsigned
+  - text: 1 unsigned
   - 'button "About: Zone signing"': "About: ⓘ"
   - 'button "Options: Zone signing"'
   - term: Not signed
@@ -165,7 +165,7 @@
             - /url: "#dossier?kind=zone&q=other.example.&id=dns%2Fauth_zone%2Fbaseline-2"
         - cell "baseline-view"
   - heading "Blocklist zones" [level=2]
-  - text: RPZ 1 zone
+  - text: 1 zone
   - 'button "About: Blocklist zones"': "About: ⓘ"
   - 'button "Options: Blocklist zones"'
   - table:
@@ -184,7 +184,7 @@
         - cell "local"
         - cell "Enabled"
   - heading "Load-balanced names" [level=2]
-  - text: DTC 1 name
+  - text: 1 name
   - 'button "About: Load-balanced names"': "About: ⓘ"
   - 'button "Options: Load-balanced names"'
   - table:

@@ -96,13 +96,14 @@ test.describe('Overview → service board (/api/data empty)', () => {
 // ---------- 2. Network ← /api/data ----------
 
 test.describe('Network → Utilization Distribution + exhaustion table (/api/data down)', () => {
-  test('a dead /api/data shows "Subnet information is unavailable" and "— loaded", not "0 loaded"', async ({ page }) => {
+  test('a dead /api/data shows "Subnet information is unavailable" and no loaded count, not "0 loaded"', async ({ page }) => {
     await page.route('**/api/data*', dead);
     await page.goto('/#network');
 
     const bands = card(page, 'Utilization Distribution');
     await expect(bands.getByText('Subnet information is unavailable')).toBeVisible();
-    await expect(bands.getByText('— loaded (count unavailable)', { exact: true })).toBeVisible();
+    // No count at all beside the error (GUI audit round 2, B15).
+    await expect(bands.getByText(/loaded/)).toHaveCount(0);
     await expect(bands.getByText(/\b0 loaded\b/)).toHaveCount(0);
 
     const exhaustion = card(page, 'Which Subnets Run Out First?');
@@ -364,7 +365,8 @@ test.describe('Security → Exposures + Lookalike Domains (failed fetch)', () =>
 
     const lookalikes = card(page, 'Lookalike Domains');
     await expect(lookalikes.getByText('Lookalike domain information is unavailable')).toBeVisible();
-    await expect(lookalikes.getByText('— detected', { exact: true })).toBeVisible();
+    // No count at all when nothing was read (GUI audit R2-C9).
+    await expect(lookalikes.getByText(/detected/)).toHaveCount(0);
     await expect(lookalikes.getByText('0 detected', { exact: true })).toHaveCount(0);
   });
 

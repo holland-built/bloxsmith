@@ -176,16 +176,17 @@ test.describe('Changes', () => {
     await expect(page.locator('main').getByText(/24 hours/)).toHaveCount(0);
   });
 
-  test('C3: on a phone the changes table fades at its right edge while it swipes', async ({ page }) => {
+  // The phone list now stacks each change into lines (round 2 phone job), so
+  // nothing is off to the right: no sideways swipe, so no edge fade.
+  test('C3: on a phone the changes list fits the screen, so it neither swipes nor fades', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installBaselineWorld(page);
     await page.goto('/#changes');
     const scroller = page.getByRole('table', { name: 'Changed objects, grouped by resource' });
     await expect(scroller).toBeVisible();
     const fade = () => scroller.evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--scroll-cue-end')) || 0);
-    await expect.poll(fade, { message: 'the right edge should fade while more is off to the right' }).toBeGreaterThan(8);
-    await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth })
-    await expect.poll(fade, { message: 'the fade should go once the table is scrolled to its end' }).toBe(0);
+    expect(await scroller.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await expect.poll(fade, { message: 'no fade when nothing is off to the right' }).toBe(0);
   });
 });
 
@@ -206,13 +207,15 @@ test.describe('DNS', () => {
     await expect(line.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 
-  test('B2: a failed failed-lookups request says why once, with Try again, and keeps "not checked"', async ({ page }) => {
+  test('B2: a failed failed-lookups request says why once, with Try again, and shows no numbers under it', async ({ page }) => {
     await installBaselineWorld(page);
     let down = true;
     await page.route('**/api/csp/dns-failures*', (r) => (down ? r.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"upstream timeout"}' }) : r.fallback()));
     await page.goto('/#dns');
     const card = panel(page, 'dns-failed-lookups');
-    await expect(card.locator('[data-failed-total] dd')).toHaveText('not checked');
+    // The whole read failed, so no numbers are drawn under the line (GUI audit round 2, B2).
+    await expect(card.locator('[data-panel-failed]')).toBeVisible();
+    await expect(card.locator('[data-failed-total]')).toHaveCount(0);
     const line = card.locator('[data-panel-failed]');
     await expect(line).toHaveCount(1);
     await expect(line).toContainText("Couldn't read these numbers from Infoblox.");
@@ -258,13 +261,15 @@ test.describe('Network', () => {
     await expect(line.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 
-  test('B2: a failed DHCP requests read says why once, with Try again, and keeps "not checked"', async ({ page }) => {
+  test('B2: a failed DHCP requests read says why once, with Try again, and shows no numbers under it', async ({ page }) => {
     await installBaselineWorld(page);
     let down = true;
     await page.route('**/api/csp/dhcp-requests*', (r) => (down ? r.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"upstream timeout"}' }) : r.fallback()));
     await page.goto('/#network');
     const card = panel(page, 'network-dhcp-requests');
-    await expect(card.locator('[data-dhcp-request] dd').first()).toHaveText('not checked');
+    // The whole read failed, so no numbers are drawn under the line (GUI audit round 2, B2).
+    await expect(card.locator('[data-panel-failed]')).toBeVisible();
+    await expect(card.locator('[data-dhcp-request]')).toHaveCount(0);
     const line = card.locator('[data-panel-failed]');
     await expect(line).toHaveCount(1);
     await expect(line).toContainText("Couldn't read these numbers from Infoblox.");
@@ -324,9 +329,9 @@ test.describe('Infra', () => {
     const table = panel(page, 'infra-host-inventory');
     await expect(table.getByText('baseline-host-c')).toBeVisible();
     const chips = (await table.locator('tbody td span.rounded-full').allTextContents()).map((t) => t.trim());
-    expect(chips.sort()).toEqual(['Active', 'Degraded', 'Not online']);
+    expect(chips.sort()).toEqual(['Active', 'Not online', 'Review']);
     const legend = panel(page, 'infra-host-status');
-    for (const w of ['Active', 'Degraded', 'Not online']) await expect(legend.getByText(w, { exact: true })).toBeVisible();
+    for (const w of ['Active', 'Review', 'Not online']) await expect(legend.getByText(w, { exact: true })).toBeVisible();
   });
 
   test('B8 follow-up: a status that only contains a healthy word is never counted Active', async ({ page }) => {

@@ -35,9 +35,10 @@
 .ov-head-right { display: inline-flex; gap: 12px; align-items: baseline; min-width: 0; text-align: right }
 /* A button that looks like one, not like a link (screen audit A13). The soft
    accent tint is the one the briefing's item buttons use. */
-.ov-btn { border: 0; min-height: 28px; padding: 0 12px; border-radius: var(--radius-control, 10px); font: inherit; font-size: 13px; font-weight: 600; color: var(--color-link); background: color-mix(in srgb, var(--ov-accent) 12%, transparent); cursor: pointer }
+/* The standard secondary button: the soft blue tint means "picked" (DESIGN §1, GUI audit R2-A8). */
+.ov-btn { border: 1px solid var(--color-border); min-height: 28px; padding: 0 12px; border-radius: var(--radius-control, 10px); font: inherit; font-size: 13px; font-weight: 600; color: var(--color-field-txt); background: var(--color-field); cursor: pointer }
 .ov-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px }
-@media (hover: hover) { .ov-btn:hover { background: color-mix(in srgb, var(--ov-accent) 22%, transparent) } }
+@media (hover: hover) { .ov-btn:hover { border-color: var(--color-border-hover) } }
 @media (pointer: coarse) { .ov-btn { min-height: 44px } }
 
 .ov-num { font-size: 28px; font-weight: 500; letter-spacing: -.03em; line-height: 1.1 }
@@ -50,6 +51,9 @@
 
 /* tiles: one card with hairlines; the selected tile gets the soft fill */
 .ov-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); overflow: hidden }
+/* One service tile per row on a phone: two columns left one tile alone and
+   wrapped IPAM's unit onto three lines (GUI audit R2-A7). */
+@media (max-width: 420px) { .ov-kpis:not(.sec-kpis) { grid-template-columns: 1fr } }
 .ov-kpi { all: unset; box-sizing: border-box; padding: 8px; border-right: 1px solid var(--ov-line); cursor: pointer; display: block }
 .ov-kpi:last-child { border-right: 0 }
 .ov-kpi-in { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; color: var(--ov-ink2) }

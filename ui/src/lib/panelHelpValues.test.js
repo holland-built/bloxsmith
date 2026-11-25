@@ -650,11 +650,11 @@ const CLAIMS = [
   {
     // The tile that used to read "Total Events" over a page size.
     panel: 'security-response-summary',
-    says: /The last tile says Total Events only when the true count is known; otherwise it says Events Shown/,
+    says: /The last tile says Total events only when the true count is known; otherwise it says Events shown/,
     file: SECURITY,
     proofs: [
-      { re: /const totalCell = totalEventsTile\(d, 'Total Events', 'Events Shown'\)/, expect: 'the tile label is chosen by totalEventsTile, not hardcoded' },
-      { re: /\{ label: totalCell\.label, value: totalCell\.value \}/, expect: 'and both its label and value come from that decision' },
+      { re: /const totalCell = totalEventsTile\(d, 'Total events', 'Events shown'\)/, expect: 'the tile label is chosen by totalEventsTile, not hardcoded' },
+      { re: /\{ label: sentenceCase\(totalCell\.label\), value: totalCell\.value \}/, expect: 'and both its label and value come from that decision' },
     ],
   },
   {
@@ -956,23 +956,24 @@ const CLAIMS = [
   },
   {
     panel: 'security-axur-incidents',
-    says: /A dash instead of a total means nothing was counted/,
+    says: /When nothing was counted no total is shown\./,
     file: SECURITY,
     proofs: [
       {
         re: /const counted = !axur\.error && !d\.unavailable && d\.configured !== false/,
         expect: 'a total is only claimed when the fetch worked, upstream did not declare itself unavailable, and a key is configured',
       },
-      { re: /\{counted \? `\$\{\(d\.total_credentials \?\? 0\)\.toLocaleString\(\)\} credentials · \$\{rows\.length\} suppliers` : '—'\}/, expect: 'otherwise the header prints an em dash rather than 0' },
+      { re: /right=\{counted \? \(/, expect: 'the header shows a total only when counted' },
+      { re: /\) : null\}\s*>\s*\{axur\.loading/, expect: 'otherwise the header shows nothing, never 0 or a dash' },
     ],
   },
   {
     panel: 'security-lookalike-domains',
-    says: /A dash instead of a count means the source could not be reached, so nothing was checked; 0 means checked and none found\./,
+    says: /When the source could not be reached no count is shown, because nothing was checked; 0 means checked and none found\./,
     file: SECURITY,
     proofs: [
       { re: /const counted = !lookalikes\.error && !d\.unavailable/, expect: 'a count is only claimed when the fetch worked and upstream did not declare itself unavailable' },
-      { re: /\{counted \? rows\.length : '—'\} detected/, expect: 'otherwise the header prints an em dash rather than 0' },
+      { re: /right=\{counted \? <span className="text-note text-muted">\{rows\.length\} detected<\/span> : null\}/, expect: 'otherwise the header shows nothing, never 0 or a dash' },
     ],
   },
   {
@@ -1048,7 +1049,7 @@ const CLAIMS = [
     file: AUDIT,
     proofs: [
       {
-        re: /sampleCountLabel\(\{ returned: rows\.length, truncated: result\?\.truncated \}, 'entries'\)/,
+        re: /result\?\.truncated \? `\$\{rows\.length\.toLocaleString\(\)\} shown, more not listed`/,
         expect: "the chip is sampleCount's wording, fed the server's own truncated flag",
       },
     ],

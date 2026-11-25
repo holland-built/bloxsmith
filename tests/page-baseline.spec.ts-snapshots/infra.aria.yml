@@ -1,5 +1,5 @@
 - main "Infra tab":
-  - heading "Infrastructure" [level=1]
+  - heading "Infra" [level=1]
   - text: /Updated \d+:\d+ [AP]M/
   - paragraph: "Host and service health: hosts, jobs and DNS forwarding proxies."
   - list "Headline numbers":
@@ -8,7 +8,7 @@
     - listitem:
       - button "Not online 1"
     - listitem:
-      - button "Degraded 1"
+      - button "Review 1"
     - listitem:
       - button "Unknown 0"
     - listitem:
@@ -42,12 +42,12 @@
             - /url: "#dossier?kind=address&q=10.10.0.2"
         - cell "Active"
         - cell "On site"
-      - row /baseline-host-b \d+\.\d+\.0\.2 Degraded On site/:
+      - row /baseline-host-b \d+\.\d+\.0\.2 Review On site/:
         - cell "baseline-host-b"
         - cell /\d+\.\d+\.0\.2/:
           - link /\d+\.\d+\.0\.2/:
             - /url: "#dossier?kind=address&q=10.20.0.2"
-        - cell "Degraded"
+        - cell "Review"
         - cell "On site"
       - row /baseline-host-c \d+\.\d+\.0\.2 Not online On site/:
         - cell "baseline-host-c"
@@ -60,7 +60,7 @@
   - 'button "About: Host Status"': "About: ⓘ"
   - 'button "Options: Host Status"'
   - application "Host Status chart"
-  - text: /3 hosts Active \d+% Degraded \d+% Not online \d+% CPU and memory, latest reading/
+  - text: /3 hosts Active \d+% Review \d+% Not online \d+% CPU and memory, latest reading/
   - table:
     - rowgroup:
       - row "Host CPU Memory":
@@ -81,7 +81,7 @@
   - text: deployed services
   - 'button "About: Service Health"': "About: ⓘ"
   - 'button "Options: Service Health"'
-  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security only part of the list arrived unknown
+  - text: DNS 2/2 online Healthy DHCP 1 stopped · 1/2 up Review Security only part of the list arrived Unknown
   - heading "Host Apps" [level=2]
   - text: Infoblox Portal 1
   - 'button "About: Host Apps"': "About: ⓘ"
@@ -109,13 +109,13 @@
         - columnheader "Status"
         - columnheader "User"
     - rowgroup:
-      - row /Jan 1, \d+, 9:\d+ AM discovery completed baseline-operator/:
+      - row /Jan 1, \d+, 9:\d+ AM discovery Completed baseline-operator/:
         - cell /Jan 1, \d+, 9:\d+ AM/
         - cell "discovery"
-        - cell "completed"
+        - cell "Completed"
         - cell "baseline-operator"
   - heading "DNS forwarding proxies" [level=2]
-  - text: DFP, from Infoblox Portal 1
+  - text: from the Infoblox Portal 1
   - 'button "About: DNS forwarding proxies"': "About: ⓘ"
   - 'button "Options: DNS forwarding proxies"'
   - table:
@@ -124,6 +124,6 @@
         - columnheader "Name"
         - columnheader "Status"
     - rowgroup:
-      - row "baseline-dfp ok":
+      - row "baseline-dfp Online":
         - cell "baseline-dfp"
-        - cell "ok"
+        - cell "Online"

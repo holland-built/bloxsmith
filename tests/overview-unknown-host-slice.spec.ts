@@ -53,7 +53,7 @@ function legendRow(page: import('@playwright/test').Page, name: string) {
 
 // 10 hosts, deliberately chosen so every bucket lands on a distinct, whole
 // percentage of the loaded rows:
-//   Active 5 (50%) · Degraded 1 (10%) · Offline 1 (10%) · Unknown 2 (20%) · Other 1 (10%)
+//   Active 5 (50%) · Review 1 (10%) · Offline 1 (10%) · Unknown 2 (20%) · Other 1 (10%)
 // Before the fix, Unknown and Other shared one slice at 30%.
 const MIXED_HOSTS = [
   { id: 'a1', name: 'app-01', ip: '10.8.0.1', status: 'online', type: 'bloxone' },
@@ -98,12 +98,12 @@ test.describe('Infra → Host Status donut (hosts reported as "unknown")', () =>
 
     // The rest of the donut is untouched by the split.
     await expect(legendRow(page, 'Active').locator('b')).toHaveText('50%');
-    await expect(legendRow(page, 'Degraded').locator('b')).toHaveText('10%');
+    await expect(legendRow(page, 'Review').locator('b')).toHaveText('10%');
     await expect(legendRow(page, 'Not online').locator('b')).toHaveText('10%');
 
     // Severity order matches Infra's bucket order — Unknown above Other, since
     // "we were not told" is a thing to go and check and "pending" is not.
-    await expect(card.locator('span.text-muted.flex-1')).toHaveText(['Active', 'Degraded', 'Not online', 'Unknown', 'Other']);
+    await expect(card.locator('span.text-muted.flex-1')).toHaveText(['Active', 'Review', 'Not online', 'Unknown', 'Other']);
   });
 
   test('an estate with no unknown hosts shows no Unknown slice at all', async ({ page }) => {

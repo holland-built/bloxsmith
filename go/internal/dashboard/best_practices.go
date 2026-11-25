@@ -107,7 +107,7 @@ func unknown(c bpCheck, readOK bool, what string) bpCheck {
 func hostsDownCheck(hosts []any, readOK, whole bool) bpCheck {
 	c := bpCheck{
 		ID: "hosts-down", Severity: "high", Link: "#infra",
-		Why: "A host that's down serves nothing, and its zones and subnets lean on the others.",
+		Why: "These are the on-prem hosts. A host that's down serves nothing, and its zones and subnets lean on the others.",
 	}
 	var items []map[string]any
 	for _, r := range hosts {
@@ -120,19 +120,19 @@ func hostsDownCheck(hosts []any, readOK, whole bool) bpCheck {
 	sort.Slice(items, func(i, j int) bool { return items[i]["name"].(string) < items[j]["name"].(string) })
 	switch {
 	case !readOK:
-		c.Title = "On-prem hosts offline or in error"
+		c.Title = "Infoblox servers that are offline or have an error"
 		return unknown(c, false, "host list")
 	case len(items) > 0:
-		c.Title = plural(len(items), "on-prem host is offline or in error", "on-prem hosts are offline or in error")
+		c.Title = plural(len(items), "Infoblox server is offline or has an error", "Infoblox servers are offline or have an error")
 		c.Status, c.Items = "problem", items
 		if !whole {
 			c.Note = "The host list was cut short, so there may be more."
 		}
 	case !whole:
-		c.Title = "On-prem hosts offline or in error"
+		c.Title = "Infoblox servers that are offline or have an error"
 		return unknown(c, true, "host list")
 	default:
-		c.Title = "Every on-prem host is online"
+		c.Title = "Every Infoblox server is online"
 		c.Status, c.Items = "passed", []map[string]any{}
 	}
 	return c
@@ -141,10 +141,10 @@ func hostsDownCheck(hosts []any, readOK, whole bool) bpCheck {
 func gmResilienceCheck(hosts []any, readOK, whole bool) bpCheck {
 	c := bpCheck{
 		ID: "gm-resilience", Severity: "high", Link: "#infra",
-		Why: "Without an HA Grid Master or a Grid Master Candidate, losing the Grid Master leaves the grid unmanaged until it's rebuilt from backup.",
+		Why: "The main grid server is the Grid Master; its backup is an HA pair or a Grid Master Candidate. Without an HA Grid Master or a Grid Master Candidate, losing the Grid Master leaves the grid unmanaged until it's rebuilt from backup.",
 	}
 	if !readOK || !whole {
-		c.Title = "Grid Masters with no HA and no candidate"
+		c.Title = "Main grid servers with no backup"
 		return unknown(c, readOK, "host list")
 	}
 	type grid struct {
@@ -213,17 +213,17 @@ func gmResilienceCheck(hosts []any, readOK, whole bool) bpCheck {
 	}
 	switch {
 	case len(items) > 0:
-		c.Title = plural(len(items), "Grid Master has no HA and no candidate", "Grid Masters have no HA and no candidate")
+		c.Title = plural(len(items), "main grid server has no backup", "main grid servers have no backup")
 		c.Status, c.Items = "problem", items
 	case cantTell > 0:
-		c.Title = "Grid Masters with no HA and no candidate"
+		c.Title = "Main grid servers with no backup"
 		c.Status, c.Items, c.Reason = "unknown", []map[string]any{}, c.Note
 		c.Note = ""
 	case len(grids) == 0:
-		c.Title = "No NIOS grids are connected to this account"
+		c.Title = "No on-site Infoblox grids are connected to this account"
 		c.Status, c.Items = "passed", []map[string]any{}
 	default:
-		c.Title = fmt.Sprintf("Every Grid Master has HA or a candidate (%s)", plural(len(grids), "grid", "grids"))
+		c.Title = fmt.Sprintf("Every main grid server has a backup (%s)", plural(len(grids), "grid", "grids"))
 		c.Status, c.Items = "passed", []map[string]any{}
 	}
 	return c
@@ -232,7 +232,7 @@ func gmResilienceCheck(hosts []any, readOK, whole bool) bpCheck {
 func dhcpAAPCheck(ha []any, readOK, whole bool) bpCheck {
 	c := bpCheck{
 		ID: "dhcp-aap", Severity: "medium",
-		Why: "Advanced Active/Passive is deprecated and doesn't support DHCPv6. Move these to Active/Active or Active/Passive.",
+		Why: "A DHCP failover pair is an HA group. Advanced Active/Passive is deprecated and doesn't support DHCPv6. Move these to Active/Active or Active/Passive.",
 	}
 	var items []map[string]any
 	for _, r := range ha {
@@ -244,19 +244,19 @@ func dhcpAAPCheck(ha []any, readOK, whole bool) bpCheck {
 	sort.Slice(items, func(i, j int) bool { return items[i]["name"].(string) < items[j]["name"].(string) })
 	switch {
 	case !readOK:
-		c.Title = "DHCP HA groups in Advanced Active/Passive mode"
+		c.Title = "DHCP failover pairs on the old Advanced Active/Passive setting"
 		return unknown(c, false, "DHCP HA group list")
 	case len(items) > 0:
-		c.Title = plural(len(items), "DHCP HA group uses the deprecated Advanced Active/Passive mode", "DHCP HA groups use the deprecated Advanced Active/Passive mode")
+		c.Title = plural(len(items), "DHCP failover pair uses the old Advanced Active/Passive setting", "DHCP failover pairs use the old Advanced Active/Passive setting")
 		c.Status, c.Items = "problem", items
 		if !whole {
 			c.Note = "The HA group list was cut short, so there may be more."
 		}
 	case !whole:
-		c.Title = "DHCP HA groups in Advanced Active/Passive mode"
+		c.Title = "DHCP failover pairs on the old Advanced Active/Passive setting"
 		return unknown(c, true, "DHCP HA group list")
 	default:
-		c.Title = "No DHCP HA group uses Advanced Active/Passive"
+		c.Title = "No DHCP failover pair uses the old Advanced Active/Passive setting"
 		c.Status, c.Items = "passed", []map[string]any{}
 	}
 	return c

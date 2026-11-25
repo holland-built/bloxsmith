@@ -404,16 +404,25 @@ test('the contrast reader measures a tinted button as painted, and still catches
     type Reader = { bgOf: (e: Element) => number[]; fgOf: (e: Element) => number[]; ratio: (a: number[], b: number[]) => number };
     const { bgOf, fgOf, ratio } = (window as unknown as { __contrast: Reader }).__contrast;
     const real = document.querySelector('.br a.br-btn')!;
+    // "View hosts" is now the plain secondary button (GUI audit R2-A8), so the
+    // tint it used to wear is rebuilt beside it: link text on a 12% accent
+    // tint, which reads about 5.2:1 as painted.
+    const tinted = document.createElement('span');
+    tinted.textContent = 'View hosts';
+    tinted.style.cssText = 'color: var(--color-link); background: color-mix(in srgb, var(--color-accent) 12%, transparent); font-size: 13px';
+    real.parentElement!.appendChild(tinted);
     // A link-coloured label on a heavy accent tint: painted, about 2.1:1.
     const bad = document.createElement('span');
     bad.textContent = 'Too faint';
     bad.style.cssText = 'color: var(--color-link); background: color-mix(in srgb, var(--color-accent) 70%, transparent); font-size: 13px';
     real.parentElement!.appendChild(bad);
-    const out = { viewHosts: ratio(fgOf(real), bgOf(real)), faint: ratio(fgOf(bad), bgOf(bad)) };
+    const out = { viewHosts: ratio(fgOf(real), bgOf(real)), tinted: ratio(fgOf(tinted), bgOf(tinted)), faint: ratio(fgOf(bad), bgOf(bad)) };
     bad.remove();
+    tinted.remove();
     return out;
   });
-  expect(read.viewHosts, '"View hosts" as painted').toBeGreaterThan(5.0);
-  expect(read.viewHosts).toBeLessThan(5.4);
+  expect(read.viewHosts, '"View hosts" as painted').toBeGreaterThan(4.5);
+  expect(read.tinted, 'the old tinted look as painted').toBeGreaterThan(5.0);
+  expect(read.tinted).toBeLessThan(5.4);
   expect(read.faint, 'a tinted label under AA must still fail').toBeLessThan(4.5);
 });

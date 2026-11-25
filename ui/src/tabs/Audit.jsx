@@ -6,7 +6,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { eventWord } from '../lib/plainWords.js'
-import { actionWord, plainRequest, resourceWord } from '../lib/auditWords.js'
+import { actionWord, plainRequest, resourceWord, resultWord, whoKindWord } from '../lib/auditWords.js'
 import Tip from '../components/Tip.jsx'
 // The look the owner picked for dashboards (2026-11-09) lives in Overview.css;
 // this page borrows its tokens and tiles so the two read as one product.
@@ -360,7 +360,7 @@ function EventPill({ event }) {
 function verdictOf(result, error, loading) {
   if (loading && !result && !error) return { state: 'wait', word: 'Checking…' }
   if (error || result == null || result.chain_verify_error) {
-    return { state: 'warn', word: 'Not verified', why: error ? 'the check could not be loaded' : result?.chain_verify_error }
+    return { state: 'warn', word: 'Not verified', why: error ? 'The check could not be loaded' : result?.chain_verify_error }
   }
   if (result.chain_valid === true) return { state: 'ok', word: 'Intact' }
   if (result.chain_valid === false && result.broken_index != null) {
@@ -695,7 +695,12 @@ function CspAuditTable({ panelId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const rows = result?.rows ?? []
+  // Newest first, like the Audit log above it (GUI audit R2-C11). A row with
+  // no readable time keeps its place at the end.
+  const rows = useMemo(
+    () => [...(result?.rows ?? [])].sort((a, b) => (Date.parse(b.ts) || 0) - (Date.parse(a.ts) || 0)),
+    [result],
+  )
 
   const columns = [
     { key: 'ts', label: 'Time', render: monoTs },
@@ -705,7 +710,7 @@ function CspAuditTable({ panelId }) {
       keep: true,
       render: (v, r) => (
         <span className="block truncate max-w-[160px]" title={r.user}>
-          {r.user || '—'} {r.who_kind && <span className="text-dim text-note">({r.who_kind})</span>}
+          {r.user || '—'} {r.who_kind && <span className="text-dim text-note">({whoKindWord(r.who_kind)})</span>}
         </span>
       ),
     },
@@ -718,7 +723,7 @@ function CspAuditTable({ panelId }) {
       render: (v) => (
         // A row with no result gets no colour. It used to be green, which
         // is a claim that the action succeeded when nothing said so.
-        <span className="line-clamp-2" style={{ color: !v ? COLORS.other : /fail/i.test(v) ? COLORS.crit : COLORS.ok }}>{v || '—'}</span>
+        <span className="line-clamp-2" title={v || undefined} style={{ color: !v ? COLORS.other : /fail/i.test(v) ? COLORS.crit : COLORS.ok }}>{resultWord(v) || '—'}</span>
       ),
     },
   ]
@@ -728,7 +733,7 @@ function CspAuditTable({ panelId }) {
       panelId={panelId}
       span={6}
       title="Infoblox Portal audit"
-      note="external — Infoblox portal activity"
+      note="From the Infoblox Portal"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">
           <input {...MACHINE_TEXT}
@@ -755,7 +760,8 @@ function CspAuditTable({ panelId }) {
               upstream tells us there are more and not how many. */}
           {rows.length > 0 && (
             <span className="text-note text-muted">
-              {sampleCountLabel({ returned: rows.length, truncated: result?.truncated }, 'entries')}
+              {/* "5 shown, more not listed" rather than the shared "total unknown" (GUI audit R2-C4). */}
+              {result?.truncated ? `${rows.length.toLocaleString()} shown, more not listed` : sampleCountLabel({ returned: rows.length, truncated: false }, 'entries')}
             </span>
           )}
         </div>
