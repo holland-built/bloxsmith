@@ -28,7 +28,7 @@ test('after Preview, the IP job can be copied as Terraform, loaded only then', a
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
   await expect(job.locator('[data-terraform]')).toHaveCount(0);
   expect(scripts.filter((u) => /terraform/i.test(u))).toEqual([]);

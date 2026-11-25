@@ -228,7 +228,7 @@ async function automateBuild(page: Page, reply: Reply) {
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
   await job.getByRole('button', { name: 'Preview' }).click();
   await job.getByRole('button', { name: 'Build it' }).click();
@@ -249,7 +249,7 @@ test('an Automate preview that fails keeps its normal message', async ({ page })
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('textbox', { name: /What is it for/ }).fill('printer-02');
   await job.getByRole('button', { name: 'Preview' }).click();
   await expect(job).toContainText('Could not run this job.');

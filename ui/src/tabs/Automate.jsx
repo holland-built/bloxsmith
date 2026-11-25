@@ -21,7 +21,7 @@ import { findRange, findSpace, useNetworkPrefill } from '../lib/prefill.js'
 import { formatWhen } from '../lib/dates.js'
 
 const JOBS = [
-  { id: 'ip', title: 'Get an IP address', says: 'The next free address in a network you pick' },
+  { id: 'ip', title: 'Get an IP address', says: 'The next free address in a subnet you pick' },
   { id: 'dns', title: 'Add a DNS name', says: 'A name that points at an address or another name' },
   { id: 'network', title: 'Make a new network', says: 'The next free network of the size you pick' },
   { id: 'branch', title: 'Set up a branch office', says: 'Networks, DHCP, a DNS zone and hosts from a site template' },
@@ -224,13 +224,13 @@ function IpJob({ onBuilt, ro, start = {} }) {
   return (
     <div className="flex flex-col gap-3">
       <SpacePicker value={space} onChange={pickSpace} want={opened ? (pre.pending ? '' : pre.space) : undefined} />
-      <Field label="Network">
+      <Field label="Subnet">
         <FilterSelect
-          label="Network"
+          label="Subnet"
           value={subnetId}
           onChange={(v) => { setSubnetId(v); flow.reset() }}
           options={subnets.map((s) => ({ value: s.id, label: subnetLabel(s) }))}
-          placeholder={space ? 'Pick a network' : 'Pick an IP space first'}
+          placeholder={space ? 'Pick a subnet' : 'Pick an IP space first'}
           disabled={!space}
         />
       </Field>
@@ -242,7 +242,7 @@ function IpJob({ onBuilt, ro, start = {} }) {
       <PreviewApply
         status={flow.status}
         disabled={!subnetId}
-        needs={[!subnetId && 'pick a network']}
+        needs={[!subnetId && 'pick a subnet']}
         applyDisabled={ro}
         applyNote="This account is read-only, so Build is off."
         onPreview={() => flow.runPreview(input())}
@@ -258,13 +258,13 @@ function IpJob({ onBuilt, ro, start = {} }) {
           <PreviewBox>
             {next
               ? <p>This will reserve <strong>{next}</strong>{subnet ? ` in ${subnetLabel(subnet)}` : ''}{name.trim() ? `, for ${name.trim()}` : ''}.</p>
-              : <p>Infoblox found no free address in this network.</p>}
+              : <p>Infoblox found no free address in this subnet.</p>}
             <CheckedAgainst res={flow.preview} />
           </PreviewBox>
         )}
       </PreviewApply>
       {showPlaybook(flow.status) && <><CopyPlaybook job="ip" input={input()} /><CopyTerraform job="ip" input={input()} /></>}
-      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="networks" />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} what="subnets" />
     </div>
   )
 }

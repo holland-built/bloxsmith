@@ -63,7 +63,7 @@ test('Automate: Get an IP address preview says what it checked and what it skipp
   await page.goto('/#automate');
   const job = page.locator('[data-panel-id="automate-job"]');
   await job.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/a');
-  await job.getByRole('combobox', { name: 'Network' }).selectOption('ipam/subnet/s2');
+  await job.getByRole('combobox', { name: 'Subnet' }).selectOption('ipam/subnet/s2');
   await job.getByRole('button', { name: 'Preview' }).click();
   await expectChecked(job.locator('[data-desk-preview]'));
 });

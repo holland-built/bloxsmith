@@ -33,6 +33,10 @@ const ACTIONS = [
 ]
 const actionLabel = (id) => ACTIONS.find((a) => a.id === id)?.label || id
 const MAX = 50000
+// A plain button: the quiet hairline buttons keep (DESIGN.md, Fields). When it
+// cannot be pressed its words go dim, as a greyed Preview's do.
+const QUIET_BTN = 'px-3 py-1.5 rounded-control border text-copy disabled:cursor-not-allowed'
+const quietStyle = (off) => ({ borderColor: 'var(--color-border)', color: off ? 'var(--color-dim)' : 'var(--color-txt)', background: 'var(--color-field)' })
 
 function Field({ label, group = false, children }) {
   const id = useId()
@@ -258,8 +262,7 @@ function DailyProposals({ setup, why }) {
         <button type="button" disabled={!setup || busy}
           onClick={() => setWatch(setup, `Each day, Bloxsmith will propose changes to ${setup.list_name}.`)}
           aria-describedby={setup ? undefined : 'sl-daily-why'}
-          className="px-3 py-1.5 rounded-control border text-copy"
-          style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+          className={QUIET_BTN} style={quietStyle(!setup || busy)}>
           {setup ? `Propose changes to ${setup.list_name} every day` : 'Propose changes every day'}
         </button>
         {!setup && <span id="sl-daily-why" className="text-note text-muted">To turn this on, {why}.</span>}
@@ -523,8 +526,7 @@ export default function SiteLists() {
                         onChange={(e) => { loadSeq.current++; setTop(e.target.value); setTops(null); setLoading(false); flow.markStale() }} />
                     </Field>
                     <button type="button" onClick={loadTop} disabled={loading}
-                      className="px-3 py-1.5 rounded-control border text-copy"
-                      style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+                      className={QUIET_BTN} style={quietStyle(loading)}>
                       {loading ? 'Getting…' : 'Get both lists'}
                     </button>
                   </div>
@@ -561,8 +563,7 @@ export default function SiteLists() {
             </Field>
             <div className="flex items-center gap-3">
               <button type="button" onClick={saveNever} disabled={neverBusy || neverText === null}
-                className="px-3 py-1.5 rounded-control border text-copy"
-                style={{ borderColor: COLORS.accent, color: 'var(--color-txt)', background: 'var(--color-field)' }}>
+                className={QUIET_BTN} style={quietStyle(neverBusy || neverText === null)}>
                 {neverBusy ? 'Saving…' : 'Save never-add list'}
               </button>
               {neverMsg && <span role={neverMsg.err ? 'alert' : 'status'} className="text-note" style={{ color: neverMsg.err ? COLORS.crit : undefined }}>{neverMsg.text}</span>}
@@ -597,6 +598,7 @@ export default function SiteLists() {
             <FilterSelect label="Policy" value={policyId} placeholder="Select policy…"
               onChange={(v) => { setPolicyId(v); setPosition('0'); flow.markStale() }}
               options={policies.map((p) => ({ value: String(p.id), label: p.name }))} />
+            <FetchError error={targets.error} stale={policies.length > 0} what="security policies" />
           </Field>
 
           <div className="flex flex-col gap-1">
@@ -625,7 +627,6 @@ export default function SiteLists() {
           </Field>
 
           <PreviewApply {...applyProps} part="start" />
-          <FetchError error={targets.error} stale={policies.length > 0} what="security policies" />
         </section>
       } result={
         <section aria-labelledby="sl-result-h" data-result-of="lists">
