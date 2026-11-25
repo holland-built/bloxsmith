@@ -289,7 +289,7 @@ It shows at most the 500 latest events from the last 24 hours. The Portal return
 
 The quick way to make a change. Pick a job on the left, answer its questions, and press **Preview** to see what will be made. Nothing is created until you press **Build it**.
 
-Everything built here can be removed from **Your recent changes**. The full Provision, Get an address and Demo server pages are still in the page menu, under **Change**.
+Everything built here can be removed from **Made here**. The full Provision, Get an address and Demo server pages are still in the page menu, under **Change**.
 
 | Job | What it asks | What it makes |
 |---|---|---|
@@ -301,11 +301,11 @@ Everything built here can be removed from **Your recent changes**. The full Prov
 
 **Networks for a cloud.** Make a new network asks what the network is for: None, AWS, Azure or Google Cloud. Each cloud keeps a few addresses of every network for itself, counted from the network's first address. AWS keeps the next three (router, DNS, future use), Azure the next three (gateway and two for DNS), and Google Cloud the next one (gateway) and the second-to-last. For 10.0.0.32/28 that is .33, .34 and .35 on AWS, and .33 and .46 on Google Cloud. Preview lists them and how many addresses that leaves for devices. Build makes the network first, then reserves each of those addresses in Infoblox with a comment such as "Kept by AWS: router", so nobody hands one out by mistake. AWS does not allow a network smaller than /28 (16 addresses), so with AWS picked the smallest size is /28. If an address cannot be reserved, the network is still made and kept, and the message names each address that was not held so you can reserve it by hand. Remove deletes the reserved addresses first, then the network. None works as before and reserves nothing. The Ansible and Terraform copies make only the network, not the reservations.
 
-**Run it from Ansible.** After Preview, Get an IP address, Add a DNS name and Make a new network show **Run this from Ansible instead**. It holds the same change as a playbook for Infoblox's `infoblox.universal_ddi` collection, with a button to copy it. Install the collection with `ansible-galaxy collection install infoblox.universal_ddi` and set `INFOBLOX_PORTAL_KEY` before running it. A change made from the playbook is not listed in Your recent changes. The branch office and demo jobs have no playbook, because they are many steps and a demo server uses Terraform.
+**Run it from Ansible.** After Preview, Get an IP address, Add a DNS name and Make a new network show **Run this from Ansible instead**. It holds the same change as a playbook for Infoblox's `infoblox.universal_ddi` collection, with a button to copy it. Install the collection with `ansible-galaxy collection install infoblox.universal_ddi` and set `INFOBLOX_PORTAL_KEY` before running it. A change made from the playbook is not listed in Made here. The branch office and demo jobs have no playbook, because they are many steps and a demo server uses Terraform.
 
-**Run it from Terraform.** The same three jobs also show **Run this from Terraform instead**, with a **Copy as Terraform** button. It holds the change as a `main.tf` for Infoblox's `infobloxopen/bloxone` Terraform provider. Set `INFOBLOX_PORTAL_KEY` to your API key and `INFOBLOX_PORTAL_URL` to your portal, then run `terraform init` and `terraform apply`. Terraform keeps the one address or network it made: running apply again does not take another. A change made this way is not listed in Your recent changes. The branch office and demo jobs have no Terraform file either.
+**Run it from Terraform.** The same three jobs also show **Run this from Terraform instead**, with a **Copy as Terraform** button. It holds the change as a `main.tf` for Infoblox's `infobloxopen/bloxone` Terraform provider. Set `INFOBLOX_PORTAL_KEY` to your API key and `INFOBLOX_PORTAL_URL` to your portal, then run `terraform init` and `terraform apply`. Terraform keeps the one address or network it made: running apply again does not take another. A change made this way is not listed in Made here. The branch office and demo jobs have no Terraform file either.
 
-**Demo servers.** Get a demo ready builds the demo server with the settings saved on the Demo server page, including its join token. It takes about 15 minutes and keeps going if you close the page; Your recent changes shows how far it got. If the server never joins the Infoblox Portal, the join token may have expired: paste a new one on the Demo server page, then remove the demo and build it again. Demo servers made on the Demo server page are listed under Your recent changes too, and are removed only when you press Remove.
+**Demo servers.** Get a demo ready builds the demo server with the settings saved on the Demo server page, including its join token. It takes about 15 minutes and keeps going if you close the page; Made here shows how far it got. If the server never joins the Infoblox Portal, the join token may have expired: paste a new one on the Demo server page, then remove the demo and build it again. Demo servers made on the Demo server page are listed under Made here too, and are removed only when you press Remove.
 
 **Find** at the top looks up an address, network or name across IPAM, DNS and the logs, and opens the search page. It changes nothing.
 
@@ -313,7 +313,7 @@ Everything built here can be removed from **Your recent changes**. The full Prov
 
 **IP space suggestions.** The three buttons above the IP space list are the best places to build. Spaces you have built in before come first, then spaces named for the person signed in, then the spaces with the most free addresses. Each button says why it is suggested. You can still pick any space from the list.
 
-**Your recent changes** lists everything built on this page, newest first. **Remove** first lists what is still there, then **Delete these** deletes exactly those items and nothing else. Bloxsmith keeps the exact Infoblox ID of everything it builds here, so Remove never touches anything it did not make. If an item cannot be deleted, the change says so, and Remove again retries only what is left.
+**Made here** lists everything built on this page, newest first. **Remove** first lists what is still there, then **Delete these** deletes exactly those items and nothing else. Bloxsmith keeps the exact Infoblox ID of everything it builds here, so Remove never touches anything it did not make. If an item cannot be deleted, the change says so, and Remove again retries only what is left.
 
 Deleting a network or a DNS zone in Infoblox also deletes everything inside it. So Remove keeps a network that now holds addresses or DHCP ranges this change did not make, and a zone that holds records this change did not make, and says so. Remove those first, then press Remove again. A DNS zone that was already there before a branch office or demo was built is never removed.
 
@@ -650,7 +650,7 @@ Every panel's About (ⓘ) ends with a line saying where its numbers come from an
 | Provision | Seed demo: Teardown log | the Infoblox API | No | it is a live log, not a chart |
 | Provision | Seed demo: Teardown summary | the Infoblox API | No | it reports what a change did, not a chart |
 | Automate | The job you picked | the Infoblox API | No | it is a form, not a chart |
-| Automate | Your recent changes | the app's own run records | No | it is a list, not a chart |
+| Automate | Made here | the app's own run records | No | it is a list, not a chart |
 | Made with Bloxsmith | What Bloxsmith made and deleted | the app's own run records | No | it is a list, not a chart |
 | Made with Bloxsmith | Delete something else | the Infoblox API | No | it is a form, not a chart |
 | Best practices | Checks | the Infoblox API | No | it checks design rules against what is there, worked out in the app |
