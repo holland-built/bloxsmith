@@ -106,3 +106,31 @@ test('at 390 a partial failure still names what failed', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('header [data-state]')).toHaveText("Hosts didn't load", { timeout: 20_000 });
 });
+
+// Codex review round 2. The header warned on any page that reads /api/data, so
+// with hosts failed Network said "Hosts didn't load" though it shows only
+// subnets. It warns only where the page uses the list that failed.
+test.describe('a hosts failure', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+  const hostsFailed = (page: Page) => page.route('**/api/data*', (r) => json(r, {
+    ...inventory({ hosts: 'error' }),
+    subnets: [{ id: 'ipam/subnet/1', address: '10.0.0.0', cidr: 24, name: 'one', utilization: 10 }],
+    _totals: { degraded: false },
+  }));
+
+  test('is not named on Network, which shows only subnets', async ({ page }) => {
+    await installBaselineWorld(page);
+    await hostsFailed(page);
+    await page.goto('/#network');
+    await expect(page.locator('[data-panel-id="network-exhaustion"]')).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('header [data-state]')).toHaveCount(0);
+  });
+
+  test('is still named on Infra, which shows hosts', async ({ page }) => {
+    await installBaselineWorld(page);
+    await hostsFailed(page);
+    await page.goto('/#infra');
+    await expect(page.locator('header [data-state]')).toHaveText("Hosts didn't load", { timeout: 20_000 });
+  });
+});

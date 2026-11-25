@@ -105,6 +105,14 @@ export function RefreshControl() {
   )
 }
 
+// The lists each /api/data page shows, read from its tab (see PAGE_FEEDS use).
+const PAGE_FEEDS = { network: ['subnets'], infra: ['hosts'], daily: ['subnets', 'hosts'] }
+const pageId = () => window.location.hash.slice(1).split('?')[0]
+const subscribeHash = (cb) => {
+  window.addEventListener('hashchange', cb)
+  return () => window.removeEventListener('hashchange', cb)
+}
+
 export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
   const [open, setOpen] = useState(false)
@@ -161,6 +169,10 @@ export default function ConnStatus() {
   useEffect(() => { noteTenant(activeId) }, [activeId])
 
   const FEED_KEYS = ['subnets', 'hosts', 'leases']
+  // Which of these lists each page that reads /api/data actually shows, so a
+  // hosts failure is not named on Network, which shows only subnets (Codex
+  // review). A page missing here is assumed to show all three.
+  const pageFeeds = PAGE_FEEDS[useSyncExternalStore(subscribeHash, pageId, () => '')] || FEED_KEYS
   // The header reads /api/data on every page. Its failure is worth a warning
   // only where the page on screen reads it too (GUI audit E9: the warning
   // showed on AI, which has no failed panel).
@@ -185,7 +197,8 @@ export default function ConnStatus() {
   // The lists that failed: each one marked so, or all three when the whole
   // read failed, or when it is degraded with nothing loaded to tell them apart.
   const marked = FEED_KEYS.filter((k) => meta[k] === 'error')
-  const failedFeeds = dataError || (feedsDegraded && !hasData && !marked.length) ? FEED_KEYS : marked
+  const failedFeeds = (dataError || (feedsDegraded && !hasData && !marked.length) ? FEED_KEYS : marked)
+    .filter((k) => pageFeeds.includes(k))
 
   useEffect(() => {
     if (hasData) lastFetchRef.current = Date.now()
