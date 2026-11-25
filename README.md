@@ -15,7 +15,7 @@ Bloxsmith shows your Infoblox Portal (CSP) account on one page: what needs atten
 ![Bloxsmith Overview page: four items needing attention, recent DNS traffic and changes, and a status card for each service](docs/dashboard.png)
 
 <details>
-<summary><b>More screens: Security, Network, DNS, Changes, Ask AI, phone, light theme</b></summary>
+<summary><b>More screens: Security, Network, DNS, Changes, AI, phone, light theme</b></summary>
 
 **Security.** Blocked and suspicious lookups, threat events by hour, and exposed credentials.
 
@@ -33,9 +33,9 @@ Bloxsmith shows your Infoblox Portal (CSP) account on one page: what needs atten
 
 ![Changes page listing recent changes grouped by IP address, subnet, DNS record and zone, with failed and deleted ones marked](docs/screenshots/changes.png)
 
-**Ask AI.** Ask about your network in plain words. This needs an AI key (see **Optional: the AI query box** below).
+**AI** (under **Ask** in the menu). Ask about your network in plain words. This needs an AI key (see **Optional: the AI query box** below).
 
-![Ask AI page with a question box, suggested questions and a threat lookup box](docs/screenshots/ask-ai.png)
+![AI page with a question box, suggested questions and a threat lookup box](docs/screenshots/ask-ai.png)
 
 **On a phone.** The same pages work on a phone, with the menu along the bottom.
 
@@ -133,7 +133,7 @@ The dashboard then opens with a short **Finish setting up** checklist: AI answer
 <details>
 <summary><b>Updating</b></summary>
 
-Nothing updates on its own. Bloxsmith shows a small banner when a newer version is out, and you
+Nothing updates on its own unless you turn on overnight updates. Bloxsmith shows a small banner when a newer version is out, and you
 decide when to take it. Your passphrase, keys and saved views are kept, and the dashboard is
 unavailable for about a minute.
 
