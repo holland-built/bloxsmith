@@ -213,8 +213,10 @@ export function JobRail({ tab, groups, tabs, logo }) {
 // The other labels stay available to screen readers and voice control. On a
 // page that is not one of the jobs, the bar adds that page's name at the end,
 // so it always shows where you are (GUI audit A12, D13, E3, 2026-11-25).
-export function JobBar({ tab, tabs }) {
-  const here = !JOB_IDS.has(tab) && tabs.find((t) => t.id === tab)
+// `pages` adds the pages no menu lists, such as Search result, so those are
+// named too.
+export function JobBar({ tab, tabs, pages = tabs }) {
+  const here = !JOB_IDS.has(tab) && pages.find((t) => t.id === tab)
   return (
     <nav aria-label="Jobs" data-job-bar="" className="frame-dock">
       {jobsOf(tabs).map((j) => (

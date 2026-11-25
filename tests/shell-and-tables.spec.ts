@@ -102,3 +102,46 @@ for (const width of [390, 1440]) {
     expect(t!.width).toBeGreaterThan(s!.width - 4);
   });
 }
+
+// Codex review of w2 (2026-11-25). The Search result page is not in TABS (it
+// is one of App.jsx's HIDDEN_PAGES), so the phone bar showed no page name there.
+test('on a phone the bottom bar names the Search result page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#dossier?q=app-dc1-prod.acme.corp');
+  const current = page.locator('[data-job-bar] [aria-current="page"]');
+  await expect(current).toHaveCount(1);
+  await expect(current).toHaveAccessibleName('Search result');
+  await expect(current).toBeVisible();
+});
+
+// Codex review of w2. The fade masked the table box itself, and its keyboard
+// focus ring is drawn inside the box, so the ring's right edge faded away.
+// The ring's right edge must be drawn as strongly as its left edge.
+test('a phone table keeps its whole focus ring while it has keyboard focus', async ({ page }) => {
+  await installFixtures(page, 'network');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#network');
+  const scroller = page.locator('[data-panel-id="network-exhaustion"] table').first().locator('xpath=..');
+  await expect(scroller).toHaveAttribute('tabindex', '0');
+  await scroller.scrollIntoViewIfNeeded();
+  // Focus it the way a keyboard does: a key press, then focus lands on it.
+  await page.keyboard.press('Shift');
+  await scroller.evaluate((el) => (el as HTMLElement).focus());
+  await expect.poll(() => scroller.evaluate((el) => el.matches(':focus-visible'))).toBe(true);
+  await page.waitForTimeout(300);
+  const shot = await scroller.screenshot();
+  const edges = await page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const y = Math.floor(img.height / 2);
+    const px = (x: number) => [...ctx.getImageData(x, y, 1, 1).data.slice(0, 3)];
+    return { left: px(0), right: px(img.width - 1) };
+  }, shot.toString('base64'));
+  const diff = edges.left.reduce((a, v, i) => a + Math.abs(v - edges.right[i]), 0);
+  expect(diff, `left ${edges.left} right ${edges.right}`).toBeLessThan(30);
+});

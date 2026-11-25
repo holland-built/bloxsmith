@@ -640,7 +640,7 @@ export default function App() {
                 </TabErrorBoundary>
               </main>
             </div>
-            <JobBar tab={tab} tabs={TABS} />
+            <JobBar tab={tab} tabs={TABS} pages={PAGES} />
           </div>
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>
