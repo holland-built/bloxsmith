@@ -16,7 +16,7 @@ const STATUS = {
   unlocked: true,
   steps: [
     { ID: 'ip', Says: 'Take the next free IP in the demo network' },
-    { ID: 'vm', Says: 'Build a NIOS-X VM on Proxmox' },
+    { ID: 'vm', Says: 'Build the demo server on Proxmox' },
   ],
   runs: [{ change: 'c-20261030-150000', status: 'ready', ip: '10.99.0.2', zone: 'demo-c-20261030-150000.example.', vmid: 211, vmName: 'jsmith-211' }],
 };
@@ -78,9 +78,9 @@ test('saved settings fold away, and the join token box opens empty saying a toke
   await page.goto('/#demo');
   const folded = page.locator('[data-settings-folded]');
   await expect(folded).toContainText('Saved and ready');
-  await expect(page.getByLabel('NIOS-X join token')).toHaveCount(0);
+  await expect(page.getByLabel('Server sign-up code from the Infoblox Portal')).toHaveCount(0);
   await folded.getByRole('button', { name: 'Change settings' }).click();
-  const box = page.getByLabel('NIOS-X join token');
+  const box = page.getByLabel('Server sign-up code from the Infoblox Portal');
   await expect(box).toHaveValue('');
   await expect(box).toHaveAttribute('placeholder', /Stored/);
 });

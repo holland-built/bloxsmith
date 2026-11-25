@@ -314,8 +314,13 @@ function ChatCard({ panelId }) {
     setInput('')
     if (inRef.current) inRef.current.style.height = 'auto'
     // The first question swaps the empty view for the chat, which remounts
-    // the box; put the cursor back in it.
-    requestAnimationFrame(() => inRef.current?.focus())
+    // the box; put the cursor back in it. Only when nothing else has it: the
+    // question waits on a check first, and someone who has moved on to
+    // another box meanwhile keeps their cursor (and what they type) there.
+    requestAnimationFrame(() => {
+      const a = document.activeElement
+      if (!a || a === document.body || a === inRef.current) inRef.current?.focus()
+    })
     setBusy(true)
     tokenFetch('/api/query', {
       method: 'POST',
@@ -744,6 +749,17 @@ function LookupCard({ panelId }) {
 // instead of being described as Groq.
 const EGRESS_KEY = 'bx:ai-egress-ok'
 
+// The company behind a provider address, so the notice names who gets the
+// question (GUI audit E8). An address not listed is named as it is.
+const AI_COMPANY = {
+  'api.groq.com': 'Groq',
+  'api.openai.com': 'OpenAI',
+  'api.anthropic.com': 'Anthropic',
+  'generativelanguage.googleapis.com': 'Google',
+  'api.mistral.ai': 'Mistral',
+}
+const aiCompany = (host) => AI_COMPANY[host] || `the AI service at ${host}`
+
 // Read fresh before every question: the provider can change in Settings while
 // this page stays open. key is null when the host is unknown.
 async function readEgress() {
@@ -777,7 +793,7 @@ function EgressNotice({ egress, accepted, onAccept }) {
   if (accepted && !open) {
     return (
       <p className="text-note text-muted mt-1 text-center">
-        Questions send tenant data to {host || 'your AI provider'}.{' '}
+        Questions send details from this account to {host ? aiCompany(host) : 'your AI provider'}.{' '}
         <button type="button" className="underline underline-offset-2" onClick={() => setOpen(true)}>Details</button>
       </p>
     )
@@ -785,8 +801,8 @@ function EgressNotice({ egress, accepted, onAccept }) {
   const text = !loaded
     ? 'Checking where questions are sent…'
     : host
-      ? `Asking a question sends live data from this tenant, such as hostnames, IP addresses, DNS names and audit entries, to ${host}. Nothing is sent until you ask.`
-      : 'Asking a question sends live data from this tenant to your configured AI provider. Its address could not be read, so asking is off until it can be. Reload the page to try again.'
+      ? `Asking a question sends live details from this account, such as hostnames, IP addresses, DNS names and audit entries, to ${AI_COMPANY[host] ? `${AI_COMPANY[host]} (${host})` : aiCompany(host)}. Nothing is sent until you ask.`
+      : 'Asking a question sends live details from this account to your AI provider. Its address could not be read, so asking is off until it can be. Reload the page to try again.'
   return (
     <div role="note" className="mt-3 text-note text-left rounded-control border px-3 py-2.5" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
       {text}

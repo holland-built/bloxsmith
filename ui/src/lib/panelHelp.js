@@ -164,7 +164,7 @@ export const PANEL_HELP = {
     look: 'The buttons filter to one severity; ticking a row fades it. Block says "blocked" only after re-reading the list to confirm; "unconfirmed" means it may or may not have applied.',
   },
   'security-inventory': {
-    what: 'How many security policies, threat feeds, named lists, roaming endpoints and Anycast members are configured on this tenant.',
+    what: 'How many security policies, threat feeds, named lists, devices with the Infoblox app and servers sharing one address are set up on this account.',
     look: 'A count of what is set up, not a measure of what is protected. A row reads "unavailable" when that one source failed, and "none configured" when it really is empty.',
   },
   'security-lookalike-domains': {

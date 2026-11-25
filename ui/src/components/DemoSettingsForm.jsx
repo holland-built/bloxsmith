@@ -12,17 +12,28 @@ const inputCls = `${FIELD_CLS} w-full`
 const btnCls = 'px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 const primary = { background: COLORS.accent, color: COLORS.onAccent }
 
+// Plain labels (GUI audit E8); the technical value the person types stays
+// visible as the "e.g." hint (E10).
 const FIELDS = [
-  ['pve', 'Proxmox SSH login', 'jsmith@10.0.0.2'],
-  ['pveName', 'Proxmox host name (answered in the demo zone)', 'pve1'],
-  ['pveIp', 'Proxmox host address', '10.0.0.2'],
-  ['pool', 'Proxmox storage for the disk', 'local-zfs'],
-  ['bridge', 'Demo bridge on Proxmox', 'vmbr9'],
-  ['subnet', 'Demo network', '10.99.0.0/24'],
-  ['gateway', 'Demo network gateway', '10.99.0.1'],
-  ['image', 'NIOS-X image on this computer (.qcow2)', '/path/to/NIOS-X_OnPrem.qcow2'],
-  ['owner', 'VM name prefix', 'jsmith'],
+  ['pve', 'Proxmox login (user@address)', 'e.g. jsmith@10.0.0.2'],
+  ['pveName', 'Proxmox computer name (answered in the demo zone)', 'e.g. pve1'],
+  ['pveIp', 'Proxmox computer address', 'e.g. 10.0.0.2'],
+  ['pool', 'Proxmox storage for the disk', 'e.g. local-zfs'],
+  ['bridge', 'Proxmox network the demo server joins', 'e.g. vmbr9'],
+  ['subnet', 'Demo network', 'e.g. 10.99.0.0/24'],
+  ['gateway', 'Demo network gateway', 'e.g. 10.99.0.1'],
+  ['image', 'Infoblox server image file on this computer', 'e.g. /path/to/NIOS-X_OnPrem.qcow2'],
+  ['owner', 'Start of each demo server name', 'e.g. jsmith'],
 ]
+
+// The server stores the disk size as "64G"; the box asks for a number of GB.
+const SIZES = [
+  ['ram', 'RAM (MB)', 'e.g. 4096'],
+  ['cores', 'Cores', 'e.g. 3'],
+  ['disk', 'Disk (GB)', 'e.g. 64'],
+]
+const shownSize = (k, v) => (k === 'disk' ? String(v ?? '').replace(/G$/i, '') : (v ?? ''))
+const savedDisk = (v) => (/^\s*\d+\s*$/.test(String(v ?? '')) ? `${String(v).trim()}G` : v)
 
 export default function DemoSettingsForm({ st, onSaved, onChange }) {
   const [form, setForm] = useState(null)
@@ -42,7 +53,7 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
     try {
       const r = await tokenFetch('/api/vault/demo', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, joinToken: token }),
+        body: JSON.stringify({ ...form, disk: savedDisk(form.disk), joinToken: token }),
       })
       const data = await r.json().catch(() => null)
       const j = data ?? {}
@@ -65,16 +76,16 @@ export default function DemoSettingsForm({ st, onSaved, onChange }) {
         </label>
       ))}
       <label className="text-note text-muted flex flex-col gap-1">
-        NIOS-X join token
+        Server sign-up code from the Infoblox Portal
         <input type="password" className={inputCls} value={token} {...API_KEY_BOX}
-          placeholder={st?.settings?.hasJoinToken ? 'Stored. Leave blank to keep it.' : 'Paste the join token from the Infoblox Portal'}
+          placeholder={st?.settings?.hasJoinToken ? 'Stored. Leave blank to keep it.' : 'Paste the code the Portal calls a “join token”'}
           onChange={(e) => setToken(e.target.value)} />
       </label>
       <div className="grid grid-cols-3 gap-2">
-        {[['ram', 'RAM (MB)'], ['cores', 'Cores'], ['disk', 'Disk']].map(([k, label]) => (
+        {SIZES.map(([k, label, ph]) => (
           <label key={k} className="text-note text-muted flex flex-col gap-1">
             {label}
-            <input className={inputCls} value={form?.[k] ?? ''} onChange={(e) => set(k, e.target.value)} {...MACHINE_TEXT} />
+            <input className={inputCls} value={shownSize(k, form?.[k])} placeholder={ph} onChange={(e) => set(k, e.target.value)} {...MACHINE_TEXT} />
           </label>
         ))}
       </div>

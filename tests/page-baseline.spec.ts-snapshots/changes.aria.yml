@@ -1,16 +1,16 @@
 - main "Changes tab":
-  - heading "What changed" [level=1]
+  - heading "Changes" [level=1]
   - text: /Last \d+ h only Updated .+/
   - button "Arrange panels"
   - heading "Worth a look" [level=2]
   - 'button "About: Worth a look"': "About: ⓘ"
   - 'button "Options: Worth a look"'
-  - text: /Deletions Needs action 1\+ older changes not checked Failed Needs action 1\+ older changes not checked Out of hours 2\+ \d+:\d+–\d+:\d+ local New accounts Unknown Not answered older changes not checked/
+  - text: /Deletions Needs action 1\+ at least 1; older changes not checked Check it was meant Failed Needs action 1\+ at least 1; older changes not checked See why it failed Out of hours 2\+ \d+:\d+–\d+:\d+ local New accounts Unknown Not answered older changes not checked/
   - status: /Based on the newest \d+ changes; older ones weren't checked/
   - heading "Changed objects" [level=2]
   - 'button "About: Changed objects"': "About: ⓘ"
   - 'button "Options: Changed objects"'
-  - text: /\d+ changes · \d+ objects · \d+:\d+:\d+–\d+:\d+:\d+/
+  - text: /\d+ changes · \d+ objects · \d+:\d+:\d+–\d+:\d+:\d+ Deleted or failed Out of hours Everything else/
   - table "Changed objects, grouped by resource":
     - row "Severity Local time Action Result Who Type Flags":
       - columnheader "Severity"
@@ -20,66 +20,66 @@
       - columnheader "Who"
       - columnheader "Type"
       - columnheader "Flags"
-    - rowgroup "addressservice — 2 rows · 1 success · 1 not successful":
-      - row "addressservice 2 rows · 1 success · 1 not successful":
+    - rowgroup "IP address — 2 rows · 1 success · 1 not successful":
+      - row "IP address 2 rows · 1 success · 1 not successful":
         - cell
-        - rowheader "addressservice":
-          - heading "addressservice" [level=3]
+        - rowheader "IP address":
+          - heading "IP address" [level=3]
         - cell "2 rows · 1 success · 1 not successful"
-      - 'row /Critical \d+-\d+-\d+:\d+:\d+ UPDATE failed: denied actor-gamma service Failed/':
-        - cell "Critical"
+      - 'row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Changed failed: denied actor-gamma service Failed/':
+        - cell "Deleted or failed"
         - cell /\d+-\d+-\d+:\d+:\d+/
-        - cell "UPDATE"
+        - cell "Changed"
         - 'cell "failed: denied"'
         - cell "actor-gamma"
         - cell "service"
         - cell "Failed"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service Out of hours/:
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed success actor-beta service Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
-        - cell "UPDATE"
+        - cell "Changed"
         - cell "success"
         - cell "actor-beta"
         - cell "service"
         - cell "Out of hours"
-    - rowgroup "subnetservice — 1 row · 1 success":
-      - row "subnetservice 1 row · 1 success":
+    - rowgroup "Subnet — 1 row · 1 success":
+      - row "Subnet 1 row · 1 success":
         - cell
-        - rowheader "subnetservice":
-          - heading "subnetservice" [level=3]
+        - rowheader "Subnet":
+          - heading "Subnet" [level=3]
         - cell "1 row · 1 success"
-      - row /Routine \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service/:
+      - row /Routine \d+-\d+-\d+:\d+:\d+ Changed success actor-beta service/:
         - cell "Routine"
         - cell /\d+-\d+-\d+:\d+:\d+/
-        - cell "UPDATE"
+        - cell "Changed"
         - cell "success"
         - cell "actor-beta"
         - cell "service"
         - cell
-    - rowgroup "dnsrecord — 1 row · 1 success · 1 deleted":
-      - row "dnsrecord 1 row · 1 success · 1 deleted":
+    - rowgroup "DNS record — 1 row · 1 success · 1 deleted":
+      - row "DNS record 1 row · 1 success · 1 deleted":
         - cell
-        - rowheader "dnsrecord":
-          - heading "dnsrecord" [level=3]
+        - rowheader "DNS record":
+          - heading "DNS record" [level=3]
         - cell "1 row · 1 success · 1 deleted"
-      - row /Critical \d+-\d+-\d+:\d+:\d+ DELETE success actor-alpha service Deleted/:
-        - cell "Critical"
+      - row /Deleted or failed \d+-\d+-\d+:\d+:\d+ Deleted success actor-alpha service Deleted/:
+        - cell "Deleted or failed"
         - cell /\d+-\d+-\d+:\d+:\d+/
-        - cell "DELETE"
+        - cell "Deleted"
         - cell "success"
         - cell "actor-alpha"
         - cell "service"
         - cell "Deleted"
-    - rowgroup "auth_zone — 1 row · 1 success":
-      - row "auth_zone 1 row · 1 success":
+    - rowgroup "DNS zone — 1 row · 1 success":
+      - row "DNS zone 1 row · 1 success":
         - cell
-        - rowheader "auth_zone":
-          - heading "auth_zone" [level=3]
+        - rowheader "DNS zone":
+          - heading "DNS zone" [level=3]
         - cell "1 row · 1 success"
-      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-alpha service Out of hours/:
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ Changed success actor-alpha service Out of hours/:
         - cell "Out of hours"
         - cell /\d+-\d+-\d+:\d+:\d+/
-        - cell "UPDATE"
+        - cell "Changed"
         - cell "success"
         - cell "actor-alpha"
         - cell "service"

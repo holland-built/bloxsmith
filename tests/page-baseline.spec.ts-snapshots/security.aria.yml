@@ -7,7 +7,7 @@
     - button "Exposures None reported"
     - button /Credentials \d+ suppliers \d+ exposed/
   - button "Arrange panels"
-  - heading "Triage Inbox" [level=2]
+  - heading "Triage inbox" [level=2]
   - group "Show by severity":
     - button "all" [pressed]
     - button "critical"
@@ -15,8 +15,8 @@
     - button "medium"
     - button "low"
   - text: "2"
-  - 'button "About: Triage Inbox"': "About: ⓘ"
-  - 'button "Options: Triage Inbox"'
+  - 'button "About: Triage inbox"': "About: ⓘ"
+  - 'button "Options: Triage inbox"'
   - table:
     - rowgroup:
       - row "Ack Severity Query Action Time Block":
@@ -49,21 +49,21 @@
         - cell /Jan 1, \d+, 8:\d+ AM/
         - cell "Block":
           - button "Block"
-  - heading "Response Summary" [level=2]
-  - 'button "About: Response Summary"': "About: ⓘ"
-  - 'button "Options: Response Summary"'
-  - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
-  - heading "Threat Events by hour" [level=2]
+  - heading "Response summary" [level=2]
+  - 'button "About: Response summary"': "About: ⓘ"
+  - 'button "Options: Response summary"'
+  - text: /Critical, not yet reviewed 0 Blocked \d+ Logged 8 Total Events \d+/
+  - heading "Threat events by hour" [level=2]
   - text: 10 events
-  - 'button "About: Threat Events by hour"': "About: ⓘ"
-  - 'button "Options: Threat Events by hour"'
+  - 'button "About: Threat events by hour"': "About: ⓘ"
+  - 'button "Options: Threat events by hour"'
   - text: critical 1 high 2 medium 3 low 4
-  - application "Threat Events by hour chart": /\d+:\d+( \d+:\d+)+/
-  - heading "Threat Feed Activity" [level=2]
-  - 'button "About: Threat Feed Activity"': "About: ⓘ"
-  - 'button "Options: Threat Feed Activity"'
+  - application "Threat events by hour chart": /\d+:\d+( \d+:\d+)+/
+  - heading "Threat feed activity" [level=2]
+  - 'button "About: Threat feed activity"': "About: ⓘ"
+  - 'button "Options: Threat feed activity"'
   - text: /\d+ Blocked 0 Allowed/
-  - application "Threat Feed Activity chart": /Dec \d+ Dec \d+/
+  - application "Threat feed activity chart": /Dec \d+ Dec \d+/
   - heading "Threat insights" [level=2]
   - text: "1"
   - 'button "About: Threat insights"': "About: ⓘ"
@@ -88,10 +88,10 @@
         - cell "Active"
         - cell "9"
         - cell /Jan 1, \d+/
-  - heading "Lookalike Domains" [level=2]
+  - heading "Lookalike domains" [level=2]
   - text: 1 detected
-  - 'button "About: Lookalike Domains"': "About: ⓘ"
-  - 'button "Options: Lookalike Domains"'
+  - 'button "About: Lookalike domains"': "About: ⓘ"
+  - 'button "Options: Lookalike domains"'
   - table:
     - rowgroup:
       - row "Lookalike Target Suspicious":
@@ -106,10 +106,10 @@
         - cell "baselíne.example"
         - cell "baseline.example"
         - cell "yes"
-  - heading "Axur Supplier Risk" [level=2]
+  - heading "Axur supplier risk" [level=2]
   - text: 9 credentials · 2 suppliers
-  - 'button "About: Axur Supplier Risk"': "About: ⓘ"
-  - 'button "Options: Axur Supplier Risk"'
+  - 'button "About: Axur supplier risk"': "About: ⓘ"
+  - 'button "Options: Axur supplier risk"'
   - table:
     - rowgroup:
       - row "Supplier Credentials exposed Types affected":
@@ -132,29 +132,29 @@
   - 'button "About: Exposures"': "About: ⓘ"
   - 'button "Options: Exposures"'
   - text: No exposures found
-  - heading "Asset Risk" [level=2]
-  - 'button "About: Asset Risk"': "About: ⓘ"
-  - 'button "Options: Asset Risk"'
+  - heading "Asset risk" [level=2]
+  - 'button "About: Asset risk"': "About: ⓘ"
+  - 'button "Options: Asset risk"'
   - text: No asset risk scores found
-  - heading "CTEM Exposure" [level=2]
-  - 'button "About: CTEM Exposure"': "About: ⓘ"
-  - 'button "Options: CTEM Exposure"'
-  - text: No CTEM exposures found
-  - heading "Asset Insights" [level=2]
-  - 'button "About: Asset Insights"': "About: ⓘ"
-  - 'button "Options: Asset Insights"'
+  - heading "Exposure by severity" [level=2]
+  - 'button "About: Exposure by severity"': "About: ⓘ"
+  - 'button "Options: Exposure by severity"'
+  - text: No exposures found
+  - heading "Asset insights" [level=2]
+  - 'button "About: Asset insights"': "About: ⓘ"
+  - 'button "Options: Asset insights"'
   - text: /Total Findings \d+ baseline/
-  - heading "Exposed Surface" [level=2]
+  - heading "Exposed surface" [level=2]
   - text: 0 hostnames · 0 IPs
-  - 'button "About: Exposed Surface"': "About: ⓘ"
-  - 'button "Options: Exposed Surface"'
+  - 'button "About: Exposed surface"': "About: ⓘ"
+  - 'button "Options: Exposed surface"'
   - text: Showing 0 of 0 No hostnames found Showing 0 of 0 No IP addresses found
-  - heading "CTEM Assets" [level=2]
-  - 'button "About: CTEM Assets"': "About: ⓘ"
-  - 'button "Options: CTEM Assets"'
-  - text: No CTEM assets found
-  - heading "Security Inventory" [level=2]
+  - heading "Assets checked for exposure" [level=2]
+  - 'button "About: Assets checked for exposure"': "About: ⓘ"
+  - 'button "Options: Assets checked for exposure"'
+  - text: No assets found
+  - heading "Security inventory" [level=2]
   - text: what is configured
-  - 'button "About: Security Inventory"': "About: ⓘ"
-  - 'button "Options: Security Inventory"'
-  - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
+  - 'button "About: Security inventory"': "About: ⓘ"
+  - 'button "Options: Security inventory"'
+  - text: Security policies 2 Threat feeds 4 Named lists 3 Devices with the Infoblox app status unknown 9 Servers sharing one address none configured 0

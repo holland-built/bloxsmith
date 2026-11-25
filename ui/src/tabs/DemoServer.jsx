@@ -111,11 +111,11 @@ export default function DemoServer() {
         <TabIntro>Builds a NIOS-X server on Proxmox, gives it DNS, and proves it answers.</TabIntro>
 
         <CardGrid layoutKey="demo">
-          <Card panelId="demo-settings" span={3} title="Settings" note="saved in the vault; the join token is never shown again">
+          <Card panelId="demo-settings" span={3} title="Settings" note="saved securely on this computer; the sign-up code is never shown again">
             {status.loading && !st ? <Empty>Loading…</Empty> : (!editing && st?.settings?.hasJoinToken && problems.length === 0) ? (
               <div data-settings-folded="" className="flex flex-col gap-2 text-note">
                 <FetchError error={status.error} stale={!!st} what="the demo server status" />
-                <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the stored join token.</p>
+                <p className="text-txt">Saved and ready. Builds go to {st.settings.pveName || st.settings.pve || 'the Proxmox host'} on {st.settings.subnet || 'the demo network'}, with the saved sign-up code.</p>
                 <button type="button" className="self-start text-note font-medium underline underline-offset-2" style={{ color: COLORS.link }}
                   onClick={() => setEditing(true)}>Change settings</button>
               </div>
@@ -167,7 +167,7 @@ export default function DemoServer() {
             </div>
           </Card>
 
-          <Card panelId="demo-code" span={6} title="The Infoblox code" note={`what ${!st?.terraform || st.terraform === 'tofu' ? 'OpenTofu' : st.terraform} runs for each step`}>
+          <Card panelId="demo-code" span={6} title="The Infoblox code" note="the steps it runs">
             {!plan ? <Empty>Press Preview to see the code each step runs.</Empty> : (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-1 flex-wrap" role="tablist">
@@ -187,7 +187,7 @@ export default function DemoServer() {
             )}
           </Card>
 
-          <Card panelId="demo-runs" span={6} title="Runs" note="each run is tagged with its ID in Infoblox and on the VM">
+          <Card panelId="demo-runs" span={6} title="Runs" note="each run is marked with its ID in Infoblox and on the server it built">
             {runs.length === 0 ? (status.error
               ? <FeedUnavailable label="Runs unavailable" reason={status.error.message || undefined} />
               : <Empty>No demo runs yet.</Empty>) : (
@@ -200,7 +200,7 @@ export default function DemoServer() {
                     <tr className="text-left text-note text-muted">
                       <th className="py-1 pr-3 font-medium">Run</th><th className="py-1 pr-3 font-medium">State</th>
                       <th className="py-1 pr-3 font-medium">Address</th><th className="py-1 pr-3 font-medium">Zone</th>
-                      <th className="py-1 pr-3 font-medium">VM</th><th className="py-1 font-medium"><span className="sr-only">Actions</span></th>
+                      <th className="py-1 pr-3 font-medium">Server</th><th className="py-1 font-medium"><span className="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody>

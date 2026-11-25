@@ -170,7 +170,7 @@ function SeverityHero({ panelId, hub, events }) {
     : sampleCountLabel(hub.data, 'events')
 
   return (
-    <Card panelId={panelId} span={4} title="Threat Events by hour" right={unavailable ? null : <span className="text-note text-muted">{headCount}</span>}>
+    <Card panelId={panelId} span={4} title="Threat events by hour" right={unavailable ? null : <span className="text-note text-muted">{headCount}</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -204,7 +204,7 @@ function SeverityHero({ panelId, hub, events }) {
                right-hand count uses. Recharts' default said `value : 0`. */
             <Suspense fallback={<Skeleton h={180} />}>
               <CategoryBars
-                label="Threat Events by hour"
+                label="Threat events by hour"
                 data={hourly}
                 unit="events"
                 height={180}
@@ -246,14 +246,14 @@ function KpiStack({ panelId, hub, events, acks }) {
   const cells = [
     // Red only when there is something to act on; blocked and logged are
     // counts, not problems, so they stay plain.
-    { label: 'Unacked Critical', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: shownOnlyLabel(d) },
+    { label: 'Critical, not yet reviewed', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: shownOnlyLabel(d) },
     { label: 'Blocked', value: d.blocked ?? 0 },
     { label: 'Logged', value: d.logged ?? 0 },
     { label: totalCell.label, value: totalCell.value },
   ]
 
   return (
-    <Card panelId={panelId} span={2} title="Response Summary">
+    <Card panelId={panelId} span={2} title="Response summary">
       {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat information is unavailable" />
       ) : (
@@ -497,7 +497,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
     <Card
       panelId={panelId}
       span={6}
-      title="Triage Inbox"
+      title="Triage inbox"
       className="sec-triage"
       right={
         <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -580,7 +580,7 @@ function LookalikeTable({ panelId, lookalikes }) {
   const counted = !lookalikes.error && !d.unavailable
 
   return (
-    <Card panelId={panelId} span={3} title="Lookalike Domains" right={<span className="text-note text-muted">{counted ? rows.length : '—'} detected</span>}>
+    <Card panelId={panelId} span={3} title="Lookalike domains" right={<span className="text-note text-muted">{counted ? rows.length : '—'} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
@@ -661,7 +661,7 @@ function AxurPanel({ panelId, axur }) {
     <Card
       panelId={panelId}
       span={3}
-      title="Axur Supplier Risk"
+      title="Axur supplier risk"
       right={
         <span className="text-note text-muted">
           {counted ? `${(d.total_credentials ?? 0).toLocaleString()} credentials · ${rows.length} suppliers` : '—'}
@@ -730,10 +730,10 @@ function CtemPanel({ panelId, ctem }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="CTEM Exposure" right={ctemRecent(d)}>
+    <Card panelId={panelId} span={3} title="Exposure by severity" right={ctemRecent(d)}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
-        <FeedUnavailable label="CTEM exposure information is unavailable" />
-      ) : empty ? <Empty>No CTEM exposures found</Empty> : (
+        <FeedUnavailable label="Exposure counts are unavailable" />
+      ) : empty ? <Empty>No exposures found</Empty> : (
         <DataTable rows={matrix} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
@@ -786,7 +786,7 @@ function ThreatFeed({ panelId, threats }) {
   )
 
   return (
-    <Card panelId={panelId} span={3} title="Threat Feed Activity">
+    <Card panelId={panelId} span={3} title="Threat feed activity">
       {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
         <FeedUnavailable reason={threats.error?.message || threats.data?.reason || undefined} label="Threat feed activity is unavailable" />
       ) : rows.length === 0 ? <Empty>No threat feed activity found</Empty> : (
@@ -797,7 +797,7 @@ function ThreatFeed({ panelId, threats }) {
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
-              label="Threat Feed Activity"
+              label="Threat feed activity"
               data={chartData}
               blockedColor={COLORS.series}
               allowedColor={COLORS.other}
@@ -879,7 +879,7 @@ function AssetInsights({ panelId, assetInsights }) {
   const hasTotal = typeof d.total === 'number' && d.total > 0
 
   return (
-    <Card panelId={panelId} span={3} title="Asset Insights">
+    <Card panelId={panelId} span={3} title="Asset insights">
       {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
         <FeedUnavailable label="Asset insights unavailable" />
       ) : status === 'empty' || !hasTotal ? (
@@ -977,7 +977,7 @@ function AssetRiskPanel({ panelId, assetRisk }) {
   ]
 
   return (
-    <Card panelId={panelId} span={4} title="Asset Risk" right={count ? <span className="text-note text-muted">{count.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={4} title="Asset risk" right={count ? <span className="text-note text-muted">{count.toLocaleString()}</span> : null}>
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
         <FeedUnavailable label="Asset risk information is unavailable" />
       ) : rows.length === 0 ? (
@@ -1024,7 +1024,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
     <Card
       panelId={panelId}
       span={4}
-      title="Exposed Surface"
+      title="Exposed surface"
       right={
         loading || bothDead ? null : (
           <span className="text-note text-muted">
@@ -1104,13 +1104,13 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
     <Card
       panelId={panelId}
       span={4}
-      title="CTEM Assets"
+      title="Assets checked for exposure"
       right={assetCount ? <span className="text-note text-muted">{assetCount.toLocaleString()} assets</span> : null}
     >
       {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || status === 'error' ? (
-        <FeedUnavailable label="CTEM asset information is unavailable" />
+        <FeedUnavailable label="Asset exposure information is unavailable" />
       ) : empty ? (
-        <Empty>No CTEM assets found</Empty>
+        <Empty>No assets found</Empty>
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map((g) => (
@@ -1156,8 +1156,8 @@ const INVENTORY_SECTIONS = [
   { key: 'security_policies', label: 'Security policies' },
   { key: 'threat_feeds', label: 'Threat feeds' },
   { key: 'named_lists', label: 'Named lists' },
-  { key: 'roaming_endpoints', label: 'Roaming endpoints' },
-  { key: 'anycast_ha', label: 'Anycast HA members' },
+  { key: 'roaming_endpoints', label: 'Devices with the Infoblox app' },
+  { key: 'anycast_ha', label: 'Servers sharing one address' },
 ]
 
 function SecurityInventory({ panelId, hub }) {
@@ -1167,7 +1167,7 @@ function SecurityInventory({ panelId, hub }) {
   const dead = !hub.loading && (!!hub.error || body === null)
 
   return (
-    <Card panelId={panelId} span={2} title="Security Inventory" note="what is configured">
+    <Card panelId={panelId} span={2} title="Security inventory" note="what is configured">
       {hub.loading ? (
         <Skeleton h={200} />
       ) : dead ? (

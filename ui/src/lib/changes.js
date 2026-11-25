@@ -106,7 +106,7 @@ export function groupByResource(rows) {
 export const ROW_CAP = 500
 
 /** What this screen is allowed to promise, capped or not. */
-export const FEED_PROMISE = `the ${ROW_CAP} most recent events in the last 24 hours, newest first`
+export const FEED_PROMISE = `the ${ROW_CAP} most recent changes in the last 24 hours, newest first`
 
 /**
  * The truncation banner. Deliberately worded as a limit, not a total: with the
@@ -119,7 +119,7 @@ export function capNotice(payload) {
     capped,
     cap: ROW_CAP,
     text: capped
-      ? `Capped at ${ROW_CAP} rows. Showing ${FEED_PROMISE}. Older events inside this 24-hour window exist and are not on this screen.`
+      ? `Showing only ${FEED_PROMISE}. Older changes from these 24 hours exist but aren't on this screen.`
       : '',
   }
 }

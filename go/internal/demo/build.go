@@ -63,8 +63,8 @@ var ErrBusy = errors.New("another demo build or teardown is already running")
 var Steps = []struct{ ID, Says string }{
 	{"network", "Make sure the demo network exists in Infoblox (created once, then kept)"},
 	{"ip", "Take the next free IP in the demo network and reserve it in the same call"},
-	{"vm", "Build a NIOS-X VM on Proxmox with that IP and the join token"},
-	{"join", "Wait for the VM to join the Infoblox Portal"},
+	{"vm", "Build the demo server on Proxmox with that IP and the sign-up code from the Portal"},
+	{"join", "Wait for the demo server to join the Infoblox Portal"},
 	{"dns", "Start DNS on it, add it to a name server group, and serve a demo zone"},
 	{"prove", "From the Proxmox host, ask the new server for its own name and an outside name"},
 }

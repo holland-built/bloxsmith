@@ -6,6 +6,7 @@ import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTh
 import { DataTable } from '../components/DataTable.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { eventWord } from '../lib/plainWords.js'
+import { actionWord, plainRequest, resourceWord } from '../lib/auditWords.js'
 import Tip from '../components/Tip.jsx'
 // The look the owner picked for dashboards (2026-11-09) lives in Overview.css;
 // this page borrows its tokens and tiles so the two read as one product.
@@ -92,7 +93,17 @@ export default function Audit() {
     if (!older.view || !page) return chain.data?.entries
     return (joinPages(older.view, page) ?? page).entries
   }, [older.view, chain.data])
-  const entries = useMemo(() => chainRows(raw), [raw])
+  // A logged request reads as a sentence ("Tried to change a DNS record;
+  // changes are turned off"). The record as written stays in the cell's title
+  // and in what the filter box searches.
+  const entries = useMemo(
+    () =>
+      chainRows(raw).map((r, i) => {
+        const plain = plainRequest(raw[i]?.detail)
+        return plain ? { ...r, detail: plain, _record: r.detail, _search: `${r._search} ${plain.toLowerCase()}` } : r
+      }),
+    [raw],
+  )
 
   // Where the next Load older starts: before the oldest entry on screen. Null
   // when there is nothing older, or when the server cannot page.
@@ -249,7 +260,7 @@ function ActivitySummary({ raw, entries, chain, panelId }) {
     <Card
       panelId={panelId}
       span={2}
-      title="Activity Summary"
+      title="Activity summary"
       // `total` here is entries.length, the rows ON SCREEN, and it stays that way
       // deliberately. The comment above `rows` documents an invariant: the
       // per-kind rows are summed, including the "N other kinds" remainder, so
@@ -379,9 +390,10 @@ function Mark({ state }) {
 // agree in the ordinary case; the tip says what was checked rather than
 // promising they are one snapshot.
 //
-// The command is visible, not in a tip: the verdict comes from the same program
-// that writes the log, and the command is how an operator checks it with
-// nothing running, on a copied log, on another machine.
+// The command sits in a tip under "How to check it yourself" (GUI audit C8,
+// 2026-11-25: a terminal command is not plain words). It is still there in
+// every state, because the verdict comes from the same program that writes
+// the log, and the command is how an operator checks it with nothing running.
 //
 // Not saved (append_failures) is a different fact from the verdict and stays a
 // tile of its own: a refused append leaves the chain on disk genuinely intact,
@@ -406,7 +418,7 @@ function TrustStrip({ chain, entries }) {
             {v.state === 'ok' ? (
               <span className="au-sub">
                 <Tip tip="Every entry's signature, the link to the entry before it, and the sealed count of entries were checked.">
-                  {total == null ? 'Count of entries not reported' : `${total.toLocaleString()} ${total === 1 ? 'entry' : 'entries'} checked`}
+                  {total == null ? 'Count of entries not reported' : `${total.toLocaleString()} ${total === 1 ? 'entry' : 'entries'} checked; none changed or removed`}
                 </Tip>
               </span>
             ) : v.state === 'crit' ? (
@@ -414,7 +426,11 @@ function TrustStrip({ chain, entries }) {
             ) : v.state === 'warn' ? (
               v.why ? <span className="au-sub au-why">{v.why}</span> : null
             ) : null}
-            <span className="ov-muted ov-small au-cmd">Check it yourself: <code>bloxsmith audit verify</code></span>
+            <span className="ov-muted ov-small au-cmd">
+              <Tip tip={<>In a terminal on this computer, run <code>bloxsmith audit verify</code>. It checks the same log without this app running.</>}>
+                How to check it yourself
+              </Tip>
+            </span>
           </div>
         </div>
         <div className="au-tile">
@@ -422,23 +438,24 @@ function TrustStrip({ chain, entries }) {
             <span className="ov-kpi-top"><span>Last entry</span></span>
             <span className="ov-num">
               {newest ? formatTime(newest._ms) : '—'}
-              {newest ? <small> {formatDay(newest._ms)}</small> : null}
+              {newest ? <small className="block"> {formatDay(newest._ms)}</small> : null}
             </span>
-            <span className="ov-muted ov-small au-clip" title={newest?.event}>{newest ? eventWord(newest.event) : ' '}</span>
+            {/* The event wraps rather than being cut: it is what this tile is for. */}
+            <span className="ov-muted ov-small [overflow-wrap:anywhere]" title={newest?.event}>{newest ? eventWord(newest.event) : ' '}</span>
           </div>
         </div>
         <div className={`au-tile ${failState}`} data-failures={typeof failed === 'number' ? failed : undefined}>
           <div className="au-in">
-            <span className="ov-kpi-top"><span>Not saved</span>{failState ? <span className="ov-verdict crit">Needs action</span> : null}</span>
+            <span className="ov-kpi-top"><span>Couldn&apos;t be saved</span>{failState ? <span className="ov-verdict crit">Needs action</span> : null}</span>
             <span className="ov-num">{typeof failed === 'number' ? failed.toLocaleString() : '—'}</span>
             {failState ? (
               <span className="ov-small">
                 <Tip tip={<>The log on disk is unaffected; the missing {failed === 1 ? 'record' : 'records'} cannot be recovered.{last?.error ? <span className="ov-tip-sub">{last.error}</span> : null}</>}>
-                  {last?.event ? `since the app started · last: ${eventWord(last.event)}` : 'since the app started'}
+                  {last?.event ? `log entries, since the app started · last: ${eventWord(last.event)}` : 'log entries, since the app started'}
                 </Tip>
               </span>
             ) : (
-              <span className="ov-muted ov-small">{typeof failed === 'number' ? 'since the app started' : 'not reported'}</span>
+              <span className="ov-muted ov-small">{typeof failed === 'number' ? 'log entries, since the app started' : 'not reported'}</span>
             )}
           </div>
         </div>
@@ -550,9 +567,12 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
       key: 'detail',
       label: 'Detail',
       sortable: true,
-      render: (v) => (
-        <span className="block truncate font-mono text-note" title={v}>{v || '—'}</span>
-      ),
+      render: (v, row) =>
+        row._record ? (
+          <span className="block truncate text-note" title={row._record}>{v}</span>
+        ) : (
+          <span className="block truncate font-mono text-note" title={v}>{v || '—'}</span>
+        ),
     },
   ]
 
@@ -560,7 +580,7 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
     <Card
       panelId={panelId}
       span={4}
-      title="Audit Log"
+      title="Audit log"
       note="Bloxsmith actions"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">
@@ -689,8 +709,9 @@ function CspAuditTable({ panelId }) {
         </span>
       ),
     },
-    { key: 'action', label: 'Action' },
-    { key: 'resource', label: 'Resource' },
+    // Plain words on screen; the Portal's own name stays in the title.
+    { key: 'action', label: 'Action', render: (v) => <span title={v || undefined}>{actionWord(v) || '—'}</span> },
+    { key: 'resource', label: 'Resource', render: (v) => <span title={v || undefined}>{resourceWord(v) || '—'}</span> },
     {
       key: 'result',
       label: 'Result',
@@ -706,7 +727,7 @@ function CspAuditTable({ panelId }) {
     <Card
       panelId={panelId}
       span={6}
-      title="Infoblox Portal Audit"
+      title="Infoblox Portal audit"
       note="external — Infoblox portal activity"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 max-w-full">

@@ -370,15 +370,16 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     await page.route('**/api/csp-audit*', (route) => fulfillJson(route, liveWindow()));
     await page.goto('/#changes');
 
-    // r3 — the only DELETE in the payload, so this locator cannot drift onto
-    // another row. Its fields are hand-written from liveWindow() above, never
-    // read back out of the page.
-    // A regex, not a bare string: `hasText: 'DELETE'` matches case-insensitively,
-    // which would also catch the dnsrecord group header's "1 deleted".
-    const deleted = page.getByRole('row').filter({ hasText: /DELETE/ });
+    // r3 — the only DELETE in the payload, shown as "Deleted" (GUI audit C8),
+    // so this locator cannot drift onto another row. Its fields are
+    // hand-written from liveWindow() above, never read back out of the page.
+    // Matched on the Action cell alone: "Deleted" also appears in the Flags
+    // chip, in the group header's "1 deleted" and in the failed row's dot
+    // label "Deleted or failed".
+    const deleted = page.getByRole('row').filter({ has: page.locator('[aria-colindex="3"]', { hasText: /^Deleted$/ }) });
     await expect(deleted).toHaveCount(1);
     const cells = deleted.getByRole('cell');
-    await expect(cells.nth(2)).toHaveText('DELETE');
+    await expect(cells.nth(2)).toHaveText('Deleted');
     await expect(cells.nth(3)).toHaveText('success');
     await expect(cells.nth(4)).toHaveText('actor-old');
     await expect(cells.nth(5)).toHaveText('service');
@@ -399,13 +400,14 @@ test.describe('#changes — what changed in the last 24 hours', () => {
     // elsewhere on the page cannot make this count wrong.
     const headings = feedTable(page).getByRole('heading', { level: 3 });
     await expect(headings).toHaveCount(4);
-    for (const resource of ['addressservice', 'subnetservice', 'dnsrecord', 'auth_zone']) {
+    // addressservice, subnetservice, dnsrecord and auth_zone, in plain words (GUI audit C8).
+    for (const resource of ['IP address', 'Subnet', 'DNS record', 'DNS zone']) {
       await expect(feedTable(page).getByRole('heading', { level: 3, name: resource })).toBeVisible();
     }
 
     // And each group is its own labelled row group, so the rows underneath a
     // heading are bound to it rather than merely following it.
-    await expect(page.getByRole('rowgroup', { name: /^addressservice/ })).toHaveCount(1);
+    await expect(page.getByRole('rowgroup', { name: /^IP address/ })).toHaveCount(1);
   });
 
   test('(f) the cap region exists before the message does', async ({ page }) => {

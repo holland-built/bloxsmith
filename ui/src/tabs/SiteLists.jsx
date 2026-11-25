@@ -555,7 +555,7 @@ export default function SiteLists() {
           </fieldset>
 
           <div className="flex flex-col gap-2">
-            <Field label="Sites never to add, one per line (kept for this tenant)">
+            <Field label="Sites never to add, one per line (kept for this account)">
               <textarea {...MACHINE_TEXT} className={FIELD_CLS} rows={3} value={neverText ?? savedNever.join('\n')}
                 onChange={(e) => { setNeverText(e.target.value); setNeverMsg(null) }} placeholder="e.g. example.com" />
             </Field>
