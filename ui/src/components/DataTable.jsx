@@ -905,7 +905,8 @@ export function DataTable({
   // Explicit px widths (table-fixed) that sum to <= the wrapper's clientWidth
   // make overflow arithmetically impossible, so the wrapper never x-scrolls
   // (the user's #1 complaint). Phones are the exception: there the columns keep
-  // their full width and the table swipes. @container hides priority:'low'
+  // their full width and the table swipes, with a fade at the right edge
+  // (scroll-cue, index.css) while more of it is off to the right. @container hides priority:'low'
   // columns only in a narrow panel on a larger screen. Long values clip within their column via
   // ellipsis (or a 2-line clamp for the non-mono grow column).
   return (
@@ -926,7 +927,7 @@ export function DataTable({
           font. font-medium matches the pill span's own weight. */}
       <span ref={noteProbeRef} className="text-note font-medium" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
-      <div ref={wrapperRef} className={`overflow-x-hidden max-md:overflow-x-auto overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
+      <div ref={wrapperRef} className={`overflow-x-hidden max-md:overflow-x-auto max-md:scroll-cue overflow-y-auto outline-none ${FOCUS_RING}`} style={{ maxHeight, minHeight }}>
         {table}
       </div>
       {footer}
