@@ -472,10 +472,15 @@ const (
 	subnetCloudRowCap = 20000
 )
 
-// subnetRowsAll pages through every subnet matching params, a page at a time.
+// subnetRowsAll pages through every subnet matching params. The offset moves
+// by the rows each page actually returned, so a short page skips nothing. The
+// rows are complete only when their distinct ids reach the total Infoblox
+// reported; an empty page before that is an incomplete read, never a smaller
+// complete one.
 func (s *Service) subnetRowsAll(ctx context.Context, params map[string]string) ([]map[string]any, Metric) {
 	var out []map[string]any
-	for off := 0; ; off += subnetCloudPage {
+	seen := map[string]bool{}
+	for off := 0; ; {
 		p := map[string]string{"_fields": "id,cidr,utilization,tags,discovery_metadata",
 			"_limit": fmt.Sprint(subnetCloudPage), "_offset": fmt.Sprint(off), "_is_total_size_needed": "true"}
 		for k, v := range params {
@@ -496,11 +501,20 @@ func (s *Service) subnetRowsAll(ctx context.Context, params map[string]string) (
 			return nil, metricFail(MetricIncomplete, fmt.Sprintf("There are more than %d cloud subnets, more than this summary reads.", subnetCloudRowCap))
 		}
 		for _, r := range rows {
-			out = append(out, asMap(r))
+			m := asMap(r)
+			if id := getStr(m["id"]); !seen[id] {
+				seen[id] = true
+				out = append(out, m)
+			}
 		}
-		if len(rows) == 0 || off+subnetCloudPage >= total {
+		if len(seen) >= total {
 			return out, metricOK(len(out))
 		}
+		if len(rows) == 0 {
+			return nil, metricFail(MetricIncomplete, fmt.Sprintf(
+				"Infoblox reported %d cloud subnets but sent %d before its pages ran out, so the cloud counts would be too low.", total, len(seen)))
+		}
+		off += len(rows)
 	}
 }
 

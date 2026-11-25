@@ -31,6 +31,9 @@ type bpCheck struct {
 	Note     string           `json:"note,omitempty"`
 	Link     string           `json:"link,omitempty"`
 	Items    []map[string]any `json:"items"`
+	// partial: the check stands but part of what backs it failed to read,
+	// so the result is not cached and the next load asks again.
+	partial bool
 }
 
 // listComplete reports whether rows are the whole list. Only a total from the
@@ -83,7 +86,7 @@ func (s *Service) bestPractices(ctx context.Context) map[string]any {
 		as,
 	}
 	for _, c := range s.dnsRecordChecks(ctx) {
-		failed = failed || c.Status == "unknown"
+		failed = failed || c.Status == "unknown" || c.partial
 		checks = append(checks, c)
 	}
 	out := map[string]any{"checks": checks}
@@ -386,11 +389,6 @@ func (s *Service) dnsRecordChecks(ctx context.Context) []bpCheck {
 
 func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 	c := bpCheck{ID: f.id, Severity: f.severity, Why: f.why}
-	what := "list of DNS records Infoblox flagged " + f.flag
-	if !r.SampleOK || len(r.Sample) >= dnsRecLimit {
-		c.Title = f.unsure
-		return unknown(c, r.SampleOK, what)
-	}
 	// The count is the cube's own count of records; one record that points
 	// two places is two sample rows, so the rows are never the count.
 	if !r.Count.OK() {
@@ -399,25 +397,36 @@ func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 		c.Reason = "Couldn't read how many DNS records Infoblox flagged " + f.flag + ". " + r.Count.Reason
 		return c
 	}
-	items := make([]map[string]any, 0, len(r.Sample))
-	for _, row := range r.Sample {
-		items = append(items, dnsRecordItem(row))
+	// The list is only the examples shown under the count; a list that failed
+	// or came back cut short is said in the note and never changes the count.
+	items := []map[string]any{}
+	if r.SampleOK {
+		for _, row := range r.Sample {
+			items = append(items, dnsRecordItem(row))
+		}
 	}
 	n := r.Count.N()
-	if n == 0 && len(items) == 0 {
+	if n == 0 {
+		if len(items) > 0 {
+			c.Title = f.unsure
+			c.Status, c.Items = "unknown", []map[string]any{}
+			c.Reason = "Infoblox's count and its list of flagged records disagree."
+			return c
+		}
 		c.Title = f.none
 		c.Status, c.Items = "passed", items
 		return c
 	}
-	// The count says none but records came back: the two reads disagree.
-	if n == 0 {
-		c.Title = f.unsure
-		c.Status, c.Items = "unknown", []map[string]any{}
-		c.Reason = "Infoblox's count and its list of flagged records disagree."
-		return c
-	}
 	c.Title = f.found(n)
 	c.Status, c.Items = "problem", items
+	switch {
+	case !r.SampleOK:
+		c.Note = "Couldn't read the list of these records, so none are shown."
+		c.partial = true
+	case len(r.Sample) >= dnsRecLimit:
+		c.Note = fmt.Sprintf("The list came back cut short, so only the first %d are shown.", len(items))
+		c.partial = true
+	}
 	return c
 }
 

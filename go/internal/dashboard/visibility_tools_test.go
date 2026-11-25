@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -257,5 +258,38 @@ func TestSubnetClouds_TagAndDiscovererOverlap(t *testing.T) {
 	}
 	if !sum.Unconfirmed.OK() || sum.Unconfirmed.N() != 0 || sum.NotCloud.N() != 1 {
 		t.Fatalf("unknown %+v not cloud %+v, want 0 and 1", sum.Unconfirmed, sum.NotCloud)
+	}
+}
+
+// pagedSubnets serves total ids, at most pageMax per page from _offset; when
+// emptyAfter > 0, every page past that offset comes back empty.
+func pagedSubnets(t *testing.T, total, pageMax, emptyAfter int) *Service {
+	t.Helper()
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		off, _ := strconv.Atoi(r.URL.Query().Get("_offset"))
+		rows := []map[string]any{}
+		for i := off; i < total && len(rows) < pageMax && !(emptyAfter > 0 && off >= emptyAfter); i++ {
+			rows = append(rows, map[string]any{"id": "subnet/" + strconv.Itoa(i)})
+		}
+		writeResultsWithPage(w, rows, map[string]any{"total_size": strconv.Itoa(total)})
+	})
+	return s
+}
+
+// A page shorter than asked for moves the offset by what came back, so no
+// row is skipped.
+func TestSubnetRowsAll_ShortPagesSkipNothing(t *testing.T) {
+	rows, m := pagedSubnets(t, 5, 2, 0).subnetRowsAll(context.Background(), nil)
+	if !m.OK() || len(rows) != 5 {
+		t.Fatalf("want all 5 rows, got %d %+v", len(rows), m)
+	}
+}
+
+// An empty page while the total says rows remain is incomplete, never a
+// complete count of what came back.
+func TestSubnetRowsAll_EmptyPageEarlyIsIncomplete(t *testing.T) {
+	_, m := pagedSubnets(t, 5, 2, 2).subnetRowsAll(context.Background(), nil)
+	if m.Status != MetricIncomplete || m.Reason == "" {
+		t.Fatalf("want incomplete with a reason, got %+v", m)
 	}
 }
