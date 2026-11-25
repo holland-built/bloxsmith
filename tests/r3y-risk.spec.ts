@@ -134,3 +134,13 @@ test('Codex review of r3y round 2: clicking Time after another column starts new
   // The newest entry (the failed DNS record delete, 1 hour ago) leads.
   await expect(log.locator('tbody tr').first()).toContainText("Couldn't delete a DNS record");
 });
+
+test('Final check: the hour chart legend says what its extra entry counts', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/#security');
+  const hero = panel(page, 'security-threat-events');
+  await expect(hero).toContainText('events');
+  // "Other" alone read like a fifth severity; the entry names what it holds.
+  await expect(hero.getByText('Info or no severity', { exact: true })).toBeVisible();
+  await expect(hero.getByText('Other', { exact: true })).toHaveCount(0);
+});

@@ -57,7 +57,7 @@
   - text: 20 events
   - 'button "About: Threat events by hour"': "About: ⓘ"
   - 'button "Options: Threat events by hour"'
-  - text: critical 1 high 2 medium 3 low 4 Other 10
+  - text: critical 1 high 2 medium 3 low 4 Info or no severity 10
   - application "Threat events by hour chart": /\d+:\d+( \d+:\d+)+/
   - text: Showing the newest 2 of 20 events.
   - heading "Threat feed activity" [level=2]
