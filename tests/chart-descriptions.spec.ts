@@ -42,7 +42,7 @@ async function chartsInAccessibilityTree(page: Page) {
 
 // The charts the fixture world draws, page by page, by name.
 const PAGES: [string, string[]][] = [
-  ['overview', ['DNS Query Rate — 24h chart']],
+  ['overview', ['DNS query rate — 24 hours chart']],
   ['dns', ['DNS Query Rate — 24h chart', 'Query Volume — 7d chart']],
   ['network', ['Utilization Distribution chart']],
   ['security', ['Threat Events by hour chart', 'Threat Feed Activity chart']],

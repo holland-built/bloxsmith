@@ -29,7 +29,7 @@ test('an incident about subnets sits on the IPAM row, not Other', async ({ page 
   await installBaselineWorld(page);
   await page.goto('/#overview');
   await expect(row(page, 'IPAM')).toContainText('subnets close to full', { timeout: 20_000 });
-  await expect(row(page, 'IPAM')).not.toContainText('None open');
+  await expect(row(page, 'IPAM')).not.toContainText('No open issues');
   await expect(row(page, 'Other')).toHaveCount(0);
 });
 
@@ -40,7 +40,7 @@ test('subnets 90% full with no incident yet are on the list and the IPAM row, ma
   await expect(tile(page, 'IPAM').locator('.ov-verdict')).toHaveText('Review', { timeout: 20_000 });
   await expect(page.locator('[data-problem="subnet-full"]')).toContainText('1 subnet is 90% full or more');
   await expect(row(page, 'IPAM')).toContainText('1 subnet is 90% full or more');
-  await expect(row(page, 'IPAM')).not.toContainText('None open');
+  await expect(row(page, 'IPAM')).not.toContainText('No open issues');
 });
 
 test('the panel of recent changes is named for what it covers', async ({ page }) => {

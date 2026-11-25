@@ -84,7 +84,7 @@ test('a capped change log states the period it covers, never a full day', async 
   const rows = [5, 45].map((m, i) => ({ id: `r${i}`, ts: agoIso(m), user: 'admin@example.com', who_kind: 'person', action: 'update', resource: 'dns/zone', result: 'success' }));
   await page.route('**/api/csp-audit*', (r) => json(r, { status: 'ok', truncated: true, count: 500, rows }));
   await page.goto('/#overview');
-  await expect(fact(page, 'Changes').locator('.br-label')).toContainText('Changes (last 45 min only)', { timeout: 20_000 });
+  await expect(fact(page, 'Changes').locator('.br-label')).toContainText('Changes (last 45 minutes only)', { timeout: 20_000 });
   await expect(fact(page, 'Changes').locator('> span:last-child')).toHaveText('2 changes, 2 by users');
   await expect(fact(page, 'Changes').locator('.br-label')).not.toContainText('Changes (last 24 hours)');
 });

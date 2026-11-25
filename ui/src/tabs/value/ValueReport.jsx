@@ -1,9 +1,15 @@
 // The Monthly report. It stays hidden on screen and is what the browser prints
 // from the Value page (Value.css), so it needs no window or route of its own.
 import DayChart from './DayChart.jsx'
-import { answerSentence, BLOCKED_COUNTS } from './valueModel.js'
+import { answerSentence, BLOCKED_COUNTS, missedNote } from './valueModel.js'
 
 const fmt = (n) => Math.round(n).toLocaleString('en-US')
+
+// The failure sentence once per section, as on screen (screen audit A9).
+function Missed({ stats }) {
+  const note = missedNote(stats)
+  return note ? <p className="vl-note">{note}</p> : null
+}
 
 function Row({ s }) {
   return (
@@ -45,10 +51,12 @@ export default function ValueReport({ m }) {
       <div className="vl-report-cols">
         <section>
           <h3>Security</h3>
+          <Missed stats={[m.blocked, m.zero_day, m.sus_to_mal, m.roaming]} />
           <table><tbody><Row s={m.zero_day} /><Row s={m.sus_to_mal} /><Row s={m.roaming} /></tbody></table>
         </section>
         <section>
           <h3>DNS and DHCP</h3>
+          <Missed stats={[m.queries, m.cache_hit, m.uptime, m.dhcp_assigned]} />
           <table><tbody><Row s={m.queries} /><Row s={m.cache_hit} /><Row s={m.uptime} /><Row s={m.dhcp_assigned} /></tbody></table>
         </section>
       </div>

@@ -40,15 +40,15 @@ test('Daily: a complete hour shows its true count', async ({ page }) => {
   await installBaselineWorld(page);
   await useHub(page, WHOLE_HOUR);
   await page.goto('/#daily');
-  await expect(card(page, 'Security Today')).toContainText('354 events', { timeout: 20_000 });
-  await expect(card(page, 'Security Today')).not.toContainText('total unknown');
+  await expect(card(page, 'Security today')).toContainText('354 events', { timeout: 20_000 });
+  await expect(card(page, 'Security today')).not.toContainText('total unknown');
 });
 
 test('Daily: a capped read says it covers only the newest events', async ({ page }) => {
   await installBaselineWorld(page);
   await useHub(page, CAPPED);
   await page.goto('/#daily');
-  await expect(card(page, 'Security Today')).toContainText('newest 5,000 events', { timeout: 20_000 });
+  await expect(card(page, 'Security today')).toContainText('newest 5,000 events', { timeout: 20_000 });
 });
 
 test('Security: a complete hour counts the hour and says what the list shows', async ({ page }) => {

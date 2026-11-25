@@ -49,8 +49,8 @@ test('a panel header shows the ⓘ and one "…"; Move and Take off the page wai
   const header = panel(page, 'license-inventory').locator('h2').locator('..');
   const buttons = header.getByRole('button');
   await expect(buttons).toHaveCount(2);
-  await expect(buttons.nth(0)).toHaveAccessibleName('About: License Inventory');
-  await expect(buttons.nth(1)).toHaveAccessibleName('Options: License Inventory');
+  await expect(buttons.nth(0)).toHaveAccessibleName('About: License inventory');
+  await expect(buttons.nth(1)).toHaveAccessibleName('Options: License inventory');
 
   // One "…" per panel, on both, and neither of the two buttons it holds
   // is on screen anywhere.
@@ -75,8 +75,8 @@ test('the menu opens on a click and shuts on Escape, on a press elsewhere, and w
   await expect(list).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   // Named by the words they show, then the panel.
-  await expect(hideBtn(page, id)).toHaveAccessibleName(/^Take off the page DNS Query Rate/);
-  await expect(moveBtn(page, id)).toHaveAccessibleName(/^Move DNS Query Rate/);
+  await expect(hideBtn(page, id)).toHaveAccessibleName(/^Take off the page DNS query rate/);
+  await expect(moveBtn(page, id)).toHaveAccessibleName(/^Move DNS query rate/);
   await expect(hideBtn(page, id)).toContainText('Take off the page');
   await expect(moveBtn(page, id)).toContainText('Move');
 
@@ -134,7 +134,7 @@ test('Take off the page hides the panel, and its menu is shut when the panel is 
   // The panel renders nothing while it is off the page but its component stays
   // mounted, so a menu left open at the click would still be open on return.
   await page.getByRole('button', { name: 'Arrange panels', exact: true }).click();
-  await page.getByRole('button', { name: 'Put back on the page: License Inventory', exact: true }).click();
+  await page.getByRole('button', { name: 'Put back on the page: License inventory', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(panel(page, id)).toHaveCount(1);
   await expect(panelMenuToggle(page, id)).toHaveAttribute('aria-expanded', 'false');

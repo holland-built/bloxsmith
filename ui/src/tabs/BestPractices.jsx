@@ -1,4 +1,4 @@
-import { Card, CardGrid, Empty, FetchError, Skeleton } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { order, SEVERITY, sevOf, splitCount, tally } from '../lib/bestPractices.js'
 import Tip from '../components/Tip.jsx'
@@ -121,7 +121,9 @@ function Tiles({ checks, loading }) {
           <span className="ov-muted ov-small">{t ? (t.unknown ? 'not a pass' : 'none') : none}</span>
         </li>
         <li className="bp-tile" data-tile="passed">
-          <span className="bp-tile-top"><span className="bp-ring sm ok" aria-hidden="true">✓</span>
+          {/* No tick until the checks have answered: a tick over "unavailable"
+              read as a pass (step 12 of the screen audit). */}
+          <span className="bp-tile-top"><span className={`bp-ring sm ${t ? 'ok' : 'none'}`} aria-hidden="true">{t ? '✓' : '–'}</span>
             <Tip tip="The whole list was read and nothing was wrong.">Passed</Tip>
           </span>
           <span className="ov-num bp-num calm">{t ? t.passed : '—'} {of}</span>
@@ -144,11 +146,11 @@ export default function BestPractices() {
       <div className="ov-look">
         <div className="ov-head">
           <PageTitle>Best practices</PageTitle>
-          <span className="inline-flex flex-wrap gap-2">
-            <Tip className="ov-pill" tip="Checks your Infoblox design against best practices and lists what to fix. It changes nothing.">Read only</Tip>
-            <UpdatedPill api={api} tip="When these checks were last read. They are read again when the page opens." />
-          </span>
+          <UpdatedPill api={api} tip="When these checks were last read. They are read again when the page opens." />
         </div>
+        {/* Said in the intro, as Value does, instead of a chip that looked
+            like a button and did nothing (screen audit A10). */}
+        <TabIntro>Checks your Infoblox design against best practices and lists what to fix. This page only reads; it changes nothing.</TabIntro>
         <Tiles checks={checks} loading={api.loading} />
       </div>
       <div className="mt-4">

@@ -32,7 +32,7 @@ test('an offline host is an open issue on the Hosts row, not "none"', async ({ p
   const hosts = row(page, 'Hosts');
   await expect(hosts).toContainText('1 of 3 hosts is not online', { timeout: 20_000 });
   await expect(hosts).toContainText('Critical');
-  await expect(hosts).not.toContainText('None open');
+  await expect(hosts).not.toContainText('No open issues');
   await expect(tile(page, 'Hosts')).toContainText('1 of 3 not online');
   await expect(tile(page, 'Hosts')).toContainText('all hosts');
 });
@@ -61,7 +61,7 @@ test('a service failing its health check never says "None open" on its row', asy
   await page.goto('/#overview');
   await expect(tile(page, 'DHCP').locator('.ov-verdict')).toHaveText('Needs action', { timeout: 20_000 });
   await expect(row(page, 'DHCP')).toContainText('DHCP services: 10 of 18 up');
-  await expect(row(page, 'DHCP')).not.toContainText('None open');
+  await expect(row(page, 'DHCP')).not.toContainText('No open issues');
   await page.getByRole('button', { name: 'Hide' }).click();
   await expect(page.locator('[data-board-summary]')).toContainText('DHCP 1 critical');
 });
@@ -80,7 +80,7 @@ test('a dead inventory feed says unavailable and not checked, never a number or 
   await page.goto('/#overview');
   for (const name of ['IPAM', 'Hosts', 'DHCP']) await expect(tile(page, name)).toContainText('unavailable', { timeout: 20_000 });
   await expect(row(page, 'Hosts')).toContainText('not checked: information unavailable');
-  await expect(row(page, 'Hosts')).not.toContainText('None open');
+  await expect(row(page, 'Hosts')).not.toContainText('No open issues');
   await expect(page.locator('[data-coverage]')).toContainText('Inventory information is unavailable');
 });
 
@@ -89,7 +89,7 @@ test('a dead incidents feed leaves the service rows "not checked", not "None ope
   await page.route('**/api/incidents*', down);
   await page.goto('/#overview');
   await expect(row(page, 'DNS')).toContainText('not checked: information unavailable', { timeout: 20_000 });
-  await expect(row(page, 'IPAM')).not.toContainText('None open');
+  await expect(row(page, 'IPAM')).not.toContainText('No open issues');
 });
 
 test('the board scrolls inside its own box at 390px, and the page does not', async ({ page }) => {
@@ -108,7 +108,7 @@ test('a clear Security row over a truncated sample says it is only clear for tha
   await page.route('**/api/hub/security*', (route) => json(route, { availability: 'ok', counts: { critical: 0, high: 0 }, truncated: true, returned: 50, rows: [] }));
   await page.goto('/#overview');
   await expect(row(page, 'Security')).toContainText('none in the latest 50 events', { timeout: 20_000 });
-  await expect(row(page, 'Security')).not.toContainText('None open');
+  await expect(row(page, 'Security')).not.toContainText('No open issues');
 });
 
 // The tiles above the board (owner's pick, 2026-11-10) say one word per

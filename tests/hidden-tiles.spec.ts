@@ -59,9 +59,9 @@ const DECLARED_ORDER = [
 // renders null, so if that hand-up ever breaks the window falls back to the raw
 // panel id and these assertions fail, which is the point of asserting the words
 // rather than a count.
-const OPEN_ISSUES = { id: 'daily-open-issues', name: 'Open Issues' };
-const SECURITY_TODAY = { id: 'daily-security-today', name: 'Security Today' };
-const HOSTS_ATTENTION = { id: 'daily-hosts-attention', name: 'Hosts Needing Attention' };
+const OPEN_ISSUES = { id: 'daily-open-issues', name: 'Open issues' };
+const SECURITY_TODAY = { id: 'daily-security-today', name: 'Security today' };
+const HOSTS_ATTENTION = { id: 'daily-hosts-attention', name: 'Hosts needing attention' };
 
 type Page = import('@playwright/test').Page;
 
@@ -259,7 +259,7 @@ test('Move up in the window saves exactly the order a drag saves', async ({ page
   // from under the pointer and answers nothing.
   await expect(moveUp(page, OPEN_ISSUES.name)).toBeDisabled();
   await expect(moveDown(page, OPEN_ISSUES.name)).toBeEnabled();
-  await expect(moveDown(page, 'DNS Zone Issues')).toBeDisabled();
+  await expect(moveDown(page, 'DNS zone issues')).toBeDisabled();
 
   await Promise.all([nextSave(page), moveUp(page, SECURITY_TODAY.name).click()]);
 

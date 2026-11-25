@@ -1,11 +1,10 @@
-import { useMemo } from 'react'
 import ItemLink from '../components/ItemLink.jsx'
 import { itemCell } from '../components/itemCell.jsx'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { sampleCountLabel, sampleScopeNote, sampleSince, shownNote } from '../lib/sampleCount.js'
+import { sampleCountLabel, sampleScopeNote, sampleSince } from '../lib/sampleCount.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 import { UTIL_CRIT, utilBand } from '../lib/utilBands.js'
 import { issueWord } from '../lib/plainWords.js'
@@ -13,8 +12,10 @@ import Tip from '../components/Tip.jsx'
 import { statusBucket } from '../lib/statusBucket.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import './Daily.css'
-import { formatTime } from '../lib/dates.js'
 import { PageTitle } from '../components/kit.jsx'
+import UpdatedPill from './UpdatedPill.jsx'
+// UpdatedPill draws with Overview's pill classes, inside an .ov-look.
+import './Overview.css'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -65,13 +66,17 @@ export default function Daily() {
   // Not the same as a slice reporting 'error': the backend can send current
   // rows for a slice it only read in part, and those are not old.
   const stale = !!data.error && !!data.data
-  const asOf = useMemo(() => (data.data ? new Date() : null), [data.data])
 
   return (
     <div className="w-full px-6 py-5">
       <div className="dy-head">
         <PageTitle>Daily report</PageTitle>
-        <Updated asOf={asOf} failed={!!data.error} />
+        {/* The shared pill, so a failed refresh reads the same as on every
+            other page (screen audit A8). display: contents keeps it in this
+            row while .ov-look lends it the pill colours. */}
+        <span className="ov-look" style={{ display: 'contents' }}>
+          <UpdatedPill api={data} tip="When the inventory last arrived. It refreshes every 30 seconds." />
+        </span>
       </div>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
@@ -85,20 +90,6 @@ export default function Daily() {
         <DnsZoneIssues panelId="daily-dns-zone-issues" zones={zones} loading={data.loading} zonesStatus={meta.zones} stale={stale} />
       </CardGrid>
     </div>
-  )
-}
-
-// When the inventory last arrived, and how often it refreshes (in the tip).
-// A failed refresh says so here once, in red, instead of a fresh-looking time.
-function Updated({ asOf, failed }) {
-  const time = asOf ? formatTime(asOf) : null
-  const label = failed ? 'Refresh failed' : time ? `Updated ${time}` : 'Checking…'
-  const tip = failed && time ? `Last good read ${time}. Tries again every 30 seconds.` : 'Refreshes every 30 seconds.'
-  return (
-    <Tip tip={tip} prefix="dy" className="dy-pill" data-updated="">
-      <span className={`dy-live ${failed ? 'down' : time ? '' : 'wait'}`} aria-hidden="true" />
-      <span>{label}</span>
-    </Tip>
   )
 }
 
@@ -163,11 +154,17 @@ function IssueKpis({ subnets, hosts, zones, totals, meta = {}, loading, panelId 
     },
   ]
   const tone = { crit: COLORS.crit, warn: COLORS.warn }
+  // Every count failed: one message with its Try again, as the other panels
+  // give, not three red words with none (screen audit A11). When only some
+  // fail, each failed tile keeps its own word and the rest stay real.
+  const allDead = cells.every((c) => c.status === 'error')
 
   return (
-    <Card span={4} panelId={panelId} title="Open Issues">
+    <Card span={4} panelId={panelId} title="Open issues">
       {loading ? (
         <Skeleton h={110} />
+      ) : allDead ? (
+        <FeedUnavailable label="Inventory information is unavailable" />
       ) : (
         <div className="dy-tiles-box">
         <div className="dy-tiles">
@@ -248,20 +245,23 @@ function SecurityToday({ sec, panelId }) {
   // The count by the title is the sample it was counted from; its tip says
   // so, and when the sample started, instead of two lines under the figures.
   const scopeTip = [scopeNote, since && `The oldest is from ${since}.`].filter(Boolean).join(' ') || null
-  // The count by the title is the rows listed; when the four severity figures
-  // add up to more, say so under them, as Security does under its bars.
-  const legendNote = shownNote(sec.data, 'events', chips.slice(0, 4).reduce((n, c) => n + c.value, 0))
+  // This panel lists no events, only totals. So the count by the title is the
+  // server's `counted`, the events those totals cover, and there is no line
+  // about rows "shown". A payload without `counted` cannot say what its totals
+  // cover, so it gets no count rather than a wrong one (screen audit A5).
+  const countLabel = !Number.isFinite(sec.data?.counted) ? null : sampleCountLabel(sec.data, 'events')
 
   return (
     <Card
       span={2}
       panelId={panelId}
-      title="Security Today"
-      right={
-        <Tip tip={sec.loading || secDead ? null : scopeTip} prefix="dy" className="dy-tip-end text-note text-muted">
-          <span>{sec.loading || secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>
+      title="Security today"
+      // No count at all while it is unknown, rather than "— events".
+      right={sec.loading || secDead || !countLabel ? null : (
+        <Tip tip={scopeTip} prefix="dy" className="dy-tip-end text-note text-muted">
+          <span>{countLabel}</span>
         </Tip>
-      }
+      )}
     >
       {sec.loading ? (
         <Skeleton h={160} />
@@ -277,7 +277,6 @@ function SecurityToday({ sec, panelId }) {
           ))}
         </dl>
       )}
-      {!sec.loading && !secDead && legendNote && <p className="text-note text-dim mt-2" data-legend-note="">{legendNote}</p>}
     </Card>
   )
 }
@@ -286,7 +285,7 @@ function SecurityToday({ sec, panelId }) {
 
 // A refresh that fails after a good one leaves the last rows in place (useApi
 // keeps its data on error). Those rows are still worth seeing, but not as if
-// they were current: Open Issues already says "unavailable" for the same feed.
+// they were current: Open issues already says "unavailable" for the same feed.
 function StaleNote() {
   return <p className="text-note text-warn mb-2">The last refresh failed. These rows are from the previous read.</p>
 }
@@ -315,7 +314,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
     { key: 'site', label: 'Site', keep: true, render: itemCell('site') },
     {
       key: 'util',
-      label: 'Util',
+      label: 'Used %',
       keep: true,
       render: (v) => {
         // utilStatus(null) would answer Healthy. Not measured is its own word.
@@ -335,7 +334,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, stale, panelId }) {
     <Card
       span={2}
       panelId={panelId}
-      title="Top Capacity Risks"
+      title="Top capacity risks"
       note="least room left"
       right={<Tip tip="The 10 with the fewest free addresses. Tiny networks (8 addresses or fewer) are left out." prefix="dy" className="dy-tip-end text-note text-muted"><span>top 10</span></Tip>}
     >
@@ -367,7 +366,7 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
   // a red dot; degraded is amber and the rest grey.
   const rank = { offline: 0, degraded: 1 }
   const rows = hosts
-    // Not online by the shared rule, the same set the Open Infra link shows.
+    // Not online by the shared rule, the same set the Open hosts link shows.
     .filter((h) => statusBucket(h.status) !== 'active')
     .map((h, i) => ({ h, i, r: rank[statusBucket(h.status)] ?? 2 }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
@@ -396,15 +395,15 @@ function HostsAttention({ hosts, loading, hostsStatus, stale, panelId }) {
     <Card
       span={2}
       panelId={panelId}
-      title="Hosts Needing Attention"
+      title="Hosts needing attention"
       // Every host listed here (offline, degraded, pending, unknown), which is
       // more than the Hosts tile counts, so it is its own number. A dash, never
       // 0, while the hosts are loading or could not be read. The whole list is
       // one click away, as on DNS Zone Issues, instead of "View all N" below.
       right={
         <span className="inline-flex items-baseline gap-3">
-          <span className="text-note text-muted">{loading || feedDead ? '—' : rows.length.toLocaleString()} listed</span>
-          <a href="#infra?status=not-online" className="dy-act">Open Infra</a>
+          {loading || feedDead ? null : <span className="text-note text-muted">{rows.length.toLocaleString()} listed</span>}
+          <a href="#infra?status=not-online" className="dy-act">Open hosts</a>
         </span>
       }
     >
@@ -457,7 +456,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, stale, panelId }) {
     <Card
       span={2}
       panelId={panelId}
-      title="DNS Zone Issues"
+      title="DNS zone issues"
       // No count here: the DNS zones tile above is that number. The whole
       // list is one click away instead.
       right={<a href="#dns?issues=1" className="dy-act">Open DNS</a>}

@@ -1,0 +1,22 @@
+- main "Best practices tab":
+  - heading "Best practices" [level=1]
+  - text: /Updated \d+:\d+ [AP]M/
+  - paragraph: Checks your Infoblox design against best practices and lists what to fix. This page only reads; it changes nothing.
+  - region "Checks at a glance":
+    - list:
+      - listitem: To fix 1 of 3 1 high
+      - listitem: Couldn't tell 1 of 3 not a pass
+      - listitem: Passed 1 of 3 whole list read
+    - text: "High: 1 on-prem host is offline or in error Couldn't tell: Grid Masters with no HA and no candidate Passed: No DHCP HA group uses Advanced Active/Passive"
+  - heading "Checks" [level=2]
+  - 'button "About: Checks"': "About: ⓘ"
+  - 'button "Options: Checks"'
+  - list "Best practice checks":
+    - listitem:
+      - group: 1 on-prem host is offline or in error High
+      - link "Open Infra":
+        - /url: "#infra"
+    - listitem:
+      - text: Grid Masters with no HA and no candidate Couldn't tell
+      - paragraph: "1 grid couldn't be checked: not all of its members are visible in the Portal."
+    - listitem: No DHCP HA group uses Advanced Active/Passive Passed

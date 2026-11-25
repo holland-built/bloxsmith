@@ -761,7 +761,12 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
     // the TTL column full of dashes — silently dropping it reads as "TTL isn't
     // tracked" instead of "we don't know it".
     { key: 'ttl', label: 'TTL', mono: true, sortable: true, keep: true },
-    { key: 'issues', label: 'Issues', hideWhenConstant: true, keep: anyFlag, sortable: true },
+    // The cell is built above as markup, so it is passed through `render`:
+    // DataTable lays render columns out to measure them, and without it the
+    // column was sized short and cut "cache time too short" off (2026-11-25).
+    // Only when anyFlag: a render column is never auto-hidden, and with no
+    // flag the column must still hide as before.
+    { key: 'issues', label: 'Issues', hideWhenConstant: true, keep: anyFlag, sortable: true, render: anyFlag ? (v) => v : undefined },
   ]
 
   return (

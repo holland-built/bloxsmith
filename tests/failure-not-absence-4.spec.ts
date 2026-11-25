@@ -85,9 +85,9 @@ test.describe('Overview → service board (/api/data empty)', () => {
     // The counts are on the tiles; the board rows hold the open issues.
     const tile = (name: string) => page.getByRole('region', { name: 'Services at a glance' }).getByRole('button', { name: new RegExp(`^${name} `) });
     await expect(tile('DHCP')).toContainText('0 active leases', { timeout: 20_000 });
-    await expect(tile('IPAM')).toContainText('0 of 0 subnets ≥90%');
+    await expect(tile('IPAM')).toContainText('0 of 0 subnets 90% full or more');
     await expect(tile('Hosts')).toContainText('0 of 0 not online');
-    await expect(row('Hosts')).toContainText('None open');
+    await expect(row('Hosts')).toContainText('No open issues');
     for (const name of ['DHCP', 'IPAM', 'Hosts']) await expect(tile(name)).not.toContainText('unavailable');
     await expect(page.locator('[data-coverage]')).not.toContainText('Inventory information is unavailable');
   });
@@ -162,22 +162,23 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
     await expect(page.getByText('all hosts online')).toHaveCount(0);
     await expect(page.getByText('no DNS zone issues')).toHaveCount(0);
 
-    const hosts = card(page, 'Hosts Needing Attention');
+    const hosts = card(page, 'Hosts needing attention');
     await expect(hosts.getByText('Host information is unavailable')).toBeVisible();
-    await expect(hosts.getByText('— listed', { exact: true })).toBeVisible();
-    await expect(hosts.getByText('0 listed', { exact: true })).toHaveCount(0);
+    // An unknown count is left out, not shown as a dash or a 0 (screen audit A11).
+    await expect(hosts.getByText(/listed$/)).toHaveCount(0);
 
-    const zones = card(page, 'DNS Zone Issues');
+    const zones = card(page, 'DNS zone issues');
     await expect(zones.getByText('DNS zone information is unavailable')).toBeVisible();
 
-    await expect(card(page, 'Top Capacity Risks').getByText('Subnet information is unavailable')).toBeVisible();
+    await expect(card(page, 'Top capacity risks').getByText('Subnet information is unavailable')).toBeVisible();
 
-    for (const key of ['subnets', 'hosts', 'zones'] as const) {
-      const row = kpi(page, key);
-      await expect(row.getByText('unavailable', { exact: true })).toBeVisible();
-      await expect(row.getByText('0', { exact: true })).toHaveCount(0);
-      await expect(row.getByText('Healthy', { exact: true })).toHaveCount(0);
-    }
+    // All three counts dead: one message with Try again in place of three
+    // red words, and still no 0 and no Healthy (screen audit A11).
+    const issues = card(page, 'Open issues');
+    await expect(issues.getByText('Inventory information is unavailable')).toBeVisible();
+    for (const key of ['subnets', 'hosts', 'zones'] as const) await expect(kpi(page, key)).toHaveCount(0);
+    await expect(issues.getByText('0', { exact: true })).toHaveCount(0);
+    await expect(issues.getByText('Healthy', { exact: true })).toHaveCount(0);
   });
 
   test('a genuinely empty tenant still says "all hosts online" and 0 counts', async ({ page }) => {
@@ -186,12 +187,12 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
     );
     await page.goto('/#daily');
 
-    const hosts = card(page, 'Hosts Needing Attention');
+    const hosts = card(page, 'Hosts needing attention');
     await expect(hosts.getByText('all hosts online')).toBeVisible();
     await expect(hosts.getByText('0 listed', { exact: true })).toBeVisible();
     await expect(hosts.getByText('Host information is unavailable')).toHaveCount(0);
 
-    const zones = card(page, 'DNS Zone Issues');
+    const zones = card(page, 'DNS zone issues');
     await expect(zones.getByText('no DNS zone issues')).toBeVisible();
 
     for (const key of ['subnets', 'hosts', 'zones'] as const) {
@@ -203,15 +204,15 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 });
 
 test.describe('Daily → loading, stale rows, and the Hosts drill-down', () => {
-  test('a first read still in flight shows "—" and "Checking…", never a 0 or "Healthy"', async ({ page }) => {
+  test('a first read still in flight shows no count and "Checking…", never a 0 or "Healthy"', async ({ page }) => {
     // Never answered: both feeds stay on their first read for the whole test.
     await page.route('**/api/data*', () => {});
     await page.route('**/api/hub/security*', () => {});
     await page.goto('/#daily');
 
-    await expect(card(page, 'Security Today').getByText('— events', { exact: true })).toBeVisible();
-    await expect(card(page, 'Hosts Needing Attention').getByText('— listed', { exact: true })).toBeVisible();
-    await expect(page.getByText('Checking…', { exact: true })).toBeVisible();
+    await expect(card(page, 'Security today').getByText(/events/)).toHaveCount(0);
+    await expect(card(page, 'Hosts needing attention').getByText(/listed$/)).toHaveCount(0);
+    await expect(page.locator('[data-updated]')).toContainText('Checking…');
     await expect(page.getByText('0 events', { exact: true })).toHaveCount(0);
     await expect(page.getByText('0 listed', { exact: true })).toHaveCount(0);
     await expect(page.locator('[data-daily-tile]')).toHaveCount(0);
@@ -232,7 +233,7 @@ test.describe('Daily → loading, stale rows, and the Hosts drill-down', () => {
 
     fail = true;
     await page.clock.runFor(31_000); // past the 30s poll
-    for (const title of ['Top Capacity Risks', 'Hosts Needing Attention', 'DNS Zone Issues']) {
+    for (const title of ['Top capacity risks', 'Hosts needing attention', 'DNS zone issues']) {
       await expect(card(page, title).getByText(/The last refresh failed\. These rows are from the previous read\./)).toBeVisible();
     }
     await expect(page.getByText('host-down')).toBeVisible();
@@ -244,7 +245,7 @@ test.describe('Daily → loading, stale rows, and the Hosts drill-down', () => {
       meta: { subnets: 'error' },
     })));
     await page.goto('/#daily');
-    await expect(card(page, 'Top Capacity Risks').getByText('10.1.0.0')).toBeVisible();
+    await expect(card(page, 'Top capacity risks').getByText('10.1.0.0')).toBeVisible();
     await expect(page.getByText('The last refresh failed.', { exact: false })).toHaveCount(0);
   });
 
@@ -319,17 +320,19 @@ test.describe('Daily → Security Today (/api/hub/security down)', () => {
   const EMPTY_OK = {
     events: [], counts: { critical: 0, high: 0, medium: 0, low: 0 },
     blocked: 0, logged: 0, total: 0, availability: 'ok',
+    // The real server always sends these (go/internal/dashboard/hub.go). Daily
+    // shows a count only when `counted` says what its totals cover.
+    counted: 0, returned: 0, truncated: false,
   };
 
-  test('a 500 shows the unavailable state and "— events", not "0 events"', async ({ page }) => {
+  test('a 500 shows the unavailable state and no event count, not "0 events"', async ({ page }) => {
     await page.route('**/api/data*', (route) => fulfillJson(route, dataPayload()));
     await page.route('**/api/hub/security*', dead);
     await page.goto('/#daily');
 
-    const sec = card(page, 'Security Today');
+    const sec = card(page, 'Security today');
     await expect(sec.getByText('Threat information is unavailable')).toBeVisible();
-    await expect(sec.getByText('— events', { exact: true })).toBeVisible();
-    await expect(sec.getByText('0 events', { exact: true })).toHaveCount(0);
+    await expect(sec.getByText(/events/)).toHaveCount(0);
     await expect(sec.getByText('critical', { exact: true })).toHaveCount(0);
   });
 
@@ -338,7 +341,7 @@ test.describe('Daily → Security Today (/api/hub/security down)', () => {
     await page.route('**/api/hub/security*', (route) => fulfillJson(route, EMPTY_OK));
     await page.goto('/#daily');
 
-    const sec = card(page, 'Security Today');
+    const sec = card(page, 'Security today');
     await expect(sec.getByText('0 events', { exact: true })).toBeVisible();
     await expect(sec.getByText('critical', { exact: true })).toBeVisible();
     await expect(sec.getByText('Threat information is unavailable')).toHaveCount(0);

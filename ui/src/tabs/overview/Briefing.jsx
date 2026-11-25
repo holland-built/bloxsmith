@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useApi } from '../../lib/api.js'
+import { retryFailedFeeds, useApi, useFeedRecovery } from '../../lib/api.js'
 import { sinceIso } from '../../lib/changes.js'
 import Tip from '../../components/Tip.jsx'
 import { changeSummary, dnsTrend, emptyListWords, licenseSummary, newIssuesWords, pageVerdict, rankProblems } from './model.js'
@@ -70,6 +70,21 @@ function licenseWords(l) {
   return bits.length ? bits.join(', ') : `No licenses expiring within 90 days (${l.total} total)`
 }
 
+// The inventory failed: say what that means, that Bloxsmith keeps trying, and
+// offer the same Try again every unavailable panel has (screen audit A3).
+function InventoryDown() {
+  const { retrying } = useFeedRecovery()
+  return (
+    <div className="br-down" role="alert">
+      <Mark sev="crit" />
+      <span>Inventory data is unavailable. Hosts, subnets, and leases cannot be checked. Bloxsmith tries again every 30 seconds.</span>
+      {retrying
+        ? <span className="br-down-wait">Trying again…</span>
+        : <button type="button" className="br-down-retry" onClick={retryFailedFeeds}>Try again</button>}
+    </div>
+  )
+}
+
 export default function Briefing({ board, services, dns, licenses, updated }) {
   const [since] = useState(() => sinceIso(Date.now()))
   const audit = useApi(`/api/csp-audit?since=${encodeURIComponent(since)}`, { poll: 60000 })
@@ -86,7 +101,7 @@ export default function Briefing({ board, services, dns, licenses, updated }) {
   const licenseFine = license.state === 'ok' && !license.expired && !license.soon && !license.undated
   return (
     <>
-      {board.feedDown && <p className="br-down" role="alert"><Mark sev="crit" /> Inventory data is unavailable. Hosts, subnets, and leases cannot be checked.</p>}
+      {board.feedDown && <InventoryDown />}
       <div className="ov-look br">
         <header className="br-rail">
           <p className="br-date">{clock.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>

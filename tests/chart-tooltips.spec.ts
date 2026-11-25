@@ -60,7 +60,7 @@ type Chart = { tab: string; panel: string; what: string };
 // tooltip, nothing for this file to sweep. Removed rather than left failing,
 // because a panel with no recharts surface cannot be made to answer a hover.
 const CHARTS: Chart[] = [
-  { tab: 'overview', panel: 'dns-hero', what: 'DNS Query Rate — 24h area' },
+  { tab: 'overview', panel: 'dns-hero', what: 'DNS query rate — 24 hours area' },
   { tab: 'network', panel: 'network-utilization-distribution', what: 'Utilization Distribution bars' },
   { tab: 'dns', panel: 'dns-query-rate', what: 'Query Rate area' },
   { tab: 'dns', panel: 'dns-query-volume-7d', what: 'Query Volume — 7d bars' },

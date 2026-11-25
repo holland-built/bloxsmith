@@ -268,7 +268,7 @@ test('accent text clears AA in both themes, on every tab that paints it', async 
       // links were the only ones). An open About does: "Open in Build a chart",
       // on the help box's own fill, which is the harder background.
       if (tab === 'overview') {
-        const about = page.getByRole('button', { name: 'About: DNS Query Rate — 24h', exact: true });
+        const about = page.getByRole('button', { name: 'About: DNS query rate — 24 hours', exact: true });
         await about.click();
         await expect(
           page.locator(`#${await about.getAttribute('aria-controls')}`).getByRole('link', { name: 'Open in Build a chart' }),

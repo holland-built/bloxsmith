@@ -19,11 +19,13 @@ const KIND_RANK = (key) => {
   return 4
 }
 
-const ACTION = (key) => {
+// An incident about subnets is about subnets whatever its key, the same rule
+// Overview's rowOf uses to put it on the IPAM row.
+const ACTION = (key, entity) => {
   const k = String(key)
   if (k.startsWith('svc-')) return 'View services'
   if (k.startsWith('hosts')) return 'View hosts'
-  if (k.startsWith('subnet')) return 'View subnets'
+  if (k.startsWith('subnet') || entity === 'subnet') return 'View subnets'
   if (k.startsWith('security-sitelist')) return 'Review list'
   if (k.startsWith('security')) return 'View events'
   if (k.startsWith('dns')) return 'View DNS'
@@ -130,7 +132,10 @@ export function newIssuesWords({ problems, allRead, reading, nowS }) {
   if (reading) return 'Checking…'
   const undated = problems.filter((r) => typeof r.seen !== 'number').length
   if (!canTellNew(problems, nowS)) {
-    return undated < problems.length ? 'Not yet available. Requires 24 hours of history.' : 'Not available. No dated issues on record.'
+    if (undated < problems.length) return 'Not yet available. Requires 24 hours of history.'
+    // Nothing dated and not every source read: nothing was checked, which is
+    // not the same as an empty record.
+    return allRead ? 'Not available. No dated issues on record.' : 'Not checked'
   }
   const complete = allRead && undated === 0
   const fresh = problems.filter((r) => r.isNew).length
@@ -140,12 +145,17 @@ export function newIssuesWords({ problems, allRead, reading, nowS }) {
   return `None among dated issues. ${undated} ${undated === 1 ? 'issue has' : 'issues have'} no date.`
 }
 
+// "View subnets" must open the subnets, not the incident list. 70: where the
+// server starts raising subnet incidents (signals.go), as inboxRows' own link
+// for subnet-utilization does.
+const subnetHref = (r) => (r.entity === 'subnet' && r.href === '#incidents' ? { href: '#network?minUtil=70&links=1' } : {})
+
 /** Every open problem, worst first, each with the one action that fixes it. */
 export function rankProblems(board, nowS) {
   const all = board.board.flatMap((b) => openProblems(b).map((r) => ({ ...r, service: b.name })))
   const provable = canTellNew(all, nowS)
   return all
-    .map((r) => ({ ...r, action: ACTION(r.key), isNew: provable && typeof r.seen === 'number' && nowS - r.seen < DAY_S }))
+    .map((r) => ({ ...r, ...subnetHref(r), action: ACTION(r.key, r.entity), isNew: provable && typeof r.seen === 'number' && nowS - r.seen < DAY_S }))
     .sort((a, b) => SEV_RANK[a.sev] - SEV_RANK[b.sev] || KIND_RANK(a.key) - KIND_RANK(b.key))
 }
 
@@ -168,6 +178,11 @@ export function dnsTrend(dns) {
   return { state: 'ok', now, was, hours, pct }
 }
 
+// "Last 6 h 30 min only" said out loud: "Last 6 hours 30 minutes only".
+const wholeWords = (text) => String(text)
+  .replace(/\b(\d+) h\b/g, (_, n) => `${n} ${n === '1' ? 'hour' : 'hours'}`)
+  .replace(/\b(\d+) min\b/g, (_, n) => `${n} ${n === '1' ? 'minute' : 'minutes'}`)
+
 /** The change log over the last day, saying how far back it really reaches. */
 export function changeSummary(audit, nowMs) {
   const rows = withinWindow(audit.data?.rows, nowMs)
@@ -184,7 +199,7 @@ export function changeSummary(audit, nowMs) {
     failed: rows.filter((r) => !isSuccess(r) && !hasNoResult(r)).length,
     noResult: rows.filter(hasNoResult).length,
     capped: win.capped,
-    window: win.text,
+    window: wholeWords(win.text),
     tip: win.tip,
   }
 }

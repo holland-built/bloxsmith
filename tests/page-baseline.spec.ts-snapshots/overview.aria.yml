@@ -26,14 +26,14 @@
           - text: ""
       - listitem:
         - text: 2 subnets close to full
-        - 'link "Open: 2 subnets close to full"':
-          - /url: "#incidents"
+        - 'link "View subnets: 2 subnets close to full"':
+          - /url: "#network?minUtil=70&links=1"
           - text: ""
   - region "Recent changes":
     - heading "Recent changes" [level=2]
     - list:
       - listitem: /DNS traffic \d+ queries\/s, up \d+% from \d+ 2 hours ago/
-      - listitem: Changes (last 6 h only) 5 changes, 0 by users, 1 failed
+      - listitem: Changes (last 6 hours only) 5 changes, 0 by users, 1 failed
       - listitem: /New issues Not yet available\. Requires \d+ hours of history\./
   - region "Current status":
     - heading "Current status" [level=2]
@@ -44,7 +44,7 @@
   - region "Services at a glance":
     - button /DNS Healthy \d+ queries\/s ▲ \d+% vs \d+[hmsp]+ ago \d+ queries\/s · hourly average, last hour · 2\/2 online/ [pressed]
     - button "DHCP Review 1 active lease 1 of 2 up 1 active lease · of 2 leases loaded · 1 stopped · 1/2 up"
-    - button /IPAM Review 1 subnet ≥\d+% of 3 1 of 3 subnets ≥\d+% · 0 more at \d+–\d+% · all subnets/
+    - button /IPAM Review 1 subnet \d+% full or more of 3 1 of 3 subnets \d+% full or more · 0 more at \d+–\d+% · all subnets/
     - button "Hosts Needs action 1 not online of 3 1 of 3 not online · all hosts"
     - button "Security Needs action 3 critical or high 3 critical or high events · whole window · list cut off"
   - region "DNS detail":
@@ -63,11 +63,11 @@
             - columnheader "Open issues"
             - columnheader /Last \d+ days/
         - rowgroup:
-          - row /DNS None open Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
+          - row /DNS No open issues Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/:
             - rowheader "DNS":
               - link "DNS":
                 - /url: "#dns"
-            - cell "None open"
+            - cell "No open issues"
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Thu, Jan 1/
           - 'row /DHCP DHCP services: 1 of 2 up Open: DHCP services: 1 of 2 up Ask the AI: Which DHCP services are not running\? Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Warning, Thu, Jan 1/':
             - rowheader "DHCP":
@@ -128,15 +128,15 @@
             - cell /Tue, Dec \d+ Wed, Dec \d+ Thu, Dec \d+ Fri, Dec \d+ Sat, Dec \d+ Sun, Dec \d+ Mon, Dec \d+ Tue, Dec \d+ Wed, Dec \d+ Critical, Thu, Jan 1/
   - heading "Charts" [level=2]
   - button "Arrange panels"
-  - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:
-    - button /DNS Query Rate — \d+[hmsp]+/
+  - heading /DNS query rate — \d+ hours/ [level=2]:
+    - button /DNS query rate — \d+ hours/
   - text: queries per second
-  - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
-  - 'button /Options: DNS Query Rate — \d+[hmsp]+/'
+  - 'button /About: DNS query rate — \d+ hours/': "About: ⓘ"
+  - 'button /Options: DNS query rate — \d+ hours/'
   - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago Average answer time \d+ ms Answered without an error \d+% last \d+ hours/
-  - application /DNS Query Rate — \d+[hmsp]+ chart/: /\d+:\d+ AM \d+:\d+ AM/
-  - heading "License Inventory" [level=2]
+  - application /DNS query rate — \d+ hours chart/: /\d+:\d+ AM \d+:\d+ AM/
+  - heading "License inventory" [level=2]
   - text: 0 licenses
-  - 'button "About: License Inventory"': "About: ⓘ"
-  - 'button "Options: License Inventory"'
+  - 'button "About: License inventory"': "About: ⓘ"
+  - 'button "Options: License inventory"'
   - text: No licenses found

@@ -59,7 +59,7 @@ test('a panel Build a chart can draw opens there on its own picks', async ({ pag
 
 test('a copy-only panel can be opened but not replaced', async ({ page }) => {
   await page.goto('/#overview');
-  await openAbout(page, 'DNS Query Rate — 24h');
+  await openAbout(page, 'DNS query rate — 24 hours');
   await expect(page.getByRole('link', { name: 'Open in Build a chart' })).toHaveAttribute('href', '#chart?count=qps&split=none&window=24h&over=hour');
   await expect(page.getByRole('link', { name: 'Replace this panel' })).toHaveCount(0);
 });

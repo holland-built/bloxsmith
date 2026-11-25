@@ -1,0 +1,50 @@
+- main "Value tab":
+  - heading "Value" [level=1]
+  - paragraph: /Results from Infoblox and Bloxsmith over the last \d+ days\. This page is read-only\./
+  - paragraph: /Dec 2 to Dec \d+, \d+/
+  - text: /Updated \d+:\d+ [AP]M/
+  - button "Print report"
+  - button "Arrange panels"
+  - heading /Security results — \d+ days/ [level=2]
+  - 'button /About: Security results — \d+ days/': "About: ⓘ"
+  - 'button /Options: Security results — \d+ days/'
+  - paragraph: /\d+,\d+/
+  - paragraph: DNS lookups blocked
+  - paragraph: Includes known threats and lookups blocked by your policy and content rules.
+  - paragraph: /Up \d+% from the previous \d+ days/
+  - figure "Latest day may be incomplete":
+    - paragraph:
+      - strong: Peak day.
+      - text: "/Dec \\d+: \\d+,\\d+ blocked/"
+    - slider "DNS lookups blocked each day. Use the arrow keys to select a day."
+    - text: ""
+  - term: Brand-new malicious domains detected
+  - definition: /\d+/
+  - term: Suspicious sites later confirmed malicious
+  - definition: "7"
+  - definition: /Identified an average of \d+ hours before confirmation/
+  - heading /Platform performance — \d+ days/ [level=2]
+  - 'button /About: Platform performance — \d+ days/': "About: ⓘ"
+  - 'button /Options: Platform performance — \d+ days/'
+  - term: DNS queries answered
+  - definition: 1.3 million
+  - definition: DNS queries answered by your servers.
+  - term: Answered from cache
+  - definition: /\d+%/
+  - definition: Share of DNS queries answered from cache, without an external lookup.
+  - term: DNS server uptime
+  - definition: /\d+\.\d+%/
+  - definition: Share of time your DNS servers were running.
+  - definition:
+    - group: Each server (2)
+  - term: DHCP addresses assigned
+  - definition: /\d+,\d+/
+  - definition: Addresses your DHCP servers assigned to devices.
+  - definition: High-availability pairs each count an address, so this figure can be up to twice the number of devices served.
+  - term: Roaming devices protected
+  - definition: /\d+/
+  - definition: Devices protected by the roaming client for at least part of this period.
+  - heading /Bloxsmith activity — \d+ days/ [level=2]
+  - 'button /About: Bloxsmith activity — \d+ days/': "About: ⓘ"
+  - 'button /Options: Bloxsmith activity — \d+ days/'
+  - paragraph: No Bloxsmith jobs are recorded for this account in this period.

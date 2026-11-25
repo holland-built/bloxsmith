@@ -42,7 +42,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     const row = hostsRow(page);
     await expect(row).toContainText('not checked: information unavailable', { timeout: 20_000 });
     await expect(hostsTile(page)).toContainText('unavailable');
-    await expect(row).not.toContainText('None open');
+    await expect(row).not.toContainText('No open issues');
     await expect(row).not.toContainText('0 of 0');
     await expect(hostsTile(page)).not.toContainText('0 of 0');
   });
@@ -54,7 +54,7 @@ test.describe('Overview → Hosts row of the service board (hosts feed)', () => 
     await page.goto('/#overview');
     const row = hostsRow(page);
     await expect(hostsTile(page)).toContainText('0 of 0 not online', { timeout: 20_000 });
-    await expect(row).toContainText('None open');
+    await expect(row).toContainText('No open issues');
     await expect(row).not.toContainText('unavailable');
   });
 

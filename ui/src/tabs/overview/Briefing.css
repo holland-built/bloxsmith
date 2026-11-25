@@ -10,7 +10,13 @@
 .br-mark.crit { color: var(--ov-crit) } .br-mark.warn { color: var(--ov-warn) } .br-mark.ok { color: var(--ov-ok) }
 .br-new { font-style: normal; font-size: 11.5px; font-weight: 600; margin-inline-start: 8px; padding: 1px 7px; border-radius: 6px; background: color-mix(in srgb, var(--ov-accent) 16%, transparent); color: var(--ov-accent) }
 .br .br-empty { color: var(--ov-muted); padding-block: 18px; font-size: 14px }
-.br-down { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; font-size: 14px; color: var(--color-crit); background: color-mix(in srgb, var(--color-crit) 10%, transparent) }
+.br-down { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; font-size: 14px; color: var(--color-crit); background: color-mix(in srgb, var(--color-crit) 10%, transparent) }
+.br-down > span:first-of-type { flex: 1 1 20rem; min-width: 0 }
+/* The same Try again as an unavailable panel's (FeedUnavailable in ui.jsx). */
+.br-down-retry { padding: 4px 10px; border-radius: var(--radius-control); border: 1px solid var(--color-border); background: var(--color-field); color: var(--color-field-txt); font-size: 12.5px; cursor: pointer }
+.br-down-retry:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px }
+@media (pointer: coarse) { .br-down-retry { min-height: 44px } }
+.br-down-wait { font-size: 12.5px; color: var(--color-dim) }
 
 .br a.br-btn, .br a.br-primary { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; white-space: nowrap; transition-property: scale, background-color; transition-duration: 150ms; transition-timing-function: ease-out }
 .br a.br-btn { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: var(--ov-accent); background: color-mix(in srgb, var(--ov-accent) 12%, transparent) }

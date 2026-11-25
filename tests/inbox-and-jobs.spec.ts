@@ -120,7 +120,7 @@ test('a quiet day says "None open" on every service row', async ({ page }) => {
   await feeds(page, { incidents: [], hosts: [{ name: 'b', status: 'online' }], crit: 0 });
   await page.goto('/');
   for (const name of ['DNS', 'DHCP', 'IPAM', 'Hosts', 'Security']) {
-    await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('None open', { timeout: 20_000 });
+    await expect(page.locator(`[data-board] [data-board-row="${name}"]`)).toContainText('No open issues', { timeout: 20_000 });
   }
   await expect(page.locator('[data-inbox-row]')).toHaveCount(0);
   await expect(page.locator('[data-board] [data-board-row="Other"]')).toHaveCount(0);
@@ -192,9 +192,9 @@ test('while security events are still loading, the Security row does not say "No
   const sec = page.locator('[data-board] [data-board-row="Security"]');
   await expect(sec).toContainText('Checking…');
   await page.waitForTimeout(500);
-  await expect(sec).not.toContainText('None open');
+  await expect(sec).not.toContainText('No open issues');
   release();
-  await expect(sec).toContainText('None open');
+  await expect(sec).toContainText('No open issues');
 });
 
 test('a second question from the header box while on the AI page is asked too', async ({ page }) => {

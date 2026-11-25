@@ -140,3 +140,28 @@ test('the DNS change says the real window, the same words on the tile and the ch
   assert.equal(vsWords(t.hours), 'vs 2h ago')
   assert.equal(vsWords(null), 'vs first hour')
 })
+
+// A14 (gui audit, 2026-11-25): with the feeds down there is nothing on record
+// to date, and "No dated issues on record" read as reassurance.
+test('"New issues" says Not checked when the sources could not be read', () => {
+  assert.equal(newIssuesWords({ problems: [], allRead: false, reading: false, nowS: NOW }), 'Not checked')
+  assert.equal(newIssuesWords({ problems: [{ seen: null }], allRead: false, reading: false, nowS: NOW }), 'Not checked')
+  // Every source read and still nothing dated: that is a fact, not a failure.
+  assert.equal(newIssuesWords({ problems: [], allRead: true, reading: false, nowS: NOW }), 'Not available. No dated issues on record.')
+})
+
+// A4: an incident about subnets offers "View subnets" and goes to the subnets,
+// whatever its key, as the board's rowOf already places it on IPAM.
+test('a subnet incident is opened with View subnets, on the subnet list', () => {
+  const board = { board: [{ name: 'IPAM', href: '#network?minUtil=90&links=1', n: 0, issues: [{ key: 'capacity', entity: 'subnet', sev: 'warn', title: '2 subnets close to full', href: '#incidents', seen: null }] }] }
+  const [r] = rankProblems(board, NOW)
+  assert.equal(r.action, 'View subnets')
+  assert.equal(r.href, '#network?minUtil=70&links=1')
+})
+
+// A13: "last 6 h" is a unit nobody says out loud.
+test('the change window is said in whole words', () => {
+  const rows = [{ ts: new Date((NOW - 6 * 3600 - 30 * 60) * 1000).toISOString(), result: 'success', who_kind: 'person' }]
+  const c = changeSummary({ data: { rows, truncated: true } }, NOW * 1000)
+  assert.equal(c.window, 'Last 6 hours 30 minutes only')
+})

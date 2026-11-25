@@ -7,7 +7,7 @@ import ValueSecurity from './value/ValueSecurity.jsx'
 import ValuePlatform from './value/ValuePlatform.jsx'
 import ValueWork from './value/ValueWork.jsx'
 import ValueReport from './value/ValueReport.jsx'
-import { buildModel } from './value/valueModel.js'
+import { buildModel, nothingToPrint } from './value/valueModel.js'
 import './Overview.css'
 import './value/Value.css'
 import { PageTitle } from '../components/kit.jsx'
@@ -24,6 +24,9 @@ export default function Value() {
   const securityLoading = security.loading && !security.data
   const platformLoading = platform.loading && !platform.data
   const stillLoading = [security, platform, daily, runs, vault].some((f) => f.loading && !f.data)
+  // Every figure failed: the report would be all "Not checked", so there is
+  // nothing to print (screen audit A9).
+  const empty = nothingToPrint(m)
   return (
     <div className="vl-page">
       <header className="vl-head">
@@ -38,12 +41,14 @@ export default function Value() {
           <span className="ov-look" style={{ display: 'contents' }}>
             <UpdatedPill api={security} tip="When the 30-day security totals last arrived. They refresh every five minutes." />
           </span>
-          <button type="button" className="vl-print" disabled={stillLoading} onClick={() => window.print()}>Print report</button>
+          <button type="button" className="vl-print" disabled={stillLoading || empty} onClick={() => window.print()}>Print report</button>
         </span>
       </header>
       <CardGrid layoutKey="value">
-        <ValueSecurity key="value-security" panelId="value-security" m={m} loading={securityLoading} />
-        <ValuePlatform key="value-platform" panelId="value-platform" m={m} loading={platformLoading} />
+        {/* refetch, not the page-wide retry: a 200 reply with an error inside
+            is not a failed fetch, so the page-wide retry would skip it. */}
+        <ValueSecurity key="value-security" panelId="value-security" m={m} loading={securityLoading} onRetry={() => { security.refetch(); daily.refetch() }} />
+        <ValuePlatform key="value-platform" panelId="value-platform" m={m} loading={platformLoading} onRetry={platform.refetch} />
         <ValueWork key="value-work" panelId="value-work" runs={runs} w={m.workCount} loading={securityLoading || (runs.loading && !runs.data)} />
       </CardGrid>
       <ValueReport m={m} />
