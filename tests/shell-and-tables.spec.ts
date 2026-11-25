@@ -111,7 +111,9 @@ test('on a phone the bottom bar names the Search result page', async ({ page }) 
   const current = page.locator('[data-job-bar] [aria-current="page"]');
   await expect(current).toHaveCount(1);
   await expect(current).toHaveAccessibleName('Search result');
-  await expect(current).toBeVisible();
+  await expect(current).toBeVisible();  // It is the page you are on: tapping it keeps the search, not an empty one.
+  await current.click();
+  await expect(page).toHaveURL(/#dossier\?q=app-dc1-prod\.acme\.corp$/);
 });
 
 // Codex review of w2. The fade masked the table box itself, and its keyboard

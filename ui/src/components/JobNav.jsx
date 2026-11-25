@@ -226,7 +226,9 @@ export function JobBar({ tab, tabs, pages = tabs }) {
         </a>
       ))}
       {here && (
-        <a href={`#${here.id}`} aria-current="page" className="frame-dock-item">
+        // The page you are on, at its full address, so tapping it keeps a
+        // search's words (#dossier?q=…) instead of opening an empty search.
+        <a href={window.location.hash || `#${here.id}`} onClick={(e) => e.preventDefault()} aria-current="page" className="frame-dock-item">
           <span>{here.label}</span>
         </a>
       )}
