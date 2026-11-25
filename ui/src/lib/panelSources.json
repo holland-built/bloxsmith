@@ -641,7 +641,7 @@
   {
     "id": "provision-seed-request",
     "page": "Provision",
-    "name": "Seed demo: Request",
+    "name": "Demo data: Request",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -650,7 +650,7 @@
   {
     "id": "provision-seed-progress",
     "page": "Provision",
-    "name": "Seed demo: Progress",
+    "name": "Demo data: Progress",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -659,7 +659,7 @@
   {
     "id": "provision-seed-log",
     "page": "Provision",
-    "name": "Seed demo: Log",
+    "name": "Demo data: Log",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -668,7 +668,7 @@
   {
     "id": "provision-seed-summary",
     "page": "Provision",
-    "name": "Seed demo: Summary",
+    "name": "Demo data: Summary",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -677,7 +677,7 @@
   {
     "id": "provision-seed-teardown",
     "page": "Provision",
-    "name": "Seed demo: Tear down demo",
+    "name": "Demo data: Tear down demo",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -686,7 +686,7 @@
   {
     "id": "provision-seed-teardown-progress",
     "page": "Provision",
-    "name": "Seed demo: Teardown progress",
+    "name": "Demo data: Teardown progress",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -695,7 +695,7 @@
   {
     "id": "provision-seed-teardown-log",
     "page": "Provision",
-    "name": "Seed demo: Teardown log",
+    "name": "Demo data: Teardown log",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
@@ -704,7 +704,7 @@
   {
     "id": "provision-seed-teardown-summary",
     "page": "Provision",
-    "name": "Seed demo: Teardown summary",
+    "name": "Demo data: Teardown summary",
     "kind": "rest",
     "source": "the Infoblox API",
     "builder": "no",
