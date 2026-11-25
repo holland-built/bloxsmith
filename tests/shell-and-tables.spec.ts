@@ -116,6 +116,17 @@ test('on a phone the bottom bar names the Search result page', async ({ page }) 
   await expect(page).toHaveURL(/#dossier\?q=app-dc1-prod\.acme\.corp$/);
 });
 
+// Codex review round 2: a second search on the page must not leave the bar
+// item pointing at the first one (copy link, open in a new tab).
+test('the Search result bar item follows a new search', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#dossier?q=alpha.example');
+  const current = page.locator('[data-job-bar] [aria-current="page"]');
+  await expect(current).toHaveAttribute('href', '#dossier?q=alpha.example');
+  await page.evaluate(() => { location.hash = 'dossier?q=beta.example'; });
+  await expect(current).toHaveAttribute('href', '#dossier?q=beta.example');
+});
+
 // Codex review of w2. The fade masked the table box itself, and its keyboard
 // focus ring is drawn inside the box, so the ring's right edge faded away.
 // The ring's right edge must be drawn as strongly as its left edge.
