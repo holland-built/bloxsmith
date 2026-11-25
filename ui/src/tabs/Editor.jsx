@@ -385,15 +385,16 @@ export default function Editor() {
     if (f.kind in PICK_ONE) {
       return pickApi[f.kind]?.error && !pickOptions[f.kind].length ? `load the ${PICK_WORDS[f.kind]}` : `pick ${PICK_ONE[f.kind]}`
     }
-    if (f.kind === 'devices') return 'enter how many devices need an address'
+    // IPv6 shows the "Size: the number after the slash" box instead of a device count.
+    if (f.kind === 'devices') return isV6 ? 'fill in the size (the number after the slash)' : 'enter how many devices need an address'
     return `fill in the ${nounOf(f.label.replace(/\s*\(.*\)$/, ''))}`
   }
-  const previewNeeds = !spec || isUpdate ? [] : [...new Set(spec.fields
-    .filter((f) => f.required && !String(fields[f.key] || '').trim()).map(needWord))]
   // Forms with a required field mark the others "(optional)", as Get an address does.
   const anyRequired = !!spec?.fields.some((f) => f.required)
   const canDelete = !!editId.trim() && EDIT_DELETE_TYPES.includes(type)
   const isV6 = String(fields.address || '').includes(':')
+  const previewNeeds = !spec || isUpdate ? [] : [...new Set(spec.fields
+    .filter((f) => f.required && !String(fields[f.key] || '').trim()).map(needWord))]
 
   // Any input edit invalidates a preview taken before it — Apply must never
   // submit a body the user has not seen.

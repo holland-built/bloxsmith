@@ -74,3 +74,15 @@ test('Editor: when DNS views fail to load, Preview is off and says to load them'
   await expect(page.getByRole('button', { name: 'Preview' }).first()).toBeDisabled();
   await expect(page.getByText('To preview, load the DNS views.')).toBeVisible();
 });
+
+// Codex review of R3-D4: an IPv6 address block asks for the size after the
+// slash, so the hint names that box, not a device count.
+test('Editor: an IPv6 address block with no size names the Size box in the hint', async ({ page }) => {
+  await page.goto('/#editor');
+  await page.getByRole('button', { name: 'Address block', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Address' }).fill('2001:db8::');
+  await page.getByRole('combobox', { name: 'IP space' }).selectOption('ipam/ip_space/baseline-1');
+  const preview = page.getByRole('button', { name: 'Preview' }).first();
+  await expect(preview).toBeDisabled();
+  await expect(preview).toHaveAccessibleDescription('To preview, fill in the size (the number after the slash).');
+});
