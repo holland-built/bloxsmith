@@ -10,7 +10,7 @@ import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedU
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
-import { countedOf, sampleCountLabel, sampleScopeNote, shownNote, shownOnlyLabel, totalEventsTile } from '../lib/sampleCount.js'
+import { countedOf, isSample, knownTotal, sampleCountLabel, sampleScopeNote, shownNote, totalEventsTile } from '../lib/sampleCount.js'
 import { DASH } from '../lib/measured.js'
 import { inventoryRow } from '../lib/securityInventory.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
@@ -139,6 +139,16 @@ export default function Security() {
 
 // ---------- severity hero ----------
 
+// How many events this hour the page's figures speak for: the rows counted,
+// the severity legend, or the total of a window that was read whole, whichever
+// is most. The hour chart's heading, Total events and the "showing" notes all
+// use it, so one screen says one number (GUI audit R3-C2).
+function eventsCovered(d) {
+  const legend = SEV_ORDER.reduce((n, s) => n + (Number(d?.counts?.[s]) || 0), 0)
+  const whole = isSample(d) ? 0 : knownTotal(d) ?? 0
+  return Math.max(countedOf(d), legend, whole)
+}
+
 function SeverityHero({ panelId, hub, events }) {
   const { COLORS } = useChartTheme()
   const counts = hub.data?.counts ?? {}
@@ -160,13 +170,14 @@ function SeverityHero({ panelId, hub, events }) {
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
   const legend = SEV_ORDER.reduce((n, s) => n + (Number(counts[s]) || 0), 0)
-  const otherSev = countedOf(hub.data) - legend
-  const barsNote = shownNote(hub.data, 'events', legend + Math.max(otherSev, 0))
-  // The legend can cover more events than the rows listed (an older payload
-  // counts severities over the whole window). The heading then gives the
-  // legend's total, so heading, legend and the note under the bars agree.
-  const headCount = !hub.data?.truncated && legend > countedOf(hub.data)
-    ? `${legend.toLocaleString()} events`
+  const covered = eventsCovered(hub.data)
+  const otherSev = covered - legend
+  const barsNote = shownNote(hub.data, 'events', covered)
+  // The legend or the total can cover more events than the rows listed (an
+  // older payload counts over the whole window). The heading then gives that
+  // number, so heading, legend, the note under the bars and Total events agree.
+  const headCount = !hub.data?.truncated && covered > countedOf(hub.data)
+    ? `${covered.toLocaleString()} events`
     : sampleCountLabel(hub.data, 'events')
 
   return (
@@ -246,7 +257,10 @@ function KpiStack({ panelId, hub, events, acks }) {
   const cells = [
     // Red only when there is something to act on; blocked and logged are
     // counts, not problems, so they stay plain.
-    { label: 'Critical, not yet reviewed', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: shownOnlyLabel(d) },
+    // Worked out from the listed rows only, so it says so when they are not
+    // every event counted: beside "Critical 1" a bare 0 read as "nothing to
+    // review" (GUI audit R3-C2).
+    { label: 'Critical, not yet reviewed', value: unackedCrit, color: unackedCrit > 0 ? COLORS.crit : undefined, scope: events.length < eventsCovered(d) ? `of the ${events.length.toLocaleString()} listed` : null },
     // The span is said on each figure: Threat feed activity's own Blocked
     // covers 7 days, and side by side the two read as a contradiction
     // (GUI audit R2-C2). /api/hub/security reads the last hour (server/data.go).
@@ -294,7 +308,7 @@ function policyActionWord(v) {
   return ACTION_WORD[String(v).toLowerCase()] ?? sentenceCase(v)
 }
 
-function BlockCell({ domain, readOnly, urgent, blocked }) {
+function BlockCell({ domain, readOnly, blocked }) {
   const { COLORS } = useChartTheme()
   // idle | busy | verified | rejected | unverified | tokenRequired.
   // "verified" is the ONLY state that may show a green tick — it means a
@@ -374,11 +388,10 @@ function BlockCell({ domain, readOnly, urgent, blocked }) {
     )
   }
   return (
-    // Quiet on purpose: a plain text action at the end of the row, shown on
-    // critical and high rows and on the row under the pointer or focus, so
-    // the inbox is not a column of buttons. Touch screens always show it.
+    // Quiet on purpose: a plain text action at the end of the row, not a
+    // boxed button. Shown at rest, with or without a mouse (GUI audit R2-C1).
     <button onClick={() => run('block')} disabled={readOnly} title={readOnly ? 'Off: this tenant is read-only' : undefined}
-      className={`sec-block${urgent ? ' sec-urgent' : ''}`}>Block</button>
+      className="sec-block">Block</button>
   )
 }
 
@@ -508,9 +521,8 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
       label: 'Block',
       keep: true,
       // Block is offered where the policy only logged or allowed the lookup,
-      // never on a row the policy already blocked (GUI audit R2-C1). It stands
-      // out on critical and high rows; on the rest it shows on hover or focus.
-      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} blocked={isBlockedAction(r.policy_action)} urgent={sevRank(r.severity) <= 1} />,
+      // never on a row the policy already blocked (GUI audit R2-C1).
+      render: (_v, r) => <BlockCell domain={r.qname} readOnly={ro.readOnly} blocked={isBlockedAction(r.policy_action)} />,
     },
   ]
 
@@ -567,7 +579,7 @@ function TriageInbox({ panelId, hub, landing, events, acks, setAcks }) {
           {/* The figure beside the severity buttons counts the listed rows
               matching the filter. Without these lines an inbox holding the
               newest 50 of a bad hour reads as an inbox with 50 things in it. */}
-          {!landing && shownNote(hub.data, 'events') && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events')}</div>}
+          {!landing && shownNote(hub.data, 'events', eventsCovered(hub.data)) && <div className="text-note text-dim mt-2">{shownNote(hub.data, 'events', eventsCovered(hub.data))}</div>}
           {!landing && scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}

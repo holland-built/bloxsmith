@@ -3,6 +3,7 @@ import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { compareCells } from '../lib/sortCompare.js'
+import { sortWords } from '../lib/sortWords.js'
 import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
 
@@ -797,10 +798,15 @@ export function DataTable({
           }}
         >
           {!activeSort?.key && <option value="">As listed</option>}
-          {sortable.flatMap((c) => [
-            <option key={`${c.key}|asc`} value={`${c.key}|asc`}>{c.label}</option>,
-            <option key={`${c.key}|desc`} value={`${c.key}|desc`}>{`${c.label}, reversed`}</option>,
-          ])}
+          {/* Each choice says which way the list runs: "Time, newest first",
+              not "Time, reversed" (GUI audit R3-B1). */}
+          {sortable.flatMap((c) => {
+            const [up, down] = sortWords(c, rows)
+            return [
+              <option key={`${c.key}|asc`} value={`${c.key}|asc`}>{up}</option>,
+              <option key={`${c.key}|desc`} value={`${c.key}|desc`}>{down}</option>,
+            ]
+          })}
         </select>
       </label>
     ) : null

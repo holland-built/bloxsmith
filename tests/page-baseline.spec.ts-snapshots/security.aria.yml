@@ -48,16 +48,18 @@
         - cell /Jan 1, \d+, 8:\d+ AM/
         - cell "Block":
           - button "Block"
+  - text: Showing the newest 2 of 20 events.
   - heading "Response summary" [level=2]
   - 'button "About: Response summary"': "About: ⓘ"
   - 'button "Options: Response summary"'
-  - text: /Critical, not yet reviewed 0 Blocked, last hour \d+ Logged, last hour 8 Total events \d+/
+  - text: /Critical, not yet reviewed, of the 2 listed 0 Blocked, last hour \d+ Logged, last hour 8 Total events 20/
   - heading "Threat events by hour" [level=2]
-  - text: 10 events
+  - text: 20 events
   - 'button "About: Threat events by hour"': "About: ⓘ"
   - 'button "Options: Threat events by hour"'
-  - text: critical 1 high 2 medium 3 low 4
+  - text: critical 1 high 2 medium 3 low 4 Other 10
   - application "Threat events by hour chart": /\d+:\d+( \d+:\d+)+/
+  - text: Showing the newest 2 of 20 events.
   - heading "Threat feed activity" [level=2]
   - 'button "About: Threat feed activity"': "About: ⓘ"
   - 'button "Options: Threat feed activity"'

@@ -100,7 +100,7 @@ export default function Audit() {
     () =>
       chainRows(raw).map((r, i) => {
         const plain = plainRequest(raw[i]?.detail)
-        return plain ? { ...r, detail: plain, _record: r.detail, _search: `${r._search} ${plain.toLowerCase()}` } : r
+        return plain ? { ...r, detail: plain, _record: r._record ?? r.detail, _search: `${r._search} ${plain.toLowerCase()}` } : r
       }),
     [raw],
   )
@@ -679,7 +679,7 @@ function CspAuditTable({ panelId }) {
     const params = new URLSearchParams()
     if (searched) params.set('q', searched)
     fetch(`/api/csp-audit?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(failureText(r.status, 'search the portal audit log')), { status: r.status }))))
+      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(failureText(r.status, 'search the portal audit log', { retryShown: true })), { status: r.status }))))
       .then((j) => setResult(j))
       .catch((e) => setError(e))
       .finally(() => setLoading(false))
