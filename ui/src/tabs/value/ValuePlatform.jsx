@@ -10,7 +10,7 @@ export default function ValuePlatform({ panelId, m, loading, onRetry }) {
     <Card panelId={panelId} span={6} title="Platform performance — 30 days">
       {loading ? <Skeleton h={140} /> : (
         <div className="vl-panel">
-          <PanelMissed stats={stats} onRetry={onRetry} />
+          <PanelMissed stats={stats} what="platform performance" onRetry={onRetry} />
           <dl className="vl-strip">
             {stats.map((s) => (
               <div key={s.key} data-value-platform-metric={s.key} style={{ display: 'contents' }}><ValueStat s={s} /></div>

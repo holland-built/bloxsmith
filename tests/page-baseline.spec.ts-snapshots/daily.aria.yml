@@ -82,12 +82,12 @@
         - cell /View details for baseline-host-c/:
           - button "View details for baseline-host-c"
           - link "baseline-host-c"
-        - cell "offline"
+        - cell "Not online"
       - row /View details for baseline-host-b/:
         - cell /View details for baseline-host-b/:
           - button "View details for baseline-host-b"
           - link "baseline-host-b"
-        - cell "degraded"
+        - cell "Review"
   - heading "DNS zone issues" [level=2]
   - link "Open DNS":
     - /url: "#dns?issues=1"
@@ -95,8 +95,8 @@
   - 'button "Options: DNS zone issues"'
   - table:
     - rowgroup:
-      - row "Zone Issues":
-        - columnheader
+      - row "Issues found Zone Issues":
+        - columnheader "Issues found"
         - columnheader "Zone"
         - columnheader "Issues"
     - rowgroup:

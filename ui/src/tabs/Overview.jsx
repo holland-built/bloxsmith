@@ -89,7 +89,7 @@ export default function Overview() {
   // tile's detail and under the DNS chart. Read once a minute: a day's
   // average barely moves in 30 seconds.
   const health = useApi('/api/csp/dns-health', { poll: 60000 })
-  const board = useBoard(dns)
+  const board = useBoard(dns, health)
 
   return (
     <div className="w-full px-6 py-5">
@@ -111,7 +111,7 @@ export default function Overview() {
 
 // ---------- the board's data ----------
 
-function useBoard(dns) {
+function useBoard(dns, dnsHealth) {
   // The other half of the pair described in ConnStatus.jsx: the header's
   // status dot polls this same url, and whichever asks second adopts the
   // first's result instead of fetching 294KB again.
@@ -176,7 +176,7 @@ function useBoard(dns) {
   const hostsShort = hostsPartial || (sliceOk('hosts') && typeof totals.hosts !== 'number')
   const issuesFor = (name) => issues.filter((r) => rowOf(r) === name)
   const board = [
-    { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps,
+    { name: 'DNS', href: '#dns', state: svcState('DNS'), partial: notFull(svcState('DNS')), trend: dnsOk ? rows : null, n: qps, failShare: failedShare(dnsHealth),
       measure: m(dnsOk, dns.loading, `${qps === null ? '—' : qps >= 100 ? Math.round(qps).toLocaleString() : qps.toFixed(1)} queries/s`), scope: dnsOk ? 'hourly average, last hour' : '' },
     { name: 'DHCP', href: '#network?focus=leases', state: svcState('DHCP'), partial: notFull(svcState('DHCP')), n: activeLeases, of: sliceOk('leases') ? leases.length : null,
       measure: m(sliceOk('leases'), data.loading, `${n0(activeLeases)} active ${noun(activeLeases, 'lease')}`), scope: sliceOk('leases') ? `of ${n0(leases.length)} ${noun(leases.length, 'lease')} loaded` : '' },
@@ -244,6 +244,15 @@ const fmt = (v, d = 0) => (typeof v === 'number' ? v.toLocaleString(undefined, {
 const upOf = (meta) => { const m = /(\d+)\s*\/\s*(\d+)\s*up/.exec(meta || ''); return m ? { up: +m[1], total: +m[2] } : null }
 const worst = (issues) => issues.reduce((w, r) => ((SEV_RANK[r.sev] || 0) > (SEV_RANK[w] || 0) ? r.sev : w), null)
 
+// The share of DNS lookups that failed outright (SERVFAIL) over 24 hours,
+// from /api/csp/dns-health, or null when it was not read. At or above
+// DNS_FAILED_REVIEW percent the DNS tile says Review.
+const DNS_FAILED_REVIEW = 5
+function failedShare(feed) {
+  const m = healthMetric(feed, 'servfail')
+  return m.state === 'ok' ? m.value : null
+}
+
 // A service's state in one word. "Healthy" only when every feed that would
 // have reported a problem answered; a failed, missing or unknown check is
 // "Not checked", never good news.
@@ -257,6 +266,10 @@ function verdict(b, checked) {
   // Subnets 90% full are worth a look even before an incident is raised, so
   // the tile never says Healthy beside a count of them.
   if (b.name === 'IPAM' && b.n > 0) return { word: SEV_WORD.warn, sev: 'warn' }
+  // Likewise DNS when a real share of lookups failed outright, whatever the
+  // service check says (Codex review of GUI audit R3-A1: 100% failed still
+  // read Healthy). "Name not found" is left out: it is normal.
+  if (b.name === 'DNS' && b.failShare >= DNS_FAILED_REVIEW) return { word: SEV_WORD.warn, sev: 'warn' }
   if (b.measure === 'unavailable') return { word: 'Unavailable', sev: 'none' }
   if (checked !== true || b.state?.failed) return { word: 'Not checked', sev: 'none' }
   if (HAS_HEALTH.has(b.name) && st !== 'ok') return { word: 'Not checked', sev: 'none' }
@@ -636,18 +649,30 @@ function LicenseInventory({ licenses, panelId }) {
 // ---------- hero ----------
 
 // Average answer time and the share of lookups answered without an error,
-// over the last 24 hours. Each says "not checked" on its own when its read
-// failed (lib/dnsHealth.js), so one dead metric never hides the other.
-// `inCard` is the chart panel, which sits outside the .ov-look block whose
-// classes the tile detail uses, so it takes the app's own muted text.
+// over the last 24 hours, with the "name not found" and failed shares beside
+// it, so a success share well under 100% shows where the rest went (GUI audit
+// R3-A1: 62% beside "Healthy" read as 4 in 10 lookups failing). Infoblox
+// sends all three (csp.go dnsHealthMetrics); the labels are the DNS page's.
+// Each says "Not checked" on its own when its read failed (lib/dnsHealth.js),
+// so one dead metric never hides the others. `inCard` is the chart panel,
+// which sits outside the .ov-look block whose classes the tile detail uses,
+// so it takes the app's own muted text.
+const HEALTH_LINE = [
+  ['answer_time', 'Average answer time'],
+  ['success', 'Answered without an error'],
+  ['nxdomain', 'Name not found'],
+  ['servfail', 'Failed'],
+]
+// "Not checked", capitalised, the one phrase every Status page uses for a
+// figure that did not load (GUI audit R3-A3).
+const shown = (m) => (m.state === 'error' ? 'Not checked' : m.text)
 function DnsHealthLine({ health, inCard = false }) {
-  const at = healthMetric(health, 'answer_time')
-  const ok = healthMetric(health, 'success')
   const muted = inCard ? 'text-muted' : 'ov-muted'
   return (
     <div className={`${inCard ? 'mb-2' : 'ov-pad'} flex flex-wrap gap-x-6 gap-y-1 text-note`} data-dns-health="">
-      <span><span className={muted}>Average answer time</span> <b>{at.text}</b></span>
-      <span><span className={muted}>Answered without an error</span> <b>{ok.text}</b></span>
+      {HEALTH_LINE.map(([key, label]) => (
+        <span key={key}><span className={muted}>{label}</span> <b>{shown(healthMetric(health, key))}</b></span>
+      ))}
       <span className={muted}>last 24 hours</span>
     </div>
   )

@@ -55,3 +55,18 @@ test('an incident names its subject, not its id', () => {
   assert.equal(subjectName({ entity_type: 'lease', entity_id: 'dhcp/lease/abc', message: 'Lease 10.0.0.5 (printer) expired' }), '10.0.0.5')
   assert.equal(subjectName({ entity_type: 'posture', entity_id: 'x', message: '2 of 3 DNS zones with public names unsigned (DNSSEC)' }), 'All DNS zones')
 })
+
+// GUI audit R3-B4: DNS cache times were bare seconds ("300").
+test('cacheTime says seconds in plain words', async () => {
+  const { cacheTime } = await import('./plainWords.js')
+  assert.equal(cacheTime(300), '5 minutes')
+  assert.equal(cacheTime(3600), '1 hour')
+  assert.equal(cacheTime(86400), '1 day')
+  assert.equal(cacheTime(60), '1 minute')
+  assert.equal(cacheTime(90), '90 seconds')
+  assert.equal(cacheTime(5400), '90 minutes')
+  assert.equal(cacheTime('7200'), '2 hours')
+  assert.equal(cacheTime(0), '0 seconds')
+  assert.equal(cacheTime(null), '—')
+  assert.equal(cacheTime(''), '—')
+})

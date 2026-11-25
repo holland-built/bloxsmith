@@ -99,9 +99,9 @@ test('a phone table with sortable columns offers a Sort by picker that sorts', a
   const picker = panel.getByLabel('Sort by');
   await expect(picker).toBeVisible({ timeout: 20_000 });
   const first = () => panel.locator('tbody tr').first().locator('td').first().innerText();
-  await picker.selectOption({ label: 'Network' });
+  await picker.selectOption({ label: 'Network, lowest first' });
   const asc = await first();
-  await picker.selectOption({ label: 'Network, reversed' });
+  await picker.selectOption({ label: 'Network, highest first' });
   await expect.poll(first).not.toBe(asc);
 });
 

@@ -1,7 +1,7 @@
 - main "Assets tab":
   - heading "Assets" [level=1]
   - text: /Updated \d+:\d+ [AP]M/
-  - paragraph: "Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more."
+  - paragraph: "Every asset discovery found: search by name, IP address or hardware address, filter by type, or click a row for more."
   - list "Headline numbers":
     - listitem:
       - button "Assets 2"
@@ -20,10 +20,6 @@
         - /url: "#assets?gap=Infoblox%20Endpoint"
   - heading "Asset Inventory" [level=2]
   - text: found by Infoblox
-  - textbox "Search assets by name, IP or MAC address":
-    - /placeholder: Name, IP or MAC
-  - button "Search"
-  - button "Refresh"
   - 'button "About: Asset Inventory"': "About: ⓘ"
   - 'button "Options: Asset Inventory"'
   - list "Asset types, largest first":
@@ -32,7 +28,10 @@
     - listitem:
       - button "Server 1 50%"
   - heading "Asset list" [level=2]
-  - text: 1–1 of 1
+  - textbox "Search assets by name, IP address or hardware (MAC) address":
+    - /placeholder: Name or address
+  - button "Search"
+  - button "Refresh"
   - 'button "About: Asset list"': "About: ⓘ"
   - 'button "Options: Asset list"'
   - paragraph: Infoblox listed 1 asset but counted 2. The two numbers come from separate reads and can differ for a while.
@@ -58,7 +57,7 @@
         - cell "baseline-provider"
         - cell "baseline-vendor"
         - cell /\d+[hmsp]+ ago/
-  - text: Page 1 of 1
+  - text: 1–1 of 1 · Page 1 of 1
   - button "Previous" [disabled]
   - button "Next" [disabled]
   - heading "Discovery connections" [level=2]

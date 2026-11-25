@@ -23,7 +23,11 @@ export default function ValueWork({ panelId, runs: api, w: counted, loading }) {
         {!loading && noPeriod ? (
           <dl className="vl-strip"><ValueStat s={{ key: 'jobs', label: 'Jobs completed', state: 'unavailable', text: 'Not available' }} /></dl>
         ) : null}
-        {!loading && !counted ? <p className="text-copy text-muted" data-value-work-state="not-checked">Jobs completed: not checked. Bloxsmith's job history could not be read.</p> : null}
+        {/* The same "Not checked" figure as every other Value number; the
+            error line above already says why (GUI audit R3-A3, R2-A12). */}
+        {!loading && !counted ? (
+          <dl className="vl-strip" data-value-work-state="not-checked"><ValueStat s={{ key: 'jobs', label: 'Jobs completed', state: 'error', text: 'Not checked' }} /></dl>
+        ) : null}
         {!loading && w ? (
           <>
             {w.jobs > 0 ? <dl className="vl-strip">{stats.map((s) => <ValueStat key={s.key} s={s} />)}</dl> : null}

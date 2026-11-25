@@ -24,13 +24,20 @@ function scalarCountPayload(overrides: { total?: number; status: string }) {
   };
 }
 
-test.describe('Infra → Discovered assets tile (discovery-status feed)', () => {
+// Infra's tile reads /api/csp/asset-filters, the Assets page's own count, so
+// the two pages agree (GUI audit R3-B3). That feed says a failed read with
+// availability: "error" and its count in total.
+function assetFiltersPayload(overrides: { total?: number | null; availability: string }) {
+  return { types: [], total: overrides.total ?? 0, availability: overrides.availability };
+}
+
+test.describe('Infra → Discovered assets tile (asset-filters feed)', () => {
   const tile = (page: import('@playwright/test').Page) =>
     page.getByRole('list', { name: 'Headline numbers' }).getByRole('link', { name: /Discovered assets/ });
 
   test('discovery feed error shows a dash, never a zero', async ({ page }) => {
-    await page.route('**/api/csp/discovery-status*', (route) =>
-      fulfillJson(route, scalarCountPayload({ status: 'error' })),
+    await page.route('**/api/csp/asset-filters*', (route) =>
+      fulfillJson(route, assetFiltersPayload({ total: null, availability: 'error' })),
     );
     await page.goto('/#infra');
     // The dash alone: the page pill and panels say why (GUI audit R2-B5).
@@ -39,8 +46,8 @@ test.describe('Infra → Discovered assets tile (discovery-status feed)', () => 
   });
 
   test('discovery feed empty shows a real zero', async ({ page }) => {
-    await page.route('**/api/csp/discovery-status*', (route) =>
-      fulfillJson(route, scalarCountPayload({ status: 'empty' })),
+    await page.route('**/api/csp/asset-filters*', (route) =>
+      fulfillJson(route, assetFiltersPayload({ total: 0, availability: 'ok' })),
     );
     await page.goto('/#infra');
     await expect(tile(page)).toContainText('0');
@@ -48,8 +55,8 @@ test.describe('Infra → Discovered assets tile (discovery-status feed)', () => 
   });
 
   test('discovery feed ok shows the real total and opens Assets', async ({ page }) => {
-    await page.route('**/api/csp/discovery-status*', (route) =>
-      fulfillJson(route, scalarCountPayload({ total: 42, status: 'ok' })),
+    await page.route('**/api/csp/asset-filters*', (route) =>
+      fulfillJson(route, assetFiltersPayload({ total: 42, availability: 'ok' })),
     );
     await page.goto('/#infra');
     await expect(tile(page)).toContainText('42');

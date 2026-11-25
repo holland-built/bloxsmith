@@ -49,7 +49,7 @@
     - button "Security Needs action 3 critical or high 3 critical or high events · whole window · only part of the list arrived"
   - region "DNS detail":
     - heading "DNS" [level=2]
-    - text: /Average answer time \d+ ms Answered without an error \d+% last \d+ hours \d+ queries\/s · hourly average, last hour · 2\/2 online/
+    - text: /Average answer time \d+ ms Answered without an error \d+% Name not found \d+% Failed \d+\.\d+% last \d+ hours \d+ queries\/s · hourly average, last hour · 2\/2 online/
     - link "Open DNS":
       - /url: "#dns"
   - region "Services":
@@ -133,7 +133,7 @@
   - text: queries per second
   - 'button /About: DNS query rate — \d+ hours/': "About: ⓘ"
   - 'button /Options: DNS query rate — \d+ hours/'
-  - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago Average answer time \d+ ms Answered without an error \d+% last \d+ hours/
+  - text: /\d+ ▲ \d+\.\d+% vs \d+[hmsp]+ ago Average answer time \d+ ms Answered without an error \d+% Name not found \d+% Failed \d+\.\d+% last \d+ hours/
   - application /DNS query rate — \d+ hours chart/: /\d+:\d+ AM \d+:\d+ AM/
   - heading "License inventory" [level=2]
   - text: 0 licenses

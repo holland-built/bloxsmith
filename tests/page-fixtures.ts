@@ -885,7 +885,8 @@ const PER_PAGE: Record<string, Handler[]> = {
   infra: [
     { method: 'GET', path: '/api/csp/dfp', body: DFP, required: true },
     { method: 'GET', path: '/api/hub/health', body: HUB_HEALTH, required: true },
-    { method: 'GET', path: '/api/csp/discovery-status', body: DISCOVERY_STATUS, required: true },
+    // The Discovered assets tile reads the Assets page's own count (GUI audit R3-B3).
+    { method: 'GET', path: '/api/csp/asset-filters', body: ASSET_FILTERS, required: true },
     { method: 'GET', path: '/api/csp/jobs', body: JOBS, required: true },
     { method: 'GET', path: '/api/csp/maintenance', body: MAINTENANCE, required: true },
     { method: 'GET', path: '/api/csp/onprem-hosts', body: ONPREM_HOSTS, required: true },

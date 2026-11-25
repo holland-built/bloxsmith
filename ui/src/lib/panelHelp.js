@@ -47,7 +47,7 @@ export const PANEL_HELP = {
   // ---- Overview ----
   'dns-hero': {
     what: 'The average number of DNS lookups a second your servers answered, hour by hour across the last 24 hours.',
-    look: 'The big figure is the latest hour, compared with the first hour on the chart. Below it, average answer time and lookups answered without an error, over 24 hours.',
+    look: 'The big figure is the latest hour, compared with the first hour on the chart. Below it, over 24 hours: average answer time, and the share of lookups answered without an error, not found, and failed.',
   },
   'license-inventory': {
     what: 'Every Infoblox licence on this tenant, what it covers, when it runs out, and how many you hold.',

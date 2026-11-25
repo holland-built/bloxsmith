@@ -28,31 +28,31 @@
         - columnheader "Detail":
           - button "Detail"
     - rowgroup:
-      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn''t delete a DNS record Error: request refused · Item: dns\/record\/baseline-1/':
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Couldn''t delete a DNS record Error: request refused · Item: DNS record baseline-1/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Couldn't delete a DNS record"
-        - 'cell "Error: request refused · Item: dns/record/baseline-1"'
+        - 'cell "Error: request refused · Item: DNS record baseline-1"'
       - 'row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator Change blocked \(read-only\) Tried to create a DNS record; changes are turned off/':
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Change blocked (read-only)"
         - cell "Tried to create a DNS record; changes are turned off"
-      - 'row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator Subnet created Address block: ipam\/address_block\/baseline-1 · Prefix length: \d+ · Subnet: \d+\.\d+\.0\.0/':
+      - 'row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator Subnet created Subnet: \d+\.\d+\.0\.0\/\d+/':
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Subnet created"
-        - 'cell /Address block: ipam\/address_block\/baseline-1 · Prefix length: \d+ · Subnet: \d+\.\d+\.0\.0/'
+        - 'cell /Subnet: \d+\.\d+\.0\.0\/\d+/'
       - 'row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator Change allowed Create a subnet/':
         - cell /1\/1\/\d+, 7:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "Change allowed"
         - cell "Create a subnet"
-      - 'row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator App updated From version: v0\.0\.0-baseline/':
+      - 'row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator App updated Was version 0\.0\.0-baseline/':
         - cell /1\/1\/\d+, 6:\d+:\d+ AM/
         - cell "baseline-operator"
         - cell "App updated"
-        - 'cell "From version: v0.0.0-baseline"'
+        - 'cell "Was version 0.0.0-baseline"'
   - heading "Activity summary" [level=2]
   - text: 5 recorded events
   - 'button "About: Activity summary"': "About: ⓘ"
@@ -75,12 +75,12 @@
         - columnheader "Resource"
         - columnheader "Result"
     - rowgroup:
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-gamma \(automated account\) Changed IP address Refused/:
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-gamma \(automated account\) Changed IP address Failed/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "actor-gamma (automated account)"
         - cell "Changed"
         - cell "IP address"
-        - cell "Refused"
+        - cell "Failed"
       - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-beta \(automated account\) Changed Subnet Worked/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
         - cell "actor-beta (automated account)"

@@ -12,7 +12,7 @@
     - listitem:
       - button "Unknown 0"
     - listitem:
-      - link "Discovered assets 7":
+      - link "Discovered assets 2":
         - /url: "#assets"
   - button "Arrange panels"
   - heading "Host Inventory" [level=2]

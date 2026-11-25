@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { itemCell } from '../components/itemCell.jsx'
-import { bucketWord, countOf } from '../lib/plainWords.js'
-import { useApi } from '../lib/api.js'
+import { bucketWord, COULD_NOT_READ, countOf, failReason, hostStatusWord } from '../lib/plainWords.js'
+import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { dnsHosts, healthMetric, hostLoadRows, hostMetricText, NOT_CHECKED, splitPerHost } from '../lib/dnsHealth.js'
 import { sliceState } from '../lib/data.js'
 import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme, useGridLayout, TabIntro } from '../components/ui.jsx'
@@ -110,7 +110,11 @@ export default function Infra() {
   const jobs = useFeedWords(useApi('/api/csp/jobs', { poll: 15000, live: true }))
   const dfp = useFeedWords(useApi('/api/csp/dfp', { poll: 30000 }))
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
-  const discovery = useApi('/api/csp/discovery-status', { poll: 60000 })
+  // The Assets page's own count, so the tile and the page it opens say the
+  // same number. It read /api/csp/discovery-status, a different Infoblox
+  // table, and showed 7 beside the Assets page's 2 (GUI audit R3-B3). Same
+  // slow-read budget as the Assets page (see its comment).
+  const discovery = useApi('/api/csp/asset-filters', { poll: 60000, coldMs: SLOW_COLD_TIMEOUT_MS })
   // The DNS/DHCP/Security service rollup. Registered since the Go rewrite and
   // called by nothing until #152: no panel anywhere showed it, and
   // /api/service-inventory — the same underlying detail_services read — was used
@@ -345,7 +349,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId, hostMetr
       ) : hostsStatus === 'error' && loaded === 0 ? (
         // Checked BEFORE the zero test: a dead read has no total, and printing
         // the empty state for it claims an estate with no hosts in it.
-        <FeedUnavailable label="Host information is unavailable" />
+        <FeedUnavailable label="Host Status unavailable" reason={COULD_NOT_READ} />
       ) : total === 0 ? (
         <Empty>No hosts found</Empty>
       ) : (
@@ -421,8 +425,17 @@ function HostLoad({ hostMetrics, dnsHealth }) {
     <div className="mt-3 pt-3 border-t border-line" data-host-load="">
       {/* A failed read is said once, in words; "not checked" read as though
           nobody looked (GUI audit B2). */}
+      {/* The same line, size and Try again as a part-failed panel on DNS
+          and Network (GUI audit R3-B2). */}
       {failed
-        ? <div className="text-note text-muted">CPU and memory couldn&apos;t be read from Infoblox.</div>
+        ? (
+          <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-copy">
+            <span className="font-semibold text-crit">CPU and memory couldn&apos;t be read from Infoblox.</span>
+            <button type="button" onClick={hostMetrics.refetch} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
+              Try again
+            </button>
+          </p>
+        )
         : <div className="text-note text-muted mb-1">CPU and memory, latest reading</div>}
       {rows.length > 0 ? (
         <DataTable rows={rows} columns={columns} maxHeight={220} rowKey={(r) => r.host} />
@@ -441,9 +454,9 @@ function HostLoad({ hostMetrics, dnsHealth }) {
         </div>
       )}
       {lost.length > 0 && (
-        <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-muted mt-2" data-host-dns-failed="">
-          DNS {lost.map(([, , words]) => words).join(' and ')} couldn&apos;t be read from Infoblox.
-          <button type="button" onClick={dnsHealth.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+        <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-copy mt-2" data-host-dns-failed="">
+          <span className="font-semibold text-crit">DNS {lost.map(([, , words]) => words).join(' and ')} couldn&apos;t be read from Infoblox.</span>
+          <button type="button" onClick={dnsHealth.refetch} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
             Try again
           </button>
         </p>
@@ -460,7 +473,7 @@ function HostLoad({ hostMetrics, dnsHealth }) {
 function discoveryTile(feed) {
   const { data, error, loading } = feed
   const pending = loading && !data
-  const dead = !pending && (error || data?.status === 'error')
+  const dead = !pending && (error || data?.availability === 'error')
   const ok = !pending && !dead && typeof data?.total === 'number'
   return {
     label: 'Discovered assets',
@@ -483,7 +496,6 @@ function sevRank(s) {
   return SEV_ORDER[statusBucket(s)] ?? 4
 }
 
-const STATUS_WORD = { ok: 'Active', active: 'Active', degraded: 'Review', offline: bucketWord('Offline') }
 
 // Status badge. Same pill as DataTable's own `badge` renderer for every status
 // it knows; an unknown one is deliberately not one of those colours — neutral
@@ -503,11 +515,8 @@ function renderStatus(v) {
   }
   const st = statusPill(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
   // The same words as the Host Status legend and the headline numbers, not
-  // Infoblox's raw "ok" or "offline" (GUI audit B8). Only those exact words
-  // are renamed: going through statusBucket's loose match would turn
-  // "Setup failed" ("up") and "Inactive" into "Active". Anything else shows
-  // as sent.
-  const word = STATUS_WORD[String(v || '').toLowerCase()]
+  // Infoblox's raw "ok" or "offline" (lib/plainWords.js hostStatusWord).
+  const word = hostStatusWord(v)
   return (
     <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
       {word || v || '—'}
@@ -649,7 +658,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
-        <FeedUnavailable label="Host information is unavailable" />
+        <FeedUnavailable label="Host Inventory unavailable" reason={COULD_NOT_READ} />
       ) : hosts.length === 0 ? (
         <Empty>No hosts found</Empty>
       ) : filtered.length === 0 ? (
@@ -765,7 +774,7 @@ function ServiceHealth({ panelId, feed }) {
       {feed.loading ? (
         <Skeleton h={160} />
       ) : dead ? (
-        <FeedUnavailable label="Service inventory unavailable" />
+        <FeedUnavailable label="Service Health unavailable" reason={failReason(feed)} />
       ) : rows.length === 0 ? (
         <Empty>No services found</Empty>
       ) : (

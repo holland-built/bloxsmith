@@ -211,7 +211,7 @@ test.describe('DNS → DNSSEC Health panel (CSPDnssec status field)', () => {
     await page.route('**/api/csp/dnssec*', (route) => fulfillJson(route, { rows: [], count: 0, status: 'error' }));
     await page.goto('/#dns');
     const card = page.locator('text=Zone signing').locator('..').locator('..');
-    await expect(card.getByText(/zone signing information is unavailable/i)).toBeVisible();
+    await expect(card.getByText(/zone signing unavailable/i)).toBeVisible();
     await expect(card.getByText(/no zone signing information/i)).toHaveCount(0);
   });
 
@@ -220,6 +220,6 @@ test.describe('DNS → DNSSEC Health panel (CSPDnssec status field)', () => {
     await page.goto('/#dns');
     const card = page.locator('text=Zone signing').locator('..').locator('..');
     await expect(card.getByText(/no zone signing information/i)).toBeVisible();
-    await expect(card.getByText(/zone signing information is unavailable/i)).toHaveCount(0);
+    await expect(card.getByText(/zone signing unavailable/i)).toHaveCount(0);
   });
 });

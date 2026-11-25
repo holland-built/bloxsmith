@@ -56,7 +56,7 @@ test('the category chips match the rows Triage lists', async ({ page }) => {
 test('Threat Events by hour says its bars come from fewer rows than its legend counts', async ({ page }) => {
   await page.goto('/#security');
   const card = page.locator('[data-panel-id="security-threat-events"]');
-  await expect(card).toContainText('Showing the newest 2 of 10 events.');
+  await expect(card).toContainText('Showing the newest 2 of 20 events.');
   // Daily lists no events, only totals, so it has no rows to say this about
   // (review of screen audit A5, 2026-11-25).
   await page.goto('/#daily');

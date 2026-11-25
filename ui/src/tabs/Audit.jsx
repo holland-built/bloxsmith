@@ -100,7 +100,7 @@ export default function Audit() {
     () =>
       chainRows(raw).map((r, i) => {
         const plain = plainRequest(raw[i]?.detail)
-        return plain ? { ...r, detail: plain, _record: r.detail, _search: `${r._search} ${plain.toLowerCase()}` } : r
+        return plain ? { ...r, detail: plain, _record: r._record ?? r.detail, _search: `${r._search} ${plain.toLowerCase()}` } : r
       }),
     [raw],
   )
@@ -553,7 +553,9 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
   }, [filtered, sort])
 
   const columns = [
-    { key: 'ts', label: 'Time', sortable: true, render: chainTs },
+    // A header click on Time starts newest first: ascending would show the
+    // oldest 50 entries of the log (Codex review of r3y).
+    { key: 'ts', label: 'Time', sortable: true, firstDir: 'desc', render: chainTs },
     {
       key: 'actor',
       label: 'Actor',
@@ -646,9 +648,11 @@ function AuditTable({ raw, entries, chain, panelId, more }) {
           maxHeight={420}
           stickyHeader
           sort={sort}
-          onSort={(next) =>
-            setSort((s) => (s.key === next.key ? { key: next.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
-          }
+          // DataTable supplies the whole sort: a header click flips or starts
+          // at the column's firstDir (Time: newest first, the rest A to Z), and
+          // the phone picker names its own direction. Forcing every new column
+          // to descending made "Actor, A to Z" sort Z to A.
+          onSort={setSort}
         />
       )}
     </Card>
@@ -679,7 +683,7 @@ function CspAuditTable({ panelId }) {
     const params = new URLSearchParams()
     if (searched) params.set('q', searched)
     fetch(`/api/csp-audit?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(failureText(r.status, 'search the portal audit log')), { status: r.status }))))
+      .then((r) => (r.ok ? r.json() : Promise.reject(Object.assign(new Error(failureText(r.status, 'search the portal audit log', { retryShown: true })), { status: r.status }))))
       .then((j) => setResult(j))
       .catch((e) => setError(e))
       .finally(() => setLoading(false))

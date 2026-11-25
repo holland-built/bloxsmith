@@ -19,7 +19,7 @@ export default function ValueSecurity({ panelId, m, loading, onRetry }) {
     <Card panelId={panelId} span={6} title="Security results — 30 days">
       {loading ? <Skeleton h={220} /> : (
         <div className="vl-panel">
-          <PanelMissed stats={[m.blocked, m.zero_day, m.sus_to_mal, m.daily]} onRetry={onRetry} />
+          <PanelMissed stats={[m.blocked, m.zero_day, m.sus_to_mal, m.daily]} what="security results" onRetry={onRetry} />
           <section className="vl-hero">
             <div data-stat="blocked" data-state={m.blocked.state}>
               <p className={m.blocked.state === 'ok' ? 'vl-huge' : 'vl-huge vl-word'}>{m.blocked.text}</p>

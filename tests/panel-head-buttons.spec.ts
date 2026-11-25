@@ -79,7 +79,7 @@ test('#assets on a touch phone: the search row never sits under the buttons', as
   const page = await ctx.newPage();
   await installBaselineWorld(page);
   await page.goto('/#assets');
-  const box = page.getByLabel('Search assets by name, IP or MAC address', { exact: true });
+  const box = page.getByLabel('Search assets by name, IP address or hardware (MAC) address', { exact: true });
   await expect(box).toBeVisible({ timeout: 20_000 });
   const overlap = await box.evaluate((el) => {
     const card = el.closest('[data-panel-id]')!;
@@ -96,7 +96,7 @@ test('#assets at 390: a wrapped caption leaves the search row its full width', a
   await installBaselineWorld(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#assets');
-  const box = page.getByLabel('Search assets by name, IP or MAC address', { exact: true });
+  const box = page.getByLabel('Search assets by name, IP address or hardware (MAC) address', { exact: true });
   await expect(box).toBeVisible({ timeout: 20_000 });
   await page.waitForLoadState('networkidle');
   const { row, head } = await box.evaluate((el) => {

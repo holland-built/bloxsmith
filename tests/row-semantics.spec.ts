@@ -41,7 +41,7 @@ test('a row that opens something is a table row whose cells can be read', async 
   const row = table.getByRole('row').filter({ hasText: 'baseline-host-b' });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   await expect(row.getByRole('cell')).toHaveCount(2);
-  await expect(row.getByRole('cell').nth(1)).toHaveText('degraded');
+  await expect(row.getByRole('cell').nth(1)).toHaveText('Review');
   // What opens it is a real button, inside the row's first cell, named for the row.
   await expect(
     row.getByRole('cell').first().getByRole('button', { name: 'View details for baseline-host-b' }),

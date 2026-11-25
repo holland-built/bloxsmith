@@ -3,6 +3,7 @@ import { useFontsLoaded } from '../lib/fonts.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 import { compareCells } from '../lib/sortCompare.js'
+import { sortWords } from '../lib/sortWords.js'
 import { statusTone } from '../lib/statusWord.js'
 import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
 
@@ -16,9 +17,11 @@ export function statusBadgeColor(v) {
   return tone ? utilStatus(TONE_UTIL[tone]) : null
 }
 
-// Toggle a {key,dir} sort object for `key`: same key flips dir, new key => asc.
-export function toggleSort(cur, key) {
-  return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
+// Toggle a {key,dir} sort object for `key`: same key flips dir, new key =>
+// `first` (a column's `firstDir`, so a time column can start newest first),
+// else asc. The phone picker sends its own direction and never comes here.
+export function toggleSort(cur, key, first = 'asc') {
+  return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: first }
 }
 
 // ---------- internals ----------
@@ -282,7 +285,7 @@ export function DataTable({
   const openCol = cols.find((c) => c.priority !== 'low') ?? cols[0]
 
   const applySort = isControlled ? onSort : setInternalSort
-  const handleSort = (key) => applySort(toggleSort(activeSort, key))
+  const handleSort = (key) => applySort(toggleSort(activeSort, key, columns.find((c) => c.key === key)?.firstDir))
 
   // ---- measurement ----
   // Canvas measureText for anything whose painted shape is known here (headers,
@@ -797,10 +800,15 @@ export function DataTable({
           }}
         >
           {!activeSort?.key && <option value="">As listed</option>}
-          {sortable.flatMap((c) => [
-            <option key={`${c.key}|asc`} value={`${c.key}|asc`}>{c.label}</option>,
-            <option key={`${c.key}|desc`} value={`${c.key}|desc`}>{`${c.label}, reversed`}</option>,
-          ])}
+          {/* Each choice says which way the list runs: "Time, newest first",
+              not "Time, reversed" (GUI audit R3-B1). */}
+          {sortable.flatMap((c) => {
+            const [up, down] = sortWords(c, rows)
+            return [
+              <option key={`${c.key}|asc`} value={`${c.key}|asc`}>{up}</option>,
+              <option key={`${c.key}|desc`} value={`${c.key}|desc`}>{down}</option>,
+            ]
+          })}
         </select>
       </label>
     ) : null

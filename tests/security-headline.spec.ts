@@ -31,7 +31,7 @@ test('the headline answers "am I under attack" from the feeds the page loads', a
   await expect(page.locator('[data-panel-id="security-lookalike-domains"]')).toBeFocused();
 });
 
-test('Block is the last column, absent on a row already blocked, and shows by itself only on critical or high rows', async ({ page }) => {
+test('Block is the last column, absent on a row already blocked, and shows at rest on every row it can act on', async ({ page }) => {
   await page.goto('/#security');
   const inbox = page.locator('[data-panel-id="security-triage-inbox"]');
   await expect(inbox.locator('thead th').last()).toHaveText('Block');
@@ -41,8 +41,9 @@ test('Block is the last column, absent on a row already blocked, and shows by it
   await page.mouse.move(0, 0);
   await expect(high.getByRole('button', { name: 'Block' })).toHaveCount(0);
   await expect(high.locator('td').last()).toHaveText('Blocked');
-  await expect(medium).toHaveCSS('opacity', '0');
-  // Still there for the row under the pointer, and for the keyboard.
+  // Shown without hovering: hidden at rest, the only row that could be blocked
+  // showed an empty cell (GUI audit R2-C1, round 3).
+  await expect(medium).toHaveCSS('opacity', '1');
   await inbox.locator('tbody tr', { hasText: 'watch.baseline.example' }).hover();
   await expect(medium).toHaveCSS('opacity', '1');
 });

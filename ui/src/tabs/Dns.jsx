@@ -10,7 +10,7 @@ import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { MACHINE_TEXT } from '../lib/machineText.js'
 import { useSavedChartPanels } from '../components/useSavedChartPanels.jsx'
-import { countOf, issueWord } from '../lib/plainWords.js'
+import { cacheTime, COULD_NOT_READ, countOf, failReason, issueWord } from '../lib/plainWords.js'
 import { PROBLEM_SEV, SEV_WORD } from '../lib/severity.js'
 import { changeText, reading, vsYesterday } from '../lib/dnsCompare.js'
 import { healthMetric } from '../lib/dnsHealth.js'
@@ -265,7 +265,7 @@ function QpsHero({ panelId, qps }) {
       {qps.loading ? (
         <Skeleton h={250} />
       ) : qps.error || status === 'error' ? (
-        <FeedUnavailable label="DNS query rate information is unavailable" />
+        <FeedUnavailable label="DNS Query Rate unavailable" reason={failReason(qps)} />
       ) : chartData.length === 0 ? (
         <Empty>No DNS query rate readings for this period</Empty>
       ) : (
@@ -338,7 +338,7 @@ function DnsAnswers({ panelId, health }) {
       {health.loading && !health.data ? (
         <Skeleton h={180} />
       ) : dead ? (
-        <FeedUnavailable label="DNS answer health information is unavailable" />
+        <FeedUnavailable label="DNS Answers unavailable" reason={failReason(health)} />
       ) : (
         <>
           <div className="text-note text-muted pt-1">Average time to answer</div>
@@ -401,9 +401,10 @@ function FailedLookups({ panelId }) {
               some failed, each of those says "not checked" on its own; when
               the whole read failed there are no numbers to show (GUI audit B2). */}
           {someFailed && (
-            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-crit pt-1">
-              {v.state === 'error' ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}
-              <button type="button" onClick={feed.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-copy pt-1">
+              {/* FetchError's look, at body size (GUI audit R3-B2). */}
+              <span className="font-semibold text-crit">{v.state === 'error' ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}</span>
+              <button type="button" onClick={feed.refetch} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
                 Try again
               </button>
             </p>
@@ -508,7 +509,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
       <Card panelId={panelId} span={2} title="Zone problems">
-        <FeedUnavailable label="DNS zone information is unavailable" />
+        <FeedUnavailable label="Zone problems unavailable" reason={COULD_NOT_READ} />
       </Card>
     )
   }
@@ -570,6 +571,8 @@ function DnsServices({ panelId, services }) {
   const columns = [
     { key: 'name', label: 'Name' },
     { key: 'comment', label: 'Comment', grow: true },
+    // Which server group the service runs on. Infoblox sends only the
+    // group's id (csp.go normDNSServices), so the id is what there is to show.
     { key: 'pool_id', label: 'Server group', mono: true },
   ]
 
@@ -578,7 +581,7 @@ function DnsServices({ panelId, services }) {
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
-        <FeedUnavailable label="DNS service information is unavailable" />
+        <FeedUnavailable label="DNS Services unavailable" reason={failReason(services)} />
       ) : rows.length === 0 ? (
         <Empty>No DNS services found</Empty>
       ) : (
@@ -618,7 +621,7 @@ function QueryVolume7d({ panelId, analytics }) {
         // "no data" in the body with "feed unavailable" in small grey beside
         // the title was the wrong way round: the empty-looking half was the
         // one people read.
-        <FeedUnavailable label="DNS query volume information is unavailable" reason={analytics.error?.message || undefined} />
+        <FeedUnavailable label="Query Volume unavailable" reason={failReason(analytics)} />
       ) : (
         /* The label is now the day itself, so both the axis and the hover
            have to spell it — an ISO timestamp on the axis would just be a
@@ -753,7 +756,8 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
       cloud: z.cloud || '',
       cloud_detail: z.cloud_detail || '',
       // No TTL published => em-dash, never a number this zone does not have.
-      ttl: ttl == null ? '—' : ttl,
+      // Seconds in words, "5 minutes", not a bare "300" (GUI audit R3-B4).
+      ttl: cacheTime(ttl),
       issues: issuesCell,
       _hasIssues: issues,
     }
@@ -777,7 +781,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
     // an empty cell to it. A view where no zone publishes a TTL must still show
     // the TTL column full of dashes — silently dropping it reads as "TTL isn't
     // tracked" instead of "we don't know it".
-    { key: 'ttl', label: 'Cache time', mono: true, sortable: true, keep: true },
+    { key: 'ttl', label: 'Cache time', sortable: true, keep: true },
     // The cell is built above as markup, so it is passed through `render`:
     // DataTable lays render columns out to measure them, and without it the
     // column was sized short and cut "cache time too short" off (2026-11-25).
@@ -852,11 +856,11 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading, readFaile
         // nor "the feed is dead".
         <Skeleton h={250} />
       ) : notSigned && signingFailed ? (
-        <FeedUnavailable label="Zone signing information is unavailable" />
+        <FeedUnavailable label="DNS Zones unavailable" reason={COULD_NOT_READ} />
       ) : issuesOnly && listFailed ? (
-        <FeedUnavailable label="DNS zone information is unavailable" />
+        <FeedUnavailable label="DNS Zones unavailable" reason={COULD_NOT_READ} />
       ) : !notSigned && zones.length === 0 ? (
-        zonesStatus === 'error' ? <FeedUnavailable label="DNS zone information is unavailable" /> : <Empty>No DNS zones found</Empty>
+        zonesStatus === 'error' ? <FeedUnavailable label="DNS Zones unavailable" reason={COULD_NOT_READ} /> : <Empty>No DNS zones found</Empty>
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>
       ) : (
@@ -928,7 +932,7 @@ function DnssecHealth({ panelId, dnssec }) {
       {dnssec.loading ? (
         <Skeleton h={280} />
       ) : failed ? (
-        <FeedUnavailable label="Zone signing information is unavailable" />
+        <FeedUnavailable label="Zone signing unavailable" reason={failReason(dnssec)} />
       ) : rows.length === 0 ? (
         <Empty>No zone signing information</Empty>
       ) : (
@@ -975,8 +979,15 @@ function DnssecHealth({ panelId, dnssec }) {
 // sentence case; an override Infoblox names in DNS terms says what it does
 // (GUI audit B10).
 const sentence = (v) => (v ? String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase() : '—')
+// Where a blocklist comes from, as Infoblox names it in `type`.
+const RPZ_SOURCE = {
+  local: 'Your own list',
+  feed: 'Threat feed',
+  fireeye: 'FireEye feed',
+}
+
 const RPZ_OVERRIDE = {
-  NONE: 'None',
+  NONE: 'As each entry says',
   NXDOMAIN: 'Answers "name not found"',
   NODATA: 'Answers "no records"',
   PASSTHRU: 'Lets it through',
@@ -994,7 +1005,7 @@ function RpzPanel({ panelId, rpz }) {
     fqdn: r.fqdn,
     severity: sentence(r.severity),
     policy_override: RPZ_OVERRIDE[String(r.policy_override ?? '').toUpperCase()] ?? sentence(r.policy_override),
-    type: r.type || '—',
+    type: RPZ_SOURCE[String(r.type ?? '').toLowerCase()] ?? (r.type ? sentence(r.type) : '—'),
     disabled: r.disabled ? 'Disabled' : 'Enabled',
     _k: `${r.fqdn ?? ''}|${i}`,
   }))
@@ -1002,8 +1013,10 @@ function RpzPanel({ panelId, rpz }) {
   const columns = [
     { key: 'fqdn', label: 'Zone', mono: true, grow: true },
     { key: 'severity', label: 'Severity' },
-    { key: 'policy_override', label: 'Override' },
-    { key: 'type', label: 'Type' },
+    // What the server does with a blocked name, and where the list comes
+    // from, in words (GUI audit B10: "Override None", "Type local").
+    { key: 'policy_override', label: 'Action' },
+    { key: 'type', label: 'Source' },
     { key: 'disabled', label: 'Status' },
   ]
 
@@ -1012,7 +1025,7 @@ function RpzPanel({ panelId, rpz }) {
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
-        <FeedUnavailable label="Blocklist zone information is unavailable" />
+        <FeedUnavailable label="Blocklist zones unavailable" reason={failReason(rpz)} />
       ) : rows.length === 0 ? (
         <Empty>No blocklist zones</Empty>
       ) : (
@@ -1034,7 +1047,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
     name: r.name,
     dtc_policy: r.dtc_policy || '—',
     precedence: r.precedence,
-    ttl: r.ttl,
+    ttl: cacheTime(r.ttl),
     disabled: r.disabled ? 'Disabled' : 'Enabled',
     _k: `${r.name ?? ''}|${i}`,
   }))
@@ -1042,7 +1055,8 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   const columns = [
     { key: 'name', label: 'Name', mono: true, grow: true, render: itemCell('address', undefined, { mono: true }) },
     { key: 'dtc_policy', label: 'Policy' },
-    { key: 'precedence', label: 'Precedence', align: 'right', mono: true },
+    // "Priority", not Infoblox's "Precedence" (GUI audit B10).
+    { key: 'precedence', label: 'Priority', align: 'right', mono: true },
     { key: 'ttl', label: 'Cache time', mono: true, align: 'right' },
     { key: 'disabled', label: 'Status' },
   ]
@@ -1052,7 +1066,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (
-        <FeedUnavailable label="Load-balanced name information is unavailable" />
+        <FeedUnavailable label="Load-balanced names unavailable" reason={failReason(dtcLbdn)} />
       ) : rows.length === 0 ? (
         <Empty>No load-balanced names</Empty>
       ) : (

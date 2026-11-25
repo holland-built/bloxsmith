@@ -140,7 +140,7 @@ export default function Assets() {
           <UpdatedPill api={list} tip="When this list of assets last arrived. It is read again when the search or type changes." />
         </div>
       </div>
-      <TabIntro>Every asset discovery found: search by name, IP or MAC, filter by type, or click a row for more.</TabIntro>
+      <TabIntro>Every asset discovery found: search by name, IP address or hardware address, filter by type, or click a row for more.</TabIntro>
       <HeadlineStrip label="Headline numbers" items={headlines(filters, type)} />
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
@@ -153,16 +153,20 @@ export default function Assets() {
           filters={filters}
           type={type}
           onType={setType}
-          input={input}
-          onInput={setInput}
-          onSearch={() => setQ(input.trim())}
-          onClear={() => { setInput(''); setQ('') }}
-          searched={q}
-          onRefresh={refresh}
-          busy={list.loading || filters.loading}
         />
         <AssetList
           panelId="assets-list"
+          search={(
+            <SearchRow
+              input={input}
+              onInput={setInput}
+              onSearch={() => setQ(input.trim())}
+              onClear={() => { setInput(''); setQ('') }}
+              searched={q}
+              onRefresh={refresh}
+              busy={list.loading || filters.loading}
+            />
+          )}
           list={list}
           allTotal={!filters.loading && !filters.error && filters.data?.availability !== 'error' && typeof filters.data?.total === 'number' ? filters.data.total : null}
           searched={q}
@@ -236,7 +240,7 @@ function headlines(filters, type) {
 // tenant's assets in the 2026-11 review; the rest were a long tail of ones.
 const TOP_TYPES = 8
 
-function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, searched, onRefresh, busy, panelId }) {
+function FilterBar({ filters, type, onType, panelId }) {
   const { COLORS } = useChartTheme()
   const [showAll, setShowAll] = useState(false)
   const d = filters.data
@@ -254,7 +258,6 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
   // them draws half a bar (GUI audit B12). They used to measure against the
   // biggest type, so two types of 50% each drew two full bars. With no total
   // the share is unknown, and so is the bar.
-  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
 
   return (
     <Card
@@ -262,41 +265,11 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
       panelId={panelId}
       title="Asset Inventory"
       note="found by Infoblox"
-      right={
-        <div className="flex items-center gap-2 min-w-0">
-          {/* Shrinks on a phone: at a fixed 220px the box ran off the left
-              edge of the card. */}
-          <input {...MACHINE_TEXT}
-            placeholder="Name, IP or MAC"
-            aria-label="Search assets by name, IP or MAC address"
-            value={input}
-            onChange={(e) => onInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-            className={`${FIELD_CLS} min-w-0 w-full sm:w-[220px]`}
-          />
-          {/* Search is the one filled button: the thing this row is for. */}
-          <button
-            type="button"
-            onClick={onSearch}
-            className="px-2.5 py-1.5 rounded-control border border-accent bg-accent text-on-accent text-copy font-medium"
-          >
-            Search
-          </button>
-          {searched && (
-            <button type="button" onClick={onClear} className={btn}>
-              Clear
-            </button>
-          )}
-          <button type="button" onClick={onRefresh} disabled={busy} className={`${btn} disabled:opacity-40`}>
-            {busy ? 'Loading…' : 'Refresh'}
-          </button>
-        </div>
-      }
     >
       {filters.loading && !d ? (
         <Skeleton h={72} />
       ) : unavailable ? (
-        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset types unavailable" onRetry={() => filters.refetch()} />
+        <FeedUnavailable reason={d?.reason || filters.error?.message} label="Asset Inventory unavailable" onRetry={() => filters.refetch()} />
       ) : (
         <div className="as-look">
           {/* total === null is a real state: the type query worked and the
@@ -358,9 +331,48 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
   )
 }
 
+// ---------- the search row ----------
+
+// In the Asset list's own header, beside the rows it fills. It sat in the
+// Asset Inventory panel, so a search changed a different panel from the one
+// it was typed into (GUI audit B12). "Hardware address", not "MAC" (B10).
+function SearchRow({ input, onInput, onSearch, onClear, searched, onRefresh, busy }) {
+  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy'
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      {/* Shrinks on a phone: at a fixed 220px the box ran off the left
+          edge of the card. */}
+      <input {...MACHINE_TEXT}
+        placeholder="Name or address"
+        aria-label="Search assets by name, IP address or hardware (MAC) address"
+        value={input}
+        onChange={(e) => onInput(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+        className={`${FIELD_CLS} min-w-0 w-full sm:w-[240px]`}
+      />
+      {/* Search is the one filled button: the thing this row is for. */}
+      <button
+        type="button"
+        onClick={onSearch}
+        className="px-2.5 py-1.5 rounded-control border border-accent bg-accent text-on-accent text-copy font-medium"
+      >
+        Search
+      </button>
+      {searched && (
+        <button type="button" onClick={onClear} className={btn}>
+          Clear
+        </button>
+      )}
+      <button type="button" onClick={onRefresh} disabled={busy} className={`${btn} disabled:opacity-40`}>
+        {busy ? 'Loading…' : 'Refresh'}
+      </button>
+    </div>
+  )
+}
+
 // ---------- the list ----------
 
-function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId }) {
+function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, onPage, selected, onSelect, panelId, search }) {
   // A new sort order keeps the current rows up until it lands. Swapping the
   // table for a skeleton would destroy the heading that holds keyboard focus.
   // Only for a sort: rows from another search must never show under this one.
@@ -457,21 +469,14 @@ function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, on
       panelId={panelId}
       // Not "Assets" again, the page's own name (GUI audit B12).
       title="Asset list"
-      right={
-        rows.length > 0 && (
-          <span className="text-note text-muted">
-            {from.toLocaleString()}–{to.toLocaleString()}
-            {total != null ? ` of ${total.toLocaleString()}` : ''}
-          </span>
-        )
-      }
+      right={search}
     >
       {list.loading && !d ? (
         <Skeleton h={320} />
       ) : unavailable ? (
         // The whole reason this branch is separate from the one below: a feed
         // that could not be read must never render as a tenant with no assets.
-        <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset inventory unavailable" onRetry={() => list.refetch()} />
+        <FeedUnavailable reason={d?.reason || list.error?.message} label="Asset list unavailable" onRetry={() => list.refetch()} />
       ) : rows.length === 0 && page > 0 ? (
         // The pager stays, so Previous is still there to press.
         <>
@@ -530,6 +535,9 @@ function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, on
             hasMore={hasMore}
             total={total}
             loading={list.loading}
+            // Which rows these are. It sat in the header, where the search
+            // row now is (GUI audit B12).
+            range={`${from.toLocaleString()}–${to.toLocaleString()}${total != null ? ` of ${total.toLocaleString()}` : ''}`}
           />
         </>
       )}
@@ -541,7 +549,7 @@ function AssetList({ list, allTotal, searched, type, gap, sort, onSort, page, on
 // the total is unknown (a failed count query still leaves a usable list); when
 // the total IS known, the last page is the one whose end reaches it. Both are
 // checked, so Next is offered when either says there is more.
-function Pager({ page, onPage, hasMore, total, loading }) {
+function Pager({ page, onPage, hasMore, total, loading, range }) {
   const knownMore = total != null && (page + 1) * PAGE_SIZE < total
   const next = hasMore || knownMore
   const pages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null
@@ -550,8 +558,8 @@ function Pager({ page, onPage, hasMore, total, loading }) {
   return (
     <div className="flex items-center justify-end gap-2 pt-2">
       <span className="text-note text-dim mr-auto">
-        Page {page + 1}
-        {pages != null ? ` of ${pages.toLocaleString()}` : ''}
+        {range ? <><span>{range}</span>{' · '}</> : null}
+        <span>Page {page + 1}{pages != null ? ` of ${pages.toLocaleString()}` : ''}</span>
       </span>
       <button type="button" className={btn} disabled={page === 0 || loading} onClick={() => onPage(page - 1)}>
         Previous

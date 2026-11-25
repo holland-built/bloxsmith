@@ -18,8 +18,8 @@ test('an IP in the search box finds the device and says which sources saw it', a
   });
   await page.goto('/#assets');
 
-  const box = page.getByRole('textbox', { name: 'Search assets by name, IP or MAC address' });
-  await expect(box).toHaveAttribute('placeholder', 'Name, IP or MAC');
+  const box = page.getByRole('textbox', { name: 'Search assets by name, IP address or hardware (MAC) address' });
+  await expect(box).toHaveAttribute('placeholder', 'Name or address');
   await box.fill('172.17.0.4');
   await box.press('Enter');
 
@@ -37,7 +37,7 @@ test('an address nobody has seen says "not seen in the last 7 days", not "no ass
     new URL(r.request().url()).searchParams.get('q') === '10.9.9.9' ? r.fulfill({ json: ASSETS_BY_ADDRESS_NONE }) : r.fallback());
   await page.goto('/#assets');
 
-  const box = page.getByRole('textbox', { name: 'Search assets by name, IP or MAC address' });
+  const box = page.getByRole('textbox', { name: 'Search assets by name, IP address or hardware (MAC) address' });
   await box.fill('10.9.9.9');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
 

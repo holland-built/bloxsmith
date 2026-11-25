@@ -323,12 +323,13 @@ function Feed({ groups }) {
     <div
       // tabIndex: a box that scrolls has to be reachable, or a keyboard cannot
       // scroll it. The rows hold nothing focusable of their own.
+      // md: only. On a phone the list flows with the page: a 520px box that
+      // scrolled on its own hid the deleted record the Deletions tile points
+      // to, with nothing to show there was more (GUI audit R3-C1).
       // relative: each row's sr-only label is position:absolute, and without a
       // positioned box here they escape it and stretch the page ~28px a row.
       tabIndex={0}
-      // max-md:scroll-cue: on a phone the right edge fades while more columns
-      // are off to the right (GUI audit C3), the same cue DataTable uses.
-      className={`relative max-h-[520px] overflow-auto max-md:scroll-cue outline-none ${FOCUS_RING}`}
+      className={`relative md:max-h-[520px] md:overflow-auto outline-none ${FOCUS_RING}`}
       role="table"
       aria-label="Changed objects, grouped by resource"
       aria-colcount={FEED_COLUMNS.length}
