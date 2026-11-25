@@ -621,7 +621,8 @@ const CLAIMS = [
     file: SECURITY,
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(hub\.data, 'events'\)/, expect: 'the severity panel computes a scope note' },
-      { re: /right=\{unavailable \? null : <span className="[^"]*">\{sampleCountLabel\(hub\.data, 'events'\)\}<\/span>\}/, expect: 'its heading count is sample-aware' },
+      { re: /right=\{unavailable \? null : <span className="[^"]*">\{headCount\}<\/span>\}/, expect: 'its heading shows headCount' },
+      { re: /const headCount = !hub\.data\?\.truncated && legend > countedOf\(hub\.data\)\n\s+\? `\$\{legend\.toLocaleString\(\)\} events`\n\s+: sampleCountLabel\(hub\.data, 'events'\)/, expect: 'and headCount is the sample-aware label, or the legend total when that is larger' },
     ],
   },
   {

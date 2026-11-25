@@ -430,6 +430,8 @@ function sevRank(s) {
   return SEV_ORDER[statusBucket(s)] ?? 4
 }
 
+const STATUS_WORD = { ok: 'Active', active: 'Active', degraded: 'Degraded', offline: bucketWord('Offline') }
+
 // Status badge. Same pill as DataTable's own `badge` renderer for every status
 // it knows; an unknown one is deliberately not one of those colours — neutral
 // grey and italic, so it never reads as the green of a healthy host or the
@@ -447,9 +449,15 @@ function renderStatus(v) {
     )
   }
   const st = statusBadgeColor(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
+  // The same words as the Host Status legend and the headline numbers, not
+  // Infoblox's raw "ok" or "offline" (GUI audit B8). Only those exact words
+  // are renamed: going through statusBucket's loose match would turn
+  // "Setup failed" ("up") and "Inactive" into "Active". Anything else shows
+  // as sent.
+  const word = STATUS_WORD[String(v || '').toLowerCase()]
   return (
     <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
-      {v || '—'}
+      {word || v || '—'}
     </span>
   )
 }

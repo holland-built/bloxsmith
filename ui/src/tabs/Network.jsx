@@ -425,7 +425,9 @@ function Overlaps({ panelId, overlaps, only, hp }) {
       {overlaps.loading ? (
         <Skeleton h={220} />
       ) : failed ? (
-        <FeedUnavailable label="Overlapping ranges unavailable" reason={overlaps.data?.error || "Couldn't read every subnet, so the list could be wrong."} />
+        // A request that failed outright has no list at all, so it gives the
+        // request's own error; the "could be wrong" line is for a partial read (B6).
+        <FeedUnavailable label="Overlapping ranges unavailable" reason={overlaps.error ? overlaps.error.message : overlaps.data?.error || "Couldn't read every subnet, so the list could be wrong."} />
       ) : (
         <>
         {only && (
@@ -577,7 +579,9 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       title="DHCP Leases"
       right={
         <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
-          <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
+          {/* Last on a phone, beside the state picker, not alone left of the
+              search box (B15). A failed or unfinished read has no count (B2). */}
+          <span className="text-note text-muted max-md:order-last">{dhcp.loading || dhcp.error || status === 'error' ? '—' : `${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()}`}</span>
           <input {...MACHINE_TEXT}
             aria-label="Search address, hostname, MAC"
             placeholder="Address, name or MAC"
@@ -622,12 +626,25 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
 // as totals for today and the last 30 days (lib/dhcpRequests.js). Each number
 // stands alone: one that could not be read says "not checked".
 function DhcpRequests({ panelId, requests }) {
+  // Any number that failed is said once, with a way to ask again; each
+  // number still says "not checked" on its own (GUI audit B2).
+  const states = DHCP_REQUEST_WINDOWS.flatMap((w) => DHCP_REQUEST_ROWS.map((r) => dhcpTotal(requests, r.key, w.key).state))
+  const allFailed = states.every((st) => st === 'error')
+  const someFailed = states.some((st) => st === 'error')
   return (
     <Card panelId={panelId} span={2} title="DHCP Requests">
       {requests.loading && !requests.data ? (
         <Skeleton h={140} />
       ) : (
         <>
+          {someFailed && (
+            <p role="status" data-panel-failed="" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-note text-crit pt-1">
+              {allFailed ? "Couldn't read these numbers from Infoblox." : "Couldn't read some of these numbers from Infoblox."}
+              <button type="button" onClick={requests.refetch} className="px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-note">
+                Try again
+              </button>
+            </p>
+          )}
           {DHCP_REQUEST_WINDOWS.map((w) => (
             <div key={w.key} data-dhcp-window={w.key}>
               <div className="text-note text-muted pt-1">{w.label}</div>

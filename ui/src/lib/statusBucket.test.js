@@ -22,6 +22,18 @@ test('"ok" only as the whole word', () => {
   assert.equal(statusBucket('broken'), 'other')
 })
 
+// A word that only CONTAINS a healthy word is not health: "Setup failed"
+// holds "up" and "Inactive" holds "active", and both were counted Active in
+// Infra's Host Status donut and headline (GUI audit follow-up, 2026-11-25).
+test('a status is never Active just because a healthy word is inside it', () => {
+  const cases = {
+    Inactive: 'offline', inactive: 'offline',
+    'Setup failed': 'offline', 'Connection down': 'offline', 'sync error': 'offline',
+    startup: 'other', constructor: 'other', toString: 'other', backup: 'other', 'not active': 'other', uptime: 'other',
+  }
+  for (const [s, want] of Object.entries(cases)) assert.equal(statusBucket(s), want, s)
+})
+
 test('"unknown" only as the whole word; anything else with it in falls through', () => {
   assert.equal(statusBucket('unknown-ish'), 'other')
 })

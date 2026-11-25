@@ -40,10 +40,12 @@ test('Incidents: a dead incidents feed says so in the triage panel', async ({ pa
 test('Incidents: a dead actions feed says so in both panels that read it', async ({ page }) => {
   await page.route('**/api/actions*', dead);
   await page.goto('/#incidents');
-  for (const id of ['incidents-soc-queue', 'incidents-action-volume']) {
+  // Each panel names itself (GUI audit C10: Action volume used to borrow
+  // Suggested actions' name).
+  for (const [id, label] of [['incidents-soc-queue', 'Suggested actions are unavailable'], ['incidents-action-volume', 'Action volume is unavailable']]) {
     const block = unavailable(page, id);
     await expect(block, `${id} did not draw the feed-unavailable block`).toBeVisible({ timeout: 20_000 });
-    await expect(block).toContainText('Suggested actions are unavailable');
+    await expect(block).toContainText(label);
   }
   await expect(page.getByText('failed to load actions')).toHaveCount(0);
 });

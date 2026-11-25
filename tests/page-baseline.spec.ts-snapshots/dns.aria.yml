@@ -50,8 +50,9 @@
         - cell "old-printer.baseline.example."
         - cell /\d+/
   - text: Every number is for today, from the failed-lookup records.
-  - button "About dns-zone-kpis": ⓘ
-  - button "Options for Zone Counts": ⋯
+  - heading "Zone problems" [level=2]
+  - 'button "About: Zone problems"': "About: ⓘ"
+  - 'button "Options: Zone problems"'
   - text: Issues by kind
   - list "Zone issues by kind":
     - listitem:
