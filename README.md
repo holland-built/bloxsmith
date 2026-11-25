@@ -55,7 +55,7 @@ Every page is in the menu down the left side: the everyday ones on top, the rest
 |---|---|---|
 | Check the network first thing in the morning | **Overview**, then **Daily report** | Look for subnets running out of addresses, DNS errors and new security hits |
 | Find a device | **Assets** | Type part of its name, address or MAC, or pick a type |
-| Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Your recent changes** removes exactly what was built |
+| Get an IP address, a DNS name, a new network, a branch office or a demo, and undo it later | **Automate** | Pick a job, press **Preview**, then **Build it**. **Made here** removes exactly what was built |
 | Give someone an address or a DNS record | **Get an address** | Fill in the form, press **Preview**, read what it will take, press **Apply** |
 | See who changed what today | **Changes** | Recent changes, grouped by what was touched. **Audit** goes further back |
 | Keep a block or allow list filled with the most popular sites | **Site lists** | Pick the top sites, press **Preview**, then **Add to policy**. **Daily proposals** suggests changes each day and changes nothing until you approve |
