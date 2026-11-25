@@ -31,6 +31,9 @@ type bpCheck struct {
 	Note     string           `json:"note,omitempty"`
 	Link     string           `json:"link,omitempty"`
 	Items    []map[string]any `json:"items"`
+	// partial: the check stands but part of what backs it failed to read,
+	// so the result is not cached and the next load asks again.
+	partial bool
 }
 
 // listComplete reports whether rows are the whole list. Only a total from the
@@ -82,8 +85,8 @@ func (s *Service) bestPractices(ctx context.Context) map[string]any {
 		dhcpAAPCheck(ha, haErr == nil, haWhole),
 		as,
 	}
-	for _, c := range s.dnsRecordChecks() {
-		failed = failed || c.Status == "unknown"
+	for _, c := range s.dnsRecordChecks(ctx) {
+		failed = failed || c.Status == "unknown" || c.partial
 		checks = append(checks, c)
 	}
 	out := map[string]any{"checks": checks}
@@ -368,52 +371,63 @@ func (s *Service) cubeRowsStrict(query map[string]any) (rows []map[string]any, o
 }
 
 // dnsRecordChecks reads the four flags at once, one read per flag, so a long
-// Stale list that runs past the row limit can't hide a Dangling record.
-func (s *Service) dnsRecordChecks() []bpCheck {
+// Stale list that runs past the row limit can't hide a Dangling record. Each
+// flag goes through readDNSFlag (visibility_read.go), the reader the
+// Visibility Assessment shares, which counts records with its own aggregate
+// query rather than by counting sample rows.
+func (s *Service) dnsRecordChecks(ctx context.Context) []bpCheck {
 	out := make([]bpCheck, len(dnsRecFlags))
 	tasks := make([]func(), len(dnsRecFlags))
 	for i, f := range dnsRecFlags {
 		tasks[i] = func() {
-			d := func(n string) string { return dnsRecCube + "." + n }
-			rows, ok := s.cubeRowsStrict(map[string]any{
-				"measures": []string{d("uniqueRecordCount")},
-				"dimensions": []string{
-					d("record_asset_name"), d("record_asset_record_type"),
-					d("record_asset_absolute_zone_name"), d("record_asset_zone_id"),
-					d("record_asset_dns_rdata"), d("record_asset_last_queried_str"),
-				},
-				"filters": []map[string]any{{
-					"member": d("indicator_ids_str"), "operator": "contains",
-					"values": []string{"'" + f.flag + "'"},
-				}},
-				"order": map[string]any{d("record_asset_absolute_zone_name"): "asc", d("record_asset_name"): "asc"},
-				"limit": dnsRecLimit,
-			})
-			out[i] = dnsRecordCheck(f, rows, ok)
+			out[i] = dnsRecordCheck(f, s.readDNSFlag(ctx, f.flag, dnsRecLimit))
 		}
 	}
 	mustFanOut(tasks...)
 	return out
 }
 
-func dnsRecordCheck(f dnsRecFlag, rows []map[string]any, readOK bool) bpCheck {
+func dnsRecordCheck(f dnsRecFlag, r dnsFlagRead) bpCheck {
 	c := bpCheck{ID: f.id, Severity: f.severity, Why: f.why}
-	what := "list of DNS records Infoblox flagged " + f.flag
-	if !readOK || len(rows) >= dnsRecLimit {
+	// The count is the cube's own count of records; one record that points
+	// two places is two sample rows, so the rows are never the count.
+	if !r.Count.OK() {
 		c.Title = f.unsure
-		return unknown(c, readOK, what)
-	}
-	items := make([]map[string]any, 0, len(rows))
-	for _, r := range rows {
-		items = append(items, dnsRecordItem(r))
-	}
-	if len(items) == 0 {
-		c.Title = f.none
-		c.Status, c.Items = "passed", items
+		c.Status, c.Items = "unknown", []map[string]any{}
+		c.Reason = "Couldn't read how many DNS records Infoblox flagged " + f.flag + ". " + r.Count.Reason
 		return c
 	}
-	c.Title = f.found(len(items))
+	// The list is only the examples shown under the count; a list that failed
+	// or came back cut short is said in the note and never changes the count.
+	items := []map[string]any{}
+	if r.SampleOK {
+		for _, row := range r.Sample {
+			items = append(items, dnsRecordItem(row))
+		}
+	}
+	n := r.Count.N()
+	if n == 0 {
+		if len(items) > 0 {
+			c.Title = f.unsure
+			c.Status, c.Items = "unknown", []map[string]any{}
+			c.Reason = "Infoblox's count and its list of flagged records disagree."
+			return c
+		}
+		c.Title = f.none
+		c.Status, c.Items = "passed", items
+		c.partial = !r.SampleOK // the count proves none; don't cache the failed read
+		return c
+	}
+	c.Title = f.found(n)
 	c.Status, c.Items = "problem", items
+	switch {
+	case !r.SampleOK:
+		c.Note = "Couldn't read the list of these records, so none are shown."
+		c.partial = true
+	case len(r.Sample) >= dnsRecLimit:
+		c.Note = fmt.Sprintf("The list came back cut short, so only the first %d are shown.", len(items))
+		c.partial = true
+	}
 	return c
 }
 

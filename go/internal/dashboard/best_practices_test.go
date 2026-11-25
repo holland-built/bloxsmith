@@ -426,8 +426,9 @@ func TestBestPractices_DNSRecordsBadReadIsUnknown(t *testing.T) {
 	}
 }
 
-// A read that fills the row limit may be cut short, so it can't pass or count.
-func TestBestPractices_DNSRecordsCutShortIsUnknown(t *testing.T) {
+// A list that fills the row limit may be cut short: the count still comes
+// from the cube's own count, and the note says the list is partial.
+func TestBestPractices_DNSRecordsCutShortKeepsCount(t *testing.T) {
 	old := dnsRecLimit
 	dnsRecLimit = 2
 	t.Cleanup(func() { dnsRecLimit = old })
@@ -437,8 +438,9 @@ func TestBestPractices_DNSRecordsCutShortIsUnknown(t *testing.T) {
 		dnsRec("c", "z.", "CNAME", "gone.", "", "['Dangling']"),
 	}, nil)
 	out := s.BestPractices(context.Background())
-	if c := findCheck(t, out, "dns-stale"); c["status"] != "unknown" || !strings.Contains(c["reason"].(string), "cut short") {
-		t.Fatalf("a full read must say couldn't tell, got %v", c)
+	if c := findCheck(t, out, "dns-stale"); c["status"] != "problem" || !strings.HasPrefix(c["title"].(string), "2 ") ||
+		!strings.Contains(c["note"].(string), "cut short") {
+		t.Fatalf("a full list keeps the count and says it is cut short, got %v", c)
 	}
 	// One long list doesn't spoil the others: each flag is its own read.
 	if c := findCheck(t, out, "dns-dangling"); c["status"] != "problem" {
@@ -494,5 +496,114 @@ func TestBestPractices_TitlesInPlainWords(t *testing.T) {
 				t.Errorf("title %q uses %q", title, j)
 			}
 		}
+	}
+}
+
+// The title's count is the cube's own count of records, not the number of
+// sample rows: one record that points two places comes back as two rows.
+func TestBestPractices_DNSCountFromAggregateNotRows(t *testing.T) {
+	p := "NetworkInsightsDnsRecordsRolledByIndicatorIdV1."
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		var q struct{ Dimensions []string }
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("query")), &q)
+		dangling := strings.Contains(r.URL.Query().Get("query"), "'Dangling'")
+		var data []map[string]any
+		switch {
+		case !dangling && len(q.Dimensions) == 0:
+			data = []map[string]any{{p + "uniqueRecordCount": "0"}}
+		case !dangling:
+			data = []map[string]any{}
+		case len(q.Dimensions) == 0:
+			data = []map[string]any{{p + "uniqueRecordCount": "1"}}
+		default:
+			data = []map[string]any{
+				dnsRec("www", "example.test.", "A", "10.0.0.1", "", "['Dangling']"),
+				dnsRec("www", "example.test.", "A", "10.0.0.2", "", "['Dangling']"),
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": data}})
+		_, _ = w.Write(b)
+	})
+	c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling")
+	if c["status"] != "problem" || !strings.HasPrefix(c["title"].(string), "1 DNS record ") {
+		t.Fatalf("want a title counting 1 record, got %v", c)
+	}
+}
+
+// When the cube's own count fails, the check can't tell: the number of sample
+// rows is never used as the count (one record pointing two places is two rows).
+func TestBestPractices_DNSCountFailureIsUnknown(t *testing.T) {
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		var q struct{ Dimensions []string }
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("query")), &q)
+		if len(q.Dimensions) == 0 {
+			w.WriteHeader(500)
+			return
+		}
+		data := []map[string]any{}
+		if strings.Contains(r.URL.Query().Get("query"), "'Dangling'") {
+			data = []map[string]any{
+				dnsRec("www", "example.test.", "A", "10.0.0.1", "", "['Dangling']"),
+				dnsRec("www", "example.test.", "A", "10.0.0.2", "", "['Dangling']"),
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": data}})
+		_, _ = w.Write(b)
+	})
+	c := findCheck(t, s.BestPractices(context.Background()), "dns-dangling")
+	if c["status"] != "unknown" || c["reason"] == "" || strings.HasPrefix(c["title"].(string), "2 ") {
+		t.Fatalf("want unknown with a reason and no sample-sized count, got %v", c)
+	}
+}
+
+// When the list of records fails but the count worked, the count stands and
+// the missing list is said separately.
+func TestBestPractices_DNSCountKeptWhenListFails(t *testing.T) {
+	p := "NetworkInsightsDnsRecordsRolledByIndicatorIdV1."
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cubejs/v1/query" {
+			writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
+			return
+		}
+		var q struct{ Dimensions []string }
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("query")), &q)
+		if len(q.Dimensions) > 0 {
+			w.WriteHeader(500)
+			return
+		}
+		n := "0"
+		if strings.Contains(r.URL.Query().Get("query"), "'Dangling'") {
+			n = "3"
+		}
+		b, _ := json.Marshal(map[string]any{"result": map[string]any{"data": []map[string]any{{p + "uniqueRecordCount": n}}}})
+		_, _ = w.Write(b)
+	})
+	out := s.BestPractices(context.Background())
+	c := findCheck(t, out, "dns-dangling")
+	if c["status"] != "problem" || !strings.HasPrefix(c["title"].(string), "3 DNS records ") || c["note"] == nil || c["note"] == "" {
+		t.Fatalf("want problem counting 3 with a note about the list, got %v", c)
+	}
+	if c := findCheck(t, out, "dns-stale"); c["status"] != "passed" {
+		t.Fatalf("a count of 0 passes even without the list, got %v", c)
+	}
+}
+
+// A count of 0 passes even when the list failed, but that result is marked
+// partial, so Best practices doesn't cache it and the next load asks again.
+func TestBestPractices_ZeroWithFailedListNotCached(t *testing.T) {
+	c := dnsRecordCheck(dnsRecFlags[0], dnsFlagRead{Count: metricOK(0), SampleOK: false})
+	if c.Status != "passed" || !c.partial {
+		t.Fatalf("want passed and partial, got %+v", c)
+	}
+	if c := dnsRecordCheck(dnsRecFlags[0], dnsFlagRead{Count: metricOK(0), SampleOK: true, Sample: []map[string]any{}}); c.partial {
+		t.Fatalf("a whole read is not partial: %+v", c)
 	}
 }

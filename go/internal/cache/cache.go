@@ -6,6 +6,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -42,14 +43,17 @@ func (e entry) life() time.Duration {
 }
 
 // flight is one upstream fetch that is currently running. Late callers for the
-// same key attach to it and block on wg instead of starting a second fetch.
-// val/err are written by the leader before wg.Done(), so a waiter that returns
-// from wg.Wait() reads them safely (WaitGroup establishes happens-before).
+// same key attach to it and wait on done instead of starting a second fetch.
+// val/err are written by the leader before close(done), so a waiter that
+// returns from <-done reads them safely (a channel close establishes
+// happens-before).
 type flight struct {
-	wg  sync.WaitGroup
-	val any
-	err error
+	done chan struct{}
+	val  any
+	err  error
 }
+
+func newFlight() *flight { return &flight{done: make(chan struct{})} }
 
 // Cache is the process-wide TTL store. Construct one in main and share it.
 type Cache struct {
@@ -228,22 +232,30 @@ func (c *Cache) InvalidatePrefix(prefix string) {
 // The write is fenced by the generation captured before the fetch (see SetGen),
 // so a tenant switch mid-fetch still drops the result.
 func (c *Cache) Do(key string, fetch func() (any, error)) (any, error) {
-	return c.do(key, TTL, true, fetch)
+	return c.do(context.Background(), key, TTL, true, fetch)
 }
 
 // DoFresh is Do without stale serving: an entry past its TTL is a miss and the
 // caller waits for the fetch. For fetches bound to a request context, and for
 // callers that must never be handed an old value.
 func (c *Cache) DoFresh(key string, fetch func() (any, error)) (any, error) {
-	return c.do(key, TTL, false, fetch)
+	return c.do(context.Background(), key, TTL, false, fetch)
+}
+
+// DoFreshCtx is DoFresh for a caller with a deadline: when another caller's
+// fetch for key is already running, this one waits for it only until ctx
+// ends, then returns ctx.Err(). The running fetch carries on and is cached as
+// usual. The fetch this caller runs itself must honour ctx on its own.
+func (c *Cache) DoFreshCtx(ctx context.Context, key string, fetch func() (any, error)) (any, error) {
+	return c.do(ctx, key, TTL, false, fetch)
 }
 
 // DoTTL is DoFresh with its own TTL for this key instead of the shared one.
 func (c *Cache) DoTTL(key string, ttl time.Duration, fetch func() (any, error)) (any, error) {
-	return c.do(key, ttl, false, fetch)
+	return c.do(context.Background(), key, ttl, false, fetch)
 }
 
-func (c *Cache) do(key string, ttl time.Duration, stale bool, fetch func() (any, error)) (any, error) {
+func (c *Cache) do(ctx context.Context, key string, ttl time.Duration, stale bool, fetch func() (any, error)) (any, error) {
 	c.mu.Lock()
 	e, have := c.entries[key]
 	age := time.Since(e.at)
@@ -257,11 +269,14 @@ func (c *Cache) do(key string, ttl time.Duration, stale bool, fetch func() (any,
 		if serveStale {
 			return e.value, nil // a refresh is already running; do not wait for it
 		}
-		f.wg.Wait()
-		return f.val, f.err
+		select {
+		case <-f.done:
+			return f.val, f.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
-	f := &flight{}
-	f.wg.Add(1)
+	f := newFlight()
 	c.inflight[key] = f
 	gen := c.gen
 	c.mu.Unlock()
@@ -271,7 +286,7 @@ func (c *Cache) do(key string, ttl time.Duration, stale bool, fetch func() (any,
 		return e.value, nil
 	}
 
-	// A panicking fetcher must not strand the waiters on wg.Wait() forever. Wake
+	// A panicking fetcher must not strand the waiters on <-done forever. Wake
 	// them with an error, then re-panic so the leader's own request still hits the
 	// handler's existing recover-to-500 guard (server/data.go recover500) — this
 	// changes nothing about how a panic is reported, only who is left hanging.
@@ -324,7 +339,7 @@ func (c *Cache) land(key string, ttl time.Duration, gen uint64, f *flight) {
 		delete(c.inflight, key)
 	}
 	c.mu.Unlock()
-	f.wg.Done()
+	close(f.done)
 }
 
 // Once runs fn with single-flight but caches nothing: concurrent callers for
@@ -344,11 +359,10 @@ func (c *Cache) Once(key string, fn func() any) any {
 	c.mu.Lock()
 	if f, ok := c.inflight[key]; ok {
 		c.mu.Unlock()
-		f.wg.Wait()
+		<-f.done
 		return f.val
 	}
-	f := &flight{}
-	f.wg.Add(1)
+	f := newFlight()
 	c.inflight[key] = f
 	c.mu.Unlock()
 	defer func() {
@@ -370,5 +384,5 @@ func (c *Cache) release(key string, f *flight) {
 		delete(c.inflight, key)
 	}
 	c.mu.Unlock()
-	f.wg.Done()
+	close(f.done)
 }

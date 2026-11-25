@@ -62,7 +62,7 @@ RULES:
 4. Always include exactly 3 suggestions.
 5. Ambiguous term? Try multiple search_entity calls, get_subnets, get_dns, get_audit_logs.
 6. No data found? Suggest alternatives as plain English questions.
-7. For "is X malicious", "lookalikes of my brand", or "what assets", use dossier_lookup / lookalike_domains / asset_insights respectively. For Infoblox IQ actions or IQ tokens, use iq_insights.
+7. For "is X malicious", "lookalikes of my brand", or "what assets", use dossier_lookup / lookalike_domains / asset_insights respectively. For Infoblox IQ actions or IQ tokens, use iq_insights. For a Visibility Assessment, use visibility_counts.
 8. COUNTING: a tool result may be {"total_count": N, "returned": M, "truncated": bool, "sample": [...]}.
    total_count is the ONLY authoritative number — use it to answer "how many". "sample" is a partial
    list capped for context size; NEVER count its elements, and never imply it is the complete set.
@@ -106,12 +106,14 @@ const toolsJSON = `[
   }},
   {"type": "function", "function": {
     "name": "get_subnets",
-    "description": "Get IPAM subnets with utilization, fullest first. For 'nearly full', 'running out' or 'most used', pass min_utilization (e.g. 80): Infoblox then counts every subnet at or above it, leaving out IPv4 /29 to /32 point-to-point links, which are always full. Use address param for a specific subnet.",
+    "description": "Get IPAM subnets with utilization, fullest first. For 'nearly full', 'running out' or 'most used', pass min_utilization (e.g. 80); for 'underused', max_utilization (e.g. 19). Infoblox then counts every subnet in that band, leaving out IPv4 /29 to /32 point-to-point links, which are always full. by_cloud=true instead counts subnets, under 20% and 80%-plus per cloud (AWS, Azure, GCP), every size included. Use address param for a specific subnet.",
     "parameters": {"type": "object",
       "properties": {
         "address": {"type": "string", "description": "Filter by subnet address, e.g. '10.0.0.0'"},
         "cidr":    {"type": "integer", "description": "CIDR prefix length, e.g. 24"},
-        "min_utilization": {"type": "integer", "description": "Only subnets at least this percent used, 0-100, e.g. 80 for nearly full"}
+        "min_utilization": {"type": "integer", "description": "Only subnets at least this percent used, 0-100, e.g. 80 for nearly full"},
+        "max_utilization": {"type": "integer", "description": "Only subnets at most this percent used, 0-100, e.g. 19 for underused"},
+        "by_cloud": {"type": "boolean", "description": "Counts per cloud and band instead of a list"}
       }}
   }},
   {"type": "function", "function": {
@@ -185,6 +187,27 @@ const toolsJSON = `[
         "limit": {"type": "integer", "minimum": 1, "maximum": 50,
           "description": "For view=recent: number of actions, 1-50, default 10"}
       }}
+  }},
+  {"type": "function", "function": {
+    "name": "risky_dns_records",
+    "description": "DNS records Infoblox flagged Dangling, Abandoned, Untrusted or Stale: the count of each (every record) and up to 25 sample records each.",
+    "parameters": {"type": "object", "properties": {}}
+  }},
+  {"type": "function", "function": {
+    "name": "asset_problems",
+    "description": "Asset counts by problem (Zombie, Noncompliant, Unregistered), missing DNS forward, pointer or IPAM record, and zombies by type. split adds top-10 bars.",
+    "parameters": {"type": "object",
+      "properties": {"split": {"type": "string", "enum": ["type", "source"], "description": "Optional top-10 split of each problem"}}}
+  }},
+  {"type": "function", "function": {
+    "name": "cmdb_gap",
+    "description": "ServiceNow CMDB gap: whether ServiceNow is connected, assets missing from it (every source, cloud included) and assets only in it.",
+    "parameters": {"type": "object", "properties": {}}
+  }},
+  {"type": "function", "function": {
+    "name": "visibility_counts",
+    "description": "Builds the 18-count IT Visibility Assessment file for the Glean agent. Returns how many counts were read and a download link to give the user.",
+    "parameters": {"type": "object", "properties": {}}
   }},
   {"type": "function", "function": {
     "name": "find_data",

@@ -628,6 +628,8 @@ eleven tools the same path sends:
 | `get_threat_feeds` | feed names, threat levels, entry counts |
 | `get_dns_analytics` | device names and device IPs by query volume |
 | `iq_insights` | IQ action titles, types, severity and dates; IQ token counts by category |
+| `risky_dns_records` | counts of flagged DNS records, plus up to 25 record names, zones and targets per flag |
+| `asset_problems` / `cmdb_gap` / `visibility_counts` | asset counts by problem, type and source, and source names; no asset names. `visibility_counts` sends the model only how many of the 18 counts were read; the file itself downloads from `/api/visibility-counts` and is not sent |
 | `search_entity` | whatever the search matched |
 | `dossier_lookup` / `lookalike_domains` / `asset_insights` | indicators, domains, device names |
 | `api_get` | up to 25 records from any of the read-only list paths in `go/internal/dashboard/ai_catalog.json` (zones, records, subnets, policies...); fields named like secret, password or token are hidden |

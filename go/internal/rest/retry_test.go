@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,7 +16,7 @@ func recordSleeps(t *testing.T) *[]time.Duration {
 	t.Helper()
 	var got []time.Duration
 	old := retrySleep
-	retrySleep = func(d time.Duration) { got = append(got, d) }
+	retrySleep = func(_ context.Context, d time.Duration) { got = append(got, d) }
 	t.Cleanup(func() { retrySleep = old })
 	return &got
 }
